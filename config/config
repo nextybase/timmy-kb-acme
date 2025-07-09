@@ -1,0 +1,19 @@
+# config/config.yaml
+# Template di configurazione per la Knowledge Base Timmy (cliente)
+
+# ID univoco/slug del cliente (tutto minuscolo, senza spazi)
+cliente_id: cliente-xyz
+
+# Nome completo cliente (per leggibilità/report)
+cliente_nome: ACME S.p.A.
+
+# (OPZIONALE) Chiave API OpenAI per feature avanzate (estrazione triple, embedding, ecc.)
+# openai_api_key: "sk-xxxxxxx"
+
+# ----
+# Tutte le altre variabili sono calcolate automaticamente dagli script
+# (drive_input_path, md_output_path, github_repo, ecc.)
+# Puoi comunque sovrascriverle aggiungendole qui (override)
+#
+# Esempio:
+# md_output_path: "output/timmy_kb"
