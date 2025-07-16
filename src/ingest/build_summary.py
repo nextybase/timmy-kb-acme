@@ -1,64 +1,70 @@
-import os
+# -*- coding: utf-8 -*-
+"""
+Generazione automatica di SUMMARY.md e README.md da file Markdown.
+Compatibile con GitBook (navigazione laterale).
+"""
+
+import logging
+from pathlib import Path
 import yaml
-import sys
+from collections import defaultdict
 
-# Importa il loader di config centralizzato
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from ingest.config_loader import load_config
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
-cfg = load_config()
-MD_ROOT = cfg['md_output_path']
-SUMMARY_PATH = os.path.join(MD_ROOT, "SUMMARY.md")
-README_PATH = os.path.join(MD_ROOT, "README.md")
-
-def get_title_from_md(md_path):
-    """Estrae il titolo dal front matter YAML o dal titolo H1."""
+def extract_title(md_path: Path) -> str:
+    """Estrae titolo da front matter YAML o primo H1"""
     try:
-        with open(md_path, encoding="utf-8") as f:
-            lines = f.readlines()
-            if lines and lines[0].startswith("---"):
-                yaml_block = []
-                for line in lines[1:]:
-                    if line.startswith("---"):
-                        break
-                    yaml_block.append(line)
-                meta = yaml.safe_load("".join(yaml_block))
-                if meta and "title" in meta:
-                    return str(meta["title"]).strip()
-            # Fallback: cerca prima linea che inizia con "#"
-            for line in lines:
-                if line.strip().startswith("# "):
-                    return line.strip("# ").strip()
-    except Exception:
-        return os.path.splitext(os.path.basename(md_path))[0]
-    return os.path.splitext(os.path.basename(md_path))[0]
+        lines = md_path.read_text(encoding="utf-8").splitlines()
+        if lines and lines[0].strip() == "---":
+            yaml_block = []
+            for line in lines[1:]:
+                if line.strip() == "---":
+                    break
+                yaml_block.append(line)
+            meta = yaml.safe_load("\n".join(yaml_block))
+            if isinstance(meta, dict) and "title" in meta:
+                return str(meta["title"]).strip()
+        for line in lines:
+            if line.strip().startswith("# "):
+                return line.strip().lstrip("#").strip()
+    except Exception as e:
+        logger.warning(f"⚠️ Titolo non estratto da {md_path.name}: {e}")
+    return md_path.stem.replace("-", " ").replace("_", " ").title()
 
-def build_summary():
-    entries = []
-    for root, dirs, files in os.walk(MD_ROOT):
-        dirs.sort()
-        files = sorted([f for f in files if f.endswith(".md")])
-        rel_root = os.path.relpath(root, MD_ROOT)
-        indent_level = 0 if rel_root == "." else rel_root.count(os.sep) + 1
+def build_markdown_summary(config: dict) -> None:
+    md_root = Path(config["md_output_path"]).resolve()
+    summary_file = md_root / "SUMMARY.md"
+    readme_file = md_root / "README.md"
 
-        if rel_root != ".":
-            sezione = os.path.basename(root).replace("-", " ").title()
-            entries.append("  " * (indent_level - 1) + f"- **{sezione}**")
+    # Mappa sezioni → lista file
+    sections = defaultdict(list)
 
-        for f in files:
-            md_path = os.path.join(root, f)
-            rel_path = os.path.relpath(md_path, ".")
-            title = get_title_from_md(md_path)
-            entries.append("  " * indent_level + f"- [{title}]({rel_path.replace(os.sep, '/')})")
+    for path in sorted(md_root.rglob("*.md")):
+        if path.name.lower() in {"summary.md", "readme.md"}:
+            continue
 
-    # Intestazione
-    lines = ["# Sommario", ""]
-    lines.extend(entries)
+        rel = path.relative_to(md_root)
+        section = rel.parts[0] if len(rel.parts) > 1 else "root"
+        sections[section].append(rel)
 
-    with open(SUMMARY_PATH, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+    content = ["# Summary", "", "* [Introduzione](README.md)"]
 
-    print(f"✅ SUMMARY.md generato con {len(entries)} voci.")
+    for section, files in sorted(sections.items()):
+        if section != "root":
+            content.append(f"* [{section.title()}]()")
+        for rel in files:
+            title = extract_title(md_root / rel)
+            indent = "  " if section != "root" else ""
+            content.append(f"{indent}* [{title}]({rel.as_posix()})")
 
-if __name__ == "__main__":
-    build_summary()
+    summary_file.write_text("\n".join(content), encoding="utf-8")
+    readme_file.write_text("\n".join(content), encoding="utf-8")
+
+    logger.info(f"✅ SUMMARY.md generato con {sum(len(f) for f in sections.values())} file.")
+    logger.info("📄 README.md aggiornato.")

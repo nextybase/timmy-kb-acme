@@ -1,0 +1,33 @@
+# YAML e parsing
+PyYAML>=6.0
+
+# Utilità per slug URL-safe
+python-slugify>=8.0.1
+
+# Parsing e analisi PDF
+PyMuPDF>=1.21.0
+
+# NLP e estrazione semantica
+spacy>=3.7.0
+# Modello consigliato: python -m spacy download it_core_news_sm
+
+# Validazione e tipizzazione
+pydantic>=2.4
+
+# Interazione con Google Drive API
+google-api-python-client>=2.96.0
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+
+# GitHub CLI (invocabile via subprocess, ma opzionale installazione esterna)
+
+# Utility varie
+tqdm>=4.66.1         # per progress bar
+python-dotenv>=1.0.0 # per gestione .env
+requests>=2.31.0     # per chiamate API (GitHub, etc.)
+
+# Docker e preview GitBook (se richiesto)
+docker>=7.0.0
+
+# Logging strutturato (opzionale ma utile)
+loguru>=0.7.2

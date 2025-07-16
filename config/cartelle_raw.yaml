@@ -1,0 +1,14 @@
+# cartelle_raw.yaml
+root_folders:
+  - name: raw
+    subfolders:
+      - identity
+      - organizzazione
+      - artefatti-operativi
+      - glossario
+      - best-practices
+      - normativa
+      - scenario
+      - economy
+      - template-documenti
+  - name: contrattualistica
