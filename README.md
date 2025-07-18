@@ -1,4 +1,4 @@
-# 🚀 OnBoarding NeXT – v1.3
+# 🚀 OnBoarding NeXT – v1.2
 
 Benvenuto nel repository ufficiale del sistema di onboarding per il progetto **NeXT**.  
 Questa versione (`v1.2`) introduce controlli di idempotenza, rollback automatici su Drive, e verifiche preventivo-interattive per il deploy GitHub.  
