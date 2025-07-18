@@ -1,137 +1,123 @@
 import os
-import sys
-import logging
 import yaml
 import tempfile
-from pathlib import Path
-from typing import Optional, Dict
-from pydantic import BaseModel, Field, ValidationError
-
-from google.oauth2 import service_account
+import logging
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2 import service_account
+from dotenv import load_dotenv
+from pathlib import Path
+from io import BytesIO
 
-# Logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Caricamento .env dinamico
+env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=env_path)
+
+SCOPES = ["https://www.googleapis.com/auth/drive"]
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "service_account.json")
+DRIVE_ID = os.getenv("DRIVE_ID")
+REPO_CLONE_BASE = os.getenv("REPO_CLONE_BASE", ".")
+RAW_DIR_TEMPLATE = os.getenv("RAW_DIR_TEMPLATE", "{base_drive}/{slug}/raw")
+OUTPUT_DIR_TEMPLATE = os.getenv("OUTPUT_DIR_TEMPLATE", "output/timmy_kb_{slug}")
+BASE_DRIVE = os.getenv("BASE_DRIVE", "G:/Drive condivisi/Nexty Docs")
+GITHUB_ORG = os.getenv("GITHUB_ORG", "nextybase")
+REPO_VISIBILITY = os.getenv("REPO_VISIBILITY", "private")
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Constants
-SCOPES = ['https://www.googleapis.com/auth/drive']
-SERVICE_ACCOUNT_FILE = 'service_account.json'
-SHARED_DRIVE_ID = os.getenv("DRIVE_ID", "0ADCU0HoCuSCNUk9PVA")
+def load_config_from_drive(slug: str, override: dict = {}) -> dict:
+    # === CONTROLLI PRELIMINARI ENV ===
+    if not DRIVE_ID:
+        raise EnvironmentError("❌ DRIVE_ID non trovato nelle variabili d'ambiente.")
+    if not SERVICE_ACCOUNT_FILE or not Path(SERVICE_ACCOUNT_FILE).exists():
+        raise EnvironmentError("❌ SERVICE_ACCOUNT_FILE mancante o non trovato.")
+    if not BASE_DRIVE:
+        raise EnvironmentError("❌ BASE_DRIVE non definito nel .env.")
+    if not RAW_DIR_TEMPLATE or not OUTPUT_DIR_TEMPLATE:
+        raise EnvironmentError("❌ RAW_DIR_TEMPLATE o OUTPUT_DIR_TEMPLATE mancanti nel .env.")
 
-
-# Pydantic model for config validation
-class ConfigModel(BaseModel):
-    cliente_id: str
-    drive_input_path: Optional[str] = None
-    md_output_path: Optional[str] = None
-    github_repo: Optional[str] = None
-    github_branch: Optional[str] = "main"
-    gitbook_space: Optional[str] = None
-
-def download_config_from_drive(cliente_id: str, local_path: Path) -> bool:
+    # === CLIENT GOOGLE DRIVE ===
     creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    service = build('drive', 'v3', credentials=creds)
-
-    # Locate client folder
-    query = (
-        f"'{SHARED_DRIVE_ID}' in parents and "
-        f"mimeType='application/vnd.google-apps.folder' and name='{cliente_id}'"
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
-    results = service.files().list(
+    service = build("drive", "v3", credentials=creds)
+
+    # === CERCA CARTELLA CLIENTE SU DRIVE ===
+    query = f"'{DRIVE_ID}' in parents and name = '{slug}' and mimeType = 'application/vnd.google-apps.folder'"
+    response = service.files().list(
         q=query,
         spaces='drive',
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
         corpora='drive',
-        driveId=SHARED_DRIVE_ID,
-        includeItemsFromAllDrives=True,
-        supportsAllDrives=True,
+        driveId=DRIVE_ID,
         fields="files(id, name)"
     ).execute()
+    folders = response.get("files", [])
 
-    folders = results.get('files', [])
     if not folders:
-        logger.error(f"❌ Cartella cliente '{cliente_id}' non trovata nel Drive condiviso.")
-        return False
+        raise FileNotFoundError(f"❌ Cartella '{slug}' non trovata nel Drive condiviso.")
 
-    folder_id = folders[0]['id']
-    query_file = f"'{folder_id}' in parents and name='config.yaml'"
-    file_results = service.files().list(
-        q=query_file,
-        spaces='drive',
-        corpora='allDrives',
-        includeItemsFromAllDrives=True,
+    folder_id = folders[0]["id"]
+
+    # === CERCA config.yaml ===
+    query = f"'{folder_id}' in parents and name = 'config.yaml'"
+    response = service.files().list(
+        q=query,
         supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora='drive',
+        driveId=DRIVE_ID,
+        spaces='drive',
         fields="files(id, name)"
     ).execute()
+    files = response.get("files", [])
 
-    files = file_results.get('files', [])
     if not files:
-        logger.error("❌ File config.yaml non trovato nella cartella del cliente.")
-        return False
+        raise FileNotFoundError("❌ File di configurazione 'config.yaml' non trovato nella cartella.")
 
-    file_id = files[0]['id']
-    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-    with open(local_path, 'wb') as fh:
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
+    file_id = files[0]["id"]
+    request = service.files().get_media(fileId=file_id)
+    fh = BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    fh.seek(0)
+    config_data = yaml.safe_load(fh)
 
-    logger.info(f"⬇️  Config.yaml scaricato in: {local_path}")
-    return True
+    # === COSTRUZIONE PATH DINAMICI DA TEMPLATE ===
+    repo_name = config_data.get("repo_name", f"timmy-kb-{slug}")
+    github_owner = config_data.get('github_owner', GITHUB_ORG)
+    repo_path = os.path.join(REPO_CLONE_BASE, repo_name)
 
+    drive_input_path = RAW_DIR_TEMPLATE.format(
+        slug=slug,
+        base_drive=BASE_DRIVE
+    )
+    md_output_path = OUTPUT_DIR_TEMPLATE.format(
+        slug=slug
+    )
 
-def load_config(config_path: Path | str = None, overrides: Optional[Dict] = None) -> dict:
-    path = Path(config_path or os.getenv("CONFIG_PATH", "config/config.yaml")).resolve()
-    if not path.is_file():
-        logger.fatal(f"❌ File di configurazione non trovato: {path}")
-        sys.exit(1)
+    config_data.update({
+        "slug": slug,
+        "repo_name": repo_name,
+        "github_owner": github_owner,
+        "github_repo": f"{github_owner}/{repo_name}",
+        "repo_visibility": REPO_VISIBILITY,
+        "repo_path": repo_path,
+        "md_output_path": md_output_path,
+        "drive_input_path": drive_input_path
+    })
 
-    try:
-        raw_cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as e:
-        logger.fatal(f"❌ Errore di parsing YAML: {e}")
-        sys.exit(1)
+    if override:
+        config_data.update(override)
 
-    # Applica override se presenti
-    if overrides:
-        raw_cfg.update(overrides)
+    # Salva una copia temporanea della config risolta per debug/tracing
+    tmp_file_path = Path(tempfile.gettempdir()) / f"config_{slug}.yaml"
+    with open(tmp_file_path, "w", encoding="utf-8") as f:
+        yaml.dump(config_data, f)
 
-    try:
-        cfg_model = ConfigModel(**raw_cfg)
-    except ValidationError as e:
-        logger.fatal(f"❌ Errore di validazione config.yaml:\n{e}")
-        sys.exit(1)
-
-    cliente_id = cfg_model.cliente_id
-
-    # Percorsi di default
-    default_drive = Path("G:/Drive condivisi/Nexty Docs") / cliente_id / "raw"
-    drive_input_path = cfg_model.drive_input_path or default_drive
-    md_output_path = cfg_model.md_output_path or (Path("output") / f"timmy_kb_{cliente_id}")
-
-    config = {
-        "cliente_id": cliente_id,
-        "drive_input_path": str(Path(drive_input_path).resolve()),
-        "md_output_path": str(Path(md_output_path).resolve()),
-        "github_repo": cfg_model.github_repo or f"nextybase/timmy-kb-{cliente_id}",
-        "github_branch": cfg_model.github_branch,
-        "gitbook_space": cfg_model.gitbook_space or f"Timmy-KB-{cliente_id}",
-    }
-
-    logger.info(f"✅ Config caricato per cliente: {cliente_id}")
-    return config
-
-
-def load_config_from_drive(cliente_id: str, overrides: Optional[Dict] = None) -> dict:
-    temp_path = Path(tempfile.gettempdir()) / f"config_{cliente_id}.yaml"
-    success = download_config_from_drive(cliente_id, temp_path)
-    if not success:
-        sys.exit(1)
-    return load_config(temp_path, overrides=overrides)
+    logger.info(f"✅ Config caricato e arricchito per cliente: {slug}")
+    return config_data

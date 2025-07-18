@@ -1,149 +1,97 @@
 
-# 🧪 Documentazione Pre-Onboarding – Timmy KB
+# 🚀 Pre-onboarding Pipeline Timmy-KB (2025+)
 
 ## 🎯 Obiettivo
 
-Automatizzare la **creazione delle strutture base** per un nuovo cliente, compresa:
-- 📁 Cartella in `clienti/` per la configurazione
-- 📁 Cartella su Drive condiviso con struttura predefinita
-- 📝 Generazione di un file `config.yaml` temporaneo
-- 🔍 **Punto di validazione manuale** per verificare il file di configurazione
-- ↩️ **Rollback automatico** in caso di annullamento
+Automatizzare la creazione della struttura base su Google Drive per ogni nuovo cliente, compresa la generazione e validazione della configurazione (`config.yaml`), e l'upload di tutti i file necessari tramite API.
 
 ---
 
-## 🧱 Struttura dei percorsi coinvolti
+## 🗂️ Struttura e moduli coinvolti
 
 ```
 project-root/
 ├── config/
-│   └── cartelle_raw.yaml ← Struttura delle sottocartelle da creare
-├── clienti/
-│   └── timmy-kb-<slug>/ ← Configurazione cliente
-│       └── config.yaml ← File finale copiato da temporaneo
-├── G:/Drive condivisi/Nexty Docs/
-│   └── <slug>/ ← Cartella cliente su Google Drive
-│       └── raw/ ← Cartella principale per PDF
-│           ├── identity/
-│           ├── organizzazione/
-│           ├── ...
-│       └── contrattualistica/
+│   └── cartelle_raw.yaml       # Struttura cartelle cliente (template)
+├── temp_config/
+│   └── config.yaml             # Config locale cliente (temporaneo)
+├── src/
+│   ├── pre_onboarding.py       # Entry-point procedura pre-onboarding
+│   └── ingest/
+│       ├── config_writer.py
+│       ├── drive_utils.py
+│       └── validate_structure.py
+├── .env                        # Configurazione variabili ambiente
 ```
 
 ---
 
-## ⚙️ Script principale: `src/pre_onboarding.py`
+## ⚙️ Flusso della procedura
 
-### ✅ Funzioni principali:
+1. **Avvio script**
+   - Da CLI: `py src/pre_onboarding.py`
+   - Richiede solo input interattivo: **slug** e **nome cliente**
 
-1. **Richiesta slug cliente**
-   - Input utente: `slug` identificativo (es: `prova`)
-   - Input nome cliente (per leggibilità)
+2. **Generazione e validazione `config.yaml`**
+   - Genera il file di configurazione locale per il cliente.
+   - Mostra all’utente il preview, chiede conferma prima dell’upload.
 
-2. **Creazione file `config.yaml` temporaneo**
-   - Salvato in `temp_config/config.yaml`
-   - Contiene solo ID e nome cliente
-   - Mostrato a video per revisione
-
-3. **Validazione manuale**
-   - Prompt: `✅ Confermi il caricamento su Drive? [y/n]`
-   - Se `n`: viene attivato il rollback → eliminazione file
+3. **Validazione struttura cartelle**
+   - Carica `cartelle_raw.yaml`, verifica che sia una lista di dict con chiave `name`.
 
 4. **Upload su Google Drive**
-   - Autenticazione con `service_account.json`
-   - Crea cartella principale con nome `slug`
-   - Legge `config/cartelle_raw.yaml` per creare la struttura sottocartelle
-   - Carica `config.yaml` nella root della cartella cliente su Drive
+   - Crea la cartella cliente (`<slug>`) su Drive condiviso.
+   - Carica `config.yaml` nella root della cartella cliente.
+   - Crea tutte le sottocartelle definite nella struttura.
+
+5. **Rollback e pulizia**
+   - Se l’utente annulla o se c’è errore grave, vengono rimossi i file temporanei.
+
+6. **Logging**
+   - Tutti i messaggi sono gestiti tramite logging centralizzato (no print).
 
 ---
 
-## 📄 Moduli coinvolti
+## 🧩 Variabili richieste in `.env`
 
-### `src/pre_onboarding.py`
-Controlla il flusso generale, input, validazione e trigger delle funzioni secondarie.
+Prima di eseguire la procedura, assicurati che queste variabili siano valorizzate:
 
-### `utils/config_writer.py`
-Contiene:
-- `generate_config_yaml()` → genera il dizionario di config
-- `write_config()` → scrive su file temporaneo
-- `upload_config_to_drive()` → carica `config.yaml` nella cartella Drive
+| Variabile                 | Descrizione                                                    |
+|---------------------------|----------------------------------------------------------------|
+| DRIVE_ID                  | ID del Drive condiviso clienti                                 |
+| SERVICE_ACCOUNT_FILE      | Path file credenziali Google API                               |
+| CARTELLE_RAW_YAML         | Path file struttura cartelle (`config/cartelle_raw.yaml`)      |
+| LOCAL_TEMP_CONFIG_PATH    | Path temporaneo per config locale (`temp_config/config.yaml`)  |
+| ...                       | (Altre variabili per portabilità/estensioni)                   |
 
-### `utils/drive_utils.py`
-Contiene:
-- `create_folder()` → crea una singola cartella
-- `create_drive_folder_structure()` → legge da `cartelle_raw.yaml` e crea la struttura
-- `init_drive_service()` → autenticazione Google Drive API
+> **NB:** Consulta il template ufficiale `.env` fornito nel progetto.
 
 ---
 
-## 🗂️ Struttura da `cartelle_raw.yaml`
+## 🌐 Note di portabilità
 
-Esempio:
-
-```yaml
-# config/cartelle_raw.yaml
-root_folders:
-  - name: raw
-    subfolders:
-      - identity
-      - organizzazione
-      - artefatti-operativi
-      - glossario
-      - best-practices
-      - normativa
-      - scenario
-      - economy
-      - template-documenti
-  - name: contrattualistica
-```
+- Tutti i path e gli ID sono parametrizzati tramite variabili `.env`
+- La pipeline funziona su Windows, Mac, Linux senza modifiche
+- Il logging centralizzato facilita debugging e audit trail
 
 ---
 
-## 🧪 Esecuzione
+## ✅ Output atteso
 
-```bash
-py src/pre_onboarding.py
-```
-
-Prompt:
-
-```
-👤 Pre-onboarding Timmy-KB
-
-🔤 Slug cliente (es. prova):
-📝 Nome cliente:
-✅ Confermi il caricamento su Drive? [y/n]
-```
+- Struttura cliente creata su Google Drive, pronta per la fase di onboarding
+- File `config.yaml` caricato nella root della cartella cliente
 
 ---
 
-## 🛑 Possibili errori gestiti
+## 🛠️ Dipendenze principali
 
-- Slug vuoto o duplicato
-- Permessi insufficienti su Drive
-- Errore di autenticazione service_account.json
-- Config non confermato → rollback file temporaneo
+- Python >= 3.10
+- `google-api-python-client`, `pyyaml`, `python-dotenv`
 
 ---
 
-## ✅ Output finale atteso
+## 🗒️ Estensioni future
 
-- 📁 Cartella `G:/Drive condivisi/Nexty Docs/<slug>/` creata con sottostruttura
-- 📄 `config.yaml` caricato in Drive
-- 💾 Eventuale copia del file finale in `clienti/timmy-kb-<slug>/`
-
----
-
-## 👥 Destinatari
-
-- Team tecnico o PM per creazione cliente
-- Utenti con accesso Drive condiviso Nexty Docs
-- Operatori che preparano i documenti per l’onboarding
-
----
-
-## 🧩 Estensioni previste
-
-- Aggiunta dei campi GitHub/GitBook nella config
-- Validazione automatica file .yaml
-- Integrazione con procedura onboarding successiva
+- Template multipli per diverse strutture clienti
+- Generazione automatica slug da nome cliente
+- Logging avanzato su file rotanti

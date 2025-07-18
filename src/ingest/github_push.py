@@ -1,58 +1,55 @@
 import subprocess
-import os
-from pathlib import Path
-from dotenv import load_dotenv
 import logging
+import os
 import shutil
+import sys
 
-# Load environment
-load_dotenv()
-GITHUB_ORG = os.getenv("GITHUB_ORG", "nextybase")
-TEMPLATE_REPO = f"{GITHUB_ORG}/timmy-kb-template"
-REPO_CLONE_BASE = Path(os.getenv("REPO_CLONE_BASE", ".")).resolve()
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
 
-def push_to_github(md_output_path: Path, repo_url: str, branch: str = "main"):
-    repo_name = repo_url.split("/")[-1]
-    repo_clone_path = REPO_CLONE_BASE / repo_name
-    full_repo_url = f"https://github.com/{repo_url}.git"
+def ask_push(config: dict) -> bool:
+    """
+    Chiede all’utente se vuole procedere con il push su GitHub.
+    """
+    risposta = input("❓ Vuoi procedere con il push su GitHub? [y/N] ").strip().lower()
+    return risposta == "y"
 
-    logger.info(f"🚀 Inizio push su GitHub → repo: {repo_url}, branch: {branch}")
+def check_gh_cli():
+    """
+    Verifica che il binario 'gh' (GitHub CLI) sia disponibile nel sistema.
+    """
+    if shutil.which("gh") is None:
+        logger.error("❌ GitHub CLI (gh) non trovato. Installa 'gh' da https://cli.github.com/")
+        sys.exit(1)
+
+def do_push(config: dict):
+    """
+    Esegue il push su GitHub del contenuto generato nella pipeline.
+    Richiede che il repo sia già inizializzato come Git repo.
+    """
+    check_gh_cli()
+
+    repo_name = config["repo_name"]
+    github_repo = config["github_repo"]
+    repo_path = config["md_output_path"]
+    visibility = config.get("repo_visibility", "private")  # può essere 'private' o 'public'
+
+    logger.info(f"📦 Inizio creazione repo {github_repo} ({visibility}) e push del contenuto...")
 
     try:
-        # Verifica se il repo esiste
-        result = subprocess.run(["gh", "repo", "view", repo_url],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if result.returncode != 0:
-            logger.info(f"📁 Repo '{repo_url}' non trovata. Creo nuova da template...")
-            subprocess.run([
-                "gh", "repo", "create", repo_url,
-                "--private",
-                "--template", TEMPLATE_REPO
-            ], check=True)
+        os.chdir(repo_path)
 
-        # Clonazione repository
-        if repo_clone_path.exists():
-            shutil.rmtree(repo_clone_path)
-        subprocess.run(["git", "clone", full_repo_url], cwd=REPO_CLONE_BASE, check=True)
+        if not os.path.exists(".git"):
+            subprocess.run(["git", "init"], check=True)
+            subprocess.run(["git", "checkout", "-b", "main"], check=True)
 
-        # Copia i file Markdown
-        for item in Path(md_output_path).iterdir():
-            target = repo_clone_path / item.name
-            if item.is_dir():
-                shutil.copytree(item, target, dirs_exist_ok=True)
-            else:
-                shutil.copy(item, target)
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], check=True)
 
-        # Commit e push
-        subprocess.run(["git", "add", "."], cwd=repo_clone_path, check=True)
-        subprocess.run(["git", "commit", "-m", "🤖 Deploy automatico contenuti KB"], cwd=repo_clone_path, check=True)
-        subprocess.run(["git", "push", "origin", branch], cwd=repo_clone_path, check=True)
-
-        logger.info("✅ Push completato con successo.")
+        subprocess.run([
+            "gh", "repo", "create", github_repo,
+            f"--{visibility}", "--source=.", "--push"
+        ], check=True)
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Errore durante il push: {e}")
+        logger.error(f"❌ Errore durante il push su GitHub: {e}")
+        sys.exit(1)

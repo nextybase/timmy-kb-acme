@@ -1,47 +1,38 @@
-import subprocess
 import os
-import shutil
-from pathlib import Path
+import subprocess
+import logging
 from dotenv import load_dotenv
 
-# Carica variabili da .env
-load_dotenv()
-docker_image = os.getenv("GITBOOK_IMAGE", "gitbook/docker-gitbook")
+logger = logging.getLogger(__name__)
 
-def preview_with_docker(output_path: str):
-    print("\n🚀 Avvio anteprima GitBook in locale con Docker...")
-    print("🌐 Anteprima disponibile su http://localhost:4000")
-    print("⏸ Premi INVIO per interrompere la preview e continuare...")
+def launch_gitbook_preview(slug: str):
+    load_dotenv()
+    docker_image = os.getenv("GITBOOK_IMAGE", "honkit/honkit")
 
-    abs_path = str(Path(output_path).resolve())
-    container_name = "gitbook_preview_temp"
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    output_dir = os.path.join(root_dir, "output", f"timmy_kb_{slug}")
+
+    if not os.path.isdir(output_dir):
+        logger.error(f"❌ Directory non trovata: {output_dir}")
+        return
+
+    logger.info(f"📁 Directory corrente: {output_dir}")
+    logger.info(f"🐳 Avvio anteprima GitBook in locale con Docker...")
 
     try:
-        # Stop forzato se il container è già attivo
-        subprocess.run(["docker", "rm", "-f", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            [
+                "docker", "run", "--rm", "-p", "4000:4000",
+                "-v", f"{output_dir}:/book",
+                docker_image, "npx", "honkit", "serve", "/book"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT
+        )
 
-        # Avvio container GitBook in background
-        subprocess.run([
-            "docker", "run", "-d", "--rm",
-            "--name", container_name,
-            "-v", f"{abs_path}:/gitbook",
-            "-p", "4000:4000",
-            docker_image,
-            "serve"
-        ], check=True)
-
-        input()  # Attende INVIO da parte dell'utente
-
-        subprocess.run(["docker", "stop", container_name], check=True)
-        print("🛑 Preview Docker terminata.")
-
-    except subprocess.CalledProcessError as e:
-        print("❌ Errore durante l'avvio della preview GitBook con Docker.")
-        print(e)
-
-def cleanup_output(output_path: str):
-    if os.path.isdir(output_path):
-        shutil.rmtree(output_path)
-        print(f"🧹 Cartella '{output_path}' eliminata.")
-    else:
-        print("ℹ️ Nessun file da eliminare.")
+        print("🔄 Premi INVIO per continuare dopo aver chiuso l’anteprima o per forzare l’interruzione...")
+        input()
+        proc.terminate()
+        logger.info("✅ Anteprima Docker terminata.")
+    except Exception as e:
+        logger.error(f"❌ Errore durante l'avvio dell'anteprima: {e}")
