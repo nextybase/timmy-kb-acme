@@ -88,4 +88,16 @@ def find_folder_by_name(service, name, parent_id=None, drive_id=None):
     files = results.get('files', [])
     return files[0] if files else None
 
-# (Altre utility future: rimozione cartelle, check permessi, ecc.)
+def delete_folder_by_id(service, folder_id: str):
+    """
+    Elimina una cartella da Google Drive in modo sicuro.
+    - Richiede l'ID della cartella.
+    - Usa supportsAllDrives per Drive condivisi.
+    """
+    try:
+        service.files().delete(
+            fileId=folder_id,
+            supportsAllDrives=True
+        ).execute()
+    except Exception as e:
+        raise RuntimeError(f"Errore durante l'eliminazione della cartella (ID: {folder_id}): {e}")

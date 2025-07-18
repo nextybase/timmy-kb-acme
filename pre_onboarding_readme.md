@@ -1,9 +1,18 @@
-
-# 🚀 Pre-onboarding Pipeline Timmy-KB (2025+)
+# 🚀 Pre-onboarding Pipeline Timmy-KB (v1.3)
 
 ## 🎯 Obiettivo
 
-Automatizzare la creazione della struttura base su Google Drive per ogni nuovo cliente, compresa la generazione e validazione della configurazione (`config.yaml`), e l'upload di tutti i file necessari tramite API.
+Automatizzare la creazione della struttura base su Google Drive per ogni nuovo cliente, compresa la generazione e validazione della configurazione (`config.yaml`), con supporto a rollback e idempotenza.
+
+---
+
+## ✅ Novità v1.3
+
+- 🔁 Check se la cartella `<slug>` esiste già su Drive
+- ⚠️ Prompt interattivo per confermare o annullare
+- 🧹 Rollback completo su Drive in caso di errore a metà
+- 🧪 Validazione semantica `cartelle_raw.yaml`
+- 📦 Logging robusto, fail-fast, portabilità .env
 
 ---
 
@@ -12,86 +21,81 @@ Automatizzare la creazione della struttura base su Google Drive per ogni nuovo c
 ```
 project-root/
 ├── config/
-│   └── cartelle_raw.yaml       # Struttura cartelle cliente (template)
+│   └── cartelle_raw.yaml
 ├── temp_config/
-│   └── config.yaml             # Config locale cliente (temporaneo)
+│   └── config.yaml
 ├── src/
-│   ├── pre_onboarding.py       # Entry-point procedura pre-onboarding
+│   ├── pre_onboarding.py
 │   └── ingest/
 │       ├── config_writer.py
 │       ├── drive_utils.py
 │       └── validate_structure.py
-├── .env                        # Configurazione variabili ambiente
+├── .env
 ```
 
 ---
 
 ## ⚙️ Flusso della procedura
 
-1. **Avvio script**
+1. **Avvio**
    - Da CLI: `py src/pre_onboarding.py`
-   - Richiede solo input interattivo: **slug** e **nome cliente**
+   - Richiede: **slug** e **nome cliente**
 
-2. **Generazione e validazione `config.yaml`**
-   - Genera il file di configurazione locale per il cliente.
-   - Mostra all’utente il preview, chiede conferma prima dell’upload.
+2. **Generazione e validazione config**
+   - `config.yaml` generato localmente
+   - Preview e conferma prima dell’upload
 
-3. **Validazione struttura cartelle**
-   - Carica `cartelle_raw.yaml`, verifica che sia una lista di dict con chiave `name`.
+3. **Validazione YAML struttura cartelle**
+   - Verifica che `cartelle_raw.yaml` contenga lista valida
 
-4. **Upload su Google Drive**
-   - Crea la cartella cliente (`<slug>`) su Drive condiviso.
-   - Carica `config.yaml` nella root della cartella cliente.
-   - Crea tutte le sottocartelle definite nella struttura.
+4. **Upload Drive**
+   - Crea cartella cliente solo se non già esistente (o su conferma)
+   - Carica `config.yaml`
+   - Crea sottocartelle annidate
 
-5. **Rollback e pulizia**
-   - Se l’utente annulla o se c’è errore grave, vengono rimossi i file temporanei.
+5. **Rollback**
+   - In caso di errore, elimina la cartella root su Drive
 
 6. **Logging**
-   - Tutti i messaggi sono gestiti tramite logging centralizzato (no print).
+   - Loggato con `logging` Python, livelli INFO/WARNING/ERROR
 
 ---
 
-## 🧩 Variabili richieste in `.env`
+## 📄 Variabili richieste in `.env`
 
-Prima di eseguire la procedura, assicurati che queste variabili siano valorizzate:
-
-| Variabile                 | Descrizione                                                    |
-|---------------------------|----------------------------------------------------------------|
-| DRIVE_ID                  | ID del Drive condiviso clienti                                 |
-| SERVICE_ACCOUNT_FILE      | Path file credenziali Google API                               |
-| CARTELLE_RAW_YAML         | Path file struttura cartelle (`config/cartelle_raw.yaml`)      |
-| LOCAL_TEMP_CONFIG_PATH    | Path temporaneo per config locale (`temp_config/config.yaml`)  |
-| ...                       | (Altre variabili per portabilità/estensioni)                   |
-
-> **NB:** Consulta il template ufficiale `.env` fornito nel progetto.
-
----
-
-## 🌐 Note di portabilità
-
-- Tutti i path e gli ID sono parametrizzati tramite variabili `.env`
-- La pipeline funziona su Windows, Mac, Linux senza modifiche
-- Il logging centralizzato facilita debugging e audit trail
+| Variabile              | Descrizione                                       |
+|------------------------|---------------------------------------------------|
+| DRIVE_ID               | ID Drive condiviso clienti                        |
+| SERVICE_ACCOUNT_FILE   | Path al file JSON con credenziali Google API     |
+| LOCAL_TEMP_CONFIG_PATH | Path locale config temporanea                    |
+| CARTELLE_RAW_YAML      | Path al template struttura cartelle cliente      |
 
 ---
 
 ## ✅ Output atteso
 
-- Struttura cliente creata su Google Drive, pronta per la fase di onboarding
-- File `config.yaml` caricato nella root della cartella cliente
+- Struttura cliente pronta su Google Drive
+- `config.yaml` caricato correttamente
 
 ---
 
-## 🛠️ Dipendenze principali
+## 🌐 Portabilità
+
+- Funziona su Windows / Mac / Linux
+- Tutti i path sono parametrizzati
+- Logging strutturato, auditabile
+
+---
+
+## 🛠️ Dipendenze
 
 - Python >= 3.10
 - `google-api-python-client`, `pyyaml`, `python-dotenv`
 
 ---
 
-## 🗒️ Estensioni future
+## 🧭 Estensioni future
 
-- Template multipli per diverse strutture clienti
-- Generazione automatica slug da nome cliente
-- Logging avanzato su file rotanti
+- Autogenerazione slug cliente
+- Profilazione multipla cartelle
+- Supporto a batch onboarding

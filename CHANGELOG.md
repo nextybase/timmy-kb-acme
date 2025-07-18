@@ -1,5 +1,32 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.2 – Idempotenza, rollback e GitHub intelligente (luglio 2025)
+
+### 🧠 Miglioramenti robustezza
+
+- ✅ Check anticipato: la pipeline ora verifica se la **repo GitHub esiste** prima di eseguire l'onboarding.
+- ⚠️ Prompt interattivo per scegliere se pushare su repo esistente o annullare.
+- ✅ Il check viene fatto **prima del download** dei PDF, evitando operazioni inutili.
+
+### 🔄 Idempotenza e fail-safe
+
+- 🧹 Se la creazione della cartella cliente su Drive fallisce, viene eseguito un **rollback automatico** (delete da Drive).
+- 📁 Verifica anche se la cartella Drive esiste già → chiede conferma prima di procedere.
+- ❌ Tutte le esecuzioni ora falliscono con messaggi chiari se manca una variabile `.env`.
+
+### 🛠️ Moduli aggiornati
+
+- `pre_onboarding.py`: logging + rollback + validazione `cartelle_raw.yaml`
+- `drive_utils.py`: funzione `delete_folder_by_id`, validazione env, fail-safe
+- `github_push.py`: fallback su repo esistente, separazione in `github_utils.py`
+- `onboarding_full.py`: check repo esistente anticipato
+
+### 📄 Documentazione aggiornata
+
+- `README.md`, `pre_onboarding_readme.md`, `onboarding_pipeline_timmy_kb_v1.3.md`
+- Nuove sezioni: idempotenza, rollback, check GitHub, flussi fail-fast
+
+
 ## v1.1 – Pipeline dinamica e Google Drive ricorsivo (luglio 2025)
 
 ### 🚀 Principali novità
