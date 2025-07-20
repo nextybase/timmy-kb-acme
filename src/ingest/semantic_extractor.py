@@ -1,3 +1,5 @@
+# src/ingest/semantic_extractor.py
+
 import os
 import json
 import logging
@@ -22,10 +24,14 @@ def extract_semantics(config: dict):
         logger.warning("⚠️ Nessun file .md trovato per l’estrazione semantica.")
         return
 
-    # Placeholder semantico
+    # ✅ Naming coerente con trattino per repo
+    slug = config.get("slug")
+    repo_name = f"timmy-kb-{slug}"
+    config["repo_name"] = repo_name  # 🔁 esplicito se non già presente
+
     summary = {
-        "slug": config["slug"],
-        "repo_name": config["repo_name"],
+        "slug": slug,
+        "repo_name": repo_name,
         "files": [f.name for f in md_files]
     }
 

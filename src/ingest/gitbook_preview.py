@@ -1,38 +1,49 @@
-import os
 import subprocess
-import logging
-from dotenv import load_dotenv
+import os
+from pathlib import Path
+from utils.logger_utils import get_logger
+logger = get_logger("gitbook_preview", "logs/onboarding.log")
 
-logger = logging.getLogger(__name__)
 
-def launch_gitbook_preview(slug: str):
-    load_dotenv()
-    docker_image = os.getenv("GITBOOK_IMAGE", "honkit/honkit")
+def run_gitbook_preview(config: dict):
+    """
+    Lancia anteprima GitBook in locale con Docker (build + serve).
+    Serve in background, poi aspetta input utente per chiudere il container.
+    """
+    output_dir = Path(config["md_output_path"]).resolve()
+    logger.info(f"📁 Directory corrente: {output_dir}")
 
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    output_dir = os.path.join(root_dir, "output", f"timmy_kb_{slug}")
-
-    if not os.path.isdir(output_dir):
-        logger.error(f"❌ Directory non trovata: {output_dir}")
+    # 1. Build statico
+    logger.info("🔧 Avvio build statico Honkit (Docker)...")
+    build_cmd = [
+        "docker", "run", "--rm", "-it",
+        "--workdir", "/app",
+        "-v", f"{output_dir}:/app",
+        "honkit/honkit", "npx", "honkit", "build"
+    ]
+    try:
+        subprocess.run(build_cmd, check=True)
+    except subprocess.CalledProcessError:
+        logger.error("❌ Errore durante `honkit build`. Anteprima non avviata.")
         return
 
-    logger.info(f"📁 Directory corrente: {output_dir}")
-    logger.info(f"🐳 Avvio anteprima GitBook in locale con Docker...")
-
+    # 2. Serve in modalità detached
+    logger.info("🐳 Avvio anteprima GitBook in locale con Docker (in background)...")
+    container_name = "honkit_preview"
+    serve_cmd = [
+        "docker", "run", "-d", "--rm",
+        "--name", container_name,
+        "-p", "4000:4000",
+        "--workdir", "/app",
+        "-v", f"{output_dir}:/app",
+        "honkit/honkit", "npx", "honkit", "serve"
+    ]
     try:
-        proc = subprocess.Popen(
-            [
-                "docker", "run", "--rm", "-p", "4000:4000",
-                "-v", f"{output_dir}:/book",
-                docker_image, "npx", "honkit", "serve", "/book"
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
-        )
+        subprocess.run(serve_cmd, check=True)
+        logger.info("✅ Anteprima avviata su http://localhost:4000")
+        input("🔁 Premi INVIO per chiudere l’anteprima e continuare...")
 
-        print("🔄 Premi INVIO per continuare dopo aver chiuso l’anteprima o per forzare l’interruzione...")
-        input()
-        proc.terminate()
-        logger.info("✅ Anteprima Docker terminata.")
-    except Exception as e:
-        logger.error(f"❌ Errore durante l'avvio dell'anteprima: {e}")
+        logger.info("🛑 Arresto container Docker...")
+        subprocess.run(["docker", "stop", container_name])
+    except subprocess.CalledProcessError:
+        logger.error("❌ Errore durante `honkit serve`.")

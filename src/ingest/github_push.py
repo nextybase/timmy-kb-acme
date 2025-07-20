@@ -1,55 +1,57 @@
-import subprocess
-import logging
+from github import Github
+from github.GithubException import GithubException, UnknownObjectException
+from utils.logger_utils import get_logger
+from pathlib import Path
+import shutil
 import os
-import sys
-from utils.github_utils import (
-    check_gh_cli_installed,
-    check_gh_authenticated,
-    repo_exists
-)
+from git import Repo
 
-logger = logging.getLogger(__name__)
-
-def ask_push(config: dict) -> bool:
-    risposta = input("❓ Vuoi procedere con il push su GitHub? [y/N] ").strip().lower()
-    return risposta == "y"
+logger = get_logger("github_push", "logs/onboarding.log")
 
 def do_push(config: dict):
-    check_gh_cli_installed()
-    check_gh_authenticated()
+    """
+    Esegue il deploy automatico della cartella `output_path`
+    su GitHub come repository privata.
+    """
+    github_token = config.get("github_token") or os.getenv("GITHUB_TOKEN")
+    repo_name = config["github_repo"]
+    local_path = Path(config["output_path"]).resolve()
 
-    repo_name = config["repo_name"]
-    github_repo = config["github_repo"]
-    repo_path = config["md_output_path"]
-    visibility = config.get("repo_visibility", "private")
+    github = Github(github_token)
+    github_user = github.get_user()
 
-    logger.info(f"🚀 Inizio deploy su GitHub: {github_repo} ({visibility})")
+    logger.info(f"🚀 Inizio deploy su GitHub: {github_user.login}/{repo_name} (private)")
 
-    os.chdir(repo_path)
+    try:
+        repo = github_user.get_repo(repo_name)
+        logger.info(f"📦 Repository '{repo_name}' trovata. Eseguo push...")
+    except UnknownObjectException:
+        logger.info(f"📦 Creo la repository '{repo_name}' su GitHub...")
+        repo = github_user.create_repo(
+            name=repo_name,
+            private=True,
+            auto_init=True,
+            description="Repository generata automaticamente da NeXT"
+        )
 
-    if not os.path.exists(".git"):
-        subprocess.run(["git", "init"], check=True)
-        subprocess.run(["git", "checkout", "-b", "main"], check=True)
+    try:
+        # Creazione cartella temporanea isolata
+        temp_dir = Path("tmp_repo_push")
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        shutil.copytree(local_path, temp_dir)
 
-    subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], check=True)
+        # Inizializza repo Git
+        repo_local = Repo.init(temp_dir)
+        repo_local.index.add([str(p.relative_to(temp_dir)) for p in temp_dir.rglob("*") if not p.is_dir()])
+        repo_local.index.commit("📦 Upload automatico da pipeline NeXT")
 
-    if repo_exists(config["github_owner"], repo_name):
-        logger.warning(f"⚠️  La repository '{github_repo}' esiste già.")
-        scelta = input("🔁 Vuoi fare push sulla repo esistente? [y/N] ").strip().lower()
-        if scelta == "y":
-            subprocess.run(["git", "remote", "add", "origin", f"https://github.com/{github_repo}.git"], check=False)
-            subprocess.run(["git", "push", "-u", "origin", "main"], check=True)
-            logger.info(f"✅ Push completato su repo esistente: {github_repo}")
-        else:
-            logger.info("⛔ Push annullato dall’utente.")
-    else:
-        try:
-            subprocess.run([
-                "gh", "repo", "create", github_repo,
-                f"--{visibility}", "--source=.", "--push"
-            ], check=True)
-            logger.info(f"✅ Repository '{github_repo}' creata e pushata con successo.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"❌ Errore durante la creazione della repo: {e}")
-            sys.exit(1)
+        # Push remoto
+        remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
+        if "origin" not in repo_local.remotes:
+            repo_local.create_remote("origin", remote_url)
+        repo_local.remotes.origin.push(refspec="master:main")
+
+        logger.info("✅ Deploy completato con successo.")
+    except Exception as e:
+        logger.error(f"❌ Errore durante il push su GitHub: {e}")
