@@ -1,10 +1,9 @@
-# src/onboarding_full.py
-
 import os
+from pathlib import Path
 from utils.logger_utils import get_logger
 from ingest.config_loader import load_config
 from ingest.pdf_to_md import convert_pdfs_to_markdown
-from ingest.semantic_extractor import extract_semantics
+from semantic.semantic_extractor import enrich_markdown_folder
 from ingest.build_summary import generate_summary_md, generate_readme_md
 from ingest.gitbook_preview import run_gitbook_preview
 from ingest.github_push import do_push
@@ -36,13 +35,17 @@ def main():
         logger.error(f"❌ Errore nel download PDF da Drive: {e}")
         return
 
+    # PATCH: allinea il path di input per la conversione ai PDF realmente scaricati
+    config["raw_dir"] = str(Path(config["output_path"]) / "raw")
+    logger.info(f"[PATCH] Imposto config['raw_dir'] a {config['raw_dir']}")
+
     # Step 2: Conversione PDF → Markdown
     print("📚 Conversione PDF → Markdown...")
     convert_pdfs_to_markdown(config)
 
     # Step 3: Estrazione Semantica JSON
     print("🧠 Estrazione semantica...")
-    extract_semantics(config)
+    enrich_markdown_folder(config["output_path"])
 
     # Step 4: Generazione README.md e SUMMARY.md
     print("📑 Generazione SUMMARY.md e README.md...")

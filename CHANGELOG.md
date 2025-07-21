@@ -1,5 +1,40 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.2.2 - 2025-07-21 - Arricchimento semantico e refactoring struttura
+
+### 🧠 Separazione tra pipeline e arricchimento semantico
+- Creata la directory `src/semantic/` dedicata alle funzioni di semantic enrichment.
+- Spostato e riprogettato `semantic_extractor.py`: ora gestisce la conversione PDF→Markdown *arricchito* (inserendo frontmatter semantico da mapping YAML), lavorando sia in modalità standalone sia come modulo richiamato dalla pipeline.
+- Tutti i modelli e algoritmi AI/NLP futuri saranno inseriti **solo** in `/semantic/` senza mai modificare la pipeline di produzione.
+
+### 🔄 Workflow idempotente e automatizzato
+- In modalità standalone: cancellazione selettiva di tutti i markdown (inclusi README.md/SUMMARY.md) prima della nuova conversione, solo su richiesta esplicita dell’utente.
+- Conversione batch di tutti i PDF presenti in `output/timmy-kb-<slug>/raw` e sottocartelle; output in `output/timmy-kb-<slug>/` con arricchimento semantico basato sul mapping YAML.
+- Generazione e aggiornamento automatico di `SUMMARY.md` e `README.md` dopo ogni enrichment.
+
+### 🛡️ Robustezza e modularità
+- Patchata la gestione degli import cross-platform per consentire sia l’uso CLI che pipeline senza errori di path/package.
+- L’arricchimento semantico ora è completamente disaccoppiato dal core della pipeline (drive, ingest, build, push), garantendo la massima estendibilità futura.
+- Tutto il codice semantic-ready può essere testato e aggiornato indipendentemente dalle evoluzioni della pipeline principale.
+
+## v1.2 1.2.1 - 2025-07-20 - Gestione percorsi e anteprima docker
+
+### 🧠 Refactoring della struttura: 
+suddivisione della pipeline in moduli dedicati (drive_utils, config_loader, pdf_to_md, semantic_extractor, build_summary, gitbook_preview, github_push, cleanup) e script principali separati per Pre-Onboarding e Onboarding completo. Centralizzati percorsi e parametri in .env per garantire coerenza tra le fasi.
+Config & naming unificati: introdotto file config.yaml per ogni cliente (contenente slug e nome) generato in pre-onboarding e caricato in onboarding completo. Utilizzo sistematico dello slug cliente per nominare cartelle (es. cartella Drive e output locale timmy_kb_<slug>) e repository GitHub (timmy-kb-<slug>), migliorando uniformità e identificazione dei clienti.
+
+### 🔄 Gestione percorsi migliorata: 
+utilizzati template configurabili (RAW_DIR_TEMPLATE, OUTPUT_DIR_TEMPLATE in .env) combinati con lo slug per calcolare dinamicamente i path dei dati grezzi e dell’output. Rimosse stringhe hardcoded in favore di pathlib e variabili d’ambiente, aumentando portabilità (supporto percorsi Windows/*nix).
+Logging strutturato: uniformato il logging su tutti i moduli con formato standard timestamp/level/message e uso di emoji (✅, ❌, ⚠️, ℹ️) per evidenziare esiti e fasi. Messaggi più espliciti per errori (es. indicazione variabili mancanti, file non trovati) e rimozione di stampe non strutturate, facilitando debug e tracciabilità.
+Conferme manuali & sicurezza: aggiunte richieste di conferma interattiva prima di azioni critiche: upload struttura su Google Drive, push du GitHub, cancellazione file locali. Implementata pulizia finale non distruttiva: lo script ora svuota la cartella output invece di cancellarla interamente, con verifica del percorso atteso per evitare rimozioni errate.
+
+### 🛠️ Integrazione GitHub e anteprima: 
+automatizzato il deploy su GitHub via GitHub CLI gh (init repo, commit, gh repo create --push in un solo comando). Introdotta anteprima locale con Docker Honkit (GitBook) su localhost:4000 pre-deploy, con avvio e terminazione controllati dallo script.
+Pipeline end-to-end completa: garantito flusso continuo nonostante funzionalità placeholder – download ricorsivo dei PDF dal Drive (anche in sottocartelle), conversione PDF→MD simulata con segnaposto, estrazione semantica di base in JSON – mantenendo l’architettura pronta per integrazioni future senza modificare l’interfaccia.
+
+### 🛠️ Bugfix: 
+risolti problemi di path e permessi su Windows (es. rimozione file aperti), aggiunti fallback per variabili d’ambiente non impostate (default per SERVICE_ACCOUNT_FILE, GITBOOK_IMAGE, ecc.). Corretta gestione errori delle API esterne: ora eventuali eccezioni durante chiamate Google Drive o subprocess (Docker/Git) vengono intercettate e loggate, con terminazione pulita del processo se necessario.
+
 ## v1.2 – Idempotenza, rollback e GitHub intelligente (luglio 2025)
 
 ### 🧠 Miglioramenti robustezza

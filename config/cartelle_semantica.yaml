@@ -1,0 +1,49 @@
+identity:
+  ambito: "Identità Aziendale"
+  descrizione: "Documenti che identificano la struttura legale, amministrativa e la mission della società"
+  esempio: ["Statuto", "Visura", "Atto Costitutivo"]
+
+organizzazione:
+  ambito: "Struttura Organizzativa"
+  descrizione: "Documenti relativi all’organigramma, funzionigramma, ruoli e mansionari"
+  esempio: ["Organigramma", "Mansionario"]
+
+artefatti-operativi:
+  ambito: "Procedure e Operatività"
+  descrizione: "Procedure operative, documenti di processo, modelli interni"
+  esempio: ["Procedure", "Modelli"]
+
+glossario:
+  ambito: "Definizioni e Glossario"
+  descrizione: "Termini chiave, glossari e dizionari interni"
+  esempio: ["Glossario", "Vocabolario"]
+
+best-practices:
+  ambito: "Best Practices"
+  descrizione: "Linee guida operative, esempi virtuosi e template"
+  esempio: ["Linee guida", "Template"]
+
+normativa:
+  ambito: "Normativa e Compliance"
+  descrizione: "Norme, regolamenti, certificazioni, policy obbligatorie"
+  esempio: ["Norme", "Certificazioni"]
+
+scenario:
+  ambito: "Scenario e Mercato"
+  descrizione: "Analisi di settore, mercato di riferimento, scenari evolutivi"
+  esempio: ["Analisi", "Mercato"]
+
+economy:
+  ambito: "Dati Economici"
+  descrizione: "Bilanci, analisi economiche, indici di performance"
+  esempio: ["Bilanci", "KPI"]
+
+template-documenti:
+  ambito: "Template Documentali"
+  descrizione: "Modelli editabili di documentazione"
+  esempio: ["Template", "Modelli"]
+
+contrattualistica:
+  ambito: "Contratti"
+  descrizione: "Documenti legali e contratti"
+  esempio: ["Contratti", "Accordi"]

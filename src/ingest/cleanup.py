@@ -1,9 +1,7 @@
-# src/ingest/cleanup.py
-
+from pathlib import Path
 import os
 import shutil
 import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +9,7 @@ def cleanup_output(config: dict):
     """
     Rimuove in modo sicuro il contenuto della cartella di output Markdown,
     mantenendo la repo .git intatta se esiste.
+    Pone la domanda solo se sono presenti file o cartelle diverse da 'config'.
     """
     output_template = config.get("OUTPUT_DIR_TEMPLATE") or os.getenv("OUTPUT_DIR_TEMPLATE")
     if not output_template:
@@ -23,17 +22,22 @@ def cleanup_output(config: dict):
         logger.error(f"❌ Variabile mancante nel template OUTPUT_DIR_TEMPLATE: {e}")
         return
 
-    if not output_path.exists():
-        logger.warning(f"⚠️ Cartella output non trovata: {output_path}")
+    # --- PATCH: escludi la sola presenza della cartella 'config'
+    # Lista di elementi (file o cartelle) diversi da 'config'
+    items_to_check = [item for item in output_path.iterdir() if item.name != "config"]
+
+    if not items_to_check:
+        logger.info(f"🟢 Solo cartella 'config' presente (o output vuota), nessuna pulizia necessaria.")
         return
 
-    confirm = input(f"❓ Vuoi svuotare il contenuto della cartella {output_path}? [y/N] ").strip().lower()
+    # Altrimenti chiedi conferma solo se ci sono altri file/cartelle
+    confirm = input(f"❓ Vuoi svuotare il contenuto della cartella {output_path} (eccetto config)? [y/N] ").strip().lower()
     if confirm != "y":
         logger.info("⏩ Pulizia annullata.")
         return
 
     try:
-        for item in output_path.iterdir():
+        for item in items_to_check:
             if item.name == ".git":
                 continue  # 🔒 Manteniamo il repo Git se esiste
             try:
@@ -43,6 +47,6 @@ def cleanup_output(config: dict):
                     shutil.rmtree(item)
             except Exception as inner_e:
                 logger.warning(f"⚠️ Impossibile rimuovere {item}: {inner_e}")
-        logger.info(f"🧹 Contenuto della cartella {output_path} rimosso.")
+        logger.info(f"🧹 Contenuto della cartella {output_path} rimosso (config preservata).")
     except Exception as e:
         logger.error(f"❌ Errore durante la pulizia: {e}")
