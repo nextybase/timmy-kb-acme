@@ -1,111 +1,88 @@
-# 🚀 Pre-onboarding Pipeline Timmy-KB (v1.2.2)
+# 🟦 Pre-Onboarding NeXT – Pipeline v1.2.3
 
-## 🎯 Obiettivo
-
-Automatizzare la creazione della struttura base su Google Drive per ogni nuovo cliente, compresa la generazione e validazione della configurazione (`config.yaml`), con supporto a rollback, logging strutturato e idempotenza.\
-Questa fase fornisce la base solida per tutte le successive procedure di ingest e arricchimento semantico.
+Questa fase serve a **creare la struttura Drive cliente**, pronta per la raccolta documentale e la successiva pipeline di onboarding NeXT.
 
 ---
 
-## ✅ Novità v1.2.2
+## 📍 Scopo e overview
 
-- 🔁 Check preventivo su esistenza cartella `<slug>` su Drive (idempotente)
-- ⚠️ Prompt interattivo per confermare o annullare
-- 🧹 Rollback sicuro su errore (eliminazione cartella root su Drive)
-- 🧪 Validazione semantica del template `cartelle_raw.yaml`
-- 📦 Logging robusto, audit completo e portabilità .env
-- ➕ Generazione e upload di `config.yaml` nella cartella `config` del cliente (pronta per la fase di onboarding)
+- **Automazione completa** della creazione struttura cartelle su Google Drive per il cliente.
+- **Generazione automatica del file `config.yaml`**, usato come base di configurazione per tutta la pipeline.
+- **Logging strutturato** e validazione a ogni step.
+- Input guidato e validazione naming (slug + nome cliente).
+- Rollback sicuro: nessuna cartella viene sovrascritta se già esistente.
 
 ---
 
-## 🗂️ Struttura e moduli coinvolti
+## ⚙️ Come si usa
+
+### 1. Esegui il pre-onboarding
+
+```bash
+py src/pre_onboarding.py
+```
+Ti verrà chiesto:
+
+- Lo slug cliente (solo minuscole, trattino, no spazi)
+- Il nome completo del cliente
+
+---
+
+### 2. Cosa fa lo script
+
+- Connette l’account Google Drive tramite service account.
+- Cerca la cartella cliente (usando lo slug come nome).
+- Se esiste già, blocca la procedura con warning.
+- Crea la cartella root cliente e tutte le sottocartelle tematiche (da YAML di struttura in config/).
+- Genera e salva localmente il file config.yaml (in output/timmy-kb-<slug>/config/config.yaml).
+- Carica config.yaml su Google Drive, dentro la cartella root appena creata.
+- Logga ogni step (successo, warning, errori) su console e su file (logs/pre_onboarding.log).
+
+---
+
+### 3. Struttura output generata
 
 ```
-project-root/
-├── config/
-│   └── cartelle_raw.yaml
-├── temp_config/
-│   └── config.yaml
-├── src/
-│   ├── pre_onboarding.py
-│   └── ingest/
-│       ├── config_writer.py
-│       ├── drive_utils.py
-│       └── validate_structure.py
-├── .env
+output/
+└── timmy-kb-<slug>/
+    ├── config/
+    │   └── config.yaml
+    └── (cartelle tematiche da YAML)
 ```
 
+---
 
+### 4. Variabili e dipendenze
+
+Il file `.env` deve contenere:
+
+- DRIVE_ID (ID della root Google Drive da usare)
+- CARTELLE_RAW_YAML (path YAML con struttura cartelle, default: config/cartelle_raw.yaml)
+- GOOGLE_SERVICE_ACCOUNT_JSON (default: service_account.json)
+
+Il file config.yaml generato conterrà tutte le informazioni necessarie per le pipeline successive.
 
 ---
 
-## ⚙️ Flusso della procedura
+## 🪵 Logging e naming
 
-1. **Avvio**
-
-   - Da CLI: `py src/pre_onboarding.py`
-   - Richiede: **slug** e **nome cliente**
-
-2. **Generazione e validazione config**
-
-   - Crea e salva localmente `config.yaml` nella struttura del cliente
-   - Preview e conferma manuale prima dell’upload
-
-3. **Validazione YAML struttura cartelle**
-
-   - Controlla la validità di `cartelle_raw.yaml` (deve rappresentare una struttura coerente)
-
-4. **Upload e creazione struttura su Drive**
-
-   - Crea cartella root cliente e sottocartelle secondo YAML
-   - Carica `config.yaml` nella sottocartella `config/`
-
-5. **Rollback**
-
-   - In caso di errore, elimina tutta la cartella cliente su Drive
-
-6. **Logging**
-
-   - Logging strutturato su file e console, con livelli INFO/WARNING/ERROR
+Ogni operazione viene loggata via funzione `get_structured_logger` dal modulo logging_utils.py.  
+Logging su console e su file.  
+Funzioni, file, variabili sempre in snake_case e con nomi descrittivi (no abbreviazioni).  
+Messaggi CLI chiari e “empathic”, differenziati da logging strutturato.
 
 ---
 
-## 📄 Variabili richieste in `.env`
+## ❗ Novità rispetto alle versioni precedenti
 
-| Variabile                 | Descrizione                                 |
-| ------------------------- | ------------------------------------------- |
-| DRIVE\_ID                 | ID Drive condiviso clienti                  |
-| SERVICE\_ACCOUNT\_FILE    | Path file JSON credenziali Google API       |
-| LOCAL\_TEMP\_CONFIG\_PATH | Path locale config temporanea               |
-| CARTELLE\_RAW\_YAML       | Path al template struttura cartelle cliente |
+- Refactor naming: tutte le funzioni e i file seguono la nuova naming rule (vedi NAMING_LOGGING_RULES.md).
+- Logging centralizzato: ogni step tracciato e facilmente auditabile.
+- Pipeline più robusta: roll-back, path sicuri, nessuna sovrascrittura accidentale.
 
 ---
 
-## ✅ Output atteso
+## 📎 Note operative
 
-- Struttura cliente completa su Google Drive (`<slug>/raw`, sottocartelle tematiche, ecc.)
-- `config.yaml` caricato e validato, pronto per la fase di onboarding
-
----
-
-## 🌐 Portabilità
-
-- Funziona su Windows/Mac/Linux
-- Path e credenziali totalmente parametrizzati
-- Logging strutturato e auditabile
-
----
-
-## 🛠️ Dipendenze
-
-- Python >= 3.10
-- `google-api-python-client`, `pyyaml`, `python-dotenv`
-
----
-
-## 🧭 Estensioni future
-
-- Autogenerazione intelligente slug cliente
-- Supporto a batch pre-onboarding
-- Profili multipli di struttura cartelle
-
+La procedura va lanciata una sola volta per ogni nuovo cliente.  
+In caso di errore o rollback, basta rilanciare lo script con lo stesso slug.  
+Per aggiornamenti, consulta anche il README principale e il CHANGELOG.

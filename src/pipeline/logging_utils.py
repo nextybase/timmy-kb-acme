@@ -1,7 +1,7 @@
 import logging
 import os
 
-def get_logger(name="default", log_file=None, level=logging.INFO):
+def get_structured_logger(name="default", log_file=None, level=logging.INFO):
     """
     Crea un logger con output su console e, se specificato, su file.
     Supporta caratteri Unicode (emoji inclusi).

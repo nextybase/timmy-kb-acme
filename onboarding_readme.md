@@ -1,129 +1,114 @@
-# 📚 Documentazione Pipeline Onboarding – Timmy KB (v1.2.2)
+# 🟩 Onboarding Pipeline Timmy-KB – v1.2.3
 
-## 🧭 Obiettivo
-
-Automatizzare la generazione, l’arricchimento semantico, l’anteprima e la pubblicazione di una Knowledge Base partendo da PDF contenuti in una cartella Drive condivisa, per ogni nuovo cliente.\
-Pipeline e arricchimento semantico sono ora **modulari e completamente separati**: la pipeline si occupa di ingest, conversione, preview e push, mentre tutti gli enrichment (tagging, AI, NLP, embedding) sono delegati ai moduli in `/semantic/`.
+Questa è la **pipeline automatizzata** per la creazione della Knowledge Base del cliente Timmy-KB,  
+ottimizzata secondo le naming rule e policy di logging della versione 1.2.3.
 
 ---
 
-## ✅ Novità v1.2.2
+## 📍 Scopo e overview
 
-- 🧠 **Separazione pipeline/enrichment:** tutti gli arricchimenti semantici ora sono gestiti solo dai moduli in `/semantic/`.
-- 🔁 **Batch conversion PDF→Markdown arricchito:** i markdown ora hanno frontmatter semantico direttamente in fase di conversione.
-- 🧹 **Cancellazione selettiva e rigenerazione automatica:** in modalità standalone è possibile pulire la cartella principale e rigenerare tutti i markdown.
-- 🛡️ **Pipeline robusta e idempotente:** ogni step lavora in modo sicuro senza rischio di duplicati o perdita dati.
-- 🔎 **Preview e publish:** anteprima locale con Honkit (Docker), push interattivo su GitHub (ramo main).
+- **Automatizzare il flusso completo** di ingestione, conversione, enrichment e pubblicazione della documentazione cliente.
+- Generazione Knowledge Base pronta per la pubblicazione GitBook/GitHub e per l’arricchimento AI-driven.
+- Logging strutturato su ogni step, messaggi CLI chiari e robustezza end-to-end.
 
 ---
 
-## 🗂️ Struttura base del progetto
+## ⚙️ Come si usa
 
-project-root/
-
-├── config/
-
-│   ├── cartelle\_semantica.yaml           # Mapping semantico delle cartelle principali
-
-│   └── clienti/\<slug>/config.yaml        # Configurazione specifica per ogni cliente (slug = identificativo cliente)
-
-├── output/
-
-│   └── timmy-kb-\<slug>/                  # Output: markdown arricchiti, README, SUMMARY ecc.
-
-├── src/
-
-│   ├── ingest/                           # Moduli di ingestione e conversione
-
-│   │   ├── config\_loader.py              # Caricamento delle config centralizzate
-
-│   │   ├── pdf\_to\_md.py                  # Conversione batch PDF → Markdown
-
-│   │   ├── build\_summary.py              # Generazione e aggiornamento SUMMARY.md
-
-│   │   ├── gitbook\_preview\.py            # Lancio anteprima Honkit/GitBook in Docker
-
-│   │   ├── github\_push.py                # Push su GitHub repo cliente
-
-│   │   └── cleanup.py                    # Cancellazione selettiva / pulizia cartelle
-
-│   ├── semantic/                         # Moduli di enrichment semantico e tagging
-
-│   │   ├── semantic\_extractor.py         # Conversione + arricchimento PDF→MD + frontmatter semantico
-
-│   │   └── semantic\_mapping.py           # Mappatura semantica (AI, NLP, tag, embedding)
-
-│   └── onboarding\_full.py                # Orchestratore principale della pipeline onboarding
-
-├── .env                                  # Variabili d’ambiente e credenziali (mai in repo!)
-
-## ⚙️ Flusso della pipeline (Onboarding)
-
-### 1. ▶️ Avvio pipeline
+### 1. Lancia la pipeline di onboarding
 
 ```bash
 py src/onboarding_full.py
-2. 🔍 Check repo GitHub esistente
-Prompt se la repo esiste già; prosegui solo su conferma
+```
+Ti verrà chiesto:
 
-3. 📥 Download PDF da Google Drive
-Scarica ricorsivamente tutti i PDF da <slug>/raw
+- Lo slug del cliente (deve corrispondere a quello creato in pre-onboarding)
 
-Mantiene la struttura delle sottocartelle
+---
 
-4. 🧩 Caricamento configurazione
-Carica config.yaml del cliente e parametri da .env
+### 2. Step principali della pipeline
 
-5. 🧠 Conversione e arricchimento PDF→Markdown
-Batch conversion di tutti i PDF in markdown con frontmatter semantico (tramite /semantic/semantic_extractor.py)
+- **Caricamento config cliente:**  
+  Da output/timmy-kb-<slug>/config/config.yaml  
+  Logga dettagli config e controlla la presenza di tutti i parametri chiave.
 
-6. 📑 Generazione README & SUMMARY
-Rigenera README.md e SUMMARY.md in modo idempotente
+- **Pulizia output:**  
+  Chiede conferma se svuotare la cartella output (eccetto config).  
+  Nessun rischio di perdita dati, tutto tracciato da log.
 
-7. 🧪 Anteprima locale via Docker
-Preview con container Honkit su localhost:4000
+- **Download PDF da Google Drive:**  
+  Scarica ricorsivamente tutti i PDF dalla cartella cliente su Drive.  
+  Mantiene struttura tematica delle sottocartelle.  
+  Logging su ogni file scaricato.
 
-L’utente può verificare i contenuti prima del deploy
+- **Conversione batch PDF → Markdown:**  
+  Funzione placeholder (in attesa parsing reale in v1.2.4):  
+  Crea un markdown fittizio per ogni PDF trovato.  
+  Logging per ogni file processato.
 
-8. 🚀 Deploy GitHub
-Push su repo GitHub (ramo main); prompt interattivo se già esistente
+- **Arricchimento semantico automatico:**  
+  Conversione e arricchimento di tutti i markdown tramite mapping YAML (frontmatter).  
+  Rigenerazione README.md e SUMMARY.md.  
+  Logging e reporting di successo/errori.
 
-9. 🧹 Cleanup finale (opzionale)
-Pulizia su richiesta; mai in automatico se la cartella contiene solo config
+- **Preview locale con Docker (Honkit):**  
+  Costruisce e serve la documentazione localmente su http://localhost:4000 tramite Docker.  
+  Logging e gestione errori.
 
-✅ Risultati Finali
-Markdown semantic-ready, frontmatter coerente per AI/knowledge graph
+- **Deploy su GitHub (opzionale, con conferma CLI):**  
+  Push automatico della Knowledge Base sulla repo GitHub del cliente.  
+  Evita duplicati e repository incomplete.  
+  Logging dettagliato esito deploy.
 
-README e SUMMARY sempre rigenerati e consistenti
+---
 
-Repo GitHub aggiornata e navigabile
-
-Logging dettagliato, path e config centralizzati
-
-🛠️ Requisiti tecnici
-Componente	Requisito
-Python	>= 3.10
-Librerie	PyMuPDF, spacy, pydantic, pyyaml, slugify, google-api-python-client, docker, requests
-Docker	Per preview Honkit/GitBook
-GitHub CLI	gh autenticato
-Google Drive	Service Account configurato (.env)
-
-⚡ Sicurezza & portabilità
-Tutti i path e parametri sono centralizzati in .env
-
-Funziona su Windows / Linux / Mac
-
-Logging strutturato
-
-Nessuna credenziale sensibile in repo
-
-🧭 Estensioni previste
-Parsing PDF→MD con estrazione contenuto reale
-
-Validazione naming e refactoring massivo
-
-Logging configurabile e interfaccia CLI per debug
-
-Plug-in AI e vettorializzazione
+## 🏗️ Struttura cartelle e file coinvolti
 
 ```
+src/
+├── pipeline/
+│   ├── drive_utils.py
+│   ├── config_utils.py
+│   ├── content_utils.py
+│   ├── gitbook_preview.py
+│   ├── github_utils.py
+│   ├── cleanup.py
+│   └── logging_utils.py
+├── semantic/
+│   ├── semantic_extractor.py
+│   └── semantic_mapping.py
+output/
+└── timmy-kb-<slug>/
+    ├── config/
+    │   └── config.yaml
+    ├── raw/
+    ├── <cartelle tematiche>/
+    ├── README.md
+    └── SUMMARY.md
+```
+
+---
+
+## 🪵 Logging, naming e orchestrazione
+
+Ogni funzione, file e variabile segue la naming rule snake_case, nessuna abbreviazione oscura.  
+Logging sempre centralizzato tramite get_structured_logger (console e file).  
+Step batch e processi critici sempre loggati con livello DEBUG, INFO, WARNING, ERROR.  
+Tutti gli errori e i warning sono gestiti e riportati all’utente in modo chiaro.
+
+---
+
+## ❗ Novità v1.2.3
+
+- Refactor naming: tutte le funzioni e i file ora seguono la convenzione ufficiale.
+- Logging strutturato: ogni step è tracciato, log file e console sempre disponibili.
+- Modularità e robustezza: orchestrazione tra pipeline, enrichment e tools ora più chiara e affidabile.
+- Preparazione per parsing PDF reale e nuovi moduli AI/CI/CD.
+
+---
+
+## 📎 Note operative
+
+È obbligatorio aver eseguito il pre-onboarding prima di questa pipeline.  
+I log sono disponibili sia su console che in logs/onboarding.log.  
+Consulta CHANGELOG.md e NAMING_LOGGING_RULES.md per dettagli su tutte le evoluzioni.

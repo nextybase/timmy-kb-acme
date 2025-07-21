@@ -1,5 +1,41 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.2.3 - 2025-07-22 - Naming & Logging Clean Release
+
+### 📏 Uniformità naming e modularità
+- Applicata una **naming convention rigorosa** per tutti i file, funzioni e variabili: ora ogni funzione segue il pattern `azione_oggetto[_origine_destinazione]` in snake_case, con nomi autoesplicativi e nessuna abbreviazione opaca.
+- **Refactoring completo dei moduli**: accorpati e rinominati i file in `/src/pipeline/` per dominio funzionale (`drive_utils.py`, `config_utils.py`, `content_utils.py`, ecc.).
+- Eliminata la distinzione fra “utils” e “ingest”: ora tutte le funzioni core della pipeline sono raccolte in `/src/pipeline/`.
+- Separati i tool CLI di manutenzione/cleaning in `/src/tools/` con naming `<azione>_tool.py`.
+- I moduli di enrichment/AI restano in `/src/semantic/`, ora anch’essi uniformati nei nomi e nel logging.
+
+### 🪵 Logging strutturato centralizzato
+- Introdotto il modulo unico `logging_utils.py` con la funzione `get_structured_logger` per una configurazione uniforme dei log.
+- **Livelli di log** coerenti e sempre usati (DEBUG, INFO, WARNING, ERROR), con messaggi espliciti, contestuali e supporto emoji per ogni step rilevante.
+- Possibilità di log su console e su file, configurabile via parametro e .env.
+- Eliminati tutti i `print()` superflui: log e messaggi CLI separati in modo chiaro.
+
+### 🧩 Robustezza, testabilità e orchestrazione
+- Tutti i moduli interni accettano un oggetto `config: dict` come parametro principale (dove sensato), garantendo orchestrazione solida tra pre-onboarding, onboarding e enrichment.
+- Funzioni di output e manipolazione file/cartelle ora sempre **fail-safe**: ogni path viene verificato e creato se mancante, con log dettagliati su ogni anomalia.
+- Tutte le funzioni critiche restituiscono un valore di esito (bool/int), e gli errori sono sempre propagati agli orchestratori tramite logging e gestione eccezioni.
+- **Docstring e commenti estesi** in ogni funzione pubblica per favorire manutenibilità e onboarding di nuovi dev.
+- Pipeline testata end-to-end: tutti i passaggi, dall’input CLI fino al deploy GitHub, funzionano in modo robusto, tracciato e predicibile.
+
+### 🔎 Revisione orchestratori e moduli semantic
+- Aggiornati `pre_onboarding.py` e `onboarding_full.py` con i nuovi import e chiamate funzione, ora completamente aderenti alle naming rule.
+- Aggiunto logging strutturato a tutti gli step dei main script.
+- Moduli di semantic enrichment (`semantic_extractor.py`, `semantic_mapping.py`) allineati a naming, logging e robustezza pipeline, con fix dei riferimenti dopo i rename.
+
+### 🛠️ Chiusura versioning e preparazione v1.2.4
+- Rilasciata pipeline pronta per parsing PDF reale, arricchimento AI-driven e introduzione di nuovi tool/CLI.
+- La struttura attuale è pronta per essere estesa e testata anche in ambienti CI/CD, con log e naming “AI-ready”.
+- Il refactoring ha migliorato significativamente la leggibilità, la tracciabilità dei processi e la facilità di debugging/upgrade futuro.
+
+**Upgrade altamente raccomandato per tutte le istanze operative e i team che contribuiscono al framework NeXT.**
+
+---
+
 ## v1.2.2 - 2025-07-21 - Arricchimento semantico e refactoring struttura
 
 ### 🧠 Separazione tra pipeline e arricchimento semantico

@@ -1,50 +1,58 @@
+# src/semantic/semantic_mapping.py
+
 import yaml
 from pathlib import Path
+from pipeline.logging_utils import get_structured_logger
+
+logger = get_structured_logger("semantic.semantic_mapping")
 
 # Path al file di mapping semantico (relativo alla root progetto)
 SEMANTIC_YAML_PATH = Path("config/cartelle_semantica.yaml")
 
-def load_semantic_mapping():
+def load_semantic_mapping() -> dict:
     """
     Carica il file YAML della struttura semantica delle cartelle.
+    Restituisce il mapping completo come dizionario.
     """
-    with open(SEMANTIC_YAML_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(SEMANTIC_YAML_PATH, "r", encoding="utf-8") as f:
+            mapping = yaml.safe_load(f)
+        logger.info(f"✅ Mapping semantico caricato da {SEMANTIC_YAML_PATH}")
+        return mapping
+    except Exception as e:
+        logger.error(f"❌ Errore nel caricamento mapping semantico: {e}")
+        return {}
 
-def get_semantic_info_for_folder(folder_name):
+def get_semantic_mapping_for_folder(folder_name: str) -> dict:
     """
     Dato il nome di una cartella (es: 'glossario'), restituisce il mapping semantico.
     """
     mapping = load_semantic_mapping()
-    return mapping.get(folder_name, {
+    info = mapping.get(folder_name)
+    if info:
+        logger.debug(f"Mapping trovato per cartella: {folder_name}")
+        return info
+    logger.warning(f"Cartella '{folder_name}' non mappata.")
+    return {
         "ambito": "unknown",
         "descrizione": "Cartella non mappata",
         "esempio": [],
-    })
+    }
 
-def get_semantic_info_for_file(filepath):
+def get_semantic_mapping_for_file(filepath: str) -> dict:
     """
     Dato un path file (Markdown), cerca la prima cartella tematica nell'albero
     e restituisce il mapping semantico relativo.
     """
     p = Path(filepath)
     for part in p.parts:
-        # Salta le directory di root/output, cerca solo la cartella tematica
-        info = get_semantic_info_for_folder(part)
+        info = get_semantic_mapping_for_folder(part)
         if info["ambito"] != "unknown":
+            logger.debug(f"Mapping semantico trovato per file: {filepath} (cartella: {part})")
             return info
-    # Nessuna cartella tematica trovata
+    logger.warning(f"Nessuna cartella tematica trovata per file: {filepath}")
     return {
         "ambito": "unknown",
         "descrizione": "File fuori struttura semantica",
         "esempio": [],
     }
-
-# Esempio d'uso (rimuovi in produzione o sposta in test!)
-if __name__ == "__main__":
-    print("== Test cartella ==")
-    print(get_semantic_info_for_folder("glossario"))
-
-    print("\n== Test file path ==")
-    print(get_semantic_info_for_file("output/timmy-kb-prova/glossario/Glossario.md"))
-    print(get_semantic_info_for_file("output/timmy-kb-prova/unknown-dir/test.md"))
