@@ -1,128 +1,129 @@
-# 📚 Documentazione Pipeline Onboarding – Timmy KB (2025, v1.2)
+# 📚 Documentazione Pipeline Onboarding – Timmy KB (v1.2.2)
 
 ## 🧭 Obiettivo
 
-Automatizzare la generazione, strutturazione semantica, anteprima e pubblicazione di una Knowledge Base partendo da PDF contenuti in una cartella Drive condivisa, per ogni nuovo cliente.  
-Tutti i path e i parametri di sistema sono caricati dinamicamente da file `.env` e dalla configurazione del cliente su Drive.
+Automatizzare la generazione, l’arricchimento semantico, l’anteprima e la pubblicazione di una Knowledge Base partendo da PDF contenuti in una cartella Drive condivisa, per ogni nuovo cliente.\
+Pipeline e arricchimento semantico sono ora **modulari e completamente separati**: la pipeline si occupa di ingest, conversione, preview e push, mentre tutti gli enrichment (tagging, AI, NLP, embedding) sono delegati ai moduli in `/semantic/`.
 
 ---
 
-## 🆕 Novità v1.2
+## ✅ Novità v1.2.2
 
-- ✅ Check anticipato: se la repo GitHub esiste già, chiede all'utente se proseguire o annullare
-- 🔁 Fallback sicuro: push solo su repo esistente, evitando errori da duplicazione
-- 🔍 Controllo `gh` installata e autenticata prima di procedere
-- 🧪 Logging migliorato e pulizia più sicura al termine della pipeline
+- 🧠 **Separazione pipeline/enrichment:** tutti gli arricchimenti semantici ora sono gestiti solo dai moduli in `/semantic/`.
+- 🔁 **Batch conversion PDF→Markdown arricchito:** i markdown ora hanno frontmatter semantico direttamente in fase di conversione.
+- 🧹 **Cancellazione selettiva e rigenerazione automatica:** in modalità standalone è possibile pulire la cartella principale e rigenerare tutti i markdown.
+- 🛡️ **Pipeline robusta e idempotente:** ogni step lavora in modo sicuro senza rischio di duplicati o perdita dati.
+- 🔎 **Preview e publish:** anteprima locale con Honkit (Docker), push interattivo su GitHub (ramo main).
 
 ---
 
 ## 🗂️ Struttura base del progetto
 
-```
 project-root/
-├── config/
-│   ├── raw_structure.yaml        # (opz.) Mappa semantica delle tipologie documentali
-│   └── cartelle_raw.yaml         # Template struttura cartelle cliente su Drive
-├── output/
-│   └── timmy_kb_<slug>/          # Output Markdown, JSON, README generati
-├── clienti/
-│   └── timmy-kb-<slug>/          # (opz.) Config locale cliente (copia)
-├── src/
-│   ├── ingest/
-│   │   ├── config_loader.py
-│   │   ├── pdf_to_md.py
-│   │   ├── semantic_extractor.py
-│   │   ├── build_summary.py
-│   │   ├── gitbook_preview.py
-│   │   ├── github_push.py
-│   │   └── cleanup.py
-│   ├── utils/
-│   │   └── github_utils.py       # ✅ nuovo modulo helper GitHub
-│   └── onboarding_full.py
-├── .env
-```
 
----
+├── config/
+
+│   ├── cartelle\_semantica.yaml           # Mapping semantico delle cartelle principali
+
+│   └── clienti/\<slug>/config.yaml        # Configurazione specifica per ogni cliente (slug = identificativo cliente)
+
+├── output/
+
+│   └── timmy-kb-\<slug>/                  # Output: markdown arricchiti, README, SUMMARY ecc.
+
+├── src/
+
+│   ├── ingest/                           # Moduli di ingestione e conversione
+
+│   │   ├── config\_loader.py              # Caricamento delle config centralizzate
+
+│   │   ├── pdf\_to\_md.py                  # Conversione batch PDF → Markdown
+
+│   │   ├── build\_summary.py              # Generazione e aggiornamento SUMMARY.md
+
+│   │   ├── gitbook\_preview\.py            # Lancio anteprima Honkit/GitBook in Docker
+
+│   │   ├── github\_push.py                # Push su GitHub repo cliente
+
+│   │   └── cleanup.py                    # Cancellazione selettiva / pulizia cartelle
+
+│   ├── semantic/                         # Moduli di enrichment semantico e tagging
+
+│   │   ├── semantic\_extractor.py         # Conversione + arricchimento PDF→MD + frontmatter semantico
+
+│   │   └── semantic\_mapping.py           # Mappatura semantica (AI, NLP, tag, embedding)
+
+│   └── onboarding\_full.py                # Orchestratore principale della pipeline onboarding
+
+├── .env                                  # Variabili d’ambiente e credenziali (mai in repo!)
 
 ## ⚙️ Flusso della pipeline (Onboarding)
 
 ### 1. ▶️ Avvio pipeline
+
 ```bash
 py src/onboarding_full.py
+2. 🔍 Check repo GitHub esistente
+Prompt se la repo esiste già; prosegui solo su conferma
+
+3. 📥 Download PDF da Google Drive
+Scarica ricorsivamente tutti i PDF da <slug>/raw
+
+Mantiene la struttura delle sottocartelle
+
+4. 🧩 Caricamento configurazione
+Carica config.yaml del cliente e parametri da .env
+
+5. 🧠 Conversione e arricchimento PDF→Markdown
+Batch conversion di tutti i PDF in markdown con frontmatter semantico (tramite /semantic/semantic_extractor.py)
+
+6. 📑 Generazione README & SUMMARY
+Rigenera README.md e SUMMARY.md in modo idempotente
+
+7. 🧪 Anteprima locale via Docker
+Preview con container Honkit su localhost:4000
+
+L’utente può verificare i contenuti prima del deploy
+
+8. 🚀 Deploy GitHub
+Push su repo GitHub (ramo main); prompt interattivo se già esistente
+
+9. 🧹 Cleanup finale (opzionale)
+Pulizia su richiesta; mai in automatico se la cartella contiene solo config
+
+✅ Risultati Finali
+Markdown semantic-ready, frontmatter coerente per AI/knowledge graph
+
+README e SUMMARY sempre rigenerati e consistenti
+
+Repo GitHub aggiornata e navigabile
+
+Logging dettagliato, path e config centralizzati
+
+🛠️ Requisiti tecnici
+Componente	Requisito
+Python	>= 3.10
+Librerie	PyMuPDF, spacy, pydantic, pyyaml, slugify, google-api-python-client, docker, requests
+Docker	Per preview Honkit/GitBook
+GitHub CLI	gh autenticato
+Google Drive	Service Account configurato (.env)
+
+⚡ Sicurezza & portabilità
+Tutti i path e parametri sono centralizzati in .env
+
+Funziona su Windows / Linux / Mac
+
+Logging strutturato
+
+Nessuna credenziale sensibile in repo
+
+🧭 Estensioni previste
+Parsing PDF→MD con estrazione contenuto reale
+
+Validazione naming e refactoring massivo
+
+Logging configurabile e interfaccia CLI per debug
+
+Plug-in AI e vettorializzazione
+
 ```
-
-### 2. 🔍 Check GitHub repo esistente
-Subito dopo l'inserimento dello slug, la pipeline verifica se la repo esiste:
-- Se esiste → prompt per confermare o annullare
-- Se non esiste → prosegue con lo step successivo
-
-### 3. 📥 Download PDF da Google Drive
-- Scarica ricorsivamente tutti i PDF da `<slug>/raw`
-- Mantiene la struttura delle sottocartelle
-
-### 4. 🧩 Caricamento configurazione
-- Carica `config.yaml` dal Drive del cliente
-- Integra parametri da `.env`
-- Valida consistenza, fallisce se mancano dati essenziali
-
-### 5. 📄 Conversione PDF → Markdown
-- Tutti i PDF diventano `.md` salvati in `output/timmy_kb_<slug>/`
-
-### 6. 🧠 Estrazione Semantica
-- Genera JSON placeholder (`README.json`, `SUMMARY.json`) per ogni documento
-
-### 7. 📑 Generazione README & SUMMARY
-- Crea `README.md` e `SUMMARY.md` compatibili con GitBook/Honkit
-
-### 8. 🧪 Anteprima locale via Docker
-- Avvia container Honkit su `localhost:4000`
-- L’utente può ispezionare i contenuti prima di procedere
-
-### 9. 🚀 Deploy GitHub
-- Prompt interattivo
-- Se repo esiste → push solo se confermato
-- Altrimenti → crea repo con `gh repo create`
-
-### 10. 🧹 Cleanup finale
-- Chiede conferma prima della rimozione
-- Cancella solo se directory è quella attesa
-
----
-
-## ✅ Risultati Finali
-
-- File Markdown e JSON strutturati
-- README e SUMMARY pronti per GitBook
-- Repo GitHub aggiornata
-- Preview Docker verificata
-- Logging trasparente
-
----
-
-## 🛠️ Requisiti tecnici
-
-| Componente     | Requisito                                               |
-|----------------|----------------------------------------------------------|
-| Python         | >= 3.10                                                  |
-| Librerie       | PyMuPDF, spacy, pydantic, pyyaml, slugify, google-api-python-client, docker, requests |
-| Docker         | Per preview Honkit/GitBook                               |
-| GitHub CLI     | `gh` autenticato                                         |
-| Google Drive   | Service Account configurato (.env)                       |
-
----
-
-## ⚡ Sicurezza & portabilità
-
-- Tutti i path e parametri sono centralizzati in `.env`
-- Compatibile con sistemi Windows / Linux
-- Logging strutturato
-- Nessuna credenziale sensibile è committata
-
----
-
-## 🧭 Estensioni previste
-
-- Attivazione GitHub Pages automatica post-push
-- Modalità `--yes` per CI/CD
-- Logging avanzato su file
-- Supporto altri formati oltre PDF
