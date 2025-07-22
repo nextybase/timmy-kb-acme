@@ -1,16 +1,15 @@
-# src/pipeline/gitbook_preview.py
-
 import subprocess
 import os
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import PreviewError
 
 logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log")
 
-def run_gitbook_docker_preview(config: dict) -> bool:
+def run_gitbook_docker_preview(config: dict) -> None:
     """
     Lancia anteprima GitBook in locale tramite Docker (Honkit build + serve).
-    Restituisce True se il ciclo build/preview è stato completato, False su errore.
+    Solleva PreviewError su errore bloccante.
     """
     output_dir = Path(config["md_output_path"]).resolve()
     logger.info(f"📁 Directory corrente per anteprima: {output_dir}")
@@ -25,9 +24,9 @@ def run_gitbook_docker_preview(config: dict) -> bool:
     ]
     try:
         subprocess.run(build_cmd, check=True)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
         logger.error("❌ Errore durante `honkit build`. Anteprima non avviata.")
-        return False
+        raise PreviewError(f"Errore durante `honkit build`: {e}")
 
     # 2. Serve in modalità detached
     logger.info("🐳 Avvio anteprima GitBook in locale con Docker (in background)...")
@@ -47,7 +46,6 @@ def run_gitbook_docker_preview(config: dict) -> bool:
 
         logger.info("🛑 Arresto container Docker...")
         subprocess.run(["docker", "stop", container_name])
-        return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
         logger.error("❌ Errore durante `honkit serve`.")
-        return False
+        raise PreviewError(f"Errore durante `honkit serve`: {e}")

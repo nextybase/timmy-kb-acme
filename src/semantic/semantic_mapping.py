@@ -1,21 +1,18 @@
-# src/semantic/semantic_mapping.py
-
 import yaml
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import SemanticMappingError
 
 logger = get_structured_logger("semantic.semantic_mapping")
 
-# Path al file di mapping semantico (relativo alla root progetto)
 SEMANTIC_YAML_PATH = Path("config/cartelle_semantica.yaml")
-
-# Caching globale del mapping
 _MAPPING_CACHE = None
 
 def load_semantic_mapping() -> dict:
     """
     Carica il file YAML della struttura semantica delle cartelle UNA SOLA VOLTA.
     Restituisce il mapping completo come dizionario.
+    Solleva SemanticMappingError in caso di errore.
     """
     global _MAPPING_CACHE
     if _MAPPING_CACHE is not None:
@@ -28,8 +25,7 @@ def load_semantic_mapping() -> dict:
         return mapping
     except Exception as e:
         logger.error(f"❌ Errore nel caricamento mapping semantico: {e}")
-        _MAPPING_CACHE = {}
-        return {}
+        raise SemanticMappingError(f"Errore nel caricamento mapping semantico: {e}")
 
 def get_semantic_mapping_for_folder(folder_name: str) -> dict:
     """
@@ -40,7 +36,7 @@ def get_semantic_mapping_for_folder(folder_name: str) -> dict:
     if info:
         logger.debug(f"Mapping trovato per cartella: {folder_name}")
         return info
-    logger.warning(f"Cartella '{folder_name}' non mappata.")
+    logger.warning(f"⚠️ Cartella '{folder_name}' non mappata.")
     return {
         "ambito": "unknown",
         "descrizione": "Cartella non mappata",
@@ -58,7 +54,7 @@ def get_semantic_mapping_for_file(filepath: str) -> dict:
         if info["ambito"] != "unknown":
             logger.debug(f"Mapping semantico trovato per file: {filepath} (cartella: {part})")
             return info
-    logger.warning(f"Nessuna cartella tematica trovata per file: {filepath}")
+    logger.warning(f"⚠️ Nessuna cartella tematica trovata per file: {filepath}")
     return {
         "ambito": "unknown",
         "descrizione": "File fuori struttura semantica",

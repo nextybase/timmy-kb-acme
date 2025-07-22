@@ -1,5 +1,35 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.3.1 - 2025-07-22 - Robustezza, gestione errori explainable & logging uniforme
+
+### 🛡️ Exception-first & gestione errori “explainable”
+- **Introdotto il modulo unico `exceptions.py`** con tutte le eccezioni custom di pipeline (`DriveDownloadError`, `DriveUploadError`, `ConversionError`, `PushError`, `ConfigError`, `CleanupError`, `PreviewError`, `EnrichmentError`, `SemanticMappingError`).
+- **Tutte le funzioni critiche** ora sollevano eccezioni custom in caso di errore bloccante (mai più errori “silenziosi” con return booleani).
+- Orchestratori (main script) uniformati: catch unico per tutte le custom, log chiari e messaggi CLI user-friendly.
+- **Pipeline pronta per audit, automonitoring, integrazione future AI/CI/CD.**
+
+### 🪵 Logging strutturato centralizzato & policy uniforme
+- **Tutti i logger ora creati con `get_structured_logger()`**, naming standard per ogni modulo.
+- Messaggi log **con emoji**, livelli coerenti (INFO, WARNING, ERROR), nessun log di successo fuori dal try/except.
+- **Terminologia e formato uniforme** su tutta la pipeline (start, successo, warning, errore, annullato, completato).
+- Policy aggiornata in coding_rule.md e README/tools.
+
+### 🧹 Rimozione codice morto, refactor conservativo & naming
+- **Rimosso tutto il codice non più usato**: funzioni legacy (es. check GitHub CLI), placeholder e import inutilizzati.
+- Tutto il naming ora coerente e autoesplicativo, nessuna variabile/campo duplicato o “ambiguo”.
+- **Tool CLI batch di refactor** sviluppato (find & replace interattivo, logs) – pronto per future clean-up di massa.
+
+### 🧪 Test end-to-end & validazione robustezza
+- **Pipeline testata interamente su casi reali** (pre-onboarding → onboarding completo → preview → deploy GitHub).
+- Tutte le fasi loggate con chiarezza, nessun messaggio di successo se la procedura fallisce.
+- Base pronta per test automatici, validazione continua e onboarding di nuovi dev.
+
+---
+
+**Questa release chiude la fase di hardening robustezza/explainability e prepara la base per la minor release dedicata a tools di analisi, test e log search avanzato.  
+Upgrade raccomandato per tutte le istanze operative e team NeXT/Timmy.**
+
+
 ## v1.3 - 2025-07-22 - Tagging semantico, robustezza AI-ready & convenzioni testing
 
 ### 🧠 Parsing PDF → Markdown, tagging e normalizzazione

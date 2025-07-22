@@ -1,14 +1,13 @@
-# src/pipeline/content_utils.py
-
-import logging
 from pathlib import Path
 import os
 import yaml
 import datetime
 
 from pipeline.file2md_utils import extract_file_to_markdown, load_tags_by_category
+from pipeline.exceptions import ConversionError
+from pipeline.logging_utils import get_structured_logger
 
-logger = logging.getLogger("pipeline.content_utils")
+logger = get_structured_logger("pipeline.content_utils")
 
 def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
@@ -16,6 +15,7 @@ def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> 
     in file Markdown nella cartella di output, aggiungendo tag di paragrafo.
     Ogni markdown ha frontmatter ricco (titolo, categoria, cartella origine, data...).
     Ritorna il numero di file convertiti.
+    Solleva ConversionError se la conversione globale fallisce.
     """
     raw_path = Path(config["raw_dir"])
     slug = config["slug"]
@@ -24,11 +24,10 @@ def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> 
     config["md_output_path"] = str(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Individua tutti i file supportati: PDF (estendibile!)
     files = list(raw_path.rglob("*"))
     files = [f for f in files if f.is_file() and f.suffix.lower() in {".pdf"}]  # Espandibile
 
-    logger.info(f"Trovati {len(files)} file da convertire in {raw_path}")
+    logger.info(f"🟢 Trovati {len(files)} file da convertire in {raw_path}")
 
     def get_categoria_from_path(file_path):
         folder = file_path.parent.name.lower()
@@ -36,7 +35,6 @@ def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> 
             return mapping[folder]
         return folder
 
-    # Carica UNA SOLA VOLTA la lista dei tag ufficiali per categoria
     tags_by_cat = load_tags_by_category()
 
     converted = 0
@@ -51,19 +49,20 @@ def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> 
                 "data_conversione": datetime.date.today().isoformat(),
                 "stato_normalizzazione": "completato"
             }
-            extract_file_to_markdown(file, output_path, frontmatter, tags_by_cat=tags_by_cat)  # <-- passaggio tags!
+            extract_file_to_markdown(file, output_path, frontmatter, tags_by_cat=tags_by_cat)
             converted += 1
             logger.info(f"✅ Markdown creato per: {file.name}")
         except Exception as e:
-            logger.warning(f"❌ Errore durante la conversione di {file.name}: {e}")
+            logger.error(f"❌ Errore durante la conversione di {file.name}: {e}")
+            raise ConversionError(f"Errore durante la conversione di {file.name}: {e}")
 
-    logger.info(f"Conversione completata: {converted}/{len(files)} riusciti")
+    logger.info(f"🏁 Conversione completata: {converted}/{len(files)} riusciti")
     return converted
 
-def generate_summary_markdown(markdown_files, output_path) -> bool:
+def generate_summary_markdown(markdown_files, output_path) -> None:
     """
     Genera il file SUMMARY.md dai markdown presenti nella cartella output_path.
-    Restituisce True se la generazione va a buon fine, False altrimenti.
+    Solleva ConversionError in caso di errore.
     """
     summary_md_path = os.path.join(output_path, "SUMMARY.md")
     try:
@@ -77,15 +76,14 @@ def generate_summary_markdown(markdown_files, output_path) -> bool:
                 f.write(f"* [{title}]({file})\n")
 
         logger.info(f"📄 SUMMARY.md generato con {len(markdown_files)} file.")
-        return True
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
-        return False
+        raise ConversionError(f"Errore nella generazione di SUMMARY.md: {e}")
 
-def generate_readme_markdown(output_path, slug) -> bool:
+def generate_readme_markdown(output_path, slug) -> None:
     """
     Genera un file README.md minimale nella cartella output_path per il cliente specificato da slug.
-    Restituisce True se la generazione va a buon fine, False altrimenti.
+    Solleva ConversionError in caso di errore.
     """
     readme_path = os.path.join(output_path, "README.md")
     try:
@@ -95,7 +93,6 @@ def generate_readme_markdown(output_path, slug) -> bool:
             f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
 
         logger.info("✅ README.md generato con contenuto minimale.")
-        return True
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di README.md: {e}")
-        return False
+        raise ConversionError(f"Errore nella generazione di README.md: {e}")

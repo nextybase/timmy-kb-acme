@@ -1,9 +1,8 @@
-# src/pipeline/cleanup.py
-
 from pathlib import Path
 import os
 import shutil
 from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import CleanupError  # <-- custom exception
 
 logger = get_structured_logger("pipeline.cleanup")
 
@@ -13,17 +12,19 @@ def cleanup_output_folder(config: dict) -> bool:
     mantenendo la repo .git intatta se esiste.
     Chiede conferma solo se sono presenti file/cartelle diverse da 'config'.
     Restituisce True se la pulizia è stata eseguita, False se annullata o non necessaria.
+
+    Solleva CleanupError su errore bloccante (es. variabile mancante, permessi, errore rimozione file).
     """
     output_template = config.get("OUTPUT_DIR_TEMPLATE") or os.getenv("OUTPUT_DIR_TEMPLATE")
     if not output_template:
         logger.error("❌ OUTPUT_DIR_TEMPLATE mancante in config e .env")
-        return False
+        raise CleanupError("OUTPUT_DIR_TEMPLATE mancante in config e .env")
 
     try:
         output_path = Path(output_template.format(**config))
     except KeyError as e:
         logger.error(f"❌ Variabile mancante nel template OUTPUT_DIR_TEMPLATE: {e}")
-        return False
+        raise CleanupError(f"Variabile mancante nel template OUTPUT_DIR_TEMPLATE: {e}")
 
     if not output_path.exists():
         logger.warning(f"⚠️ Cartella output {output_path} non esistente. Nessuna pulizia necessaria.")
@@ -39,7 +40,7 @@ def cleanup_output_folder(config: dict) -> bool:
     # Chiedi conferma solo se ci sono altri file/cartelle
     confirm = input(f"❓ Vuoi svuotare il contenuto della cartella {output_path} (eccetto config)? [y/N] ").strip().lower()
     if confirm != "y":
-        logger.info("⏩ Pulizia annullata dall’utente.")
+        logger.info("⏹️ Pulizia annullata dall’utente.")
         return False
 
     try:
@@ -53,8 +54,9 @@ def cleanup_output_folder(config: dict) -> bool:
                     shutil.rmtree(item)
             except Exception as inner_e:
                 logger.warning(f"⚠️ Impossibile rimuovere {item}: {inner_e}")
+                raise CleanupError(f"Impossibile rimuovere {item}: {inner_e}")
         logger.info(f"🧹 Contenuto della cartella {output_path} rimosso (config preservata).")
         return True
     except Exception as e:
         logger.error(f"❌ Errore durante la pulizia: {e}")
-        return False
+        raise CleanupError(f"Errore durante la pulizia: {e}")
