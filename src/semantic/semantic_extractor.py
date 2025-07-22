@@ -1,21 +1,17 @@
 import sys
 import os
 
+# Mantieni l'adattamento path per esecuzioni dirette fuori package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from pathlib import Path
-import importlib.util
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import EnrichmentError
 
+from .semantic_mapping import get_semantic_mapping_for_file  # ← import pythonico e pulito
+
 logger = get_structured_logger("semantic.semantic_extractor")
 
-# Import dinamico semantic_mapping.py (nessuna modifica)
-mapping_path = os.path.join(os.path.dirname(__file__), "semantic_mapping.py")
-spec = importlib.util.spec_from_file_location("semantic_mapping", mapping_path)
-semantic_mapping = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(semantic_mapping)
-get_semantic_mapping_for_file = semantic_mapping.get_semantic_mapping_for_file
 
 def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
     """
@@ -44,7 +40,7 @@ def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
                 if not any(line.startswith("enriched:") for line in frontmatter):
                     frontmatter.append("enriched: true")
                 enriched_content = (
-                    "---\n" + "\n".join(frontmatter) + "\n---\n" + "\n".join(lines[idx+1:])
+                    "---\n" + "\n".join(frontmatter) + "\n---\n" + "\n".join(lines[idx + 1:])
                 )
                 with open(md_path, "w", encoding="utf-8") as f:
                     f.write(enriched_content)
@@ -58,6 +54,7 @@ def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
 
     logger.info(f"Enrichment completato: {enriched}/{len(md_files)} file arricchiti.")
     return enriched
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
