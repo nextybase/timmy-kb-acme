@@ -1,6 +1,6 @@
-# 🟦 Pre-Onboarding NeXT – Pipeline v1.2.3
+# 🟦 Pre-Onboarding NeXT – Pipeline v1.3
 
-Questa fase serve a **creare la struttura Drive cliente**, pronta per la raccolta documentale e la successiva pipeline di onboarding NeXT.
+Questa fase serve a **creare la struttura Drive cliente**, pronta per la raccolta documentale e la successiva pipeline di onboarding NeXT/Timmy.
 
 ---
 
@@ -11,6 +11,7 @@ Questa fase serve a **creare la struttura Drive cliente**, pronta per la raccolt
 - **Logging strutturato** e validazione a ogni step.
 - Input guidato e validazione naming (slug + nome cliente).
 - Rollback sicuro: nessuna cartella viene sovrascritta se già esistente.
+- Tutta la logica di naming e logging segue [coding_rule.md](./coding_rule.md).
 
 ---
 
@@ -64,20 +65,22 @@ Il file config.yaml generato conterrà tutte le informazioni necessarie per le p
 
 ---
 
-## 🪵 Logging e naming
+## 🪵 Logging, naming & policy
 
-Ogni operazione viene loggata via funzione `get_structured_logger` dal modulo logging_utils.py.  
-Logging su console e su file.  
-Funzioni, file, variabili sempre in snake_case e con nomi descrittivi (no abbreviazioni).  
-Messaggi CLI chiari e “empathic”, differenziati da logging strutturato.
+- Ogni operazione viene loggata via logger strutturato (`logging_utils.py`).
+- Logging sia su console che su file.
+- Funzioni, file, variabili sempre in snake_case e con nomi descrittivi (no abbreviazioni).
+- Messaggi CLI chiari ed empatici, distinti dal logging strutturato.
+- **Tutte le policy di coding, logging e testing sono ora formalizzate in [coding_rule.md](./coding_rule.md)** (non più in NAMING_LOGGING_RULES.md).
 
 ---
 
 ## ❗ Novità rispetto alle versioni precedenti
 
-- Refactor naming: tutte le funzioni e i file seguono la nuova naming rule (vedi NAMING_LOGGING_RULES.md).
+- Naming e logging ora allineati a `coding_rule.md` v1.0.
 - Logging centralizzato: ogni step tracciato e facilmente auditabile.
 - Pipeline più robusta: roll-back, path sicuri, nessuna sovrascrittura accidentale.
+- Tutte le regole di test, naming, logging sono centralizzate in `coding_rule.md`.
 
 ---
 
@@ -85,4 +88,4 @@ Messaggi CLI chiari e “empathic”, differenziati da logging strutturato.
 
 La procedura va lanciata una sola volta per ogni nuovo cliente.  
 In caso di errore o rollback, basta rilanciare lo script con lo stesso slug.  
-Per aggiornamenti, consulta anche il README principale e il CHANGELOG.
+Per aggiornamenti e policy consulta sempre il [README principale](./README.md), il [CHANGELOG](./CHANGELOG.md) e [coding_rule.md](./coding_rule.md).

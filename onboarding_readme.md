@@ -1,114 +1,109 @@
-# 🟩 Onboarding Pipeline Timmy-KB – v1.2.3
 
-Questa è la **pipeline automatizzata** per la creazione della Knowledge Base del cliente Timmy-KB,  
-ottimizzata secondo le naming rule e policy di logging della versione 1.2.3.
+# 📦 Onboarding Pipeline Timmy-KB – v1.3
 
----
-
-## 📍 Scopo e overview
-
-- **Automatizzare il flusso completo** di ingestione, conversione, enrichment e pubblicazione della documentazione cliente.
-- Generazione Knowledge Base pronta per la pubblicazione GitBook/GitHub e per l’arricchimento AI-driven.
-- Logging strutturato su ogni step, messaggi CLI chiari e robustezza end-to-end.
+Versione: 1.3  
+Data: 2025-07-22  
+Owner: NeXT Dev Team
 
 ---
 
-## ⚙️ Come si usa
+## 🧭 Scopo della pipeline
 
-### 1. Lancia la pipeline di onboarding
-
-```bash
-py src/onboarding_full.py
-```
-Ti verrà chiesto:
-
-- Lo slug del cliente (deve corrispondere a quello creato in pre-onboarding)
+Questa pipeline automatizza il processo di onboarding per ogni cliente/PMI,  
+creando una knowledge base AI-ready (formato markdown arricchito, tagging semantico, frontmatter esteso)  
+partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tracciabilità per knowledge graph, audit e validazione.
 
 ---
 
-### 2. Step principali della pipeline
+## 🚦 Flusso operativo (step-by-step)
 
-- **Caricamento config cliente:**  
-  Da output/timmy-kb-<slug>/config/config.yaml  
-  Logga dettagli config e controlla la presenza di tutti i parametri chiave.
+### 1️⃣ Pre-onboarding
 
-- **Pulizia output:**  
-  Chiede conferma se svuotare la cartella output (eccetto config).  
-  Nessun rischio di perdita dati, tutto tracciato da log.
-
-- **Download PDF da Google Drive:**  
-  Scarica ricorsivamente tutti i PDF dalla cartella cliente su Drive.  
-  Mantiene struttura tematica delle sottocartelle.  
-  Logging su ogni file scaricato.
-
-- **Conversione batch PDF → Markdown:**  
-  Funzione placeholder (in attesa parsing reale in v1.2.4):  
-  Crea un markdown fittizio per ogni PDF trovato.  
-  Logging per ogni file processato.
-
-- **Arricchimento semantico automatico:**  
-  Conversione e arricchimento di tutti i markdown tramite mapping YAML (frontmatter).  
-  Rigenerazione README.md e SUMMARY.md.  
-  Logging e reporting di successo/errori.
-
-- **Preview locale con Docker (Honkit):**  
-  Costruisce e serve la documentazione localmente su http://localhost:4000 tramite Docker.  
-  Logging e gestione errori.
-
-- **Deploy su GitHub (opzionale, con conferma CLI):**  
-  Push automatico della Knowledge Base sulla repo GitHub del cliente.  
-  Evita duplicati e repository incomplete.  
-  Logging dettagliato esito deploy.
+- Esegui:
+  ```bash
+  py src/pre_onboarding.py
+  ```
+- Funzioni:
+  - Generazione struttura standard su Google Drive per il cliente (cartelle tematiche)
+  - Creazione file config YAML arricchito (`config/clienti/<slug>/config/config.yaml`)
+  - Logging dettagliato e validazione automatica
+  - Se la struttura esiste già, la procedura blocca ed esce con rollback
+- Lo slug cliente è in formato `timmy-kb-<slug>`, naming policy in [coding_rule.md](./coding_rule.md)
+- Dopo questa fase il cliente carica i propri PDF/artefatti direttamente nelle cartelle condivise di Drive
 
 ---
 
-## 🏗️ Struttura cartelle e file coinvolti
+### 2️⃣ Onboarding completo
 
-```
-src/
-├── pipeline/
-│   ├── drive_utils.py
-│   ├── config_utils.py
-│   ├── content_utils.py
-│   ├── gitbook_preview.py
-│   ├── github_utils.py
-│   ├── cleanup.py
-│   └── logging_utils.py
-├── semantic/
-│   ├── semantic_extractor.py
-│   └── semantic_mapping.py
-output/
-└── timmy-kb-<slug>/
-    ├── config/
-    │   └── config.yaml
-    ├── raw/
-    ├── <cartelle tematiche>/
-    ├── README.md
-    └── SUMMARY.md
-```
+- Esegui:
+  ```bash
+  py src/onboarding_full.py
+  ```
+- Funzioni:
+  - Caricamento config e validazione repo GitHub di destinazione
+  - Download ricorsivo di tutti i PDF dalla struttura cliente su Drive (cartelle tematiche mantenute)
+  - Conversione automatica di tutti i PDF in markdown con:
+    - **Parsing avanzato:** suddivisione in paragrafi “logici”, titoli reali, elenchi markdown, pulizia spezzature
+    - **Frontmatter esteso** (titolo, categoria, origine cartella, data conversione…)
+    - **Tagging semantico per paragrafo**: matching delle keyword ufficiali da YAML, output `<!-- tags: ... -->` solo per paragrafi rilevanti
+  - Enrichment semantico (facoltativo): aggiunta metadati, mapping, ulteriori arricchimenti via moduli plugin
+  - Generazione automatica di `README.md` e `SUMMARY.md` per GitBook/Honkit
+  - Preview locale con Docker+Honkit (facoltativo)
+  - Deploy/push su repo GitHub (con controllo interattivo, rollback su errori)
+  - Logging strutturato, nessuna stampa superflua
 
 ---
 
-## 🪵 Logging, naming e orchestrazione
+### 3️⃣ Enrichment semantico avanzato (standalone/fase plugin)
 
-Ogni funzione, file e variabile segue la naming rule snake_case, nessuna abbreviazione oscura.  
-Logging sempre centralizzato tramite get_structured_logger (console e file).  
-Step batch e processi critici sempre loggati con livello DEBUG, INFO, WARNING, ERROR.  
-Tutti gli errori e i warning sono gestiti e riportati all’utente in modo chiaro.
-
----
-
-## ❗ Novità v1.2.3
-
-- Refactor naming: tutte le funzioni e i file ora seguono la convenzione ufficiale.
-- Logging strutturato: ogni step è tracciato, log file e console sempre disponibili.
-- Modularità e robustezza: orchestrazione tra pipeline, enrichment e tools ora più chiara e affidabile.
-- Preparazione per parsing PDF reale e nuovi moduli AI/CI/CD.
+- Esegui:
+  ```bash
+  py src/semantic/semantic_extractor.py
+  ```
+- Funzioni:
+  - Arricchisce i markdown prodotti con metadati e tagging aggiuntivi (pronto per pipeline KG/AI)
+  - Possibilità di rigenerare README e SUMMARY
+  - Logging e rollback in caso di errori
 
 ---
 
-## 📎 Note operative
+### 4️⃣ Testing e convenzione
 
-È obbligatorio aver eseguito il pre-onboarding prima di questa pipeline.  
-I log sono disponibili sia su console che in logs/onboarding.log.  
-Consulta CHANGELOG.md e NAMING_LOGGING_RULES.md per dettagli su tutte le evoluzioni.
+- Tutti i test sono in `/tests/`
+- I file di test sono sempre in `/filetest/<tipo>/` (es. pdf/, docx/, ecc.)
+- Output dei test in `/output/timmy-kb-dummytest/`
+- Pulizia obbligatoria a fine test (prompt CLI per cancellazione)
+- Dettaglio policy e naming: vedi [coding_rule.md](./coding_rule.md)
+
+---
+
+## 📚 Configurazione e policy
+
+- **Configurazione centralizzata**: tutte le variabili principali sono in `.env` e `config/`
+- **Lista tag ufficiali**: file YAML per categorie in `config/timmy_tags.yaml`
+- **Mapping semantico cartelle**: file YAML in `config/`
+- **Policy di naming, logging, testing**: tutte in [coding_rule.md](./coding_rule.md)
+
+---
+
+## 🧩 Tecnologie e dipendenze
+
+- Python >= 3.10
+- PyMuPDF, spacy, pyyaml, google-api-python-client, docker, requests, gitpython, PyGithub, python-slugify, pydantic
+- Docker (per preview GitBook)
+- GitHub CLI configurato
+- Service Account JSON Google
+
+---
+
+## 🗂️ Changelog (sintesi v1.3)
+
+- Pipeline parsing/conversione PDF→Markdown completamente rinnovata, frontmatter esteso
+- Tagging semantico integrato e AI-ready, policy ufficiale YAML
+- Logging strutturato, nessun print nei moduli di produzione
+- Testing e convenzione file formalizzati, policy raccolte in `coding_rule.md`
+- Tutto pronto per evoluzione Knowledge Graph/AI e arricchimento plugin
+
+---
+
+> Per ogni evoluzione strutturale, aggiornare [coding_rule.md](./coding_rule.md) e seguire le convenzioni riportate.

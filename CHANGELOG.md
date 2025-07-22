@@ -1,5 +1,47 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.3 - 2025-07-22 - Tagging semantico, robustezza AI-ready & convenzioni testing
+
+### 🧠 Parsing PDF → Markdown, tagging e normalizzazione
+- **Pipeline di conversione PDF→Markdown completamente rinnovata**:  
+  - Suddivisione del testo in paragrafi “logici” tra righe vuote
+  - Riconoscimento titoli reali e elenchi in markdown, unione automatica di frasi spezzate
+  - Generazione frontmatter ricco e robusto per ogni file Markdown
+- **Funzionalità di tagging semantico integrata**:
+  - Utilizzo di una lista YAML di tag ufficiali, strutturata per categorie (multi-word supportato)
+  - Matching delle keyword/tag su ogni paragrafo con logica case-insensitive e normalizzazione (spazi, trattini)
+  - I tag sono inseriti come commento markdown alla fine di ogni paragrafo rilevante
+  - **Scelta architetturale**: la categoria dei tag è risolta downstream (nel Knowledge Graph) e non nel markdown
+
+### 🧪 Testing, convenzioni e cleaning
+- **Formalizzata la convenzione di testing NeXT/Timmy**:
+  - Script di test sempre in `/tests/`, file di input in `/filetest/<tipo>/`, output dei test in `/output/timmy-kb-dummytest/`
+  - Naming regole per i test (niente "test" nel nome file, utente sempre "dummytest", cleanup obbligatorio a fine run)
+  - Pulizia e idempotenza totale dei test: nessun dato di test rimane dopo cleanup, nessuna interferenza con dati reali
+- **Pipeline testata end-to-end**:  
+  pre-onboarding → upload reali su Google Drive → onboarding completo con download, parsing, tagging, generation di README/SUMMARY, preview Docker, cleanup
+
+### 🪵 Logging e pulizia codice
+- Logging ulteriormente standardizzato: solo INFO, WARNING, ERROR (DEBUG solo dove utile per troubleshooting)
+- Nessun print() nei moduli, solo log strutturato (messaggi CLI solo nei test per conferma utente)
+- Rimozione di funzioni placeholder o codice morto, pulizia degli import
+- Docstring e commenti vibe-coding, tutto pronto per la manutenzione e l’onboarding di nuovi dev
+
+### 🗂️ Refactoring e file di policy
+- Creazione del file unico `coding_rule.md` (versionamento indipendente) che raccoglie tutte le regole di naming, logging, testing e best practice: il README ora linka direttamente a questa policy
+- Aggiornamento della documentazione e del README per riflettere la nuova struttura di test, l’architettura tagging e le convenzioni di progetto
+
+### 🛡️ Robustezza, AI-readiness e knowledge graph
+- Tutto il flusso è ora pienamente “AI-ready”: ogni paragrafo è facilmente “taggabile” e pronto per il passaggio a modelli semantici/knowledge graph
+- Il mapping semantico, la gestione delle categorie e l’estensione verso nuovi formati/file sono pronte per le prossime evoluzioni del framework
+
+---
+
+**Upgrade raccomandato per tutti i team e istanze NeXT/Timmy:  
+Questa release chiude la fase di refactoring, introduce la semantica ai-paragraph,  
+formalizza le regole di coding/testing e prepara il terreno per l’integrazione completa con knowledge graph e AI pipeline.**
+
+
 ## v1.2.3 - 2025-07-22 - Naming & Logging Clean Release
 
 ### 📏 Uniformità naming e modularità

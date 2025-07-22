@@ -9,18 +9,26 @@ logger = get_structured_logger("semantic.semantic_mapping")
 # Path al file di mapping semantico (relativo alla root progetto)
 SEMANTIC_YAML_PATH = Path("config/cartelle_semantica.yaml")
 
+# Caching globale del mapping
+_MAPPING_CACHE = None
+
 def load_semantic_mapping() -> dict:
     """
-    Carica il file YAML della struttura semantica delle cartelle.
+    Carica il file YAML della struttura semantica delle cartelle UNA SOLA VOLTA.
     Restituisce il mapping completo come dizionario.
     """
+    global _MAPPING_CACHE
+    if _MAPPING_CACHE is not None:
+        return _MAPPING_CACHE
     try:
         with open(SEMANTIC_YAML_PATH, "r", encoding="utf-8") as f:
             mapping = yaml.safe_load(f)
         logger.info(f"✅ Mapping semantico caricato da {SEMANTIC_YAML_PATH}")
+        _MAPPING_CACHE = mapping
         return mapping
     except Exception as e:
         logger.error(f"❌ Errore nel caricamento mapping semantico: {e}")
+        _MAPPING_CACHE = {}
         return {}
 
 def get_semantic_mapping_for_folder(folder_name: str) -> dict:

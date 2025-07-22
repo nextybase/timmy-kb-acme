@@ -3,37 +3,61 @@
 import logging
 from pathlib import Path
 import os
+import yaml
+import datetime
+
+from pipeline.file2md_utils import extract_file_to_markdown, load_tags_by_category
 
 logger = logging.getLogger("pipeline.content_utils")
 
-def convert_pdfs_to_markdown_placeholder(config: dict) -> int:
+def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
-    Simula la conversione di PDF in file Markdown (placeholder).
-    Conta e converte tutti i PDF trovati in config["raw_dir"] in file markdown nella cartella di output.
-    Ritorna il numero di PDF convertiti.
+    Converte tutti i file supportati (inizialmente solo PDF) trovati in config["raw_dir"]
+    in file Markdown nella cartella di output, aggiungendo tag di paragrafo.
+    Ogni markdown ha frontmatter ricco (titolo, categoria, cartella origine, data...).
+    Ritorna il numero di file convertiti.
     """
     raw_path = Path(config["raw_dir"])
     slug = config["slug"]
     output_base = config.get("OUTPUT_DIR_TEMPLATE", "output/timmy-kb-{slug}")
     output_path = Path(output_base.format(slug=slug))
     config["md_output_path"] = str(output_path)
-
     output_path.mkdir(parents=True, exist_ok=True)
 
-    pdf_files = list(raw_path.rglob("*.pdf"))
-    logger.info(f"Trovati {len(pdf_files)} PDF da convertire in {raw_path}")
+    # Individua tutti i file supportati: PDF (estendibile!)
+    files = list(raw_path.rglob("*"))
+    files = [f for f in files if f.is_file() and f.suffix.lower() in {".pdf"}]  # Espandibile
+
+    logger.info(f"Trovati {len(files)} file da convertire in {raw_path}")
+
+    def get_categoria_from_path(file_path):
+        folder = file_path.parent.name.lower()
+        if mapping and folder in mapping:
+            return mapping[folder]
+        return folder
+
+    # Carica UNA SOLA VOLTA la lista dei tag ufficiali per categoria
+    tags_by_cat = load_tags_by_category()
 
     converted = 0
-    for pdf in pdf_files:
+    for file in files:
         try:
-            md_file = output_path / (pdf.stem.replace(" ", "_") + ".md")
-            md_file.write_text(f"# Contenuto fittizio per {pdf.name}", encoding="utf-8")
+            titolo = file.stem.replace("_", " ").title()
+            categoria = get_categoria_from_path(file)
+            frontmatter = {
+                "titolo": titolo,
+                "categoria": categoria,
+                "origine_cartella": file.parent.name,
+                "data_conversione": datetime.date.today().isoformat(),
+                "stato_normalizzazione": "completato"
+            }
+            extract_file_to_markdown(file, output_path, frontmatter, tags_by_cat=tags_by_cat)  # <-- passaggio tags!
             converted += 1
-            logger.debug(f"Creato markdown placeholder per: {pdf.name}")
+            logger.info(f"✅ Markdown creato per: {file.name}")
         except Exception as e:
-            logger.warning(f"❌ Errore durante la conversione di {pdf.name}: {e}")
+            logger.warning(f"❌ Errore durante la conversione di {file.name}: {e}")
 
-    logger.info(f"Conversione completata: {converted}/{len(pdf_files)} riusciti")
+    logger.info(f"Conversione completata: {converted}/{len(files)} riusciti")
     return converted
 
 def generate_summary_markdown(markdown_files, output_path) -> bool:
@@ -68,7 +92,7 @@ def generate_readme_markdown(output_path, slug) -> bool:
         with open(readme_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(f"# Timmy KB – {slug}\n\n")
             f.write("Benvenuto nella Knowledge Base del cliente **{0}**.\n\n".format(slug))
-            f.write("Questa documentazione è generata automaticamente a partire dai PDF forniti durante l’onboarding.\n")
+            f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
 
         logger.info("✅ README.md generato con contenuto minimale.")
         return True

@@ -1,0 +1,103 @@
+governance:
+  - governance
+  - audit
+  - compliance
+  - framework_etico
+  - etica
+  - valori
+  - accountability
+  - audit_trail
+  - compliance_normativa
+  - C-Board
+  - escalation
+
+AI:
+  - intelligenza_artificiale
+  - AI
+  - explainable_AI
+  - trasparenza_algoritmica
+  - explainability
+  - bias
+  - fairness
+  - sicurezza
+  - performance
+  - transparency
+  - confidenza
+  - probabilismo
+  - Bayesian
+  - pseudonimizzazione
+  - privacy
+  - AI_Act
+  - human_in_the_loop
+  - human_centric
+
+architettura:
+  - framework
+  - Nexty
+  - NeXT
+  - micro_agente
+  - agenti_virtuali
+  - moduli_specialistici
+  - modularità
+  - architettura
+  - envelope
+  - sandbox
+  - API
+  - open_data
+  - dashboard
+  - workflow
+  - processi_aziendali
+  - scenario
+  - escalation
+
+dati:
+  - knowledge_graph
+  - data_integration
+  - data_quality
+  - dataset
+  - open_data
+
+business_process:
+  - onboarding
+  - TeamUP
+  - formazione
+  - AI_literacy
+  - competenze
+  - PMI
+  - stakeholder
+  - product_owner
+  - project_management
+  - change_management
+  - sprint
+  - report
+  - feedback
+  - formazione_continua
+  - onboarding_continuo
+  - personalized_learning
+  - soft_skills
+  - decisione
+  - use_case
+  - auditability
+  - user_experience
+  - stakeholder_territoriali
+  - partnership
+  - funding
+  - ROI
+  - innovazione
+  - training
+  - inclusione
+
+compliance_eu:
+  - European_Commission
+  - AI_Act
+
+design_e_agile:
+  - design_thinking
+  - agile
+
+teams:
+  - Team_C
+  - Team_D
+
+altro:
+  - Vision

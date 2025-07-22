@@ -1,10 +1,12 @@
+# src/onboarding_full.py
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import load_client_config
 from pipeline.content_utils import (
-    convert_pdfs_to_markdown_placeholder,
+    convert_files_to_structured_markdown,
     generate_summary_markdown,
     generate_readme_markdown
 )
@@ -13,11 +15,20 @@ from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup import cleanup_output_folder
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from semantic.semantic_extractor import enrich_markdown_folder
+from semantic.semantic_mapping import load_semantic_mapping
 
 load_dotenv()
 logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
 
 def main():
+    """
+    Pipeline di onboarding Timmy-KB:
+    1. Download PDF da Drive nella cartella raw locale
+    2. Conversione PDF → Markdown strutturato
+    3. Enrichment semantico (se richiesto)
+    4. Generazione README.md e SUMMARY.md
+    5. Preview con Docker, push su GitHub (opzionale)
+    """
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
     print("▶️ Onboarding completo Timmy-KB")
 
@@ -60,10 +71,18 @@ def main():
     config["raw_dir"] = str(Path(config["output_path"]) / "raw")
     logger.debug(f"PATCH: config['raw_dir'] impostato a {config['raw_dir']}")
 
-    # --- Step 2: Conversione PDF → Markdown ---
-    print("📚 Conversione PDF → Markdown...")
+    # --- Check presenza PDF dopo download ---
+    pdf_files = list(Path(config["raw_dir"]).rglob("*.pdf"))
+    if not pdf_files:
+        logger.warning("❗ Nessun PDF trovato nella cartella raw dopo il download. Controllare che il cliente abbia caricato i file su Drive.")
+        print("❌ Nessun PDF trovato: pipeline interrotta.")
+        return
+
+    # --- Step 2: Conversione PDF → Markdown strutturato ---
+    print("📚 Conversione PDF → Markdown strutturato...")
     try:
-        convert_pdfs_to_markdown_placeholder(config)
+        mapping = load_semantic_mapping()  # mapping yaml caricato UNA SOLA VOLTA
+        convert_files_to_structured_markdown(config, mapping)
         logger.info("✅ Conversione PDF → Markdown completata.")
     except Exception as e:
         logger.error(f"❌ Errore nella conversione PDF → Markdown: {e}")
@@ -73,14 +92,14 @@ def main():
     # --- Step 3: Enrichment semantico ---
     print("🧠 Estrazione semantica (enrichment)...")
     try:
-        enrich_markdown_folder(config["output_path"], slug)
+        enrich_markdown_folder(config["md_output_path"], slug)
         logger.info("✅ Enrichment semantico completato.")
     except Exception as e:
         logger.error(f"❌ Errore in fase di enrichment semantico: {e}")
         print("❌ Errore durante l’enrichment semantico.")
         return
 
-    # --- Step 4: Generazione README.md e SUMMARY.md ---
+    # --- Step 4: Generazione README.md e SUMMARY.md (UNA SOLA VOLTA) ---
     print("📑 Generazione SUMMARY.md e README.md...")
     try:
         md_path = config["md_output_path"]
