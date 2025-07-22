@@ -1,12 +1,10 @@
-# Byte-compiled / optimized / DLL files
+# === Python virtualenv & environment ===
+venv/
+.env/
+.env.*        # Qualsiasi file .env.*
 __pycache__/
-*.py[codz]
-*$py.class
-
-# C extensions
+*.py[cod]
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -19,161 +17,83 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+# Windows venv path
+Scripts/
+Lib/
+share/
+Include/
+# Conda
+*.conda
+*.ipynb_checkpoints
 
-# Unit test / coverage reports
+# === VS Code & editor config ===
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# === Credential & secret files ===
+token.json
+credentials.json
+client_secret.json
+service_account.json
+auth.json
+*.pem
+*.key
+*.crt
+
+# === Docker & container files ===
+*.pid
+docker-compose*.yml
+Dockerfile
+docker-compose.override.yml
+
+# === Output & temp files ===
+output/
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+
+# === Notebook & Jupyter related ===
+.ipynb_checkpoints/
+share/
+**/share/
+**/share/jupyter/
+**/share/jupyter/nbextensions/
+**/share/jupyter/nbextensions/pydeck/
+*.nbconvert.ipynb
+
+# === Test & test artifacts ===
+filetest/
+tests/
+timmy-kb-dummytest/
+# output di test dedicato
+output/timmy-kb-dummytest/
+coverage/
 htmlcov/
 .tox/
 .nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
+.cache/
 .pytest_cache/
-cover/
 
-# Translations
-*.mo
-*.pot
+# === Git & OS files ===
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+# === Misc ===
+*.sqlite3
+*.db
+*.dump
+*.log.*
 
-# Flask stuff:
-instance/
-.webassets-cache
+# === Esclude tutto ciò che non è puro sorgente/progetto ===
 
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-# .python-version
-
-# pipenv
-#Pipfile.lock
-
-# UV
-#uv.lock
-
-# poetry
-#poetry.lock
-#poetry.toml
-
-# pdm
-.pdm-python
-.pdm-build/
-
-# pixi
-#pixi.lock
-.pixi
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath
-*.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
-
-# mkdocs
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug
-cython_debug/
-
-# PyCharm
-#.idea/
-
-# Abstra
-.abstra/
-
-# VSCode
-# .vscode/
-
-# Ruff
-.ruff_cache/
-
-# PyPI config
-.pypirc
-
-# Cursor
-.cursorignore
-.cursorindexingignore
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
-
-# === Timmy KB specific ===
-output/
-temp_config/
-service_account.json
-*.log
-logs/
-*.bak
-*.tmp
+# [END OF FILE]
