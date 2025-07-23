@@ -70,6 +70,18 @@ share/
 **/share/jupyter/nbextensions/pydeck/
 *.nbconvert.ipynb
 
+# Jupyter, configurazioni inutili
+etc/
+etc/jupyter/
+etc/jupyter/nbconfig/
+etc/jupyter/nbconfig/notebook.d/
+etc/jupyter/nbconfig/notebook.d/pydeck.json
+# Output locali e temporanei
+logs/
+filetest/
+.vscode/
+*.ipynb_checkpoints/
+
 # === Test & test artifacts ===
 filetest/
 tests/
