@@ -15,7 +15,7 @@ def push_output_to_github(config: dict) -> None:
     """
     Esegue il deploy automatico della cartella `output_path`
     su GitHub come repository privata.
-    Esclude dal push le cartelle: .git, _book, config, raw
+    Esclude dal push le cartelle: .git, _book, config, raw (in qualunque livello, anche annidato).
     Solleva PushError se il push fallisce.
     """
     github_token = config.get("github_token") or os.getenv("GITHUB_TOKEN")

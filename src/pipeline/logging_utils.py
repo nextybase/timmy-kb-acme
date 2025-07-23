@@ -3,14 +3,24 @@ import os
 
 def get_structured_logger(name="default", log_file=None, level=logging.INFO):
     """
-    Crea un logger con output su console e, se specificato, su file.
-    Supporta caratteri Unicode (emoji inclusi).
+    Restituisce un logger strutturato con output su console e, opzionalmente, su file.
+    - Formato: timestamp, livello, nome modulo, messaggio (emoji supportate).
+    - Su più chiamate/istanze, evita duplicazioni degli handler.
+    - Utile sia per debug che per produzione (puoi personalizzare il livello).
+    
+    Args:
+        name (str): Nome del logger (tipicamente il modulo)
+        log_file (str): Path file di log (opzionale)
+        level (int): Livello log (logging.INFO di default)
+
+    Returns:
+        logging.Logger: Oggetto logger pronto all'uso
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Evita duplicazioni se già esiste
-    if logger.handlers:
+    # Evita duplicazione handler (utile in ambienti notebook o reload multipli)
+    if any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         return logger
 
     formatter = logging.Formatter(

@@ -9,12 +9,15 @@ logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log"
 def run_gitbook_docker_preview(config: dict) -> None:
     """
     Lancia anteprima GitBook in locale tramite Docker (Honkit build + serve).
+    - Prima fa il build statico
+    - Poi serve il sito in modalità detached su http://localhost:4000
+    Attende input utente per chiudere la preview e arresta il container.
     Solleva PreviewError su errore bloccante.
     """
     output_dir = Path(config["md_output_path"]).resolve()
     logger.info(f"📁 Directory corrente per anteprima: {output_dir}")
 
-    # 1. Build statico
+    # Step 1: Build statico
     logger.info("🔧 Avvio build statico Honkit (Docker)...")
     build_cmd = [
         "docker", "run", "--rm", "-it",
@@ -28,7 +31,7 @@ def run_gitbook_docker_preview(config: dict) -> None:
         logger.error("❌ Errore durante `honkit build`. Anteprima non avviata.")
         raise PreviewError(f"Errore durante `honkit build`: {e}")
 
-    # 2. Serve in modalità detached
+    # Step 2: Serve in modalità detached
     logger.info("🐳 Avvio anteprima GitBook in locale con Docker (in background)...")
     container_name = "honkit_preview"
     serve_cmd = [

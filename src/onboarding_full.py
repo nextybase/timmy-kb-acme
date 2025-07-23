@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
@@ -10,37 +12,50 @@ from pipeline.content_utils import (
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
-from pipeline.cleanup import cleanup_output_folder
+from pipeline.cleanup import cleanup_output_folder, safe_remove_dir
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError
 
+def is_valid_slug(slug: str) -> bool:
+    if not slug:
+        return False
+    return re.fullmatch(r"[a-z0-9-]+", slug) is not None
+
+def check_docker_running():
+    try:
+        subprocess.run(
+            ["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        return True
+    except Exception:
+        return False
+
+os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 load_dotenv()
 logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
 
 def main():
-    """
-    Pipeline di onboarding Timmy-KB:
-    1. Download PDF da Drive nella cartella raw locale
-    2. Conversione PDF → Markdown strutturato
-    3. Enrichment semantico (se richiesto)
-    4. Generazione README.md e SUMMARY.md
-    5. Preview con Docker, push su GitHub (opzionale)
-    """
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
     print("▶️ Onboarding completo Timmy-KB")
 
+    if not check_docker_running():
+        print("❌ Docker non risulta attivo o non è raggiungibile.")
+        print("🔧 Avvia Docker Desktop o il servizio Docker prima di continuare.")
+        logger.error("Docker non attivo: pipeline bloccata.")
+        return
+
     try:
         # --- Input slug ---
-        slug = input("🔤 Inserisci lo slug cliente: ").strip()
-        logger.debug(f"Slug ricevuto da input: '{slug}'")
-        if not slug:
-            print("❌ Slug cliente non valido.")
-            logger.error("❌ Slug cliente mancante: operazione annullata.")
+        raw_slug = input("🔤 Inserisci lo slug cliente: ").strip().lower()
+        logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
+        slug = raw_slug.replace("_", "-")
+        if not is_valid_slug(slug):
+            print("❌ Slug cliente non valido. Ammessi solo lettere minuscole, numeri, trattini (es: acme-srl).")
+            logger.error(f"❌ Slug cliente non valido: '{raw_slug}' -> '{slug}'")
             return
 
-        # --- Caricamento config cliente ---
         print("📥 Caricamento configurazione...")
         config = load_client_config(slug)
         logger.info(f"✅ Config caricato e arricchito per cliente: {slug}")
@@ -54,11 +69,9 @@ def main():
         download_drive_pdfs_to_local(service=service, config=config)
         logger.info("📥 Download PDF da Drive completato.")
 
-        # --- Aggiorna config["raw_dir"] ---
         config["raw_dir"] = str(Path(config["output_path"]) / "raw")
         logger.debug(f"PATCH: config['raw_dir'] impostato a {config['raw_dir']}")
 
-        # --- Check presenza PDF dopo download ---
         pdf_files = list(Path(config["raw_dir"]).rglob("*.pdf"))
         if not pdf_files:
             logger.warning("⚠️ Nessun PDF trovato nella cartella raw dopo il download. Controllare che il cliente abbia caricato i file su Drive.")
@@ -67,7 +80,7 @@ def main():
 
         # --- Step 2: Conversione PDF → Markdown strutturato ---
         print("📚 Conversione PDF → Markdown strutturato...")
-        mapping = load_semantic_mapping()  # mapping yaml caricato UNA SOLA VOLTA
+        mapping = load_semantic_mapping()
         convert_files_to_structured_markdown(config, mapping)
         logger.info("✅ Conversione PDF → Markdown completata.")
 
@@ -76,7 +89,7 @@ def main():
         enrich_markdown_folder(config["md_output_path"], slug)
         logger.info("✅ Enrichment semantico completato.")
 
-        # --- Step 4: Generazione README.md e SUMMARY.md (UNA SOLA VOLTA) ---
+        # --- Step 4: Generazione README.md e SUMMARY.md ---
         print("📑 Generazione SUMMARY.md e README.md...")
         md_path = config["md_output_path"]
         md_files = [f for f in os.listdir(md_path) if f.endswith(".md")]
@@ -89,19 +102,53 @@ def main():
         run_gitbook_docker_preview(config)
         logger.info("✅ Anteprima GitBook completata.")
 
-        # --- Step 6: Push GitHub ---
-        risposta = input("❓ Vuoi procedere con il push su GitHub? [y/N] ").strip().lower()
+        # --- Step 6: Push GitHub SOLO della knowledge base pulita (cartella book) ---
+        risposta = input("❓ Vuoi procedere con il push su GitHub della sola cartella book? [y/N] ").strip().lower()
         logger.debug(f"Risposta push GitHub: {risposta}")
+        temp_dir = None
         if risposta == "y":
-            print("🚀 Esecuzione push su GitHub...")
-            push_output_to_github(config)
-            logger.info("✅ Push su GitHub completato.")
+            print("🚀 Esecuzione push su GitHub SOLO per la knowledge base (cartella book)...")
+            # Crea una copia della config per il push su book/
+            book_config = dict(config)
+            book_config["output_path"] = str(Path(config["md_output_path"]).resolve())
+            temp_dir = push_output_to_github(book_config)
+            logger.info(f"✅ Push su GitHub completato SOLO per la cartella book. Temp dir: {temp_dir}")
+            print(f"✅ Push su GitHub completato SOLO per la cartella book. I file temporanei rimangono in: {temp_dir}")
         else:
             logger.info("⏹️ Push su GitHub annullato dall’utente.")
             print("⏹️ Push annullato. Operazione completata.")
 
-        logger.info(f"🏁 Onboarding pipeline completata per cliente: {slug}")
-        print(f"🏁 Onboarding pipeline completata per cliente: {slug}")
+        # --- Step 7: UX finale, cleanup guidato ---
+        if temp_dir:
+            while True:
+                finale = input(f"\n✅ Possiamo definire completo l'onboarding del cliente {config['cliente_nome']}? [y/N] ").strip().lower()
+                if finale == "y":
+                    safe_remove_dir(temp_dir)
+                    print("🧹 Pulizia completata. Onboarding chiuso.")
+                    logger.info("🧹 Temp dir rimossa, onboarding completato.")
+                    break
+                elif finale == "n":
+                    reset = input("🔄 Vuoi azzerare la procedura? [y/N] ").strip().lower()
+                    if reset == "y":
+                        also_conf = input("🗑️ Vuoi cancellare anche i file di configurazione? Dovrai ripartire dal pre-onboarding. [y/N] ").strip().lower()
+                        if also_conf == "y":
+                            config_dir = Path(config["output_path"]) / "config"
+                            safe_remove_dir(config_dir)
+                            print("🗑️ Tutto azzerato, inclusa la configurazione.")
+                            logger.warning("🗑️ Tutto azzerato, inclusa la configurazione.")
+                        safe_remove_dir(temp_dir)
+                        print("🧹 Pulizia completata. Onboarding azzerato.")
+                        logger.info("🧹 Temp dir rimossa, onboarding azzerato.")
+                        break
+                    elif reset == "n":
+                        print(f"❗ Attenzione: la temp dir ({temp_dir}) e la config rimangono. Puoi rilanciare o ispezionare i file.")
+                        logger.warning("❗ Temp dir e config non rimosse: attesa nuova azione utente.")
+                        break
+                else:
+                    print("Risposta non valida. Inserisci 'y' o 'n'.")
+        else:
+            print(f"🏁 Onboarding pipeline completata per cliente: {slug}")
+            logger.info(f"🏁 Onboarding pipeline completata per cliente: {slug}")
 
     except PipelineError as e:
         logger.error(f"❌ Errore bloccante nella pipeline: {e}")

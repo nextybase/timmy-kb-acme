@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Mantieni l'adattamento path per esecuzioni dirette fuori package
+# 🔄 Adatta il path per esecuzioni dirette fuori package (utile anche in testing/CLI)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from pathlib import Path
@@ -12,11 +12,11 @@ from .semantic_mapping import get_semantic_mapping_for_file  # ← import python
 
 logger = get_structured_logger("semantic.semantic_extractor")
 
-
 def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
     """
     Enrichment semantico dei file markdown nella cartella output_folder.
-    Attenzione: non genera né README.md né SUMMARY.md (ora spostati nella pipeline).
+    Attenzione: non genera né README.md né SUMMARY.md (sono generati dalla pipeline principale).
+    Aggiunge 'enriched: true' nel frontmatter dei markdown.
     Ritorna il numero di markdown arricchiti.
     Solleva EnrichmentError se la cartella non esiste o in caso di errore bloccante.
     """
@@ -37,6 +37,7 @@ def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
                 lines = content.split("\n")
                 idx = lines.index("---", 1)
                 frontmatter = lines[1:idx]
+                # Solo se non già arricchito
                 if not any(line.startswith("enriched:") for line in frontmatter):
                     frontmatter.append("enriched: true")
                 enriched_content = (
@@ -50,13 +51,13 @@ def enrich_markdown_folder(output_folder: str, slug: str = None) -> int:
                 logger.warning(f"⚠️ Nessun frontmatter trovato in {md_path.name}. Skippato.")
         except Exception as e:
             logger.error(f"❌ Errore durante enrichment di {md_path.name}: {e}")
-            # Errore sul singolo file: prosegui (soft fail)
+            # Soft fail: la pipeline continua sugli altri file
 
     logger.info(f"Enrichment completato: {enriched}/{len(md_files)} file arricchiti.")
     return enriched
 
-
 if __name__ == "__main__":
+    # Permette uso sia come modulo sia da CLI
     if len(sys.argv) > 1:
         out_folder = sys.argv[1]
     else:

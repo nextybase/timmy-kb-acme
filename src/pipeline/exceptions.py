@@ -1,7 +1,7 @@
 # src/pipeline/exceptions.py
 
 class PipelineError(Exception):
-    """Eccezione generica per errori bloccanti nella pipeline."""
+    """Eccezione generica per errori bloccanti nella pipeline NeXT/Timmy."""
     pass
 
 class DriveDownloadError(PipelineError):

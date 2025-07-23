@@ -10,9 +10,9 @@ _MAPPING_CACHE = None
 
 def load_semantic_mapping() -> dict:
     """
-    Carica il file YAML della struttura semantica delle cartelle UNA SOLA VOLTA.
-    Restituisce il mapping completo come dizionario.
-    Solleva SemanticMappingError in caso di errore.
+    Carica il file YAML della struttura semantica delle cartelle UNA SOLA VOLTA (cache globale).
+    Ritorna il mapping completo come dict.
+    Solleva SemanticMappingError se il file manca o è malformato.
     """
     global _MAPPING_CACHE
     if _MAPPING_CACHE is not None:
@@ -29,7 +29,8 @@ def load_semantic_mapping() -> dict:
 
 def get_semantic_mapping_for_folder(folder_name: str) -> dict:
     """
-    Dato il nome di una cartella (es: 'glossario'), restituisce il mapping semantico.
+    Dato il nome di una cartella (es: 'glossario'), restituisce il mapping semantico (ambito, descrizione...).
+    Se non trovata, ritorna oggetto di fallback con ambito "unknown".
     """
     mapping = load_semantic_mapping()
     info = mapping.get(folder_name)
@@ -46,7 +47,7 @@ def get_semantic_mapping_for_folder(folder_name: str) -> dict:
 def get_semantic_mapping_for_file(filepath: str) -> dict:
     """
     Dato un path file (Markdown), cerca la prima cartella tematica nell'albero
-    e restituisce il mapping semantico relativo.
+    e restituisce il mapping semantico relativo (fallback "unknown" se non trovata).
     """
     p = Path(filepath)
     for part in p.parts:

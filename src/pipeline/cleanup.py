@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import shutil
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import CleanupError  # <-- custom exception
+from pipeline.exceptions import CleanupError  # custom exception
 
 logger = get_structured_logger("pipeline.cleanup")
 
@@ -15,29 +15,17 @@ def cleanup_output_folder(config: dict) -> bool:
 
     Solleva CleanupError su errore bloccante (es. variabile mancante, permessi, errore rimozione file).
     """
-    output_template = config.get("OUTPUT_DIR_TEMPLATE") or os.getenv("OUTPUT_DIR_TEMPLATE")
-    if not output_template:
-        logger.error("❌ OUTPUT_DIR_TEMPLATE mancante in config e .env")
-        raise CleanupError("OUTPUT_DIR_TEMPLATE mancante in config e .env")
-
-    try:
-        output_path = Path(output_template.format(**config))
-    except KeyError as e:
-        logger.error(f"❌ Variabile mancante nel template OUTPUT_DIR_TEMPLATE: {e}")
-        raise CleanupError(f"Variabile mancante nel template OUTPUT_DIR_TEMPLATE: {e}")
-
-    if not output_path.exists():
+    output_path = Path(config.get("output_path", ""))
+    if not output_path or not output_path.exists():
         logger.warning(f"⚠️ Cartella output {output_path} non esistente. Nessuna pulizia necessaria.")
         return False
 
-    # Escludi la sola presenza della cartella 'config'
     items_to_check = [item for item in output_path.iterdir() if item.name != "config"]
 
     if not items_to_check:
         logger.info(f"🟢 Solo cartella 'config' presente (o output vuota), nessuna pulizia necessaria.")
         return False
 
-    # Chiedi conferma solo se ci sono altri file/cartelle
     confirm = input(f"❓ Vuoi svuotare il contenuto della cartella {output_path} (eccetto config)? [y/N] ").strip().lower()
     if confirm != "y":
         logger.info("⏹️ Pulizia annullata dall’utente.")
@@ -46,7 +34,7 @@ def cleanup_output_folder(config: dict) -> bool:
     try:
         for item in items_to_check:
             if item.name == ".git":
-                continue  # 🔒 Manteniamo il repo Git se esiste
+                continue  # 🔒 Manteniamo la repo Git se esiste (safe!)
             try:
                 if item.is_file() or item.is_symlink():
                     item.unlink()
@@ -60,3 +48,24 @@ def cleanup_output_folder(config: dict) -> bool:
     except Exception as e:
         logger.error(f"❌ Errore durante la pulizia: {e}")
         raise CleanupError(f"Errore durante la pulizia: {e}")
+
+def safe_remove_dir(path):
+    """
+    Rimuove ricorsivamente una directory anche se alcuni file sono temporaneamente in uso (Windows-safe).
+    Usa retry e delay. Solleva CleanupError se dopo vari tentativi la directory persiste.
+    """
+    import time
+    path = Path(path)
+    if not path.exists():
+        logger.info(f"🟢 La directory {path} non esiste già (nessuna azione richiesta).")
+        return
+    for _ in range(5):
+        try:
+            shutil.rmtree(path, ignore_errors=False)
+            logger.info(f"🧹 Directory rimossa: {path}")
+            return
+        except PermissionError as e:
+            logger.warning(f"⚠️ Directory lockata (in uso): {path}. Retry tra poco...")
+            time.sleep(0.5)
+    logger.error(f"❌ Non riesco a cancellare la directory dopo più tentativi: {path}")
+    raise CleanupError(f"Impossibile cancellare la directory: {path}")

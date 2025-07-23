@@ -10,11 +10,13 @@ logger = get_structured_logger("pipeline.config_utils")
 
 def load_client_config(slug: str) -> dict:
     """
-    Carica la configurazione del cliente dallo YAML.
-    Deve essere presente drive_folder_id; in caso contrario errore (ConfigError).
+    Carica la configurazione del cliente dallo YAML locale.
+    Richiede che il file config.yaml sia presente e valido.
+    Solleva ConfigError se manca o è incompleto.
     """
     config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
     logger.debug(f"Caricamento config da: {config_path}")
+
     if not config_path.exists():
         logger.error(f"❌ File config.yaml non trovato per il cliente '{slug}'")
         raise ConfigError(f"File config.yaml non trovato per il cliente '{slug}'")
@@ -26,11 +28,12 @@ def load_client_config(slug: str) -> dict:
         logger.error(f"❌ Errore durante la lettura del file config.yaml: {e}")
         raise ConfigError(f"Errore nella lettura del file config.yaml: {e}")
 
+    # --- Normalizzazione e completezza chiavi ---
     config["slug"] = slug
-    config["nome_cliente"] = config.get("cliente_nome", slug)
-    config["raw_dir"] = f"tmp/timmykb_rawpdf_{slug}"
+    config["cliente_nome"] = config.get("cliente_nome", slug)
     config["output_path"] = f"output/timmy-kb-{slug}"
-    config["md_output_path"] = config["output_path"]
+    config["md_output_path"] = config.get("md_output_path", f"output/timmy-kb-{slug}/book")
+    config["raw_dir"] = str(Path(config["output_path"]) / "raw")
     config["github_repo"] = f"timmy-kb-{slug}"
 
     if not config.get("drive_id"):
@@ -47,7 +50,7 @@ def load_client_config(slug: str) -> dict:
 
 def upload_config_to_drive_folder(service, folder_id: str, config_data: dict):
     """
-    Carica il file config.yaml su Google Drive.
+    Carica il file config.yaml su Google Drive nella cartella specificata.
     Solleva ConfigError in caso di errore.
     """
     try:
@@ -78,7 +81,7 @@ def upload_config_to_drive_folder(service, folder_id: str, config_data: dict):
 
 def write_client_config_file(config_data: dict, path: Path) -> None:
     """
-    Scrive il file config.yaml localmente per verifica/rollback.
+    Scrive il file config.yaml localmente per backup/rollback.
     Solleva ConfigError in caso di errore.
     """
     try:

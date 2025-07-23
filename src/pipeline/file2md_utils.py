@@ -66,6 +66,7 @@ def markdownize_pdf_text(raw_text: str, tags_by_cat=None) -> str:
     result = []
 
     for block in blocks:
+        # Se tutte le righe sono elenchi (numerati o puntati), markdownizza come lista
         if all(re.match(r"^(\d+[\.\)]|[•\-–])\s+", l) for l in block):
             for l in block:
                 item = re.sub(r"^(\d+[\.\)]|[•\-–])\s*", "- ", l.strip())

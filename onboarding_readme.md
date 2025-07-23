@@ -20,7 +20,6 @@ partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tra
 ### 1️⃣ Pre-onboarding
 
 - Esegui:
-  ```bash
   py src/pre_onboarding.py
   ```
 - Funzioni:
@@ -36,7 +35,6 @@ partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tra
 ### 2️⃣ Onboarding completo
 
 - Esegui:
-  ```bash
   py src/onboarding_full.py
   ```
 - Funzioni:
@@ -57,7 +55,6 @@ partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tra
 ### 3️⃣ Enrichment semantico avanzato (standalone/fase plugin)
 
 - Esegui:
-  ```bash
   py src/semantic/semantic_extractor.py
   ```
 - Funzioni:

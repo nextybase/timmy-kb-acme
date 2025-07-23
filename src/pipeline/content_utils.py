@@ -12,20 +12,18 @@ logger = get_structured_logger("pipeline.content_utils")
 def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
     Converte tutti i file supportati (inizialmente solo PDF) trovati in config["raw_dir"]
-    in file Markdown nella cartella di output, aggiungendo tag di paragrafo.
-    Ogni markdown ha frontmatter ricco (titolo, categoria, cartella origine, data...).
+    in file Markdown nella cartella di output, aggiungendo tag di paragrafo e frontmatter ricco.
+    Ogni markdown ha: titolo, categoria, cartella origine, data conversione, stato normalizzazione.
     Ritorna il numero di file convertiti.
     Solleva ConversionError se la conversione globale fallisce.
     """
     raw_path = Path(config["raw_dir"])
     slug = config["slug"]
-    output_base = config.get("OUTPUT_DIR_TEMPLATE", "output/timmy-kb-{slug}")
-    output_path = Path(output_base.format(slug=slug))
-    config["md_output_path"] = str(output_path)
+    output_path = Path(config.get("md_output_path", f"output/timmy-kb-{slug}/book"))
     output_path.mkdir(parents=True, exist_ok=True)
 
-    files = list(raw_path.rglob("*"))
-    files = [f for f in files if f.is_file() and f.suffix.lower() in {".pdf"}]  # Espandibile
+    # Solo PDF (espandibile in futuro)
+    files = [f for f in raw_path.rglob("*") if f.is_file() and f.suffix.lower() in {".pdf"}]
 
     logger.info(f"🟢 Trovati {len(files)} file da convertire in {raw_path}")
 
@@ -89,7 +87,7 @@ def generate_readme_markdown(output_path, slug) -> None:
     try:
         with open(readme_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(f"# Timmy KB – {slug}\n\n")
-            f.write("Benvenuto nella Knowledge Base del cliente **{0}**.\n\n".format(slug))
+            f.write(f"Benvenuto nella Knowledge Base del cliente **{slug}**.\n\n")
             f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
 
         logger.info("✅ README.md generato con contenuto minimale.")

@@ -1,5 +1,46 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.3.2 - 2025-07-23 - Push minimale, architettura “KB only” & UX human-in-the-loop
+
+### 📦 Deploy selettivo: pubblicazione knowledge base pulita
+
+- **Il push su GitHub ora pubblica come root della repo SOLO la cartella `book/`**, contenente tutti i file Markdown già strutturati e arricchiti (README.md, SUMMARY.md e pagine della KB).
+- **Eliminato dalla pubblicazione ogni file di lavoro**: nessun output temporaneo, nessun file raw o config, repo sempre “pulita” e pubblicabile.
+- **Struttura della repo finale su GitHub** allineata perfettamente a quella visibile in preview Docker/Honkit.
+
+### 🧭 Workflow UX human-in-the-loop e controllo finale
+
+- Aggiunta una **domanda esplicita a fine pipeline**: l’utente può scegliere se pubblicare SOLO la knowledge base (`book/`) o l’intero output, con default su “KB only”.
+- Pulizia, reset configurazione e gestione file temporanei ora completamente guidata da dialogo utente step-by-step.
+- Logging e messaggi CLI rivisti: ogni passo chiave è ora tracciato, spiegato e retrocompatibile.
+
+### 🛡️ Robustezza e bugfix: push, permessi, temp dir
+
+- **Confermata la gestione della directory temporanea nella root progetto** (`tmp_repo_push/`), scelta come standard architetturale per evitare problemi di permessi o “file ghost” tipici di AppData/Temp su Windows.
+- Refactor e miglioramento della funzione di push (`push_output_to_github`):
+  - Crea sempre la temp dir nella root del progetto
+  - Filtra in modo robusto al commit per escludere qualsiasi file `.git`, `_book`, `config`, `raw` anche se annidati
+  - Cleanup della temp dir sempre garantito a fine procedura, per evitare residui o collisioni future
+- **Fix completo per tutti i problemi riscontrati in push**:  
+  - Errore “hasDotgit”, repo vuote, permessi GitHub e HTTP 500 ora sono gestiti e diagnosticati in modo trasparente
+  - Migliorato il workflow di fallback: se il push fallisce per permessi o errori temporanei, i suggerimenti e i messaggi di debug sono ora user-friendly e autoesplicativi.
+
+### 🧪 Test automatici, cleaning e CLI resilienti
+
+- **Script di test batch (`tests/test_github_utils.py`) aggiornato**:  
+  - Verifica presenza `.git` ovunque nella dummy repo  
+  - Push testabile su repo temporanea  
+  - Opzione per cancellazione automatica repo via API o CLI GitHub (fallback intelligente)
+- Tutto il cleaning ora centralizzato e retrocompatibile, con funzioni idempotenti e logging dettagliato.
+- Debug facilitato: ogni temp dir è ispezionabile, cancellabile in sicurezza a fine test/procedura.
+
+---
+
+**Release raccomandata per tutti i team e istanze operative.  
+La pipeline è ora UX-first, retrocompatibile, e pronta per la generazione knowledge base massiva/AI-driven.  
+Aggiornate la documentazione interna per riflettere il nuovo workflow “book-only”!**
+
+
 ## v1.3.1 - 2025-07-22 - Robustezza, gestione errori explainable & logging uniforme
 
 ### 🛡️ Exception-first & gestione errori “explainable”

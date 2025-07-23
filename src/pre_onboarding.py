@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
@@ -15,6 +16,15 @@ from pipeline.exceptions import PipelineError
 load_dotenv()
 logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
 
+# --- Slug validation utility ---
+def is_valid_slug(slug: str) -> bool:
+    """
+    Verifica che lo slug sia conforme a [a-z0-9-], senza caratteri strani o path traversal.
+    """
+    if not slug:
+        return False
+    return re.fullmatch(r"[a-z0-9-]+", slug) is not None
+
 def main():
     logger.info("▶️ Avvio procedura di pre-onboarding NeXT")
     print("▶️ Procedura di pre-onboarding NeXT")
@@ -23,13 +33,14 @@ def main():
         # --- Input slug ---
         raw_slug = input("🔤 Inserisci lo slug del cliente: ").strip().lower()
         logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
-        if not raw_slug:
-            print("❌ Slug non valido.")
-            logger.error("❌ Slug cliente mancante: operazione annullata.")
-            return
 
+        # --- Validazione robusta dello slug ---
         slug = raw_slug.replace("_", "-")
-        logger.info(f"🟢 Slug normalizzato: '{slug}'")
+        if not is_valid_slug(slug):
+            print("❌ Slug non valido. Ammessi solo lettere minuscole, numeri, trattini (es: acme-srl).")
+            logger.error(f"❌ Slug cliente non valido: '{raw_slug}' -> '{slug}'")
+            return
+        logger.info(f"🟢 Slug validato e normalizzato: '{slug}'")
 
         # --- Input nome cliente ---
         cliente_nome = input("🏷️ Inserisci il nome completo del cliente (es. Acme S.r.l.): ").strip()
