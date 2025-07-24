@@ -1,42 +1,38 @@
-import os
 import io
 from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError
+from pipeline.settings import get_settings
 
 logger = get_structured_logger("pipeline.drive_utils")
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "service_account.json")
 
 def get_drive_service():
     """
-    Restituisce un oggetto Google Drive API autenticato con service account.
+    Restituisce un oggetto Google Drive API autenticato con service account,
+    utilizzando la configurazione centralizzata Settings.
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
+    settings = get_settings()
+    # Supporta sia google_service_account_json che service_account_file
+    service_account_file = (
+        getattr(settings, "drive_service_account_file", None)
+        or getattr(settings, "google_service_account_json", None)
+        or getattr(settings, "service_account_file", None)
+    )
     creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        service_account_file, scopes=SCOPES
     )
     return build('drive', 'v3', credentials=creds)
 
 def create_drive_folder(service, name, parent_id):
     """
     Crea una cartella su Google Drive all'interno della cartella padre specificata.
-
-    Args:
-        service: oggetto Google Drive API autenticato
-        name (str): nome della nuova cartella
-        parent_id (str): ID della cartella padre su Drive
-
-    Returns:
-        str: ID della cartella creata
-
-    Raises:
-        DriveUploadError: se la creazione fallisce
     """
     folder_metadata = {
         'name': name,
@@ -58,10 +54,8 @@ def create_drive_folder(service, name, parent_id):
 
 def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
     """
-    Scarica tutti i PDF ricorsivamente da una cartella di Drive all'output locale.
-
-    Raises:
-        DriveDownloadError: se il download fallisce
+    Scarica tutti i PDF ricorsivamente da una cartella di Drive all'output locale,
+    mantenendo la struttura delle sottocartelle, TUTTO dentro destination (=raw/).
     """
     try:
         query = f"'{folder_id}' in parents and trashed = false"
@@ -82,19 +76,22 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
             mime_type = file['mimeType']
 
             if mime_type == 'application/pdf':
-                request = service.files().get_media(fileId=file_id)
+                # Scarica il PDF nella cartella corrente (che DEVE essere una sottocartella di raw/)
                 local_path = Path(destination) / name
                 local_path.parent.mkdir(parents=True, exist_ok=True)
+                request = service.files().get_media(fileId=file_id)
                 with io.FileIO(local_path, 'wb') as fh:
                     downloader = MediaIoBaseDownload(fh, request)
                     done = False
                     while not done:
                         status, done = downloader.next_chunk()
-                logger.info(f"📥 Scaricato PDF: {name}")
+                logger.info(f"📥 Scaricato PDF: {local_path}")
 
             elif mime_type == 'application/vnd.google-apps.folder':
+                # Crea la sottocartella locale (se non esiste), sempre dentro raw/
                 new_dest = Path(destination) / name
                 new_dest.mkdir(parents=True, exist_ok=True)
+                # Ricorsione sulla sottocartella
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
     except HttpError as e:
@@ -105,9 +102,6 @@ def download_drive_pdfs_to_local(service, config):
     """
     Scarica tutti i PDF dalla cartella cliente su Drive all'output locale.
     Usa config dict: deve avere slug, drive_id, drive_folder_id, output_path.
-
-    Raises:
-        DriveDownloadError: se il download fallisce
     """
     slug = config["slug"]
     drive_id = config["drive_id"]
@@ -124,9 +118,6 @@ def download_drive_pdfs_to_local(service, config):
 def create_drive_subfolders_from_yaml(service, drive_id, parent_folder_id, yaml_path):
     """
     Crea ricorsivamente le sottocartelle su Drive secondo la struttura definita nel file YAML.
-
-    Raises:
-        DriveUploadError: se la creazione delle sottocartelle fallisce
     """
     import yaml
     logger.info(f"Parsing YAML struttura cartelle: {yaml_path}")
@@ -172,10 +163,6 @@ def find_drive_folder_by_name(service, name, drive_id=None):
     """
     Cerca una cartella su Drive per nome, opzionalmente all'interno di un drive specifico.
     Restituisce il primo match come dict {id, name} oppure None.
-    Usata SOLO nella fase di pre_onboarding, non nella pipeline principale!
-
-    Raises:
-        DriveDownloadError: se la ricerca fallisce
     """
     logger.debug(f"Ricerca cartella '{name}' in Drive (ID: {drive_id})")
     try:
@@ -205,3 +192,58 @@ def find_drive_folder_by_name(service, name, drive_id=None):
     except Exception as e:
         logger.error(f"❌ Errore durante la ricerca della cartella '{name}': {e}")
         raise DriveDownloadError(f"Errore durante la ricerca della cartella '{name}': {e}")
+
+def upload_folder_to_drive_raw(service, local_folder: Path, drive_id: str, drive_raw_folder_id: str):
+    """
+    Carica ricorsivamente tutti i file e sottocartelle da local_folder nella cartella 'raw' su Drive.
+    - service: oggetto Drive API autenticato
+    - local_folder: Path locale della cartella da caricare (es: filetest/raw)
+    - drive_id: ID del drive di destinazione (usato solo per riferimento)
+    - drive_raw_folder_id: ID cartella 'raw' del cliente su Drive (già creata dal pre-onboarding)
+    """
+    import mimetypes
+
+    def upload_file(file_path, parent_id):
+        file_metadata = {
+            'name': file_path.name,
+            'parents': [parent_id]
+        }
+        mimetype, _ = mimetypes.guess_type(str(file_path))
+        media = MediaFileUpload(str(file_path), mimetype=mimetype)
+        try:
+            service.files().create(
+                body=file_metadata,
+                media_body=media,
+                supportsAllDrives=True
+            ).execute()
+            logger.info(f"📤 Caricato file: {file_path.name} (in cartella Drive ID: {parent_id})")
+        except Exception as e:
+            logger.error(f"❌ Errore caricando file {file_path.name}: {e}")
+
+    def find_or_create_drive_folder(service, parent_id, folder_name):
+        query = (
+            f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        )
+        results = service.files().list(q=query, supportsAllDrives=True).execute().get('files', [])
+        if results:
+            return results[0]['id']
+        # Altrimenti crea la sottocartella
+        folder_metadata = {
+            'name': folder_name,
+            'parents': [parent_id],
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        folder = service.files().create(body=folder_metadata, supportsAllDrives=True, fields='id').execute()
+        return folder['id']
+
+    def upload_recursive(local_path, parent_drive_id):
+        for item in Path(local_path).iterdir():
+            if item.is_file():
+                upload_file(item, parent_drive_id)
+            elif item.is_dir():
+                subfolder_id = find_or_create_drive_folder(service, parent_drive_id, item.name)
+                upload_recursive(item, subfolder_id)
+
+    # Inizia dalla cartella raw locale e la root 'raw' su Drive
+    upload_recursive(local_folder, drive_raw_folder_id)
+    logger.info("✅ Upload ricorsivo cartella raw completato.")

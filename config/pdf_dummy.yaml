@@ -1,0 +1,77 @@
+identity:
+  titolo: "Identita Aziendale"
+  paragrafi:
+    - "L'identita aziendale definisce chi siamo come organizzazione: racchiude i nostri valori, la missione e la visione che ci guidano ogni giorno."
+    - "La chiarezza sull'identita e fondamentale per garantire coerenza interna e comunicare correttamente verso l'esterno."
+    - "In questa sezione vengono archiviati documenti fondanti come statuto, codice etico, linee guida strategiche e principi di governance."
+    - "Aggiornare e condividere periodicamente l'identita aziendale contribuisce a rafforzare il senso di appartenenza e la cultura condivisa."
+organizzazione:
+  titolo: "Struttura Organizzativa"
+  paragrafi:
+    - "La struttura organizzativa descrive ruoli, responsabilita e i processi decisionali interni all'azienda."
+    - "Include organigrammi, policy di delega, matrici delle competenze e procedure operative standard."
+    - "Un'organizzazione ben definita favorisce l'efficienza, la collaborazione e la risoluzione rapida delle criticita."
+    - "Documentare la struttura rende piu facile accogliere nuovi collaboratori e scalare processi operativi."
+artefatti-operativi:
+  titolo: "Artefatti Operativi"
+  paragrafi:
+    - "Gli artefatti operativi rappresentano strumenti concreti per la gestione dei processi aziendali: moduli, template, checklist e istruzioni operative."
+    - "Una raccolta aggiornata di artefatti supporta l'efficienza, la standardizzazione e il miglioramento continuo."
+    - "Questa sezione raccoglie anche procedure di auditing, piani di miglioramento e strumenti per il controllo qualita."
+    - "Centralizzare gli artefatti rende piu semplice il loro aggiornamento e la diffusione delle best practice."
+glossario:
+  titolo: "Glossario Aziendale"
+  paragrafi:
+    - "Il glossario contiene le definizioni dei termini tecnici, sigle e acronimi usati in azienda, facilitando la comprensione condivisa."
+    - "Un glossario aiuta a ridurre ambiguita, errori interpretativi e velocizza l'onboarding di nuovi collaboratori."
+    - "In questa sezione vengono raccolte anche traduzioni ufficiali, sinonimi e terminologie proprietarie."
+    - "Aggiornare il glossario periodicamente e fondamentale per tenere traccia di cambiamenti nei processi e nell'organizzazione."
+best-practices:
+  titolo: "Best Practices"
+  paragrafi:
+    - "Le best practices sono linee guida, suggerimenti operativi e regole d'oro sviluppate dall'esperienza aziendale."
+    - "Documentare e condividere le best practices permette di replicare i successi e ridurre gli errori ricorrenti."
+    - "In questa sezione si raccolgono anche casi studio, lessons learned e raccomandazioni di settore."
+    - "Una cultura basata sulle best practices favorisce innovazione, qualita e crescita sostenibile."
+normativa:
+  titolo: "Normativa e Compliance"
+  paragrafi:
+    - "La sezione normativa raccoglie leggi, regolamenti e policy obbligatorie che impattano sulle attivita aziendali."
+    - "Un aggiornamento costante della normativa consente all'azienda di restare conforme alle disposizioni di settore e alle policy interne."
+    - "Vengono documentate anche procedure di audit, privacy, sicurezza e gestione delle segnalazioni."
+    - "La compliance e un valore fondamentale per la reputazione e la competitivita dell'organizzazione."
+scenario:
+  titolo: "Scenario e Contesto"
+  paragrafi:
+    - "La sezione scenario contiene analisi di mercato, trend emergenti, rischi e opportunita rilevanti per l'azienda."
+    - "Conoscere il contesto permette di anticipare i cambiamenti e prendere decisioni informate."
+    - "Qui si trovano anche report di settore, benchmark e panoramiche competitive."
+    - "Un monitoraggio continuo dello scenario favorisce l'adattamento strategico e la resilienza aziendale."
+economy:
+  titolo: "Dati Economico-Finanziari"
+  paragrafi:
+    - "La gestione trasparente dei dati economici e centrale per la sostenibilita e la crescita aziendale."
+    - "In questa sezione vengono raccolti bilanci, report economici, KPI finanziari e budget annuali."
+    - "Analizzare periodicamente i dati consente di individuare aree di miglioramento e ottimizzare la pianificazione."
+    - "Una visione chiara dei numeri supporta le decisioni strategiche e facilita il dialogo con stakeholder e investitori."
+template-documenti:
+  titolo: "Template Documentali"
+  paragrafi:
+    - "I template documentali offrono modelli predefiniti per contratti, lettere, presentazioni e comunicazioni ufficiali."
+    - "Utilizzare template garantisce uniformita, risparmio di tempo e riduzione degli errori nei documenti aziendali."
+    - "Questa sezione viene aggiornata regolarmente per riflettere novita normative o modifiche nei processi."
+    - "Un archivio di template ben gestito semplifica l'attivita di tutti i reparti aziendali."
+contrattualistica:
+  titolo: "Contrattualistica"
+  paragrafi:
+    - "La contrattualistica raccoglie tutti i contratti, accordi e convenzioni siglati dall'azienda."
+    - "Un archivio ordinato permette di verificare rapidamente clausole, scadenze e obblighi reciproci."
+    - "In questa sezione sono presenti anche modelli di contratto standard e istruzioni per la loro gestione."
+    - "La gestione accurata dei contratti tutela l'azienda e facilita la relazione con clienti e fornitori."
+raw:
+  titolo: "Raw (Materiali Grezzi)"
+  paragrafi:
+    - "Questa cartella e destinata al caricamento di materiali grezzi e documenti da processare."
+    - "Serve come deposito temporaneo per i file ancora da classificare o elaborare."
+    - "Vengono archiviati qui materiali in arrivo dai clienti, bozze o file di input da validare."
+    - "E importante svuotare e riordinare periodicamente questa cartella per mantenere ordine nel flusso di lavoro."

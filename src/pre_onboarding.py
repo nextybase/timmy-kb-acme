@@ -1,33 +1,28 @@
-import os
-import re
 from pathlib import Path
-from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
     get_drive_service,
     find_drive_folder_by_name,
     create_drive_folder,
-    create_drive_subfolders_from_yaml
+    create_drive_subfolders_from_yaml,
 )
 from pipeline.config_utils import upload_config_to_drive_folder, write_client_config_file
 from pipeline.exceptions import PipelineError
-
-# ▶️ Setup logging e variabili ambiente
-load_dotenv()
-logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
-
-# --- Slug validation utility ---
-def is_valid_slug(slug: str) -> bool:
-    """
-    Verifica che lo slug sia conforme a [a-z0-9-], senza caratteri strani o path traversal.
-    """
-    if not slug:
-        return False
-    return re.fullmatch(r"[a-z0-9-]+", slug) is not None
+from pipeline.settings import get_settings
+from pipeline.utils import is_valid_slug  # <- ora importato dal modulo utils
 
 def main():
+    logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Avvio procedura di pre-onboarding NeXT")
     print("▶️ Procedura di pre-onboarding NeXT")
+
+    # --- Centralizzazione config ---
+    try:
+        settings = get_settings()
+    except Exception as e:
+        print(f"❌ Configurazione globale non valida: {e}")
+        logger.error(f"❌ Errore configurazione globale: {e}")
+        return
 
     try:
         # --- Input slug ---
@@ -50,14 +45,10 @@ def main():
             logger.error("❌ Nome cliente mancante: operazione annullata.")
             return
 
-        # --- Caricamento variabili ambiente ---
-        drive_id = os.getenv("DRIVE_ID")
-        cartelle_yaml_path = os.getenv("CARTELLE_RAW_YAML", "config/cartelle_raw.yaml")
+        # --- Usa config centralizzata ---
+        drive_id = settings.drive_id
+        cartelle_yaml_path = getattr(settings, "cartelle_yaml_path", "config/cartelle_raw.yaml")
         logger.debug(f"drive_id: {drive_id} | cartelle_yaml_path: {cartelle_yaml_path}")
-        if not drive_id:
-            print("❌ DRIVE_ID non trovato nello .env.")
-            logger.error("❌ Variabile DRIVE_ID mancante: impossibile proseguire.")
-            return
 
         # --- Connessione a Google Drive ---
         service = get_drive_service()
@@ -84,12 +75,12 @@ def main():
             "cliente_nome": cliente_nome,
             "drive_folder_id": drive_folder_id,
             "drive_id": drive_id,
-            "output_path": f"output/timmy-kb-{slug}",
-            "md_output_path": f"output/timmy-kb-{slug}/book"
+            "output_path": settings.raw_dir_template.format(slug=slug).split("/raw")[0],
+            "md_output_path": settings.output_dir_template.format(slug=slug)
         }
         logger.debug(f"Config data generato: {config_data}")
 
-        local_config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
+        local_config_path = Path(f"{config_data['output_path']}/config/config.yaml")
         write_client_config_file(config_data, local_config_path)
         logger.info(f"✅ File config.yaml salvato localmente: {local_config_path}")
 
@@ -105,7 +96,7 @@ def main():
         print(f"❌ Errore bloccante: {e}")
         return
     except Exception as e:
-        logger.error(f"❌ Errore non gestito: {e}")
+        logger.error(f"❌ Errore non gestito: {e}", exc_info=True)
         print(f"❌ Errore imprevisto: {e}")
         return
 

@@ -1,6 +1,15 @@
 import os
 import re
 import sys
+import logging
+from pathlib import Path
+
+# Setup logging (opzionale: puoi loggare anche su file)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+logger = logging.getLogger("refactor_tool")
 
 EXT_INCLUDE = {".py", ".yaml", ".yml", ".md"}
 DIR_EXCLUDE = {".git", "venv", "__pycache__", ".mypy_cache", ".idea", ".vscode"}
@@ -26,7 +35,7 @@ def scan_occurrences(root, find_str):
             if matches:
                 found_files.append((fpath, len(matches)))
         except Exception as e:
-            print(f"\n⚠️ Errore nel leggere {fpath}: {e}")
+            logger.warning(f"⚠️ Errore nel leggere {fpath}: {e}")
         if i % 10 == 0 or i == total:
             perc = int(100 * i / total)
             print(f"  ...{i}/{total} file ({perc}%)", end='\r')
@@ -42,8 +51,9 @@ def replace_in_files(file_list, find_str, replace_str):
             new_text = text.replace(find_str, replace_str)
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(new_text)
+            logger.info(f"✏️ Sostituzione effettuata in: {fpath}")
         except Exception as e:
-            print(f"\n⚠️ Errore nel modificare {fpath}: {e}")
+            logger.warning(f"⚠️ Errore nel modificare {fpath}: {e}")
         if i % 5 == 0 or i == total:
             perc = int(100 * i / total)
             print(f"  ...{i}/{total} file modificati ({perc}%)", end='\r')
@@ -60,9 +70,11 @@ def find_and_replace_menu():
     replace_str = input("Stringa di sostituzione (lascia vuoto per solo ricerca): ")
     do_replace = bool(replace_str)
 
-    root = input("Cartella da cui partire [default: .]: ").strip() or "."
+    # Usa la root del progetto come default!
+    default_root = str(Path(__file__).parent.parent.resolve())
+    root = input(f"Cartella da cui partire [default: {default_root}]: ").strip() or default_root
 
-    print("\n⏳ Scansione in corso...")
+    print(f"\n⏳ Scansione in corso nella cartella: {root}")
     found_files = scan_occurrences(root, find_str)
 
     print(f"\n📝 Risultati per '{find_str}':")
@@ -86,7 +98,7 @@ def find_and_replace_menu():
 
 def main_menu():
     while True:
-        print("\n=========== REFRACTOR TOOL ==========")
+        print("\n=========== REFACTOR TOOL ===========")
         print("1. Find & Replace (ricerca e sostituzione stringhe)")
         print("2. Esci")
         print("=====================================")

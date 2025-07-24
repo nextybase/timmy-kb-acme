@@ -2,10 +2,18 @@ import yaml
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import SemanticMappingError
+from pipeline.settings import get_settings
 
 logger = get_structured_logger("semantic.semantic_mapping")
 
-SEMANTIC_YAML_PATH = Path("config/cartelle_semantica.yaml")
+def get_semantic_yaml_path():
+    # Se hai impostato il path custom in Settings, usalo
+    try:
+        settings = get_settings()
+        return Path(getattr(settings, "semantic_yaml_path", "config/cartelle_semantica.yaml"))
+    except Exception:
+        return Path("config/cartelle_semantica.yaml")
+
 _MAPPING_CACHE = None
 
 def load_semantic_mapping() -> dict:
@@ -17,10 +25,11 @@ def load_semantic_mapping() -> dict:
     global _MAPPING_CACHE
     if _MAPPING_CACHE is not None:
         return _MAPPING_CACHE
+    path = get_semantic_yaml_path()
     try:
-        with open(SEMANTIC_YAML_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             mapping = yaml.safe_load(f)
-        logger.info(f"✅ Mapping semantico caricato da {SEMANTIC_YAML_PATH}")
+        logger.info(f"✅ Mapping semantico caricato da {path}")
         _MAPPING_CACHE = mapping
         return mapping
     except Exception as e:

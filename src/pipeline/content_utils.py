@@ -1,6 +1,5 @@
 from pathlib import Path
 import os
-import yaml
 import datetime
 
 from pipeline.file2md_utils import extract_file_to_markdown, load_tags_by_category

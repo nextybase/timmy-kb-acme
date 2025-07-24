@@ -1,94 +1,115 @@
-import os
 import yaml
-import tempfile
 from pathlib import Path
-from pipeline.logging_utils import get_structured_logger
-from pipeline.drive_utils import get_drive_service
-from pipeline.exceptions import ConfigError
+import os
+import datetime
 
-logger = get_structured_logger("pipeline.config_utils")
+from pipeline.file2md_utils import extract_file_to_markdown, load_tags_by_category
+from pipeline.exceptions import ConversionError
+from pipeline.logging_utils import get_structured_logger
+
+logger = get_structured_logger("pipeline.content_utils")
 
 def load_client_config(slug: str) -> dict:
     """
-    Carica la configurazione del cliente dallo YAML locale.
-    Richiede che il file config.yaml sia presente e valido.
-    Solleva ConfigError se manca o è incompleto.
+    Carica la configurazione del cliente dal file config.yaml situato in output/timmy-kb-{slug}/config/config.yaml
     """
-    config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
-    logger.debug(f"Caricamento config da: {config_path}")
-
+    config_path = Path("output") / f"timmy-kb-{slug}" / "config" / "config.yaml"
     if not config_path.exists():
-        logger.error(f"❌ File config.yaml non trovato per il cliente '{slug}'")
-        raise ConfigError(f"File config.yaml non trovato per il cliente '{slug}'")
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"❌ Errore durante la lettura del file config.yaml: {e}")
-        raise ConfigError(f"Errore nella lettura del file config.yaml: {e}")
-
-    # --- Normalizzazione e completezza chiavi ---
+        raise FileNotFoundError(f"Config file non trovato: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
     config["slug"] = slug
-    config["cliente_nome"] = config.get("cliente_nome", slug)
-    config["output_path"] = f"output/timmy-kb-{slug}"
-    config["md_output_path"] = config.get("md_output_path", f"output/timmy-kb-{slug}/book")
-    config["raw_dir"] = str(Path(config["output_path"]) / "raw")
-    config["github_repo"] = f"timmy-kb-{slug}"
-
-    if not config.get("drive_id"):
-        config["drive_id"] = os.getenv("DRIVE_ID")
-        logger.warning(f"⚠️ drive_id non presente in config, usato valore da .env: {config['drive_id']}")
-
-    if not config.get("drive_folder_id"):
-        logger.error("❌ drive_folder_id mancante in config: impossibile procedere.")
-        raise ConfigError("drive_folder_id mancante in config. Esegui prima il pre-onboarding.")
-
-    logger.info(f"✅ Config caricata correttamente per il cliente: {slug}")
-    logger.debug(f"Config caricata: {config}")
     return config
 
-def upload_config_to_drive_folder(service, folder_id: str, config_data: dict):
+def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
-    Carica il file config.yaml su Google Drive nella cartella specificata.
-    Solleva ConfigError in caso di errore.
+    Converte tutti i file supportati (inizialmente solo PDF) trovati in config["raw_dir"]
+    in file Markdown nella cartella di output, aggiungendo tag di paragrafo e frontmatter ricco.
+    Ogni markdown ha: titolo, categoria, cartella origine, data conversione, stato normalizzazione.
+    I file Markdown vengono generati TUTTI nella cartella book/ (config["md_output_path"]).
+    Ritorna il numero di file convertiti.
+    Solleva ConversionError se la conversione globale fallisce.
     """
+    raw_path = Path(config["raw_dir"])
+    slug = config["slug"]
+    output_path = Path(config.get("md_output_path", f"output/timmy-kb-{slug}/book"))
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Solo PDF (espandibile in futuro)
+    files = [f for f in raw_path.rglob("*") if f.is_file() and f.suffix.lower() == ".pdf"]
+
+    logger.info(f"🟢 Trovati {len(files)} file da convertire in {raw_path}")
+
+    def get_categoria_from_path(file_path):
+        folder = file_path.parent.name.lower()
+        if mapping and folder in mapping:
+            return mapping[folder]
+        return folder
+
+    tags_by_cat = load_tags_by_category()
+
+    converted = 0
+    for file in files:
+        try:
+            titolo = file.stem.replace("_", " ").title()
+            categoria = get_categoria_from_path(file)
+            frontmatter = {
+                "titolo": titolo,
+                "categoria": categoria,
+                "origine_cartella": file.parent.name,
+                "data_conversione": datetime.date.today().isoformat(),
+                "stato_normalizzazione": "completato"
+            }
+            # PATCH: forzo output_path (book/) per tutti gli md, niente sottocartelle
+            extract_file_to_markdown(
+                file,
+                output_path,  # book/
+                frontmatter,
+                tags_by_cat=tags_by_cat
+            )
+            converted += 1
+            logger.info(f"✅ Markdown creato per: {file.name}")
+        except Exception as e:
+            logger.error(f"❌ Errore durante la conversione di {file.name}: {e}")
+            raise ConversionError(f"Errore durante la conversione di {file.name}: {e}")
+
+    logger.info(f"🏁 Conversione completata: {converted}/{len(files)} riusciti")
+    return converted
+
+def generate_summary_markdown(markdown_files, output_path) -> None:
+    """
+    Genera il file SUMMARY.md dai markdown presenti nella cartella output_path.
+    Solleva ConversionError in caso di errore.
+    """
+    summary_md_path = os.path.join(output_path, "SUMMARY.md")
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".yaml", mode='w', encoding='utf-8') as temp_file:
-            yaml.dump(config_data, temp_file, allow_unicode=True)
-            temp_file_path = temp_file.name
+        with open(summary_md_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# Sommario\n\n")
+            f.write("* [Introduzione](README.md)\n")
+            for file in sorted(markdown_files):
+                if file.lower() in {"readme.md", "summary.md"}:
+                    continue
+                title = os.path.splitext(os.path.basename(file))[0].replace("_", " ")
+                f.write(f"* [{title}]({file})\n")
 
-        from googleapiclient.http import MediaFileUpload
-        media = MediaFileUpload(temp_file_path, mimetype='application/x-yaml', resumable=False)
-        file_metadata = {
-            'name': 'config.yaml',
-            'parents': [folder_id]
-        }
-
-        service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id',
-            supportsAllDrives=True
-        ).execute()
-
-        logger.info("✅ File config.yaml caricato con successo su Google Drive.")
-        logger.debug(f"📄 Il file temporaneo resta disponibile: {temp_file_path}")
-
+        logger.info(f"📄 SUMMARY.md generato con {len(markdown_files)} file.")
     except Exception as e:
-        logger.error(f"❌ Errore durante il caricamento su Drive: {e}")
-        raise ConfigError(f"Errore durante il caricamento su Drive: {e}")
+        logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
+        raise ConversionError(f"Errore nella generazione di SUMMARY.md: {e}")
 
-def write_client_config_file(config_data: dict, path: Path) -> None:
+def generate_readme_markdown(output_path, slug) -> None:
     """
-    Scrive il file config.yaml localmente per backup/rollback.
-    Solleva ConfigError in caso di errore.
+    Genera un file README.md minimale nella cartella output_path per il cliente specificato da slug.
+    Solleva ConversionError in caso di errore.
     """
+    readme_path = os.path.join(output_path, "README.md")
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(config_data, f, allow_unicode=True, sort_keys=False)
-        logger.info(f"✅ File di configurazione salvato in locale: {path}")
+        with open(readme_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(f"# Timmy KB – {slug}\n\n")
+            f.write(f"Benvenuto nella Knowledge Base del cliente **{slug}**.\n\n")
+            f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
+
+        logger.info("✅ README.md generato con contenuto minimale.")
     except Exception as e:
-        logger.error(f"❌ Errore nella scrittura locale: {e}")
-        raise ConfigError(f"Errore nella scrittura locale: {e}")
+        logger.error(f"❌ Errore nella generazione di README.md: {e}")
+        raise ConversionError(f"Errore nella generazione di README.md: {e}")

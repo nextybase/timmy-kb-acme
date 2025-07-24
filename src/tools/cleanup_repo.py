@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Strumento autonomo di cleanup:
-- Elimina la cartella cliente
+Strumento autonomo di cleanup per la pipeline Timmy-KB.
+- Elimina la cartella clienti
 - Svuota la cartella output
 - Cancella file locali (es. book.json)
 - Elimina la repo GitHub remota
+Usa la configurazione centralizzata via Settings.
 """
 
 import os
@@ -12,17 +13,23 @@ import shutil
 import subprocess
 import logging
 from pathlib import Path
+import sys
 
-# Setup logging
+# Setup path e logging
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+from pipeline.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
 
-# Costanti corrette
-PROJECT_ROOT      = Path(__file__).resolve().parents[2]  # root reale del progetto
-CLIENTI_BASE_PATH = Path(os.getenv("CLIENTI_BASE_PATH", r"C:\Users\User\clienti"))
+settings = get_settings()
+
+# Path di progetto e variabili globali (tutte da settings se disponibili)
+PROJECT_ROOT      = Path(__file__).resolve().parents[1]
+CLIENTI_BASE_PATH = Path(getattr(settings, "clienti_base_path", r"C:\Users\User\clienti"))
 OUTPUT_BASE_PATH  = PROJECT_ROOT / "output"
 BOOK_JSON_PATH    = PROJECT_ROOT / "book.json"
-GITHUB_ORG        = os.getenv("GITHUB_ORG", "nextybase")
+GITHUB_ORG        = getattr(settings, "github_org", "nextybase")
 
 def on_rm_error(func, path, exc_info):
     import stat
@@ -74,8 +81,9 @@ def delete_github_repo(repo_fullname: str):
         logger.error(f"❌ Errore GitHub CLI: {e}")
 
 def run_cleanup(slug: str, elimina_repo: bool = True):
+    # Path coerenti con la pipeline attuale (trattino, non underscore)
     folder_clienti = CLIENTI_BASE_PATH / f"timmy-kb-{slug}"
-    folder_output  = OUTPUT_BASE_PATH / f"timmy_kb_{slug}"
+    folder_output  = OUTPUT_BASE_PATH / f"timmy-kb-{slug}"
     repo_fullname  = f"{GITHUB_ORG}/timmy-kb-{slug}"
 
     logger.info("🔍 Avvio procedura di cleanup completa...")
@@ -93,7 +101,7 @@ def main():
     slug = input("🆔 Inserisci lo slug cliente da eliminare (es: prova): ").strip().lower()
 
     folder_clienti = CLIENTI_BASE_PATH / f"timmy-kb-{slug}"
-    folder_output  = OUTPUT_BASE_PATH / f"timmy_kb_{slug}"
+    folder_output  = OUTPUT_BASE_PATH / f"timmy-kb-{slug}"
     repo_fullname  = f"{GITHUB_ORG}/timmy-kb-{slug}"
 
     print(f"\n🚨 ATTENZIONE: stai per eliminare:")

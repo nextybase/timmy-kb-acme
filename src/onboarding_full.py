@@ -1,8 +1,6 @@
-import os
-import re
-import subprocess
 from pathlib import Path
-from dotenv import load_dotenv
+import subprocess
+import os
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import load_client_config
 from pipeline.content_utils import (
@@ -12,16 +10,13 @@ from pipeline.content_utils import (
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
-from pipeline.cleanup import cleanup_output_folder, safe_remove_dir
-from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
+from pipeline.cleanup import cleanup_output_folder, safe_clean_dir
+from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively  # PATCH qui!
 from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError
-
-def is_valid_slug(slug: str) -> bool:
-    if not slug:
-        return False
-    return re.fullmatch(r"[a-z0-9-]+", slug) is not None
+from pipeline.settings import get_settings
+from pipeline.utils import is_valid_slug
 
 def check_docker_running():
     try:
@@ -32,13 +27,21 @@ def check_docker_running():
     except Exception:
         return False
 
+# Sopprime warning MuPDF in CLI (opzionale)
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
-load_dotenv()
-logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
 
 def main():
+    logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
     print("▶️ Onboarding completo Timmy-KB")
+
+    # --- Centralizzazione config ---
+    try:
+        settings = get_settings()
+    except Exception as e:
+        print(f"❌ Configurazione globale non valida: {e}")
+        logger.error(f"❌ Errore configurazione globale: {e}")
+        return
 
     if not check_docker_running():
         print("❌ Docker non risulta attivo o non è raggiungibile.")
@@ -66,10 +69,18 @@ def main():
         # --- Step 1: Download da Drive e pulizia output ---
         cleanup_output_folder(config)
         service = get_drive_service()
-        download_drive_pdfs_to_local(service=service, config=config)
+        # PATCH: scarica i PDF e le sottocartelle dentro output/timmy-kb-dummy/raw/
+        raw_dir = Path(config["output_path"]) / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        download_drive_pdfs_recursively(
+            service=service,
+            folder_id=config["drive_folder_id"],
+            destination=raw_dir,
+            drive_id=config["drive_id"]
+        )
         logger.info("📥 Download PDF da Drive completato.")
 
-        config["raw_dir"] = str(Path(config["output_path"]) / "raw")
+        config["raw_dir"] = str(raw_dir)
         logger.debug(f"PATCH: config['raw_dir'] impostato a {config['raw_dir']}")
 
         pdf_files = list(Path(config["raw_dir"]).rglob("*.pdf"))
@@ -123,7 +134,7 @@ def main():
             while True:
                 finale = input(f"\n✅ Possiamo definire completo l'onboarding del cliente {config['cliente_nome']}? [y/N] ").strip().lower()
                 if finale == "y":
-                    safe_remove_dir(temp_dir)
+                    safe_clean_dir(temp_dir)
                     print("🧹 Pulizia completata. Onboarding chiuso.")
                     logger.info("🧹 Temp dir rimossa, onboarding completato.")
                     break
@@ -133,10 +144,10 @@ def main():
                         also_conf = input("🗑️ Vuoi cancellare anche i file di configurazione? Dovrai ripartire dal pre-onboarding. [y/N] ").strip().lower()
                         if also_conf == "y":
                             config_dir = Path(config["output_path"]) / "config"
-                            safe_remove_dir(config_dir)
+                            safe_clean_dir(config_dir)
                             print("🗑️ Tutto azzerato, inclusa la configurazione.")
                             logger.warning("🗑️ Tutto azzerato, inclusa la configurazione.")
-                        safe_remove_dir(temp_dir)
+                        safe_clean_dir(temp_dir)
                         print("🧹 Pulizia completata. Onboarding azzerato.")
                         logger.info("🧹 Temp dir rimossa, onboarding azzerato.")
                         break
@@ -155,7 +166,7 @@ def main():
         print(f"❌ Errore bloccante: {e}")
         return
     except Exception as e:
-        logger.error(f"❌ Errore non gestito: {e}")
+        logger.error(f"❌ Errore non gestito: {e}", exc_info=True)
         print(f"❌ Errore imprevisto: {e}")
         return
 

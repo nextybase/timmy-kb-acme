@@ -1,5 +1,4 @@
 import subprocess
-import os
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError

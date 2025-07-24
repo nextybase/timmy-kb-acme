@@ -20,7 +20,6 @@ Questa fase serve a **creare la struttura Drive cliente**, pronta per la raccolt
 
 ### 1. Esegui il pre-onboarding
 
-```bash
 py src/pre_onboarding.py
 Ti verrà chiesto:
 

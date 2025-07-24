@@ -1,8 +1,8 @@
 from pathlib import Path
-import os
 import shutil
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import CleanupError  # custom exception
+from pipeline.exceptions import CleanupError
+# from pipeline.settings import get_settings  # <-- Solo se serve accesso a template output dinamico
 
 logger = get_structured_logger("pipeline.cleanup")
 
@@ -49,23 +49,32 @@ def cleanup_output_folder(config: dict) -> bool:
         logger.error(f"❌ Errore durante la pulizia: {e}")
         raise CleanupError(f"Errore durante la pulizia: {e}")
 
-def safe_remove_dir(path):
+def safe_clean_dir(path):
     """
-    Rimuove ricorsivamente una directory anche se alcuni file sono temporaneamente in uso (Windows-safe).
-    Usa retry e delay. Solleva CleanupError se dopo vari tentativi la directory persiste.
+    Cancella ricorsivamente tutti i file e sottocartelle all'interno di `path`,
+    ma NON cancella la cartella stessa. Se qualche file è in uso, logga warning.
     """
     import time
+    from pathlib import Path
+    import shutil
+
     path = Path(path)
     if not path.exists():
         logger.info(f"🟢 La directory {path} non esiste già (nessuna azione richiesta).")
-        return
-    for _ in range(5):
-        try:
-            shutil.rmtree(path, ignore_errors=False)
-            logger.info(f"🧹 Directory rimossa: {path}")
-            return
-        except PermissionError as e:
-            logger.warning(f"⚠️ Directory lockata (in uso): {path}. Retry tra poco...")
-            time.sleep(0.5)
-    logger.error(f"❌ Non riesco a cancellare la directory dopo più tentativi: {path}")
-    raise CleanupError(f"Impossibile cancellare la directory: {path}")
+        return True
+    error = False
+    for item in path.iterdir():
+        for _ in range(5):
+            try:
+                if item.is_file() or item.is_symlink():
+                    item.unlink()
+                else:
+                    shutil.rmtree(item)
+                break
+            except PermissionError:
+                logger.warning(f"⚠️ File/directory lockata (in uso): {item}. Retry tra poco...")
+                time.sleep(0.5)
+        else:
+            logger.warning(f"⚠️ Impossibile rimuovere: {item} (file lock persistente)")
+            error = True
+    return not error
