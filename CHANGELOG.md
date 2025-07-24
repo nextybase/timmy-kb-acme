@@ -1,37 +1,5 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
-## v1.3.3 - 2025-07-24 - Refactor pipeline, test end-to-end & ALERT conversione PDF→Markdown
-
-### 🧩 Refactor architetturale & centralizzazione configurazione
-
-- Introdotto modulo centralizzato `settings.py` (Pydantic) per la gestione di tutte le variabili di configurazione (Drive, GitHub, percorsi output, ecc.), eliminando l’uso diretto di variabili d’ambiente nei moduli.
-- Refactoring orchestratori principali (`pre_onboarding.py`, `onboarding_full.py`): ora utilizzano sempre la config centralizzata e controllano path/output in modo robusto.
-- Unificata la gestione degli slug, cleanup, logging e validazione su tutti i main script, garantendo idempotenza e UX predicibile.
-
-### 🔄 Download e conversione PDF: struttura ricostruita, output “flat”
-
-- Patchate le funzioni di download PDF da Google Drive: ora tutti i file (anche da sottocartelle tematiche) vengono scaricati in `output/timmy-kb-<slug>/raw/` mantenendo la struttura semantica.
-- Aggiornata la funzione di conversione PDF→Markdown: i markdown vengono generati “flat” nella cartella `book/` (senza sottocartelle), con README e SUMMARY automatici.
-- **ALERT: bug noto nella funzione di conversione** — in alcune condizioni, i file `.md` non vengono generati nella cartella `book/` come previsto, oppure vengono generati file extra (es. `.html` o markdown fuori da `book/`).  
-  **La release include un alert in README: il bug sarà oggetto di fix prioritario in v1.3.4/v1.4.**
-
-### 🧪 Test automatici & end-to-end “dummy”
-
-- Implementato lo script di test end-to-end: pulizia ambiente (output/Drive/GitHub), onboarding su slug `dummy`, upload automatico dei PDF dummy, verifica conversione, preview, push e cleaning.
-- Tutti i test batch (conversione, deploy, cleaning) ora usano la struttura aggiornata e sono idempotenti.
-- Debug e log CLI dettagliati in ogni fase, messaggi chiari per ogni step e anomalia.
-
-### 🪵 Logging strutturato, cleaning e CLI resilienti
-
-- Logging avanzato su tutti i moduli core, con livelli coerenti e emoji per ogni esito rilevante.
-- Cleaning e safe-clean folder completamente idempotenti; controllo sulla cancellazione manuale dei file “lockati”.
-- CLI sempre interattiva nei tool di test, pronta per onboarding di nuovi dev.
-
----
-
-**Release stabile, raccomandata per team e test reali.  
-ATTENZIONE: la funzione di conversione PDF→Markdown necessita di revisione urgente.  
-Consultare README per workaround e stato bugfix.**
 
 
 ## v1.3.2 - 2025-07-23 - Push minimale, architettura “KB only” & UX human-in-the-loop
