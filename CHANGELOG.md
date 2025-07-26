@@ -1,5 +1,29 @@
 # 📦 CHANGELOG – OnBoarding NeXT
 
+## v1.3.3 - 2025-07-26 - Refactor architetturale finale, test E2E & fix conversione PDF→Markdown
+
+### 🏗️ Architettura consolidata & Config centralizzata  
+- **Configurazione unica dell’ambiente** – Introdotto il modulo `pipeline/settings.py` per la gestione centralizzata delle variabili globali (Drive, GitHub, path template) via `.env`. L’avvio della pipeline ora valida sempre la configurazione, interrompendo l’esecuzione in caso di errori.
+- **Output Knowledge Base unificato in `book/`** – Tutti i Markdown generati dai PDF vengono ora salvati direttamente in `book/` (cartella della knowledge base pulita), senza sottocartelle. La funzione di conversione è stata rifattorizzata per garantire la coerenza e il corretto posizionamento dei file.
+- **Validazione e robustezza** – Migliorata la verifica iniziale di configurazioni e servizi esterni (Docker, Drive). In caso di problemi, la pipeline si interrompe in modo sicuro con messaggi chiari.
+
+### 🧪 Test end-to-end & Tool di supporto  
+- **Scenario completo di test (“dummy”)** – Script `tests/end2end_dummy.py` che esegue l’intero onboarding su un cliente fittizio, verifica automatica di tutte le fasi e cleanup a fine test.
+- **Generazione PDF di prova e cleanup** – Nuovi tool per creare PDF dummy (`generate_pdf_dummy.py`) e ripulire completamente ambiente e repo di test (`cleanup_repo.py`).
+- **Modifica a `.gitignore`** – Le cartelle `tests/` e `filetest/` nella root sono ora tracciate dal repository per garantire la piena disponibilità degli script di test e delle risorse di esempio.
+
+### 🪵 Logging avanzato & rifiniture  
+- **Log su file dedicati** e terminologia uniforme in tutti i moduli.
+- **Eliminati tutti i `print()` non interattivi** nei moduli core: la comunicazione avviene solo tramite logger.
+- **Hardening e pulizia** finale, con directory temporanee e file di output sempre nella root progetto.
+
+### 🐞 Bugfix  
+- **Risolto bug conversione PDF→Markdown**: ora tutti i file `.md` vengono generati e posizionati correttamente in `book/`. Rimossi anche i file `.html` spurii dal processo di conversione.
+
+---
+
+> Questa release completa la stabilizzazione della v1.3.  
+> La pipeline è ora pronta per la documentazione finale e per accogliere futuri upgrade.
 
 
 ## v1.3.2 - 2025-07-23 - Push minimale, architettura “KB only” & UX human-in-the-loop

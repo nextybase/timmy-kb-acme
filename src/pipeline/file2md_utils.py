@@ -8,10 +8,7 @@ from pipeline.logging_utils import get_structured_logger
 logger = get_structured_logger("pipeline.file2md_utils")
 
 def load_tags_by_category(path="config/timmy_tags.yaml"):
-    """
-    Carica la lista di tag strutturata per categorie dal file YAML.
-    Restituisce: dict categoria: [tag1, tag2, ...]
-    """
+    """Carica la lista di tag strutturata per categorie dal file YAML."""
     try:
         with open(path, encoding="utf-8") as f:
             cats = yaml.safe_load(f)
@@ -21,19 +18,14 @@ def load_tags_by_category(path="config/timmy_tags.yaml"):
         raise ConversionError(f"Errore nel caricamento dei tag da {path}: {e}")
 
 def get_all_tags(tags_by_cat):
-    """
-    Ritorna tutte le stringhe tag uniche (lowercase).
-    """
+    """Ritorna tutte le stringhe tag uniche (lowercase)."""
     alltags = []
     for tags in tags_by_cat.values():
         alltags.extend(tags)
     return list(set([t.lower() for t in alltags]))
 
 def get_paragraph_tags(paragraph, tags_by_cat):
-    """
-    Matching multi-word: se la frase/tag (case-insensitive, con trattini/spazi/underscore normalizzati)
-    è contenuta nel paragrafo, aggiunge il tag.
-    """
+    """Effettua matching multi-word di tag all'interno del paragrafo."""
     paragraph_norm = paragraph.lower().replace("-", " ").replace("_", " ")
     matches = set()
     for cat, tags in tags_by_cat.items():
@@ -66,7 +58,6 @@ def markdownize_pdf_text(raw_text: str, tags_by_cat=None) -> str:
     result = []
 
     for block in blocks:
-        # Se tutte le righe sono elenchi (numerati o puntati), markdownizza come lista
         if all(re.match(r"^(\d+[\.\)]|[•\-–])\s+", l) for l in block):
             for l in block:
                 item = re.sub(r"^(\d+[\.\)]|[•\-–])\s*", "- ", l.strip())
@@ -99,11 +90,24 @@ def markdownize_pdf_text(raw_text: str, tags_by_cat=None) -> str:
 
     return "\n\n".join(result)
 
-def extract_pdf_blocks_to_markdown(pdf_path: Path, output_path: Path, frontmatter: dict, tags_by_cat=None):
+def build_frontmatter(pdf_path: Path, mapping=None, config=None):
     """
-    Estrae testo da un PDF, pagina per pagina, e lo trasforma in markdown strutturato a blocchi,
-    aggiungendo i tag di paragrafo.
-    Solleva ConversionError in caso di errore.
+    Costruisce il frontmatter YAML a partire dal nome file e parametri extra.
+    """
+    frontmatter = {
+        "titolo": pdf_path.stem,
+        "origine_file": str(pdf_path),
+    }
+    if config and "slug" in config:
+        frontmatter["slug_cliente"] = config["slug"]
+    if mapping:
+        # Implementa mapping semantico (placeholder)
+        frontmatter["categoria"] = mapping.get(pdf_path.parent.name, "documento")
+    return frontmatter
+
+def extract_pdf_blocks_to_markdown(pdf_path: Path, md_output_path: Path, frontmatter: dict, tags_by_cat=None):
+    """
+    Estrae testo da un PDF e lo trasforma in markdown, scrivendo il file in md_output_path.
     """
     try:
         doc = fitz.open(pdf_path)
@@ -122,23 +126,23 @@ def extract_pdf_blocks_to_markdown(pdf_path: Path, output_path: Path, frontmatte
             f"# {frontmatter.get('titolo', pdf_path.stem)}\n"
             f"{full_text}"
         )
-        md_file = output_path / (pdf_path.stem.replace(" ", "_") + ".md")
+        md_name = pdf_path.stem.replace(" ", "_").lower() + ".md"
+        md_file = md_output_path / md_name
         md_file.write_text(md_content, encoding="utf-8")
+        logger.info(f"✅ Conversione completata: {md_file.name}")
     except Exception as e:
         logger.error(f"❌ Errore durante l'estrazione PDF→Markdown di {pdf_path}: {e}")
         raise ConversionError(f"Errore durante l'estrazione PDF→Markdown di {pdf_path}: {e}")
 
-def extract_file_to_markdown(path: Path, output_path: Path, frontmatter: dict, tags_by_cat=None):
+def extract_file_to_markdown(path: Path, md_output_path: Path, frontmatter: dict, tags_by_cat=None):
     """
-    Estrae contenuto da un file supportato e salva come Markdown,
-    aggiungendo i tag dove possibile (matching multi-word/tag per categoria).
-    Solleva ConversionError se il tipo di file non è supportato o se si verifica un errore.
+    Estrae contenuto da un file supportato e salva come Markdown in md_output_path.
     """
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        extract_pdf_blocks_to_markdown(path, output_path, frontmatter, tags_by_cat=tags_by_cat)
-    # TODO: elif suffix == ".docx": extract_docx_to_markdown(...)
-    # TODO: elif suffix in [".jpg", ".png"]: extract_image_to_markdown(...)
+        extract_pdf_blocks_to_markdown(path, md_output_path, frontmatter, tags_by_cat=tags_by_cat)
+    # TODO: elif suffix == ".docx": ...
+    # TODO: elif suffix in [".jpg", ".png"]: ...
     else:
         try:
             md_content = (
@@ -148,10 +152,27 @@ def extract_file_to_markdown(path: Path, output_path: Path, frontmatter: dict, t
                 f"# {frontmatter.get('titolo', path.stem)}\n"
                 "*Tipo file non supportato per estrazione automatica.*"
             )
-            md_file = output_path / (path.stem.replace(" ", "_") + ".md")
+            md_name = path.stem.replace(" ", "_").lower() + ".md"
+            md_file = md_output_path / md_name
             md_file.write_text(md_content, encoding="utf-8")
             logger.warning(f"⚠️ Tipo file non supportato per estrazione automatica: {path}")
             raise ConversionError(f"Tipo file non supportato: {path.suffix}")
         except Exception as e:
             logger.error(f"❌ Errore durante l'estrazione file→Markdown di {path}: {e}")
             raise ConversionError(f"Errore durante l'estrazione file→Markdown di {path}: {e}")
+
+def convert_pdfs_to_markdown(pdf_root, md_output_path, mapping=None, config=None, tags_by_cat=None):
+    """
+    Funzione pubblica principale: trova tutti i PDF in pdf_root (ricorsivo) e li converte in Markdown,
+    salvandoli SOLO in md_output_path, con filename minuscolo/underscore.
+    """
+    pdf_root = Path(pdf_root)
+    md_output_path = Path(md_output_path)
+    md_output_path.mkdir(parents=True, exist_ok=True)
+
+    pdf_files = list(pdf_root.rglob("*.pdf"))
+    if not pdf_files:
+        logger.warning(f"⚠️ Nessun PDF trovato in {pdf_root}")
+    for pdf_path in pdf_files:
+        frontmatter = build_frontmatter(pdf_path, mapping=mapping, config=config)
+        extract_pdf_blocks_to_markdown(pdf_path, md_output_path, frontmatter, tags_by_cat=tags_by_cat)

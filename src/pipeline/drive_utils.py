@@ -19,7 +19,6 @@ def get_drive_service():
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
     settings = get_settings()
-    # Supporta sia google_service_account_json che service_account_file
     service_account_file = (
         getattr(settings, "drive_service_account_file", None)
         or getattr(settings, "google_service_account_json", None)
@@ -76,7 +75,6 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
             mime_type = file['mimeType']
 
             if mime_type == 'application/pdf':
-                # Scarica il PDF nella cartella corrente (che DEVE essere una sottocartella di raw/)
                 local_path = Path(destination) / name
                 local_path.parent.mkdir(parents=True, exist_ok=True)
                 request = service.files().get_media(fileId=file_id)
@@ -88,10 +86,8 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
                 logger.info(f"📥 Scaricato PDF: {local_path}")
 
             elif mime_type == 'application/vnd.google-apps.folder':
-                # Crea la sottocartella locale (se non esiste), sempre dentro raw/
                 new_dest = Path(destination) / name
                 new_dest.mkdir(parents=True, exist_ok=True)
-                # Ricorsione sulla sottocartella
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
     except HttpError as e:
@@ -227,7 +223,6 @@ def upload_folder_to_drive_raw(service, local_folder: Path, drive_id: str, drive
         results = service.files().list(q=query, supportsAllDrives=True).execute().get('files', [])
         if results:
             return results[0]['id']
-        # Altrimenti crea la sottocartella
         folder_metadata = {
             'name': folder_name,
             'parents': [parent_id],
@@ -244,6 +239,48 @@ def upload_folder_to_drive_raw(service, local_folder: Path, drive_id: str, drive
                 subfolder_id = find_or_create_drive_folder(service, parent_drive_id, item.name)
                 upload_recursive(item, subfolder_id)
 
-    # Inizia dalla cartella raw locale e la root 'raw' su Drive
     upload_recursive(local_folder, drive_raw_folder_id)
     logger.info("✅ Upload ricorsivo cartella raw completato.")
+
+def upload_config_to_drive_folder(service, config_path, drive_folder_id):
+    """
+    Carica il file config.yaml nella cartella Drive specificata.
+    Se esiste già un file con lo stesso nome, lo sovrascrive.
+    """
+    from googleapiclient.http import MediaFileUpload
+    from pathlib import Path
+
+    config_path = Path(config_path)  # Fix: safe cast a Path per compatibilità .name
+
+    query = (
+        f"'{drive_folder_id}' in parents and name = '{config_path.name}' and trashed = false"
+    )
+    results = service.files().list(
+        q=query,
+        fields='files(id, name)',
+        supportsAllDrives=True
+    ).execute().get('files', [])
+
+    for f in results:
+        try:
+            service.files().delete(fileId=f['id'], supportsAllDrives=True).execute()
+        except Exception as e:
+            logger.warning(f"⚠️ Errore durante la cancellazione del vecchio config.yaml su Drive: {e}")
+
+    file_metadata = {
+        'name': config_path.name,
+        'parents': [drive_folder_id],
+        'mimeType': 'application/x-yaml'
+    }
+    media = MediaFileUpload(str(config_path), mimetype='application/x-yaml')
+    try:
+        uploaded = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            supportsAllDrives=True
+        ).execute()
+        logger.info(f"✅ Caricato config.yaml su Drive, ID: {uploaded.get('id')}")
+        return uploaded.get('id')
+    except Exception as e:
+        logger.error(f"❌ Errore caricando config.yaml su Drive: {e}")
+        raise

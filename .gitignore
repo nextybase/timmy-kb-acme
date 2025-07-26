@@ -78,14 +78,10 @@ etc/jupyter/nbconfig/notebook.d/
 etc/jupyter/nbconfig/notebook.d/pydeck.json
 # Output locali e temporanei
 logs/
-filetest/
 .vscode/
 *.ipynb_checkpoints/
 
 # === Test & test artifacts ===
-filetest/
-tests/
-timmy-kb-dummytest/
 # output di test dedicato
 output/timmy-kb-dummytest/
 coverage/

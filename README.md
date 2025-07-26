@@ -1,167 +1,112 @@
-
-# 🚀 OnBoarding NeXT – v1.3.3
-
-Benvenuto nel repository ufficiale del sistema di onboarding per il progetto **NeXT**.  
-Questa versione (`v1.3.3`) introduce il refactoring architetturale, la centralizzazione della configurazione, la robustezza nei test end-to-end, logging strutturato avanzato e **ALERT su una funzione critica**:
-
-> ⚠️ **ALERT: la funzione di conversione PDF→Markdown non posiziona sempre i file `.md` nella cartella `book/` come previsto.  
-> Potrebbero essere generati file markdown in posizioni errate o file extra (.html).  
-> Questo bug è noto e verrà risolto con priorità nella release 1.3.4/1.4.  
-> Consulta il Changelog e questa sezione per lo stato dei fix e i workaround.**
+# Timmy-KB – Onboarding Pipeline v1.3.3
 
 ---
 
-## 📚 Documentazione inclusa
+# Timmy-KB: Knowledge Base Onboarding Pipeline (v1.3.3)
 
-- [`pre_onboarding_readme.md`](./pre_onboarding_readme.md)  
-  *Creazione struttura cliente su Google Drive e generazione `config.yaml`.*
+Pipeline modulare, automatizzata e AI-ready per l’onboarding strutturato di PMI nella piattaforma NeXT (Nested eXtreme Timeline), con generazione semantica di knowledge base in Markdown e pubblicazione continua su GitHub/GitBook.
 
-- [`onboarding_pipeline_timmy_kb_v1.3.md`](./onboarding_pipeline_timmy_kb_v1.3.md)  
-  *Pipeline completa: download PDF ricorsivo, preview Docker e deploy GitHub.*
-
-- [`coding_rule.md`](./coding_rule.md)  
-  *Policy e regole ufficiali per naming, logging, convenzioni di test e best practice.*
+> Questa versione è la release **1.3.3** e conclude il refactoring architetturale della 1.3.
 
 ---
 
-## 🧭 Obiettivo del progetto
+## 🎯 Scopo
 
-Offrire una pipeline **robusta**, **automatizzata**, **adattiva** e **AI-friendly** per gestire end-to-end il processo di onboarding dei clienti, producendo dati già pronti per l’enrichment semantico e la costruzione di knowledge graph.
+- Automatizzare l’onboarding documentale e operativo di clienti (PMI o organizzazioni)
+- Generare una **Knowledge Base** semantica, pulita e pubblicabile in formato Markdown
+- Centralizzare la configurazione dell’ambiente via `.env` e `config/`
+- Consentire test end-to-end, preview Docker e deploy GitHub senza passaggi manuali
 
-- **Naming uniforme, logging e modularità garantite**
-- **Exception-first**: ogni errore critico solleva un’eccezione custom, mai più errori silenziosi
-- **Logging strutturato, centralizzato, pronto per strumenti di ricerca**
-- **Download ricorsivo PDF e conversione batch in Markdown arricchito** (frontmatter + tagging semantico)
-- **Anteprima locale KB con Honkit (Docker)**
-- **Deploy GitHub con check interattivo ed evitamento duplicazioni**
-- **Modalità “book-only”**: ora puoi pubblicare su GitHub *solo la knowledge base* già arricchita, senza file temporanei o di configurazione
-- **Compatibilità nativa con cloni NeXT** (Timmy, ClasScrum, Zeno)
-- **Separazione totale** tra pipeline core e moduli di arricchimento semantico (NLP/AI)
-- Tool CLI per refactor e manutenzione batch
+## 🧩 Architettura (overview)
 
----
+- **Pipeline modulare:** separazione rigorosa tra moduli di pipeline, semantica e strumenti (`/pipeline`, `/semantic`, `/tools`)
+- **Configurazione centralizzata:** tutte le variabili principali sono gestite da `pipeline/settings.py` e dal file `.env`
+- **Onboarding in step idempotenti:**
+    - Pre-onboarding (setup cartelle, creazione Drive, config cliente)
+    - Onboarding full (download PDF, conversione Markdown, enrichment semantico, preview Docker, push GitHub)
+- **Output knowledge base semantico:** tutti i markdown generati sono raccolti in una sola cartella `book/`, pronta per la pubblicazione (output “flat”)
+- **Preview locale e deploy:** preview via Docker/Honkit su `book/`, push GitHub solo della knowledge base pulita
 
-## ⚠️ ALERT e Limitazioni note (luglio 2025)
-
-- La **funzione di conversione PDF→Markdown** presenta bug che possono portare a:
-  - Output dei markdown in cartelle diverse da `book/`.
-  - Generazione di file extra (es. `.html`), oppure mancanza di markdown previsti.
-- Il team sta lavorando su una soluzione definitiva (fix previsto in v1.3.4/v1.4).
-- **Workaround temporaneo:**  
-  Verifica la presenza dei markdown nella cartella `book/` e ricontrolla i log di pipeline per path effettivi.
-- Apri una issue (o consulta la sezione Changelog) per dettagli su fix e rilascio.
-
----
-
-## 🏁 Flusso operativo
-
-### 🔹 Fase 1: Pre-Onboarding
-
-```bash
-py src/pre_onboarding.py
-```
-
-- Richiede solo slug e nome cliente.
-- Check se cartella esiste già su Drive.
-- Validazione struttura YAML e rollback su errore.
-- Logging dettagliato di ogni step.
-
-📖 Dettagli in `pre_onboarding_readme.md`
-
-### 🔹 Fase 2: Onboarding completo
-
-```bash
-py src/onboarding_full.py
-```
-
-- Caricamento configurazione e check anticipato repo GitHub
-- Download ricorsivo PDF
-- Conversione batch PDF→Markdown arricchito e tagging semantico
-- Enrichment semantico automatico
-- Preview Docker con Honkit
-- Push GitHub della sola knowledge base (`book/`)
-- Logging strutturato e feedback CLI
-
-📖 Dettagli in `onboarding_pipeline_timmy_kb_v1.3.md`
-
----
-
-### 🔹 Arricchimento semantico (standalone/plug-in)
-
-```bash
-py src/semantic/semantic_extractor.py
-```
-- Conversione e enrichment di tutti i PDF presenti in `/raw` in markdown con frontmatter semantico e tagging.
-- Pulizia opzionale e idempotente dei markdown esistenti.
-- Rigenerazione automatica di `README.md` e `SUMMARY.md`.
-- Logging su ogni step critico.
-
----
-
-## 🧪 Test & Tools
-
-Tutti gli script di test sono in `/tests/`:
-
-- Test automatici per conversione PDF→Markdown (`tests/pdf2md_preview.py`)
-- Test per deploy GitHub (`tests/test_github_utils.py`)
-- End-to-end “dummy test” (`tests/test_end2end_dummy.py`) che pulisce, crea, testa e verifica tutto il ciclo onboarding su un cliente fittizio.
-
-Tool CLI in `/src/tools/`:
-
-- `generate_pdf_dummy.py`: genera cartelle e PDF di test per simulazioni end-to-end.
-- `cleanup_repo.py`: elimina repo GitHub di test.
-- `refactor_tool.py`: base per refactor massivi batch.
-
-Cartella `/filetest/`: contiene i file PDF dummy e altro materiale per i test.
-
-**Best practice:**
-
-- Ogni test genera output in `/output/timmy-kb-dummytest/` (o simile).
-- Cleanup finale sempre interattivo.
-
----
-
-## 🏗 Struttura del repository
+## 🏗️ Struttura delle cartelle
 
 ```
-root/
+project-root/
+├── output/
+│   └── timmy-kb-<slug>/
+│       ├── raw/         # PDF originali scaricati da Drive
+│       ├── book/        # Tutti i Markdown generati (knowledge base pulita)
+│       └── config/      # File config cliente
 ├── src/
-│   ├── pipeline/         # Tutti i moduli core (drive, config, github, content, logging, preview, cleanup, exceptions)
-│   ├── semantic/         # Tutte le funzioni di enrichment, parsing, AI, NLP (semantic_extractor.py, semantic_mapping.py)
-│   └── tools/            # Tool CLI standalone di manutenzione (es. cleanup_tool.py, refactor_tool.py, validate_structure_tool.py)
-├── config/               # Strutture YAML, mapping semantico cartelle, lista tag (timmy_tags.yaml), ecc.
-├── output/               # Output generato per ogni cliente (markdown arricchiti, summary, ecc.)
-├── filetest/             # File di test organizzati per tipo (pdf/, docx/, ...)
-├── tests/                # Script di test (uno per step/funzione, es. test_github_utils.py)
-├── .env                  # Variabili di configurazione
-├── requirements.txt
-├── coding_rule.md
-└── README.md
+│   ├── pipeline/
+│   ├── semantic/
+│   └── tools/
+├── filetest/
+│   └── ...              # Risorse di test/dummy
+├── logs/
+│   └── ...
+└── .env
 ```
 
+## ⚙️ Prerequisiti
+
+- Python 3.10+
+- Docker (per preview locale)
+- Account Google Drive + service account JSON
+- Token GitHub con permessi repo
+- Variabili configurate in `.env` (vedi sotto)
+
+## ⚡ Setup rapido
+
+1. **Clona il repository e installa le dipendenze**
+2. **Configura `.env`** (esempio):
+    ```env
+    DRIVE_ID=...
+    GOOGLE_SERVICE_ACCOUNT_JSON=...
+    GITHUB_ORG=nextybase
+    GITHUB_TOKEN=...
+    ```
+3. **Esegui il pre-onboarding:**
+    ```sh
+    py src/pre_onboarding.py
+    ```
+   Segui i prompt per slug e nome cliente. Verrà creata la struttura Drive e il file `config.yaml` cliente.
+4. **Popola la cartella Drive** con i PDF richiesti (secondo le sottocartelle generate).
+5. **Esegui l’onboarding completo:**
+    ```sh
+    py src/onboarding_full.py
+    ```
+   La pipeline effettuerà download, conversione, enrichment, preview e (opzionale) deploy GitHub della knowledge base.
+
+
+## 🧪 Test e strumenti di sviluppo
+
+- **Test end-to-end**: `tests/end2end_dummy.py` simula tutta la pipeline su un cliente di test, dalla creazione delle cartelle al push GitHub.
+- **Generazione PDF dummy**: `src/tools/generate_pdf_dummy.py` crea PDF di esempio tematici per ogni cartella (configurabili in YAML).
+- **Cleanup completo**: `src/tools/cleanup_repo.py` rimuove tutto l’output e le repo di test di un cliente.
+
+
+## 🪵 Logging e debug
+
+- Ogni modulo scrive log dettagliati sia su console sia su file dedicato in `logs/` (es. `logs/onboarding.log`)
+- In caso di errori gravi (es. config mancante, Docker non attivo), la pipeline si interrompe e avvisa chiaramente
+- Tutte le interazioni non di sistema sono solo via logger o prompt CLI
+
+
+## 📝 Changelog sintetico
+
+- **v1.3.3** (2025-07-26): Refactor architetturale, test end-to-end, bug noto conversione PDF→Markdown (alert)
+- **v1.3.2** (2025-07-18): Output KB only, deploy GitHub ottimizzato, patch directory temporanee
+- **v1.3.1** (2025-07-13): Logging strutturato, refactor naming, CLI interattive idempotenti
+- **v1.3.0** (2025-07-10): Prima versione modulare onboarding NeXT (architettura stabile)
+
+
+## 📚 Documentazione e principi
+
+- **Regole di coding:** vedere `regole_coding_pipeline.md` per naming, logging, test, modularità
+- **Manifesto tecnico:** principi semantici e architetturali in `manifesto_tecnico_kb_timmy.md`
+- **Roadmap operativa:** milestones e step successivi in `ProgettoRoadmap1_3.pdf`
+
 ---
 
-## 🪵 Logging e gestione errori (novità v1.3.1+)
+### 🟢 Per ogni dubbio, segui la documentazione e le regole di coding interne. Per bug, segnala su GitHub (con log e dettagli del caso).
 
-- Logging centralizzato tramite `get_structured_logger` su tutti i moduli core e semantic.
-- Policy emoji e terminologia uniforme (vedi `coding_rule.md`).
-- Log file e console sincronizzati, separazione chiara livelli (INFO/WARNING/ERROR).
-- Exception-first: errori bloccanti propagati sempre come eccezioni custom, mai più errori “silenziosi” o return booleani.
-- Tool CLI per refactor batch e manutenzione (vedi `/tools/`).
-
----
-
-## 🗂️ Changelog sintetico
-
-Consulta il file `CHANGELOG.md` per tutte le release.
-
-- **v1.3.3** – Refactor architetturale, test end-to-end, bug noto conversione PDF→Markdown (alert)
-- **v1.3.2** – Deploy “book-only”, UX step-by-step, robustezza test GitHub, cleaning temp e repo minimale
-- **v1.3.1** – Exception-first, logging uniforme, refactor tools, robustezza explainable, policy aggiornata
-- **v1.3** – Tagging semantico, robustezza AI-ready, policy di testing e coding centralizzata
-- **v1.2.3** – Uniformità naming, logging strutturato, refactor moduli, robustezza orchestrazione
-- **v1.2.2** – Separazione completa enrichment semantico vs pipeline, conversione PDF batch e frontmatter
-- **v1.2.1** – Refactoring percorsi e anteprima docker
-- **v1.2** – Robustezza, rollback, GitHub smart
-- **v1.1** – Parametrizzazione totale, Google Drive ricorsivo
-- **v1.0** – Baseline completa

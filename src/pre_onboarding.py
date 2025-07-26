@@ -4,12 +4,13 @@ from pipeline.drive_utils import (
     get_drive_service,
     find_drive_folder_by_name,
     create_drive_folder,
-    create_drive_subfolders_from_yaml,
+    upload_config_to_drive_folder,
+    create_drive_subfolders_from_yaml
 )
-from pipeline.config_utils import upload_config_to_drive_folder, write_client_config_file
+from pipeline.config_utils import write_client_config_file
 from pipeline.exceptions import PipelineError
 from pipeline.settings import get_settings
-from pipeline.utils import is_valid_slug  # <- ora importato dal modulo utils
+from pipeline.utils import is_valid_slug
 
 def main():
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
@@ -29,7 +30,6 @@ def main():
         raw_slug = input("🔤 Inserisci lo slug del cliente: ").strip().lower()
         logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
 
-        # --- Validazione robusta dello slug ---
         slug = raw_slug.replace("_", "-")
         if not is_valid_slug(slug):
             print("❌ Slug non valido. Ammessi solo lettere minuscole, numeri, trattini (es: acme-srl).")
@@ -78,14 +78,19 @@ def main():
             "output_path": settings.raw_dir_template.format(slug=slug).split("/raw")[0],
             "md_output_path": settings.output_dir_template.format(slug=slug)
         }
+
+        # PATCH: Forza sempre la presenza di /book in md_output_path
+        if not str(config_data["md_output_path"]).endswith("/book"):
+            config_data["md_output_path"] = f"{config_data['output_path']}/book"
+
         logger.debug(f"Config data generato: {config_data}")
 
-        local_config_path = Path(f"{config_data['output_path']}/config/config.yaml")
-        write_client_config_file(config_data, local_config_path)
-        logger.info(f"✅ File config.yaml salvato localmente: {local_config_path}")
+        # Scrivi config.yaml e ottieni il path effettivo
+        config_path = write_client_config_file(config_data, slug)
+        logger.info(f"✅ File config.yaml salvato localmente: {config_path}")
 
         # --- Upload config.yaml su Drive ---
-        upload_config_to_drive_folder(service, drive_folder_id, config_data)
+        upload_config_to_drive_folder(service, config_path, drive_folder_id)
         logger.info("✅ File config.yaml caricato su Google Drive.")
 
         logger.info(f"🏁 Pre-onboarding completato per il cliente: {slug}")

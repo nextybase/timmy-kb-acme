@@ -13,10 +13,10 @@ class Settings(BaseSettings):
     service_account_file: Optional[str] = Field(default=None, description="File credenziali Google API (legacy/compatibilità)")
 
     # === GitHub ===
-    github_org: str = Field(..., description="Nome dell'utente GitHub")
+    github_org: str = Field(default="nextybase", description="Nome dell'organizzazione o utente GitHub")
+    github_token: Optional[str] = Field(default=None, description="Personal access token GitHub")
     repo_clone_base: Optional[str] = None
     repo_visibility: Optional[str] = None
-    github_token: Optional[str] = None
 
     # === Cartelle Pipeline / Template ===
     cartelle_raw_yaml: Optional[str] = None

@@ -11,7 +11,7 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup import cleanup_output_folder, safe_clean_dir
-from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively  # PATCH qui!
+from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively
 from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError
@@ -69,7 +69,6 @@ def main():
         # --- Step 1: Download da Drive e pulizia output ---
         cleanup_output_folder(config)
         service = get_drive_service()
-        # PATCH: scarica i PDF e le sottocartelle dentro output/timmy-kb-dummy/raw/
         raw_dir = Path(config["output_path"]) / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
         download_drive_pdfs_recursively(
@@ -119,9 +118,12 @@ def main():
         temp_dir = None
         if risposta == "y":
             print("🚀 Esecuzione push su GitHub SOLO per la knowledge base (cartella book)...")
-            # Crea una copia della config per il push su book/
             book_config = dict(config)
             book_config["output_path"] = str(Path(config["md_output_path"]).resolve())
+            # PATCH: aggiungi github_repo dinamicamente dal settings centrale
+            github_org = getattr(settings, "github_org", "nextybase")
+            book_config["github_repo"] = f"{github_org}/timmy-kb-{slug}"
+            logger.info(f"🔗 Repo di destinazione GitHub: {book_config['github_repo']}")
             temp_dir = push_output_to_github(book_config)
             logger.info(f"✅ Push su GitHub completato SOLO per la cartella book. Temp dir: {temp_dir}")
             print(f"✅ Push su GitHub completato SOLO per la cartella book. I file temporanei rimangono in: {temp_dir}")

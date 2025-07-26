@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import datetime
 
-from pipeline.file2md_utils import extract_file_to_markdown, load_tags_by_category
+from pipeline.file2md_utils import convert_pdfs_to_markdown
 from pipeline.exceptions import ConversionError
 from pipeline.logging_utils import get_structured_logger
 
@@ -10,51 +10,21 @@ logger = get_structured_logger("pipeline.content_utils")
 
 def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
-    Converte tutti i file supportati (inizialmente solo PDF) trovati in config["raw_dir"]
-    in file Markdown nella cartella di output, aggiungendo tag di paragrafo e frontmatter ricco.
-    Ogni markdown ha: titolo, categoria, cartella origine, data conversione, stato normalizzazione.
+    Wrapper per compatibilità: richiama la funzione unica che converte tutti i PDF in Markdown.
+    Prende i parametri da config e mapping, chiama la conversione centralizzata.
     Ritorna il numero di file convertiti.
-    Solleva ConversionError se la conversione globale fallisce.
     """
     raw_path = Path(config["raw_dir"])
     slug = config["slug"]
     output_path = Path(config.get("md_output_path", f"output/timmy-kb-{slug}/book"))
     output_path.mkdir(parents=True, exist_ok=True)
-
-    # Solo PDF (espandibile in futuro)
-    files = [f for f in raw_path.rglob("*") if f.is_file() and f.suffix.lower() in {".pdf"}]
-
-    logger.info(f"🟢 Trovati {len(files)} file da convertire in {raw_path}")
-
-    def get_categoria_from_path(file_path):
-        folder = file_path.parent.name.lower()
-        if mapping and folder in mapping:
-            return mapping[folder]
-        return folder
-
-    tags_by_cat = load_tags_by_category()
-
-    converted = 0
-    for file in files:
-        try:
-            titolo = file.stem.replace("_", " ").title()
-            categoria = get_categoria_from_path(file)
-            frontmatter = {
-                "titolo": titolo,
-                "categoria": categoria,
-                "origine_cartella": file.parent.name,
-                "data_conversione": datetime.date.today().isoformat(),
-                "stato_normalizzazione": "completato"
-            }
-            extract_file_to_markdown(file, output_path, frontmatter, tags_by_cat=tags_by_cat)
-            converted += 1
-            logger.info(f"✅ Markdown creato per: {file.name}")
-        except Exception as e:
-            logger.error(f"❌ Errore durante la conversione di {file.name}: {e}")
-            raise ConversionError(f"Errore durante la conversione di {file.name}: {e}")
-
-    logger.info(f"🏁 Conversione completata: {converted}/{len(files)} riusciti")
-    return converted
+    # Optional: tags_by_cat e altri parametri possono essere passati se serve.
+    return convert_pdfs_to_markdown(
+        pdf_root=raw_path,
+        md_output_path=output_path,
+        mapping=mapping,
+        config=config
+    )
 
 def generate_summary_markdown(markdown_files, output_path) -> None:
     """
