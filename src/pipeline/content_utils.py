@@ -10,15 +10,14 @@ logger = get_structured_logger("pipeline.content_utils")
 
 def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
     """
-    Wrapper per compatibilità: richiama la funzione unica che converte tutti i PDF in Markdown.
-    Prende i parametri da config e mapping, chiama la conversione centralizzata.
+    Wrapper per la conversione PDF→Markdown strutturata.
+    Garantisce che l'output vada nella cartella corretta secondo config["md_output_path"].
     Ritorna il numero di file convertiti.
     """
     raw_path = Path(config["raw_dir"])
-    slug = config["slug"]
-    output_path = Path(config.get("md_output_path", f"output/timmy-kb-{slug}/book"))
+    output_path = Path(config["md_output_path"])  # patch: forzatura definitiva verso /book
     output_path.mkdir(parents=True, exist_ok=True)
-    # Optional: tags_by_cat e altri parametri possono essere passati se serve.
+
     return convert_pdfs_to_markdown(
         pdf_root=raw_path,
         md_output_path=output_path,
@@ -26,9 +25,9 @@ def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> 
         config=config
     )
 
-def generate_summary_markdown(markdown_files, output_path) -> None:
+def generate_summary_markdown(markdown_files, output_path: str) -> None:
     """
-    Genera il file SUMMARY.md dai markdown presenti nella cartella output_path.
+    Genera il file SUMMARY.md dai file Markdown presenti nella cartella output_path.
     Solleva ConversionError in caso di errore.
     """
     summary_md_path = os.path.join(output_path, "SUMMARY.md")
@@ -41,13 +40,12 @@ def generate_summary_markdown(markdown_files, output_path) -> None:
                     continue
                 title = os.path.splitext(os.path.basename(file))[0].replace("_", " ")
                 f.write(f"* [{title}]({file})\n")
-
         logger.info(f"📄 SUMMARY.md generato con {len(markdown_files)} file.")
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
         raise ConversionError(f"Errore nella generazione di SUMMARY.md: {e}")
 
-def generate_readme_markdown(output_path, slug) -> None:
+def generate_readme_markdown(output_path: str, slug: str) -> None:
     """
     Genera un file README.md minimale nella cartella output_path per il cliente specificato da slug.
     Solleva ConversionError in caso di errore.
@@ -58,7 +56,6 @@ def generate_readme_markdown(output_path, slug) -> None:
             f.write(f"# Timmy KB – {slug}\n\n")
             f.write(f"Benvenuto nella Knowledge Base del cliente **{slug}**.\n\n")
             f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
-
         logger.info("✅ README.md generato con contenuto minimale.")
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di README.md: {e}")

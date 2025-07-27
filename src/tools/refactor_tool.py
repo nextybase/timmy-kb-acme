@@ -4,20 +4,24 @@ import sys
 import logging
 from pathlib import Path
 
-# Setup logging (opzionale: puoi loggare anche su file)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-logger = logging.getLogger("refactor_tool")
+# 🔧 Permette import da src/
+ROOT = Path(__file__).parent.parent.parent.resolve()
+SRC_PATH = ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+from pipeline.logging_utils import get_structured_logger
+
 
 EXT_INCLUDE = {".py", ".yaml", ".yml", ".md"}
 DIR_EXCLUDE = {".git", "venv", "__pycache__", ".mypy_cache", ".idea", ".vscode"}
 
+
 def should_check_file(fname):
     return any(fname.endswith(ext) for ext in EXT_INCLUDE)
 
-def scan_occurrences(root, find_str):
+
+def scan_occurrences(root, find_str, regex_mode=False):
     all_files = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in DIR_EXCLUDE]
@@ -25,83 +29,100 @@ def scan_occurrences(root, find_str):
             if should_check_file(fname):
                 fpath = os.path.join(dirpath, fname)
                 all_files.append(fpath)
+
     found_files = []
-    total = len(all_files)
     for i, fpath in enumerate(all_files, 1):
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 text = f.read()
-            matches = list(re.finditer(re.escape(find_str), text))
+
+            if regex_mode:
+                matches = list(re.finditer(find_str, text))
+            else:
+                matches = list(re.finditer(re.escape(find_str), text))
+
             if matches:
                 found_files.append((fpath, len(matches)))
+
         except Exception as e:
-            logger.warning(f"⚠️ Errore nel leggere {fpath}: {e}")
-        if i % 10 == 0 or i == total:
-            perc = int(100 * i / total)
-            print(f"  ...{i}/{total} file ({perc}%)", end='\r')
-    print()
+            logger.warning(f"⚠️ Errore leggendo {fpath}: {e}")
+
     return found_files
 
-def replace_in_files(file_list, find_str, replace_str):
-    total = len(file_list)
-    for i, (fpath, _) in enumerate(file_list, 1):
+
+def replace_in_files(file_list, find_str, replace_str, regex_mode=False, dry_run=True):
+    for fpath, _ in file_list:
         try:
             with open(fpath, "r", encoding="utf-8") as f:
-                text = f.read()
-            new_text = text.replace(find_str, replace_str)
-            with open(fpath, "w", encoding="utf-8") as f:
-                f.write(new_text)
-            logger.info(f"✏️ Sostituzione effettuata in: {fpath}")
+                original = f.read()
+
+            if regex_mode:
+                modified = re.sub(find_str, replace_str, original)
+            else:
+                modified = original.replace(find_str, replace_str)
+
+            if original != modified:
+                if dry_run:
+                    print(f"\n📄 [ANTEPRIMA] Modifiche in: {fpath}")
+                    print("-" * 60)
+                    lines_old = original.splitlines()
+                    lines_new = modified.splitlines()
+                    for old, new in zip(lines_old, lines_new):
+                        if old != new:
+                            print(f"- {old}")
+                            print(f"+ {new}")
+                else:
+                    with open(fpath, "w", encoding="utf-8") as f:
+                        f.write(modified)
+                    logger.info(f"✏️ Sostituzione effettuata in: {fpath}")
         except Exception as e:
             logger.warning(f"⚠️ Errore nel modificare {fpath}: {e}")
-        if i % 5 == 0 or i == total:
-            perc = int(100 * i / total)
-            print(f"  ...{i}/{total} file modificati ({perc}%)", end='\r')
-    print()
+
 
 def find_and_replace_menu():
-    print("\n🔎 [Find & Replace] — Ricerca (e sostituzione) interattiva su file di progetto\n")
+    print("\n🔎 [Find & Replace] — Ricerca e sostituzione nei file di progetto")
 
-    find_str = input("Stringa da trovare: ").strip()
+    find_str = input("🔍 Stringa da trovare (regex supportato): ").strip()
     if not find_str:
-        print("❌ Stringa di ricerca vuota. Operazione annullata.")
+        print("❌ Stringa vuota. Annullato.")
         return
 
-    replace_str = input("Stringa di sostituzione (lascia vuoto per solo ricerca): ")
-    do_replace = bool(replace_str)
+    replace_str = input("✏️ Stringa di sostituzione (vuoto = solo dry-run): ")
+    regex_mode = input("🔁 Usa modalità REGEX? [y/N]: ").strip().lower() == "y"
+    dry_run = input("🧪 Vuoi solo simulare la sostituzione? [Y/n]: ").strip().lower() != "n"
 
-    # Usa la root del progetto come default!
     default_root = str(Path(__file__).parent.parent.resolve())
-    root = input(f"Cartella da cui partire [default: {default_root}]: ").strip() or default_root
+    root = input(f"📁 Cartella da cui partire [default: {default_root}]: ").strip() or default_root
 
     print(f"\n⏳ Scansione in corso nella cartella: {root}")
-    found_files = scan_occurrences(root, find_str)
+    found_files = scan_occurrences(root, find_str, regex_mode=regex_mode)
 
-    print(f"\n📝 Risultati per '{find_str}':")
+    print(f"\n📊 Risultati per '{find_str}':")
     if not found_files:
-        print("✅ Nessuna occorrenza trovata!")
+        print("✅ Nessuna occorrenza trovata.")
         return
-    else:
-        for fpath, n in found_files:
-            print(f" - {fpath}  ({n} occorrenze)")
+    for fpath, n in found_files:
+        print(f" - {fpath}  ({n} occorrenze)")
 
-    if do_replace:
-        conferma = input("\nApplico davvero la sostituzione su questi file? (y/N): ").strip().lower()
-        if conferma == "y":
-            print("\n✏️ Sostituzione in corso...")
-            replace_in_files(found_files, find_str, replace_str)
-            print("\n✅ Sostituzione effettuata!")
-        else:
-            print("\n💡 Dry-run: nessuna modifica fatta.")
+    if dry_run:
+        print("\n🔍 Modalità dry-run: mostrerò i cambiamenti ma non scriverò nulla.")
     else:
-        print("\n💡 Ricerca completata (solo scan, nessuna modifica).")
+        conferma = input("\n⚠️ Confermi la sostituzione su questi file? (y/N): ").strip().lower()
+        if conferma != "y":
+            print("❌ Annullato.")
+            return
+
+    print("\n🚀 Avvio sostituzione...")
+    replace_in_files(found_files, find_str, replace_str, regex_mode=regex_mode, dry_run=dry_run)
+    print("\n✅ Operazione completata.")
+
 
 def main_menu():
     while True:
-        print("\n=========== REFACTOR TOOL ===========")
-        print("1. Find & Replace (ricerca e sostituzione stringhe)")
-        print("2. Esci")
-        print("=====================================")
+        print("\n=========== REFACTOR TOOL ==========")
+        print("1. 🔎 Find & Replace (ricerca e sostituzione)")
+        print("2. ❌ Esci")
+        print("====================================")
         choice = input("Scegli un'opzione (numero): ").strip()
         if choice == "1":
             find_and_replace_menu()
@@ -109,7 +130,8 @@ def main_menu():
             print("👋 Uscita.")
             break
         else:
-            print("❌ Scelta non valida. Riprova.\n")
+            print("❌ Scelta non valida. Riprova.")
+
 
 if __name__ == "__main__":
     main_menu()

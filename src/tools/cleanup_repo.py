@@ -1,35 +1,41 @@
 #!/usr/bin/env python3
 """
 Strumento autonomo di cleanup per la pipeline Timmy-KB.
-- Elimina la cartella clienti
-- Svuota la cartella output
-- Cancella file locali (es. book.json)
-- Elimina la repo GitHub remota
-Usa la configurazione centralizzata via Settings.
+Allineato alla versione NeXT v1.3:
+- Configurazione centralizzata (TimmySecrets)
+- Logging strutturato
 """
 
 import os
 import shutil
 import subprocess
-import logging
 from pathlib import Path
 import sys
 
-# Setup path e logging
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-from pipeline.settings import get_settings
+# Setup import locale
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger(__name__)
+from pipeline.logging_utils import get_structured_logger
+from pipeline.config_utils import TimmySecrets
 
-settings = get_settings()
+# === Logger
+logger = get_structured_logger("tools.cleanup_repo")
 
-# Path di progetto e variabili globali (tutte da settings se disponibili)
-PROJECT_ROOT      = Path(__file__).resolve().parents[1]
-CLIENTI_BASE_PATH = Path(getattr(settings, "clienti_base_path", r"C:\Users\User\clienti"))
-OUTPUT_BASE_PATH  = PROJECT_ROOT / "output"
-BOOK_JSON_PATH    = PROJECT_ROOT / "book.json"
-GITHUB_ORG        = getattr(settings, "github_org", "nextybase")
+# === Configurazione centralizzata
+try:
+    secrets = TimmySecrets()
+except Exception as e:
+    print(f"❌ Errore caricando configurazione globale: {e}")
+    sys.exit(1)
+
+# === Percorsi base
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CLIENTI_BASE_PATH = Path(secrets.clienti_base_path)
+OUTPUT_BASE_PATH = PROJECT_ROOT / "output"
+BOOK_JSON_PATH = PROJECT_ROOT / "book.json"
+PACKAGE_JSON_PATH = PROJECT_ROOT / "package.json"
+BOOK_DIR = PROJECT_ROOT / "_book"
+GITHUB_ORG = secrets.github_org or "nextybase"
 
 def on_rm_error(func, path, exc_info):
     import stat
@@ -63,15 +69,15 @@ def clear_folder(folder: Path, label: str):
     else:
         logger.info(f"📂 {label} non trovata: {folder}")
 
-def delete_file(file_path: Path, label: str):
-    if file_path.exists():
+def delete_file(path: Path, label: str):
+    if path.exists():
         try:
-            file_path.unlink()
-            logger.info(f"🗑️  {label} eliminato: {file_path}")
+            path.unlink()
+            logger.info(f"🗑️  {label} eliminato: {path}")
         except Exception as e:
             logger.error(f"❌ Errore eliminando {label}: {e}")
     else:
-        logger.info(f"📄 {label} non presente: {file_path}")
+        logger.info(f"📄 {label} non presente: {path}")
 
 def delete_github_repo(repo_fullname: str):
     try:
@@ -81,7 +87,7 @@ def delete_github_repo(repo_fullname: str):
         logger.error(f"❌ Errore GitHub CLI: {e}")
 
 def run_cleanup(slug: str, elimina_repo: bool = True):
-    # Path coerenti con la pipeline attuale (trattino, non underscore)
+    slug = slug.strip().lower().replace("_", "-")
     folder_clienti = CLIENTI_BASE_PATH / f"timmy-kb-{slug}"
     folder_output  = OUTPUT_BASE_PATH / f"timmy-kb-{slug}"
     repo_fullname  = f"{GITHUB_ORG}/timmy-kb-{slug}"
@@ -89,7 +95,10 @@ def run_cleanup(slug: str, elimina_repo: bool = True):
     logger.info("🔍 Avvio procedura di cleanup completa...")
     delete_folder(folder_clienti, "Cartella clienti")
     clear_folder(folder_output, "Cartella output")
-    delete_file(BOOK_JSON_PATH, "File book.json")
+
+    delete_file(BOOK_JSON_PATH, "book.json")
+    delete_file(PACKAGE_JSON_PATH, "package.json")
+    delete_folder(BOOK_DIR, "_book (build Docker)")
 
     if elimina_repo:
         logger.info(f"🔄 Eliminazione repo GitHub: {repo_fullname}")
@@ -99,16 +108,15 @@ def run_cleanup(slug: str, elimina_repo: bool = True):
 
 def main():
     slug = input("🆔 Inserisci lo slug cliente da eliminare (es: prova): ").strip().lower()
-
-    folder_clienti = CLIENTI_BASE_PATH / f"timmy-kb-{slug}"
-    folder_output  = OUTPUT_BASE_PATH / f"timmy-kb-{slug}"
-    repo_fullname  = f"{GITHUB_ORG}/timmy-kb-{slug}"
+    repo_fullname = f"{GITHUB_ORG}/timmy-kb-{slug}"
 
     print(f"\n🚨 ATTENZIONE: stai per eliminare:")
-    print(f"- Cartella clienti: {folder_clienti}")
-    print(f"- Contenuto cartella output: {folder_output}")
-    print(f"- Repo GitHub:      {repo_fullname}")
+    print(f"- Cartella clienti: {CLIENTI_BASE_PATH / f'timmy-kb-{slug}'}")
+    print(f"- Cartella output:  {OUTPUT_BASE_PATH / f'timmy-kb-{slug}'}")
     print(f"- File book.json:   {BOOK_JSON_PATH}")
+    print(f"- File package.json:{PACKAGE_JSON_PATH}")
+    print(f"- Cartella _book/:  {BOOK_DIR}")
+    print(f"- Repo GitHub:      {repo_fullname}")
     conferma = input("✋ Confermi? Scrivi 'ok' per procedere: ").strip().lower()
 
     if conferma == "ok":

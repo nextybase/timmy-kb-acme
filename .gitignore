@@ -1,107 +1,32 @@
-# === Python virtualenv & environment ===
-venv/
-.env/
-.env.*        # Qualsiasi file .env.*
+# === Output pipeline e dati generati ===
+output/
+logs/
+share/
+token.json
+service_account.json
+
+# === File di configurazione esempio ===
+config/.env.example
+config/config.yaml.example
+
+# === Python bytecode ===
 __pycache__/
 *.py[cod]
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-pip-log.txt
-pip-delete-this-directory.txt
-# Windows venv path
-Scripts/
-Lib/
-share/
-Include/
-# Conda
-*.conda
-*.ipynb_checkpoints
 
-# === VS Code & editor config ===
+# === VSCode & OS ===
 .vscode/
-.idea/
-*.sublime-workspace
-*.sublime-project
-
-# === Credential & secret files ===
-token.json
-credentials.json
-client_secret.json
-service_account.json
-auth.json
-*.pem
-*.key
-*.crt
-
-# === Docker & container files ===
-*.pid
-docker-compose*.yml
-Dockerfile
-docker-compose.override.yml
-
-# === Output & temp files ===
-output/
-logs/
-*.log
-*.tmp
-*.temp
-*.bak
-
-# === Notebook & Jupyter related ===
-.ipynb_checkpoints/
-share/
-**/share/
-**/share/jupyter/
-**/share/jupyter/nbextensions/
-**/share/jupyter/nbextensions/pydeck/
-*.nbconvert.ipynb
-
-# Jupyter, configurazioni inutili
-etc/
-etc/jupyter/
-etc/jupyter/nbconfig/
-etc/jupyter/nbconfig/notebook.d/
-etc/jupyter/nbconfig/notebook.d/pydeck.json
-# Output locali e temporanei
-logs/
-.vscode/
-*.ipynb_checkpoints/
-
-# === Test & test artifacts ===
-# output di test dedicato
-output/timmy-kb-dummytest/
-coverage/
-htmlcov/
-.tox/
-.nox/
-.cache/
-.pytest_cache/
-
-# === Git & OS files ===
 .DS_Store
-Thumbs.db
-desktop.ini
 
-# === Misc ===
-*.sqlite3
-*.db
-*.dump
-*.log.*
+# === Virtualenv & scripts Windows ===
+venv/
+Lib/
+Scripts/
+src/Lib/
+src/Scripts/
 
-# === Esclude tutto ciò che non è puro sorgente/progetto ===
+# === File di test temporanei ===
+src/test_env_settings.py
 
-# [END OF FILE]
+# === Altro ===
+# Aggiungi altre cartelle temporanee, se ne usi (es: tmp/, cache/, ecc.)

@@ -11,16 +11,17 @@ logger = get_structured_logger("pipeline.github_utils", "logs/onboarding.log")
 
 def push_output_to_github(config: dict) -> str:
     """
-    Esegue il deploy automatico della cartella `output_path`
-    su GitHub come repository privata.
-    Esclude dal push le cartelle: .git, _book, config, raw (in qualunque livello, anche annidato).
-    Solleva PushError se il push fallisce.
-    Restituisce il percorso della temp_dir usata per il push (utile per cleanup successivi).
+    Esegue il deploy automatico della cartella `output_path` su GitHub.
+    Esclude .git, _book, config, raw. Crea repo se non esiste.
+    Ritorna la temp_dir usata per il push (da pulire manualmente).
     """
     settings = get_settings()
-    github_token = config.get("github_token") or getattr(settings, "github_token", None)
+    github_token = (
+        config.get("github_token")
+        or getattr(settings, "github_token", None)
+    )
     if not github_token:
-        logger.error("❌ GITHUB_TOKEN non trovato. Inserisci il token nel file .env, settings o in config.")
+        logger.error("❌ GITHUB_TOKEN mancante: inseriscilo nel file .env o settings.")
         raise PushError("GITHUB_TOKEN mancante!")
 
     repo_name = config["github_repo"]
@@ -29,13 +30,13 @@ def push_output_to_github(config: dict) -> str:
     try:
         github = Github(github_token)
         github_user = github.get_user()
-        logger.info(f"🚀 Inizio deploy su GitHub: {github_user.login}/{repo_name} (private)")
+        logger.info(f"🚀 Deploy GitHub per: {github_user.login}/{repo_name} (private)")
 
         try:
             repo = github_user.get_repo(repo_name)
-            logger.info(f"📦 Repository '{repo_name}' trovata. Eseguo push...")
+            logger.info(f"📦 Repo trovata: {repo_name}")
         except UnknownObjectException:
-            logger.info(f"📦 Creo la repository '{repo_name}' su GitHub...")
+            logger.info(f"📦 Repo non trovata, la creo: {repo_name}")
             repo = github_user.create_repo(
                 name=repo_name,
                 private=True,
@@ -48,27 +49,23 @@ def push_output_to_github(config: dict) -> str:
             shutil.rmtree(temp_dir)
         shutil.copytree(local_path, temp_dir)
 
-        git_dir = temp_dir / ".git"
-        if git_dir.exists() and git_dir.is_dir():
-            shutil.rmtree(git_dir)
-
+        # Pulizia cartelle da escludere
         EXCLUDE_DIRS = {'.git', '_book', 'config', 'raw'}
+        for excl in EXCLUDE_DIRS:
+            excl_path = temp_dir / excl
+            if excl_path.exists():
+                shutil.rmtree(excl_path, ignore_errors=True)
 
         repo_local = Repo.init(temp_dir)
-        repo_local.index.add([
+        files_to_add = [
             str(p.relative_to(temp_dir))
             for p in temp_dir.rglob("*")
-            if (
-                not p.is_dir()
-                and all(excl not in p.parts for excl in EXCLUDE_DIRS)
-            )
-        ])
+            if p.is_file() and all(x not in p.parts for x in EXCLUDE_DIRS)
+        ]
+        repo_local.index.add(files_to_add)
         repo_local.index.commit("📦 Upload automatico da pipeline NeXT")
 
-        if 'main' not in repo_local.heads:
-            main_branch = repo_local.create_head('main')
-        else:
-            main_branch = repo_local.heads['main']
+        main_branch = repo_local.create_head('main') if 'main' not in repo_local.heads else repo_local.heads['main']
         repo_local.head.reference = main_branch
         repo_local.head.reset(index=True, working_tree=True)
 
@@ -77,7 +74,7 @@ def push_output_to_github(config: dict) -> str:
             repo_local.create_remote("origin", remote_url)
         repo_local.git.push("--set-upstream", "origin", "main", "--force")
 
-        logger.info("✅ Deploy completato con successo.")
+        logger.info("✅ Push su GitHub completato.")
         shutil.rmtree(temp_dir, ignore_errors=True)
         return str(temp_dir)
 

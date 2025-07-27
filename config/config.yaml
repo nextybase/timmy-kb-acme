@@ -1,4 +1,27 @@
-drive_folder_id: "prova"
-md_output_path: "output/timmy_kb_prova"
-github_repo: "nomeorg/timmy-kb-prova"
-gitbook_space: "Timmy-KB-prova"
+# =============================================
+#  config/config.yaml – Configurazione pipeline Timmy NeXT
+#  Versionato su repo, editabile da interfaccia
+# =============================================
+
+# === GitHub settings (NON token) ===
+github_org: nextybase              # Organizzazione o user GitHub
+repo_visibility: private           # 'private' o 'public' (default: private)
+
+# === Pipeline structure / templates ===
+cartelle_raw_yaml: config/cartelle_raw.yaml    # YAML struttura cartelle base per ingest
+local_temp_config_path: temp_config/config.yaml  # Path file config temporaneo, se usato da UI/CLI
+raw_dir_template: output/timmy-kb-{slug}/raw   # Template per cartella input documenti del cliente
+output_dir_template: output/timmy-kb-{slug}    # Template per cartella output principale del cliente
+
+# === Docker / GitBook settings (NON token) ===
+gitbook_image: honkit/honkit          # Docker image per preview Honkit/GitBook
+gitbook_workspace: next-2             # Workspace GitBook da usare (ID o slug, NON token)
+
+# === Logging settings ===
+log_file_path: logs/onboarding.log    # Percorso file di log
+log_max_bytes: 1048576                # Max size per rotazione log (byte)
+log_backup_count: 3                   # Numero max file di backup per log rotazione
+debug: false                          # true/false per abilitare log verbose (default: false)
+
+# === Policy aggiuntive / estensioni future ===
+# (Aggiungi qui ulteriori parametri pipeline editabili)
