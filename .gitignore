@@ -1,32 +1,56 @@
-# === Output pipeline e dati generati ===
-output/
-logs/
-share/
-token.json
-service_account.json
-
-# === File di configurazione esempio ===
-config/.env.example
-config/config.yaml.example
-
-# === Python bytecode ===
+# === Python ===
 __pycache__/
 *.py[cod]
 *.so
+*.pyd
+*.pyo
+*.log
 
-# === VSCode & OS ===
-.vscode/
-.DS_Store
-
-# === Virtualenv & scripts Windows ===
+# === Virtualenv ===
 venv/
-Lib/
-Scripts/
-src/Lib/
-src/Scripts/
+env/
+ENV/
+.venv/
+.ENV/
 
-# === File di test temporanei ===
-src/test_env_settings.py
+# === VS Code settings ===
+.vscode/
 
-# === Altro ===
-# Aggiungi altre cartelle temporanee, se ne usi (es: tmp/, cache/, ecc.)
+# === Pytest, Coverage ===
+.cache/
+.pytest_cache/
+coverage.*
+htmlcov/
+.tox/
+
+# === Output Pipeline ===
+output/
+tmp_repo_push/
+logs/
+
+# === Credenziali e segreti ===
+.env
+*.env
+service_account.json
+
+# === Jupyter/Notebook/Streamlit ===
+.ipynb_checkpoints/
+*.nbconvert/
+.streamlit/
+
+# === MacOS/Linux/Windows trash ===
+.DS_Store
+Thumbs.db
+
+# === Docker ===
+*.pid
+*.sock
+
+# === Honkit/GitBook preview ===
+_book/
+book.json
+
+# === Misc/Backup ===
+*~
+*.bak
+*.swp

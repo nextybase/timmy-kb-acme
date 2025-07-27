@@ -1,0 +1,6 @@
+# Esempio configurazione per un cliente
+
+slug: acme
+raw_dir: filetest/pdf/
+md_output_path: output/timmy-kb-acme/book
+default_language: it

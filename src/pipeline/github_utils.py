@@ -5,33 +5,50 @@ from github import Github
 from github.GithubException import UnknownObjectException
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
-from pipeline.settings import get_settings
+from pipeline.config_utils import get_config
 
 logger = get_structured_logger("pipeline.github_utils", "logs/onboarding.log")
 
-def push_output_to_github(config: dict) -> str:
+def push_output_to_github(config: dict, slug: str = None) -> str:
     """
     Esegue il deploy automatico della cartella `output_path` su GitHub.
     Esclude .git, _book, config, raw. Crea repo se non esiste.
     Ritorna la temp_dir usata per il push (da pulire manualmente).
+    - Se slug non è fornito, si assume che config contenga tutto il necessario.
+    - Se slug è fornito, i valori mancanti vengono recuperati dal get_config(slug).
     """
-    settings = get_settings()
-    github_token = (
-        config.get("github_token")
-        or getattr(settings, "github_token", None)
-    )
+    # Recupera config e/o slug da pipeline
+    if slug:
+        settings = get_config(slug)
+        github_token = (
+            config.get("github_token") or
+            getattr(settings.secrets, "GITHUB_TOKEN", None)
+        )
+        repo_name = config.get("github_repo") or f"timmy-kb-{slug}"
+        output_path = Path(config.get("output_path") or settings.config.md_output_path).resolve()
+    else:
+        github_token = config.get("github_token")
+        repo_name = config.get("github_repo")
+        output_path = Path(config["output_path"]).resolve()
+
     if not github_token:
         logger.error("❌ GITHUB_TOKEN mancante: inseriscilo nel file .env o settings.")
         raise PushError("GITHUB_TOKEN mancante!")
 
-    repo_name = config["github_repo"]
-    local_path = Path(config["output_path"]).resolve()
+    if not repo_name:
+        logger.error("❌ github_repo mancante nel config.")
+        raise PushError("github_repo mancante nel config!")
+
+    if not output_path.exists():
+        logger.error(f"❌ output_path non trovato: {output_path}")
+        raise PushError(f"output_path non trovato: {output_path}")
 
     try:
         github = Github(github_token)
         github_user = github.get_user()
         logger.info(f"🚀 Deploy GitHub per: {github_user.login}/{repo_name} (private)")
 
+        # Crea o recupera la repo remota
         try:
             repo = github_user.get_repo(repo_name)
             logger.info(f"📦 Repo trovata: {repo_name}")
@@ -47,7 +64,7 @@ def push_output_to_github(config: dict) -> str:
         temp_dir = Path("tmp_repo_push")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
-        shutil.copytree(local_path, temp_dir)
+        shutil.copytree(output_path, temp_dir)
 
         # Pulizia cartelle da escludere
         EXCLUDE_DIRS = {'.git', '_book', 'config', 'raw'}

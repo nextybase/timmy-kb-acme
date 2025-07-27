@@ -4,22 +4,23 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
+
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError
-from pipeline.settings import get_settings
+from pipeline.config_utils import get_config  # <-- CORRETTO!
 
 logger = get_structured_logger("pipeline.drive_utils")
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def get_drive_service():
+def get_drive_service(slug):
     """
     Restituisce un oggetto Google Drive API autenticato con service account,
-    utilizzando la configurazione centralizzata Settings.
+    utilizzando la configurazione centralizzata.
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
-    settings = get_settings()
-    service_account_file = settings.service_account_file
+    config = get_config(slug)  # Ora serve sempre lo slug!
+    service_account_file = config.service_account_file
     creds = service_account.Credentials.from_service_account_file(
         service_account_file, scopes=SCOPES
     )

@@ -1,4 +1,5 @@
 import os
+import sys
 import yaml
 from pathlib import Path
 from fpdf import FPDF
@@ -6,7 +7,7 @@ from fpdf import FPDF
 # === CONFIG ===
 RAW_YAML = "config/cartelle_raw.yaml"
 PDF_DUMMY_YAML = "config/pdf_dummy.yaml"
-BASE_OUTPUT = Path("filetest/raw")  # output generato qui
+DEFAULT_OUTPUT = Path("filetest/raw")
 
 def load_yaml(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -35,18 +36,36 @@ def make_pdf(titolo, paragrafi, pdf_path):
     for par in paragrafi:
         pdf.multi_cell(0, 8, par)
         pdf.ln(2)
-    pdf.output(pdf_path)
+    pdf.output(str(pdf_path))
     print(f"📄 Generato PDF di test: {pdf_path}")
 
 def main():
+    # Prompt per la destinazione di output
+    print(f"\nDefault output: {DEFAULT_OUTPUT.resolve()}")
+    user_out = input("Dove vuoi generare la struttura RAW? (Invio = default) ")
+    if user_out.strip():
+        out_base = Path(user_out.strip()).expanduser().resolve()
+    else:
+        out_base = DEFAULT_OUTPUT.resolve()
+
+    # Sovrascrivi se già presente?
+    if out_base.exists():
+        resp = input(f"La cartella {out_base} esiste già. Sovrascrivere tutto? [y/N]: ").strip().lower()
+        if resp == "y":
+            import shutil
+            shutil.rmtree(out_base)
+        else:
+            print("❌ Annullato.")
+            sys.exit(0)
+
     # Carica yaml struttura e contenuti dummy
     cartelle_struct = load_yaml(RAW_YAML)
     pdf_dummy = load_yaml(PDF_DUMMY_YAML)
     cartelle = parse_cartelle_structure(cartelle_struct)
 
-    print(f"\n🗂️  Genero struttura e PDF dummy in: {BASE_OUTPUT}\n")
+    print(f"\n🗂️  Genero struttura e PDF dummy in: {out_base}\n")
     for cat in cartelle:
-        cat_folder = BASE_OUTPUT / cat
+        cat_folder = out_base / cat
         cat_folder.mkdir(parents=True, exist_ok=True)
         info = pdf_dummy.get(cat, {})
         titolo = info.get("titolo", f"Sezione: {cat.title()}")
@@ -58,7 +77,7 @@ def main():
         pdf_path = cat_folder / f"{cat}_dummy.pdf"
         make_pdf(titolo, paragrafi, pdf_path)
 
-    print("\n✅ PDF dummy generati per tutte le cartelle tematiche!")
+    print(f"\n✅ PDF dummy generati in: {out_base}!")
 
 if __name__ == "__main__":
     main()

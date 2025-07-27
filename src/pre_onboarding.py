@@ -11,7 +11,6 @@ from pipeline.config_utils import write_client_config_file, TimmySecrets
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug
 
-
 def main():
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Avvio procedura di pre-onboarding NeXT")
@@ -43,13 +42,30 @@ def main():
             return
         logger.debug(f"Nome cliente ricevuto: '{cliente_nome}'")
 
-        # --- Config ---
+        # --- Config (prima di chiamare qualunque funzione che usi il config su disco) ---
         drive_id = secrets.DRIVE_ID
         cartelle_yaml_path = "config/cartelle_raw.yaml"
         logger.debug(f"drive_id: {drive_id} | cartelle_yaml_path: {cartelle_yaml_path}")
 
+        # --- Costruzione e scrittura file config PRIMA della connessione a Drive ---
+        output_base = f"output/timmy-kb-{slug}"
+        raw_dir = f"{output_base}/raw"
+        md_output_path = f"{output_base}/book"
+
+        config_data = {
+            "slug": slug,
+            "cliente_nome": cliente_nome,
+            "drive_folder_id": None,   # da aggiornare dopo la creazione su Drive!
+            "drive_id": drive_id,
+            "output_path": output_base,
+            "md_output_path": md_output_path,
+            "raw_dir": raw_dir
+        }
+        config_path = write_client_config_file(config_data, slug)
+        logger.info(f"✅ File config.yaml salvato (step preliminare): {config_path}")
+
         # --- Connessione a Google Drive ---
-        service = get_drive_service()
+        service = get_drive_service(slug)
         logger.info("🟢 Connessione a Google Drive riuscita.")
 
         # --- Check cartella già esistente ---
@@ -67,26 +83,10 @@ def main():
         create_drive_subfolders_from_yaml(service, drive_id, drive_folder_id, cartelle_yaml_path)
         logger.info("✅ Struttura sottocartelle creata correttamente.")
 
-        # --- Costruzione config ---
-        output_base = f"output/timmy-kb-{slug}"
-        raw_dir = f"{output_base}/raw"
-        md_output_path = f"{output_base}/book"
-
-        config_data = {
-            "slug": slug,
-            "cliente_nome": cliente_nome,
-            "drive_folder_id": drive_folder_id,
-            "drive_id": drive_id,
-            "output_path": output_base,
-            "md_output_path": md_output_path,
-            "raw_dir": raw_dir
-        }
-
-        logger.debug(f"Config generata: {config_data}")
-
-        # --- Scrittura file locale ---
+        # --- Aggiorna config con drive_folder_id e risalva ---
+        config_data["drive_folder_id"] = drive_folder_id
         config_path = write_client_config_file(config_data, slug)
-        logger.info(f"✅ File config.yaml salvato: {config_path}")
+        logger.info(f"✅ File config.yaml aggiornato con drive_folder_id: {config_path}")
 
         # --- Upload su Drive ---
         upload_config_to_drive_folder(service, config_path, drive_folder_id)
@@ -103,7 +103,6 @@ def main():
         logger.error(f"❌ Errore non gestito: {e}", exc_info=True)
         print(f"❌ Errore imprevisto: {e}")
         return
-
 
 if __name__ == "__main__":
     main()

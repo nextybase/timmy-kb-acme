@@ -1,72 +1,31 @@
+"""
+Gestione del mapping semantico tra file markdown e le categorie definite (YAML).
+Fornisce utilità per caricare e applicare il mapping.
+"""
 import yaml
 from pathlib import Path
-from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import SemanticMappingError
-from pipeline.settings import get_settings
 
-logger = get_structured_logger("semantic.semantic_mapping")
+def load_semantic_mapping(mapping_path: str = "config/semantic_mapping.yaml") -> dict:
+    """
+    Carica il mapping semantico dal file YAML specificato.
+    """
+    mapping_file = Path(mapping_path)
+    if not mapping_file.exists():
+        raise FileNotFoundError(f"File di mapping semantico non trovato: {mapping_path}")
+    with open(mapping_file, "r", encoding="utf-8") as f:
+        mapping = yaml.safe_load(f)
+    return mapping
 
-def get_semantic_yaml_path():
-    # Se hai impostato il path custom in Settings, usalo
-    try:
-        settings = get_settings()
-        return Path(getattr(settings, "semantic_yaml_path", "config/cartelle_semantica.yaml"))
-    except Exception:
-        return Path("config/cartelle_semantica.yaml")
+def get_semantic_mapping_for_file(file_path: str, mapping: dict) -> dict:
+    """
+    Trova la categoria semantica per un file markdown specifico.
+    """
+    fname = Path(file_path).name
+    return mapping.get(fname, {})
 
-_MAPPING_CACHE = None
-
-def load_semantic_mapping() -> dict:
+# Se servono funzioni aggiuntive (esempio di utility):
+def list_semantic_categories(mapping: dict) -> list:
     """
-    Carica il file YAML della struttura semantica delle cartelle UNA SOLA VOLTA (cache globale).
-    Ritorna il mapping completo come dict.
-    Solleva SemanticMappingError se il file manca o è malformato.
+    Restituisce la lista delle categorie semantiche definite.
     """
-    global _MAPPING_CACHE
-    if _MAPPING_CACHE is not None:
-        return _MAPPING_CACHE
-    path = get_semantic_yaml_path()
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            mapping = yaml.safe_load(f)
-        logger.info(f"✅ Mapping semantico caricato da {path}")
-        _MAPPING_CACHE = mapping
-        return mapping
-    except Exception as e:
-        logger.error(f"❌ Errore nel caricamento mapping semantico: {e}")
-        raise SemanticMappingError(f"Errore nel caricamento mapping semantico: {e}")
-
-def get_semantic_mapping_for_folder(folder_name: str) -> dict:
-    """
-    Dato il nome di una cartella (es: 'glossario'), restituisce il mapping semantico (ambito, descrizione...).
-    Se non trovata, ritorna oggetto di fallback con ambito "unknown".
-    """
-    mapping = load_semantic_mapping()
-    info = mapping.get(folder_name)
-    if info:
-        logger.debug(f"Mapping trovato per cartella: {folder_name}")
-        return info
-    logger.warning(f"⚠️ Cartella '{folder_name}' non mappata.")
-    return {
-        "ambito": "unknown",
-        "descrizione": "Cartella non mappata",
-        "esempio": [],
-    }
-
-def get_semantic_mapping_for_file(filepath: str) -> dict:
-    """
-    Dato un path file (Markdown), cerca la prima cartella tematica nell'albero
-    e restituisce il mapping semantico relativo (fallback "unknown" se non trovata).
-    """
-    p = Path(filepath)
-    for part in p.parts:
-        info = get_semantic_mapping_for_folder(part)
-        if info["ambito"] != "unknown":
-            logger.debug(f"Mapping semantico trovato per file: {filepath} (cartella: {part})")
-            return info
-    logger.warning(f"⚠️ Nessuna cartella tematica trovata per file: {filepath}")
-    return {
-        "ambito": "unknown",
-        "descrizione": "File fuori struttura semantica",
-        "esempio": [],
-    }
+    return list({cat for m in mapping.values() for cat in m.get("categories", [])})

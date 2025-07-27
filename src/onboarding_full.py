@@ -18,9 +18,7 @@ from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursiv
 from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError
-from pipeline.settings import get_settings
 from pipeline.utils import is_valid_slug
-
 
 def check_docker_running():
     try:
@@ -29,21 +27,12 @@ def check_docker_running():
     except Exception:
         return False
 
-
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
-
 
 def main():
     logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
     print("▶️ Onboarding completo Timmy-KB")
-
-    try:
-        settings = get_settings()
-    except Exception as e:
-        print(f"❌ Configurazione globale non valida: {e}")
-        logger.error(f"❌ Errore configurazione globale: {e}")
-        return
 
     if not check_docker_running():
         print("❌ Docker non risulta attivo o non è raggiungibile.")
@@ -66,14 +55,20 @@ def main():
         secrets = cfg.secrets
 
         logger.info(f"✅ Config caricato e validato per cliente: {slug}")
-        logger.debug(f"Config: {config.dict()}")
+        logger.debug(f"Config: {config.model_dump()}")  # Pydantic v2+
 
         print(f"📝 Onboarding per: {slug}")
 
         # Step 1: Download da Drive
-        cleanup_output_folder(config.dict())
-        service = get_drive_service()
-        raw_dir = Path(config.md_output_path).parent / "raw"
+        output_base = Path(config.output_path)
+        book_dir = output_base / "book"
+        raw_dir = output_base / "raw"
+
+        print("🧹 Pulizia cartelle di output (book e raw)...")
+        cleanup_output_folder(book_dir)
+        cleanup_output_folder(raw_dir)
+
+        service = get_drive_service(slug)
         raw_dir.mkdir(parents=True, exist_ok=True)
         download_drive_pdfs_recursively(
             service=service,
@@ -83,7 +78,7 @@ def main():
         )
         logger.info("📥 Download PDF da Drive completato.")
 
-        config_dict = config.dict()
+        config_dict = config.model_dump()
         config_dict["raw_dir"] = str(raw_dir)
 
         pdf_files = list(raw_dir.rglob("*.pdf"))
@@ -118,7 +113,8 @@ def main():
             print("🚀 Esecuzione push su GitHub SOLO per la knowledge base (cartella book)...")
             book_config = config_dict.copy()
             book_config["output_path"] = str(Path(config.md_output_path).resolve())
-            book_config["github_repo"] = f"{settings.github_org}/timmy-kb-{slug}"
+            github_org = getattr(secrets, "GITHUB_ORG", None) or getattr(cfg, "github_org", None) or "nextybase"
+            book_config["github_repo"] = f"{github_org}/timmy-kb-{slug}"
             logger.info(f"🔗 Repo GitHub: {book_config['github_repo']}")
             temp_dir = push_output_to_github(book_config)
             logger.info(f"✅ Push su GitHub completato. Temp dir: {temp_dir}")
@@ -166,7 +162,6 @@ def main():
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)
         print(f"❌ Errore imprevisto: {e}")
         return
-
 
 if __name__ == "__main__":
     main()
