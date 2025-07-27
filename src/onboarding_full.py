@@ -3,7 +3,6 @@ import subprocess
 import os
 
 from pydantic import ValidationError
-
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_config
 from pipeline.content_utils import (
@@ -35,8 +34,7 @@ def main():
     print("▶️ Onboarding completo Timmy-KB")
 
     if not check_docker_running():
-        print("❌ Docker non risulta attivo o non è raggiungibile.")
-        print("🔧 Avvia Docker Desktop o il servizio Docker prima di continuare.")
+        print("⚠️ Docker non risulta attivo o non è raggiungibile.")
         logger.error("Docker non attivo: pipeline bloccata.")
         return
 
@@ -45,118 +43,80 @@ def main():
         logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
         slug = raw_slug.replace("_", "-")
         if not is_valid_slug(slug):
-            print("❌ Slug cliente non valido. Ammessi solo lettere minuscole, numeri, trattini (es: acme-srl).")
-            logger.error(f"❌ Slug cliente non valido: '{raw_slug}' -> '{slug}'")
+            print("❌ Slug cliente non valido. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
+            logger.error(f"Slug cliente non valido: '{slug}'")
             return
 
         print("📥 Caricamento configurazione...")
-        cfg = get_config(slug)
-        config = cfg.config
-        secrets = cfg.secrets
-
+        config = get_config(slug)
         logger.info(f"✅ Config caricato e validato per cliente: {slug}")
-        logger.debug(f"Config: {config.model_dump()}")  # Pydantic v2+
+        logger.debug(f"Config: {config.model_dump()}")
 
         print(f"📝 Onboarding per: {slug}")
 
-        # Step 1: Download da Drive
-        output_base = Path(config.output_path)
-        book_dir = output_base / "book"
-        raw_dir = output_base / "raw"
+        # Step 1: Download PDF dal Drive
+        output_base = config.output_dir_path         # Radice output cliente
+        raw_dir = config.raw_dir_path                # Cartella raw PDF
+        md_dir = config.md_output_path_path          # Cartella markdown/book
 
         print("🧹 Pulizia cartelle di output (book e raw)...")
-        cleanup_output_folder(book_dir)
-        cleanup_output_folder(raw_dir)
+        safe_clean_dir(md_dir)
+        safe_clean_dir(raw_dir)
 
         service = get_drive_service(slug)
         raw_dir.mkdir(parents=True, exist_ok=True)
         download_drive_pdfs_recursively(
             service=service,
-            folder_id=secrets.DRIVE_ID,
+            folder_id=config.secrets.DRIVE_ID,
             destination=raw_dir,
-            drive_id=secrets.DRIVE_ID
+            drive_id=config.secrets.DRIVE_ID
         )
-        logger.info("📥 Download PDF da Drive completato.")
+        logger.info("✅ Download PDF da Drive completato.")
 
-        config_dict = config.model_dump()
-        config_dict["raw_dir"] = str(raw_dir)
-
-        pdf_files = list(raw_dir.rglob("*.pdf"))
-        if not pdf_files:
-            logger.warning("⚠️ Nessun PDF trovato nella cartella raw dopo il download.")
-            print("❌ Nessun PDF trovato: pipeline interrotta.")
-            return
-
-        print("📚 Conversione PDF → Markdown strutturato...")
+        # Step 2: Conversione PDF -> markdown strutturato
+        print("🔄 Conversione PDF -> markdown strutturato...")
         mapping = load_semantic_mapping()
-        convert_files_to_structured_markdown(config_dict, mapping)
-        logger.info("✅ Conversione PDF → Markdown completata.")
+        convert_files_to_structured_markdown(config, mapping)
+        logger.info("✅ Conversione markdown completata.")
 
-        print("🧠 Estrazione semantica (enrichment)...")
-        enrich_markdown_folder(config.md_output_path, slug)
+        # Step 3: Enrichment semantico dei markdown
+        print("🔎 Enrichment semantico markdown...")
+        enrich_markdown_folder(md_dir, slug)
         logger.info("✅ Enrichment semantico completato.")
 
-        print("📑 Generazione SUMMARY.md e README.md...")
-        md_files = [f for f in os.listdir(config.md_output_path) if f.endswith(".md")]
-        generate_summary_markdown(md_files, config.md_output_path)
-        generate_readme_markdown(config.md_output_path, slug)
+        # Step 4: Generazione summary/book
+        print("📚 Generazione SUMMARY.md e README.md...")
+        md_files = [f for f in md_dir.iterdir() if f.suffix == ".md"]
+        generate_summary_markdown(md_files, md_dir)
+        generate_readme_markdown(md_dir)
         logger.info("✅ SUMMARY.md e README.md generati.")
 
-        print("🔍 Avvio anteprima GitBook in locale con Docker...")
-        run_gitbook_docker_preview(config_dict)
-        logger.info("✅ Anteprima GitBook completata.")
+        # Step 5: Preview GitBook (opzionale)
+        print("👁️  Avvio preview GitBook in locale con Docker...")
+        run_gitbook_docker_preview(config)
+        logger.info("✅ Preview GitBook completata.")
 
-        risposta = input("❓ Vuoi procedere con il push su GitHub della sola cartella book? [y/N] ").strip().lower()
-        logger.debug(f"Risposta push GitHub: {risposta}")
-        temp_dir = None
-        if risposta == "y":
-            print("🚀 Esecuzione push su GitHub SOLO per la knowledge base (cartella book)...")
-            book_config = config_dict.copy()
-            book_config["output_path"] = str(Path(config.md_output_path).resolve())
-            github_org = getattr(secrets, "GITHUB_ORG", None) or getattr(cfg, "github_org", None) or "nextybase"
-            book_config["github_repo"] = f"{github_org}/timmy-kb-{slug}"
-            logger.info(f"🔗 Repo GitHub: {book_config['github_repo']}")
-            temp_dir = push_output_to_github(book_config)
-            logger.info(f"✅ Push su GitHub completato. Temp dir: {temp_dir}")
-            print(f"✅ Push su GitHub completato. File temporanei in: {temp_dir}")
+        # Step 6: Push GitHub (opzionale)
+        resp = input("🚀 Vuoi procedere con il push su GitHub della sola cartella book? [y/N] ").strip().lower()
+        logger.debug(f"Risposta push GitHub: {resp}")
+        if resp == "y":
+            push_output_to_github(md_dir, config)
+            logger.info(f"Push GitHub completato. Cartella: {md_dir}")
+            print(f"✅ Push GitHub completato. Cartella: {md_dir}")
         else:
-            logger.info("⏹️ Push GitHub annullato.")
-            print("⏹️ Push annullato.")
+            logger.info("Push GitHub annullato dall'utente.")
+            print("ℹ️  Push annullato.")
 
-        if temp_dir:
-            while True:
-                finale = input(f"\n✅ Onboarding completato per {slug}? [y/N] ").strip().lower()
-                if finale == "y":
-                    safe_clean_dir(temp_dir)
-                    print("🧹 Pulizia completata. Onboarding chiuso.")
-                    logger.info("🧹 Temp dir rimossa.")
-                    break
-                elif finale == "n":
-                    reset = input("🔄 Vuoi azzerare la procedura? [y/N] ").strip().lower()
-                    if reset == "y":
-                        also_conf = input("🗑️ Cancellare anche la configurazione? [y/N] ").strip().lower()
-                        if also_conf == "y":
-                            config_dir = Path(config.md_output_path).parent / "config"
-                            safe_clean_dir(config_dir)
-                            print("🗑️ Tutto azzerato.")
-                            logger.warning("🗑️ Config rimossa.")
-                        safe_clean_dir(temp_dir)
-                        print("🧹 Onboarding azzerato.")
-                        logger.info("🧹 Temp dir rimossa.")
-                        break
-                    elif reset == "n":
-                        print(f"❗ La temp dir ({temp_dir}) e la config rimangono.")
-                        logger.warning("❗ Temp dir non rimossa.")
-                        break
-                else:
-                    print("Risposta non valida. Inserisci 'y' o 'n'.")
-        else:
-            print(f"🏁 Onboarding completato per: {slug}")
-            logger.info(f"🏁 Onboarding completato per: {slug}")
+        print(f"✅ Onboarding completato per: {slug}")
+        logger.info(f"✅ Onboarding completato per: {slug}")
 
     except PipelineError as e:
-        logger.error(f"❌ Errore bloccante: {e}")
-        print(f"❌ Errore bloccante: {e}")
+        logger.error(f"❌ Errore pipeline: {e}")
+        print(f"❌ Errore pipeline: {e}")
+        return
+    except ValidationError as e:
+        logger.error(f"❌ Errore validazione config: {e}")
+        print(f"❌ Errore validazione config: {e}")
         return
     except Exception as e:
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)

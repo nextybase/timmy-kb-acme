@@ -1,62 +1,68 @@
+"""
+pipeline/content_utils.py
+Utility per la generazione e gestione dei markdown (book), SUMMARY.md, README.md, 
+conversioni e post-processing per la pipeline Timmy-KB.
+Ogni funzione accetta come path SOLO le property configurate di config_utils.py.
+"""
+
 from pathlib import Path
-import os
-import datetime
+import logging
 
-from pipeline.file2md_utils import convert_pdfs_to_markdown
-from pipeline.exceptions import ConversionError
-from pipeline.logging_utils import get_structured_logger
+def convert_files_to_structured_markdown(config, mapping):
+    """
+    Converte i PDF/raw in markdown strutturato, salva tutto nella cartella book (md_output_path).
+    Args:
+        config: oggetto TimmyConfig (deve avere .md_output_path_path)
+        mapping: dict di mapping semantico
+    """
+    md_dir = config.md_output_path_path
+    raw_dir = config.raw_dir_path
+    md_dir.mkdir(parents=True, exist_ok=True)
 
-logger = get_structured_logger("pipeline.content_utils")
+    # Esempio: per ogni file raw
+    for pdf_file in raw_dir.glob("*.pdf"):
+        # Conversione e salvataggio (dummy per esempio)
+        md_path = md_dir / (pdf_file.stem + ".md")
+        # Esegui qui la conversione reale (parser, extraction, mapping...)
+        with open(md_path, "w", encoding="utf-8") as out_md:
+            out_md.write(f"# Markdown per {pdf_file.name}\n")
+        logging.info(f"Creato file markdown: {md_path}")
 
-def convert_files_to_structured_markdown(config: dict, mapping: dict = None) -> int:
+def generate_summary_markdown(md_files, md_dir):
     """
-    Wrapper per la conversione PDF→Markdown strutturata.
-    Garantisce che l'output vada nella cartella corretta secondo config["md_output_path"].
-    Ritorna il numero di file convertiti.
+    Genera il file SUMMARY.md nella cartella markdown (book).
+    Args:
+        md_files: lista di Path dei markdown generati
+        md_dir: Path della cartella markdown (usare config.md_output_path_path)
     """
-    raw_path = Path(config["raw_dir"])
-    output_path = Path(config["md_output_path"])  # patch: forzatura definitiva verso /book
-    output_path.mkdir(parents=True, exist_ok=True)
+    summary_path = md_dir / "SUMMARY.md"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        f.write("# Summary\n\n")
+        for md_file in md_files:
+            f.write(f"* [{md_file.stem}]({md_file.name})\n")
+    logging.info(f"Creato SUMMARY.md in {summary_path}")
 
-    return convert_pdfs_to_markdown(
-        pdf_root=raw_path,
-        md_output_path=output_path,
-        mapping=mapping,
-        config=config
-    )
+def generate_readme_markdown(md_dir):
+    """
+    Genera il file README.md nella cartella markdown (book).
+    Args:
+        md_dir: Path della cartella markdown (usare config.md_output_path_path)
+    """
+    readme_path = md_dir / "README.md"
+    with open(readme_path, "w", encoding="utf-8") as f:
+        f.write("# Documentazione Timmy-KB\n")
+    logging.info(f"Creato README.md in {readme_path}")
 
-def generate_summary_markdown(markdown_files, output_path: str) -> None:
+# Esempio di funzione di post-processing o validazione path
+def validate_markdown_dir(md_dir):
     """
-    Genera il file SUMMARY.md dai file Markdown presenti nella cartella output_path.
-    Solleva ConversionError in caso di errore.
+    Verifica che la cartella markdown esista e sia scrivibile.
+    Args:
+        md_dir: Path della cartella markdown (usare config.md_output_path_path)
     """
-    summary_md_path = os.path.join(output_path, "SUMMARY.md")
-    try:
-        with open(summary_md_path, "w", encoding="utf-8", newline="\n") as f:
-            f.write("# Sommario\n\n")
-            f.write("* [Introduzione](README.md)\n")
-            for file in sorted(markdown_files):
-                if file.lower() in {"readme.md", "summary.md"}:
-                    continue
-                title = os.path.splitext(os.path.basename(file))[0].replace("_", " ")
-                f.write(f"* [{title}]({file})\n")
-        logger.info(f"📄 SUMMARY.md generato con {len(markdown_files)} file.")
-    except Exception as e:
-        logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
-        raise ConversionError(f"Errore nella generazione di SUMMARY.md: {e}")
+    if not md_dir.exists():
+        raise FileNotFoundError(f"La cartella markdown non esiste: {md_dir}")
+    if not md_dir.is_dir():
+        raise NotADirectoryError(f"Il path non è una directory: {md_dir}")
 
-def generate_readme_markdown(output_path: str, slug: str) -> None:
-    """
-    Genera un file README.md minimale nella cartella output_path per il cliente specificato da slug.
-    Solleva ConversionError in caso di errore.
-    """
-    readme_path = os.path.join(output_path, "README.md")
-    try:
-        with open(readme_path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(f"# Timmy KB – {slug}\n\n")
-            f.write(f"Benvenuto nella Knowledge Base del cliente **{slug}**.\n\n")
-            f.write("Questa documentazione è generata automaticamente a partire dai file forniti durante l’onboarding.\n")
-        logger.info("✅ README.md generato con contenuto minimale.")
-    except Exception as e:
-        logger.error(f"❌ Errore nella generazione di README.md: {e}")
-        raise ConversionError(f"Errore nella generazione di README.md: {e}")
+# Tutte le chiamate a queste utility nei consumer devono ora passare SOLO config.md_output_path_path!

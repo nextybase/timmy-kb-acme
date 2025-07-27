@@ -1,6 +1,7 @@
 """
 Modulo di enrichment semantico: arricchisce i file markdown usando il mapping YAML.
 """
+
 from pathlib import Path
 import yaml
 import logging
@@ -9,7 +10,7 @@ logger = logging.getLogger("semantic_extractor")
 
 def enrich_markdown_folder(md_output_path: str, slug: str, mapping_path: str = "config/semantic_mapping.yaml"):
     """
-    Arricchisce tutti i file markdown in una cartella con tag semantici, usando il mapping YAML.
+    Arricchisce tutti i file markdown in una cartella con tag semantici dal mapping YAML.
     """
     mapping = load_semantic_mapping(mapping_path)
     md_folder = Path(md_output_path)
@@ -30,11 +31,11 @@ def enrich_markdown_file(md_file: Path, mapping: dict):
         content = f.read()
 
     # Esempio: aggiungi un header con le categorie (personalizza come vuoi)
-    categories = semantic_info.get("categories", [])
+    categories = semantic_info.get("categorie", [])
     header = ""
     if categories:
         header += "---\n"
-        header += f"categories: {categories}\n"
+        header += f"categorie: {categories}\n"
         header += "---\n\n"
 
     # Scrivi il file arricchito solo se manca l'enrichment

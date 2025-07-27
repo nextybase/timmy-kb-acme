@@ -1,7 +1,8 @@
 """
 Gestione del mapping semantico tra file markdown e le categorie definite (YAML).
-Fornisce utilità per caricare e applicare il mapping.
+Fornisce utility per caricare e applicare il mapping.
 """
+
 import yaml
 from pathlib import Path
 
@@ -28,4 +29,4 @@ def list_semantic_categories(mapping: dict) -> list:
     """
     Restituisce la lista delle categorie semantiche definite.
     """
-    return list({cat for m in mapping.values() for cat in m.get("categories", [])})
+    return list({cat for m in mapping.values() for cat in m.get("categorie", [])})

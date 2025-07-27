@@ -7,7 +7,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError
-from pipeline.config_utils import get_config  # <-- CORRETTO!
+from pipeline.config_utils import get_config  # <-- centrale!
 
 logger = get_structured_logger("pipeline.drive_utils")
 
@@ -19,8 +19,8 @@ def get_drive_service(slug):
     utilizzando la configurazione centralizzata.
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
-    config = get_config(slug)  # Ora serve sempre lo slug!
-    service_account_file = config.service_account_file
+    config = get_config(slug)
+    service_account_file = config.secrets.SERVICE_ACCOUNT_FILE
     creds = service_account.Credentials.from_service_account_file(
         service_account_file, scopes=SCOPES
     )
@@ -45,9 +45,14 @@ def create_drive_folder(service, name, parent_id):
         logger.error(f"❌ Errore nella creazione della cartella '{name}': {e}")
         raise DriveUploadError(f"Errore nella creazione della cartella '{name}': {e}")
 
-def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
+def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, drive_id):
     """
-    Scarica tutti i PDF ricorsivamente da una cartella di Drive all'output locale.
+    Scarica tutti i PDF ricorsivamente da una cartella di Drive alla cartella raw locale.
+    Args:
+        service: Google Drive API client
+        folder_id: ID cartella Drive
+        raw_dir_path: Path (da config.raw_dir_path)
+        drive_id: ID del drive
     """
     try:
         query = f"'{folder_id}' in parents and trashed = false"
@@ -68,7 +73,7 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
             mime_type = file['mimeType']
 
             if mime_type == 'application/pdf':
-                local_path = Path(destination) / name
+                local_path = raw_dir_path / name
                 local_path.parent.mkdir(parents=True, exist_ok=True)
                 request = service.files().get_media(fileId=file_id)
                 with io.FileIO(local_path, 'wb') as fh:
@@ -79,7 +84,7 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
                 logger.info(f"📥 Scaricato PDF: {local_path}")
 
             elif mime_type == 'application/vnd.google-apps.folder':
-                new_dest = Path(destination) / name
+                new_dest = raw_dir_path / name
                 new_dest.mkdir(parents=True, exist_ok=True)
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
@@ -90,16 +95,17 @@ def download_drive_pdfs_recursively(service, folder_id, destination, drive_id):
 def download_drive_pdfs_to_local(service, config):
     """
     Scarica tutti i PDF dalla cartella cliente su Drive all'output locale.
+    Usa solo config.raw_dir_path!
     """
-    slug = config["slug"]
-    drive_id = config["drive_id"]
-    folder_id = config.get("drive_folder_id")
-    output_path = config["output_path"]
+    slug = config.slug
+    drive_id = config.secrets.DRIVE_ID
+    folder_id = getattr(config, "drive_folder_id", None)
+    raw_dir_path = config.raw_dir_path
     logger.info(f"📥 Inizio download PDF per il cliente: {slug}")
     if not folder_id:
         logger.error("❌ drive_folder_id mancante in config.")
         raise DriveDownloadError("drive_folder_id mancante in config.")
-    download_drive_pdfs_recursively(service, folder_id, output_path, drive_id)
+    download_drive_pdfs_recursively(service, folder_id, raw_dir_path, drive_id)
     logger.info("✅ Download PDF completato.")
     return True
 
@@ -170,9 +176,9 @@ def find_drive_folder_by_name(service, name, drive_id=None):
         logger.error(f"❌ Errore nella ricerca della cartella '{name}': {e}")
         raise DriveDownloadError(f"Errore durante la ricerca della cartella '{name}': {e}")
 
-def upload_folder_to_drive_raw(service, local_folder: Path, drive_id: str, drive_raw_folder_id: str):
+def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive_raw_folder_id: str):
     """
-    Carica ricorsivamente tutti i file da local_folder nella cartella 'raw' su Drive.
+    Carica ricorsivamente tutti i file da raw_dir_path nella cartella 'raw' su Drive.
     """
     import mimetypes
 
@@ -216,7 +222,7 @@ def upload_folder_to_drive_raw(service, local_folder: Path, drive_id: str, drive
                 subfolder_id = find_or_create_drive_folder(service, parent_drive_id, item.name)
                 upload_recursive(item, subfolder_id)
 
-    upload_recursive(local_folder, drive_raw_folder_id)
+    upload_recursive(raw_dir_path, drive_raw_folder_id)
     logger.info("✅ Upload ricorsivo cartella raw completato.")
 
 def upload_config_to_drive_folder(service, config_path, drive_folder_id):

@@ -8,7 +8,7 @@ def get_structured_logger(name="default", log_file=None, level=None):
     """
     logger = logging.getLogger(name)
 
-    # Evita duplicazioni
+    # Evita duplicazioni handler
     if logger.handlers:
         return logger
 
@@ -44,6 +44,6 @@ def get_structured_logger(name="default", log_file=None, level=None):
             fh.setFormatter(formatter)
             logger.addHandler(fh)
         except Exception as e:
-            print(f"⚠️ Impossibile scrivere log su file: {log_file} – {e}")
+            print(f"⚠️ Impossibile scrivere log su file: {log_file} — {e}")
 
     return logger
