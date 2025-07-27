@@ -1,6 +1,9 @@
 from pathlib import Path
 import subprocess
 import os
+from dotenv import load_dotenv
+load_dotenv()
+print("DEBUG: SERVICE_ACCOUNT_FILE =", os.environ.get("SERVICE_ACCOUNT_FILE"))
 
 from pydantic import ValidationError
 from pipeline.logging_utils import get_structured_logger
@@ -65,10 +68,18 @@ def main():
 
         service = get_drive_service(slug)
         raw_dir.mkdir(parents=True, exist_ok=True)
+
+        # Attenzione: serve ID cartella cliente (NON solo l'ID del Drive)
+        folder_id = getattr(config, "drive_folder_id", None)
+        if not folder_id:
+            logger.error("❌ ID cartella cliente (drive_folder_id) mancante nella config! Verifica pre-onboarding.")
+            print("❌ Errore: ID cartella cliente mancante nella config!")
+            return
+
         download_drive_pdfs_recursively(
             service=service,
-            folder_id=config.secrets.DRIVE_ID,
-            destination=raw_dir,
+            folder_id=folder_id,
+            raw_dir_path=raw_dir,
             drive_id=config.secrets.DRIVE_ID
         )
         logger.info("✅ Download PDF da Drive completato.")

@@ -6,8 +6,8 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import DriveDownloadError, DriveUploadError
-from pipeline.config_utils import get_config  # <-- centrale!
+from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError
+from pipeline.config_utils import get_config  # centrale!
 
 logger = get_structured_logger("pipeline.drive_utils")
 
@@ -20,7 +20,14 @@ def get_drive_service(slug):
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
     config = get_config(slug)
+
+    # Controllo robusto sui secrets
+    if not config.secrets or not getattr(config.secrets, "SERVICE_ACCOUNT_FILE", None):
+        logger.error("❌ SERVICE_ACCOUNT_FILE mancante nei secrets! Verifica variabili d'ambiente o .env.")
+        raise PipelineError("SERVICE_ACCOUNT_FILE mancante nei secrets/config!")
+
     service_account_file = config.secrets.SERVICE_ACCOUNT_FILE
+
     creds = service_account.Credentials.from_service_account_file(
         service_account_file, scopes=SCOPES
     )
@@ -48,11 +55,6 @@ def create_drive_folder(service, name, parent_id):
 def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, drive_id):
     """
     Scarica tutti i PDF ricorsivamente da una cartella di Drive alla cartella raw locale.
-    Args:
-        service: Google Drive API client
-        folder_id: ID cartella Drive
-        raw_dir_path: Path (da config.raw_dir_path)
-        drive_id: ID del drive
     """
     try:
         query = f"'{folder_id}' in parents and trashed = false"

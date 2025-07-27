@@ -3,11 +3,17 @@ pipeline/config_utils.py
 Utility e modello di configurazione per la pipeline Timmy-KB.
 Gestione centralizzata dei path e dei parametri, con mappatura chiavi YAML → property Python.
 """
+from dotenv import load_dotenv
+load_dotenv()
 
+import os
 import yaml
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional
+
+
+print("SERVICE_ACCOUNT_FILE:", os.environ.get("SERVICE_ACCOUNT_FILE"))
 
 # =======================
 # MODELLI CONFIGURAZIONE
@@ -33,6 +39,7 @@ class TimmyConfig(BaseModel):
     log_max_bytes: Optional[int] = 1048576
     log_backup_count: Optional[int] = 3
     debug: Optional[bool] = False
+    drive_folder_id: Optional[str] = None
     # ... altri parametri pipeline
 
     secrets: Optional[TimmySecrets] = None

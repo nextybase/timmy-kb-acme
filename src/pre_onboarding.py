@@ -1,3 +1,9 @@
+from dotenv import load_dotenv
+load_dotenv()
+import os
+print("DEBUG [pre_onboarding] SERVICE_ACCOUNT_FILE:", os.environ.get("SERVICE_ACCOUNT_FILE"))
+
+import yaml
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
@@ -18,7 +24,7 @@ def main():
 
     try:
         # Step 1: Raccolta dati utente
-        raw_slug = input("🔤 Inserisci lo slug del cliente: ").strip().lower()
+        raw_slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
         logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
         slug = raw_slug.replace("_", "-")
         if not is_valid_slug(slug):
@@ -33,8 +39,6 @@ def main():
             return
 
         # Step 2: Generazione path/config
-        # Carica la config di progetto (template) dalla YAML globale
-        # NB: Qui potresti anche fare un merge con un template, se serve
         base_config_yaml = Path("config/config.yaml")
         if not base_config_yaml.exists():
             print("❌ File config/config.yaml mancante.")
@@ -65,9 +69,12 @@ def main():
 
         # Step 5: Inizializza Google Drive e sottocartelle
         service = get_drive_service(slug)
-        drive_folder = find_drive_folder_by_name(service, slug)
+        config = get_config(slug)
+        parent_id = config.secrets.DRIVE_ID
+
+        drive_folder = find_drive_folder_by_name(service, slug, drive_id=parent_id)
         if not drive_folder:
-            drive_folder_id = create_drive_folder(service, slug)
+            drive_folder_id = create_drive_folder(service, slug, parent_id)
             logger.info(f"Cartella Drive creata: {drive_folder_id}")
         else:
             drive_folder_id = drive_folder['id']
@@ -76,6 +83,25 @@ def main():
         # Upload config su Drive
         upload_config_to_drive_folder(service, config_path, drive_folder_id)
         logger.info("Config caricata su Drive.")
+
+        # Aggiorna config con drive_folder_id
+        config_dict["drive_folder_id"] = drive_folder_id
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config_dict, f, allow_unicode=True)
+        logger.info(f"Aggiornato config con drive_folder_id: {drive_folder_id}")
+
+        # Step 6: Creazione struttura sottocartelle da YAML
+        yaml_path = "config/cartelle_raw.yaml"
+        if not Path(yaml_path).exists():
+            logger.error(f"File YAML struttura cartelle mancante: {yaml_path}")
+            print(f"❌ File YAML struttura cartelle mancante: {yaml_path}")
+        else:
+            try:
+                create_drive_subfolders_from_yaml(service, parent_id, drive_folder_id, yaml_path)
+                logger.info("Struttura cartelle Drive creata da YAML.")
+            except Exception as e:
+                logger.error(f"Errore creazione struttura cartelle da YAML: {e}")
+                print(f"❌ Errore creazione struttura cartelle su Drive: {e}")
 
         print(f"✅ Pre-onboarding completato per: {slug}")
 
