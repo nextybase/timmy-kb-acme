@@ -3,6 +3,7 @@ pipeline/config_utils.py
 Utility e modello di configurazione per la pipeline Timmy-KB.
 Gestione centralizzata dei path e dei parametri, con mappatura chiavi YAML → property Python.
 """
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -11,9 +12,6 @@ import yaml
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional
-
-
-print("SERVICE_ACCOUNT_FILE:", os.environ.get("SERVICE_ACCOUNT_FILE"))
 
 # =======================
 # MODELLI CONFIGURAZIONE
@@ -83,7 +81,7 @@ def get_config(slug: str) -> TimmyConfig:
     Carica la config YAML del cliente dalla directory di output.
     Sostituisce i template path (con {slug}) e popola il modello TimmyConfig.
     """
-    config_path = Path(f"output/timmy-kb-{slug}/config.yaml")
+    config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
     if not config_path.exists():
         raise FileNotFoundError(f"Config file non trovato: {config_path}")
 
@@ -92,14 +90,12 @@ def get_config(slug: str) -> TimmyConfig:
 
     # Applica slug a tutti i template path della YAML
     config_dict["slug"] = slug
-    config_dict["output_dir"] = config_dict.get("output_dir_template", "output/timmy-kb-{slug}").format(slug=slug)
-    config_dict["raw_dir"] = config_dict.get("raw_dir_template", "output/timmy-kb-{slug}/raw").format(slug=slug)
-    # Output markdown: prendi path dedicato, oppure book dentro output_dir
+    config_dict["output_dir"] = config_dict.get("output_dir_template", f"output/timmy-kb-{slug}").format(slug=slug)
+    config_dict["raw_dir"] = config_dict.get("raw_dir_template", f"output/timmy-kb-{slug}/raw").format(slug=slug)
     config_dict["md_output_path"] = str(Path(config_dict["output_dir"]) / "book")
-    # Config path utile per reference
     config_dict["config_path"] = str(config_path)
 
-    # Carica eventuali secrets se presenti
+    # Carica eventuali secrets da env se presenti
     secrets_dict = {}
     for secret_key in ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]:
         env_val = os.environ.get(secret_key)
@@ -112,10 +108,11 @@ def get_config(slug: str) -> TimmyConfig:
 
 def write_client_config_file(config: dict, slug: str) -> Path:
     """
-    Scrive la configurazione YAML nella cartella di output del cliente.
+    Scrive la configurazione YAML nella cartella di output del cliente
+    in output/timmy-kb-<slug>/config/config.yaml.
     Restituisce il path del file creato.
     """
-    config_dir = Path(f"output/timmy-kb-{slug}")
+    config_dir = Path(f"output/timmy-kb-{slug}") / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path = config_dir / "config.yaml"
     with open(config_path, "w", encoding="utf-8") as f:
@@ -123,3 +120,4 @@ def write_client_config_file(config: dict, slug: str) -> Path:
     return config_path
 
 # Puoi aggiungere qui altre utility per gestione path/config
+

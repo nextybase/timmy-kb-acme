@@ -31,6 +31,25 @@ def check_docker_running():
 
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
+def check_gitbook_preview_files(md_dir: Path):
+    # Utility minimalista per validazione cartella preview (usata SOLO se skip)
+    print("⚡ [SKIP_PREVIEW] Controllo file minimi per preview GitBook...")
+    warn_files = []
+    if not md_dir.exists():
+        warn_files.append("Cartella book/ NON creata dalla pipeline.")
+    else:
+        files = list(md_dir.rglob("*.md"))
+        if not files:
+            warn_files.append("Almeno un file .md in book/ (es. test.md)")
+    if warn_files:
+        print("\n⚠️  [WARNING] Alcuni file minimi per la preview GitBook sono mancanti:")
+        for w in warn_files:
+            print(f"   - {w}")
+        print("➡️  Rigenera la cartella dummy (usa il tool di setup) **prima** di lanciare la preview.")
+    else:
+        print("✅ File minimi per preview GitBook OK.")
+    print("👉  **Per la preview completa, eseguire manualmente o usare il test dedicato.**")
+
 def main():
     logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
@@ -102,10 +121,15 @@ def main():
         generate_readme_markdown(md_dir)
         logger.info("✅ SUMMARY.md e README.md generati.")
 
-        # Step 5: Preview GitBook (opzionale)
-        print("👁️  Avvio preview GitBook in locale con Docker...")
-        run_gitbook_docker_preview(config)
-        logger.info("✅ Preview GitBook completata.")
+        # Step 5: Preview GitBook (opzionale, ora cleanup automatico)
+        if os.environ.get("TIMMY_SKIP_PREVIEW") == "1":
+            print("👁️  [SKIP] Preview Docker disabilitata (modalità test end2end).")
+            check_gitbook_preview_files(md_dir)
+            logger.info("[SKIP] Preview Docker saltata in fase di test.")
+        else:
+            print("👁️  Avvio preview GitBook in locale con Docker...")
+            run_gitbook_docker_preview(config)
+            logger.info("✅ Preview GitBook completata.")
 
         # Step 6: Push GitHub (opzionale)
         resp = input("🚀 Vuoi procedere con il push su GitHub della sola cartella book? [y/N] ").strip().lower()

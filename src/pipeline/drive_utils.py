@@ -86,10 +86,17 @@ def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, driv
                 logger.info(f"📥 Scaricato PDF: {local_path}")
 
             elif mime_type == 'application/vnd.google-apps.folder':
-                new_dest = raw_dir_path / name
-                new_dest.mkdir(parents=True, exist_ok=True)
+                # PATCH ANTI-DOPPIA RAW: se il nome è 'raw' e siamo già in 'raw', NON aggiungere un altro livello
+                if name.lower() == 'raw' and raw_dir_path.name.lower() == 'raw':
+                    new_dest = raw_dir_path
+                else:
+                    new_dest = raw_dir_path / name
+                    new_dest.mkdir(parents=True, exist_ok=True)
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
+    except HttpError as e:
+        logger.error(f"❌ Errore nel download ricorsivo: {e}")
+        raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
     except HttpError as e:
         logger.error(f"❌ Errore nel download ricorsivo: {e}")
         raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
