@@ -15,9 +15,12 @@ from pipeline.drive_utils import (
 )
 from pipeline.config_utils import write_client_config_file, get_config
 from pipeline.exceptions import PipelineError
-from pipeline.utils import is_valid_slug
+from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 
 def main():
+    # Validazione ambiente prima di procedere
+    validate_preonboarding_environment()
+    
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Procedura di pre-onboarding NeXT")
     print("▶️ Procedura di pre-onboarding NeXT")
