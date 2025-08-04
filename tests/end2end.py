@@ -139,7 +139,7 @@ def clean_drive_subfolders(slug):
         return
 
     drive_id = config["drive_id"]
-    folder_id = config["drive_folder_id"]
+    folder_id = config.get("drive_folder_id", "1C1L-BtruPfyQB3nZCeo6zpjm0g77O95J")
 
     service = get_drive_service(slug)
 
@@ -208,8 +208,7 @@ def test_end2end_pipeline():
             service,
             TEMP_RAW,
             config["drive_id"],
-            config.get("drive_folder_id"),
-            inside_raw=True  # <-- La tua funzione su Drive deve gestire questa modalità
+            config.get("drive_folder_id")
         )
         print("✅ Upload su Drive effettuato!")
     except Exception as e:
@@ -241,8 +240,4 @@ def test_end2end_pipeline():
         print("➡️  Rigenera la cartella dummy (usa il tool di setup) **prima** di lanciare il test preview.")
     print("\n👉  **Per analizzare la preview, lancia il test dedicato:**")
     print("    pytest -v -s tests/test_gitbook_preview.py\n")
-    try:
-        input("Premi INVIO per continuare...")
-    except EOFError:
-        print("(Ambiente non-interattivo: continuo automaticamente)")
     print("✅ Test end-to-end completato con SUCCESSO.")

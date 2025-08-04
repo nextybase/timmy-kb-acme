@@ -1,4 +1,6 @@
 import io
+import mimetypes
+import yaml
 from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -7,33 +9,25 @@ from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError
-from pipeline.config_utils import get_config  # centrale!
+from pipeline.config_utils import get_config
 
 logger = get_structured_logger("pipeline.drive_utils")
-
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def get_drive_service(slug):
-    """
-    Restituisce un oggetto Google Drive API autenticato con service account,
-    utilizzando la configurazione centralizzata.
-    """
+def get_drive_service(slug: str):
     logger.debug("Inizializzo connessione a Google Drive API.")
     config = get_config(slug)
 
-    # Controllo robusto sui secrets
     if not config.secrets or not getattr(config.secrets, "SERVICE_ACCOUNT_FILE", None):
-        logger.error("❌ SERVICE_ACCOUNT_FILE mancante nei secrets! Verifica variabili d'ambiente o .env.")
+        logger.error("❌ SERVICE_ACCOUNT_FILE mancante nei secrets!")
         raise PipelineError("SERVICE_ACCOUNT_FILE mancante nei secrets/config!")
 
-    service_account_file = config.secrets.SERVICE_ACCOUNT_FILE
-
     creds = service_account.Credentials.from_service_account_file(
-        service_account_file, scopes=SCOPES
+        config.secrets.SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
     return build('drive', 'v3', credentials=creds)
 
-def create_drive_folder(service, name, parent_id):
+def create_drive_folder(service, name: str, parent_id: str) -> str:
     folder_metadata = {
         'name': name,
         'mimeType': 'application/vnd.google-apps.folder',
@@ -52,10 +46,7 @@ def create_drive_folder(service, name, parent_id):
         logger.error(f"❌ Errore nella creazione della cartella '{name}': {e}")
         raise DriveUploadError(f"Errore nella creazione della cartella '{name}': {e}")
 
-def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, drive_id):
-    """
-    Scarica tutti i PDF ricorsivamente da una cartella di Drive alla cartella raw locale.
-    """
+def download_drive_pdfs_recursively(service, folder_id: str, raw_dir_path: Path, drive_id: str):
     try:
         query = f"'{folder_id}' in parents and trashed = false"
         results = service.files().list(
@@ -68,8 +59,7 @@ def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, driv
             driveId=drive_id
         ).execute()
 
-        files = results.get('files', [])
-        for file in files:
+        for file in results.get('files', []):
             name = file['name']
             file_id = file['id']
             mime_type = file['mimeType']
@@ -86,44 +76,31 @@ def download_drive_pdfs_recursively(service, folder_id, raw_dir_path: Path, driv
                 logger.info(f"📥 Scaricato PDF: {local_path}")
 
             elif mime_type == 'application/vnd.google-apps.folder':
-                # PATCH ANTI-DOPPIA RAW: se il nome è 'raw' e siamo già in 'raw', NON aggiungere un altro livello
-                if name.lower() == 'raw' and raw_dir_path.name.lower() == 'raw':
-                    new_dest = raw_dir_path
-                else:
-                    new_dest = raw_dir_path / name
-                    new_dest.mkdir(parents=True, exist_ok=True)
+                new_dest = raw_dir_path if name.lower() == 'raw' and raw_dir_path.name.lower() == 'raw' else raw_dir_path / name
+                new_dest.mkdir(parents=True, exist_ok=True)
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
     except HttpError as e:
         logger.error(f"❌ Errore nel download ricorsivo: {e}")
         raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
-    except HttpError as e:
-        logger.error(f"❌ Errore nel download ricorsivo: {e}")
-        raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
 
-def download_drive_pdfs_to_local(service, config):
-    """
-    Scarica tutti i PDF dalla cartella cliente su Drive all'output locale.
-    Usa solo config.raw_dir_path!
-    """
+def download_drive_pdfs_to_local(service, config) -> bool:
     slug = config.slug
     drive_id = config.secrets.DRIVE_ID
     folder_id = getattr(config, "drive_folder_id", None)
     raw_dir_path = config.raw_dir_path
+
     logger.info(f"📥 Inizio download PDF per il cliente: {slug}")
     if not folder_id:
         logger.error("❌ drive_folder_id mancante in config.")
         raise DriveDownloadError("drive_folder_id mancante in config.")
+
     download_drive_pdfs_recursively(service, folder_id, raw_dir_path, drive_id)
     logger.info("✅ Download PDF completato.")
     return True
 
-def create_drive_subfolders_from_yaml(service, drive_id, parent_folder_id, yaml_path):
-    """
-    Crea sottocartelle su Drive secondo struttura YAML.
-    """
-    import yaml
-    logger.info(f"Parsing YAML struttura cartelle: {yaml_path}")
+def create_drive_subfolders_from_yaml(service, drive_id: str, parent_folder_id: str, yaml_path: Path) -> bool:
+    logger.info(f"📄 Parsing YAML struttura cartelle: {yaml_path}")
     try:
         with open(yaml_path, "r", encoding="utf-8") as file:
             structure = yaml.safe_load(file)
@@ -138,16 +115,16 @@ def create_drive_subfolders_from_yaml(service, drive_id, parent_folder_id, yaml_
                     logger.warning("⚠️ Cartella senza nome saltata.")
                     continue
                 new_folder_id = create_drive_folder(service, name, parent_id)
-                indent = "  " * depth
-                logger.info(f"{indent}📂 Creata cartella '{name}' (ID: {new_folder_id})")
+                logger.info("  " * depth + f"📂 Creata cartella '{name}' (ID: {new_folder_id})")
                 subfolders = folder.get("subfolders")
-                if isinstance(subfolders, list) and subfolders:
+                if isinstance(subfolders, list):
                     create_nested_folders(new_folder_id, subfolders, depth + 1)
 
         root_folders = structure.get("root_folders", [])
         if not isinstance(root_folders, list):
             raise DriveUploadError("'root_folders' deve essere una lista.")
-        logger.info("📁 Inizio creazione struttura cartelle da YAML...")
+
+        logger.info(f"📁 Inizio creazione struttura cartelle nel Drive condiviso ID: {drive_id}")
         create_nested_folders(parent_folder_id, root_folders)
         logger.info("✅ Struttura cartelle creata con successo.")
         return True
@@ -156,11 +133,8 @@ def create_drive_subfolders_from_yaml(service, drive_id, parent_folder_id, yaml_
         logger.error(f"❌ Errore nel parsing YAML o creazione sottocartelle: {e}")
         raise DriveUploadError(f"Errore nella creazione sottocartelle: {e}")
 
-def find_drive_folder_by_name(service, name, drive_id=None):
-    """
-    Cerca una cartella su Drive per nome, opzionalmente in un Drive specifico.
-    """
-    logger.debug(f"Ricerca cartella '{name}' in Drive (ID: {drive_id})")
+def find_drive_folder_by_name(service, name: str, drive_id: str = None):
+    logger.debug(f"🔎 Ricerca cartella '{name}' in Drive (ID: {drive_id})")
     try:
         query = f"name = '{name}' and mimeType = 'application/vnd.google-apps.folder'"
         if drive_id:
@@ -170,9 +144,9 @@ def find_drive_folder_by_name(service, name, drive_id=None):
             "spaces": "drive",
             "fields": "files(id, name)",
             "supportsAllDrives": True,
-            "includeItemsFromAllDrives": True
+            "includeItemsFromAllDrives": True,
+            "corpora": "drive" if drive_id else "user"
         }
-        params["corpora"] = "drive" if drive_id else "user"
         if drive_id:
             params["driveId"] = drive_id
 
@@ -186,12 +160,7 @@ def find_drive_folder_by_name(service, name, drive_id=None):
         raise DriveDownloadError(f"Errore durante la ricerca della cartella '{name}': {e}")
 
 def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive_raw_folder_id: str):
-    """
-    Carica ricorsivamente tutti i file da raw_dir_path nella cartella 'raw' su Drive.
-    """
-    import mimetypes
-
-    def upload_file(file_path, parent_id):
+    def upload_file(file_path: Path, parent_id: str):
         file_metadata = {
             'name': file_path.name,
             'parents': [parent_id]
@@ -208,7 +177,7 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
         except Exception as e:
             logger.error(f"❌ Errore caricando file {file_path.name}: {e}")
 
-    def find_or_create_drive_folder(service, parent_id, folder_name):
+    def find_or_create_drive_folder(service, parent_id: str, folder_name: str) -> str:
         query = (
             f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         )
@@ -223,8 +192,8 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
         folder = service.files().create(body=folder_metadata, supportsAllDrives=True, fields='id').execute()
         return folder['id']
 
-    def upload_recursive(local_path, parent_drive_id):
-        for item in Path(local_path).iterdir():
+    def upload_recursive(local_path: Path, parent_drive_id: str):
+        for item in local_path.iterdir():
             if item.is_file():
                 upload_file(item, parent_drive_id)
             elif item.is_dir():
@@ -234,12 +203,7 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
     upload_recursive(raw_dir_path, drive_raw_folder_id)
     logger.info("✅ Upload ricorsivo cartella raw completato.")
 
-def upload_config_to_drive_folder(service, config_path, drive_folder_id):
-    """
-    Carica il file config.yaml nella cartella Drive specificata. Sovrascrive eventuali duplicati.
-    """
-    config_path = Path(config_path)
-
+def upload_config_to_drive_folder(service, config_path: Path, drive_folder_id: str):
     query = (
         f"'{drive_folder_id}' in parents and name = '{config_path.name}' and trashed = false"
     )

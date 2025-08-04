@@ -29,6 +29,7 @@ PDF_DUMMY_YAML = "config/pdf_dummy.yaml"
 
 # ID reale della cartella dummy su Drive (da usare nei test)
 HARDCODED_DUMMY_DRIVE_ID = "1C1L-BtruPfyQB3nZCeo6zpjm0g77O95J"
+HARDCODED_DUMMY_FOLDER_ID = "12cLba2kKKF4YH_JBA19Kjwr0J8awQDVh"
 
 def load_yaml(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -105,14 +106,13 @@ def main():
         "md_output_path": str(BOOK),
         "output_dir": str(BASE),
         "drive_id": HARDCODED_DUMMY_DRIVE_ID,
-        # Da .env se esiste, altrimenti fallback default
+        "drive_folder_id": HARDCODED_DUMMY_FOLDER_ID,
         "service_account_file": os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json"),
         "base_drive": os.environ.get("BASE_DRIVE", "dummy-base-folder"),
         "github_repo": os.environ.get("GITHUB_REPO", "nextybase/timmy-kb-dummy"),
         "github_branch": os.environ.get("GITHUB_BRANCH", "main"),
         "github_token": os.environ.get("GITHUB_TOKEN", ""),
         "gitbook_token": os.environ.get("GITBOOK_TOKEN", ""),
-        # ...aggiungi altri parametri solo se richiesti dai tuoi test/pipeline...
     }
     with open(CONFIG / "config.yaml", "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True)

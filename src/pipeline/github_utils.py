@@ -3,6 +3,7 @@ from pathlib import Path
 from git import Repo
 from github import Github
 from github.GithubException import UnknownObjectException
+
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
 from pipeline.config_utils import get_config
@@ -11,11 +12,20 @@ logger = get_structured_logger("pipeline.github_utils", "logs/onboarding.log")
 
 def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
     """
-    Esegue il deploy automatico della cartella output_path su GitHub.
-    Crea repo se non esiste. Ritorna la temp_dir usata per il push.
-    - Se slug non è fornito, si assume che config contenga tutto il necessario.
+    Esegue il deploy automatico della cartella md_dir_path su GitHub.
+    Crea la repository se non esiste e forza il push su master.
+
+    Args:
+        md_dir_path (Path): Directory contenente i markdown da pushare.
+        config: Oggetto configurazione contenente secrets e info GitHub.
+        slug (str, opzionale): Identificatore cliente per override config.
+
+    Returns:
+        str: Path della directory pubblicata.
+
+    Raises:
+        PushError: Se mancano token o repo o se il push fallisce.
     """
-    # Recupera config e/o slug se serve
     if slug:
         settings = get_config(slug)
         github_token = getattr(settings.secrets, "GITHUB_TOKEN", None)
@@ -41,7 +51,6 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
         github_user = github.get_user()
         logger.info(f"🔗 Deploy GitHub per: {github_user.login}/{repo_name} (private)")
 
-        # Crea o recupera il repo su GitHub
         try:
             repo = github_user.get_repo(repo_name)
             logger.info(f"🌱 Repo trovata: {repo_name}")
@@ -54,13 +63,11 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
                 description="Repository generato automaticamente da NeXT"
             )
 
-        # Prepara temp dir locale per il push
         temp_dir = Path("tmp_repo_push")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
         shutil.copytree(output_path, temp_dir)
 
-        # Escludi alcune cartelle di sistema se presenti
         EXCLUDE_DIRS = {'.git', '_book', 'config', 'raw'}
         for excl in EXCLUDE_DIRS:
             excl_path = temp_dir / excl
@@ -68,11 +75,11 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
                 shutil.rmtree(excl_path, ignore_errors=True)
 
         repo_local = Repo.init(temp_dir)
-        files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.rglob("*") if p.is_file() and all(x not in p.parts for x in EXCLUDE_DIRS)]
+        files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.rglob("*")
+                        if p.is_file() and all(x not in p.parts for x in EXCLUDE_DIRS)]
         repo_local.index.add(files_to_add)
         repo_local.index.commit("Upload automatico da pipeline NeXT")
 
-        # Push (crea remote origin se serve)
         remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
         if "origin" not in [r.name for r in repo_local.remotes]:
             repo_local.create_remote("origin", remote_url)
@@ -80,7 +87,6 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
             repo_local.remotes.origin.set_url(remote_url)
 
         repo_local.git.push("origin", "master", force=True)
-
         logger.info("🚀 Push su GitHub completato.")
         shutil.rmtree(temp_dir, ignore_errors=True)
         return str(output_path)

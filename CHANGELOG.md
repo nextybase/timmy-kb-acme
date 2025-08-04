@@ -3,6 +3,20 @@
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
 ---
+## [2025-08-04] refactor: fixbug e definizione test
+
+### ♻️ Refactor iniziale
+- Corretto bug critico nella funzione `drive_utils.download_drive_pdfs_to_local` relativo al mapping `folder_id -> nome tematico`
+- Allineati i path dei file generati (`RAW_DIR`, `BOOK_DIR`, `DUMMY_YAML`) con le convenzioni del progetto
+- Rimozione riferimenti obsoleti alla cartella `filetest/`, sostituita con `output/timmy-kb-dummy/raw/`
+- Applicate migliorie minori alla struttura di logging e messaggi CLI
+
+### ✅ Aggiunta e sistemazione test
+- Creato file `tests/test_drive_utils.py` per testare tutte le funzioni chiave di `drive_utils`
+- Fix test `test_find_folder` con allineamento parametri corretti `drive_id` e `drive_folder_id`
+- Inseriti print di debug temporanei per il tracciamento del comportamento in ambiente condiviso
+- Documentato limite strutturale dei service account nei test Google Drive (errore 403 quota)
+
 
 ## [1.0.0] – 2025-08-04
 
