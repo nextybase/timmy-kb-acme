@@ -1,8 +1,8 @@
 
-# 📦 Onboarding Pipeline Timmy-KB – v1.3
+# 📦 Onboarding Pipeline Timmy-KB – v1.0
 
-Versione: 1.3  
-Data: 2025-07-22  
+Versione: 1.0 
+Data: 2025-09-04  
 Owner: NeXT Dev Team
 
 ---
@@ -24,7 +24,7 @@ partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tra
   ```
 - Funzioni:
   - Generazione struttura standard su Google Drive per il cliente (cartelle tematiche)
-  - Creazione file config YAML arricchito (`config/clienti/<slug>/config/config.yaml`)
+  - Creazione file config YAML arricchito (`output/timmy-kb-<slug>/config/config.yaml`)
   - Logging dettagliato e validazione automatica
   - Se la struttura esiste già, la procedura blocca ed esce con rollback
 - Lo slug cliente è in formato `timmy-kb-<slug>`, naming policy in [coding_rule.md](./coding_rule.md)
@@ -67,8 +67,7 @@ partendo dai PDF/artefatti reali dell’organizzazione e mantenendo la piena tra
 ### 4️⃣ Testing e convenzione
 
 - Tutti i test sono in `/tests/`
-- I file di test sono sempre in `/filetest/<tipo>/` (es. pdf/, docx/, ecc.)
-- Output dei test in `/output/timmy-kb-dummytest/`
+- Output dei test in `/output/timmy-kb-dummy/`
 - Pulizia obbligatoria a fine test (prompt CLI per cancellazione)
 - Dettaglio policy e naming: vedi [coding_rule.md](./coding_rule.md)
 
