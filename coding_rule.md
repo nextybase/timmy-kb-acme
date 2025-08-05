@@ -60,10 +60,17 @@
 - Verificare se il dominio già esiste
 - Se è semantic, va in `semantic/`; se è interfaccia o strumento, in `tools/`
 - Import espliciti e localizzati:
-
-  ```python
   from semantic.keyword_generator import extract_keywords_from_pdf_folder
   ```
+
+## 2.7 CLI & Interazione
+
+- **Tutti gli script CLI devono ricevere ogni parametro operativo tramite argomenti da riga di comando (argparse, Typer, Click).**
+    - **L’input manuale (`input()`) è ammesso solo quando strettamente necessario** (es. menù interattivo, conferma distruttiva, debug, step opzionali) e MAI come unica modalità.
+    - **In modalità pipeline automatica (es. --no-interactive), nessun input() deve bloccare l’esecuzione**: tutti i parametri vanno passati via CLI, e gli step interattivi devono poter essere saltati/forzati.
+    - Ogni menù interattivo, prompt di conferma o pausa deve essere disattivabile via flag CLI (`--no-interactive`, `--yes`, ecc.).
+    - Tutte le opzioni CLI devono essere visibili e documentate nell’`--help`.
+    - Se uno script prevede input interattivo, deve documentare chiaramente quando e perché (nell’help e nel README).
 
 ---
 
@@ -76,7 +83,6 @@
 - Modulo unico: `pipeline/logging_utils.py`
 - Ogni modulo richiama:
 
-  ```python
   from pipeline.logging_utils import get_structured_logger
   logger = get_structured_logger(__name__)
   ```
@@ -115,33 +121,35 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
 
 - Test: `tests/test_<nome_modulo>.py`
 - Output: `output/timmy-kb-dummy/`
-- Cleanup sempre obbligatorio (tranne preview manuali o test locali)
-- Evitare test con effetti collaterali persistenti
+- **Tutti i dati di test devono essere generati esclusivamente tramite il tool `src/tools/gen_dummy_kb.py`.**
+- Cleanup sempre obbligatorio (tranne preview manuali o test locali).
+- Evitare test con effetti collaterali persistenti.
 
 ### 3.2 Convenzioni
 
-- I file di test iniziano con `test_` (compatibilità `pytest`)
-- Eccezione: `end2end.py` non ha prefisso per essere eseguito **solo manualmente**
-- Slug sempre `dummy`, mai slug reali
-- I test devono essere **idempotenti**: esecuzioni multiple non devono causare conflitti
-- Print ammessi solo in fase di debug, marcati chiaramente (`🔍 DEBUG:`)
+- I file di test iniziano con `test_` (compatibilità `pytest`).
+- Eccezione: `end2end.py` non ha prefisso per essere eseguito **solo manualmente**.
+- Slug, cartelle e risorse di test sempre `dummy` — mai slug reali o dati utenti veri.
+- I test devono essere **idempotenti**: esecuzioni multiple non devono causare conflitti o duplicati.
+- Print ammessi solo in fase di debug, marcati chiaramente (`🔍 DEBUG:`).
 
 ### 3.3 Policy
 
-- Nessun dato reale o cliente in `/tests/`
-- Ogni nuova feature = nuovo test associato
+- Nessun dato reale, sensibile o cliente in `/tests/` o negli output di test.
+- Ogni nuova feature = nuovo test associato che usa le risorse dummy.
 - I test che coinvolgono API Google Drive:
-  - devono usare strutture e ID dummy (drive condiviso configurato)
-  - **non devono testare upload su Drive** con account senza quota (service account)
-  - è preferibile **mockare l’upload** nei test, oppure validarlo solo in orchestrazione end-to-end
+  - devono usare strutture e ID dummy (drive condiviso di test configurato).
+  - **non devono testare upload su Drive** con account senza quota (service account).
+  - è preferibile **mockare l’upload** nei test, oppure validarlo solo in orchestrazione end-to-end.
+- **Bloccante:** Ogni test, esempio o sviluppo deve riferirsi ESCLUSIVAMENTE ai file e risorse generate da `gen_dummy_kb.py`.
 
 ### 3.4 Best practice
 
-- Aggiungere `assert` chiari e messaggi esplicativi in caso di fallimento
-- Per test strutturali (PDF, cartelle, config), usare gli stessi YAML di onboarding
-- Documentare sempre nel changelog ogni test introdotto o modificato
+- Aggiungere `assert` chiari e messaggi esplicativi in caso di fallimento.
+- Per test strutturali (PDF, cartelle, config), usare gli stessi YAML di onboarding.
+- Documentare sempre nel changelog ogni test introdotto o modificato.
+- Validare regolarmente l’idempotenza dei test e la correttezza della procedura di cleanup.
 
----
 
 ## 🧰 4. Policy Semantic Separation
 
@@ -181,6 +189,6 @@ keywords_globali:
 
 ## 📚 Allegati
 
-- Esempi: `pdf2md_preview.py`, `refactor_tool.py`, `onboarding_full.py`
+- Esempi: `content_utils.py`, `refactor_tool.py`, `onboarding_full.py`
 - Esempio validatore: `validate_structure.py`
 - Codice AI: in `semantic/` (in arrivo: `rosetta_validator.py`, `semantic_chunker.py`)

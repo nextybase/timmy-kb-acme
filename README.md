@@ -108,7 +108,38 @@ project-root/
     ```
    La pipeline effettuerà download, conversione, enrichment semantico, preview, e deploy GitHub della KB.
 
-## 🧪 Test e strumenti di sviluppo
+## 🧪 Testing & Dummy Data Policy
+
+Per garantire test sicuri, riproducibili e mai collegati a dati reali, **TUTTI i dati di test di Timmy-KB sono generati esclusivamente tramite il tool**:
+
+src/tools/gen_dummy_kb.py
+
+### Cosa fa questo tool?
+
+- Crea da zero una knowledge base di esempio (“dummy”), inclusi file, cartelle, configurazioni e slug di test standard.
+- **Ogni test automatico, manuale o end-to-end deve riferirsi SOLO ai dati generati da questo script** (mai slug o file reali!).
+- Lo slug di test è sempre `dummy` (mai nomi utente veri).
+- Tutti i file e le cartelle generate sono separate dai dati reali, nella directory:
+
+output/timmy-kb-dummy/
+- Il tool è **CLI-ready**: puoi personalizzare percorso, cleanup, override e modalità batch/interattiva tramite parametri da linea di comando.
+
+### Policy di test
+
+- Qualsiasi nuova feature o refactoring deve essere accompagnato da un test automatico che usa i dati dummy.
+- È vietato inserire dati reali, account veri o informazioni sensibili nei test o nei dummy generati.
+- I test devono essere idempotenti: si possono ripetere più volte senza errori né conflitti.
+- I test che coinvolgono servizi esterni (es: Google Drive) devono usare strutture/ID dummy e, dove possibile, mockare l’upload.
+
+### Best practice
+
+- Cleanup automatico obbligatorio dopo i test (eccetto preview/manuale).
+- Debug-print sempre marcate come `🔍 DEBUG:`.
+- Documentare ogni nuovo test o variazione nel changelog.
+
+**In caso di dubbio, genera SEMPRE i dati di test con `gen_dummy_kb.py` prima di eseguire o scrivere test.**
+
+### 🧪 Test e strumenti di sviluppo
 
 - **Test end-to-end**: `tests/test_end2end.py` copre l’intero flusso di onboarding e deploy.
 - **Generazione dummy KB**: `src/tools/gen_dummy_kb.py` crea dataset/test dummy per sviluppo e validazione.
