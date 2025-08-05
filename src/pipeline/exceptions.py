@@ -1,5 +1,11 @@
 # src/pipeline/exceptions.py
 
+"""
+Definizione delle eccezioni custom per la pipeline NeXT/Timmy.
+Tutte le eccezioni core devono ereditare da PipelineError.
+Ogni eccezione ha una docstring specifica per l’auto-documentazione.
+"""
+
 class PipelineError(Exception):
     """Eccezione generica per errori bloccanti nella pipeline NeXT/Timmy."""
     pass
@@ -39,3 +45,10 @@ class EnrichmentError(PipelineError):
 class SemanticMappingError(PipelineError):
     """Errore nel caricamento del mapping semantico delle cartelle."""
     pass
+
+class PreOnboardingValidationError(PipelineError):
+    """Errore di validazione durante la fase di pre-onboarding (config, env, file)."""
+    pass
+
+# Utilizzo consigliato: 
+# from pipeline.exceptions import <ExcClass> e non importare direttamente PipelineError.

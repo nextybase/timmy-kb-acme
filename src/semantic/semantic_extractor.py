@@ -4,9 +4,11 @@ Modulo di enrichment semantico: arricchisce i file markdown usando il mapping YA
 
 from pathlib import Path
 import yaml
-import logging
 
-logger = logging.getLogger("semantic_extractor")
+from pipeline.logging_utils import get_structured_logger
+from semantic.semantic_mapping import load_semantic_mapping  # ✅ Import centralizzato
+
+logger = get_structured_logger("semantic_extractor", "logs/semantic_extractor.log")
 
 def enrich_markdown_folder(md_output_path: str, slug: str, mapping_path: str = "config/semantic_mapping.yaml"):
     """
@@ -44,10 +46,4 @@ def enrich_markdown_file(md_file: Path, mapping: dict):
             f.write(header + content)
         logger.info(f"Enrichment applicato a: {fname}")
 
-def load_semantic_mapping(mapping_path: str) -> dict:
-    mapping_file = Path(mapping_path)
-    if not mapping_file.exists():
-        logger.warning(f"Mapping non trovato: {mapping_path}")
-        return {}
-    with open(mapping_file, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+# La funzione load_semantic_mapping ora è SOLO in semantic_mapping.py ed è riusata ovunque serve!

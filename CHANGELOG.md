@@ -2,6 +2,31 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-06] refactor: compliance logging, error handling & pulizia moduli inutilizzati
+
+### ♻️ Refactor orchestratori & error handling
+- Refactor globale di tutti i file orchestratori (`pre_onboarding.py`, `onboarding_full.py`):
+    - **Gestione uniforme degli errori**: ora tutti gli errori bloccanti vengono loggati e rilanciati tramite eccezioni custom (`PipelineError`, `PreOnboardingValidationError`), con `sys.exit(1)` solo a livello di entrypoint/CLI.
+    - **Eliminazione di tutti i print() e exit(1)** sparsi nei moduli di validazione/config, sostituiti da logging strutturato e custom exceptions.
+    - **Gestione errori esplicita e trasparente**: logging sempre presente prima di ogni terminazione forzata, nessun errore silenzioso.
+
+### 🏗️ Architettura e dipendenze
+- Uniformato l’uso del logger centralizzato tramite factory (`get_structured_logger`) in **tutti i moduli** (inclusi moduli semantic).
+- **Rimosso ogni duplicazione di funzione**: ora `load_semantic_mapping` viene importato unicamente da `semantic_mapping.py`, eliminando la duplicazione in `semantic_extractor.py`.
+
+### 🧹 Pulizia moduli inutilizzati
+- **Eliminato il modulo `file2md_utils.py`**: tutte le funzioni di conversione e arricchimento PDF→Markdown sono oggi implementate e richiamate in `content_utils.py` e pipeline principali.
+- Nessuna funzione chiave persa: tutte le logiche di batch, frontmatter, tagging, enrichment sono presenti e attive nei moduli di orchestrazione.
+
+### 📑 Chiarezza documentazione e policy
+- Aggiornata la documentazione interna: chiarito dove avviene la conversione PDF→Markdown e l’enrichment semantico.
+- Nota di deprecazione: *nessun modulo "legacy" attivo – tutti i flussi sono ora conformi alle regole NeXT, con logging e gestione errori centralizzati.*
+
+---
+
+> Refactor completato: il progetto ora rispetta pienamente le policy aziendali su logging, errori e modularità, senza più moduli dormienti o duplicati. Pronto per CI/CD e review tecnica avanzata.
+
+
 
 ## [2025-08-05] refactor: standardizzazione batch/manuale & revisione orchestratori e test
 

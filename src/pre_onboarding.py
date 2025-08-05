@@ -3,6 +3,7 @@ load_dotenv()
 import yaml
 from pathlib import Path
 import argparse
+import sys
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
@@ -13,40 +14,39 @@ from pipeline.drive_utils import (
     create_drive_subfolders_from_yaml
 )
 from pipeline.config_utils import write_client_config_file, get_config
-from pipeline.exceptions import PipelineError
+from pipeline.exceptions import PipelineError, PreOnboardingValidationError
 from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 
 def preonboarding_main(slug=None, client_name=None, no_interactive=False):
-    validate_preonboarding_environment()
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Procedura di pre-onboarding NeXT")
-
     try:
+        validate_preonboarding_environment()
         # Input fallback solo se non in modalità no-interactive
         if not slug:
             if no_interactive:
                 logger.error("Slug non fornito in modalità no-interactive. Uscita.")
-                exit(1)
+                raise PipelineError("Slug non fornito in modalità no-interactive.")
             slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
         logger.debug(f"Slug ricevuto: '{slug}'")
         slug = slug.replace("_", "-")
         if not is_valid_slug(slug):
             logger.error(f"Slug non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
-            exit(1)
+            raise PipelineError(f"Slug non valido: '{slug}'")
 
         if not client_name:
             if no_interactive:
                 logger.error("Nome cliente non fornito in modalità no-interactive. Uscita.")
-                exit(1)
+                raise PipelineError("Nome cliente non fornito in modalità no-interactive.")
             client_name = input("👤 Inserisci il nome completo del cliente (es. Acme S.r.l.): ").strip()
         if not client_name:
             logger.error("Nome cliente mancante.")
-            exit(1)
+            raise PipelineError("Nome cliente mancante.")
 
         base_config_yaml = Path("config/config.yaml")
         if not base_config_yaml.exists():
             logger.error("File config/config.yaml mancante.")
-            exit(1)
+            raise PipelineError("File config/config.yaml mancante.")
 
         with open(base_config_yaml, "r", encoding="utf-8") as f:
             config_dict = yaml.safe_load(f)
@@ -99,12 +99,15 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
 
         logger.info(f"✅ Pre-onboarding completato per: {slug}")
 
+    except PreOnboardingValidationError as e:
+        logger.error(f"❌ Errore validazione pre-onboarding: {e}")
+        sys.exit(1)
     except PipelineError as e:
         logger.error(f"❌ Errore pipeline: {e}")
-        exit(1)
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)
-        exit(1)
+        sys.exit(1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

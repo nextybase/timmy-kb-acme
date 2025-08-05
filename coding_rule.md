@@ -63,7 +63,7 @@
   from semantic.keyword_generator import extract_keywords_from_pdf_folder
   ```
 
-## 2.7 CLI & Interazione
+### 1.7 CLI & Interazione
 
 - **Tutti gli script CLI devono ricevere ogni parametro operativo tramite argomenti da riga di comando (argparse, Typer, Click).**
     - **L’input manuale (`input()`) è ammesso solo quando strettamente necessario** (es. menù interattivo, conferma distruttiva, debug, step opzionali) e MAI come unica modalità.

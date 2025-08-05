@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 import os
 import argparse
+import sys
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -41,23 +42,23 @@ def onboarding_main(
     logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
 
-    # Slug: da CLI o fallback a input()
-    if not slug:
-        if no_interactive:
-            logger.error("Slug non fornito in modalità no-interactive. Uscita.")
-            exit(1)
-        slug = input("🔤 Inserisci lo slug cliente: ").strip().lower()
-    logger.debug(f"Slug ricevuto: '{slug}'")
-    slug = slug.replace("_", "-")
-    if not is_valid_slug(slug):
-        logger.error(f"Slug cliente non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
-        exit(1)
-
-    if not check_docker_running():
-        logger.error("Docker non attivo o non raggiungibile. Pipeline bloccata.")
-        exit(1)
-
     try:
+        # Slug: da CLI o fallback a input()
+        if not slug:
+            if no_interactive:
+                logger.error("Slug non fornito in modalità no-interactive. Uscita.")
+                raise PipelineError("Slug non fornito in modalità no-interactive.")
+            slug = input("🔤 Inserisci lo slug cliente: ").strip().lower()
+        logger.debug(f"Slug ricevuto: '{slug}'")
+        slug = slug.replace("_", "-")
+        if not is_valid_slug(slug):
+            logger.error(f"Slug cliente non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
+            raise PipelineError(f"Slug cliente non valido: '{slug}'")
+
+        if not check_docker_running():
+            logger.error("Docker non attivo o non raggiungibile. Pipeline bloccata.")
+            raise PipelineError("Docker non attivo o non raggiungibile.")
+
         config = get_config(slug)
         logger.info(f"✅ Config caricato e validato per cliente: {slug}")
         logger.debug(f"Config: {config.model_dump()}")
@@ -76,7 +77,7 @@ def onboarding_main(
         folder_id = getattr(config, "drive_folder_id", None)
         if not folder_id:
             logger.error("❌ ID cartella cliente (drive_folder_id) mancante nella config!")
-            exit(1)
+            raise PipelineError("ID cartella cliente (drive_folder_id) mancante nella config!")
 
         download_drive_pdfs_recursively(
             service=service,
@@ -125,13 +126,13 @@ def onboarding_main(
 
     except PipelineError as e:
         logger.error(f"❌ Errore pipeline: {e}")
-        exit(1)
+        raise
     except ValidationError as e:
         logger.error(f"❌ Errore validazione config: {e}")
-        exit(1)
+        raise PipelineError(e)
     except Exception as e:
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)
-        exit(1)
+        raise PipelineError(e)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -144,9 +145,12 @@ if __name__ == "__main__":
     parser.add_argument("--skip-preview", action="store_true", help="Salta la preview Docker/Honkit")
 
     args = parser.parse_args()
-    onboarding_main(
-        slug=args.slug,
-        no_interactive=args.no_interactive,
-        auto_push=args.auto_push,
-        skip_preview=args.skip_preview
-    )
+    try:
+        onboarding_main(
+            slug=args.slug,
+            no_interactive=args.no_interactive,
+            auto_push=args.auto_push,
+            skip_preview=args.skip_preview
+        )
+    except PipelineError:
+        sys.exit(1)
