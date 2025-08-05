@@ -110,9 +110,7 @@ project-root/
 
 ## 🧪 Testing & Dummy Data Policy
 
-Per garantire test sicuri, riproducibili e mai collegati a dati reali, **TUTTI i dati di test di Timmy-KB sono generati esclusivamente tramite il tool**:
-
-src/tools/gen_dummy_kb.py
+Per garantire test sicuri, riproducibili e mai collegati a dati reali, **TUTTI i dati di test di Timmy-KB sono generati esclusivamente tramite il tool**: src/tools/gen_dummy_kb.py
 
 ### Cosa fa questo tool?
 
