@@ -113,21 +113,33 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
 
 ### 3.1 Struttura
 
-- test: `tests/test_<funzione>.py`
-- output: `output/timmy-kb-dummy/`
-- cleanup sempre obbligatorio (tranne preview)
+- Test: `tests/test_<nome_modulo>.py`
+- Output: `output/timmy-kb-dummy/`
+- Cleanup sempre obbligatorio (tranne preview manuali o test locali)
+- Evitare test con effetti collaterali persistenti
 
 ### 3.2 Convenzioni
 
-- I file di test iniziano con `test_` (compatibilità pytest) o altro nome descrittivo purché non ambiguo
-- Test sempre su slug dummy
-- Test idempotenti: run multipli non devono generare conflitti
+- I file di test iniziano con `test_` (compatibilità `pytest`)
+- Eccezione: `end2end.py` non ha prefisso per essere eseguito **solo manualmente**
+- Slug sempre `dummy`, mai slug reali
+- I test devono essere **idempotenti**: esecuzioni multiple non devono causare conflitti
+- Print ammessi solo in fase di debug, marcati chiaramente (`🔍 DEBUG:`)
 
 ### 3.3 Policy
 
-- Nessun dato reale in `/tests/`
-- Ogni nuova feature = nuovo script test
-- Print solo in fase setup/debug
+- Nessun dato reale o cliente in `/tests/`
+- Ogni nuova feature = nuovo test associato
+- I test che coinvolgono API Google Drive:
+  - devono usare strutture e ID dummy (drive condiviso configurato)
+  - **non devono testare upload su Drive** con account senza quota (service account)
+  - è preferibile **mockare l’upload** nei test, oppure validarlo solo in orchestrazione end-to-end
+
+### 3.4 Best practice
+
+- Aggiungere `assert` chiari e messaggi esplicativi in caso di fallimento
+- Per test strutturali (PDF, cartelle, config), usare gli stessi YAML di onboarding
+- Documentare sempre nel changelog ogni test introdotto o modificato
 
 ---
 

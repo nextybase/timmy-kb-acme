@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from pydantic import ValidationError
-import yaml
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_config
@@ -16,7 +15,7 @@ from pipeline.content_utils import (
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
-from pipeline.cleanup import cleanup_output_folder, safe_clean_dir
+from pipeline.cleanup import safe_clean_dir
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively
 from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
