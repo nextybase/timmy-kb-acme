@@ -12,6 +12,9 @@ import yaml
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional
+from pipeline.logging_utils import get_structured_logger
+
+logger = get_structured_logger("pipeline.config_utils")
 
 # =======================
 # MODELLI CONFIGURAZIONE
@@ -80,13 +83,19 @@ def get_config(slug: str) -> TimmyConfig:
     """
     Carica la config YAML del cliente dalla directory di output.
     Sostituisce i template path (con {slug}) e popola il modello TimmyConfig.
+    Logga warning se il file config non esiste.
     """
     config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
     if not config_path.exists():
+        logger.warning(f"Config file non trovato: {config_path}")
         raise FileNotFoundError(f"Config file non trovato: {config_path}")
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        config_dict = yaml.safe_load(f)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config_dict = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Errore nel caricamento della config YAML: {e}")
+        raise
 
     # Applica slug a tutti i template path della YAML
     config_dict["slug"] = slug
@@ -111,13 +120,18 @@ def write_client_config_file(config: dict, slug: str) -> Path:
     Scrive la configurazione YAML nella cartella di output del cliente
     in output/timmy-kb-<slug>/config/config.yaml.
     Restituisce il path del file creato.
+    Logga warning/error se la scrittura fallisce.
     """
     config_dir = Path(f"output/timmy-kb-{slug}") / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, allow_unicode=True)
-    return config_path
+    try:
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "config.yaml"
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, allow_unicode=True)
+        logger.info(f"Config file scritto correttamente: {config_path}")
+        return config_path
+    except Exception as e:
+        logger.error(f"Errore nella scrittura del file di configurazione: {e}")
+        raise
 
 # Puoi aggiungere qui altre utility per gestione path/config
-

@@ -9,26 +9,28 @@ import pytest
 # Fai vedere src/ come package root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from pipeline.config_utils import get_config, UnifiedConfig
+from pipeline.config_utils import get_config
 from pipeline.github_utils import push_output_to_github
 from github import Github
 from github.GithubException import GithubException
+from pipeline.logging_utils import get_structured_logger
 
 SLUG = "dummy"
 REPO_NAME = "timmy-kb-dummytest"
 DUMMY_REPO_PATH = Path("filetest/dummy_repo")
+logger = get_structured_logger("test_github_utils")
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_dummy_repo():
     """Assicura che la dummy_repo esista e sia pronta per il test."""
     if not DUMMY_REPO_PATH.exists():
-        # Puoi aggiungere qui uno script che genera una dummy_repo se vuoi automatizzare la creazione
+        logger.error(f"Dummy repo non trovata in {DUMMY_REPO_PATH}")
         raise RuntimeError(f"Dummy repo non trovata in {DUMMY_REPO_PATH}")
 
-def print_debug_github(config):
-    print("\n=== DEBUG CONFIG GITHUB ===")
+def debug_github_config(config):
+    logger.debug("\n=== DEBUG CONFIG GITHUB ===")
     for k, v in config.items():
-        print(f"{k}: {v}")
+        logger.debug(f"{k}: {v}")
 
 def scan_for_dotgit(base_path):
     base_path = Path(base_path)
@@ -36,9 +38,9 @@ def scan_for_dotgit(base_path):
 
 def list_files(base_path):
     base_path = Path(base_path)
-    print(f"\nContenuto di {base_path}:")
+    logger.debug(f"\nContenuto di {base_path}:")
     for p in base_path.rglob('*'):
-        print("   ", p.relative_to(base_path), "(dir)" if p.is_dir() else "")
+        logger.debug(f"   {p.relative_to(base_path)}{' (dir)' if p.is_dir() else ''}")
 
 def delete_repo_on_github(repo_name, github_token):
     try:
@@ -46,23 +48,23 @@ def delete_repo_on_github(repo_name, github_token):
         user = github.get_user()
         repo = user.get_repo(repo_name)
         repo.delete()
-        print(f"🗑️ Repository '{repo_name}' eliminata con successo su GitHub (via API).")
+        logger.info(f"🗑️ Repository '{repo_name}' eliminata con successo su GitHub (via API).")
     except GithubException as e:
         if e.status == 403 or e.status == 401:
-            print("⚠️ Permessi insufficienti via API (403/401). Tenterò via GitHub CLI.")
+            logger.warning("⚠️ Permessi insufficienti via API (403/401). Tenterò via GitHub CLI.")
         else:
-            print(f"⚠️ Errore API PyGithub: {e}")
+            logger.warning(f"⚠️ Errore API PyGithub: {e}")
             return
     except Exception as e:
-        print(f"⚠️ Errore API PyGithub: {e}")
+        logger.warning(f"⚠️ Errore API PyGithub: {e}")
         return
     # Tenta via CLI
     try:
-        print(f"Tento eliminazione repo '{repo_name}' via GitHub CLI...")
+        logger.info(f"Tento eliminazione repo '{repo_name}' via GitHub CLI...")
         subprocess.run(["gh", "repo", "delete", repo_name, "--yes"], check=True)
-        print(f"🗑️ Repository '{repo_name}' eliminata via CLI (gh).")
+        logger.info(f"🗑️ Repository '{repo_name}' eliminata via CLI (gh).")
     except Exception as e:
-        print(f"❌ Impossibile cancellare la repo '{repo_name}' con nessun metodo. Errore: {e}")
+        logger.error(f"❌ Impossibile cancellare la repo '{repo_name}' con nessun metodo. Errore: {e}")
 
 def test_github_push_and_cleanup(monkeypatch):
     """
@@ -81,7 +83,7 @@ def test_github_push_and_cleanup(monkeypatch):
         "output_path": output_path
     }
 
-    print_debug_github(config)
+    debug_github_config(config)
     list_files(config['output_path'])
     dotgits = scan_for_dotgit(config['output_path'])
 
@@ -89,15 +91,13 @@ def test_github_push_and_cleanup(monkeypatch):
 
     try:
         push_output_to_github(config)
-        print(f"\n✅ Push completato.")
+        logger.info("✅ Push completato.")
     except Exception as e:
         pytest.fail(f"❌ Errore nel test push: {e}")
 
-    # Cleanup finale (richiesto interattivamente solo in run manuale)
-    # Qui si può mettere una variabile d'ambiente per forzare o saltare cleanup
+    # Cleanup finale (solo se variabile DELETE_TEST_REPO=1)
     if github_token and os.environ.get("DELETE_TEST_REPO", "0") == "1":
         delete_repo_on_github(config["github_repo"], github_token)
-        print("🧹 Cleanup completato (repo eliminata su GitHub).")
+        logger.info("🧹 Cleanup completato (repo eliminata su GitHub).")
     else:
-        print("ℹ️ Cleanup automatico non eseguito. Imposta DELETE_TEST_REPO=1 per eliminare la repo test.")
-
+        logger.info("ℹ️ Cleanup automatico non eseguito. Imposta DELETE_TEST_REPO=1 per eliminare la repo test.")

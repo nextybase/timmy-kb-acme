@@ -1,170 +1,114 @@
-# Timmy-KB – Onboarding Pipeline v1.0
+# Timmy-KB – Knowledge Base Onboarding Pipeline (v1.0)
 
----
+--- 
 
-# Timmy-KB: Knowledge Base Onboarding Pipeline (v1.0)
+Pipeline modulare e automatizzata per l’onboarding strutturato di PMI nella piattaforma NeXT, con generazione di knowledge base in Markdown semantico e pubblicazione continua su GitHub/GitBook.
 
-Pipeline modulare, automatizzata e AI-ready per l’onboarding strutturato di PMI nella piattaforma NeXT (Nested eXtreme Timeline), con generazione semantica di knowledge base in Markdown e pubblicazione continua su GitHub/GitBook.
+## 🧠 Filosofia e Obiettivi
 
-## 🧠 Filosofia e Obiettivi dell’Onboarding
+La pipeline Timmy-KB garantisce che ogni informazione, tag, relazione e categoria sia esplicitamente dichiarata e tracciabile, secondo policy e mapping YAML forniti a monte.
+Nessuna inferenza automatica viene applicata senza controllo: la semantica è sempre dichiarata, non dedotta.
 
-La fase di **onboarding** della pipeline Timmy-KB è *propedeutica* alla successiva creazione della knowledge base semantica tramite AI. Questa fase NON prevede inferenze se non strettamente controllate e limita al minimo le deduzioni euristiche o le automazioni intelligenti:  
-**la semantica deve essere dichiarata, non dedotta**.
-
-**Obiettivo principale:**  
-> Costruire una base dati solida, tracciabile e completamente esplicita, in cui ogni informazione, tag, relazione e categoria sia definita tramite regole, configurazioni e mapping YAML forniti a monte.
-
-- Il parsing e la strutturazione sono lineari, sostanzialmente deterministici e auditabili: ogni dato trasformato o marcato semanticamente segue policy e mapping ufficiali. 
-- Nessuna inferenza automatica viene applicata senza specifico controllo HiTL: la pipeline non “indovina” e raggruppa o classifica in modo euristico soltanto con palese approvazione umana.
-- Tutta la semantica e le relazioni sono **forti**, *dichiarate*, e mai deboli o “implicite”.
-
-**Solo con questa base rigorosa sarà possibile, nella fase di creazione AI del prototipo Timmy,  
-sviluppare un database relazionale semantico e un knowledge graph realmente affidabili e flessibili.**
-
----
-
-
-> Questa versione implementa la **separazione netta tra pipeline di produzione, orchestrazione e logica semantica**, secondo i principi del modello NeXT.
-
----
+- Parsing e strutturazione deterministici e auditabili
+- Semantica e relazioni forti, sempre definite da configurazione
+- Ideale per generare database relazionali e knowledge graph affidabili
 
 ## 🎯 Scopo
 
-- Automatizzare onboarding documentale e operativo per PMI/organizzazioni in ecosistemi NeXT
-- Generare una **Knowledge Base** semantica, normalizzata e compatibile con la fase uccessiva (CreateTimmy)
-- Garantire **separazione tra orchestrazione e semantica**: la pipeline opera come layer tecnico, la semantica come layer autonomo
-- Centralizzare configurazione e logging per massimo controllo e auditabilità
-- Consentire test end-to-end, preview locale (Docker/Honkit), e deploy automatico su GitHub
-
-### Documentazione chiave della pipeline Timmy-KB
-
-| **[onboarding_readme.md](onboarding_readme.md)**   | **README operativo**: guida step-by-step a pipeline, onboarding, deploy e strumenti. Usare per ogni primo setup o revisione processo.                    |
-| **[coding_rules.md](coding_rules.md)**             | **Regole di coding**: naming convention, policy di logging, test, organizzazione repo e naming file/folder. Fonte di verità obbligatoria per sviluppo.      |
-| **[manifesto_tecnico.md](manifesto_tecnico.md)**   | **Manifesto tecnico**: principi architetturali e semantici NeXT, separation of concerns, scelte di design, envelope epistemico, roadmap e visione futura.  |
-
-> **Consulta sempre questi file prima di modificare la pipeline o aprire nuove PR.**  
-> Per bug/anomalie, apri issue su GitHub allegando log e dettagli.
-
-
----
+- Automatizzare onboarding documentale e operativo per organizzazioni in ecosistemi NeXT
+- Generare una Knowledge Base semantica e normalizzata, pronta per le successive fasi AI
+- Separare orchestrazione e semantica, mantenendo la pipeline come layer tecnico
+- Centralizzare configurazione e logging per massimo controllo
+- Supportare preview locale (Docker/Honkit), test end-to-end e deploy automatico
 
 ## 🧩 Architettura (overview)
 
-- **Pipeline modulare**: separazione chiara tra moduli di pipeline (`src/pipeline/`), semantica (`src/semantic/`) e strumenti (`src/tools/`)
-- **Orchestratori**: file root (`src/pre_onboarding.py`, `src/onboarding_full.py`) gestiscono tutto il flusso e coordinano pipeline + semantica
-- **Configurazione centralizzata**: tutte le variabili sono gestite via `.env` e moduli `config_utils.py`
-- **Onboarding idempotente, a step**:
-    - Pre-onboarding (setup ambiente, Drive, config)
-    - Onboarding completo (download, conversione, enrichment semantico, preview, deploy)
-- **Output knowledge base**: tutti i Markdown generati sono raccolti in `output/book/`, pronti per la pubblicazione (“flat output”)
-- **Preview locale e deploy continuo**: preview via Docker/Honkit, push GitHub solo della KB definitiva
+- **Pipeline modulare**: separazione tra moduli tecnici (`src/pipeline/`), semantici (`src/semantic/`), e strumenti (`src/tools/`)
+- **Orchestratori CLI-ready**: orchestratori root (`src/pre_onboarding.py`, `src/onboarding_full.py`) gestiscono tutto il flusso e sono utilizzabili sia in modalità manuale (con input guidato) che automatica (parametri CLI)
+- **Configurazione centralizzata**: variabili d’ambiente e YAML gestiti da moduli dedicati
+- **Output knowledge base**: Markdown generati raccolti in `output/book/`, pronti per deploy
+- **Logging strutturato**: ogni step loggato su file/console tramite logger dedicato
 
-## 🏗️ Struttura delle cartelle
+## 🏗️ Struttura cartelle principale
 
+```
 project-root/
 ├── output/
-│ └── timmy-kb-<slug>/
-│ ├── raw/ # PDF originali da Drive
-│ ├── book/ # Markdown generati (KB pulita)
-│ └── config/ # File di configurazione cliente
+│   └── timmy-kb-<slug>/
+│       ├── raw/           # PDF originali da Drive
+│       ├── book/          # Markdown generati
+│       └── config/        # File di configurazione cliente
 ├── src/
-│ ├── pipeline/ # Moduli tecnici della pipeline
-│ ├── semantic/ # Funzioni di arricchimento e mappatura semantica
-│ └── tools/ # Strumenti di supporto, refactor, validazione repo, dummy KB
-├── tests/
-│ └── ... # Test unitari, E2E, test semantici
-├── logs/
-│ └── ... # Log strutturati e di processo
-└── .env # Configurazione centralizzata
-
+│   ├── pipeline/          # Moduli tecnici
+│   ├── semantic/          # Funzioni semantiche
+│   └── tools/             # Strumenti di supporto e dummy KB
+├── tests/                 # Test unitari ed E2E
+├── logs/                  # Log strutturati
+└── .env                   # Configurazione centralizzata
+```
 
 ## ⚙️ Prerequisiti
 
 - Python 3.10+
-- Docker (per preview locale, Honkit)
+- Docker
 - Account Google Drive + service account JSON
 - Token GitHub con permessi repo
-- Variabili configurate in `.env` (vedi sotto)
+- Variabili configurate in `.env`
 
-## ⚡ Setup rapido
+## 🚦 Quickstart
 
 1. **Clona il repository e installa le dipendenze**
-2. **Configura `.env`** (esempio):
-
-    DRIVE_ID=...
-    GOOGLE_SERVICE_ACCOUNT_JSON=...
-    GITHUB_ORG=nextybase
-    GITHUB_TOKEN=...
-    ```
+2. **Configura `.env`** (vedi esempio nel repo)
 3. **Esegui il pre-onboarding:**
-
+    ```bash
     python src/pre_onboarding.py
     ```
-   Segui i prompt CLI per slug/nome cliente. Verrà creata la struttura di partenza e il file `config.yaml` cliente.
-4. **Popola la cartella Drive** con i PDF richiesti.
-5. **Esegui l’onboarding completo:**
-
+   Segui i prompt per slug/nome cliente oppure usa i parametri CLI (`--slug`, `--client-name`, `--no-interactive`)
+4. **Popola la cartella Drive** con i PDF richiesti
+5. **Esegui onboarding completo:**
+    ```bash
     python src/onboarding_full.py
     ```
-   La pipeline effettuerà download, conversione, enrichment semantico, preview, e deploy GitHub della KB.
+   Usa i flag CLI per modalità automatica (`--slug`, `--auto-push`, `--skip-preview`, `--no-interactive`), oppure interagisci guidato
 
-## 🧪 Testing & Dummy Data Policy
+## 🧪 Testing e Dummy Data
 
-Per garantire test sicuri, riproducibili e mai collegati a dati reali, **TUTTI i dati di test di Timmy-KB sono generati esclusivamente tramite il tool**: src/tools/gen_dummy_kb.py
+Tutti i dati di test sono generati tramite:
+```bash
+python src/tools/gen_dummy_kb.py
+```
+- Slug di test: sempre `dummy`
+- Output test separato da dati reali (`output/timmy-kb-dummy/`)
+- Tutti i test (`tests/`) sono idempotenti, batch/manuale friendly e automatizzati
+- In modalità batch (`BATCH_TEST=1 pytest tests/`): nessun input richiesto, cleanup automatico
 
-### Cosa fa questo tool?
+## 📦 Funzioni principali e CLI orchestratori
 
-- Crea da zero una knowledge base di esempio (“dummy”), inclusi file, cartelle, configurazioni e slug di test standard.
-- **Ogni test automatico, manuale o end-to-end deve riferirsi SOLO ai dati generati da questo script** (mai slug o file reali!).
-- Lo slug di test è sempre `dummy` (mai nomi utente veri).
-- Tutti i file e le cartelle generate sono separate dai dati reali, nella directory:
+Gli orchestratori supportano:
+- `--slug`: slug del cliente
+- `--client-name`: nome cliente (pre-onboarding)
+- `--no-interactive`: disabilita input (solo batch/CI)
+- `--auto-push`: push GitHub automatico senza conferma
+- `--skip-preview`: salta preview Honkit/Docker
 
-output/timmy-kb-dummy/
-- Il tool è **CLI-ready**: puoi personalizzare percorso, cleanup, override e modalità batch/interattiva tramite parametri da linea di comando.
+Tutti i parametri possono essere combinati per workflow automatici. In assenza, il tool guida l’utente passo-passo.
 
-### Policy di test
+## 🪵 Logging e Debug
 
-- Qualsiasi nuova feature o refactoring deve essere accompagnato da un test automatico che usa i dati dummy.
-- È vietato inserire dati reali, account veri o informazioni sensibili nei test o nei dummy generati.
-- I test devono essere idempotenti: si possono ripetere più volte senza errori né conflitti.
-- I test che coinvolgono servizi esterni (es: Google Drive) devono usare strutture/ID dummy e, dove possibile, mockare l’upload.
+- Log sempre su file in `logs/` e in console
+- Debug e errori tracciati da logger strutturato, mai via print
+- Ogni funzione tecnica/semantica deve loggare input/output/errore
 
-### Best practice
+## 📝 Policy, regole e documentazione
 
-- Cleanup automatico obbligatorio dopo i test (eccetto preview/manuale).
-- Debug-print sempre marcate come `🔍 DEBUG:`.
-- Documentare ogni nuovo test o variazione nel changelog.
+- **Regole di coding**: [coding_rule.md](coding_rule.md)
+- **Manifesto tecnico**: [manifesto_tecnico.md](manifesto_tecnico.md)
+- **Best practice pipeline**: PDF “Best practices per pipeline Python” (Kedro, Airflow, Luigi)
+- **Modello NeXT**: Paper NeXT allegato
 
-**In caso di dubbio, genera SEMPRE i dati di test con `gen_dummy_kb.py` prima di eseguire o scrivere test.**
-
-### 🧪 Test e strumenti di sviluppo
-
-- **Test end-to-end**: `tests/test_end2end.py` copre l’intero flusso di onboarding e deploy.
-- **Generazione dummy KB**: `src/tools/gen_dummy_kb.py` crea dataset/test dummy per sviluppo e validazione.
-- **Cleanup completo**: `src/tools/cleanup_repo.py` elimina tutte le risorse/test di un cliente o ambiente.
-- **Refactor & validazione**: `src/tools/refactor_tool.py` e `src/tools/validate_structure.py` mantengono la codebase conforme a regole aziendali e modularità.
-
-## 🪵 Logging e debug
-
-- Logging centralizzato in tutti i moduli (`logs/`)
-- Ogni funzione semantica/tecnica deve loggare input/output ed errori, mai scrivere output direttamente fuori dai layer orchestrati
-- In caso di errori bloccanti/config errata, la pipeline si interrompe e avvisa l’utente
-
-## 📝 Changelog sintetico
-
-- **v1.0** (2025-08): Pubblicazione applicativo base, solo pipeline, semantica da strutturare.
-
-
-## 📚 Documentazione e principi
-
-- **Regole di coding**: [coding_rule.md](coding_rule.md) — naming, logging, modularità, test (obbligatorio seguirlo!)
-- **Manifesto tecnico**: [manifesto_tecnico.md](manifesto_tecnico.md) — principi semantici, architetturali, NeXT, separation of concerns
-- **Best practice pipeline**: vedere PDF “Best practices per pipeline Python” (lezioni da Kedro, Airflow, Luigi)
-- **Modello di orchestrazione**: Paper NeXT, focus su modularità, explainability, envelope epistemico
-- **Roadmap**: milestones e step in ProgettoRoadmap1_3.pdf (se disponibile)
+Consulta sempre questi file PRIMA di modificare la pipeline o aprire PR.
 
 ---
 
-### 🟢 Segui sempre la documentazione e le regole di coding aziendali.  
-**Per bug o anomalie**, apri issue su GitHub allegando log e dettagli.
+**Per bug/anomalie, apri issue su GitHub allegando log e dettagli.**
 

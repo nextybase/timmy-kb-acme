@@ -2,6 +2,42 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+
+## [2025-08-05] refactor: standardizzazione batch/manuale & revisione orchestratori e test
+
+### ♻️ Refactor globale orchestratori e pipeline
+- Uniformato il comportamento di tutti i file orchestratori (`pre_onboarding.py`, `onboarding.py` e pipeline root):
+    - Ora supportano CLI parametrica (`--slug`, `--no-interactive`, `--auto-push`, `--skip-preview`)
+    - Input interattivo solo in esecuzione manuale; **mai in batch o CI**
+    - Logging strutturato e centralizzato, eliminati tutti i print residui
+    - Uscita con exit code gestito in caso di errore bloccante
+- Refactor della gestione del logging in tutti i moduli: uso esclusivo di logger dedicati e fallback robusto su console
+
+### 🧪 Refactor e adeguamento test
+- Aggiornate tutte le fixture e teardown dei test: ora compatibili sia con esecuzione singola/manuale che batch (pytest globale/CI)
+- **Nuova logica `BATCH_TEST=1`**:
+    - Se impostata, cleanup automatico e nessun input nei test
+    - In assenza, conferma manuale e print di stato per debug locale
+- Tutti i print di stato e debug nei test convertiti in logger (`logger.info`, `logger.debug`)
+- Cleanup e teardown dei test ora sempre batch-friendly e idempotenti
+- Aggiornata la sezione *Testing Rules* in `coding_rule.md` secondo le nuove policy batch/manuale
+
+### 📜 Policy e best practice
+- Inserite e chiarite in `coding_rule.md` le nuove regole di testing batch/manuale:
+    - Test batch-friendly obbligatori, mai input() o print() in CI
+    - Comportamento manuale consentito solo su test singoli
+    - Cleanup automatico o confermabile solo in modalità manuale
+- Introdotto uso della variabile `BATCH_TEST=1` per discriminare tra batch/manuale in modo standard e cross-piattaforma
+
+### 🐞 Fixed
+- Correzione definitiva di ogni potenziale blocco su input nei test e negli orchestratori
+- Eliminati gli ultimi workaround su cleanup container Docker e teardown repo GitHub nei test
+
+---
+
+> Tutti i moduli e i test sono ora perfettamente idempotenti, batch-friendly e pienamente conformi alle regole NeXT, pronti per CI/CD e sviluppo collaborativo.
+
+
 ---
 ## [2025-08-04] refactor: fixbug e definizione test
 

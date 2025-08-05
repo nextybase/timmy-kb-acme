@@ -64,15 +64,26 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
             )
 
         temp_dir = Path("tmp_repo_push")
+        # Cleanup preventivo della cartella temporanea se esiste
         if temp_dir.exists():
-            shutil.rmtree(temp_dir)
+            try:
+                shutil.rmtree(temp_dir)
+                logger.info(f"🧹 Cartella temporanea '{temp_dir}' rimossa prima del push.")
+            except Exception as e:
+                logger.warning(f"⚠️ Impossibile rimuovere '{temp_dir}' prima del push: {e}")
+
         shutil.copytree(output_path, temp_dir)
 
+        # Esclude directory non desiderate dal push
         EXCLUDE_DIRS = {'.git', '_book', 'config', 'raw'}
         for excl in EXCLUDE_DIRS:
             excl_path = temp_dir / excl
             if excl_path.exists():
-                shutil.rmtree(excl_path, ignore_errors=True)
+                try:
+                    shutil.rmtree(excl_path, ignore_errors=True)
+                    logger.info(f"🧹 Rimossa sottocartella '{excl}' dalla repo temporanea.")
+                except Exception as e:
+                    logger.warning(f"⚠️ Impossibile rimuovere '{excl_path}': {e}")
 
         repo_local = Repo.init(temp_dir)
         files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.rglob("*")
@@ -88,7 +99,14 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
 
         repo_local.git.push("origin", "master", force=True)
         logger.info("🚀 Push su GitHub completato.")
-        shutil.rmtree(temp_dir, ignore_errors=True)
+
+        # Cleanup della cartella temporanea anche dopo il push
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            logger.info(f"🧹 Cartella temporanea '{temp_dir}' rimossa dopo il push.")
+        except Exception as e:
+            logger.warning(f"⚠️ Impossibile rimuovere '{temp_dir}' dopo il push: {e}")
+
         return str(output_path)
 
     except Exception as e:

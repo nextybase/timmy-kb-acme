@@ -122,8 +122,9 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
 - Test: `tests/test_<nome_modulo>.py`
 - Output: `output/timmy-kb-dummy/`
 - **Tutti i dati di test devono essere generati esclusivamente tramite il tool `src/tools/gen_dummy_kb.py`.**
-- Cleanup sempre obbligatorio (tranne preview manuali o test locali).
+- Cleanup obbligatorio in modalità batch/CI; opzionale/manuale se il test è lanciato singolarmente.
 - Evitare test con effetti collaterali persistenti.
+- **Ogni test deve essere eseguibile sia in modalità batch (pytest globale/CI) che manualmente (singolo file).**
 
 ### 3.2 Convenzioni
 
@@ -131,7 +132,10 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
 - Eccezione: `end2end.py` non ha prefisso per essere eseguito **solo manualmente**.
 - Slug, cartelle e risorse di test sempre `dummy` — mai slug reali o dati utenti veri.
 - I test devono essere **idempotenti**: esecuzioni multiple non devono causare conflitti o duplicati.
-- Print ammessi solo in fase di debug, marcati chiaramente (`🔍 DEBUG:`).
+- Print ammessi solo per debug/manuale, mai in batch/CI; sempre marcati chiaramente (`🔍 DEBUG:`).
+- L’input interattivo (`input()`) è ammesso **solo** se il test è eseguito singolarmente/manualmente.  
+  In modalità batch (o se presente la variabile `BATCH_TEST=1`), ogni input deve essere **automaticamente saltato**  
+  (cleanup automatico, nessuna attesa o conferma).
 
 ### 3.3 Policy
 
@@ -142,6 +146,8 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
   - **non devono testare upload su Drive** con account senza quota (service account).
   - è preferibile **mockare l’upload** nei test, oppure validarlo solo in orchestrazione end-to-end.
 - **Bloccante:** Ogni test, esempio o sviluppo deve riferirsi ESCLUSIVAMENTE ai file e risorse generate da `gen_dummy_kb.py`.
+- **Ogni test deve poter essere eseguito automaticamente senza alcuna interazione utente**  
+  quando lanciato come parte di una suite (pytest globale o CI).
 
 ### 3.4 Best practice
 
@@ -149,6 +155,8 @@ logger.error("❌ Errore estrazione testo", exc_info=True)
 - Per test strutturali (PDF, cartelle, config), usare gli stessi YAML di onboarding.
 - Documentare sempre nel changelog ogni test introdotto o modificato.
 - Validare regolarmente l’idempotenza dei test e la correttezza della procedura di cleanup.
+- **Quando serve comportamento diverso batch/manuale, usare una variabile d’ambiente (`BATCH_TEST=1`) o flag pytest**  
+  per discriminare tra modalità automatica e interattiva.
 
 
 ## 🧰 4. Policy Semantic Separation

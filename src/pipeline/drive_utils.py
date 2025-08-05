@@ -78,6 +78,7 @@ def download_drive_pdfs_recursively(service, folder_id: str, raw_dir_path: Path,
             elif mime_type == 'application/vnd.google-apps.folder':
                 new_dest = raw_dir_path if name.lower() == 'raw' and raw_dir_path.name.lower() == 'raw' else raw_dir_path / name
                 new_dest.mkdir(parents=True, exist_ok=True)
+                # Ricorsione su sottocartelle
                 download_drive_pdfs_recursively(service, file_id, new_dest, drive_id)
 
     except HttpError as e:
@@ -175,13 +176,19 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
             ).execute()
             logger.info(f"📤 Caricato file: {file_path.name} (cartella ID: {parent_id})")
         except Exception as e:
+            # Logga e prosegue: non interrompe tutta la pipeline su errore singolo file
             logger.error(f"❌ Errore caricando file {file_path.name}: {e}")
 
     def find_or_create_drive_folder(service, parent_id: str, folder_name: str) -> str:
         query = (
             f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         )
-        results = service.files().list(q=query, supportsAllDrives=True).execute().get('files', [])
+        try:
+            results = service.files().list(q=query, supportsAllDrives=True).execute().get('files', [])
+        except Exception as e:
+            logger.error(f"❌ Errore nella ricerca/creazione della sottocartella '{folder_name}': {e}")
+            raise DriveUploadError(f"Errore nella ricerca/creazione sottocartella: {e}")
+
         if results:
             return results[0]['id']
         folder_metadata = {
@@ -189,29 +196,45 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
             'parents': [parent_id],
             'mimeType': 'application/vnd.google-apps.folder'
         }
-        folder = service.files().create(body=folder_metadata, supportsAllDrives=True, fields='id').execute()
-        return folder['id']
+        try:
+            folder = service.files().create(body=folder_metadata, supportsAllDrives=True, fields='id').execute()
+            logger.info(f"📂 Creata sottocartella: {folder_name} (ID: {folder['id']})")
+            return folder['id']
+        except Exception as e:
+            logger.error(f"❌ Errore creando sottocartella '{folder_name}': {e}")
+            raise DriveUploadError(f"Errore creando sottocartella: {e}")
 
     def upload_recursive(local_path: Path, parent_drive_id: str):
         for item in local_path.iterdir():
             if item.is_file():
-                upload_file(item, parent_drive_id)
+                try:
+                    upload_file(item, parent_drive_id)
+                except Exception as e:
+                    logger.error(f"❌ [Ricorsivo] Errore caricando file {item}: {e}")
             elif item.is_dir():
-                subfolder_id = find_or_create_drive_folder(service, parent_drive_id, item.name)
-                upload_recursive(item, subfolder_id)
+                try:
+                    subfolder_id = find_or_create_drive_folder(service, parent_drive_id, item.name)
+                    upload_recursive(item, subfolder_id)
+                except Exception as e:
+                    logger.error(f"❌ [Ricorsivo] Errore creando/caricando sottocartella {item}: {e}")
 
     upload_recursive(raw_dir_path, drive_raw_folder_id)
     logger.info("✅ Upload ricorsivo cartella raw completato.")
 
 def upload_config_to_drive_folder(service, config_path: Path, drive_folder_id: str):
+    # Elimina eventuali config.yaml già presenti
     query = (
         f"'{drive_folder_id}' in parents and name = '{config_path.name}' and trashed = false"
     )
-    results = service.files().list(
-        q=query,
-        fields='files(id, name)',
-        supportsAllDrives=True
-    ).execute().get('files', [])
+    try:
+        results = service.files().list(
+            q=query,
+            fields='files(id, name)',
+            supportsAllDrives=True
+        ).execute().get('files', [])
+    except Exception as e:
+        logger.warning(f"⚠️ Errore nel check pre-upload config.yaml: {e}")
+        results = []
 
     for f in results:
         try:

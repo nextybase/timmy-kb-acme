@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import yaml
 from pathlib import Path
+import argparse
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
@@ -15,33 +16,37 @@ from pipeline.config_utils import write_client_config_file, get_config
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 
-def main():
+def preonboarding_main(slug=None, client_name=None, no_interactive=False):
     validate_preonboarding_environment()
-
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Procedura di pre-onboarding NeXT")
-    print("▶️ Procedura di pre-onboarding NeXT")
 
     try:
-        raw_slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
-        logger.debug(f"Slug ricevuto da input: '{raw_slug}'")
-        slug = raw_slug.replace("_", "-")
+        # Input fallback solo se non in modalità no-interactive
+        if not slug:
+            if no_interactive:
+                logger.error("Slug non fornito in modalità no-interactive. Uscita.")
+                exit(1)
+            slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
+        logger.debug(f"Slug ricevuto: '{slug}'")
+        slug = slug.replace("_", "-")
         if not is_valid_slug(slug):
-            print("❌ Slug non valido. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
-            logger.error(f"Slug non valido: '{slug}'")
-            return
+            logger.error(f"Slug non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
+            exit(1)
 
-        client_name = input("👤 Inserisci il nome completo del cliente (es. Acme S.r.l.): ").strip()
         if not client_name:
-            print("❌ Nome cliente non valido.")
+            if no_interactive:
+                logger.error("Nome cliente non fornito in modalità no-interactive. Uscita.")
+                exit(1)
+            client_name = input("👤 Inserisci il nome completo del cliente (es. Acme S.r.l.): ").strip()
+        if not client_name:
             logger.error("Nome cliente mancante.")
-            return
+            exit(1)
 
         base_config_yaml = Path("config/config.yaml")
         if not base_config_yaml.exists():
-            print("❌ File config/config.yaml mancante.")
             logger.error("File config/config.yaml mancante.")
-            return
+            exit(1)
 
         with open(base_config_yaml, "r", encoding="utf-8") as f:
             config_dict = yaml.safe_load(f)
@@ -84,24 +89,35 @@ def main():
 
         yaml_path = Path("config/cartelle_raw.yaml")
         if not yaml_path.exists():
-            logger.error(f"❌ File YAML struttura cartelle mancante: {yaml_path}")
-            print(f"❌ File YAML struttura cartelle mancante: {yaml_path}")
+            logger.error(f"File YAML struttura cartelle mancante: {yaml_path}")
         else:
             try:
                 create_drive_subfolders_from_yaml(service, parent_id, drive_folder_id, yaml_path)
                 logger.info("✅ Struttura cartelle Drive creata da YAML.")
             except Exception as e:
                 logger.error(f"Errore creazione struttura cartelle da YAML: {e}")
-                print(f"❌ Errore creazione struttura cartelle su Drive: {e}")
 
-        print(f"✅ Pre-onboarding completato per: {slug}")
+        logger.info(f"✅ Pre-onboarding completato per: {slug}")
 
     except PipelineError as e:
         logger.error(f"❌ Errore pipeline: {e}")
-        print(f"❌ Errore pipeline: {e}")
+        exit(1)
     except Exception as e:
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)
-        print(f"❌ Errore imprevisto: {e}")
+        exit(1)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Procedura di pre-onboarding NeXT (config + setup cartelle)",
+        epilog="Esempio: python pre_onboarding.py --slug dummy --client-name 'Dummy Corp' --no-interactive"
+    )
+    parser.add_argument("--slug", type=str, help="Slug cliente (es: acme-srl)")
+    parser.add_argument("--client-name", type=str, help="Nome completo cliente")
+    parser.add_argument("--no-interactive", action="store_true", help="Disabilita input interattivo (solo pipeline/CI)")
+
+    args = parser.parse_args()
+    preonboarding_main(
+        slug=args.slug,
+        client_name=args.client_name,
+        no_interactive=args.no_interactive
+    )

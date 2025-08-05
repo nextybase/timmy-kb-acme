@@ -8,31 +8,34 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from pipeline.config_utils import get_config
+from pipeline.logging_utils import get_structured_logger
 
 SLUG = "dummy"
+logger = get_structured_logger("test_config_utils")
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_dummy_kb():
     """Crea la struttura dummy KB se non esiste."""
     kb_root = Path("output/timmy-kb-dummy/config/config.yaml")
     if not kb_root.exists():
+        logger.info("Creazione KB dummy di test tramite gen_dummy_kb.py")
         subprocess.run(["python", "src/tools/gen_dummy_kb.py"], check=True)
 
-def print_debug_config(unified):
-    print("\n=== DEBUG CONFIG LOADED ===")
-    print("[TimmyConfig]")
+def debug_config(unified):
+    logger.debug("\n=== DEBUG CONFIG LOADED ===")
+    logger.debug("[TimmyConfig]")
     for field in unified.__class__.model_fields:
-        print(f"{field}: {getattr(unified, field)!r}")
-    print("[TimmySecrets]")
+        logger.debug(f"{field}: {getattr(unified, field)!r}")
+    logger.debug("[TimmySecrets]")
     if hasattr(unified, "secrets"):
         for field in getattr(unified.secrets.__class__, "model_fields", []):
-            print(f"{field}: {getattr(unified.secrets, field)!r}")
+            logger.debug(f"{field}: {getattr(unified.secrets, field)!r}")
 
 def test_config_valid_load():
     """Verifica che la configurazione unificata venga caricata correttamente."""
     from pipeline import config_utils
     unified = get_config(SLUG)
-    print_debug_config(unified)
+    debug_config(unified)
     # Controlla che i campi fondamentali esistano
     for attr in ["slug", "raw_dir", "md_output_path", "output_dir", "secrets"]:
         assert hasattr(unified, attr), f"{attr} mancante"

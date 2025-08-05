@@ -5,6 +5,8 @@ def get_structured_logger(name="default", log_file=None, level=None):
     """
     Logger strutturato con supporto configurazione via .env (TimmySecrets).
     Importa TimmySecrets localmente per evitare import circolari.
+
+    Se il logger esiste già (handler presente), NON reimposta gli handler/livello.
     """
     logger = logging.getLogger(name)
 
@@ -19,7 +21,7 @@ def get_structured_logger(name="default", log_file=None, level=None):
         if log_file is None:
             log_file = secrets.log_file_path
         if level is None:
-            if secrets.log_level and secrets.log_level.upper() == "DEBUG":
+            if getattr(secrets, "log_level", None) and secrets.log_level.upper() == "DEBUG":
                 level = logging.DEBUG
             else:
                 level = logging.INFO
@@ -44,6 +46,7 @@ def get_structured_logger(name="default", log_file=None, level=None):
             fh.setFormatter(formatter)
             logger.addHandler(fh)
         except Exception as e:
-            print(f"⚠️ Impossibile scrivere log su file: {log_file} — {e}")
+            # Usa direttamente il logger appena configurato per loggare su console!
+            logger.warning(f"⚠️ Impossibile scrivere log su file: {log_file} — {e}")
 
     return logger

@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import List
-import logging
+from pipeline.logging_utils import get_structured_logger
 
-logger = logging.getLogger("pipeline.content_utils")
+logger = get_structured_logger("pipeline.content_utils")
 
 
 def convert_files_to_structured_markdown(config, mapping: dict):
@@ -27,9 +27,12 @@ def convert_files_to_structured_markdown(config, mapping: dict):
             stem = f"{prefix}_{stem}"
 
         md_path = md_dir / f"{stem}.md"
-        with open(md_path, "w", encoding="utf-8") as out_md:
-            out_md.write(f"# Markdown per {pdf_file.name}\n")
-        logger.info(f"✅ Creato file markdown: {md_path}")
+        try:
+            with open(md_path, "w", encoding="utf-8") as out_md:
+                out_md.write(f"# Markdown per {pdf_file.name}\n")
+            logger.info(f"✅ Creato file markdown: {md_path}")
+        except Exception as e:
+            logger.error(f"❌ Errore nella creazione del file markdown {md_path}: {e}")
 
 
 def generate_summary_markdown(md_files: List[Path], md_dir: Path):
@@ -41,11 +44,14 @@ def generate_summary_markdown(md_files: List[Path], md_dir: Path):
         md_dir: Directory in cui salvare SUMMARY.md
     """
     summary_path = md_dir / "SUMMARY.md"
-    with open(summary_path, "w", encoding="utf-8") as f:
-        f.write("# Summary\n\n")
-        for md_file in md_files:
-            f.write(f"* [{md_file.stem}]({md_file.name})\n")
-    logger.info(f"📘 Generato SUMMARY.md in {summary_path}")
+    try:
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write("# Summary\n\n")
+            for md_file in md_files:
+                f.write(f"* [{md_file.stem}]({md_file.name})\n")
+        logger.info(f"📘 Generato SUMMARY.md in {summary_path}")
+    except Exception as e:
+        logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
 
 
 def generate_readme_markdown(md_dir: Path):
@@ -56,9 +62,12 @@ def generate_readme_markdown(md_dir: Path):
         md_dir: Directory in cui salvare README.md
     """
     readme_path = md_dir / "README.md"
-    with open(readme_path, "w", encoding="utf-8") as f:
-        f.write("# Documentazione Timmy-KB\n")
-    logger.info(f"📘 Generato README.md in {readme_path}")
+    try:
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write("# Documentazione Timmy-KB\n")
+        logger.info(f"📘 Generato README.md in {readme_path}")
+    except Exception as e:
+        logger.error(f"❌ Errore nella generazione di README.md: {e}")
 
 
 def validate_markdown_dir(md_dir: Path):
@@ -73,6 +82,8 @@ def validate_markdown_dir(md_dir: Path):
         NotADirectoryError: se il path non è una directory
     """
     if not md_dir.exists():
+        logger.error(f"❌ La cartella markdown non esiste: {md_dir}")
         raise FileNotFoundError(f"La cartella markdown non esiste: {md_dir}")
     if not md_dir.is_dir():
+        logger.error(f"❌ Il path non è una directory: {md_dir}")
         raise NotADirectoryError(f"Il path non è una directory: {md_dir}")

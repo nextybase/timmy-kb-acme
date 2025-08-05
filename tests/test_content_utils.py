@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 import shutil
 import pytest
 from pathlib import Path
-
+from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_config
 from pipeline.content_utils import (
     convert_files_to_structured_markdown,
@@ -17,6 +17,7 @@ SLUG = "dummy"
 OUTPUT_BASE = Path(f"output/timmy-kb-{SLUG}")
 RAW_DIR = OUTPUT_BASE / "raw"
 BOOK_DIR = OUTPUT_BASE / "book"
+logger = get_structured_logger("test_content_utils")
 
 @pytest.fixture
 def setup_and_teardown_output():
@@ -28,21 +29,31 @@ def setup_and_teardown_output():
     test_md = BOOK_DIR / "test.md"
     if test_md.exists():
         test_md.unlink()
-        print("🗑️  Rimosso test.md prima del test.")
+        logger.debug("🗑️  Rimosso test.md prima del test.")
 
     yield
 
-    # Conferma per rimozione file Markdown generati
-    choice = input("❓ Vuoi eliminare i Markdown generati dal test? [y/N] ").strip().lower()
-    if choice == "y":
+    is_batch = os.environ.get("BATCH_TEST", "0") == "1"
+    if is_batch:
+        # Cleanup automatico, nessun input
         for md_file in BOOK_DIR.glob("*.md"):
             if md_file.name not in ("README.md", "SUMMARY.md"):
                 md_file.unlink()
-                print(f"🧹 Rimosso file Markdown generato: {md_file.name}")
+        logger.info("✅ Cleanup automatico completato (modalità batch).")
+        # Ricrea file test.md post-test (se necessario)
         test_md.write_text("# File di test\nQuesto file è usato per test GitBook preview.\n", encoding="utf-8")
-        print("📄 Ricreato file test.md post-test.")
     else:
-        print("ℹ️  File Markdown generati lasciati per ispezione.")
+        # Modalità manuale con input/print
+        choice = input("❓ Vuoi eliminare i Markdown generati dal test? [y/N] ").strip().lower()
+        if choice == "y":
+            for md_file in BOOK_DIR.glob("*.md"):
+                if md_file.name not in ("README.md", "SUMMARY.md"):
+                    md_file.unlink()
+                    print(f"🧹 Rimosso file Markdown generato: {md_file.name}")
+            test_md.write_text("# File di test\nQuesto file è usato per test GitBook preview.\n", encoding="utf-8")
+            print("📄 Ricreato file test.md post-test.")
+        else:
+            print("ℹ️  File Markdown generati lasciati per ispezione.")
 
 def test_pdf_to_markdown_conversion(setup_and_teardown_output):
     config = get_config(SLUG)
