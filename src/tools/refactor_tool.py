@@ -1,23 +1,26 @@
 import os
 import re
 import sys
-
 from pathlib import Path
 
-# Trova sempre la root del progetto (dove c’è src/)
-HERE = Path(__file__).resolve()
-PROJECT_ROOT = HERE.parents[2]  # Modifica se il livello è diverso
+# === Setup unico e DRY della SRC_PATH ===
+def setup_src_path():
+    """
+    Trova la root del progetto (dove c'è la cartella 'src/') salendo la gerarchia,
+    aggiunge src/ a sys.path se non presente.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        src_path = parent / "src"
+        if src_path.exists() and src_path.is_dir():
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+            return src_path
+    raise RuntimeError("Impossibile trovare la cartella 'src/' nella gerarchia.")
 
-SRC_PATH = PROJECT_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
+SRC_PATH = setup_src_path()
 
 from pipeline.logging_utils import get_structured_logger
-
-ROOT = Path(__file__).parent.parent.parent.resolve()
-SRC_PATH = ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
 
 logger = get_structured_logger("pipeline.refactor")
 
@@ -76,44 +79,6 @@ def replace_in_files(file_list, find_str, replace_str, regex_mode=False, dry_run
         except Exception as e:
             logger.warning(f"⚠️ Errore nel modificare {fpath}: {e}")
 
-def refactor_pipeline_settings():
-    print("\n🔁 Refactor massivo pipeline.config_utils → config_utils")
-    default_root = str(Path(__file__).parent.parent.resolve())
-    root = input(f"📁 Cartella da cui partire [default: {default_root}]: ").strip() or default_root
-    dry_run = input("🧪 Solo anteprima/dry-run? [Y/n]: ").strip().lower() != "n"
-
-    # Pattern 1: import diretto
-    regex1 = r"from\s+pipeline\.settings\s+import\s+([^\n]+)"
-    repl1 = r"from pipeline.config_utils import \1"
-
-    # Pattern 2: uso modulo (import semplice o referenze)
-    regex2 = r"pipeline\.settings"
-    repl2 = "pipeline.config_utils"
-
-    # Pattern 3: chiamate a get_config()
-    regex3 = r"get_settings\s*\("
-    repl3 = "get_config("
-
-    # Sostituzioni in sequenza
-    patterns = [
-        (regex1, repl1, True, "import diretto"),
-        (regex2, repl2, True, "referenze modulo"),
-        (regex3, repl3, True, "chiamate funzione"),
-    ]
-
-    for regex, repl, regex_mode, descr in patterns:
-        print(f"\n🔎 Cerca/Sostituisci: {descr} — Pattern: {regex} -> {repl}")
-        found_files = scan_occurrences(root, regex, regex_mode=regex_mode)
-        print(f"\n📊 Risultati per pattern '{regex}':")
-        if not found_files:
-            print("✅ Nessuna occorrenza trovata.")
-            continue
-        for fpath, n in found_files:
-            print(f" - {fpath}  ({n} occorrenze)")
-        replace_in_files(found_files, regex, repl, regex_mode=regex_mode, dry_run=dry_run)
-
-    print("\n✅ Refactor completato.")
-
 def find_and_replace_menu():
     print("\n🔎 [Find & Replace] — Ricerca e sostituzione nei file di progetto")
     find_str = input("🔍 Stringa da trovare (regex supportato): ").strip()
@@ -147,16 +112,13 @@ def find_and_replace_menu():
 def main_menu():
     while True:
         print("\n=========== REFACTOR TOOL ==========")
-        print("1. 🔁 Refactor pipeline.config_utils → config_utils (automatico, sicuro)")
-        print("2. 🔎 Find & Replace personalizzato")
-        print("3. ❌ Esci")
+        print("1. 🔎 Find & Replace personalizzato")
+        print("2. ❌ Esci")
         print("====================================")
         choice = input("Scegli un'opzione (numero): ").strip()
         if choice == "1":
-            refactor_pipeline_settings()
-        elif choice == "2":
             find_and_replace_menu()
-        elif choice == "3":
+        elif choice == "2":
             print("👋 Uscita.")
             break
         else:
