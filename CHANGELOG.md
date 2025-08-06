@@ -2,6 +2,32 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-06] - Refactor e miglioramenti strutturali
+
+- **Nuova policy di output `book/`:**
+  - Ora ogni cartella in `raw/` viene aggregata in **un unico file `.md`** (nome = nome cartella), eliminando la generazione di un file `.md` per ogni PDF.
+  - La cartella `book/` contiene solo i file `.md` aggregati per cartella più i file core (`README.md`, `SUMMARY.md`).
+
+- **Funzione di conversione aggiornata (`content_utils.py`):**
+  - Implementata nuova funzione che aggrega i PDF di ciascuna cartella in un unico file `.md`.
+  - Struttura di output semplificata e pulita.
+
+- **Push su GitHub snellito (`github_utils.py`):**
+  - Ora vengono committati e pushati **solo** i file `.md` realmente utili, senza più copiare cartelle o file temporanei non voluti.
+  - Possibilità di estendere facilmente a immagini/asset (commentato nello snippet).
+
+- **Chiarezza e compliance alle regole aziendali:**
+  - Output di pipeline sempre pulito e tracciabile.
+  - Nessun side-effect da log, temporanei, raw, backup, test, ecc.
+  - Massima chiarezza e atomicità dei commit.
+
+---
+
+**NOTE:**  
+Questi cambiamenti migliorano la governance della pipeline, riducono il rumore nel repository, facilitano review e rollback, e garantiscono che solo gli artefatti finali e rilevanti vengano versionati.
+
+
+
 ## [2025-08-07] refactor: docstring, coerenza CLI e compliance architetturale pipeline
 
 ### 📖 Miglioramento docstring & commenti

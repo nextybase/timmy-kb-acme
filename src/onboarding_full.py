@@ -28,7 +28,7 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup import safe_clean_dir
-from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively
+from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local  # <--- MODIFICA QUI
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug
 from semantic.semantic_extractor import enrich_markdown_folder
@@ -121,17 +121,16 @@ def onboarding_main(
             logger.error("❌ ID cartella cliente (drive_folder_id) mancante nella config!")
             raise PipelineError("ID cartella cliente (drive_folder_id) mancante nella config!")
 
-        download_drive_pdfs_recursively(
+        # ---- MODIFICA: usa SOLO il wrapper/adaptor, non la funzione low-level ----
+        download_drive_pdfs_to_local(
             service=service,
-            folder_id=folder_id,
-            raw_dir_path=raw_dir,
-            drive_id=config.secrets.DRIVE_ID
+            config=config
         )
         logger.info("✅ Download PDF da Drive completato.")
 
         logger.info("🔄 Conversione PDF -> markdown strutturato...")
         mapping = load_semantic_mapping()
-        convert_files_to_structured_markdown(config, mapping)
+        convert_files_to_structured_markdown(config)
         logger.info("✅ Conversione markdown completata.")
 
         logger.info("🔎 Enrichment semantico markdown...")

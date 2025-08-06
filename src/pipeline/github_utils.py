@@ -80,24 +80,24 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
             except Exception as e:
                 logger.warning(f"⚠️ Impossibile rimuovere '{temp_dir}' prima del push: {e}")
 
-        shutil.copytree(output_path, temp_dir)
+        # Copia solo i file utili (.md, immagini, asset dichiarati)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        whitelist_ext = {'.md'}
+        whitelist_names = {'README.md', 'SUMMARY.md'}
 
-        # Esclude directory non desiderate dal push
-        EXCLUDE_DIRS = {'.git', '_book', 'config', 'raw'}
-        for excl in EXCLUDE_DIRS:
-            excl_path = temp_dir / excl
-            if excl_path.exists():
-                try:
-                    shutil.rmtree(excl_path, ignore_errors=True)
-                    logger.info(f"🧹 Rimossa sottocartella '{excl}' dalla repo temporanea.")
-                except Exception as e:
-                    logger.warning(f"⚠️ Impossibile rimuovere '{excl_path}': {e}")
+        # Copia i file .md dalla root di output_path
+        for file in output_path.glob("*.md"):
+            shutil.copy(file, temp_dir / file.name)
+
+        # Se hai asset da includere, aggiungi qui la logica (ad esempio immagini):
+        # for ext in [".png", ".jpg", ".jpeg", ".gif", ".svg"]:
+        #     for img_file in output_path.glob(f"*{ext}"):
+        #         shutil.copy(img_file, temp_dir / img_file.name)
 
         repo_local = Repo.init(temp_dir)
-        files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.rglob("*")
-                        if p.is_file() and all(x not in p.parts for x in EXCLUDE_DIRS)]
+        files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.iterdir() if p.is_file()]
         repo_local.index.add(files_to_add)
-        repo_local.index.commit("Upload automatico da pipeline NeXT")
+        repo_local.index.commit("Upload automatico dei soli file markdown utili da pipeline NeXT")
 
         remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
         if "origin" not in [r.name for r in repo_local.remotes]:

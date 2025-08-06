@@ -2,7 +2,7 @@
 content_utils.py
 
 Utility per la generazione e validazione di file markdown a partire dai PDF raw,
-nell’ambito della pipeline Timmy-KB.  
+nell’ambito della pipeline Timmy-KB.
 Permette la conversione automatica, la generazione dei file di sommario/documentazione
 e la validazione delle directory di output.
 """
@@ -14,35 +14,29 @@ from pipeline.logging_utils import get_structured_logger
 logger = get_structured_logger("pipeline.content_utils")
 
 
-def convert_files_to_structured_markdown(config, mapping: dict):
+def convert_files_to_structured_markdown(config):
     """
-    Converte i PDF presenti in config.raw_dir_path in markdown strutturati
-    nella cartella config.md_output_path_path, ignorando la struttura delle sottocartelle.
+    Aggrega i PDF presenti nelle sottocartelle di config.raw_dir_path in un file markdown unico per cartella,
+    nella cartella config.md_output_path_path.
 
-    Args:
-        config: Oggetto di configurazione con attributi .md_output_path_path e .raw_dir_path
-        mapping (dict): Dizionario semantico per la conversione (placeholder, non usato qui)
+    Ogni file .md prende il nome della cartella di origine.
     """
     md_dir = config.md_output_path_path
     raw_dir = config.raw_dir_path
     md_dir.mkdir(parents=True, exist_ok=True)
 
-    for pdf_file in raw_dir.rglob("*.pdf"):
-        # Crea un nome unico basato sulla sottocartella, se presente
-        stem = pdf_file.stem
-        if pdf_file.parent != raw_dir:
-            rel_parts = pdf_file.parent.relative_to(raw_dir).parts
-            prefix = "-".join(rel_parts)
-            stem = f"{prefix}_{stem}"
-
-        md_path = md_dir / f"{stem}.md"
+    # Scorri solo le sottocartelle (ogni cartella = un file md)
+    for subfolder in [p for p in raw_dir.iterdir() if p.is_dir()]:
+        md_path = md_dir / f"{subfolder.name}.md"
         try:
             with open(md_path, "w", encoding="utf-8") as out_md:
-                out_md.write(f"# Markdown per {pdf_file.name}\n")
-            logger.info(f"✅ Creato file markdown: {md_path}")
+                out_md.write(f"# {subfolder.name.capitalize()}\n\n")
+                for pdf_file in sorted(subfolder.glob("*.pdf")):
+                    out_md.write(f"## {pdf_file.name}\n")
+                    out_md.write(f"(Contenuto estratto/conversione da {pdf_file.name} qui...)\n\n")
+            logger.info(f"✅ Creato file markdown aggregato: {md_path}")
         except Exception as e:
             logger.error(f"❌ Errore nella creazione del file markdown {md_path}: {e}")
-
 
 def generate_summary_markdown(md_files: List[Path], md_dir: Path):
     """
@@ -62,7 +56,6 @@ def generate_summary_markdown(md_files: List[Path], md_dir: Path):
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
 
-
 def generate_readme_markdown(md_dir: Path):
     """
     Genera il file README.md nella directory markdown.
@@ -77,7 +70,6 @@ def generate_readme_markdown(md_dir: Path):
         logger.info(f"📘 Generato README.md in {readme_path}")
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di README.md: {e}")
-
 
 def validate_markdown_dir(md_dir: Path):
     """
