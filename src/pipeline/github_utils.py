@@ -1,9 +1,9 @@
 """
 github_utils.py
 
-Utility per il deploy automatico della cartella markdown su GitHub.  
-Gestisce creazione repository, push forzato su master, gestione repo temporanea e cleanup.  
-Supporta override slug/config ed esclude cartelle non desiderate dal deploy (config, raw, ecc).
+Utility per il deploy automatico della cartella markdown su GitHub.
+Gestisce creazione repository, push forzato su master, gestione repo temporanea e cleanup.
+Supporta config centralizzata e prende parametri da settings.
 """
 
 import shutil
@@ -14,19 +14,18 @@ from github.GithubException import UnknownObjectException
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
-from pipeline.config_utils import get_config
+from pipeline.config_utils import settings  # <--- Config centralizzata
 
 logger = get_structured_logger("pipeline.github_utils", "logs/onboarding.log")
 
-def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
+def push_output_to_github(md_dir_path: Path = None) -> str:
     """
-    Esegue il deploy automatico della cartella md_dir_path su GitHub.
+    Esegue il deploy automatico della cartella markdown su GitHub.
     Crea la repository se non esiste e forza il push su master.
 
     Args:
-        md_dir_path (Path): Directory contenente i markdown da pushare.
-        config: Oggetto configurazione contenente secrets e info GitHub.
-        slug (str, opzionale): Identificatore cliente per override config.
+        md_dir_path (Path, opzionale): Directory contenente i markdown da pushare.
+            Default: settings.md_output_path.
 
     Returns:
         str: Path della directory pubblicata.
@@ -34,22 +33,17 @@ def push_output_to_github(md_dir_path: Path, config, slug: str = None) -> str:
     Raises:
         PushError: Se mancano token o repo o se il push fallisce.
     """
-    if slug:
-        settings = get_config(slug)
-        github_token = getattr(settings.secrets, "GITHUB_TOKEN", None)
-        repo_name = getattr(settings, "github_repo", None) or f"timmy-kb-{slug}"
-        output_path = settings.md_output_path_path
-    else:
-        github_token = getattr(config.secrets, "GITHUB_TOKEN", None)
-        repo_name = getattr(config, "github_repo", None) or f"timmy-kb-{config.slug}"
-        output_path = config.md_output_path_path
+    # Usa sempre settings come fonte della verità
+    github_token = getattr(settings, "github_token", None)
+    repo_name = getattr(settings, "github_repo", None) or f"timmy-kb-{settings.slug}"
+    output_path = md_dir_path or settings.md_output_path
 
     if not github_token:
         logger.error("❌ GITHUB_TOKEN mancante: inseriscilo nel file .env o settings.")
         raise PushError("GITHUB_TOKEN mancante!")
     if not repo_name:
-        logger.error("❌ github_repo mancante nel config.")
-        raise PushError("github_repo mancante nel config!")
+        logger.error("❌ github_repo mancante nel settings.")
+        raise PushError("github_repo mancante nel settings!")
     if not output_path.exists():
         logger.error(f"❌ output_path non trovato: {output_path}")
         raise PushError(f"output_path non trovato: {output_path}")

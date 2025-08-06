@@ -1,146 +1,140 @@
 """
-pipeline/config_utils.py
+src/pipeline/config_utils.py
 
-Utility e modello di configurazione per la pipeline Timmy-KB.
-Gestione centralizzata dei path e dei parametri, con mappatura chiavi YAML → property Python.
-Consente caricamento, scrittura e accesso tipizzato/configurabile a tutte le directory di lavoro pipeline.
+Configurazione centralizzata pipeline Timmy-KB.
+Tutti i nomi 1:1 con .env e config.yaml, con property dinamiche per path e compatibilità moduli.
 """
 
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-import yaml
 from pathlib import Path
-from pydantic import BaseModel, Field
 from typing import Optional
+import yaml
+from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
 from pipeline.logging_utils import get_structured_logger
 
 logger = get_structured_logger("pipeline.config_utils")
 
-# =======================
-# MODELLI CONFIGURAZIONE
-# =======================
+class Settings(BaseSettings):
+    """
+    Modello di configurazione centralizzato per la pipeline Timmy-KB.
 
-class TimmySecrets(BaseModel):
+    Flow di configurazione:
+      1. Cerca parametri prima nelle variabili d’ambiente (es. export DRIVE_ID=...)
+      2. Se assenti, cerca in .env (root progetto)
+      3. Usa default dichiarati nella classe SOLO per i non critici
+      4. Sostituisce automaticamente {slug} nei path template (se usi path template)
+      5. Parametri critici: errore se mancanti, pipeline non parte
+      6. Tutti i moduli consumano la config solo via 'from pipeline.config_utils import settings'
     """
-    Modello per i secrets (variabili sensibili) necessari alla pipeline Timmy-KB.
-    Popolato tramite variabili d'ambiente o YAML.
-    """
-    DRIVE_ID: Optional[str] = None
-    SERVICE_ACCOUNT_FILE: Optional[str] = None
-    GITHUB_TOKEN: Optional[str] = None
-    # ... aggiungi altri secrets se necessari
 
-class TimmyConfig(BaseModel):
-    """
-    Modello di configurazione principale per la pipeline Timmy-KB.
-    Permette accesso strutturato e validato a tutte le directory, parametri e secrets del cliente.
-    """
-    slug: str
-    output_dir: str                  # Radice output cliente, es: output/timmy-kb-{slug}
-    raw_dir: str                     # Cartella raw PDF, es: output/timmy-kb-{slug}/raw
-    md_output_path: str              # Cartella markdown output, es: output/timmy-kb-{slug}/book
-    config_path: Optional[str] = None# Path file config usato
-    github_org: Optional[str] = None
-    repo_visibility: Optional[str] = None
-    gitbook_image: Optional[str] = None
-    gitbook_workspace: Optional[str] = None
-    log_file_path: Optional[str] = None
-    log_max_bytes: Optional[int] = 1048576
-    log_backup_count: Optional[int] = 3
-    debug: Optional[bool] = False
-    drive_folder_id: Optional[str] = None
-    # ... altri parametri pipeline
+    # === GOOGLE DRIVE ===
+    DRIVE_ID: str = Field(..., env="DRIVE_ID", description="ID Drive condiviso clienti (obbligatorio)")
+    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE", description="Credenziali Google API (obbligatorio)")
+    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE", description="Path base reale su filesystem locale (opzionale)")
 
-    secrets: Optional[TimmySecrets] = None
+    # === GITHUB ===
+    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN", description="Token OAuth GitHub (obbligatorio)")
+
+    # === GITBOOK API (solo se usata in futuro) ===
+    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN", description="Token API GitBook (opzionale)")
+
+    # === ALTRI (aggiungili qui se presenti in config.yaml/.env) ===
+    SLUG: Optional[str] = Field(None, env="SLUG", description="Slug identificativo progetto (opzionale, preferito se presente)")
+    # Altri parametri custom (aggiungi se necessario) ...
+
+    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL", description="Livello logging")
+    DEBUG: bool = Field(False, env="DEBUG", description="Debug mode")
+
+    @model_validator(mode="after")
+    def check_critici(cls, data):
+        critici = ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]
+        for key in critici:
+            if not getattr(data, key, None):
+                logger.error(f"Parametro critico '{key}' mancante!")
+                raise ValueError(f"Parametro critico '{key}' mancante!")
+        return data
+
+    # === PROPERTY DINAMICHE (compatibili legacy) ===
 
     @property
-    def output_dir_path(self) -> Path:
-        """Restituisce il Path radice output cliente (`output_dir`)."""
-        return Path(self.output_dir)
+    def slug(self) -> str:
+        """
+        Restituisce lo slug prioritariamente dalla variabile SLUG,
+        oppure deriva da DRIVE_ID (fallback) o da output_dir.
+        """
+        if self.SLUG:
+            return self.SLUG
+        return self.DRIVE_ID.lower().replace("_", "-")
 
     @property
-    def raw_dir_path(self) -> Path:
-        """Restituisce il Path della cartella raw PDF (`raw_dir`)."""
-        return Path(self.raw_dir)
+    def output_dir(self) -> Path:
+        """
+        Path radice output cliente (es: output/timmy-kb-{slug})
+        """
+        return Path(f"output/timmy-kb-{self.slug}")
 
     @property
-    def md_output_path_path(self) -> Path:
-        """Restituisce il Path della cartella markdown finali (`md_output_path`)."""
-        return Path(self.md_output_path)
+    def raw_dir(self) -> Path:
+        """
+        Path cartella raw PDF (es: output/timmy-kb-{slug}/raw)
+        """
+        return self.output_dir / "raw"
+
+    @property
+    def md_output_path(self) -> Path:
+        """
+        Path cartella markdown finali (es: output/timmy-kb-{slug}/book)
+        """
+        return self.output_dir / "book"
 
     @property
     def book_dir(self) -> Path:
-        """Alias retrocompatibile per md_output_path_path."""
-        return self.md_output_path_path
+        """Alias retrocompatibile."""
+        return self.md_output_path
 
     @property
-    def config_path_path(self) -> Optional[Path]:
-        """Restituisce il Path oggetto file config, se valorizzato."""
-        return Path(self.config_path) if self.config_path else None
+    def output_dir_path(self) -> Path:
+        """Alias retrocompatibile."""
+        return self.output_dir
 
-    def subfolder(self, name: str) -> Path:
+    @property
+    def logs_path(self) -> Path:
         """
-        Restituisce il Path di una sottocartella della radice output.
-
-        Args:
-            name (str): Nome della sottocartella.
-
-        Returns:
-            Path: Path completo della sottocartella.
+        Restituisce il path file di log principale.
+        Usa logs/timmy-kb-<slug>.log.
         """
-        return self.output_dir_path / name
+        log_name = f"timmy-kb-{self.slug}.log"
+        return Path("logs") / log_name
+    
+    @property
+    def drive_folder_id(self) -> Optional[str]:
+        """
+        Restituisce l'ID della cartella cliente su Drive (drive_folder_id)
+        leggendo dinamicamente dal config YAML del cliente.
+        """
+        config_path = self.output_dir / "config" / "config.yaml"
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    conf = yaml.safe_load(f)
+                return conf.get("drive_folder_id")
+            except Exception as e:
+                logger.warning(f"Impossibile leggere drive_folder_id da {config_path}: {e}")
+        return None
 
-# =======================
-# FUNZIONI DI UTILITY
-# =======================
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
 
-def get_config(slug: str) -> TimmyConfig:
-    """
-    Carica la config YAML del cliente dalla directory di output.
-    Sostituisce i template path (con {slug}) e popola il modello TimmyConfig.
-    Logga warning se il file config non esiste.
+settings = Settings()
 
-    Args:
-        slug (str): Identificativo cliente/progetto (es: acme-srl).
+if __name__ == "__main__":
+    print(f"SERVICE_ACCOUNT_FILE from settings: {settings.SERVICE_ACCOUNT_FILE}")
 
-    Raises:
-        FileNotFoundError: Se il file di config non viene trovato.
-        Exception: Per errori di parsing/caricamento YAML.
-
-    Returns:
-        TimmyConfig: Istanza di configurazione validata.
-    """
-    config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
-    if not config_path.exists():
-        logger.warning(f"Config file non trovato: {config_path}")
-        raise FileNotFoundError(f"Config file non trovato: {config_path}")
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config_dict = yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"Errore nel caricamento della config YAML: {e}")
-        raise
-
-    # Applica slug a tutti i template path della YAML
-    config_dict["slug"] = slug
-    config_dict["output_dir"] = config_dict.get("output_dir_template", f"output/timmy-kb-{slug}").format(slug=slug)
-    config_dict["raw_dir"] = config_dict.get("raw_dir_template", f"output/timmy-kb-{slug}/raw").format(slug=slug)
-    config_dict["md_output_path"] = str(Path(config_dict["output_dir"]) / "book")
-    config_dict["config_path"] = str(config_path)
-
-    # Carica eventuali secrets da env se presenti
-    secrets_dict = {}
-    for secret_key in ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]:
-        env_val = os.environ.get(secret_key)
-        if env_val:
-            secrets_dict[secret_key] = env_val
-    secrets = TimmySecrets(**secrets_dict) if secrets_dict else None
-    config_dict["secrets"] = secrets
-
-    return TimmyConfig(**config_dict)
 
 def write_client_config_file(config: dict, slug: str) -> Path:
     """
@@ -152,9 +146,6 @@ def write_client_config_file(config: dict, slug: str) -> Path:
     Args:
         config (dict): Dizionario di configurazione da salvare.
         slug (str): Identificativo cliente/progetto.
-
-    Raises:
-        Exception: In caso di errore nella scrittura file.
 
     Returns:
         Path: Percorso file YAML creato.
@@ -171,4 +162,14 @@ def write_client_config_file(config: dict, slug: str) -> Path:
         logger.error(f"Errore nella scrittura del file di configurazione: {e}")
         raise
 
-# Puoi aggiungere qui altre utility per gestione path/config
+# Utility per leggere config cliente dal YAML (per drive_folder_id e altri parametri dinamici)
+def get_client_config(slug: str) -> dict:
+    """
+    Carica la config YAML di un cliente dal path standard.
+    Utile per recuperare drive_folder_id e altri parametri non-globali.
+    """
+    config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file non trovato: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)

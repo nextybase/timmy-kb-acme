@@ -2,8 +2,8 @@
 cleanup.py
 
 Utility di pulizia sicura delle cartelle di output per pipeline Timmy-KB.
-Permette di svuotare il contenuto di una directory (file e sottocartelle),  
-ma protegge root, home e directory critiche.  
+Permette di svuotare il contenuto di una directory (file e sottocartelle),
+ma protegge root, home e directory critiche.
 Utilizzabile sia da pipeline/orchestratori che da CLI (conferma utente/flag --force).
 """
 
@@ -11,9 +11,9 @@ import shutil
 import argparse
 from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
+from pipeline.config_utils import settings  # <--- Import centralizzato settings
 
 logger = get_structured_logger("pipeline.cleanup")
-
 
 def cleanup_output_folder(folder_path):
     """
@@ -50,7 +50,6 @@ def cleanup_output_folder(folder_path):
             except Exception as e:
                 logger.warning(f"⚠️ Impossibile rimuovere {item}: {e}")
 
-
 def safe_clean_dir(folder_path):
     """
     Cancella tutto il contenuto della cartella in modo sicuro.
@@ -84,17 +83,18 @@ def safe_clean_dir(folder_path):
         except Exception as e:
             logger.warning(f"⚠️ Impossibile rimuovere {item}: {e}")
 
-
 def interactive_cleanup():
     """
     Modalità CLI interattiva: richiede all’utente il percorso della cartella,
     mostra avviso e richiede conferma prima di procedere con la pulizia.
+    Di default propone la cartella di output principale da settings.
     """
     print("\n[Timmy-KB] Pulizia cartella di output")
-    folder = input("Inserisci il percorso della cartella da svuotare: ").strip()
+    # Predefinito: output_dir da settings
+    default_folder = str(settings.output_dir)
+    folder = input(f"Inserisci il percorso della cartella da svuotare [default: {default_folder}]: ").strip()
     if not folder:
-        print("Percorso non valido. Operazione annullata.")
-        return
+        folder = default_folder
     print(f"Stai per svuotare tutto il contenuto di: {folder}")
     confirm = input("Sei sicuro? [y/N]: ").strip().lower()
     if confirm == "y":
@@ -106,41 +106,35 @@ def interactive_cleanup():
     else:
         print("Operazione annullata.")
 
-
 def cli_cleanup():
     """
     Entry-point CLI: parsing argomenti, conferma, chiama cleanup_output_folder().
-
-    --folder (str): Cartella da svuotare.
+    --folder (str): Cartella da svuotare (default = settings.output_dir).
     --force (flag): Non chiedere conferma (modalità automatica/pipeline).
     """
     parser = argparse.ArgumentParser(
         description="Svuota tutto il contenuto di una cartella di output in modo sicuro.",
         epilog="Esempio: python cleanup.py --folder output/timmy-kb-dummy/ --force"
     )
-    parser.add_argument("--folder", type=str, help="Percorso della cartella da svuotare")
+    parser.add_argument("--folder", type=str, help="Percorso della cartella da svuotare (default: settings.output_dir)")
     parser.add_argument("--force", action="store_true", help="Non chiedere conferma (modalità automatica/pipeline)")
     args = parser.parse_args()
 
-    if not args.folder:
-        # Fallback alla modalità interattiva se non specificato da CLI
-        interactive_cleanup()
-        return
+    folder = args.folder or str(settings.output_dir)
 
     if not args.force:
-        print(f"Attenzione: stai per svuotare tutto il contenuto di: {args.folder}")
+        print(f"Attenzione: stai per svuotare tutto il contenuto di: {folder}")
         confirm = input("Sei sicuro? [y/N]: ").strip().lower()
         if confirm != "y":
             print("Operazione annullata.")
             return
 
     try:
-        cleanup_output_folder(args.folder)
+        cleanup_output_folder(folder)
         print("Pulizia completata.")
     except Exception as e:
         print(f"Errore: {e}")
         exit(1)
-
 
 if __name__ == "__main__":
     cli_cleanup()

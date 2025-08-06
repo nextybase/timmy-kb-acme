@@ -5,12 +5,16 @@ Fornisce utility per caricare e applicare il mapping.
 
 import yaml
 from pathlib import Path
+from pipeline.config_utils import settings  # Import settings per default robusto
 
-def load_semantic_mapping(mapping_path: str = "config/semantic_mapping.yaml") -> dict:
+def load_semantic_mapping(mapping_path: str = None) -> dict:
     """
     Carica il mapping semantico dal file YAML specificato.
     Ritorna un dizionario: {nome_file_md: {slug, categorie, ...}, ...}
+    Usa per default il path centrale da settings.
     """
+    if mapping_path is None:
+        mapping_path = "config/semantic_mapping.yaml"
     mapping_file = Path(mapping_path)
     if not mapping_file.exists():
         raise FileNotFoundError(f"File di mapping semantico non trovato: {mapping_path}")

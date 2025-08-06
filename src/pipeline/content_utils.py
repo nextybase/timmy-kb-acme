@@ -10,19 +10,19 @@ e la validazione delle directory di output.
 from pathlib import Path
 from typing import List
 from pipeline.logging_utils import get_structured_logger
+from pipeline.config_utils import settings  # <--- Import centralizzato settings
 
 logger = get_structured_logger("pipeline.content_utils")
 
-
-def convert_files_to_structured_markdown(config):
+def convert_files_to_structured_markdown():
     """
-    Aggrega i PDF presenti nelle sottocartelle di config.raw_dir_path in un file markdown unico per cartella,
-    nella cartella config.md_output_path_path.
+    Aggrega i PDF presenti nelle sottocartelle di settings.raw_dir in un file markdown unico per cartella,
+    nella cartella settings.md_output_path.
 
     Ogni file .md prende il nome della cartella di origine.
     """
-    md_dir = config.md_output_path_path
-    raw_dir = config.raw_dir_path
+    md_dir = settings.md_output_path
+    raw_dir = settings.raw_dir
     md_dir.mkdir(parents=True, exist_ok=True)
 
     # Scorri solo le sottocartelle (ogni cartella = un file md)
@@ -38,14 +38,17 @@ def convert_files_to_structured_markdown(config):
         except Exception as e:
             logger.error(f"❌ Errore nella creazione del file markdown {md_path}: {e}")
 
-def generate_summary_markdown(md_files: List[Path], md_dir: Path):
+def generate_summary_markdown(md_files: List[Path], md_dir: Path = None):
     """
     Genera il file SUMMARY.md nella directory markdown.
 
     Args:
         md_files (List[Path]): Lista di Path dei file markdown.
-        md_dir (Path): Directory in cui salvare SUMMARY.md.
+        md_dir (Path, opzionale): Directory in cui salvare SUMMARY.md.
+                                  Default = settings.md_output_path.
     """
+    if md_dir is None:
+        md_dir = settings.md_output_path
     summary_path = md_dir / "SUMMARY.md"
     try:
         with open(summary_path, "w", encoding="utf-8") as f:
@@ -56,13 +59,16 @@ def generate_summary_markdown(md_files: List[Path], md_dir: Path):
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di SUMMARY.md: {e}")
 
-def generate_readme_markdown(md_dir: Path):
+def generate_readme_markdown(md_dir: Path = None):
     """
     Genera il file README.md nella directory markdown.
 
     Args:
-        md_dir (Path): Directory in cui salvare README.md.
+        md_dir (Path, opzionale): Directory in cui salvare README.md.
+                                  Default = settings.md_output_path.
     """
+    if md_dir is None:
+        md_dir = settings.md_output_path
     readme_path = md_dir / "README.md"
     try:
         with open(readme_path, "w", encoding="utf-8") as f:
@@ -71,17 +77,19 @@ def generate_readme_markdown(md_dir: Path):
     except Exception as e:
         logger.error(f"❌ Errore nella generazione di README.md: {e}")
 
-def validate_markdown_dir(md_dir: Path):
+def validate_markdown_dir(md_dir: Path = None):
     """
     Verifica che la directory markdown esista e sia una directory valida.
 
     Args:
-        md_dir (Path): Path della directory markdown.
+        md_dir (Path, opzionale): Path della directory markdown. Default = settings.md_output_path.
 
     Raises:
         FileNotFoundError: se la directory non esiste.
         NotADirectoryError: se il path non è una directory.
     """
+    if md_dir is None:
+        md_dir = settings.md_output_path
     if not md_dir.exists():
         logger.error(f"❌ La cartella markdown non esiste: {md_dir}")
         raise FileNotFoundError(f"La cartella markdown non esiste: {md_dir}")

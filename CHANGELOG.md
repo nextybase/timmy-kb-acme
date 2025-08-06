@@ -2,6 +2,30 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-08] refactor(wip): gestione drive_folder_id e compliance download PDF cliente
+
+### 🗂️ Gestione avanzata `drive_folder_id` (multi-cliente)
+- Ora la pipeline **carica e utilizza dinamicamente** il campo `drive_folder_id` dal config YAML del cliente (`output/timmy-kb-<slug>/config/config.yaml`), sia in orchestrazione che nelle utility Google Drive.
+- **Blocco rigoroso** se `drive_folder_id` non è presente o non valido: il download dei PDF *fallisce* senza fallback sulla root del Drive condiviso (compliance NeXT).
+- Funzione `download_drive_pdfs_to_local` aggiornata: riceve ora `drive_folder_id` (cartella cliente) e `DRIVE_ID` (shared drive) come parametri espliciti, evitando ogni ambiguità e bug multi-cliente.
+- Logging chiaro sull’identità delle cartelle Drive coinvolte in ogni fase di download/upload.
+
+### 🔒 Error handling, naming & coerenza config
+- `drive_utils.py` ora rifiuta ogni operazione se `drive_folder_id` non è presente o coerente (pre-onboarding incompleto/config corrotto).
+- Allineata la terminologia **Drive** in tutto il codice (`drive_folder_id` = cartella cliente, `DRIVE_ID` = shared drive root da .env/config).
+- Docstring e logging rivisti per chiarezza operativa (chi fa cosa e su quale Drive/cliente).
+
+### 🛠️ Orchestratori allineati
+- Orchestratore `onboarding_full.py` ora carica esplicitamente il config cliente a inizio run, estraendo e passando `drive_folder_id` alle funzioni di download PDF.
+- Tutte le funzioni di download/upload su Drive sono ora *parametriche* e batch-friendly (no hardcoded settings).
+
+---
+
+**NOTE:**  
+Questo refactoring è **intermedio**: ora la pipeline è pronta per multi-cliente, nessun rischio di download “incrociati” o di corruzione tra progetti.  
+Prossimi passi: refactor upload e utility drive avanzate, estensione logging e test coverage, uniformità semantica.
+
+
 ## [2025-08-06] - Refactor e miglioramenti strutturali
 
 - **Nuova policy di output `book/`:**

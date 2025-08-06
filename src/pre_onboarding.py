@@ -1,7 +1,7 @@
 """
 pre_onboarding.py
 
-Procedura di pre-onboarding per pipeline NeXT.  
+Procedura di pre-onboarding per pipeline NeXT.
 Crea la configurazione di progetto e la struttura di cartelle locali e su Google Drive per il cliente specificato.
 Valida input e ambiente, genera/configura file, effettua upload su Drive e struttura le sottocartelle secondo YAML.
 """
@@ -24,7 +24,7 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_drive_subfolders_from_yaml,
 )
-from pipeline.config_utils import write_client_config_file, get_config
+from pipeline.config_utils import write_client_config_file, settings
 from pipeline.exceptions import PipelineError, PreOnboardingValidationError
 from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 
@@ -41,21 +41,8 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
     - Crea o trova cartella su Google Drive e carica la config.
     - Aggiorna la config con l'ID della cartella Drive.
     - Struttura le sottocartelle su Drive da template YAML, se presente.
-
-    Args:
-        slug (str, optional): Identificativo cliente/progetto (es: acme-srl).
-        client_name (str, optional): Nome completo cliente.
-        no_interactive (bool, optional): Disabilita richieste input se True (modalità CI).
-
-    Raises:
-        PipelineError: Errori di input, ambiente o operazioni pipeline.
-        PreOnboardingValidationError: Errori di validazione ambiente/pre-onboarding.
-        Exception: Qualsiasi errore imprevisto (loggato, forza uscita).
-
-    Returns:
-        None
     """
-    logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
+    logger = get_structured_logger("pre_onboarding", str(settings.logs_path))
     logger.info("▶️ Procedura di pre-onboarding NeXT")
     try:
         validate_preonboarding_environment()
@@ -104,9 +91,12 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             folder.mkdir(parents=True, exist_ok=True)
             logger.info(f"📁 Cartella creata o già esistente: {folder}")
 
-        service = get_drive_service(slug)
-        config = get_config(slug)
-        parent_id = config.secrets.DRIVE_ID
+        # Setta la variabile SLUG nell'ambiente così settings la usa subito dopo
+        import os
+        os.environ["SLUG"] = slug
+
+        service = get_drive_service()
+        parent_id = settings.DRIVE_ID
 
         drive_folder = find_drive_folder_by_name(service, slug, drive_id=parent_id)
         if not drive_folder:
@@ -119,10 +109,13 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         upload_config_to_drive_folder(service, config_path, drive_folder_id)
         logger.info("✅ Config caricata su Drive.")
 
+        # --- PATCH ROBUSTA: salva sempre il drive_folder_id nel config del cliente ---
         config_dict["drive_folder_id"] = drive_folder_id
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, allow_unicode=True)
         logger.info(f"📝 Aggiornato config con drive_folder_id: {drive_folder_id}")
+        # DEBUG: Mostra subito se c'è drive_folder_id scritto correttamente
+        logger.debug(f"Contenuto finale config.yaml:\n{yaml.dump(config_dict, allow_unicode=True)}")
 
         yaml_path = Path("config/cartelle_raw.yaml")
         if not yaml_path.exists():

@@ -17,22 +17,22 @@ from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError
-from pipeline.config_utils import get_config
+from pipeline.config_utils import settings  # <--- settings centralizzato
 
 logger = get_structured_logger("pipeline.drive_utils")
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def get_drive_service(slug: str):
+def get_drive_service():
     """
     Inizializza e restituisce una sessione autenticata Google Drive API v3.
+    Usa settings.SERVICE_ACCOUNT_FILE come file di credenziali.
     """
     logger.debug("Inizializzo connessione a Google Drive API.")
-    config = get_config(slug)
-    if not config.secrets or not getattr(config.secrets, "SERVICE_ACCOUNT_FILE", None):
-        logger.error("❌ SERVICE_ACCOUNT_FILE mancante nei secrets!")
-        raise PipelineError("SERVICE_ACCOUNT_FILE mancante nei secrets/config!")
+    if not getattr(settings, "SERVICE_ACCOUNT_FILE", None):
+        logger.error("❌ SERVICE_ACCOUNT_FILE mancante nei settings!")
+        raise PipelineError("SERVICE_ACCOUNT_FILE mancante nei settings!")
     creds = service_account.Credentials.from_service_account_file(
-        config.secrets.SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        settings.SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
     return build('drive', 'v3', credentials=creds)
 
@@ -96,21 +96,23 @@ def download_drive_pdfs_recursively(service, folder_id: str, raw_dir_path: Path,
         logger.error(f"❌ Errore nel download ricorsivo: {e}")
         raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
 
-def download_drive_pdfs_to_local(service, config) -> bool:
+def download_drive_pdfs_to_local(service, drive_folder_id=None, drive_id=None) -> bool:
     """
-    Wrapper che scarica tutti i PDF del cliente su raw_dir_path dalla cartella Drive associata.
+    Wrapper che scarica tutti i PDF dalla cartella Drive specificata su settings.RAW_DIR.
+    Usa drive_folder_id come cartella radice del cliente.
     """
-    slug = config.slug
-    drive_id = config.secrets.DRIVE_ID
-    folder_id = getattr(config, "drive_folder_id", None)
-    raw_dir_path = config.raw_dir_path
+    if drive_folder_id is None:
+        logger.error("❌ drive_folder_id mancante nei settings/config!")
+        raise DriveDownloadError("drive_folder_id mancante nei settings/config! Pre-onboarding non completato o config corrotto.")
 
-    logger.info(f"📥 Inizio download PDF per il cliente: {slug}")
-    if not folder_id:
-        logger.error("❌ drive_folder_id mancante in config.")
-        raise DriveDownloadError("drive_folder_id mancante in config.")
+    # RAW_DIR può essere una property, quindi si può mantenere anche minuscolo se definito come property!
+    raw_dir_path = getattr(settings, "RAW_DIR", None)
+    if raw_dir_path is None and hasattr(settings, "raw_dir"):
+        raw_dir_path = settings.raw_dir
 
-    download_drive_pdfs_recursively(service, folder_id, raw_dir_path, drive_id)
+    logger.info(f"📥 Inizio download PDF per la pipeline (drive_folder_id: {drive_folder_id})")
+
+    download_drive_pdfs_recursively(service, drive_folder_id, raw_dir_path, drive_id)
     logger.info("✅ Download PDF completato.")
     return True
 
@@ -138,7 +140,7 @@ def create_drive_subfolders_from_yaml(service, drive_id: str, parent_folder_id: 
         root_folders = structure.get("root_folders", [])
         if not isinstance(root_folders, list):
             raise DriveUploadError("'root_folders' deve essere una lista.")
-        logger.info(f"📁 Inizio creazione struttura cartelle nel Drive condiviso ID: {drive_id}")
+        logger.info(f"📁 Inizio creazione struttura cartelle nel Drive cliente ID: {drive_id}")
         create_nested_folders(parent_folder_id, root_folders)
         logger.info("✅ Struttura cartelle creata con successo.")
         return True
@@ -173,23 +175,24 @@ def find_drive_folder_by_name(service, name: str, drive_id: str = None):
         logger.error(f"❌ Errore nella ricerca della cartella '{name}': {e}")
         raise DriveDownloadError(f"Errore durante la ricerca della cartella '{name}': {e}")
 
-def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive_raw_folder_id: str):
+def upload_folder_to_drive_raw(service, raw_dir_path: Path = None, drive_id: str = None, drive_raw_folder_id: str = None):
     """
-    Carica ricorsivamente tutti i file dalla cartella raw_dir_path su Drive,
+    Carica ricorsivamente tutti i file dalla cartella RAW_DIR su Drive,
     mantenendo la struttura di sottocartelle.
-
-    Args:
-        service: Istanza autenticata Google Drive.
-        raw_dir_path (Path): Directory locale da caricare.
-        drive_id (str): ID del Drive condiviso. (non usato, lasciato per compatibilità)
-        drive_raw_folder_id (str): ID della cartella "raw" su Drive.
-
-    Raises:
-        DriveUploadError: Se uno o più file non vengono caricati correttamente.
-
-    Returns:
-        True se upload completato senza errori.
+    Se non passati, usa quelli di settings.
     """
+    if raw_dir_path is None:
+        raw_dir_path = getattr(settings, "RAW_DIR", None)
+        if raw_dir_path is None and hasattr(settings, "raw_dir"):
+            raw_dir_path = settings.raw_dir
+    if drive_id is None:
+        drive_id = getattr(settings, "drive_folder_id", None)
+    if drive_raw_folder_id is None:
+        drive_raw_folder_id = getattr(settings, "drive_folder_id", None)
+    if not drive_raw_folder_id:
+        logger.error("❌ drive_folder_id mancante per upload raw!")
+        raise DriveUploadError("drive_folder_id mancante nei settings/config.")
+
     errors = []
 
     def upload_file(file_path: Path, parent_id: str):
@@ -257,10 +260,17 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
 
     return True
 
-def upload_config_to_drive_folder(service, config_path: Path, drive_folder_id: str):
+def upload_config_to_drive_folder(service, config_path: Path, drive_folder_id: str = None):
     """
     Carica config.yaml su Drive, eliminando eventuali versioni precedenti nella cartella.
+    Se drive_folder_id non è passato, usa quello di settings.
     """
+    if drive_folder_id is None:
+        drive_folder_id = getattr(settings, "drive_folder_id", None)
+    if not drive_folder_id:
+        logger.error("❌ drive_folder_id mancante per upload config!")
+        raise DriveUploadError("drive_folder_id mancante nei settings/config.")
+
     # Elimina eventuali config.yaml già presenti
     query = (
         f"'{drive_folder_id}' in parents and name = '{config_path.name}' and trashed = false"

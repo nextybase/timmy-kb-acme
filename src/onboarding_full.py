@@ -1,8 +1,8 @@
 """
 onboarding_full.py
 
-Orchestratore principale per il processo di onboarding documentale Timmy-KB.  
-Automatizza la validazione della configurazione, download e conversione PDF,  
+Orchestratore principale per il processo di onboarding documentale Timmy-KB.
+Automatizza la validazione della configurazione, download e conversione PDF,
 enrichment semantico, generazione markdown, preview GitBook e push su GitHub.
 """
 
@@ -12,6 +12,7 @@ import sys
 import argparse
 import subprocess
 from pathlib import Path
+import yaml
 
 # Third-party packages
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ from pydantic import ValidationError
 
 # Local modules
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import get_config
+from pipeline.config_utils import settings
 from pipeline.content_utils import (
     convert_files_to_structured_markdown,
     generate_summary_markdown,
@@ -28,7 +29,7 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup import safe_clean_dir
-from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local  # <--- MODIFICA QUI
+from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug
 from semantic.semantic_extractor import enrich_markdown_folder
@@ -39,12 +40,19 @@ load_dotenv()
 
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
+def load_client_config(slug: str) -> dict:
+    """
+    Carica il config.yaml specifico del cliente.
+    """
+    config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config cliente non trovato: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 def check_docker_running():
     """
     Verifica che Docker sia attivo ed eseguibile sul sistema.
-
-    Returns:
-        bool: True se Docker risponde, False altrimenti.
     """
     try:
         subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -60,28 +68,8 @@ def onboarding_main(
 ):
     """
     Orchestrates the full onboarding pipeline for Timmy-KB.
-
-    - Valida parametri e configurazione.
-    - Pulizia cartelle di output e workspace.
-    - Download dei PDF da Drive nella cartella "raw".
-    - Conversione automatica PDF -> markdown strutturato.
-    - Enrichment semantico del markdown.
-    - Generazione SUMMARY.md e README.md.
-    - Preview locale con Docker/Honkit (facoltativa).
-    - Push su GitHub automatizzato o su richiesta.
-
-    Args:
-        slug (str, optional): Identificativo cliente/progetto (es: acme-srl).
-        no_interactive (bool, optional): Disabilita input interattivo (modalità CI).
-        auto_push (bool, optional): Esegui sempre push GitHub senza conferma.
-        skip_preview (bool, optional): Salta la preview Docker/Honkit.
-
-    Raises:
-        PipelineError: Errori bloccanti nella pipeline o nella configurazione.
-        ValidationError: Errori di validazione config (Pydantic).
-        Exception: Errori imprevisti.
     """
-    logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
+    logger = get_structured_logger("onboarding_full", str(settings.logs_path))
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
 
     try:
@@ -95,46 +83,52 @@ def onboarding_main(
         slug = slug.replace("_", "-")
         if not is_valid_slug(slug):
             logger.error(f"Slug cliente non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
-            raise PipelineError(f"Slug cliente non valido: '{slug}'")
+            raise PipelineError(f"Slug cliente non valido: {slug}")
+
+        # Setta la variabile SLUG nell'ambiente così settings la usa subito dopo
+        os.environ["SLUG"] = slug
 
         if not check_docker_running():
             logger.error("Docker non attivo o non raggiungibile. Pipeline bloccata.")
             raise PipelineError("Docker non attivo o non raggiungibile.")
 
-        config = get_config(slug)
         logger.info(f"✅ Config caricato e validato per cliente: {slug}")
-        logger.debug(f"Config: {config.model_dump()}")
+        logger.debug(f"Settings: {settings.model_dump()}")
 
-        output_base = config.output_dir_path
-        raw_dir = config.raw_dir_path
-        md_dir = config.md_output_path_path
+        # --- PATCH: carica config cliente per drive_folder_id ---
+        client_config = load_client_config(slug)
+        drive_folder_id = client_config.get("drive_folder_id")
+        if not drive_folder_id:
+            logger.error("❌ ID cartella cliente (drive_folder_id) mancante nel config!")
+            raise PipelineError("ID cartella cliente (drive_folder_id) mancante nel config!")
+
+        output_base = settings.output_dir
+        raw_dir = settings.raw_dir
+        md_dir = settings.md_output_path
 
         logger.info("🧹 Pulizia cartelle di output (book e raw)...")
         safe_clean_dir(md_dir)
         safe_clean_dir(raw_dir)
 
-        service = get_drive_service(slug)
+        service = get_drive_service()
         raw_dir.mkdir(parents=True, exist_ok=True)
 
-        folder_id = getattr(config, "drive_folder_id", None)
-        if not folder_id:
-            logger.error("❌ ID cartella cliente (drive_folder_id) mancante nella config!")
-            raise PipelineError("ID cartella cliente (drive_folder_id) mancante nella config!")
-
-        # ---- MODIFICA: usa SOLO il wrapper/adaptor, non la funzione low-level ----
+        # Download PDF da Drive su raw_dir
         download_drive_pdfs_to_local(
             service=service,
-            config=config
+            drive_folder_id=drive_folder_id,   # id cartella cliente
+            drive_id=settings.DRIVE_ID         # id shared drive
         )
+
         logger.info("✅ Download PDF da Drive completato.")
 
         logger.info("🔄 Conversione PDF -> markdown strutturato...")
         mapping = load_semantic_mapping()
-        convert_files_to_structured_markdown(config)
+        convert_files_to_structured_markdown()
         logger.info("✅ Conversione markdown completata.")
 
         logger.info("🔎 Enrichment semantico markdown...")
-        enrich_markdown_folder(md_dir, slug)
+        enrich_markdown_folder(md_dir)
         logger.info("✅ Enrichment semantico completato.")
 
         logger.info("📚 Generazione SUMMARY.md e README.md...")
@@ -147,7 +141,7 @@ def onboarding_main(
             logger.info("[SKIP] Preview Docker saltata.")
         else:
             logger.info("👁️  Avvio preview GitBook con Docker...")
-            run_gitbook_docker_preview(config)
+            run_gitbook_docker_preview()
             logger.info("✅ Preview GitBook completata.")
 
         # Push automatico o con conferma manuale
@@ -158,7 +152,7 @@ def onboarding_main(
             do_push = (resp == "y")
 
         if do_push:
-            push_output_to_github(md_dir, config)
+            push_output_to_github()
             logger.info(f"✅ Push GitHub completato. Cartella: {md_dir}")
         else:
             logger.info("Push GitHub annullato.")
@@ -169,7 +163,7 @@ def onboarding_main(
         logger.error(f"❌ Errore pipeline: {e}")
         raise
     except ValidationError as e:
-        logger.error(f"❌ Errore validazione config: {e}")
+        logger.error(f"❌ Errore validazione settings: {e}")
         raise PipelineError(e)
     except Exception as e:
         logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)

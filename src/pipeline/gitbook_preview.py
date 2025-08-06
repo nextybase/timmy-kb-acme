@@ -1,9 +1,9 @@
 """
 gitbook_preview.py
 
-Strumenti per la generazione della preview locale del libro (GitBook/Honkit)  
-nella pipeline Timmy-KB, tramite container Docker isolato.  
-Gestisce la generazione automatica di book.json/package.json, build, preview,  
+Strumenti per la generazione della preview locale del libro (GitBook/Honkit)
+nella pipeline Timmy-KB, tramite container Docker isolato.
+Gestisce la generazione automatica di book.json/package.json, build, preview,
 e la pulizia del container anche in caso di errore/interruzione.
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Union
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError
-from pipeline.config_utils import TimmyConfig
+from pipeline.config_utils import settings  # <-- import centralizzato
 
 logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log")
 
@@ -63,7 +63,7 @@ def ensure_package_json(book_dir: Path) -> None:
         logger.info(f"📦 package.json già presente: {package_json_path}")
 
 def run_gitbook_docker_preview(
-    config: Union[dict, TimmyConfig],
+    config: Union[dict, None] = None,
     port: int = 4000,
     container_name: str = "honkit_preview"
 ) -> None:
@@ -73,7 +73,7 @@ def run_gitbook_docker_preview(
     Rimuove sempre ogni residuo preesistente con lo stesso nome container.
 
     Args:
-        config (dict | TimmyConfig): Configurazione pipeline (usata per md_output_path).
+        config (dict | None): Vecchia compatibilità. Se None, usa settings.md_output_path.
         port (int, optional): Porta di pubblicazione locale (default 4000).
         container_name (str, optional): Nome container Docker temporaneo.
 
@@ -90,10 +90,14 @@ def run_gitbook_docker_preview(
     except Exception as e:
         logger.warning(f"⚠️ (Pre-run) Impossibile rimuovere container Docker '{container_name}': {e}")
 
-    if isinstance(config, dict):
+    # --- Centrale: ora path markdown sempre da settings, salvo override esplicito ---
+    if config is None:
+        md_output_path = settings.md_output_path.resolve()
+    elif isinstance(config, dict):
         md_output_path = Path(config["md_output_path"]).resolve()
     else:
-        md_output_path = config.md_output_path_path.resolve()
+        # Compatibilità con vecchi oggetti TimmyConfig, ora dismessi
+        md_output_path = Path(getattr(config, "md_output_path", settings.md_output_path)).resolve()
 
     logger.info(f"📦 Directory per anteprima: {md_output_path}")
 
