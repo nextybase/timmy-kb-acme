@@ -1,21 +1,27 @@
-from dotenv import load_dotenv
-load_dotenv()
-import yaml
+# Standard library
+import sys
 from pathlib import Path
 import argparse
-import sys
 
+# Third-party packages
+import yaml
+
+# Local modules
+from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
     get_drive_service,
     find_drive_folder_by_name,
     create_drive_folder,
     upload_config_to_drive_folder,
-    create_drive_subfolders_from_yaml
+    create_drive_subfolders_from_yaml,
 )
 from pipeline.config_utils import write_client_config_file, get_config
 from pipeline.exceptions import PipelineError, PreOnboardingValidationError
 from pipeline.utils import is_valid_slug, validate_preonboarding_environment
+
+# Esegui subito dopo gli import di terze parti
+load_dotenv()
 
 def preonboarding_main(slug=None, client_name=None, no_interactive=False):
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")

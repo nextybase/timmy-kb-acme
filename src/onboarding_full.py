@@ -1,28 +1,34 @@
-from pathlib import Path
-import subprocess
+# Standard library
 import os
-import argparse
 import sys
-from dotenv import load_dotenv
-load_dotenv()
+import argparse
+import subprocess
+from pathlib import Path
 
+# Third-party packages
+from dotenv import load_dotenv
 from pydantic import ValidationError
 
+# Local modules
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_config
 from pipeline.content_utils import (
     convert_files_to_structured_markdown,
     generate_summary_markdown,
-    generate_readme_markdown
+    generate_readme_markdown,
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
-from pipeline.cleanup import safe_clean_dir
+from pipeline.cleanupa import safe_clean_dir
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively
-from semantic.semantic_extractor import enrich_markdown_folder
-from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug
+from semantic.semantic_extractor import enrich_markdown_folder
+from semantic.semantic_mapping import load_semantic_mapping
+
+# Esegui subito dopo gli import di terze parti
+load_dotenv()
+
 
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
