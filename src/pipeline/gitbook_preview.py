@@ -9,6 +9,7 @@ e la pulizia del container anche in caso di errore/interruzione.
 
 import subprocess
 import json
+import os
 from pathlib import Path
 from typing import Union
 from pipeline.logging_utils import get_structured_logger
@@ -126,7 +127,11 @@ def run_gitbook_docker_preview(
         serve_proc = subprocess.run(serve_cmd, check=True, capture_output=True, text=True)
         container_id = serve_proc.stdout.strip()
         logger.info(f"🌍 Anteprima live avviata: http://localhost:{port} (container: {container_id})")
-        input("🔄 Premi INVIO per chiudere l'anteprima e arrestare Docker...")
+        # Modalità interattiva solo se non siamo in batch/CI
+        if not os.environ.get("BATCH_TEST"):
+            input("🔄 Premi INVIO per chiudere l'anteprima e arrestare Docker...")
+        else:
+            logger.info("Modalità batch/CI: preview servita senza attesa, container sarà chiuso subito.")
     except subprocess.CalledProcessError as e:
         logger.error(
             f"❌ Errore durante `honkit serve`: {e}\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"

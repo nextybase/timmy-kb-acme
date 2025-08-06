@@ -27,7 +27,7 @@ from pipeline.content_utils import (
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
-from pipeline.cleanupa import safe_clean_dir
+from pipeline.cleanup import safe_clean_dir
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_recursively
 from pipeline.exceptions import PipelineError
 from pipeline.utils import is_valid_slug
