@@ -18,9 +18,8 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-# Local modules
+# Local modules – IMPORT SOLO UTILITY!
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import settings
 from pipeline.content_utils import (
     convert_files_to_structured_markdown,
     generate_summary_markdown,
@@ -37,7 +36,6 @@ from semantic.semantic_mapping import load_semantic_mapping
 
 # Esegui subito dopo gli import di terze parti
 load_dotenv()
-
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
 def load_client_config(slug: str) -> dict:
@@ -69,25 +67,24 @@ def onboarding_main(
     """
     Orchestrates the full onboarding pipeline for Timmy-KB.
     """
+    if not slug:
+        if no_interactive:
+            print("Slug non fornito in modalità no-interactive. Uscita.")
+            raise PipelineError("Slug non fornito in modalità no-interactive.")
+        slug = input("🔤 Inserisci lo slug cliente: ").strip().lower()
+    slug = slug.replace("_", "-")
+    if not is_valid_slug(slug):
+        print(f"Slug cliente non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
+        raise PipelineError(f"Slug cliente non valido: {slug}")
+
+    # ⚡️ PATCH: usa sempre la factory settings per lo slug
+    from pipeline.config_utils import get_settings_for_slug
+    settings = get_settings_for_slug(slug)
+
     logger = get_structured_logger("onboarding_full", str(settings.logs_path))
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
 
     try:
-        # Slug: da CLI o fallback a input()
-        if not slug:
-            if no_interactive:
-                logger.error("Slug non fornito in modalità no-interactive. Uscita.")
-                raise PipelineError("Slug non fornito in modalità no-interactive.")
-            slug = input("🔤 Inserisci lo slug cliente: ").strip().lower()
-        logger.debug(f"Slug ricevuto: '{slug}'")
-        slug = slug.replace("_", "-")
-        if not is_valid_slug(slug):
-            logger.error(f"Slug cliente non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
-            raise PipelineError(f"Slug cliente non valido: {slug}")
-
-        # Setta la variabile SLUG nell'ambiente così settings la usa subito dopo
-        os.environ["SLUG"] = slug
-
         if not check_docker_running():
             logger.error("Docker non attivo o non raggiungibile. Pipeline bloccata.")
             raise PipelineError("Docker non attivo o non raggiungibile.")
@@ -95,13 +92,14 @@ def onboarding_main(
         logger.info(f"✅ Config caricato e validato per cliente: {slug}")
         logger.debug(f"Settings: {settings.model_dump()}")
 
-        # --- PATCH: carica config cliente per drive_folder_id ---
+        # Carica config cliente per drive_folder_id (usato SOLO per Drive)
         client_config = load_client_config(slug)
         drive_folder_id = client_config.get("drive_folder_id")
         if not drive_folder_id:
             logger.error("❌ ID cartella cliente (drive_folder_id) mancante nel config!")
             raise PipelineError("ID cartella cliente (drive_folder_id) mancante nel config!")
 
+        # Output path locale forzato su slug (tramite settings)
         output_base = settings.output_dir
         raw_dir = settings.raw_dir
         md_dir = settings.md_output_path
@@ -110,14 +108,16 @@ def onboarding_main(
         safe_clean_dir(md_dir)
         safe_clean_dir(raw_dir)
 
-        service = get_drive_service()
+        # PATCH: passa settings come parametro!
+        service = get_drive_service(settings)
         raw_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download PDF da Drive su raw_dir
+        # PATCH: passa settings come parametro!
         download_drive_pdfs_to_local(
             service=service,
-            drive_folder_id=drive_folder_id,   # id cartella cliente
-            drive_id=settings.DRIVE_ID         # id shared drive
+            settings=settings,
+            drive_folder_id=drive_folder_id,
+            drive_id=settings.DRIVE_ID
         )
 
         logger.info("✅ Download PDF da Drive completato.")
@@ -170,14 +170,6 @@ def onboarding_main(
         raise PipelineError(e)
 
 if __name__ == "__main__":
-    """
-    Avvia la procedura di onboarding Timmy-KB da CLI.
-    Parametri supportati:
-      --slug           Identificativo cliente/progetto (es: acme-srl)
-      --no-interactive Disabilita input interattivo (solo pipeline/CI)
-      --auto-push      Esegui push GitHub senza chiedere conferma
-      --skip-preview   Salta preview Docker/Honkit
-    """
     parser = argparse.ArgumentParser(
         description="Onboarding completo Timmy-KB (automazione pipeline)",
         epilog="Esempio: python onboarding.py --slug dummy --auto-push --skip-preview --no-interactive"

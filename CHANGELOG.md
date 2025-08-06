@@ -2,6 +2,23 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [X.Y.Z] - 2025-08-06
+
+### Modifiche principali
+
+- Refactoring completo di `config_utils.py`: rimosso singleton globale `settings`, introdotto utilizzo esclusivo della factory `get_settings_for_slug(slug)` per tutte le pipeline per-client.
+- Aggiornamento orchestratori (`pre_onboarding.py`, `onboarding_full.py`) per compatibilità con la nuova gestione multi-client di `settings`.
+- Refactoring funzioni/utility per ricevere `settings` come parametro, evitando riferimenti globali.
+- Fix bug critico su generazione errata di cartelle/slug nelle pipeline onboarding (root path e raw path).
+- Warning e validazioni migliorate: errore esplicito se lo slug non viene passato correttamente.
+- Documentazione aggiornata nei moduli per chiarire il flusso e l'utilizzo corretto di `settings`.
+
+### Effetti collaterali
+
+- **ATTENZIONE**: Qualsiasi modulo che usava `from pipeline.config_utils import settings` DEVE ora istanziare `Settings()` direttamente *oppure* ricevere un oggetto settings come argomento.
+- Pipeline ora multi-client, pronta per esecuzioni concorrenti e deploy più sicuro.
+
+
 ## [2025-08-08] refactor(wip): gestione drive_folder_id e compliance download PDF cliente
 
 ### 🗂️ Gestione avanzata `drive_folder_id` (multi-cliente)

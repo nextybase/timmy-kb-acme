@@ -13,9 +13,9 @@ import argparse
 
 # Third-party packages
 import yaml
+from dotenv import load_dotenv
 
 # Local modules
-from dotenv import load_dotenv
 from pipeline.logging_utils import get_structured_logger
 from pipeline.drive_utils import (
     get_drive_service,
@@ -24,40 +24,35 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_drive_subfolders_from_yaml,
 )
-from pipeline.config_utils import write_client_config_file, settings
+from pipeline.config_utils import write_client_config_file, get_settings_for_slug
 from pipeline.exceptions import PipelineError, PreOnboardingValidationError
 from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 
-# Esegui subito dopo gli import di terze parti
+# Carica .env subito dopo gli import di terze parti
 load_dotenv()
 
 def preonboarding_main(slug=None, client_name=None, no_interactive=False):
     """
     Orchestrates the Pre-Onboarding phase for a new semantic onboarding process.
-
-    - Valida ambiente e parametri, richiede input interattivo se necessario.
-    - Genera file di configurazione YAML specifico per il cliente.
-    - Crea cartelle output locali (raw, md).
-    - Crea o trova cartella su Google Drive e carica la config.
-    - Aggiorna la config con l'ID della cartella Drive.
-    - Struttura le sottocartelle su Drive da template YAML, se presente.
     """
-    logger = get_structured_logger("pre_onboarding", str(settings.logs_path))
+    logger = get_structured_logger("pre_onboarding", "logs/timmy-kb-preonboarding.log")
     logger.info("▶️ Procedura di pre-onboarding NeXT")
     try:
         validate_preonboarding_environment()
-        # Input fallback solo se non in modalità no-interactive
+
+        # 1. Raccogli slug
         if not slug:
             if no_interactive:
                 logger.error("Slug non fornito in modalità no-interactive. Uscita.")
                 raise PipelineError("Slug non fornito in modalità no-interactive.")
             slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
-        logger.debug(f"Slug ricevuto: '{slug}'")
         slug = slug.replace("_", "-")
+        logger.debug(f"Slug ricevuto: '{slug}'")
         if not is_valid_slug(slug):
             logger.error(f"Slug non valido: '{slug}'. Ammessi solo lettere, numeri, trattini (es: acme-srl).")
             raise PipelineError(f"Slug non valido: '{slug}'")
 
+        # 2. Raccogli client_name
         if not client_name:
             if no_interactive:
                 logger.error("Nome cliente non fornito in modalità no-interactive. Uscita.")
@@ -67,6 +62,7 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             logger.error("Nome cliente mancante.")
             raise PipelineError("Nome cliente mancante.")
 
+        # 3. Carica template config.yaml base
         base_config_yaml = Path("config/config.yaml")
         if not base_config_yaml.exists():
             logger.error("File config/config.yaml mancante.")
@@ -75,15 +71,18 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         with open(base_config_yaml, "r", encoding="utf-8") as f:
             config_dict = yaml.safe_load(f)
 
+        # 4. Applica parametri cliente su config dict
         config_dict["slug"] = slug
         config_dict["output_dir"] = config_dict.get("output_dir_template", "output/timmy-kb-{slug}").format(slug=slug)
         config_dict["raw_dir"] = config_dict.get("raw_dir_template", "output/timmy-kb-{slug}/raw").format(slug=slug)
         config_dict["md_output_path"] = str(Path(config_dict["output_dir"]) / "book")
         config_dict["client_name"] = client_name
 
+        # 5. Scrivi config cliente YAML su output
         config_path = write_client_config_file(config_dict, slug)
         logger.info(f"Config YAML scritto in: {config_path}")
 
+        # 6. Crea cartelle locali se non esistono
         output_dir = Path(config_dict["output_dir"])
         raw_dir = Path(config_dict["raw_dir"])
         md_dir = Path(config_dict["md_output_path"])
@@ -91,13 +90,12 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             folder.mkdir(parents=True, exist_ok=True)
             logger.info(f"📁 Cartella creata o già esistente: {folder}")
 
-        # Setta la variabile SLUG nell'ambiente così settings la usa subito dopo
-        import os
-        os.environ["SLUG"] = slug
+        # 7. Crea settings per lo slug
+        settings = get_settings_for_slug(slug)
 
-        service = get_drive_service()
+        # 8. Google Drive setup: crea cartella cliente su Drive se non esiste
+        service = get_drive_service(settings)
         parent_id = settings.DRIVE_ID
-
         drive_folder = find_drive_folder_by_name(service, slug, drive_id=parent_id)
         if not drive_folder:
             drive_folder_id = create_drive_folder(service, slug, parent_id)
@@ -106,23 +104,24 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             drive_folder_id = drive_folder['id']
             logger.info(f"📂 Cartella Drive già esistente: {drive_folder_id}")
 
+        # 9. Carica config su Drive
         upload_config_to_drive_folder(service, config_path, drive_folder_id)
         logger.info("✅ Config caricata su Drive.")
 
-        # --- PATCH ROBUSTA: salva sempre il drive_folder_id nel config del cliente ---
+        # 10. Aggiorna config con drive_folder_id locale
         config_dict["drive_folder_id"] = drive_folder_id
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, allow_unicode=True)
         logger.info(f"📝 Aggiornato config con drive_folder_id: {drive_folder_id}")
-        # DEBUG: Mostra subito se c'è drive_folder_id scritto correttamente
         logger.debug(f"Contenuto finale config.yaml:\n{yaml.dump(config_dict, allow_unicode=True)}")
 
+        # 11. Crea sottocartelle su Drive da YAML (se presente)
         yaml_path = Path("config/cartelle_raw.yaml")
         if not yaml_path.exists():
             logger.error(f"File YAML struttura cartelle mancante: {yaml_path}")
         else:
             try:
-                create_drive_subfolders_from_yaml(service, parent_id, drive_folder_id, yaml_path)
+                create_drive_subfolders_from_yaml(service, settings, parent_id, drive_folder_id, yaml_path)
                 logger.info("✅ Struttura cartelle Drive creata da YAML.")
             except Exception as e:
                 logger.error(f"Errore creazione struttura cartelle da YAML: {e}")
@@ -140,13 +139,6 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         sys.exit(1)
 
 if __name__ == "__main__":
-    """
-    Avvia la procedura di pre-onboarding da CLI.
-    Parametri supportati:
-      --slug           Identificativo cliente/progetto (es: acme-srl)
-      --client-name    Nome completo cliente
-      --no-interactive Disabilita richieste input (solo pipeline/CI)
-    """
     parser = argparse.ArgumentParser(
         description="Procedura di pre-onboarding NeXT (config + setup cartelle)",
         epilog="Esempio: python pre_onboarding.py --slug dummy --client-name 'Dummy Corp' --no-interactive"
