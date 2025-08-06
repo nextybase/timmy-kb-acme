@@ -2,6 +2,39 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-07] refactor: docstring, coerenza CLI e compliance architetturale pipeline
+
+### 📖 Miglioramento docstring & commenti
+- Aggiunte docstring di **modulo, funzione e proprietà** per tutti i file della cartella `src/pipeline/`:
+    - Descrizione chiara delle responsabilità, dei parametri e dei ritorni.
+    - Uniformato lo stile alle convenzioni PEP257/Napoleon.
+
+### 🧩 Refactor import, logging e naming
+- Ordinati tutti gli import secondo PEP8 (standard, third-party, local).
+- Verificato che **ogni modulo** usi il logger strutturato locale tramite `get_structured_logger`.
+- Eliminato ogni uso di `print()` fuori da CLI o test.
+- Tutti i nomi di funzioni, classi e variabili uniformati a `snake_case`/`PascalCase` come da policy.
+
+### 🏗️ Uniformità orchestratori e CLI
+- Tutte le funzioni principali (`onboarding_main`, `preonboarding_main` ecc.) ora dotate di docstring e parametri espliciti.
+- Parametri CLI documentati e fallback input sempre gestito per modalità batch/manuale.
+
+### 🔒 Sicurezza e validazione
+- Rafforzati i controlli sulle funzioni di pulizia (`safe_clean_dir`, `cleanup_output_folder`) per prevenire rischi sui path critici.
+- Validazione slug e ambiente preonboarding con logging dettagliato ed eccezioni dedicate.
+
+### 🛠️ Best practice di struttura pipeline
+- Assicurata **separazione netta** tra orchestrazione tecnica (`pipeline/`) e logica semantica (`semantic/`).
+- Configurazione e segreti ora centralizzati in `TimmyConfig`, gestione YAML/property unificata.
+
+### ⚙️ Uniformità CLI e batch
+- Orchestratori e utility accettano tutti i parametri via CLI (`argparse`), modalità batch/interattiva sempre distinguibile tramite flag (`--no-interactive`, `--auto-push`, ecc).
+
+---
+
+> Ora l’intera pipeline tecnica è documentata, pulita, conforme alle policy aziendali e pronta per essere estesa sul fronte semantico/AI e per review tecnica avanzata.
+
+
 ## [2025-08-06] refactor: compliance logging, error handling & pulizia moduli inutilizzati
 
 ### ♻️ Refactor orchestratori & error handling

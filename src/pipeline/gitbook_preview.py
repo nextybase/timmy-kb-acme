@@ -1,3 +1,12 @@
+"""
+gitbook_preview.py
+
+Strumenti per la generazione della preview locale del libro (GitBook/Honkit)  
+nella pipeline Timmy-KB, tramite container Docker isolato.  
+Gestisce la generazione automatica di book.json/package.json, build, preview,  
+e la pulizia del container anche in caso di errore/interruzione.
+"""
+
 import subprocess
 import json
 from pathlib import Path
@@ -9,6 +18,12 @@ from pipeline.config_utils import TimmyConfig
 logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log")
 
 def ensure_book_json(book_dir: Path) -> None:
+    """
+    Garantisce la presenza di un file book.json di base nella directory markdown.
+
+    Args:
+        book_dir (Path): Directory markdown del progetto.
+    """
     book_json_path = book_dir / "book.json"
     if not book_json_path.exists():
         data = {
@@ -22,6 +37,12 @@ def ensure_book_json(book_dir: Path) -> None:
         logger.info(f"📖 book.json già presente: {book_json_path}")
 
 def ensure_package_json(book_dir: Path) -> None:
+    """
+    Garantisce la presenza di un file package.json di base per la preview Honkit.
+
+    Args:
+        book_dir (Path): Directory markdown del progetto.
+    """
     package_json_path = book_dir / "package.json"
     if not package_json_path.exists():
         data = {
@@ -49,6 +70,14 @@ def run_gitbook_docker_preview(
     Avvia la preview GitBook/Honkit in Docker e garantisce la chiusura e la rimozione
     del container al termine, anche in caso di errore o interruzione.
     Rimuove sempre ogni residuo preesistente con lo stesso nome container.
+
+    Args:
+        config (dict | TimmyConfig): Configurazione pipeline (usata per md_output_path).
+        port (int, optional): Porta di pubblicazione locale (default 4000).
+        container_name (str, optional): Nome container Docker temporaneo.
+
+    Raises:
+        PreviewError: In caso di errore nel build/serve della preview.
     """
     # Cleanup preventivo di eventuale container pre-esistente (anche Exited)
     try:

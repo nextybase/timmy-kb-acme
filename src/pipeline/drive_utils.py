@@ -1,3 +1,11 @@
+"""
+drive_utils.py
+
+Utility per l’integrazione con Google Drive nella pipeline Timmy-KB.
+Gestisce autenticazione, creazione e ricerca cartelle, download/upload ricorsivo di file PDF,
+upload config, generazione struttura da YAML, e funzioni di supporto alla pipeline documentale.
+"""
+
 import io
 import mimetypes
 import yaml
@@ -15,6 +23,18 @@ logger = get_structured_logger("pipeline.drive_utils")
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 def get_drive_service(slug: str):
+    """
+    Inizializza e restituisce una sessione autenticata Google Drive API v3.
+
+    Args:
+        slug (str): Identificativo cliente/progetto.
+
+    Raises:
+        PipelineError: Se manca il SERVICE_ACCOUNT_FILE nei secrets/config.
+
+    Returns:
+        googleapiclient.discovery.Resource: Istanza autenticata di servizio Drive.
+    """
     logger.debug("Inizializzo connessione a Google Drive API.")
     config = get_config(slug)
 
@@ -28,6 +48,20 @@ def get_drive_service(slug: str):
     return build('drive', 'v3', credentials=creds)
 
 def create_drive_folder(service, name: str, parent_id: str) -> str:
+    """
+    Crea una nuova cartella su Google Drive all’interno di parent_id.
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        name (str): Nome della cartella da creare.
+        parent_id (str): ID cartella padre.
+
+    Raises:
+        DriveUploadError: In caso di errore durante la creazione della cartella.
+
+    Returns:
+        str: ID della nuova cartella creata.
+    """
     folder_metadata = {
         'name': name,
         'mimeType': 'application/vnd.google-apps.folder',
@@ -47,6 +81,19 @@ def create_drive_folder(service, name: str, parent_id: str) -> str:
         raise DriveUploadError(f"Errore nella creazione della cartella '{name}': {e}")
 
 def download_drive_pdfs_recursively(service, folder_id: str, raw_dir_path: Path, drive_id: str):
+    """
+    Scarica ricorsivamente tutti i PDF da una cartella Drive (e sottocartelle), 
+    salvandoli in raw_dir_path.
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        folder_id (str): ID della cartella di partenza su Drive.
+        raw_dir_path (Path): Cartella locale di destinazione.
+        drive_id (str): ID del Drive condiviso.
+
+    Raises:
+        DriveDownloadError: In caso di errore durante il download ricorsivo.
+    """
     try:
         query = f"'{folder_id}' in parents and trashed = false"
         results = service.files().list(
@@ -86,6 +133,19 @@ def download_drive_pdfs_recursively(service, folder_id: str, raw_dir_path: Path,
         raise DriveDownloadError(f"Errore nel download ricorsivo: {e}")
 
 def download_drive_pdfs_to_local(service, config) -> bool:
+    """
+    Wrapper che scarica tutti i PDF del cliente su raw_dir_path dalla cartella Drive associata.
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        config: Configurazione cliente (con slug, secrets, raw_dir_path, ecc.).
+
+    Raises:
+        DriveDownloadError: Se manca drive_folder_id o su errore download.
+
+    Returns:
+        bool: True se completato con successo.
+    """
     slug = config.slug
     drive_id = config.secrets.DRIVE_ID
     folder_id = getattr(config, "drive_folder_id", None)
@@ -101,6 +161,21 @@ def download_drive_pdfs_to_local(service, config) -> bool:
     return True
 
 def create_drive_subfolders_from_yaml(service, drive_id: str, parent_folder_id: str, yaml_path: Path) -> bool:
+    """
+    Crea la struttura di sottocartelle in Drive a partire da file YAML (formato {"root_folders": [...]})
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        drive_id (str): ID del Drive condiviso.
+        parent_folder_id (str): ID cartella principale dove inserire la struttura.
+        yaml_path (Path): Path YAML con la struttura da creare.
+
+    Raises:
+        DriveUploadError: Se il file YAML non è valido o errore in creazione struttura.
+
+    Returns:
+        bool: True se completato con successo.
+    """
     logger.info(f"📄 Parsing YAML struttura cartelle: {yaml_path}")
     try:
         with open(yaml_path, "r", encoding="utf-8") as file:
@@ -135,6 +210,20 @@ def create_drive_subfolders_from_yaml(service, drive_id: str, parent_folder_id: 
         raise DriveUploadError(f"Errore nella creazione sottocartelle: {e}")
 
 def find_drive_folder_by_name(service, name: str, drive_id: str = None):
+    """
+    Ricerca una cartella per nome su Google Drive (nella root del Drive specificato).
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        name (str): Nome della cartella da cercare.
+        drive_id (str, optional): ID del Drive condiviso.
+
+    Raises:
+        DriveDownloadError: In caso di errore nella ricerca.
+
+    Returns:
+        dict | None: Info cartella trovata (id, name) oppure None.
+    """
     logger.debug(f"🔎 Ricerca cartella '{name}' in Drive (ID: {drive_id})")
     try:
         query = f"name = '{name}' and mimeType = 'application/vnd.google-apps.folder'"
@@ -161,6 +250,19 @@ def find_drive_folder_by_name(service, name: str, drive_id: str = None):
         raise DriveDownloadError(f"Errore durante la ricerca della cartella '{name}': {e}")
 
 def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive_raw_folder_id: str):
+    """
+    Carica ricorsivamente tutti i file dalla cartella raw_dir_path su Drive,
+    mantenendo la struttura di sottocartelle.
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        raw_dir_path (Path): Directory locale da caricare.
+        drive_id (str): ID del Drive condiviso.
+        drive_raw_folder_id (str): ID della cartella "raw" su Drive.
+
+    Returns:
+        None
+    """
     def upload_file(file_path: Path, parent_id: str):
         file_metadata = {
             'name': file_path.name,
@@ -222,6 +324,17 @@ def upload_folder_to_drive_raw(service, raw_dir_path: Path, drive_id: str, drive
     logger.info("✅ Upload ricorsivo cartella raw completato.")
 
 def upload_config_to_drive_folder(service, config_path: Path, drive_folder_id: str):
+    """
+    Carica config.yaml su Drive, eliminando eventuali versioni precedenti nella cartella.
+
+    Args:
+        service: Istanza autenticata Google Drive.
+        config_path (Path): Path locale del file YAML da caricare.
+        drive_folder_id (str): ID della cartella Drive di destinazione.
+
+    Raises:
+        Exception: In caso di errore nell’upload.
+    """
     # Elimina eventuali config.yaml già presenti
     query = (
         f"'{drive_folder_id}' in parents and name = '{config_path.name}' and trashed = false"

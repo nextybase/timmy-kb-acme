@@ -1,12 +1,32 @@
+"""
+logging_utils.py
+
+Utility per la creazione di logger strutturati per la pipeline Timmy-KB.
+Supporta configurazione via .env (TimmySecrets), logging su file e console, 
+formattazione uniforme e safe fallback in caso di errori su file handler.
+"""
+
 import logging
 import os
 
 def get_structured_logger(name="default", log_file=None, level=None):
     """
-    Logger strutturato con supporto configurazione via .env (TimmySecrets).
-    Importa TimmySecrets localmente per evitare import circolari.
+    Crea un logger strutturato con supporto a configurazione via .env (TimmySecrets).
+    Evita duplicazione handler; importa TimmySecrets localmente per non avere import circolari.
 
-    Se il logger esiste già (handler presente), NON reimposta gli handler/livello.
+    - Se il logger esiste già (handler presente), restituisce il logger esistente.
+    - Supporta logging su file se specificato, altrimenti solo console.
+
+    Args:
+        name (str, optional): Nome del logger (default "default").
+        log_file (str, optional): Path file di log (default: da TimmySecrets o None).
+        level (int, optional): Livello logging (default: INFO o da TimmySecrets).
+
+    Returns:
+        logging.Logger: Logger configurato secondo le regole pipeline.
+
+    Raises:
+        Nessuna: fallback silenzioso se TimmySecrets/log_file non disponibili.
     """
     logger = logging.getLogger(name)
 

@@ -1,3 +1,11 @@
+"""
+utils.py
+
+Utility di validazione e supporto per la pipeline Timmy-KB.  
+Include funzioni per validazione slug e per la verifica preventiva dell’ambiente di pre-onboarding,
+con controllo file di configurazione, chiavi obbligatorie e directory critiche.
+"""
+
 import sys
 import logging
 from pathlib import Path
@@ -9,6 +17,12 @@ def is_valid_slug(slug: str) -> bool:
     """
     Verifica che lo slug sia conforme a [a-z0-9-], senza caratteri strani o path traversali.
     Utile per validare identificativi di clienti, repo, cartelle output, ecc.
+
+    Args:
+        slug (str): Stringa da validare.
+
+    Returns:
+        bool: True se valido, False altrimenti.
     """
     if not slug:
         return False
@@ -19,6 +33,9 @@ def validate_preonboarding_environment():
     Step 1: Verifica presenza, leggibilità e conformità di config/config.yaml.
     Step 2: Se tutto ok, verifica l'esistenza degli altri file e directory critici.
     In caso di errore, logga un report dettagliato e solleva eccezione custom.
+
+    Raises:
+        PreOnboardingValidationError: Se mancano file, chiavi obbligatorie o directory critiche.
     """
     logger = logging.getLogger("preonboarding.validation")
     # --- STEP 1: Validazione config principale ---

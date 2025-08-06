@@ -102,3 +102,4 @@ La Knowledge Base (KB) semantica di Timmy è progettata come base informativa st
 ---
 
 **Nota**: I moduli da implementare sono già previsti nella roadmap, la struttura del repo è allineata, e il processo di validazione file/config è stato integrato e testato.
+

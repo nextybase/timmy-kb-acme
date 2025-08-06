@@ -1,3 +1,12 @@
+"""
+content_utils.py
+
+Utility per la generazione e validazione di file markdown a partire dai PDF raw,
+nell’ambito della pipeline Timmy-KB.  
+Permette la conversione automatica, la generazione dei file di sommario/documentazione
+e la validazione delle directory di output.
+"""
+
 from pathlib import Path
 from typing import List
 from pipeline.logging_utils import get_structured_logger
@@ -12,7 +21,7 @@ def convert_files_to_structured_markdown(config, mapping: dict):
 
     Args:
         config: Oggetto di configurazione con attributi .md_output_path_path e .raw_dir_path
-        mapping: Dizionario semantico per la conversione (placeholder)
+        mapping (dict): Dizionario semantico per la conversione (placeholder, non usato qui)
     """
     md_dir = config.md_output_path_path
     raw_dir = config.raw_dir_path
@@ -40,8 +49,8 @@ def generate_summary_markdown(md_files: List[Path], md_dir: Path):
     Genera il file SUMMARY.md nella directory markdown.
 
     Args:
-        md_files: Lista di Path dei file markdown
-        md_dir: Directory in cui salvare SUMMARY.md
+        md_files (List[Path]): Lista di Path dei file markdown.
+        md_dir (Path): Directory in cui salvare SUMMARY.md.
     """
     summary_path = md_dir / "SUMMARY.md"
     try:
@@ -59,7 +68,7 @@ def generate_readme_markdown(md_dir: Path):
     Genera il file README.md nella directory markdown.
 
     Args:
-        md_dir: Directory in cui salvare README.md
+        md_dir (Path): Directory in cui salvare README.md.
     """
     readme_path = md_dir / "README.md"
     try:
@@ -75,11 +84,11 @@ def validate_markdown_dir(md_dir: Path):
     Verifica che la directory markdown esista e sia una directory valida.
 
     Args:
-        md_dir: Path della directory markdown
+        md_dir (Path): Path della directory markdown.
 
     Raises:
-        FileNotFoundError: se la directory non esiste
-        NotADirectoryError: se il path non è una directory
+        FileNotFoundError: se la directory non esiste.
+        NotADirectoryError: se il path non è una directory.
     """
     if not md_dir.exists():
         logger.error(f"❌ La cartella markdown non esiste: {md_dir}")

@@ -1,3 +1,11 @@
+"""
+pre_onboarding.py
+
+Procedura di pre-onboarding per pipeline NeXT.  
+Crea la configurazione di progetto e la struttura di cartelle locali e su Google Drive per il cliente specificato.
+Valida input e ambiente, genera/configura file, effettua upload su Drive e struttura le sottocartelle secondo YAML.
+"""
+
 # Standard library
 import sys
 from pathlib import Path
@@ -24,6 +32,29 @@ from pipeline.utils import is_valid_slug, validate_preonboarding_environment
 load_dotenv()
 
 def preonboarding_main(slug=None, client_name=None, no_interactive=False):
+    """
+    Orchestrates the Pre-Onboarding phase for a new semantic onboarding process.
+
+    - Valida ambiente e parametri, richiede input interattivo se necessario.
+    - Genera file di configurazione YAML specifico per il cliente.
+    - Crea cartelle output locali (raw, md).
+    - Crea o trova cartella su Google Drive e carica la config.
+    - Aggiorna la config con l'ID della cartella Drive.
+    - Struttura le sottocartelle su Drive da template YAML, se presente.
+
+    Args:
+        slug (str, optional): Identificativo cliente/progetto (es: acme-srl).
+        client_name (str, optional): Nome completo cliente.
+        no_interactive (bool, optional): Disabilita richieste input se True (modalità CI).
+
+    Raises:
+        PipelineError: Errori di input, ambiente o operazioni pipeline.
+        PreOnboardingValidationError: Errori di validazione ambiente/pre-onboarding.
+        Exception: Qualsiasi errore imprevisto (loggato, forza uscita).
+
+    Returns:
+        None
+    """
     logger = get_structured_logger("pre_onboarding", "logs/pre_onboarding.log")
     logger.info("▶️ Procedura di pre-onboarding NeXT")
     try:
@@ -116,6 +147,13 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         sys.exit(1)
 
 if __name__ == "__main__":
+    """
+    Avvia la procedura di pre-onboarding da CLI.
+    Parametri supportati:
+      --slug           Identificativo cliente/progetto (es: acme-srl)
+      --client-name    Nome completo cliente
+      --no-interactive Disabilita richieste input (solo pipeline/CI)
+    """
     parser = argparse.ArgumentParser(
         description="Procedura di pre-onboarding NeXT (config + setup cartelle)",
         epilog="Esempio: python pre_onboarding.py --slug dummy --client-name 'Dummy Corp' --no-interactive"

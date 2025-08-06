@@ -1,3 +1,11 @@
+"""
+onboarding_full.py
+
+Orchestratore principale per il processo di onboarding documentale Timmy-KB.  
+Automatizza la validazione della configurazione, download e conversione PDF,  
+enrichment semantico, generazione markdown, preview GitBook e push su GitHub.
+"""
+
 # Standard library
 import os
 import sys
@@ -29,10 +37,15 @@ from semantic.semantic_mapping import load_semantic_mapping
 # Esegui subito dopo gli import di terze parti
 load_dotenv()
 
-
 os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
 def check_docker_running():
+    """
+    Verifica che Docker sia attivo ed eseguibile sul sistema.
+
+    Returns:
+        bool: True se Docker risponde, False altrimenti.
+    """
     try:
         subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
@@ -45,6 +58,29 @@ def onboarding_main(
     auto_push=False,
     skip_preview=False
 ):
+    """
+    Orchestrates the full onboarding pipeline for Timmy-KB.
+
+    - Valida parametri e configurazione.
+    - Pulizia cartelle di output e workspace.
+    - Download dei PDF da Drive nella cartella "raw".
+    - Conversione automatica PDF -> markdown strutturato.
+    - Enrichment semantico del markdown.
+    - Generazione SUMMARY.md e README.md.
+    - Preview locale con Docker/Honkit (facoltativa).
+    - Push su GitHub automatizzato o su richiesta.
+
+    Args:
+        slug (str, optional): Identificativo cliente/progetto (es: acme-srl).
+        no_interactive (bool, optional): Disabilita input interattivo (modalità CI).
+        auto_push (bool, optional): Esegui sempre push GitHub senza conferma.
+        skip_preview (bool, optional): Salta la preview Docker/Honkit.
+
+    Raises:
+        PipelineError: Errori bloccanti nella pipeline o nella configurazione.
+        ValidationError: Errori di validazione config (Pydantic).
+        Exception: Errori imprevisti.
+    """
     logger = get_structured_logger("onboarding_full", "logs/onboarding.log")
     logger.info("▶️ Avvio pipeline onboarding Timmy-KB")
 
@@ -141,6 +177,14 @@ def onboarding_main(
         raise PipelineError(e)
 
 if __name__ == "__main__":
+    """
+    Avvia la procedura di onboarding Timmy-KB da CLI.
+    Parametri supportati:
+      --slug           Identificativo cliente/progetto (es: acme-srl)
+      --no-interactive Disabilita input interattivo (solo pipeline/CI)
+      --auto-push      Esegui push GitHub senza chiedere conferma
+      --skip-preview   Salta preview Docker/Honkit
+    """
     parser = argparse.ArgumentParser(
         description="Onboarding completo Timmy-KB (automazione pipeline)",
         epilog="Esempio: python onboarding.py --slug dummy --auto-push --skip-preview --no-interactive"

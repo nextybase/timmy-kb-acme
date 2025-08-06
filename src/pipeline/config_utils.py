@@ -1,7 +1,9 @@
 """
 pipeline/config_utils.py
+
 Utility e modello di configurazione per la pipeline Timmy-KB.
 Gestione centralizzata dei path e dei parametri, con mappatura chiavi YAML → property Python.
+Consente caricamento, scrittura e accesso tipizzato/configurabile a tutte le directory di lavoro pipeline.
 """
 
 from dotenv import load_dotenv
@@ -21,12 +23,20 @@ logger = get_structured_logger("pipeline.config_utils")
 # =======================
 
 class TimmySecrets(BaseModel):
+    """
+    Modello per i secrets (variabili sensibili) necessari alla pipeline Timmy-KB.
+    Popolato tramite variabili d'ambiente o YAML.
+    """
     DRIVE_ID: Optional[str] = None
     SERVICE_ACCOUNT_FILE: Optional[str] = None
     GITHUB_TOKEN: Optional[str] = None
     # ... aggiungi altri secrets se necessari
 
 class TimmyConfig(BaseModel):
+    """
+    Modello di configurazione principale per la pipeline Timmy-KB.
+    Permette accesso strutturato e validato a tutte le directory, parametri e secrets del cliente.
+    """
     slug: str
     output_dir: str                  # Radice output cliente, es: output/timmy-kb-{slug}
     raw_dir: str                     # Cartella raw PDF, es: output/timmy-kb-{slug}/raw
@@ -47,32 +57,39 @@ class TimmyConfig(BaseModel):
 
     @property
     def output_dir_path(self) -> Path:
-        """Path radice output cliente (output_dir)"""
+        """Restituisce il Path radice output cliente (`output_dir`)."""
         return Path(self.output_dir)
 
     @property
     def raw_dir_path(self) -> Path:
-        """Path cartella raw PDF"""
+        """Restituisce il Path della cartella raw PDF (`raw_dir`)."""
         return Path(self.raw_dir)
 
     @property
     def md_output_path_path(self) -> Path:
-        """Path cartella markdown finali"""
+        """Restituisce il Path della cartella markdown finali (`md_output_path`)."""
         return Path(self.md_output_path)
 
     @property
     def book_dir(self) -> Path:
-        """Alias retrocompatibile per md_output_path"""
+        """Alias retrocompatibile per md_output_path_path."""
         return self.md_output_path_path
 
     @property
     def config_path_path(self) -> Optional[Path]:
-        """Path oggetto file config, se valorizzato"""
+        """Restituisce il Path oggetto file config, se valorizzato."""
         return Path(self.config_path) if self.config_path else None
 
-    # Utility: path helper per altre sottocartelle future
     def subfolder(self, name: str) -> Path:
-        """Restituisce il path di una sottocartella della radice output"""
+        """
+        Restituisce il Path di una sottocartella della radice output.
+
+        Args:
+            name (str): Nome della sottocartella.
+
+        Returns:
+            Path: Path completo della sottocartella.
+        """
         return self.output_dir_path / name
 
 # =======================
@@ -84,6 +101,16 @@ def get_config(slug: str) -> TimmyConfig:
     Carica la config YAML del cliente dalla directory di output.
     Sostituisce i template path (con {slug}) e popola il modello TimmyConfig.
     Logga warning se il file config non esiste.
+
+    Args:
+        slug (str): Identificativo cliente/progetto (es: acme-srl).
+
+    Raises:
+        FileNotFoundError: Se il file di config non viene trovato.
+        Exception: Per errori di parsing/caricamento YAML.
+
+    Returns:
+        TimmyConfig: Istanza di configurazione validata.
     """
     config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
     if not config_path.exists():
@@ -121,6 +148,16 @@ def write_client_config_file(config: dict, slug: str) -> Path:
     in output/timmy-kb-<slug>/config/config.yaml.
     Restituisce il path del file creato.
     Logga warning/error se la scrittura fallisce.
+
+    Args:
+        config (dict): Dizionario di configurazione da salvare.
+        slug (str): Identificativo cliente/progetto.
+
+    Raises:
+        Exception: In caso di errore nella scrittura file.
+
+    Returns:
+        Path: Percorso file YAML creato.
     """
     config_dir = Path(f"output/timmy-kb-{slug}") / "config"
     try:

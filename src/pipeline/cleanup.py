@@ -1,4 +1,11 @@
-# pipeline/cleanup.py
+"""
+cleanup.py
+
+Utility di pulizia sicura delle cartelle di output per pipeline Timmy-KB.
+Permette di svuotare il contenuto di una directory (file e sottocartelle),  
+ma protegge root, home e directory critiche.  
+Utilizzabile sia da pipeline/orchestratori che da CLI (conferma utente/flag --force).
+"""
 
 import shutil
 import argparse
@@ -12,6 +19,12 @@ def cleanup_output_folder(folder_path):
     """
     Svuota tutto il contenuto della cartella specificata (file e sottocartelle),
     lasciando intatta la cartella stessa.
+
+    Args:
+        folder_path (str | Path): Percorso della cartella da svuotare.
+
+    Raises:
+        ValueError: Se si tenta di pulire la root del progetto.
     """
     folder = Path(folder_path).resolve()
     # Sicurezza: mai permettere "." o la root del progetto!
@@ -41,7 +54,13 @@ def cleanup_output_folder(folder_path):
 def safe_clean_dir(folder_path):
     """
     Cancella tutto il contenuto della cartella in modo sicuro.
-    Bloccato su cartelle critiche (root, home, etc).
+    Bloccato su cartelle critiche (root, home, ecc.).
+
+    Args:
+        folder_path (str | Path): Percorso della cartella da svuotare.
+
+    Raises:
+        ValueError: Se si tenta di cancellare una directory critica.
     """
     folder = Path(folder_path).resolve()
     forbidden = [Path('/').resolve(), Path.home().resolve(), Path.cwd().root]
@@ -67,6 +86,10 @@ def safe_clean_dir(folder_path):
 
 
 def interactive_cleanup():
+    """
+    Modalità CLI interattiva: richiede all’utente il percorso della cartella,
+    mostra avviso e richiede conferma prima di procedere con la pulizia.
+    """
     print("\n[Timmy-KB] Pulizia cartella di output")
     folder = input("Inserisci il percorso della cartella da svuotare: ").strip()
     if not folder:
@@ -85,6 +108,12 @@ def interactive_cleanup():
 
 
 def cli_cleanup():
+    """
+    Entry-point CLI: parsing argomenti, conferma, chiama cleanup_output_folder().
+
+    --folder (str): Cartella da svuotare.
+    --force (flag): Non chiedere conferma (modalità automatica/pipeline).
+    """
     parser = argparse.ArgumentParser(
         description="Svuota tutto il contenuto di una cartella di output in modo sicuro.",
         epilog="Esempio: python cleanup.py --folder output/timmy-kb-dummy/ --force"

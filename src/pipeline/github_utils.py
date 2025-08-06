@@ -1,3 +1,11 @@
+"""
+github_utils.py
+
+Utility per il deploy automatico della cartella markdown su GitHub.  
+Gestisce creazione repository, push forzato su master, gestione repo temporanea e cleanup.  
+Supporta override slug/config ed esclude cartelle non desiderate dal deploy (config, raw, ecc).
+"""
+
 import shutil
 from pathlib import Path
 from git import Repo

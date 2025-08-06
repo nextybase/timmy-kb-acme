@@ -1,13 +1,12 @@
 # Timmy-KB – Knowledge Base Onboarding Pipeline (v1.0)
 
---- 
+---
 
 Pipeline modulare e automatizzata per l’onboarding strutturato di PMI nella piattaforma NeXT, con generazione di knowledge base in Markdown semantico e pubblicazione continua su GitHub/GitBook.
 
 ## 🧠 Filosofia e Obiettivi
 
-La pipeline Timmy-KB garantisce che ogni informazione, tag, relazione e categoria sia esplicitamente dichiarata e tracciabile, secondo policy e mapping YAML forniti a monte.
-Nessuna inferenza automatica viene applicata senza controllo: la semantica è sempre dichiarata, non dedotta.
+La pipeline Timmy-KB garantisce che ogni informazione, tag, relazione e categoria sia esplicitamente dichiarata e tracciabile, secondo policy e mapping YAML forniti a monte. Nessuna inferenza automatica viene applicata senza controllo: la semantica è sempre dichiarata, non dedotta.
 
 - Parsing e strutturazione deterministici e auditabili
 - Semantica e relazioni forti, sempre definite da configurazione
@@ -58,25 +57,27 @@ project-root/
 ## 🚦 Quickstart
 
 1. **Clona il repository e installa le dipendenze**
-2. **Configura `.env`** (vedi esempio nel repo)
+2. \*\*Configura \*\*\`\` (vedi esempio nel repo)
 3. **Esegui il pre-onboarding:**
-    ```bash
-    python src/pre_onboarding.py
-    ```
+   ```bash
+   python src/pre_onboarding.py
+   ```
    Segui i prompt per slug/nome cliente oppure usa i parametri CLI (`--slug`, `--client-name`, `--no-interactive`)
 4. **Popola la cartella Drive** con i PDF richiesti
 5. **Esegui onboarding completo:**
-    ```bash
-    python src/onboarding_full.py
-    ```
+   ```bash
+   python src/onboarding_full.py
+   ```
    Usa i flag CLI per modalità automatica (`--slug`, `--auto-push`, `--skip-preview`, `--no-interactive`), oppure interagisci guidato
 
 ## 🧪 Testing e Dummy Data
 
 Tutti i dati di test sono generati tramite:
+
 ```bash
 python src/tools/gen_dummy_kb.py
 ```
+
 - Slug di test: sempre `dummy`
 - Output test separato da dati reali (`output/timmy-kb-dummy/`)
 - Tutti i test (`tests/`) sono idempotenti, batch/manuale friendly e automatizzati
@@ -85,6 +86,7 @@ python src/tools/gen_dummy_kb.py
 ## 📦 Funzioni principali e CLI orchestratori
 
 Gli orchestratori supportano:
+
 - `--slug`: slug del cliente
 - `--client-name`: nome cliente (pre-onboarding)
 - `--no-interactive`: disabilita input (solo batch/CI)
@@ -101,8 +103,8 @@ Tutti i parametri possono essere combinati per workflow automatici. In assenza, 
 
 ## 📝 Policy, regole e documentazione
 
-- **Regole di coding**: [coding_rule.md](coding_rule.md)
-- **Manifesto tecnico**: [manifesto_tecnico.md](manifesto_tecnico.md)
+- **Regole di coding**: [coding\_rule.md](coding_rule.md)
+- **Manifesto tecnico**: [manifesto\_tecnico.md](manifesto_tecnico.md)
 - **Best practice pipeline**: PDF “Best practices per pipeline Python” (Kedro, Airflow, Luigi)
 - **Modello NeXT**: Paper NeXT allegato
 
