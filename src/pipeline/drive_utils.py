@@ -1,23 +1,50 @@
 import io
 import os
+import time
 from pathlib import Path
 from typing import Optional
+import shutil
 import yaml
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
+from googleapiclient.errors import HttpError
 from google.oauth2 import service_account
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import DriveUploadError
+from pipeline.exceptions import DriveDownloadError, DriveUploadError
+from pipeline.constants import OUTPUT_DIR_NAME
+from pipeline.config_utils import get_settings_for_slug
 
-logger = get_structured_logger("pipeline.drive_utils", "logs/timmy-kb-drive-utils.log")
+logger = get_structured_logger("pipeline.drive_utils")
 
-# -------------------------------------------------------------------
-# AUTENTICAZIONE GOOGLE DRIVE
-# -------------------------------------------------------------------
 
-def get_drive_service(settings):
+# -------------------------------
+# WRAPPER API CON RETRY E LOGGING
+# -------------------------------
+
+def drive_api_call(func, *args, **kwargs):
+    """
+    Esegue una chiamata API Google Drive con retry/backoff su errori temporanei.
+    """
+    for attempt in range(3):
+        try:
+            return func(*args, **kwargs)
+        except HttpError as e:
+            if e.resp.status in [429, 500, 503]:
+                logger.warning(f"[Drive API] Tentativo {attempt+1} fallito, retry...")
+                time.sleep(2 ** attempt)
+                continue
+            raise
+    raise DriveDownloadError("API Google Drive fallita dopo 3 tentativi")
+
+
+# -------------------------------
+# CREAZIONE SERVIZIO
+# -------------------------------
+
+def get_drive_service(settings=None):
+    settings = settings or get_settings_for_slug()
     creds = service_account.Credentials.from_service_account_file(
         settings.SERVICE_ACCOUNT_FILE,
         scopes=["https://www.googleapis.com/auth/drive"]
@@ -25,9 +52,9 @@ def get_drive_service(settings):
     return build("drive", "v3", credentials=creds)
 
 
-# -------------------------------------------------------------------
-# CREAZIONE CARTELLE E UPLOAD
-# -------------------------------------------------------------------
+# -------------------------------
+# FUNZIONI ORIGINALI + INTEGRAZIONI
+# -------------------------------
 
 def create_drive_folder(service, name: str, parent_id: str) -> str:
     file_metadata = {
@@ -35,7 +62,8 @@ def create_drive_folder(service, name: str, parent_id: str) -> str:
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [parent_id]
     }
-    folder = service.files().create(
+    folder = drive_api_call(
+        service.files().create,
         body=file_metadata,
         fields="id",
         supportsAllDrives=True
@@ -46,10 +74,10 @@ def create_drive_folder(service, name: str, parent_id: str) -> str:
 
 
 def find_drive_folder_by_name(service, name: str, parent_id: str, drive_id: str) -> Optional[dict]:
-    from googleapiclient.errors import HttpError
     try:
         query = f"mimeType='application/vnd.google-apps.folder' and name='{name}' and '{parent_id}' in parents and trashed = false"
-        results = service.files().list(
+        results = drive_api_call(
+            service.files().list,
             q=query,
             spaces="drive",
             fields="files(id, name)",
@@ -65,11 +93,11 @@ def find_drive_folder_by_name(service, name: str, parent_id: str, drive_id: str)
         return files[0]
     except HttpError as e:
         if e.resp.status == 404:
-            logger.warning(f"⚠️ Parent ID non trovato o non accessibile: {parent_id}. Procedo come se la cartella '{name}' non esistesse.")
+            logger.warning(f"⚠️ Parent ID non trovato o non accessibile: {parent_id}")
             return None
-        else:
-            logger.error(f"❌ Errore durante la ricerca della cartella '{name}': {e}")
-            raise
+        logger.error(f"❌ Errore nella ricerca della cartella '{name}': {e}")
+        raise
+
 
 def upload_config_to_drive_folder(service, config_path: Path, folder_id: str):
     file_metadata = {
@@ -77,57 +105,23 @@ def upload_config_to_drive_folder(service, config_path: Path, folder_id: str):
         "parents": [folder_id]
     }
     media = MediaFileUpload(str(config_path), mimetype="application/x-yaml")
-    service.files().create(
+    drive_api_call(
+        service.files().create,
         body=file_metadata,
         media_body=media,
         fields="id",
         supportsAllDrives=True
     ).execute()
-    logger.info(f"⬆️ Config caricato: {config_path} → Drive folder ID {folder_id}")
+    logger.info(f"📤 Config caricata: {config_path} ➡️ Drive folder ID {folder_id}")
 
-
-# -------------------------------------------------------------------
-# CREAZIONE SOTTOCARTELLE DA YAML (AGGIORNATA)
-# -------------------------------------------------------------------
-
-def create_drive_subfolders_from_yaml(service, parent_id: str, yaml_path: Path):
-    """Crea sottocartelle in Drive basate sulla struttura definita in un file YAML (supporto root_folders/subfolders)."""
-
-    def _create_recursive(base_parent_id: str, folders: list):
-        """Crea cartelle ricorsivamente in Drive."""
-        for folder_def in folders:
-            folder_name = folder_def.get("name")
-            if not folder_name:
-                continue
-            # Crea la cartella
-            new_folder_id = create_drive_folder(service, folder_name, base_parent_id)
-            # Se ci sono sottocartelle, richiamo ricorsivamente
-            subfolders = folder_def.get("subfolders", [])
-            if subfolders:
-                _create_recursive(new_folder_id, subfolders)
-
-    try:
-        with open(yaml_path, "r", encoding="utf-8") as f:
-            struttura = yaml.safe_load(f) or {}
-        root_folders = struttura.get("root_folders", [])
-        if not root_folders:
-            logger.warning(f"⚠️ Nessuna cartella trovata in root_folders di {yaml_path}")
-            return
-        _create_recursive(parent_id, root_folders)
-        logger.info(f"✅ Sottocartelle create da YAML: {yaml_path}")
-    except Exception as e:
-        logger.error(f"❌ Errore creazione sottocartelle da {yaml_path}: {e}", exc_info=True)
-        raise DriveUploadError(f"Errore creazione sottocartelle da {yaml_path}: {e}")
-
-
-# -------------------------------------------------------------------
-# DOWNLOAD PDF DA DRIVE
-# -------------------------------------------------------------------
 
 def download_drive_pdfs_recursively(service, folder_id: str, local_path: Path, drive_id: str):
-    """Scarica tutti i PDF da una cartella Drive (e sottocartelle) mantenendo la struttura."""
+    """
+    Scarica tutti i PDF da una cartella Drive e sottocartelle mantenendo la struttura.
+    """
     query = f"'{folder_id}' in parents and trashed = false"
-    results = service.files().list(
+    results = drive_api_call(
+        service.files().list,
         q=query,
         spaces="drive",
         fields="files(id, name, mimeType)",
@@ -149,7 +143,8 @@ def download_drive_pdfs_recursively(service, folder_id: str, local_path: Path, d
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-            logger.info(f"⬇️ Scaricato PDF: {file_name} → {local_file_path}")
+            logger.info(f"📥 Scaricato PDF: {file_name} ➡️ {local_file_path}")
+
         elif item["mimeType"] == "application/vnd.google-apps.folder":
             subfolder_path = local_path / item["name"]
             subfolder_path.mkdir(parents=True, exist_ok=True)
@@ -157,7 +152,9 @@ def download_drive_pdfs_recursively(service, folder_id: str, local_path: Path, d
 
 
 def download_drive_pdfs_to_local(service, settings, drive_folder_id: str, drive_id: str):
-    """Scarica i PDF da Drive in locale mantenendo la struttura."""
-    local_path = Path(settings.raw_dir)
+    """
+    Scarica i PDF da Drive in locale, mantenendo la struttura.
+    """
+    local_path = settings.raw_dir
     local_path.mkdir(parents=True, exist_ok=True)
     download_drive_pdfs_recursively(service, drive_folder_id, local_path, drive_id)

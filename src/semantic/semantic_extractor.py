@@ -1,19 +1,23 @@
 """
-Modulo di enrichment semantico: arricchisce i file markdown usando il mapping YAML.
+Modulo di arricchimento semantico:
+applica intestazioni e categorie ai file markdown
+usando il mapping YAML fornito.
 """
 
 from pathlib import Path
 import yaml
+import shutil
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_settings_for_slug
 from semantic.semantic_mapping import load_semantic_mapping
-
+from pipeline.constants import BACKUP_SUFFIX
+from pipeline.exceptions import EnrichmentError
 
 def _resolve_settings(settings=None):
     """
     Restituisce un'istanza Settings.
-    Se non viene passato, prova a usare get_settings_for_slug().
+    Se non viene passato esplicitamente, usa get_settings_for_slug().
     """
     if settings is None:
         return get_settings_for_slug()
@@ -27,7 +31,6 @@ def enrich_markdown_folder(
 ):
     """
     Arricchisce tutti i file markdown in una cartella con tag semantici dal mapping YAML.
-    Di default usa settings.md_output_path e settings.slug.
     """
     settings = _resolve_settings(settings)
     logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
@@ -42,8 +45,8 @@ def enrich_markdown_folder(
 
 def enrich_markdown_file(md_file: Path, mapping: dict, settings=None):
     """
-    Applica enrichment semantico a un singolo file markdown,
-    aggiungendo header/categorie dal mapping.
+    Applica arricchimento semantico a un singolo file markdown,
+    aggiungendo header/categoria dal mapping.
     """
     settings = _resolve_settings(settings)
     logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
@@ -51,29 +54,52 @@ def enrich_markdown_file(md_file: Path, mapping: dict, settings=None):
     fname = md_file.name
     semantic_info = mapping.get(fname, {})
 
-    # Forza la presenza dello slug centrale (anche se mancante nel mapping)
+    # Recupero slug
     slug = semantic_info.get("slug") or settings.slug
     if not slug:
-        logger.error(f"❌ slug mancante sia nel mapping che in settings per il file {fname} (enrichment saltato)")
+        logger.error(f"❌ Slug mancante sia nel mapping che in settings per il file {fname}. Enrichment saltato.")
         return
 
+    # Creazione header YAML
     header_dict = dict(semantic_info)
     header_dict["slug"] = slug
-
     try:
         header_yaml = "---\n" + yaml.safe_dump(header_dict, sort_keys=False, allow_unicode=True) + "---\n\n"
     except Exception as e:
-        logger.error(f"❌ Errore serializzazione YAML frontmatter per {fname}: {e}")
+        logger.error(f"❌ Errore serializzando YAML per {fname}: {e}")
         return
 
-    with open(md_file, "r", encoding="utf-8") as f:
-        content = f.read()
+    # Backup file prima della modifica
+    backup_path = md_file.with_suffix(BACKUP_SUFFIX)
+    try:
+        shutil.copy(md_file, backup_path)
+        logger.info(f"💾 Backup creato: {backup_path}")
+    except Exception as e:
+        logger.warning(f"⚠️ Impossibile creare backup per {fname}: {e}")
 
+    # Lettura contenuto originale
+    try:
+        with open(md_file, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        logger.error(f"❌ Errore lettura {fname}: {e}")
+        return
+
+    # Evita doppio inserimento header
     if content.strip().startswith("---"):
-        logger.info(f"ℹ️ Frontmatter già presente per {fname}, enrichment saltato.")
+        logger.info(f"ℹ️ Header già presente in {fname}, enrichment saltato.")
         return
 
-    with open(md_file, "w", encoding="utf-8") as f:
-        f.write(header_yaml + content)
-
-    logger.info(f"✨ Enrichment applicato a: {fname} (slug: {slug})")
+    # Scrittura con header
+    try:
+        with open(md_file, "w", encoding="utf-8") as f:
+            f.write(header_yaml + content)
+        logger.info(f"✅ Enrichment applicato a: {fname} (slug: {slug})")
+    except Exception as e:
+        logger.error(f"❌ Errore scrittura {fname}, rollback in corso: {e}")
+        try:
+            shutil.copy(backup_path, md_file)
+            logger.info(f"🔄 Ripristinato file da backup per {fname}")
+        except Exception as rollback_err:
+            logger.critical(f"❌ Errore nel rollback per {fname}: {rollback_err}")
+        raise EnrichmentError(f"Errore enrichment per {fname}") from e
