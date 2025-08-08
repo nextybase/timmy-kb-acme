@@ -5,22 +5,38 @@ Fornisce utility per caricare e applicare il mapping.
 
 import yaml
 from pathlib import Path
-from pipeline.config_utils import settings  # Import settings per default robusto
+from pipeline.config_utils import get_settings_for_slug  # <-- tolto import diretto settings
 
-def load_semantic_mapping(mapping_path: str = None) -> dict:
+
+def _resolve_settings(settings=None):
+    """
+    Restituisce un'istanza Settings.
+    Se non viene passato, prova a usare get_settings_for_slug().
+    """
+    if settings is None:
+        return get_settings_for_slug()
+    return settings
+
+
+def load_semantic_mapping(mapping_path: str = None, settings=None) -> dict:
     """
     Carica il mapping semantico dal file YAML specificato.
     Ritorna un dizionario: {nome_file_md: {slug, categorie, ...}, ...}
-    Usa per default il path centrale da settings.
+    Usa per default il path centrale da settings se non fornito.
     """
+    settings = _resolve_settings(settings)
+
     if mapping_path is None:
         mapping_path = "config/semantic_mapping.yaml"
+
     mapping_file = Path(mapping_path)
     if not mapping_file.exists():
         raise FileNotFoundError(f"File di mapping semantico non trovato: {mapping_path}")
+
     with open(mapping_file, "r", encoding="utf-8") as f:
         mapping = yaml.safe_load(f) or {}
     return mapping
+
 
 def get_semantic_mapping_for_file(file_path: str, mapping: dict) -> dict:
     """
@@ -29,16 +45,18 @@ def get_semantic_mapping_for_file(file_path: str, mapping: dict) -> dict:
         file_path (str): Path del file markdown (usa solo il nome).
         mapping (dict): Mapping completo caricato da YAML.
     Returns:
-        dict: Dizionario con info semantiche (vuoto se non trovate).
+        dict: Dizionario con info semantiche (vuoto se non trovato).
     """
     fname = Path(file_path).name
     return mapping.get(fname, {})
+
 
 def list_semantic_categories(mapping: dict) -> list:
     """
     Restituisce la lista unica delle categorie semantiche definite nel mapping.
     """
     return list({cat for m in mapping.values() for cat in m.get("categorie", [])})
+
 
 def check_missing_slugs(mapping: dict) -> list:
     """

@@ -6,29 +6,48 @@ from pathlib import Path
 import yaml
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import settings  # <--- Import centrale settings
+from pipeline.config_utils import get_settings_for_slug
 from semantic.semantic_mapping import load_semantic_mapping
 
-logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
 
-def enrich_markdown_folder(md_output_path: Path = None, mapping_path: str = "config/semantic_mapping.yaml"):
+def _resolve_settings(settings=None):
+    """
+    Restituisce un'istanza Settings.
+    Se non viene passato, prova a usare get_settings_for_slug().
+    """
+    if settings is None:
+        return get_settings_for_slug()
+    return settings
+
+
+def enrich_markdown_folder(
+    md_output_path: Path = None,
+    mapping_path: str = "config/semantic_mapping.yaml",
+    settings=None
+):
     """
     Arricchisce tutti i file markdown in una cartella con tag semantici dal mapping YAML.
     Di default usa settings.md_output_path e settings.slug.
     """
+    settings = _resolve_settings(settings)
+    logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
+
     if md_output_path is None:
         md_output_path = settings.md_output_path
+
     mapping = load_semantic_mapping(mapping_path)
     for md_file in Path(md_output_path).glob("*.md"):
-        enrich_markdown_file(md_file, mapping)
+        enrich_markdown_file(md_file, mapping, settings=settings)
 
-def enrich_markdown_file(md_file: Path, mapping: dict):
+
+def enrich_markdown_file(md_file: Path, mapping: dict, settings=None):
     """
-    Applica enrichment semantico a un singolo file markdown, aggiungendo header/categorie dal mapping.
-    - Inserisce sempre lo slug (obbligatorio)
-    - Serializza header YAML in modo robusto
-    - Logga e non arricchisce se frontmatter già presente
+    Applica enrichment semantico a un singolo file markdown,
+    aggiungendo header/categorie dal mapping.
     """
+    settings = _resolve_settings(settings)
+    logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
+
     fname = md_file.name
     semantic_info = mapping.get(fname, {})
 
@@ -50,10 +69,11 @@ def enrich_markdown_file(md_file: Path, mapping: dict):
     with open(md_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    if content.lstrip().startswith("---"):
-        logger.info(f"Frontmatter già presente per {fname}, enrichment saltato.")
+    if content.strip().startswith("---"):
+        logger.info(f"ℹ️ Frontmatter già presente per {fname}, enrichment saltato.")
         return
 
     with open(md_file, "w", encoding="utf-8") as f:
         f.write(header_yaml + content)
-    logger.info(f"✅ Enrichment applicato a: {fname} (slug: {slug})")
+
+    logger.info(f"✨ Enrichment applicato a: {fname} (slug: {slug})")

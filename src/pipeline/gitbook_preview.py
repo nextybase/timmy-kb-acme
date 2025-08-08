@@ -14,17 +14,23 @@ from pathlib import Path
 from typing import Union
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError
-from pipeline.config_utils import settings  # <-- import centralizzato
+from pipeline.config_utils import get_settings_for_slug  # <-- tolto import diretto settings
 
 logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log")
 
-def ensure_book_json(book_dir: Path) -> None:
-    """
-    Garantisce la presenza di un file book.json di base nella directory markdown.
 
-    Args:
-        book_dir (Path): Directory markdown del progetto.
+def _resolve_settings(settings=None):
     """
+    Restituisce un'istanza Settings.
+    Se non viene passato esplicitamente, prova a usare get_settings_for_slug().
+    """
+    if settings is None:
+        return get_settings_for_slug()
+    return settings
+
+
+def ensure_book_json(book_dir: Path) -> None:
+    """Garantisce la presenza di un file book.json di base nella directory markdown."""
     book_json_path = book_dir / "book.json"
     if not book_json_path.exists():
         data = {
@@ -37,13 +43,9 @@ def ensure_book_json(book_dir: Path) -> None:
     else:
         logger.info(f"📖 book.json già presente: {book_json_path}")
 
-def ensure_package_json(book_dir: Path) -> None:
-    """
-    Garantisce la presenza di un file package.json di base per la preview Honkit.
 
-    Args:
-        book_dir (Path): Directory markdown del progetto.
-    """
+def ensure_package_json(book_dir: Path) -> None:
+    """Garantisce la presenza di un file package.json di base per la preview Honkit."""
     package_json_path = book_dir / "package.json"
     if not package_json_path.exists():
         data = {
@@ -62,41 +64,35 @@ def ensure_package_json(book_dir: Path) -> None:
     else:
         logger.info(f"📦 package.json già presente: {package_json_path}")
 
+
 def run_gitbook_docker_preview(
     config: Union[dict, None] = None,
     port: int = 4000,
-    container_name: str = "honkit_preview"
+    container_name: str = "honkit_preview",
+    settings=None
 ) -> None:
     """
-    Avvia la preview GitBook/Honkit in Docker e garantisce la chiusura e la rimozione
-    del container al termine, anche in caso di errore o interruzione.
-    Rimuove sempre ogni residuo preesistente con lo stesso nome container.
-
-    Args:
-        config (dict | None): Vecchia compatibilità. Se None, usa settings.md_output_path.
-        port (int, optional): Porta di pubblicazione locale (default 4000).
-        container_name (str, optional): Nome container Docker temporaneo.
-
-    Raises:
-        PreviewError: In caso di errore nel build/serve della preview.
+    Avvia la preview GitBook/Honkit in Docker e garantisce la chiusura e rimozione
+    del container al termine o in caso di errore/interruzione.
     """
-    # Cleanup preventivo di eventuale container pre-esistente (anche Exited)
+    settings = _resolve_settings(settings)
+
+    # Cleanup preventivo di eventuale container pre-esistente
     try:
         subprocess.run(
             ["docker", "rm", "-f", container_name],
             capture_output=True, text=True, check=False
         )
-        logger.info(f"🧹 (Pre-run) Docker container '{container_name}' rimosso se esistente.")
+        logger.info(f"🛑 (Pre-run) Docker container '{container_name}' rimosso se esistente.")
     except Exception as e:
         logger.warning(f"⚠️ (Pre-run) Impossibile rimuovere container Docker '{container_name}': {e}")
 
-    # --- Centrale: ora path markdown sempre da settings, salvo override esplicito ---
+    # Determina la path markdown
     if config is None:
         md_output_path = settings.md_output_path.resolve()
     elif isinstance(config, dict):
         md_output_path = Path(config["md_output_path"]).resolve()
     else:
-        # Compatibilità con vecchi oggetti TimmyConfig, ora dismessi
         md_output_path = Path(getattr(config, "md_output_path", settings.md_output_path)).resolve()
 
     logger.info(f"📦 Directory per anteprima: {md_output_path}")
@@ -104,7 +100,7 @@ def run_gitbook_docker_preview(
     ensure_book_json(md_output_path)
     ensure_package_json(md_output_path)
 
-    logger.info("🛠️  Build statico Honkit (Docker)...")
+    logger.info("🏗️ Build statica Honkit (Docker)...")
     build_cmd = [
         "docker", "run", "--rm",
         "--workdir", "/app",
@@ -117,7 +113,7 @@ def run_gitbook_docker_preview(
         logger.error("❌ Errore durante `honkit build`.")
         raise PreviewError(f"Errore `honkit build`: {e}")
 
-    logger.info("🔄 Avvio anteprima GitBook (Docker serve live)...")
+    logger.info("🌐 Avvio anteprima GitBook (Docker live)...")
     serve_cmd = [
         "docker", "run", "-d",
         "--name", container_name,
@@ -131,41 +127,20 @@ def run_gitbook_docker_preview(
         serve_proc = subprocess.run(serve_cmd, check=True, capture_output=True, text=True)
         container_id = serve_proc.stdout.strip()
         logger.info(f"🌍 Anteprima live avviata: http://localhost:{port} (container: {container_id})")
-        # Modalità interattiva solo se non siamo in batch/CI
         if not os.environ.get("BATCH_TEST"):
-            input("🔄 Premi INVIO per chiudere l'anteprima e arrestare Docker...")
+            input("⏸️ Premi INVIO per chiudere l'anteprima e arrestare Docker...")
         else:
-            logger.info("Modalità batch/CI: preview servita senza attesa, container sarà chiuso subito.")
+            logger.info("Modalità batch/CI: anteprima servita senza attesa interattiva.")
     except subprocess.CalledProcessError as e:
         logger.error(
             f"❌ Errore durante `honkit serve`: {e}\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"
         )
         raise PreviewError(f"Errore `honkit serve`: {e}")
     finally:
-        logger.info("💕 Arresto container Docker...")
+        logger.info("🛑 Arresto container Docker...")
         try:
-            # Prova prima con stop
-            stop_proc = subprocess.run(
-                ["docker", "stop", container_name],
-                capture_output=True, text=True, check=False
-            )
-            logger.info(f"🛑 Docker stop stdout: {stop_proc.stdout.strip()}")
-            logger.info(f"🛑 Docker stop stderr: {stop_proc.stderr.strip()}")
-            if stop_proc.returncode != 0:
-                logger.warning("🛑 Docker stop non riuscito, provo con 'docker kill'")
-                kill_proc = subprocess.run(
-                    ["docker", "kill", container_name],
-                    capture_output=True, text=True, check=False
-                )
-                logger.info(f"🛑 Docker kill stdout: {kill_proc.stdout.strip()}")
-                logger.info(f"🛑 Docker kill stderr: {kill_proc.stderr.strip()}")
-            # Pulizia finale anche di container exited
-            rm_proc = subprocess.run(
-                ["docker", "rm", "-f", container_name],
-                capture_output=True, text=True, check=False
-            )
-            logger.info(f"🧹 Docker rm stdout: {rm_proc.stdout.strip()}")
-            logger.info(f"🧹 Docker rm stderr: {rm_proc.stderr.strip()}")
-            logger.info(f"🧹 Docker container '{container_name}' rimosso (se presente).")
+            subprocess.run(["docker", "stop", container_name], capture_output=True, text=True, check=False)
+            subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, text=True, check=False)
+            logger.info(f"✅ Container Docker '{container_name}' rimosso.")
         except Exception as e:
-            logger.error(f"⚠️ Errore durante la rimozione del container Docker: {e}")
+            logger.error(f"⚠️ Errore nella rimozione del container Docker: {e}")
