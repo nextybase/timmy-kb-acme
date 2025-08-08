@@ -2,6 +2,59 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-08] fix/refactor: stabilizzazione pre-onboarding e gestione cartelle Drive
+
+### 🛠️ Refactor `drive_utils.py`
+- Rimosso parametro obbligatorio `settings_instance` da `create_drive_folder`: ora accetta solo `service`, `name` e `parent_id`.
+- Gestione `driveId` limitata alle query (`files().list`), evitando errori API in `files().create`.
+- Log migliorati con indicazione chiara di nome cartella, ID e parent su Drive.
+
+### 🔄 Aggiornamenti `pre_onboarding.py`
+- Corretto passaggio parametri a `create_drive_folder` e `upload_config_to_drive_folder` per compatibilità API.
+- Implementata creazione automatica su Drive della struttura `raw/`, `book/`, `config/` accanto alla cartella cliente.
+- Backup automatico `.bak` del `config.yaml` locale dopo aggiornamento con `drive_folder_id`.
+
+### 🐞 Fix limiti Google Drive
+- Gestito errore 403 `storageQuotaExceeded` con indicazione chiara nel log: upload supportato solo su Shared Drive.
+- Allineati riferimenti da `DRIVE_ROOT_ID` a `DRIVE_ID` come definito in `.env`.
+
+### ✅ Risultati
+- Pre-onboarding ora crea struttura cartelle sia in locale che su Drive senza errori di parametri API.
+- `config.yaml` aggiornato e sincronizzato con ID cartella cliente su Drive.
+- Pipeline pronta per test di onboarding completo e push GitHub.
+
+
+## [2025-08-08] refactor: allineamento orchestratori, fix push GitHub e stabilizzazione pre-onboarding/onboarding
+
+### 🔄 Allineamento `pre_onboarding.py` con repo
+- Ripristinata la versione aggiornata dal repository come base, applicando **solo le modifiche necessarie**:
+  - Uso corretto di `create_drive_folder` con 3 argomenti per evitare errori `unexpected keyword argument driveId`.
+  - Conservata l’inizializzazione di `settings` per lo `slug` corrente tramite `get_settings_for_slug`.
+  - Confermata la generazione completa della struttura cartelle su Drive a partire da `cartelle_raw.yaml`.
+
+### 🛠️ Correzioni `onboarding_full.py`
+- Fix caricamento config cliente: ora `load_client_config` cerca il file in `output/timmy-kb-<slug>/config/config.yaml` senza duplicazioni di path.
+- Aggiornato il blocco finale di push:
+  - Passa l’oggetto `settings` alla funzione `push_output_to_github` per mantenere coerenza multi-cliente.
+  - Gestione interattiva (`y/N`) preservata, con possibilità di `--auto-push` batch.
+- Validata la presenza di `drive_folder_id` e blocco esplicito se mancante, evitando download PDF fuori contesto cliente.
+
+### 🚀 Refactor `github_utils.py`
+- Funzione `push_output_to_github` aggiornata per ricevere **esplicitamente** `settings` e path opzionale `md_dir_path`.
+- Aggiunto fallback a `os.getenv("GITHUB_TOKEN")` per garantire compatibilità con `.env`.
+- Fix mancato import di `os` che causava `NameError` in fase di push.
+- Confermata logica di creazione repo solo se non esiste, push forzato su `master` e commit esclusivo dei `.md` utili.
+
+### 📂 Configurazione e coerenza path
+- Allineato valore `local_temp_config_path` a `config/config.yaml` nei file `config.yaml` generati, evitando riferimenti errati a `temp_config/config.yaml`.
+- Validato che la pipeline scarichi i PDF nella cartella `raw_dir` del cliente (`output/timmy-kb-<slug>/raw`), senza percorsi ambigui.
+
+### ✅ Risultati
+- Pipeline `pre_onboarding` e `onboarding_full` ora eseguibili end-to-end senza errori.
+- Creazione cartelle Drive, download PDF, conversione, arricchimento semantico, preview GitBook e push GitHub completati correttamente.
+- Pronto per ulteriori ottimizzazioni ma con stato stabile e sincronizzato con il repository.
+
+
 ## [X.Y.Z] - 2025-08-06
 
 ### Modifiche principali

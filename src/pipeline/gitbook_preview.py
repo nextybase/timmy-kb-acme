@@ -1,10 +1,14 @@
 """
 gitbook_preview.py
 
-Strumenti per la generazione della preview locale del libro (GitBook/Honkit)
-nella pipeline Timmy-KB, tramite container Docker isolato.
-Gestisce la generazione automatica di book.json/package.json, build, preview,
-e la pulizia del container anche in caso di errore/interruzione.
+Genera e avvia la preview locale della documentazione (GitBook/Honkit)
+usando container Docker isolato.
+
+Modifiche Fase 2:
+- Validazione path con _validate_path_in_base_dir
+- Uso costanti da constants.py
+- Eccezioni uniformi (PreviewError)
+- Logger coerente con il resto della pipeline
 """
 
 import subprocess
@@ -12,41 +16,52 @@ import json
 import os
 from pathlib import Path
 from typing import Union
+
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError
-from pipeline.config_utils import get_settings_for_slug  # <-- tolto import diretto settings
+from pipeline.config_utils import get_settings_for_slug
+from pipeline.constants import BOOK_JSON_NAME, PACKAGE_JSON_NAME
+from pipeline.utils import _validate_path_in_base_dir
 
-logger = get_structured_logger("pipeline.gitbook_preview", "logs/onboarding.log")
+logger = get_structured_logger("pipeline.gitbook_preview")
 
 
 def _resolve_settings(settings=None):
     """
     Restituisce un'istanza Settings.
-    Se non viene passato esplicitamente, prova a usare get_settings_for_slug().
     """
-    if settings is None:
-        return get_settings_for_slug()
-    return settings
+    return settings or get_settings_for_slug()
 
 
 def ensure_book_json(book_dir: Path) -> None:
-    """Garantisce la presenza di un file book.json di base nella directory markdown."""
-    book_json_path = book_dir / "book.json"
+    """
+    Garantisce la presenza di un file book.json di base nella directory markdown.
+    """
+    _validate_path_in_base_dir(book_dir, book_dir.parent)
+    book_json_path = book_dir / BOOK_JSON_NAME
+
     if not book_json_path.exists():
         data = {
             "title": "Timmy KB",
             "author": "Pipeline",
             "plugins": []
         }
-        book_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        logger.info(f"📖 book.json generato in: {book_json_path}")
+        try:
+            book_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            logger.info(f"📚 book.json generato in: {book_json_path}")
+        except Exception as e:
+            raise PreviewError(f"Errore generazione book.json: {e}")
     else:
-        logger.info(f"📖 book.json già presente: {book_json_path}")
+        logger.info(f"📚 book.json già presente: {book_json_path}")
 
 
 def ensure_package_json(book_dir: Path) -> None:
-    """Garantisce la presenza di un file package.json di base per la preview Honkit."""
-    package_json_path = book_dir / "package.json"
+    """
+    Garantisce la presenza di un file package.json di base nella directory markdown.
+    """
+    _validate_path_in_base_dir(book_dir, book_dir.parent)
+    package_json_path = book_dir / PACKAGE_JSON_NAME
+
     if not package_json_path.exists():
         data = {
             "name": "timmy-kb",
@@ -59,8 +74,11 @@ def ensure_package_json(book_dir: Path) -> None:
                 "serve": "honkit serve"
             }
         }
-        package_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        logger.info(f"📦 package.json generato in: {package_json_path}")
+        try:
+            package_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            logger.info(f"📦 package.json generato in: {package_json_path}")
+        except Exception as e:
+            raise PreviewError(f"Errore generazione package.json: {e}")
     else:
         logger.info(f"📦 package.json già presente: {package_json_path}")
 
@@ -72,35 +90,26 @@ def run_gitbook_docker_preview(
     settings=None
 ) -> None:
     """
-    Avvia la preview GitBook/Honkit in Docker e garantisce la chiusura e rimozione
-    del container al termine o in caso di errore/interruzione.
+    Avvia la preview GitBook/Honkit in Docker e garantisce
+    la rimozione del container al termine o in caso di errore/interruzione.
     """
     settings = _resolve_settings(settings)
+    _validate_path_in_base_dir(settings.md_output_path, settings.base_dir)
 
-    # Cleanup preventivo di eventuale container pre-esistente
-    try:
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True, text=True, check=False
-        )
-        logger.info(f"🛑 (Pre-run) Docker container '{container_name}' rimosso se esistente.")
-    except Exception as e:
-        logger.warning(f"⚠️ (Pre-run) Impossibile rimuovere container Docker '{container_name}': {e}")
-
-    # Determina la path markdown
+    md_output_path = None
     if config is None:
         md_output_path = settings.md_output_path.resolve()
     elif isinstance(config, dict):
-        md_output_path = Path(config["md_output_path"]).resolve()
+        md_output_path = Path(config.get("md_output_path", settings.md_output_path)).resolve()
     else:
         md_output_path = Path(getattr(config, "md_output_path", settings.md_output_path)).resolve()
 
-    logger.info(f"📦 Directory per anteprima: {md_output_path}")
+    logger.info(f"📂 Directory per anteprima: {md_output_path}")
 
     ensure_book_json(md_output_path)
     ensure_package_json(md_output_path)
 
-    logger.info("🏗️ Build statica Honkit (Docker)...")
+    # Build static
     build_cmd = [
         "docker", "run", "--rm",
         "--workdir", "/app",
@@ -109,11 +118,12 @@ def run_gitbook_docker_preview(
     ]
     try:
         subprocess.run(build_cmd, check=True)
+        logger.info("🏗️ Build statica Honkit completata.")
     except subprocess.CalledProcessError as e:
-        logger.error("❌ Errore durante `honkit build`.")
-        raise PreviewError(f"Errore `honkit build`: {e}")
+        logger.error("❌ Errore durante 'honkit build'.")
+        raise PreviewError(f"Errore 'honkit build': {e}")
 
-    logger.info("🌐 Avvio anteprima GitBook (Docker live)...")
+    # Serve live preview
     serve_cmd = [
         "docker", "run", "-d",
         "--name", container_name,
@@ -122,25 +132,17 @@ def run_gitbook_docker_preview(
         "-v", f"{md_output_path}:/app",
         "honkit/honkit", "npm", "run", "serve"
     ]
-    container_id = None
     try:
-        serve_proc = subprocess.run(serve_cmd, check=True, capture_output=True, text=True)
-        container_id = serve_proc.stdout.strip()
-        logger.info(f"🌍 Anteprima live avviata: http://localhost:{port} (container: {container_id})")
+        proc = subprocess.run(serve_cmd, check=True, capture_output=True, text=True)
+        container_id = proc.stdout.strip()
+        logger.info(f"🌍 Anteprima disponibile su: http://localhost:{port} (container: {container_id})")
+
         if not os.environ.get("BATCH_TEST"):
             input("⏸️ Premi INVIO per chiudere l'anteprima e arrestare Docker...")
-        else:
-            logger.info("Modalità batch/CI: anteprima servita senza attesa interattiva.")
-    except subprocess.CalledProcessError as e:
-        logger.error(
-            f"❌ Errore durante `honkit serve`: {e}\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"
-        )
-        raise PreviewError(f"Errore `honkit serve`: {e}")
-    finally:
         logger.info("🛑 Arresto container Docker...")
-        try:
-            subprocess.run(["docker", "stop", container_name], capture_output=True, text=True, check=False)
-            subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, text=True, check=False)
-            logger.info(f"✅ Container Docker '{container_name}' rimosso.")
-        except Exception as e:
-            logger.error(f"⚠️ Errore nella rimozione del container Docker: {e}")
+        subprocess.run(["docker", "stop", container_name], check=False)
+        subprocess.run(["docker", "rm", "-f", container_name], check=False)
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"❌ Errore durante 'honkit serve': {e}")
+        raise PreviewError(f"Errore 'honkit serve': {e}")
