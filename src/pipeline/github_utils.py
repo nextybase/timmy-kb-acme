@@ -5,7 +5,7 @@ Utility per il deploy automatico della cartella markdown su GitHub.
 Gestisce creazione repository, push forzato su master, gestione repo temporanea e cleanup.
 Supporta config centralizzata e prende parametri da settings.
 """
-
+import os
 import shutil
 from pathlib import Path
 from git import Repo
@@ -14,16 +14,16 @@ from github.GithubException import UnknownObjectException
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
-from pipeline.config_utils import settings  # <--- Config centralizzata
 
 logger = get_structured_logger("pipeline.github_utils", "logs/onboarding.log")
 
-def push_output_to_github(md_dir_path: Path = None) -> str:
+def push_output_to_github(settings, md_dir_path: Path = None) -> str:
     """
     Esegue il deploy automatico della cartella markdown su GitHub.
     Crea la repository se non esiste e forza il push su master.
 
     Args:
+        settings: Oggetto settings già inizializzato per lo slug corrente.
         md_dir_path (Path, opzionale): Directory contenente i markdown da pushare.
             Default: settings.md_output_path.
 
@@ -33,8 +33,7 @@ def push_output_to_github(md_dir_path: Path = None) -> str:
     Raises:
         PushError: Se mancano token o repo o se il push fallisce.
     """
-    # Usa sempre settings come fonte della verità
-    github_token = getattr(settings, "github_token", None)
+    github_token = getattr(settings, "github_token", None) or os.getenv("GITHUB_TOKEN")
     repo_name = getattr(settings, "github_repo", None) or f"timmy-kb-{settings.slug}"
     output_path = md_dir_path or settings.md_output_path
 

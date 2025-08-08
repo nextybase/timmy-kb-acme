@@ -9,7 +9,7 @@ repo_visibility: private           # 'private' o 'public' (default: private)
 
 # === Pipeline structure / templates ===
 cartelle_raw_yaml: config/cartelle_raw.yaml    # YAML struttura cartelle base per ingest
-local_temp_config_path: temp_config/config.yaml  # Path file config temporaneo, se usato da UI/CLI
+local_temp_config_path: config/config.yaml  # Path file config temporaneo, se usato da UI/CLI
 raw_dir_template: output/timmy-kb-{slug}/raw   # Template per cartella input documenti del cliente
 output_dir_template: output/timmy-kb-{slug}    # Template per cartella output principale del cliente
 

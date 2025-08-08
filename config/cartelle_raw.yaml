@@ -1,0 +1,23 @@
+root_folders:
+  - name: raw
+    subfolders:
+      - name: identità
+        subfolders: []
+      - name: organizzazione
+        subfolders: []
+      - name: artefatti-operativi
+        subfolders: []
+      - name: glossario
+        subfolders: []
+      - name: best-practices
+        subfolders: []
+      - name: normativa
+        subfolders: []
+      - name: scenario
+        subfolders: []
+      - name: economy
+        subfolders: []
+      - name: template-documenti
+        subfolders: []
+  - name: contrattualistica
+    subfolders: []

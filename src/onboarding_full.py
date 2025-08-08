@@ -29,12 +29,11 @@ os.environ["MUPDF_WARNING_SUPPRESS"] = "1"
 
 def load_client_config(slug: str, output_dir: Path) -> dict:
     """Carica il config.yaml specifico del cliente da path dinamico."""
-    config_path = output_dir / f"timmy-kb-{slug}" / "config" / "config.yaml"
+    config_path = Path(output_dir) / "config" / "config.yaml"
     if not config_path.exists():
         raise FileNotFoundError(f"Config cliente non trovato: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f), config_path
-
 
 def check_docker_running() -> bool:
     """Verifica che Docker sia attivo ed eseguibile sul sistema."""
@@ -136,8 +135,8 @@ def onboarding_main(
             do_push = (resp == "y")
 
         if do_push:
-            push_output_to_github()
-            logger.info(f"✅ Push GitHub completato. Cartella: {md_dir}")
+            push_output_to_github(settings, md_dir_path=md_dir)
+            logger.info(f"✅ Push GitHub completato. Cartella: {md_dir}")      
         else:
             logger.info("Push GitHub annullato.")
 

@@ -36,15 +36,15 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
     Orchestrates the Pre-Onboarding phase for a new semantic onboarding process.
     """
     logger = get_structured_logger("pre_onboarding", "logs/timmy-kb-preonboarding.log")
-    logger.info("▶️ Procedura di pre-onboarding NeXT")
+    logger.info("🌤 Procedura di pre-onboarding NeXT")
     try:
         validate_preonboarding_environment()
 
-        # 1. Raccogli slug
+        # 1. Raccolgli slug
         if not slug:
             if no_interactive:
-                logger.error("Slug non fornito in modalità no-interactive. Uscita.")
-                raise PipelineError("Slug non fornito in modalità no-interactive.")
+                logger.error("Slug non fornito in modalità no-interattiva. Uscita.")
+                raise PipelineError("Slug non fornito in modalità no-interattiva.")
             slug = input("🌤 Inserisci lo slug del cliente: ").strip().lower()
         slug = slug.replace("_", "-")
         logger.debug(f"Slug ricevuto: '{slug}'")
@@ -55,8 +55,8 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         # 2. Raccogli client_name
         if not client_name:
             if no_interactive:
-                logger.error("Nome cliente non fornito in modalità no-interactive. Uscita.")
-                raise PipelineError("Nome cliente non fornito in modalità no-interactive.")
+                logger.error("Nome cliente non fornito in modalità no-interattiva. Uscita.")
+                raise PipelineError("Nome cliente non fornito in modalità no-interattiva.")
             client_name = input("👤 Inserisci il nome completo del cliente (es. Acme S.r.l.): ").strip()
         if not client_name:
             logger.error("Nome cliente mancante.")
@@ -96,7 +96,7 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
         # 8. Google Drive setup: crea cartella cliente su Drive se non esiste
         service = get_drive_service(settings)
         parent_id = settings.DRIVE_ID
-        drive_folder = find_drive_folder_by_name(service, slug, drive_id=parent_id)
+        drive_folder = find_drive_folder_by_name(service, slug, parent_id, settings.DRIVE_ID)
         if not drive_folder:
             drive_folder_id = create_drive_folder(service, slug, parent_id)
             logger.info(f"📂 Cartella Drive creata: {drive_folder_id}")
@@ -104,15 +104,20 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             drive_folder_id = drive_folder['id']
             logger.info(f"📂 Cartella Drive già esistente: {drive_folder_id}")
 
+        # 🔹 CREA cartella RAW sotto la cartella cliente e salva il suo ID
+        raw_drive_folder_id = create_drive_folder(service, "raw", drive_folder_id)
+        logger.info(f"📂 Cartella 'raw' creata su Drive (ID: {raw_drive_folder_id})")
+
         # 9. Carica config su Drive
         upload_config_to_drive_folder(service, config_path, drive_folder_id)
-        logger.info("✅ Config caricata su Drive.")
+        logger.info("📤 Config caricata su Drive.")
 
-        # 10. Aggiorna config con drive_folder_id locale
+        # 10. Aggiorna config con drive_folder_id e raw_folder_id locale
         config_dict["drive_folder_id"] = drive_folder_id
+        config_dict["raw_folder_id"] = raw_drive_folder_id
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(config_dict, f, allow_unicode=True)
-        logger.info(f"📝 Aggiornato config con drive_folder_id: {drive_folder_id}")
+        logger.info(f"📝 Aggiornato config con drive_folder_id: {drive_folder_id} e raw_folder_id: {raw_drive_folder_id}")
         logger.debug(f"Contenuto finale config.yaml:\n{yaml.dump(config_dict, allow_unicode=True)}")
 
         # 11. Crea sottocartelle su Drive da YAML (se presente)
@@ -121,8 +126,8 @@ def preonboarding_main(slug=None, client_name=None, no_interactive=False):
             logger.error(f"File YAML struttura cartelle mancante: {yaml_path}")
         else:
             try:
-                create_drive_subfolders_from_yaml(service, settings, parent_id, drive_folder_id, yaml_path)
-                logger.info("✅ Struttura cartelle Drive creata da YAML.")
+                create_drive_subfolders_from_yaml(service, drive_folder_id, yaml_path)
+                logger.info("📂 Struttura cartelle Drive creata da YAML.")
             except Exception as e:
                 logger.error(f"Errore creazione struttura cartelle da YAML: {e}")
 
