@@ -2,7 +2,7 @@
 src/pipeline/config_utils.py
 
 Configurazione centralizzata pipeline Timmy-KB.
-Tutti i nomi 1:1 con .env e config.yaml, con property dinamiche per path e compatibilità moduli.
+Tutti i nomi 1:1 con .env e config.yaml, con proprietà dinamiche per path e compatibilità moduli.
 """
 
 from dotenv import load_dotenv
@@ -16,6 +16,7 @@ from pydantic import Field, model_validator
 from pipeline.logging_utils import get_structured_logger
 
 logger = get_structured_logger("pipeline.config_utils")
+
 
 class Settings(BaseSettings):
     """
@@ -46,7 +47,7 @@ class Settings(BaseSettings):
         critici = ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]
         for key in critici:
             if not getattr(data, key, None):
-                logger.error(f"Parametro critico '{key}' mancante!")
+                logger.error(f"Parametro critico '{key}' mancante! (.env variabile MAIUSCOLA)")
                 raise ValueError(f"Parametro critico '{key}' mancante!")
         if not getattr(data, "SLUG", None):
             logger.error("Parametro obbligatorio 'SLUG' mancante! Usare sempre get_settings_for_slug(slug) negli orchestratori.")
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     def slug(self) -> str:
         if self.SLUG:
             return self.SLUG
-        raise RuntimeError("SLUG mancante nei settings e nelle variabili d'ambiente. Usare SEMPRE get_settings_for_slug(slug) negli orchestratori.")
+        raise RuntimeError("SLUG mancante nei settings e nelle variabili d'ambiente.")
 
     @property
     def output_dir(self) -> Path:
@@ -86,14 +87,27 @@ class Settings(BaseSettings):
 
     @property
     def drive_folder_id(self) -> Optional[str]:
+        """
+        Restituisce il drive_folder_id dal config cliente (minuscolo, config.yaml),
+        con logging diagnostico se mancante o non leggibile.
+        """
         config_path = self.output_dir / "config" / "config.yaml"
         if config_path.exists():
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
-                    conf = yaml.safe_load(f)
-                return conf.get("drive_folder_id")
+                    conf = yaml.safe_load(f) or {}
+                folder_id = conf.get("drive_folder_id")
+                if not folder_id:
+                    logger.warning(
+                        f"drive_folder_id mancante in {config_path}. "
+                        "Verificare il file di configurazione cliente."
+                    )
+                return folder_id
             except Exception as e:
-                logger.warning(f"Impossibile leggere drive_folder_id da {config_path}: {e}")
+                logger.error(f"Errore lettura drive_folder_id da {config_path}: {e}", exc_info=True)
+                return None
+        else:
+            logger.warning(f"File config cliente non trovato per drive_folder_id: {config_path}")
         return None
 
     class Config:
@@ -101,18 +115,15 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         case_sensitive = True
 
-# ⚠️ PATCH: NON istanziare più il singleton globale qui!
-# settings = Settings()
-# Usa solo get_settings_for_slug(slug) negli orchestratori/client pipeline.
 
 if __name__ == "__main__":
-    # SOLO PER DEBUG! NON USARE NEGLI ORCHESTRATORI!
     try:
         settings = Settings()
         print(f"SERVICE_ACCOUNT_FILE from settings: {settings.SERVICE_ACCOUNT_FILE}")
         print(f"SLUG: {settings.SLUG}")
     except Exception as e:
         print(f"Errore: {e}")
+
 
 def write_client_config_file(config: dict, slug: str) -> Path:
     config_dir = Path(f"output/timmy-kb-{slug}") / "config"
@@ -127,6 +138,7 @@ def write_client_config_file(config: dict, slug: str) -> Path:
         logger.error(f"Errore nella scrittura del file di configurazione: {e}")
         raise
 
+
 def get_client_config(slug: str) -> dict:
     config_path = Path(f"output/timmy-kb-{slug}/config/config.yaml")
     if not config_path.exists():
@@ -134,12 +146,23 @@ def get_client_config(slug: str) -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+
 def get_settings_for_slug(slug: str = None):
     """
-    Factory per generare una nuova istanza Settings aggiornata sullo slug fornito.
+    Factory per generare una nuova istanza Settings agganciata sullo slug fornito.
     Usare SEMPRE questa factory negli orchestratori per-client.
     """
     import os
     if slug:
         os.environ["SLUG"] = slug
     return Settings()
+
+# Patch di compatibilità per moduli legacy che importano `settings` direttamente
+try:
+    settings = Settings()
+except Exception as e:
+    logger.warning(
+        f"[Compat] Impossibile istanziare settings al volo: {e}. "
+        "Usare get_settings_for_slug(slug) per ottenere un'istanza valida."
+    )
+    settings = None
