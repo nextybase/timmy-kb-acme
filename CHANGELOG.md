@@ -2,6 +2,25 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-09] feat+fix/pre_onboarding: struttura locale e Drive da YAML
+
+### ✨ Nuove funzioni
+- `utils.py`: aggiunta `create_local_base_structure()` per generare la struttura locale cliente con naming `timmy-kb-<slug>` e sottocartelle `raw` da `config/cartelle_raw.yaml`.
+- `drive_utils.py`: aggiunta `create_drive_structure_from_yaml()` per generare l’intera struttura su Drive da `cartelle_raw.yaml` in modo ricorsivo.
+
+### 🛠 Refactor `pre_onboarding.py`
+- Corretto naming cartella cliente in locale.
+- Creazione sottocartelle `raw` in locale da YAML.
+- Creazione struttura top-level su Drive leggendo da `cartelle_raw.yaml` (`raw`, `contrattualistica`, ecc.) con sottocartelle relative.
+- `config.yaml` caricato direttamente nella cartella cliente su Drive.
+- Mantenuta la logica originale per evitare regressioni nella pipeline.
+
+### ✅ Obiettivi
+- Allineamento struttura locale e remota alle specifiche YAML.
+- Maggiore coerenza nella gestione di `config.yaml`.
+- Modifiche minime per preservare stabilità e compatibilità.
+
+
 ## [2025-08-08] fix/refactor: stabilizzazione pre-onboarding e gestione cartelle Drive
 
 ### 🛠️ Refactor `drive_utils.py`

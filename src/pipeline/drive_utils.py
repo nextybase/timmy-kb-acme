@@ -17,9 +17,9 @@ from pipeline.utils import _validate_path_in_base_dir
 logger = get_structured_logger("pipeline.drive_utils")
 
 
-# ---------------------------
+# -------------------------------------------------
 # Wrapper API Google Drive
-# ---------------------------
+# -------------------------------------------------
 def drive_api_call(func, *args, **kwargs):
     for attempt in range(3):
         try:
@@ -33,9 +33,9 @@ def drive_api_call(func, *args, **kwargs):
     raise DriveDownloadError("API Google Drive fallita dopo 3 tentativi")
 
 
-# ---------------------------
+# -------------------------------------------------
 # Creazione servizio Drive
-# ---------------------------
+# -------------------------------------------------
 def get_drive_service(settings_instance=None, slug: Optional[str] = None):
     if settings_instance:
         cfg = settings_instance
@@ -51,9 +51,9 @@ def get_drive_service(settings_instance=None, slug: Optional[str] = None):
     return build("drive", "v3", credentials=creds)
 
 
-# ---------------------------
+# -------------------------------------------------
 # Funzioni di utilità Drive
-# ---------------------------
+# -------------------------------------------------
 def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> str:
     file_metadata = {
         "name": name,
@@ -95,3 +95,34 @@ def upload_config_to_drive_folder(service, config_path: Path, folder_id: str, ba
         logger.info(f"📤 Config caricata: {config_path} → Drive folder {folder_id}")
     except Exception as e:
         raise DriveUploadError(f"Errore upload config {config_path}: {e}")
+
+
+# -------------------------------------------------
+# Nuova funzione: Creazione struttura completa da YAML
+# -------------------------------------------------
+def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -> Dict[str, str]:
+    """
+    Crea ricorsivamente la struttura di cartelle su Drive leggendo da un file YAML.
+    Restituisce un mapping {nome_cartella: id_cartella}.
+    """
+    import yaml
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"❌ Errore nel leggere {yaml_path}: {e}")
+        raise
+
+    def _create_subfolders(base_parent_id, folders):
+        ids = {}
+        for folder in folders:
+            folder_id = create_drive_folder(service, folder["name"], base_parent_id)
+            ids[folder["name"]] = folder_id
+            if folder.get("subfolders"):
+                ids.update(_create_subfolders(folder_id, folder["subfolders"]))
+        return ids
+
+    logger.info(f"🚀 Creazione struttura Drive da YAML: {yaml_path}")
+    mapping = _create_subfolders(parent_id, config.get("root_folders", []))
+    logger.info(f"✅ Struttura Drive creata con {len(mapping)} cartelle.")
+    return mapping

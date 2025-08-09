@@ -29,7 +29,7 @@ def is_valid_slug(slug: Optional[str] = None) -> bool:
     pattern = getattr(settings, "SLUG_PATTERN", r"[a-z0-9-]+")
     if not re.fullmatch(pattern, normalized_slug):
         logging.getLogger("slug.validation").debug(
-            f"Slug '{slug}' non valido. Normalizzato: '{normalized_slug}', pattern: {pattern}"
+            f"Slug '{slug}' non valido. Normalizzato: '{normalized_slug}'", pattern={pattern}
         )
         return False
     return True
@@ -79,7 +79,7 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
 
     logger.info(f"✅ Config {config_path} esistente e leggibile.")
 
-    # STEP 2 – Validazione e creazione directory critiche
+    # STEP 2 – Verifica e creazione directory critiche
     required_dirs = ["logs"]
     for dir_name in required_dirs:
         dir_path = Path(dir_name).resolve()
@@ -93,3 +93,42 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
             dir_path.mkdir(parents=True, exist_ok=True)
 
     logger.info("✅ Tutti i file e le directory richieste sono presenti o create.")
+
+
+# ─────────────────────────────────────────────────────────────
+# NUOVA FUNZIONE: Creazione struttura locale cliente
+# ─────────────────────────────────────────────────────────────
+
+def create_local_base_structure(slug: str, yaml_path: Path, base_output: Path = Path("output")) -> Path:
+    """
+    Crea la struttura locale per un cliente:
+    - timmy-kb-<slug>/
+        ├── book/
+        ├── config/
+        └── raw/ + sottocartelle definite in cartelle_raw.yaml (solo quelle sotto 'raw')
+
+    Ritorna il percorso base creato.
+    """
+    logger = logging.getLogger("preonboarding.structure")
+
+    base_dir = base_output / f"timmy-kb-{slug}"
+    (base_dir / "book").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"❌ Errore nel leggere {yaml_path}: {e}")
+        raise
+
+    for folder in cfg.get("root_folders", []):
+        if folder["name"] == "raw" and folder.get("subfolders"):
+            for sub in folder["subfolders"]:
+                (raw_dir / sub["name"]).mkdir(parents=True, exist_ok=True)
+                logger.info(f"📂 Creata cartella locale: {raw_dir / sub['name']}")
+
+    logger.info(f"✅ Struttura locale cliente creata in {base_dir}")
+    return base_dir
