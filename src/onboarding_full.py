@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import get_settings_for_slug
-from pipeline.constants import BACKUP_SUFFIX, OUTPUT_DIR_NAME
+from pipeline.constants import OUTPUT_DIR_NAME
 from pipeline.drive_utils import (
     get_drive_service,
     download_drive_pdfs_to_local,
@@ -21,7 +21,6 @@ from pipeline.exceptions import (
     PreviewError,
     PushError,
 )
-
 from pipeline.utils import is_valid_slug
 from pipeline.cleanup import safe_clean_dir
 from pipeline.content_utils import (
@@ -63,13 +62,13 @@ def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
     logger.info(f"🚀 Avvio onboarding completo per: {slug}")
 
     try:
-        # Percorsi locali allineati con pre_onboarding
+        # Percorsi locali
         client_base_dir = settings.base_dir / OUTPUT_DIR_NAME / f"timmy-kb-{slug}"
         raw_dir = client_base_dir / "raw"
         md_output_path = client_base_dir / "book"
 
         # Caricamento config cliente
-        client_config, client_config_path = load_client_config(slug, settings.base_dir, logger)
+        client_config, _ = load_client_config(slug, settings.base_dir, logger)
         drive_folder_id = client_config.get("drive_folder_id")
         if not drive_folder_id:
             raise ConfigError("ID cartella cliente su Drive mancante in config.yaml")
@@ -91,21 +90,34 @@ def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
         # Conversione PDF → Markdown
         convert_files_to_structured_markdown(raw_dir, md_output_path, logger)
 
-        # Arricchimento semantico
-        mapping = load_semantic_mapping()
-        enrich_markdown_folder(md_output_path, mapping, logger)
+        # Arricchimento semantico — uso mapping già caricato
+        mapping = load_semantic_mapping(settings=settings)
+        enrich_markdown_folder(md_output_path, mapping_source=mapping, settings=settings)
 
-        # Generazione SUMMARY e README
-        generate_summary_markdown(md_output_path, logger)
-        generate_readme_markdown(md_output_path, slug, logger)
+        # Generazione SUMMARY e README (passo sempre settings)
+        generate_summary_markdown(
+            md_files=list(md_output_path.glob("*.md")),
+            md_dir=md_output_path,
+            settings=settings
+        )
+        generate_readme_markdown(
+            md_dir=md_output_path,
+            settings=settings
+        )
 
         # Anteprima GitBook
         if not skip_preview:
-            run_gitbook_docker_preview(md_output_path, logger)
+            run_gitbook_docker_preview(
+                settings=settings,
+                config={"md_output_path": str(md_output_path)}
+            )
 
         # Push GitHub
         if auto_push:
-            push_output_to_github(md_output_path, logger)
+            push_output_to_github(
+                settings=settings,
+                md_dir_path=md_output_path
+            )
 
         logger.info(f"🏁 Onboarding completo terminato per: {slug}")
 

@@ -9,6 +9,7 @@ Modifiche Fase 2:
 - Uso costanti da constants.py
 - Eccezioni uniformi (PreviewError)
 - Logger coerente con il resto della pipeline
+- Rimosso fallback pericoloso su get_settings_for_slug() senza slug
 """
 
 import subprocess
@@ -18,8 +19,7 @@ from pathlib import Path
 from typing import Union
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PreviewError
-from pipeline.config_utils import get_settings_for_slug
+from pipeline.exceptions import PreviewError, PipelineError
 from pipeline.constants import BOOK_JSON_NAME, PACKAGE_JSON_NAME
 from pipeline.utils import _validate_path_in_base_dir
 
@@ -28,9 +28,18 @@ logger = get_structured_logger("pipeline.gitbook_preview")
 
 def _resolve_settings(settings=None):
     """
-    Restituisce un'istanza Settings.
+    Restituisce un'istanza Settings valida.
+    Evita il fallback implicito su get_settings_for_slug() senza slug.
     """
-    return settings or get_settings_for_slug()
+    if settings is None:
+        raise PipelineError(
+            "Oggetto 'settings' mancante. Passare sempre un'istanza Settings valida."
+        )
+    if not hasattr(settings, "md_output_path") or not hasattr(settings, "base_dir"):
+        raise PipelineError(
+            "Oggetto 'settings' non valido: atteso Settings con 'md_output_path' e 'base_dir'."
+        )
+    return settings
 
 
 def ensure_book_json(book_dir: Path) -> None:
@@ -96,7 +105,6 @@ def run_gitbook_docker_preview(
     settings = _resolve_settings(settings)
     _validate_path_in_base_dir(settings.md_output_path, settings.base_dir)
 
-    md_output_path = None
     if config is None:
         md_output_path = settings.md_output_path.resolve()
     elif isinstance(config, dict):

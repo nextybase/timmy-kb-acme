@@ -13,28 +13,30 @@ from typing import Optional, Dict, Any, List
 from pipeline.config_utils import get_settings_for_slug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.constants import BACKUP_SUFFIX, SEMANTIC_MAPPING_FILE_NAME
-from pipeline.exceptions import SemanticMappingError
+from pipeline.exceptions import SemanticMappingError, PipelineError
 from pipeline.utils import _validate_path_in_base_dir
 
 logger = get_structured_logger("semantic.semantic_mapping")
 
 
-def _resolve_settings(settings=None):
+def _resolve_settings(settings=None, slug=None):
     """
     Restituisce un'istanza Settings.
-    Se non viene passato esplicitamente, usa get_settings_for_slug().
+    Se non viene passato esplicitamente, usa get_settings_for_slug(slug).
     """
-    if settings is None:
-        return get_settings_for_slug()
-    return settings
+    if settings is not None:
+        return settings
+    if slug is not None:
+        return get_settings_for_slug(slug)
+    raise PipelineError("Impossibile risolvere settings: manca 'settings' e 'slug'.")
 
 
-def load_semantic_mapping(mapping_path: Optional[str] = None, settings=None) -> Dict[str, Any]:
+def load_semantic_mapping(mapping_path: Optional[str] = None, settings=None, slug=None) -> Dict[str, Any]:
     """
     Carica il mapping semantico da file YAML.
     Ritorna un dizionario: {nome_file_md: {slug, categoria, ...}, ...}
     """
-    settings = _resolve_settings(settings)
+    settings = _resolve_settings(settings, slug)
 
     if mapping_path is None:
         mapping_path = settings.base_dir / "config" / SEMANTIC_MAPPING_FILE_NAME
@@ -55,11 +57,11 @@ def load_semantic_mapping(mapping_path: Optional[str] = None, settings=None) -> 
         raise SemanticMappingError(f"Errore lettura mapping: {e}")
 
 
-def save_semantic_mapping(mapping: Dict[str, Any], mapping_path: Optional[str] = None, settings=None):
+def save_semantic_mapping(mapping: Dict[str, Any], mapping_path: Optional[str] = None, settings=None, slug=None):
     """
     Salva il mapping semantico su file YAML in modo sicuro, con backup.
     """
-    settings = _resolve_settings(settings)
+    settings = _resolve_settings(settings, slug)
 
     if mapping_path is None:
         mapping_path = settings.base_dir / "config" / SEMANTIC_MAPPING_FILE_NAME

@@ -12,7 +12,7 @@ Modifiche Fase 2:
 """
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Union
 import shutil
 
 from pipeline.logging_utils import get_structured_logger
@@ -26,11 +26,19 @@ logger = get_structured_logger("pipeline.content_utils")
 
 def _resolve_settings(settings=None):
     """
-    Restituisce un'istanza Settings.
-    Se non viene passato esplicitamente, usa get_settings_for_slug().
+    Restituisce un'istanza Settings valida.
+    Se non viene passato esplicitamente, solleva errore chiaro.
+    Evita di interpretare per errore logger o altri oggetti come settings.
     """
     if settings is None:
-        return get_settings_for_slug()
+        raise PipelineError(
+            "Parametro 'settings' mancante. "
+            "Fornire un oggetto Settings valido alla funzione chiamante."
+        )
+    if not hasattr(settings, "logs_path") or not hasattr(settings, "base_dir"):
+        raise PipelineError(
+            "Oggetto 'settings' non valido: atteso Settings con 'logs_path' e 'base_dir'."
+        )
     return settings
 
 
@@ -56,16 +64,36 @@ def _safe_write_file(file_path: Path, content: str):
         raise PipelineError(f"Errore scrittura file {file_path}: {e}")
 
 
-def convert_files_to_structured_markdown(settings=None):
+def convert_files_to_structured_markdown(
+    arg1: Optional[Union[Path, object]] = None,
+    arg2: Optional[Path] = None,
+    arg3=None
+):
     """
-    Aggrega i PDF presenti nella cartella raw_dir in file markdown univoci
-    per cartella, nella cartella md_output_path.
+    Converte i PDF presenti nella cartella raw in file markdown univoci per cartella.
+    Supporta due modalità:
+    1. Vecchio stile: convert_files_to_structured_markdown(settings)
+    2. Nuovo stile: convert_files_to_structured_markdown(raw_dir, md_output_path, logger)
     """
-    settings = _resolve_settings(settings)
-    md_dir = settings.md_output_path
-    raw_dir = settings.raw_dir
+    if isinstance(arg1, Path) and isinstance(arg2, Path):
+        # Nuovo stile
+        raw_dir = arg1
+        md_dir = arg2
+        local_logger = arg3 or logger
+        settings = None
+    else:
+        # Vecchio stile
+        settings = _resolve_settings(arg1)
+        raw_dir = settings.raw_dir
+        md_dir = settings.md_output_path
+        local_logger = logger
 
-    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    # Validazione path sicura
+    if settings:
+        _validate_path_in_base_dir(md_dir, settings.base_dir)
+    else:
+        _validate_path_in_base_dir(md_dir, md_dir.parent)
+
     md_dir.mkdir(parents=True, exist_ok=True)
 
     for subfolder in [p for p in raw_dir.iterdir() if p.is_dir()]:
@@ -77,9 +105,9 @@ def convert_files_to_structured_markdown(settings=None):
                 content += f"(Contenuto estratto/conversione da {pdf_file.name}...)\n\n"
 
             _safe_write_file(md_path, content)
-            logger.info(f"📄 Creato file markdown aggregato: {md_path}")
+            local_logger.info(f"📄 Creato file markdown aggregato: {md_path}")
         except Exception as e:
-            logger.error(f"❌ Errore creazione file markdown {md_path}: {e}")
+            local_logger.error(f"❌ Errore creazione file markdown {md_path}: {e}")
             raise PipelineError(f"Errore creazione markdown {md_path}: {e}")
 
 

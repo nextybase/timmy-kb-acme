@@ -14,11 +14,28 @@ from github import Github
 from github.GithubException import UnknownObjectException
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PushError
+from pipeline.exceptions import PushError, PipelineError
 from pipeline.utils import _validate_path_in_base_dir
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME
 
 logger = get_structured_logger("pipeline.github_utils", f"{LOGS_DIR_NAME}/onboarding.log")
+
+
+def _resolve_settings(settings):
+    """
+    Restituisce un'istanza Settings valida.
+    """
+    if settings is None:
+        raise PipelineError(
+            "Oggetto 'settings' mancante. Passare sempre un'istanza Settings valida."
+        )
+    required_attrs = ["slug", "base_dir", "md_output_path"]
+    for attr in required_attrs:
+        if not hasattr(settings, attr):
+            raise PipelineError(
+                f"Oggetto 'settings' non valido: manca attributo richiesto '{attr}'."
+            )
+    return settings
 
 
 def push_output_to_github(settings, md_dir_path: Path = None) -> str:
@@ -37,6 +54,8 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
     Raises:
         PushError: Se mancano token, repo o il push fallisce.
     """
+    settings = _resolve_settings(settings)
+
     github_token = getattr(settings, "github_token", None) or os.getenv("GITHUB_TOKEN")
     repo_name = getattr(settings, "github_repo", None) or f"timmy-kb-{settings.slug}"
     output_path = md_dir_path or settings.md_output_path

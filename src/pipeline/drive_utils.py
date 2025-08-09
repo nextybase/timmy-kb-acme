@@ -127,11 +127,12 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -
     logger.info(f"✅ Struttura Drive creata con {len(mapping)} cartelle.")
     return mapping
 
+
 def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path, shared_drive_id: str, logger=None):
     """
     Scarica ricorsivamente tutti i file PDF dalla cartella Drive indicata e dalle sue sottocartelle.
     Mantiene la struttura di cartelle su Drive in locale.
-    
+
     :param service: servizio Drive autenticato (da get_drive_service)
     :param drive_folder_id: ID cartella principale su Drive (es. cartella cliente)
     :param local_path: Path locale dove scaricare i file
@@ -139,7 +140,6 @@ def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path
     :param logger: logger opzionale per log strutturato
     """
     from googleapiclient.errors import HttpError
-    import io
     from googleapiclient.http import MediaIoBaseDownload
 
     def _download_folder_contents(folder_id: str, current_local_path: Path):
@@ -178,9 +178,13 @@ def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path
                         status, done = downloader.next_chunk()
                         if logger:
                             logger.info(f"   Progresso: {int(status.progress() * 100)}%")
-                elif mime_type == "application/vnd.google-apps.folder":
-                    # Ricorsione nelle sottocartelle
-                    sub_local_path = current_local_path / name
+                elif mime_type == GDRIVE_FOLDER_MIME:
+                    # Evita di annidare raw/raw se siamo già nella cartella raw locale
+                    if name.lower() == "raw" and current_local_path.name.lower() == "raw":
+                        sub_local_path = current_local_path
+                    else:
+                        sub_local_path = current_local_path / name
+
                     if logger:
                         logger.info(f"📂 Entrando nella cartella: {name}")
                     _download_folder_contents(item["id"], sub_local_path)

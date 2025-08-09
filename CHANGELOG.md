@@ -2,6 +2,35 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## **Interventi – Agosto 2025 (commit intermedio, revisione onboarding_full.py e correlati)**
+
+### **Modifiche principali**
+- **`onboarding_full.py`**
+  - Corretto passaggio dei parametri a funzioni esterne (`run_gitbook_docker_preview`, `push_output_to_github`) in modo coerente con la loro firma aggiornata.
+  - Introdotto passaggio esplicito dell’oggetto `settings` per evitare errori di tipo `get_settings_for_slug() missing 1 required positional argument: 'slug'`.
+  - Passato `md_dir_path` esplicito a `push_output_to_github` per eliminare ambiguità e rendere più chiaro il flusso.
+  - Nessuna modifica superflua: mantenuta logica esistente e struttura del file invariata.
+
+### **File correlati analizzati**
+- **`gitbook_preview.py`**
+  - Rivisto `_resolve_settings` per futura compatibilità con passaggio esplicito di `settings`.
+  - Confermata validazione dei percorsi e gestione sicura dei file `book.json` e `package.json`.
+
+- **`github_utils.py`**
+  - Verificata compatibilità con passaggio esplicito di `settings` e `md_dir_path` da `onboarding_full.py`.
+  - Nessun refactoring non necessario applicato, mantenuta logica di deploy GitHub invariata.
+
+- **`semantic_extractor.py`**
+  - Confermato utilizzo del parametro `mapping_source` per permettere passaggio diretto del mapping da `onboarding_full.py` senza ricaricarlo da file.
+  - Evidenziata necessità di gestire casi in cui lo `slug` non sia presente né nel mapping né in `settings` (problema ancora aperto).
+
+### **Note operative**
+- Commit volutamente **intermedio**: restano da affrontare:
+  - Errori di “slug mancante” in `semantic_extractor.py`.
+  - Verifica end-to-end della procedura di push GitHub.
+  - Allineamento definitivo di `_resolve_settings` in tutti i moduli per eliminare chiamate errate a `get_settings_for_slug`.
+
+
 ## [2025-08-09] feat+fix/pre_onboarding: struttura locale e Drive da YAML
 
 ### ✨ Nuove funzioni
