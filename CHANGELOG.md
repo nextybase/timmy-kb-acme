@@ -2,6 +2,29 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-09] fix/refactor: stabilizzazione onboarding_full.py e allineamento config_utils.py per gestione slug
+
+### 🛠️ Modifiche a `onboarding_full.py`
+- Mantenuta struttura e logica originale, intervenendo **solo** per garantire compatibilità con gestione multi-cliente.
+- Aggiunta impostazione esplicita `settings.slug = slug` subito dopo l’inizializzazione di `settings` tramite `get_settings_for_slug()`.
+- Confermata la ricerca PDF in `raw/` con scan ricorsivo (`rglob`) per supportare sottocartelle, evitando falsi negativi.
+- Preservata la pausa interattiva dopo la preview Docker e prima del push su GitHub, mantenendo coerenza batch/manuale.
+- Nessuna modifica superflua: invariati import, naming e flusso operativo.
+
+### 🛠️ Modifiche a `config_utils.py`
+- Aggiunto campo opzionale `slug: Optional[str] = None` al modello `Settings` (Pydantic) per supporto nativo allo slug cliente.
+- Sostituiti tutti i riferimenti a `self.SLUG` con `self.slug` per evitare `AttributeError` e allineare naming.
+- Aggiornati messaggi di errore e log in `check_critico` per usare il campo corretto.
+- Corrette proprietà `output_dir` e `logs_path` per usare `self.slug`.
+- Aggiornata `get_settings_for_slug()` per passare `slug` minuscolo al costruttore di `Settings`, eliminando l’errore `extra_forbidden` di Pydantic v2.
+
+### ✅ Risultati
+- Onboarding completo ora esegue senza crash in presenza di slug cliente.
+- Gestione slug integrata in `Settings`, eliminando workaround e garantendo coerenza tra orchestratori.
+- Compatibilità confermata con funzioni `push_output_to_github` e `run_gitbook_docker_preview`.
+- Struttura repo e pipeline allineata, pronta per test di deploy GitHub end-to-end.
+
+
 ## **Interventi – Agosto 2025 (commit intermedio, revisione onboarding_full.py e correlati)**
 
 ### **Modifiche principali**
