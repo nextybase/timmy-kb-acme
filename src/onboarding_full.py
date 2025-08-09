@@ -51,13 +51,14 @@ def load_client_config(slug: str, base_dir: Path, logger) -> tuple:
 
 def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
     if not slug:
-        slug = input("📝 Inserisci lo slug cliente: ").strip()
+        slug = input("🔗 Inserisci lo slug cliente: ").strip()
 
     slug = slug.replace("_", "-").lower()
     if not is_valid_slug(slug):
         raise PipelineError(f"Slug cliente non valido: {slug}.")
 
     settings = get_settings_for_slug(slug)
+    settings.slug = slug  # 🔹 aggiunta per compatibilità con funzioni che richiedono slug
     logger = get_structured_logger("onboarding_full", str(settings.logs_path))
     logger.info(f"🚀 Avvio onboarding completo per: {slug}")
 
@@ -86,15 +87,22 @@ def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
             settings.DRIVE_ID,
             logger
         )
+        # ✅ Controllo presenza PDF (ricorsivo)
+        pdf_files = list(raw_dir.rglob("*.pdf"))
+        if not pdf_files:
+            raise PipelineError(
+                f"Nessun PDF trovato in {raw_dir} (anche nelle sottocartelle). "
+                f"Controlla il drive_folder_id o la cartella Drive."
+            )
 
         # Conversione PDF → Markdown
         convert_files_to_structured_markdown(raw_dir, md_output_path, logger)
 
-        # Arricchimento semantico — uso mapping già caricato
+        # Arricchimento semantico
         mapping = load_semantic_mapping(settings=settings)
         enrich_markdown_folder(md_output_path, mapping_source=mapping, settings=settings)
 
-        # Generazione SUMMARY e README (passo sempre settings)
+        # Generazione SUMMARY e README
         generate_summary_markdown(
             md_files=list(md_output_path.glob("*.md")),
             md_dir=md_output_path,
@@ -105,28 +113,31 @@ def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
             settings=settings
         )
 
-        # Anteprima GitBook
+        # Preview GitBook
         if not skip_preview:
             run_gitbook_docker_preview(
                 settings=settings,
                 config={"md_output_path": str(md_output_path)}
             )
 
-        # Push GitHub
+        # ✅ Conferma push GitHub
         if auto_push:
-            push_output_to_github(
-                settings=settings,
-                md_dir_path=md_output_path
-            )
+            push_output_to_github(settings=settings, md_dir_path=md_output_path)
+        else:
+            confirm = input("Vuoi procedere al push su GitHub? (y/n): ").strip().lower()
+            if confirm == "y":
+                push_output_to_github(settings=settings, md_dir_path=md_output_path)
+            else:
+                logger.info("Push su GitHub annullato dall'utente.")
 
-        logger.info(f"🏁 Onboarding completo terminato per: {slug}")
+        logger.info(f"✅ Onboarding completato per: {slug}")
 
     except (PipelineError, ConfigError, DriveDownloadError, ConversionError,
             PreviewError, PushError, ValidationError) as e:
-        logger.error(f"❌ Errore onboarding completo: {e}")
+        logger.error(f"⚠️ Errore onboarding completato: {e}")
         raise
     except Exception as e:
-        logger.error(f"⚠️ Errore imprevisto: {e}", exc_info=True)
+        logger.error(f"❌ Errore imprevisto: {e}", exc_info=True)
         raise PipelineError(e)
 
 

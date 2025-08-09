@@ -16,7 +16,6 @@ from pipeline.constants import (
 )
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.utils import _validate_path_in_base_dir
-
 # Cache interna per Settings
 _settings_cache: Dict[str, "Settings"] = {}
 
@@ -29,7 +28,8 @@ class Settings(PydanticBaseSettings):
     SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")
     BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")
     DRIVE_ROOT_ID: Optional[str] = Field(
-        None, env="DRIVE_ROOT_ID",
+        None,
+        env="DRIVE_ROOT_ID",
         description="ID cartella radice cliente su Google Drive"
     )
 
@@ -38,7 +38,7 @@ class Settings(PydanticBaseSettings):
     GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")
 
     # Identificativo cliente e log
-    SLUG: Optional[str] = Field(None, env="SLUG")
+    slug: Optional[str] = None  # 🔹 nuovo campo per compatibilità multi-client
     LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
     DEBUG: bool = Field(False, env="DEBUG")
 
@@ -47,29 +47,29 @@ class Settings(PydanticBaseSettings):
         from pipeline.logging_utils import get_structured_logger
         logger = get_structured_logger("pipeline.config_utils")
 
-        critici = ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]
-        for key in critici:
+        critico = ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]
+        for key in critico:
             if not getattr(self, key, None):
                 logger.error(f"Parametro critico '{key}' mancante!")
                 raise ValueError(f"Parametro critico '{key}' mancante!")
 
-        if not self.SLUG:
-            logger.error("Parametro 'SLUG' mancante! Usare get_settings_for_slug(slug).")
-            raise ValueError("Parametro 'SLUG' mancante!")
+        if not self.slug:
+            logger.error("Parametro 'slug' mancante! Usare get_settings_for_slug(slug).")
+            raise ValueError("Parametro 'slug' mancante!")
 
         if not self.DRIVE_ROOT_ID:
             logger.warning("Parametro 'DRIVE_ROOT_ID' mancante: alcune funzioni Drive potrebbero non funzionare.")
 
         return self
 
-    # --- Property di path ---
+    # --- Proprietà di path ---
     @property
     def base_dir(self) -> Path:
         return Path(os.getenv("BASE_DIR", Path.cwd()))
 
     @property
     def output_dir(self) -> Path:
-        return self.base_dir / OUTPUT_DIR_NAME / self.SLUG
+        return self.base_dir / OUTPUT_DIR_NAME / self.slug
 
     @property
     def config_dir(self) -> Path:
@@ -93,7 +93,7 @@ class Settings(PydanticBaseSettings):
 
     @property
     def logs_path(self) -> Path:
-        return self.base_dir / LOGS_DIR_NAME / f"timmy-kb-{self.SLUG}.log"
+        return self.base_dir / LOGS_DIR_NAME / f"timmy-kb-{self.slug}.log"
 
     @property
     def drive_folder_id(self) -> Optional[str]:
@@ -161,7 +161,7 @@ def get_settings_for_slug(slug: str, base_dir: Optional[Path] = None, force_relo
         return _settings_cache[slug]
     if base_dir:
         os.environ["BASE_DIR"] = str(base_dir)
-    settings_obj = Settings(SLUG=slug)
+    settings_obj = Settings(slug=slug)
     _settings_cache[slug] = settings_obj
     return settings_obj
 
