@@ -1,8 +1,10 @@
 import io
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+import yaml
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from googleapiclient.errors import HttpError
@@ -11,14 +13,13 @@ from google.oauth2 import service_account
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError
 from pipeline.constants import GDRIVE_FOLDER_MIME, PDF_MIME_TYPE
-from pipeline.config_utils import get_settings_for_slug
-from pipeline.utils import _validate_path_in_base_dir
+from pipeline.config_utils import get_settings_for_slug, _validate_path_in_base_dir
 
 logger = get_structured_logger("pipeline.drive_utils")
 
 
 # -------------------------------------------------
-# Wrapper API Google Drive
+# Wrapper API Google Drive con retry
 # -------------------------------------------------
 def drive_api_call(func, *args, **kwargs):
     for attempt in range(3):
@@ -98,20 +99,19 @@ def upload_config_to_drive_folder(service, config_path: Path, folder_id: str, ba
 
 
 # -------------------------------------------------
-# Nuova funzione: Creazione struttura completa da YAML
+# Creazione struttura Drive da YAML
 # -------------------------------------------------
 def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -> Dict[str, str]:
     """
     Crea ricorsivamente la struttura di cartelle su Drive leggendo da un file YAML.
     Restituisce un mapping {nome_cartella: id_cartella}.
     """
-    import yaml
     try:
         with open(yaml_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❌ Errore nel leggere {yaml_path}: {e}")
-        raise
+        raise PipelineError(e)
 
     def _create_subfolders(base_parent_id, folders):
         ids = {}
@@ -128,26 +128,18 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -
     return mapping
 
 
+# -------------------------------------------------
+# Download PDF da Drive in locale
+# -------------------------------------------------
 def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path, shared_drive_id: str, logger=None):
     """
     Scarica ricorsivamente tutti i file PDF dalla cartella Drive indicata e dalle sue sottocartelle.
     Mantiene la struttura di cartelle su Drive in locale.
-
-    :param service: servizio Drive autenticato (da get_drive_service)
-    :param drive_folder_id: ID cartella principale su Drive (es. cartella cliente)
-    :param local_path: Path locale dove scaricare i file
-    :param shared_drive_id: ID del Drive condiviso
-    :param logger: logger opzionale per log strutturato
     """
-    from googleapiclient.errors import HttpError
-    from googleapiclient.http import MediaIoBaseDownload
-
     def _download_folder_contents(folder_id: str, current_local_path: Path):
-        # Assicura la creazione della cartella locale
         current_local_path.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Lista file e cartelle nella directory corrente
             query = f"'{folder_id}' in parents and trashed = false"
             results = service.files().list(
                 q=query,
@@ -165,7 +157,6 @@ def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path
                 mime_type = item["mimeType"]
 
                 if mime_type == PDF_MIME_TYPE:
-                    # Scarica il PDF
                     file_id = item["id"]
                     local_file_path = current_local_path / name
                     if logger:
@@ -179,12 +170,10 @@ def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path
                         if logger:
                             logger.info(f"   Progresso: {int(status.progress() * 100)}%")
                 elif mime_type == GDRIVE_FOLDER_MIME:
-                    # Evita di annidare raw/raw se siamo già nella cartella raw locale
                     if name.lower() == "raw" and current_local_path.name.lower() == "raw":
                         sub_local_path = current_local_path
                     else:
                         sub_local_path = current_local_path / name
-
                     if logger:
                         logger.info(f"📂 Entrando nella cartella: {name}")
                     _download_folder_contents(item["id"], sub_local_path)
@@ -192,7 +181,38 @@ def download_drive_pdfs_to_local(service, drive_folder_id: str, local_path: Path
         except HttpError as error:
             if logger:
                 logger.error(f"❌ Errore durante il download da Drive: {error}")
-            raise
+            raise DriveDownloadError(error)
 
-    # Avvia il download ricorsivo
     _download_folder_contents(drive_folder_id, local_path)
+
+
+# -------------------------------------------------
+# Creazione struttura locale cliente
+# -------------------------------------------------
+def create_local_base_structure(slug: str, yaml_path: Path, base_output: Path = Path("output")) -> Path:
+    """
+    Crea la struttura locale per un cliente a partire da un file YAML.
+    """
+    local_logger = get_structured_logger("preonboarding.structure")
+
+    base_dir = base_output / f"timmy-kb-{slug}"
+    (base_dir / "book").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+    except Exception as e:
+        local_logger.error(f"❌ Errore nel leggere {yaml_path}: {e}")
+        raise PipelineError(e)
+
+    for folder in cfg.get("root_folders", []):
+        if folder["name"] == "raw" and folder.get("subfolders"):
+            for sub in folder["subfolders"]:
+                (raw_dir / sub["name"]).mkdir(parents=True, exist_ok=True)
+                local_logger.info(f"📂 Creata cartella locale: {raw_dir / sub['name']}")
+
+    local_logger.info(f"✅ Struttura locale cliente creata in {base_dir}")
+    return base_dir
