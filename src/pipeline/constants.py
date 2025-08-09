@@ -8,6 +8,7 @@ Se devono cambiare, il cambiamento va considerato architetturale.
 OUTPUT_DIR_NAME = "output"
 LOGS_DIR_NAME = "logs"
 CONFIG_FILE_NAME = "config.yaml"
+SEMANTIC_MAPPING_FILE_NAME = "semantic_mapping.yaml"
 
 # 📄 Suffissi di backup e temporanei
 BACKUP_SUFFIX = ".bak"
@@ -27,3 +28,7 @@ CONFIG_DIR_NAME = "config"
 
 # 📄 MIME Types generici
 PDF_MIME_TYPE = "application/pdf"
+
+# 📄 File tipici di GitBook
+BOOK_JSON_NAME = "book.json"
+PACKAGE_JSON_NAME = "package.json"
