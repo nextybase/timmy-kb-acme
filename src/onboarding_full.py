@@ -92,20 +92,25 @@ def onboarding_full_main(slug=None, skip_preview=False, auto_push=False):
         convert_files_to_structured_markdown(raw_dir, book_dir, logger=logger)
 
         # Arricchimento semantico
-        semantic_mapping = load_semantic_mapping(slug=slug)
+        semantic_mapping = load_semantic_mapping(slug=slug, logger=logger)
         enrich_markdown_folder(book_dir, semantic_mapping, logger=logger)
 
         # Generazione SUMMARY.md e README.md
-        generate_summary_markdown(book_dir, logger=logger)
-        generate_readme_markdown(book_dir, logger=logger)
+        generate_summary_markdown(book_dir, logger=logger, settings=settings)
+        generate_readme_markdown(book_dir, logger=logger, settings=settings)
 
         # Preview GitBook (se non saltato)
         if not skip_preview:
-            run_gitbook_docker_preview(book_dir, logger=logger)
+            run_gitbook_docker_preview(slug=slug)
 
-        # Push su GitHub (se richiesto)
+        # Push su GitHub (se richiesto o confermato)
+        if not auto_push:
+            risposta = input("📤 Vuoi fare il push su GitHub? [y/N]: ").strip().lower()
+            if risposta == "y":
+                auto_push = True
+
         if auto_push:
-            push_output_to_github(book_dir, slug, logger=logger)
+            push_output_to_github(settings=settings, md_dir_path=book_dir)
 
         logger.info(f"✅ Onboarding completo terminato per: {slug}")
 

@@ -2,6 +2,34 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-10] fix/refactor: stabilizzazione onboarding_full.py e github_utils.py con gestione esplicita di settings e slug
+
+### 🛠️ Modifiche a `onboarding_full.py`
+- Rivista l’inizializzazione di `settings` tramite `get_settings_for_slug(slug)` e mantenuta coerente per tutto il flusso.
+- Passaggio esplicito di `settings` e `md_dir_path` a `push_output_to_github` per evitare errori di slug mancante.
+- Aggiornato il passaggio a `run_gitbook_docker_preview` con `slug=slug` per allineamento firma funzione.
+- Preservata logica esistente, evitando modifiche superflue e mantenendo compatibilità batch/interattiva con `--auto-push` e `--skip-preview`.
+- Confermato il caricamento di `client_config` a inizio run con validazione di `drive_folder_id`.
+
+### 🛠️ Modifiche a `github_utils.py`
+- Refactor di `push_output_to_github` per richiedere sempre `settings` come parametro obbligatorio.
+- Nome repository calcolato come `GITHUB_REPO` da settings o `timmy-kb-<slug>` se non presente.
+- Fallback automatico a `GITHUB_TOKEN` da variabile d’ambiente.
+- Validazione `output_path` con `_validate_path_in_base_dir` per garantire che sia all’interno della base del cliente.
+- Creazione repo GitHub solo se assente; push forzato su `master` dei soli file `.md` utili.
+- Gestione sicura della cartella temporanea `tmp_repo_push` (rimozione prima e dopo il push).
+
+### 🛠️ Modifiche correlate e verifiche
+- Controllata coerenza di `_resolve_settings` e gestione slug anche in `gitbook_preview.py` (nessuna modifica invasiva, solo verifica).
+- Confermata compatibilità con il nuovo modello `Settings` in `config_utils.py` che ora supporta lo slug come campo nativo.
+- Testata esecuzione end-to-end della pipeline di onboarding con `--auto-push` attivo.
+
+### ✅ Risultati
+- Esecuzione completa di onboarding con download PDF, conversione, arricchimento semantico, generazione `SUMMARY.md` e `README.md`, preview GitBook e push GitHub senza salti di step.
+- Eliminati errori e warning legati a slug mancante in fasi critiche.
+- Pipeline multi-cliente stabile e pronta per il deploy GitHub in produzione.
+
+
 ## [2025-08-09] fix/refactor: stabilizzazione onboarding_full.py e allineamento config_utils.py per gestione slug
 
 ### 🛠️ Modifiche a `onboarding_full.py`

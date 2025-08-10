@@ -22,9 +22,7 @@ load_dotenv()
 
 
 def update_config_with_drive_ids(config_path: Path, new_data: dict, logger) -> None:
-    """
-    Aggiorna il config cliente con i nuovi dati Drive, con backup sicuro.
-    """
+    """Aggiorna il config cliente con i nuovi dati Drive, con backup sicuro."""
     if not config_path.exists():
         raise ConfigError(f"Config cliente non trovato: {config_path}")
 
@@ -38,7 +36,7 @@ def update_config_with_drive_ids(config_path: Path, new_data: dict, logger) -> N
         config_data.update(new_data)
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(config_data, f, allow_unicode=True)
-        logger.info(f"📝 Config aggiornato con ID Drive: {new_data}")
+        logger.info(f"🔄 Config aggiornato con ID Drive: {new_data}")
     except Exception as e:
         logger.error(f"❌ Errore aggiornamento config: {e}")
         shutil.copy(backup_path, config_path)
@@ -47,9 +45,7 @@ def update_config_with_drive_ids(config_path: Path, new_data: dict, logger) -> N
 
 
 def pre_onboarding_main(slug=None):
-    """
-    Fase di pre-onboarding: crea struttura locale, struttura Drive e config cliente.
-    """
+    """Fase di pre-onboarding: crea struttura locale, struttura Drive e config cliente."""
     if not slug:
         slug = input("🔧 Inserisci lo slug cliente: ").strip()
 
@@ -74,6 +70,14 @@ def pre_onboarding_main(slug=None):
         client_config_path = base_dir / "config" / CONFIG_FILE_NAME
         shutil.copy(template_config_path, client_config_path)
         logger.info(f"📄 Config template copiato in: {client_config_path}")
+
+        # 📌 Copia anche semantic_mapping.yaml globale nel config cliente
+        global_mapping_path = Path("config") / "semantic_mapping.yaml"
+        if global_mapping_path.exists():
+            shutil.copy(global_mapping_path, base_dir / "config" / "semantic_mapping.yaml")
+            logger.info(f"📄 semantic_mapping.yaml copiato in: {base_dir / 'config' / 'semantic_mapping.yaml'}")
+        else:
+            logger.warning(f"⚠️ File semantic_mapping.yaml globale non trovato in {global_mapping_path}")
 
         # Connessione a Drive
         drive_service = get_drive_service(settings)

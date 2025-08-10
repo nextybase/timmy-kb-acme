@@ -3,12 +3,6 @@ content_utils.py
 
 Utility per la generazione e validazione di file markdown a partire da PDF raw,
 nell'ambito della pipeline Timmy-KB.
-
-Modifiche Fase 2:
-- Validazione path sicura con _validate_path_in_base_dir (da config_utils)
-- Uso costanti da constants.py
-- Logger e messaggi uniformati
-- Gestione eccezioni uniforme
 """
 
 from pathlib import Path
@@ -30,10 +24,6 @@ def convert_files_to_structured_markdown(
 ):
     """
     Converte i PDF presenti nella cartella raw in file markdown univoci per cartella.
-
-    Può essere chiamata in due modi:
-    - convert_files_to_structured_markdown(raw_dir: Path, md_dir: Path, logger: Optional[Logger])
-    - convert_files_to_structured_markdown(slug: str)
     """
     if isinstance(arg1, Path) and isinstance(arg2, Path):
         raw_dir = arg1
@@ -46,7 +36,6 @@ def convert_files_to_structured_markdown(
         md_dir = settings.md_output_path
         local_logger = logger or get_structured_logger("pipeline.content_utils")
 
-    # Validazione path sicura
     if settings:
         _validate_path_in_base_dir(md_dir, settings.base_dir)
     else:
@@ -62,7 +51,7 @@ def convert_files_to_structured_markdown(
                 content += f"## {pdf_file.name}\n"
                 content += f"(Contenuto estratto/conversione da {pdf_file.name}...)\n\n"
 
-            _safe_write_file(md_path, content)
+            _safe_write_file(md_path, content, logger=local_logger)
             local_logger.info(f"📄 Creato file markdown aggregato: {md_path}")
         except Exception as e:
             local_logger.error(f"❌ Errore creazione markdown {md_path}: {e}")
@@ -89,8 +78,8 @@ def generate_summary_markdown(
             if md_file.name not in ("SUMMARY.md", "README.md"):
                 content += f"* [{md_file.stem}]({md_file.name})\n"
 
-        _safe_write_file(summary_path, content)
-        local_logger.info(f"📝 Generato SUMMARY.md in {summary_path}")
+        _safe_write_file(summary_path, content, logger=local_logger)
+        local_logger.info(f"📄 Generato SUMMARY.md in {summary_path}")
     except Exception as e:
         local_logger.error(f"❌ Errore generazione SUMMARY.md: {e}")
         raise PipelineError("Errore generazione SUMMARY.md")
@@ -112,7 +101,7 @@ def generate_readme_markdown(
     readme_path = md_dir / "README.md"
     try:
         content = "# Documentazione Timmy-KB\n"
-        _safe_write_file(readme_path, content)
+        _safe_write_file(readme_path, content, logger=local_logger)
         local_logger.info(f"📄 Generato README.md in {readme_path}")
     except Exception as e:
         local_logger.error(f"❌ Errore generazione README.md: {e}")

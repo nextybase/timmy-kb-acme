@@ -24,16 +24,17 @@ from pipeline.config_utils import get_settings_for_slug, _validate_path_in_base_
 from pipeline.exceptions import PipelineError
 from pipeline.constants import CONFIG_FILE_NAME, SEMANTIC_MAPPING_FILE
 
-logger = get_structured_logger("pipeline.semantic_extractor")
-
 
 # -------------------------------------------------
 # Funzioni di utilità
 # -------------------------------------------------
-def _load_semantic_mapping(mapping_path: Path) -> dict:
+def _load_semantic_mapping(mapping_path: Path, logger=None) -> dict:
     """
     Carica il file di mapping semantico YAML.
     """
+    if logger is None:
+        logger = get_structured_logger("semantic.mapping")
+
     _validate_path_in_base_dir(mapping_path, mapping_path.parent)
     if not mapping_path.exists():
         logger.error(f"❌ File di mapping semantico non trovato: {mapping_path}")
@@ -49,10 +50,13 @@ def _load_semantic_mapping(mapping_path: Path) -> dict:
         raise PipelineError(f"Errore lettura mapping: {e}")
 
 
-def _list_markdown_files(md_dir: Path) -> List[Path]:
+def _list_markdown_files(md_dir: Path, logger=None) -> List[Path]:
     """
     Restituisce la lista ordinata di file markdown nella directory indicata.
     """
+    if logger is None:
+        logger = get_structured_logger("semantic.files")
+
     _validate_path_in_base_dir(md_dir, md_dir.parent)
     if not md_dir.exists():
         raise FileNotFoundError(f"Directory markdown non trovata: {md_dir}")
@@ -67,17 +71,25 @@ def _list_markdown_files(md_dir: Path) -> List[Path]:
 # -------------------------------------------------
 # Estrazione concetti semantici
 # -------------------------------------------------
-def extract_semantic_concepts(slug: Optional[str] = None, md_dir: Optional[Path] = None) -> dict:
+def extract_semantic_concepts(
+    slug: Optional[str] = None, 
+    md_dir: Optional[Path] = None, 
+    logger=None
+) -> dict:
     """
     Estrae i concetti semantici dai file markdown in base al mapping definito.
 
     Args:
         slug: Slug cliente (se non passato, obbligatorio md_dir)
         md_dir: Path alla directory contenente i file markdown
+        logger: Logger strutturato (opzionale)
 
     Returns:
         dict: mapping concetti → contenuti trovati
     """
+    if logger is None:
+        logger = get_structured_logger("semantic.extract")
+
     if not slug and not md_dir:
         raise PipelineError("Necessario passare uno slug o un path markdown.")
 
@@ -89,8 +101,8 @@ def extract_semantic_concepts(slug: Optional[str] = None, md_dir: Optional[Path]
         if settings else md_path.parent / CONFIG_FILE_NAME
     )
 
-    mapping = _load_semantic_mapping(mapping_path)
-    markdown_files = _list_markdown_files(md_path)
+    mapping = _load_semantic_mapping(mapping_path, logger=logger)
+    markdown_files = _list_markdown_files(md_path, logger=logger)
 
     extracted_data = {}
     for concept, keywords in mapping.items():
@@ -129,7 +141,7 @@ def enrich_markdown_folder(md_dir: Path, semantic_mapping: dict, logger=None):
     if not md_dir.exists():
         raise FileNotFoundError(f"Directory markdown non trovata: {md_dir}")
 
-    markdown_files = _list_markdown_files(md_dir)
+    markdown_files = _list_markdown_files(md_dir, logger=logger)
     logger.info(f"📂 Avvio arricchimento semantico su {len(markdown_files)} file in {md_dir}")
 
     # Placeholder: in futuro qui ci sarà la pipeline semantica
@@ -155,8 +167,8 @@ if __name__ == "__main__":
                 slug=args.slug,
                 md_dir=Path(args.md_dir) if args.md_dir else None
             )
-            logger.info(f"📊 Risultati estrazione: {extracted}")
+            get_structured_logger("semantic.cli").info(f"📊 Risultati estrazione: {extracted}")
         else:
-            logger.error("❌ Necessario passare uno slug o un path markdown.")
+            get_structured_logger("semantic.cli").error("❌ Necessario passare uno slug o un path markdown.")
     except Exception as e:
-        logger.error(f"❌ Errore: {e}")
+        get_structured_logger("semantic.cli").error(f"❌ Errore: {e}")

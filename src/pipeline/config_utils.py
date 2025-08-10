@@ -9,6 +9,7 @@ import yaml
 import logging
 import re
 
+from pipeline.logging_utils import get_structured_logger
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic import Field, model_validator
 from pipeline.constants import (
@@ -16,7 +17,7 @@ from pipeline.constants import (
     BACKUP_SUFFIX, TMP_SUFFIX,
     RAW_DIR_NAME, BOOK_DIR_NAME, CONFIG_DIR_NAME
 )
-from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
+from pipeline.exceptions import ConfigError, PipelineError
 
 # Cache interna per Settings
 _settings_cache: Dict[str, "Settings"] = {}
@@ -71,7 +72,8 @@ class Settings(PydanticBaseSettings):
 
     @property
     def output_dir(self) -> Path:
-        return self.base_dir / OUTPUT_DIR_NAME / self.slug
+        # 🔹 Correzione: rispetta la struttura output/timmy-kb-<slug>
+        return self.base_dir / OUTPUT_DIR_NAME / f"timmy-kb-{self.slug}"
 
     @property
     def config_dir(self) -> Path:
@@ -176,7 +178,6 @@ def is_valid_slug(slug: Optional[str] = None) -> bool:
     if not slug:
         return False
     normalized_slug = slug.replace("_", "-").lower()
-    # Regex restrittiva: lettere, numeri, trattini, no doppio trattino, no trattini iniziali/finali
     pattern = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
     if not re.fullmatch(pattern, normalized_slug):
         logging.getLogger("slug.validation").debug(
@@ -206,7 +207,6 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
     if base_dir is None:
         base_dir = getattr(settings, "base_dir", Path("."))
 
-    # STEP 1 – Validazione config principale
     config_path = Path("config") / CONFIG_FILE_NAME
     config_path = config_path.resolve()
 
@@ -229,7 +229,6 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
 
     logger.info(f"✅ Config {config_path} esistente e leggibile.")
 
-    # STEP 2 – Verifica e creazione directory critiche
     required_dirs = ["logs"]
     for dir_name in required_dirs:
         dir_path = Path(dir_name).resolve()
@@ -244,12 +243,16 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
 
     logger.info("✅ Tutti i file e le directory richieste sono presenti o create.")
 
-def _safe_write_file(file_path: Path, content: str):
+
+def _safe_write_file(file_path: Path, content: str, logger=None):
     """
     Scrive un file in modo sicuro:
     - Backup del file esistente
     - Sovrascrittura con nuovo contenuto
     """
+    if logger is None:
+        logger = get_structured_logger("pipeline.config_utils")
+
     _validate_path_in_base_dir(file_path, file_path.parent)
 
     if file_path.exists():
@@ -260,8 +263,7 @@ def _safe_write_file(file_path: Path, content: str):
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
-        logger.debug(f"✏️ File scritto: {file_path}")
+        logger.debug(f"📝 File scritto: {file_path}")
     except Exception as e:
         logger.error(f"❌ Errore scrittura file {file_path}: {e}")
         raise PipelineError(f"Errore scrittura file {file_path}: {e}")
-
