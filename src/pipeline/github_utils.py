@@ -1,3 +1,5 @@
+# src/pipeline/github_utils.py
+
 import os
 import shutil
 from pathlib import Path
@@ -9,18 +11,19 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
 from pipeline.config_utils import _validate_path_in_base_dir
 from pipeline.constants import LOGS_DIR_NAME
+from pipeline.context import ClientContext
 
 logger = get_structured_logger("pipeline.github_utils", f"{LOGS_DIR_NAME}/onboarding.log")
 
 
-def push_output_to_github(settings, md_dir_path: Path = None) -> str:
+def push_output_to_github(context: ClientContext, md_dir_path: Path = None) -> str:
     """
     Esegue il deploy automatico della cartella markdown su GitHub.
     Crea il repository se non esiste e forza il push su main/master.
 
     Args:
-        settings: Settings inizializzati per lo slug corrente.
-        md_dir_path: Path contenente i markdown da pushare (default: settings.md_output_path).
+        context: ClientContext inizializzato per il cliente corrente.
+        md_dir_path: Path contenente i markdown da pushare (default: context.md_dir).
 
     Returns:
         str: Percorso della directory pubblicata.
@@ -28,12 +31,12 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
     Raises:
         PushError: Se mancano token, repo o il push fallisce.
     """
-    if settings is None:
-        raise PushError("Settings non forniti a push_output_to_github")
+    if not context:
+        raise PushError("Context mancante per push_output_to_github")
 
-    github_token = getattr(settings, "GITHUB_TOKEN", None) or os.getenv("GITHUB_TOKEN")
-    repo_name = getattr(settings, "GITHUB_REPO", None) or f"timmy-kb-{settings.slug}"
-    output_path = md_dir_path or settings.md_output_path
+    github_token = context.settings.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+    repo_name = context.settings.get("GITHUB_REPO") or f"timmy-kb-{context.slug}"
+    output_path = md_dir_path or context.md_dir
 
     if not github_token:
         logger.error("❌ GITHUB_TOKEN mancante.")
@@ -45,7 +48,7 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
         logger.error(f"❌ output_path non trovato: {output_path}")
         raise PushError(f"output_path non trovato: {output_path}")
 
-    _validate_path_in_base_dir(output_path, settings.base_dir)
+    _validate_path_in_base_dir(output_path, context.base_dir)
 
     # Lista file markdown
     md_files = list(output_path.glob("*.md"))
@@ -60,7 +63,7 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
         github_user = github.get_user()
         logger.info(f"👤 Deploy GitHub per utente {github_user.login} → repo: {repo_name} (privata)")
 
-        # Controllo se repo esiste, altrimenti la creo
+        # Controlla se repo esiste, altrimenti la crea
         try:
             repo = github_user.get_repo(repo_name)
             logger.info(f"📂 Repo trovata: {repo_name}")
@@ -73,22 +76,22 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
                 description="Repository generato automaticamente da Timmy-KB"
             )
 
-        # Preparo cartella temporanea per push
+        # Prepara cartella temporanea per push
         temp_dir = Path("tmp_repo_push")
         if temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copio file markdown nella temp dir
+        # Copia file markdown nella temp dir
         for file in md_files:
             shutil.copy(file, temp_dir / file.name)
 
-        # Inizializzo repo locale
+        # Inizializza repo locale
         repo_local = Repo.init(temp_dir)
         repo_local.index.add([str(p.relative_to(temp_dir)) for p in temp_dir.iterdir() if p.is_file()])
         repo_local.index.commit("Upload automatico dei file markdown da pipeline Timmy-KB")
 
-        # Determino branch di default (main se repo nuova, master se esistente)
+        # Determina branch di default
         default_branch = "main"
         try:
             if repo.default_branch:
@@ -96,7 +99,7 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
         except Exception:
             pass
 
-        # Configuro e faccio il push
+        # Configura remote e push
         remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
         if "origin" not in [r.name for r in repo_local.remotes]:
             repo_local.create_remote("origin", remote_url)
@@ -108,7 +111,7 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
         logger.info("✅ Push su GitHub completato.")
 
         shutil.rmtree(temp_dir, ignore_errors=True)
-        logger.info(f"🗑️ Rimossa cartella temporanea '{temp_dir}' dopo il push.")
+        logger.info(f"🧹 Rimossa cartella temporanea '{temp_dir}' dopo il push.")
 
         return str(output_path)
 

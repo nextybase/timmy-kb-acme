@@ -1,39 +1,43 @@
+# src/pipeline/logging_utils.py
 """
-logging_utils.py
-
 Utility per la creazione di logger strutturati per la pipeline Timmy-KB.
-Supporta configurazione via settings centralizzato, logging su file e console,
-formattazione uniforme e validazione sicura del percorso file log.
+Supporta configurazione via settings centralizzato o ClientContext,
+logging su file e console, formattazione uniforme e validazione sicura
+del percorso file log.
 """
 
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from logging.handlers import RotatingFileHandler
 
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.exceptions import PipelineError
+from pipeline.context import ClientContext
 
 
 def get_structured_logger(
     name: str = "default",
-    log_file: Optional[Path] = None,
+    log_file: Optional[Union[str, Path]] = None,
     level: Optional[int] = None,
     rotate: bool = False,
     max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 3
+    backup_count: int = 3,
+    context: Optional[ClientContext] = None
 ) -> logging.Logger:
     """
-    Crea un logger strutturato con supporto a file e console.
+    Crea un logger strutturato con supporto per console e file, opzionalmente
+    legato ad un ClientContext.
 
     Args:
-        name (str): Nome del logger.
-        log_file (Optional[Path]): Path file log. Se None, tenta di usare settings.logs_path.
-        level (Optional[int]): Livello logging. Se None, tenta di usare settings.LOG_LEVEL.
-        rotate (bool): Abilita RotatingFileHandler.
-        max_bytes (int): Dimensione massima file log.
-        backup_count (int): Numero massimo file di backup.
+        name: Nome del logger.
+        log_file: Path del file di log. Se None, solo console.
+        level: Livello logging (default: INFO).
+        rotate: Abilita RotatingFileHandler.
+        max_bytes: Dimensione massima file log per rotazione.
+        backup_count: Numero massimo file di backup.
+        context: (opzionale) ClientContext per associare automaticamente lo slug nei log.
 
     Returns:
         logging.Logger: Logger configurato.
@@ -44,49 +48,40 @@ def get_structured_logger(
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # Import settings in modo dinamico per evitare cicli
-    try:
-        from pipeline.config_utils import settings, _validate_path_in_base_dir
-        if log_file is None:
-            log_file = getattr(settings, "logs_path", None)
-        if level is None:
-            level_str = getattr(settings, "LOG_LEVEL", "INFO").upper()
-            level = getattr(logging, level_str, logging.INFO)
-    except Exception:
-        if level is None:
-            level = logging.INFO
-        _validate_path_in_base_dir = None  # fallback
-
+    # Livello di default
+    if level is None:
+        level = logging.INFO
     logger.setLevel(level)
 
+    # Formatter uniforme
     formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        "%(asctime)s | %(levelname)s | %(name)s"
+        + (" | slug=%(slug)s" if context else "")
+        + " | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # Console handler
+    # Handler console
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
+    if context:
+        ch.addFilter(lambda record: setattr(record, "slug", context.slug) or True)
     logger.addHandler(ch)
 
-    # File handler (opzionale)
+    # Handler file, se richiesto
     if log_file:
+        log_file_path = Path(log_file)
+        log_file_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            if _validate_path_in_base_dir:
-                base_dir = getattr(settings, "base_dir", Path.cwd())
-                _validate_path_in_base_dir(Path(log_file), base_dir)
-
-            os.makedirs(Path(log_file).parent, exist_ok=True)
-
             if rotate:
-                fh = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
+                fh = RotatingFileHandler(log_file_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
             else:
-                fh = logging.FileHandler(log_file, encoding="utf-8")
+                fh = logging.FileHandler(log_file_path, encoding="utf-8")
             fh.setFormatter(formatter)
+            if context:
+                fh.addFilter(lambda record: setattr(record, "slug", context.slug) or True)
             logger.addHandler(fh)
-        except PipelineError as e:
-            logger.warning(f"Percorso log non consentito: {e}. Logging solo su console.")
         except Exception as e:
-            logger.warning(f"Impossibile creare file log {log_file}: {e}. Logging solo su console.")
+            logger.warning(f"Impossibile creare file di log {log_file_path}: {e}. Logging solo su console.")
 
     return logger

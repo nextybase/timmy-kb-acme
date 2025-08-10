@@ -1,60 +1,101 @@
 # src/pipeline/context.py
 
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
+from typing import Dict, Any, List, Optional
+import yaml
+from .exceptions import ConfigError
 
-class PipelineContext(BaseModel):
-    """
-    Oggetto unificato per passaggio dati, stato e configurazione
-    in tutte le funzioni della pipeline Timmy-KB.
-    """
-    # Identificativi
+
+@dataclass
+class ClientContext:
+    """Contesto unificato per tutte le pipeline Timmy-KB."""
+
+    # Identità cliente
     slug: str
     client_name: Optional[str] = None
 
-    # Configurazione centrale e parametri settings
-    settings: Dict[str, Any]  # oppure: Settings (Pydantic)
-    config_path: Path
+    # Configurazione e path
+    settings: Dict[str, Any] = field(default_factory=dict)
+    config_path: Path = None
     mapping_path: Optional[Path] = None
+    base_dir: Path = None
+    output_dir: Path = None
+    raw_dir: Path = None
+    md_dir: Path = None
+    log_dir: Path = None
 
-    # Directory & path operative
-    log_path: Path
-    output_dir: Path
-    raw_dir: Path
-    md_dir: Path
+    # Risorse esterne
+    drive_folders: Dict[str, str] = field(default_factory=dict)
+    github_repo: Optional[str] = None
 
-    # Drive / Output / Servizi esterni
-    drive_folder_id: Optional[str] = None
-
-    # Parametri di controllo flusso pipeline
+    # Flag esecuzione
     no_interactive: bool = False
     auto_push: bool = False
     skip_preview: bool = False
-
-    # Logging e livello
     log_level: str = "INFO"
-
-    # Stato run, errori, warning step-by-step
-    error_list: List[str] = []
-    warning_list: List[str] = []
-    step_status: Dict[str, str] = {}
-
-    # Dry-run flag (per test/pulizia)
     dry_run: bool = False
 
-    # --- Metodi utili ---
+    # Stato runtime
+    error_list: List[str] = field(default_factory=list)
+    warning_list: List[str] = field(default_factory=list)
+    step_status: Dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def load(cls, slug: str) -> "ClientContext":
+        """
+        Carica e valida la configurazione cliente, restituendo un ClientContext pronto all'uso.
+        """
+        # Import lazy per evitare circular import
+        from pipeline.logging_utils import get_structured_logger
+
+        base_dir = Path(__file__).resolve().parents[2]
+        config_path = base_dir / "output" / f"timmy-kb-{slug}" / "config" / "config.yaml"
+
+        if not config_path.exists():
+            raise ConfigError(f"Config file non trovato per slug '{slug}'")
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            settings = yaml.safe_load(f) or {}
+
+        logger = get_structured_logger(__name__, context=cls(slug=slug))
+        logger.info("Config cliente caricato", extra={"slug": slug, "config_path": str(config_path)})
+
+        return cls(
+            slug=slug,
+            client_name=settings.get("client_name"),
+            settings=settings,
+            config_path=config_path,
+            mapping_path=(config_path.parent / "semantic_mapping.yaml"),
+            base_dir=base_dir,
+            output_dir=base_dir / "output" / f"timmy-kb-{slug}",
+            raw_dir=base_dir / "output" / f"timmy-kb-{slug}" / "raw",
+            md_dir=base_dir / "output" / f"timmy-kb-{slug}" / "book",
+            log_dir=base_dir / "output" / f"timmy-kb-{slug}" / "logs",
+            drive_folders=settings.get("drive_folders", {}),
+            github_repo=settings.get("github_repo", "")
+        )
+
+    # --- Utility per tracking stato ---
     def log_error(self, msg: str):
+        from pipeline.logging_utils import get_structured_logger
+        logger = get_structured_logger(__name__, context=self)
         self.error_list.append(msg)
+        logger.error(msg, extra={"slug": self.slug})
 
     def log_warning(self, msg: str):
+        from pipeline.logging_utils import get_structured_logger
+        logger = get_structured_logger(__name__, context=self)
         self.warning_list.append(msg)
+        logger.warning(msg, extra={"slug": self.slug})
 
     def set_step_status(self, step: str, status: str):
+        from pipeline.logging_utils import get_structured_logger
+        logger = get_structured_logger(__name__, context=self)
         self.step_status[step] = status
+        logger.info(f"Step '{step}' → {status}", extra={"slug": self.slug})
 
-    # Shortcut: info di stato finale
-    def summary(self):
+    def summary(self) -> Dict[str, Any]:
         return {
             "slug": self.slug,
             "error_count": len(self.error_list),

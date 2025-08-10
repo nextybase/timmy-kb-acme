@@ -1,6 +1,5 @@
+# src/pipeline/content_utils.py
 """
-content_utils.py
-
 Utility per la generazione e validazione di file markdown a partire da PDF raw,
 nell'ambito della pipeline Timmy-KB.
 """
@@ -10,37 +9,28 @@ from typing import List, Optional, Union
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import (
-    get_settings_for_slug,
     _validate_path_in_base_dir,
     _safe_write_file
 )
 from pipeline.exceptions import PipelineError
+from pipeline.context import ClientContext
 
+logger = get_structured_logger("pipeline.content_utils")
 
 def convert_files_to_structured_markdown(
-    arg1: Optional[Union[str, Path]] = None,
-    arg2: Optional[Path] = None,
-    logger: Optional[object] = None
+    context: ClientContext,
+    raw_dir: Optional[Path] = None,
+    md_dir: Optional[Path] = None,
+    log: Optional[object] = None
 ):
     """
     Converte i PDF presenti nella cartella raw in file markdown univoci per cartella.
     """
-    if isinstance(arg1, Path) and isinstance(arg2, Path):
-        raw_dir = arg1
-        md_dir = arg2
-        local_logger = logger or get_structured_logger("pipeline.content_utils")
-        settings = None
-    else:
-        settings = get_settings_for_slug(arg1)
-        raw_dir = settings.raw_dir
-        md_dir = settings.md_output_path
-        local_logger = logger or get_structured_logger("pipeline.content_utils")
+    raw_dir = raw_dir or context.raw_dir
+    md_dir = md_dir or context.md_dir
+    local_logger = log or get_structured_logger("pipeline.content_utils")
 
-    if settings:
-        _validate_path_in_base_dir(md_dir, settings.base_dir)
-    else:
-        _validate_path_in_base_dir(md_dir, md_dir.parent)
-
+    _validate_path_in_base_dir(md_dir, context.base_dir)
     md_dir.mkdir(parents=True, exist_ok=True)
 
     for subfolder in [p for p in raw_dir.iterdir() if p.is_dir()]:
@@ -52,24 +42,23 @@ def convert_files_to_structured_markdown(
                 content += f"(Contenuto estratto/conversione da {pdf_file.name}...)\n\n"
 
             _safe_write_file(md_path, content, logger=local_logger)
-            local_logger.info(f"📄 Creato file markdown aggregato: {md_path}")
+            local_logger.info(f"✅ Creato file markdown aggregato: {md_path}")
         except Exception as e:
             local_logger.error(f"❌ Errore creazione markdown {md_path}: {e}")
             raise PipelineError(f"Errore creazione markdown {md_path}: {e}")
 
-
 def generate_summary_markdown(
-    md_dir: Path,
-    logger: Optional[object] = None,
-    settings=None
+    context: ClientContext,
+    md_dir: Optional[Path] = None,
+    log: Optional[object] = None
 ):
     """
     Genera il file SUMMARY.md nella directory markdown.
     """
-    settings = settings or get_settings_for_slug(settings)
-    local_logger = logger or get_structured_logger("pipeline.content_utils")
+    md_dir = md_dir or context.md_dir
+    local_logger = log or get_structured_logger("pipeline.content_utils")
 
-    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    _validate_path_in_base_dir(md_dir, context.base_dir)
 
     summary_path = md_dir / "SUMMARY.md"
     try:
@@ -79,47 +68,45 @@ def generate_summary_markdown(
                 content += f"* [{md_file.stem}]({md_file.name})\n"
 
         _safe_write_file(summary_path, content, logger=local_logger)
-        local_logger.info(f"📄 Generato SUMMARY.md in {summary_path}")
+        local_logger.info(f"✅ Generato SUMMARY.md in {summary_path}")
     except Exception as e:
         local_logger.error(f"❌ Errore generazione SUMMARY.md: {e}")
         raise PipelineError("Errore generazione SUMMARY.md")
 
-
 def generate_readme_markdown(
-    md_dir: Path,
-    logger: Optional[object] = None,
-    settings=None
+    context: ClientContext,
+    md_dir: Optional[Path] = None,
+    log: Optional[object] = None
 ):
     """
     Genera il file README.md nella directory markdown.
     """
-    settings = settings or get_settings_for_slug(settings)
-    local_logger = logger or get_structured_logger("pipeline.content_utils")
+    md_dir = md_dir or context.md_dir
+    local_logger = log or get_structured_logger("pipeline.content_utils")
 
-    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    _validate_path_in_base_dir(md_dir, context.base_dir)
 
     readme_path = md_dir / "README.md"
     try:
         content = "# Documentazione Timmy-KB\n"
         _safe_write_file(readme_path, content, logger=local_logger)
-        local_logger.info(f"📄 Generato README.md in {readme_path}")
+        local_logger.info(f"✅ Generato README.md in {readme_path}")
     except Exception as e:
         local_logger.error(f"❌ Errore generazione README.md: {e}")
         raise PipelineError("Errore generazione README.md")
 
-
 def validate_markdown_dir(
-    md_dir: Path,
-    logger: Optional[object] = None,
-    settings=None
+    context: ClientContext,
+    md_dir: Optional[Path] = None,
+    log: Optional[object] = None
 ):
     """
     Verifica che la directory markdown esista e sia valida.
     """
-    settings = settings or get_settings_for_slug(settings)
-    local_logger = logger or get_structured_logger("pipeline.content_utils")
+    md_dir = md_dir or context.md_dir
+    local_logger = log or get_structured_logger("pipeline.content_utils")
 
-    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    _validate_path_in_base_dir(md_dir, context.base_dir)
 
     if not md_dir.exists():
         local_logger.error(f"❌ La cartella markdown non esiste: {md_dir}")
