@@ -1,136 +1,162 @@
 """
 semantic_extractor.py
 
-Modulo per l’arricchimento semantico dei file markdown:
-applica intestazioni e categorie ai file markdown usando il mapping YAML fornito.
+Modulo per l'estrazione e l'arricchimento semantico dei documenti markdown generati dalla pipeline Timmy-KB.
+
+Struttura attuale:
+- Caricamento mapping semantico
+- Estrazione concetti
+- Orchestratore di arricchimento (placeholder, per sviluppo futuro)
+
+Refactor Fase 2:
+- Separazione netta dalla pipeline di costruzione
+- Import aggiornati: _validate_path_in_base_dir da config_utils
+- Logging uniforme
+- Preparazione per estensioni modulari
 """
 
 from pathlib import Path
+from typing import Optional, List
 import yaml
-import shutil
-from typing import Optional, Union
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import get_settings_for_slug
-from semantic.semantic_mapping import load_semantic_mapping
-from pipeline.constants import BACKUP_SUFFIX, SEMANTIC_MAPPING_FILE_NAME
-from pipeline.exceptions import EnrichmentError, PipelineError
-from pipeline.utils import _validate_path_in_base_dir
+from pipeline.config_utils import get_settings_for_slug, _validate_path_in_base_dir
+from pipeline.exceptions import PipelineError
+from pipeline.constants import CONFIG_FILE_NAME, SEMANTIC_MAPPING_FILE
+
+logger = get_structured_logger("pipeline.semantic_extractor")
 
 
-def _resolve_settings(settings=None):
+# -------------------------------------------------
+# Funzioni di utilità
+# -------------------------------------------------
+def _load_semantic_mapping(mapping_path: Path) -> dict:
     """
-    Restituisce un'istanza Settings valida.
-    Verifica minima per evitare che sia passato un logger o altro oggetto.
+    Carica il file di mapping semantico YAML.
     """
-    resolved = settings or get_settings_for_slug()
-    if not hasattr(resolved, "logs_path") or not hasattr(resolved, "base_dir"):
-        raise PipelineError(
-            "Oggetto 'settings' non valido: atteso Settings con 'logs_path' e 'base_dir'."
-        )
-    return resolved
+    _validate_path_in_base_dir(mapping_path, mapping_path.parent)
+    if not mapping_path.exists():
+        logger.error(f"❌ File di mapping semantico non trovato: {mapping_path}")
+        raise FileNotFoundError(f"File di mapping semantico non trovato: {mapping_path}")
 
-
-def enrich_markdown_folder(
-    md_output_path: Optional[Path] = None,
-    mapping_source: Union[str, dict, None] = None,
-    settings=None
-):
-    """
-    Applica arricchimento semantico a tutti i file markdown in una cartella
-    usando il mapping YAML.
-
-    :param md_output_path: Path della cartella contenente i file markdown.
-    :param mapping_source: Può essere:
-        - stringa (path al file di mapping YAML)
-        - dict già caricato
-        - None → usa percorso predefinito config/<SEMANTIC_MAPPING_FILE_NAME>
-    :param settings: Oggetto Settings valido o None.
-    """
-    settings = _resolve_settings(settings)
-    logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
-
-    if md_output_path is None:
-        md_output_path = settings.md_output_path
-
-    _validate_path_in_base_dir(md_output_path, settings.base_dir)
-
-    # Caricamento mapping
-    if mapping_source is None:
-        mapping_path = f"config/{SEMANTIC_MAPPING_FILE_NAME}"
-        mapping = load_semantic_mapping(mapping_path, settings=settings)
-    elif isinstance(mapping_source, dict):
-        mapping = mapping_source
-    elif isinstance(mapping_source, (str, Path)):
-        mapping = load_semantic_mapping(mapping_source, settings=settings)
-    else:
-        raise PipelineError("Parametro 'mapping_source' non valido.")
-
-    for md_file in Path(md_output_path).glob("*.md"):
-        enrich_markdown_file(md_file, mapping, settings=settings)
-
-
-def enrich_markdown_file(md_file: Path, mapping: dict, settings=None):
-    """
-    Applica arricchimento semantico a un singolo file markdown.
-    """
-    settings = _resolve_settings(settings)
-    logger = get_structured_logger("semantic_extractor", str(settings.logs_path))
-
-    _validate_path_in_base_dir(md_file, settings.base_dir)
-
-    fname = md_file.name
-    semantic_info = mapping.get(fname, {})
-
-    # Recupero slug con fallback sicuro
-    slug = semantic_info.get("slug") or getattr(settings, "slug", None)
-    if not slug:
-        logger.error(
-            f"❌ Slug mancante sia nel mapping che in settings per il file {fname}. Enrichment saltato."
-        )
-        return
-
-    # Creazione header YAML
-    header_dict = dict(semantic_info)
-    header_dict["slug"] = slug
     try:
-        header_yaml = "---\n" + yaml.safe_dump(
-            header_dict, sort_keys=False, allow_unicode=True
-        ) + "---\n\n"
+        with open(mapping_path, "r", encoding="utf-8") as f:
+            mapping = yaml.safe_load(f) or {}
+        logger.info(f"📄 Mapping semantico caricato da {mapping_path}")
+        return mapping
     except Exception as e:
-        logger.error(f"❌ Errore serializzando YAML per {fname}: {e}")
-        return
+        logger.error(f"❌ Errore nella lettura/parsing di {mapping_path}: {e}")
+        raise PipelineError(f"Errore lettura mapping: {e}")
 
-    # Backup file
-    backup_path = md_file.with_suffix(BACKUP_SUFFIX)
+
+def _list_markdown_files(md_dir: Path) -> List[Path]:
+    """
+    Restituisce la lista ordinata di file markdown nella directory indicata.
+    """
+    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    if not md_dir.exists():
+        raise FileNotFoundError(f"Directory markdown non trovata: {md_dir}")
+    if not md_dir.is_dir():
+        raise NotADirectoryError(f"Il path non è una directory: {md_dir}")
+
+    files = sorted(md_dir.glob("*.md"))
+    logger.info(f"📄 {len(files)} file markdown trovati in {md_dir}")
+    return files
+
+
+# -------------------------------------------------
+# Estrazione concetti semantici
+# -------------------------------------------------
+def extract_semantic_concepts(slug: Optional[str] = None, md_dir: Optional[Path] = None) -> dict:
+    """
+    Estrae i concetti semantici dai file markdown in base al mapping definito.
+
+    Args:
+        slug: Slug cliente (se non passato, obbligatorio md_dir)
+        md_dir: Path alla directory contenente i file markdown
+
+    Returns:
+        dict: mapping concetti → contenuti trovati
+    """
+    if not slug and not md_dir:
+        raise PipelineError("Necessario passare uno slug o un path markdown.")
+
+    settings = get_settings_for_slug(slug) if slug else None
+    md_path = md_dir or settings.md_output_path
+
+    mapping_path = (
+        settings.config_dir / SEMANTIC_MAPPING_FILE
+        if settings else md_path.parent / CONFIG_FILE_NAME
+    )
+
+    mapping = _load_semantic_mapping(mapping_path)
+    markdown_files = _list_markdown_files(md_path)
+
+    extracted_data = {}
+    for concept, keywords in mapping.items():
+        matches = []
+        for file in markdown_files:
+            try:
+                content = file.read_text(encoding="utf-8")
+                for kw in keywords:
+                    if kw.lower() in content.lower():
+                        matches.append({"file": file.name, "keyword": kw})
+            except Exception as e:
+                logger.warning(f"⚠️ Impossibile leggere {file}: {e}")
+        extracted_data[concept] = matches
+
+    logger.info(f"✅ Estrazione concetti completata per {slug or md_dir}")
+    return extracted_data
+
+
+# -------------------------------------------------
+# Orchestratore arricchimento semantico (placeholder)
+# -------------------------------------------------
+def enrich_markdown_folder(md_dir: Path, semantic_mapping: dict, logger=None):
+    """
+    Orchestratore della fase di arricchimento semantico.
+    Al momento esegue solo validazioni e logging.
+    In futuro:
+      - Analisi del contenuto markdown
+      - Annotazioni semantiche
+      - Aggiornamento dei file
+      - Generazione di metadati aggiuntivi
+    """
+    if logger is None:
+        logger = get_structured_logger("semantic.enrich")
+
+    _validate_path_in_base_dir(md_dir, md_dir.parent)
+    if not md_dir.exists():
+        raise FileNotFoundError(f"Directory markdown non trovata: {md_dir}")
+
+    markdown_files = _list_markdown_files(md_dir)
+    logger.info(f"📂 Avvio arricchimento semantico su {len(markdown_files)} file in {md_dir}")
+
+    # Placeholder: in futuro qui ci sarà la pipeline semantica
+    for file in markdown_files:
+        logger.debug(f"🔍 Analisi placeholder per {file.name}")
+
+    logger.info("✅ Arricchimento semantico completato (placeholder)")
+
+
+# -------------------------------------------------
+# CLI
+# -------------------------------------------------
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Estrazione e arricchimento semantico da markdown Timmy-KB")
+    parser.add_argument("--slug", type=str, help="Slug cliente (es: acme-srl)")
+    parser.add_argument("--md_dir", type=str, help="Percorso directory markdown")
+    args = parser.parse_args()
+
     try:
-        shutil.copy(md_file, backup_path)
-        logger.info(f"💾 Backup creato: {backup_path}")
+        if args.slug or args.md_dir:
+            extracted = extract_semantic_concepts(
+                slug=args.slug,
+                md_dir=Path(args.md_dir) if args.md_dir else None
+            )
+            logger.info(f"📊 Risultati estrazione: {extracted}")
+        else:
+            logger.error("❌ Necessario passare uno slug o un path markdown.")
     except Exception as e:
-        logger.warning(f"⚠️ Impossibile creare backup per {fname}: {e}")
-
-    # Lettura contenuto originale
-    try:
-        with open(md_file, "r", encoding="utf-8") as f:
-            content = f.read()
-    except Exception as e:
-        logger.error(f"❌ Errore lettura {fname}: {e}")
-        return
-
-    if content.strip().startswith("---"):
-        logger.info(f"ℹ️ Header già presente in {fname}, enrichment saltato.")
-        return
-
-    # Scrittura con header
-    try:
-        with open(md_file, "w", encoding="utf-8") as f:
-            f.write(header_yaml + content)
-        logger.info(f"📝 Enrichment applicato a: {fname} (slug: {slug})")
-    except Exception as e:
-        logger.error(f"❌ Errore scrittura {fname}: {e}")
-        try:
-            shutil.copy(backup_path, md_file)
-            logger.info(f"♻️ Ripristinato file da backup per {fname}")
-        except Exception as rollback_err:
-            logger.critical(f"❌ Errore nel rollback per {fname}: {rollback_err}")
-        raise EnrichmentError(f"Errore enrichment per {fname}") from e
+        logger.error(f"❌ Errore: {e}")

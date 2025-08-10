@@ -4,12 +4,12 @@ gitbook_preview.py
 Genera e avvia la preview locale della documentazione (GitBook/Honkit)
 usando container Docker isolato.
 
-Modifiche Fase 2:
-- Validazione path con _validate_path_in_base_dir
+Refactor Fase 2:
+- Validazione path con _validate_path_in_base_dir da config_utils.py
 - Uso costanti da constants.py
 - Eccezioni uniformi (PreviewError)
 - Logger coerente con il resto della pipeline
-- Rimosso fallback pericoloso su get_settings_for_slug() senza slug
+- Rimosso _resolve_settings, uso diretto di get_settings_for_slug()
 """
 
 import subprocess
@@ -21,30 +21,14 @@ from typing import Union
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError, PipelineError
 from pipeline.constants import BOOK_JSON_NAME, PACKAGE_JSON_NAME
-from pipeline.utils import _validate_path_in_base_dir
+from pipeline.config_utils import get_settings_for_slug, _validate_path_in_base_dir
 
 logger = get_structured_logger("pipeline.gitbook_preview")
 
 
-def _resolve_settings(settings=None):
-    """
-    Restituisce un'istanza Settings valida.
-    Evita il fallback implicito su get_settings_for_slug() senza slug.
-    """
-    if settings is None:
-        raise PipelineError(
-            "Oggetto 'settings' mancante. Passare sempre un'istanza Settings valida."
-        )
-    if not hasattr(settings, "md_output_path") or not hasattr(settings, "base_dir"):
-        raise PipelineError(
-            "Oggetto 'settings' non valido: atteso Settings con 'md_output_path' e 'base_dir'."
-        )
-    return settings
-
-
 def ensure_book_json(book_dir: Path) -> None:
     """
-    Garantisce la presenza di un file book.json di base nella directory markdown.
+    Garantisce la presenza di un file book.json nella directory markdown.
     """
     _validate_path_in_base_dir(book_dir, book_dir.parent)
     book_json_path = book_dir / BOOK_JSON_NAME
@@ -57,16 +41,16 @@ def ensure_book_json(book_dir: Path) -> None:
         }
         try:
             book_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            logger.info(f"📚 book.json generato in: {book_json_path}")
+            logger.info(f"📄 book.json generato in: {book_json_path}")
         except Exception as e:
             raise PreviewError(f"Errore generazione book.json: {e}")
     else:
-        logger.info(f"📚 book.json già presente: {book_json_path}")
+        logger.info(f"📄 book.json già presente: {book_json_path}")
 
 
 def ensure_package_json(book_dir: Path) -> None:
     """
-    Garantisce la presenza di un file package.json di base nella directory markdown.
+    Garantisce la presenza di un file package.json nella directory markdown.
     """
     _validate_path_in_base_dir(book_dir, book_dir.parent)
     package_json_path = book_dir / PACKAGE_JSON_NAME
@@ -75,7 +59,7 @@ def ensure_package_json(book_dir: Path) -> None:
         data = {
             "name": "timmy-kb",
             "version": "1.0.0",
-            "description": "Auto-generated for Honkit preview",
+            "description": "Auto-generato per Honkit preview",
             "main": "README.md",
             "license": "MIT",
             "scripts": {
@@ -96,28 +80,26 @@ def run_gitbook_docker_preview(
     config: Union[dict, None] = None,
     port: int = 4000,
     container_name: str = "honkit_preview",
-    settings=None
+    slug: str = None
 ) -> None:
     """
-    Avvia la preview GitBook/Honkit in Docker e garantisce
-    la rimozione del container al termine o in caso di errore/interruzione.
+    Avvia la preview GitBook/Honkit in Docker.
     """
-    settings = _resolve_settings(settings)
+    if not slug:
+        raise PipelineError("Slug cliente mancante per avvio preview.")
+
+    settings = get_settings_for_slug(slug)
     _validate_path_in_base_dir(settings.md_output_path, settings.base_dir)
 
-    if config is None:
-        md_output_path = settings.md_output_path.resolve()
-    elif isinstance(config, dict):
-        md_output_path = Path(config.get("md_output_path", settings.md_output_path)).resolve()
-    else:
-        md_output_path = Path(getattr(config, "md_output_path", settings.md_output_path)).resolve()
+    md_output_path = settings.md_output_path.resolve()
 
     logger.info(f"📂 Directory per anteprima: {md_output_path}")
 
+    # Creazione file necessari
     ensure_book_json(md_output_path)
     ensure_package_json(md_output_path)
 
-    # Build static
+    # Build statica
     build_cmd = [
         "docker", "run", "--rm",
         "--workdir", "/app",
@@ -126,12 +108,12 @@ def run_gitbook_docker_preview(
     ]
     try:
         subprocess.run(build_cmd, check=True)
-        logger.info("🏗️ Build statica Honkit completata.")
+        logger.info("✅ Build statica Honkit completata.")
     except subprocess.CalledProcessError as e:
         logger.error("❌ Errore durante 'honkit build'.")
         raise PreviewError(f"Errore 'honkit build': {e}")
 
-    # Serve live preview
+    # Servizio live preview
     serve_cmd = [
         "docker", "run", "-d",
         "--name", container_name,
@@ -146,8 +128,7 @@ def run_gitbook_docker_preview(
         logger.info(f"🌍 Anteprima disponibile su: http://localhost:{port} (container: {container_id})")
 
         if not os.environ.get("BATCH_TEST"):
-            input("⏸️ Premi INVIO per chiudere l'anteprima e arrestare Docker...")
-        logger.info("🛑 Arresto container Docker...")
+            input("⏹ Premi INVIO per chiudere l'anteprima e arrestare Docker...")
         subprocess.run(["docker", "stop", container_name], check=False)
         subprocess.run(["docker", "rm", "-f", container_name], check=False)
 

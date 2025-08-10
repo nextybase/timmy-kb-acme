@@ -243,3 +243,25 @@ def validate_preonboarding_environment(base_dir: Optional[Path] = None, logger: 
             dir_path.mkdir(parents=True, exist_ok=True)
 
     logger.info("✅ Tutti i file e le directory richieste sono presenti o create.")
+
+def _safe_write_file(file_path: Path, content: str):
+    """
+    Scrive un file in modo sicuro:
+    - Backup del file esistente
+    - Sovrascrittura con nuovo contenuto
+    """
+    _validate_path_in_base_dir(file_path, file_path.parent)
+
+    if file_path.exists():
+        backup_path = file_path.with_suffix(BACKUP_SUFFIX)
+        shutil.copy(file_path, backup_path)
+        logger.info(f"💾 Backup creato: {backup_path}")
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        logger.debug(f"✏️ File scritto: {file_path}")
+    except Exception as e:
+        logger.error(f"❌ Errore scrittura file {file_path}: {e}")
+        raise PipelineError(f"Errore scrittura file {file_path}: {e}")
+

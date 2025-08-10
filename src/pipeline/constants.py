@@ -8,7 +8,7 @@ Se devono cambiare, il cambiamento va considerato architetturale.
 OUTPUT_DIR_NAME = "output"
 LOGS_DIR_NAME = "logs"
 CONFIG_FILE_NAME = "config.yaml"
-SEMANTIC_MAPPING_FILE_NAME = "semantic_mapping.yaml"
+SEMANTIC_MAPPING_FILE = "semantic_mapping.yaml"
 
 # 📄 Suffissi di backup e temporanei
 BACKUP_SUFFIX = ".bak"

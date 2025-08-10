@@ -46,7 +46,7 @@ def get_structured_logger(
 
     # Import settings in modo dinamico per evitare cicli
     try:
-        from pipeline.config_utils import settings
+        from pipeline.config_utils import settings, _validate_path_in_base_dir
         if log_file is None:
             log_file = getattr(settings, "logs_path", None)
         if level is None:
@@ -55,6 +55,7 @@ def get_structured_logger(
     except Exception:
         if level is None:
             level = logging.INFO
+        _validate_path_in_base_dir = None  # fallback
 
     logger.setLevel(level)
 
@@ -71,9 +72,9 @@ def get_structured_logger(
     # File handler (opzionale)
     if log_file:
         try:
-            from pipeline.utils import _validate_path_in_base_dir  # import locale anti-ciclo
-            base_dir = getattr(settings, "base_dir", Path.cwd())
-            _validate_path_in_base_dir(Path(log_file), base_dir)
+            if _validate_path_in_base_dir:
+                base_dir = getattr(settings, "base_dir", Path.cwd())
+                _validate_path_in_base_dir(Path(log_file), base_dir)
 
             os.makedirs(Path(log_file).parent, exist_ok=True)
 

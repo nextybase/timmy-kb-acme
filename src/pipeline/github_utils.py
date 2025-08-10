@@ -3,7 +3,12 @@ github_utils.py
 
 Utility per il deploy automatico della cartella markdown su GitHub.
 Gestisce creazione repository, push forzato su master, gestione repo temporanea e cleanup.
-Supporta config centralizzata e prende parametri da settings.
+Supporta config centralizzata e parametri da settings.
+
+Refactoring:
+- Uso di _validate_path_in_base_dir da config_utils
+- Eliminata dipendenza da pipeline.utils
+- Log uniformati
 """
 
 import os
@@ -15,52 +20,42 @@ from github.GithubException import UnknownObjectException
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError, PipelineError
-from pipeline.utils import _validate_path_in_base_dir
+from pipeline.config_utils import _validate_path_in_base_dir, get_settings_for_slug
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME
 
 logger = get_structured_logger("pipeline.github_utils", f"{LOGS_DIR_NAME}/onboarding.log")
 
 
-def _resolve_settings(settings):
+def _resolve_settings(settings=None):
     """
     Restituisce un'istanza Settings valida.
     """
-    if settings is None:
-        raise PipelineError(
-            "Oggetto 'settings' mancante. Passare sempre un'istanza Settings valida."
-        )
-    required_attrs = ["slug", "base_dir", "md_output_path"]
-    for attr in required_attrs:
-        if not hasattr(settings, attr):
-            raise PipelineError(
-                f"Oggetto 'settings' non valido: manca attributo richiesto '{attr}'."
-            )
-    return settings
+    if settings:
+        return settings
+    return get_settings_for_slug()
 
 
-def push_output_to_github(settings, md_dir_path: Path = None) -> str:
+def push_output_to_github(settings=None, md_dir_path: Path = None) -> str:
     """
     Esegue il deploy automatico della cartella markdown su GitHub.
-    Crea la repository se non esiste e forza il push su master.
+    Crea il repository se non esiste e forza il push su master.
 
     Args:
-        settings: Oggetto settings inizializzato per lo slug corrente.
-        md_dir_path (Path, opzionale): Directory contenente i markdown da pushare.
-                                       Default: settings.md_output_path.
+        settings: Settings inizializzati per lo slug corrente.
+        md_dir_path: Path contenente i markdown da pushare (default: settings.md_output_path).
 
     Returns:
-        str: Path della directory pubblicata.
+        str: Percorso della directory pubblicata.
 
     Raises:
         PushError: Se mancano token, repo o il push fallisce.
     """
     settings = _resolve_settings(settings)
 
-    github_token = getattr(settings, "github_token", None) or os.getenv("GITHUB_TOKEN")
-    repo_name = getattr(settings, "github_repo", None) or f"timmy-kb-{settings.slug}"
+    github_token = getattr(settings, "GITHUB_TOKEN", None) or os.getenv("GITHUB_TOKEN")
+    repo_name = getattr(settings, "GITHUB_REPO", None) or f"timmy-kb-{settings.slug}"
     output_path = md_dir_path or settings.md_output_path
 
-    # Validazione parametri e path
     if not github_token:
         logger.error("❌ GITHUB_TOKEN mancante.")
         raise PushError("GITHUB_TOKEN mancante.")
@@ -76,54 +71,48 @@ def push_output_to_github(settings, md_dir_path: Path = None) -> str:
     try:
         github = Github(github_token)
         github_user = github.get_user()
-        logger.info(f"🐙 Deploy GitHub per utente {github_user.login} → repo: {repo_name} (privata)")
+        logger.info(f"👤 Deploy GitHub per utente {github_user.login} → repo: {repo_name} (privata)")
 
         try:
             repo = github_user.get_repo(repo_name)
-            logger.info(f"📦 Repo trovata: {repo_name}")
+            logger.info(f"📂 Repo trovata: {repo_name}")
         except UnknownObjectException:
-            logger.info(f"📦 Repo non trovata, creazione in corso: {repo_name}")
+            logger.info(f"📂 Repo non trovata, creazione in corso: {repo_name}")
             repo = github_user.create_repo(
                 name=repo_name,
                 private=True,
                 auto_init=False,
-                description="Repository generato automaticamente da NeXT"
+                description="Repository generato automaticamente da Timmy-KB"
             )
 
         temp_dir = Path("tmp_repo_push")
         if temp_dir.exists():
             try:
                 shutil.rmtree(temp_dir)
-                logger.info(f"🧹 Rimossa cartella temporanea '{temp_dir}' prima del push.")
+                logger.info(f"🗑️ Rimossa cartella temporanea '{temp_dir}' prima del push.")
             except Exception as e:
                 logger.warning(f"⚠️ Impossibile rimuovere '{temp_dir}' prima del push: {e}")
 
-        # Copia file markdown nella cartella temporanea
         temp_dir.mkdir(parents=True, exist_ok=True)
         for file in output_path.glob("*.md"):
             shutil.copy(file, temp_dir / file.name)
 
-        # Creazione repo locale e commit
         repo_local = Repo.init(temp_dir)
-        files_to_add = [str(p.relative_to(temp_dir)) for p in temp_dir.iterdir() if p.is_file()]
-        repo_local.index.add(files_to_add)
-        repo_local.index.commit("Upload automatico dei file markdown da pipeline NeXT")
+        repo_local.index.add([str(p.relative_to(temp_dir)) for p in temp_dir.iterdir() if p.is_file()])
+        repo_local.index.commit("Upload automatico dei file markdown da pipeline Timmy-KB")
 
-        # Config remote
         remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
         if "origin" not in [r.name for r in repo_local.remotes]:
             repo_local.create_remote("origin", remote_url)
         else:
             repo_local.remotes.origin.set_url(remote_url)
 
-        # Push forzato su master
         repo_local.git.push("origin", "master", force=True)
-        logger.info("🚀 Push su GitHub completato.")
+        logger.info("✅ Push su GitHub completato.")
 
-        # Cleanup cartella temporanea
         try:
             shutil.rmtree(temp_dir, ignore_errors=True)
-            logger.info(f"🧹 Rimossa cartella temporanea '{temp_dir}' dopo il push.")
+            logger.info(f"🗑️ Rimossa cartella temporanea '{temp_dir}' dopo il push.")
         except Exception as e:
             logger.warning(f"⚠️ Impossibile rimuovere '{temp_dir}' dopo il push: {e}")
 
