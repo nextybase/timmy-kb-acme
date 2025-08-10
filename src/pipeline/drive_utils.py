@@ -1,8 +1,5 @@
-# src/pipeline/drive_utils.py
-
 import io
 import time
-import logging
 from pathlib import Path
 from typing import Dict, Any
 
@@ -38,13 +35,13 @@ def drive_api_call(func, *args, **kwargs):
 # Creazione servizio Drive
 # ---------------------------
 def get_drive_service(context: ClientContext):
-    """Crea un servizio Google Drive autenticato."""
-    cfg = context.settings
-    if not cfg.get("google_service_account"):
-        raise PipelineError("Configurazione Drive mancante nel config cliente.")
+    """Crea un servizio Google Drive autenticato usando variabili da .env."""
+    service_account_path = context.env.get("GOOGLE_SERVICE_ACCOUNT")
+    if not service_account_path or not Path(service_account_path).exists():
+        raise PipelineError("File di service account Google mancante o non trovato. Verifica GOOGLE_SERVICE_ACCOUNT in .env.")
 
     creds = service_account.Credentials.from_service_account_file(
-        cfg["google_service_account"],
+        service_account_path,
         scopes=["https://www.googleapis.com/auth/drive"]
     )
     return build("drive", "v3", credentials=creds)
@@ -123,7 +120,7 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
                 q=query,
                 fields="files(id, name, mimeType)",
                 corpora="drive",
-                driveId=context.settings.get("drive_id"),
+                driveId=context.env.get("DRIVE_ID"),  # ⬅️ ora legge da .env
                 includeItemsFromAllDrives=True,
                 supportsAllDrives=True
             ).execute()

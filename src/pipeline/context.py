@@ -1,11 +1,14 @@
-# src/pipeline/context.py
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
-from .exceptions import ConfigError
+import logging
 
+from .exceptions import ConfigError
+from .env_utils import get_env_var  # ⬅️ nuovo import per variabili .env
+
+# Logger semplice per uso interno, evita import circolare
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ClientContext:
@@ -25,9 +28,8 @@ class ClientContext:
     md_dir: Path = None
     log_dir: Path = None
 
-    # Risorse esterne
-    drive_folders: Dict[str, str] = field(default_factory=dict)
-    github_repo: Optional[str] = None
+    # Risorse esterne (da .env)
+    env: Dict[str, Any] = field(default_factory=dict)
 
     # Flag esecuzione
     no_interactive: bool = False
@@ -46,9 +48,6 @@ class ClientContext:
         """
         Carica e valida la configurazione cliente, restituendo un ClientContext pronto all'uso.
         """
-        # Import lazy per evitare circular import
-        from pipeline.logging_utils import get_structured_logger
-
         base_dir = Path(__file__).resolve().parents[2]
         config_path = base_dir / "output" / f"timmy-kb-{slug}" / "config" / "config.yaml"
 
@@ -56,44 +55,43 @@ class ClientContext:
             raise ConfigError(f"Config file non trovato per slug '{slug}'")
 
         with open(config_path, "r", encoding="utf-8") as f:
-            settings = yaml.safe_load(f) or {}
+            settings = yaml.safe_load(f)
 
-        logger = get_structured_logger(__name__, context=cls(slug=slug))
-        logger.info("Config cliente caricato", extra={"slug": slug, "config_path": str(config_path)})
+        logger.info(f"Config cliente caricato: {config_path}")
+
+        # Carica variabili da .env
+        env_vars = {
+            "GOOGLE_SERVICE_ACCOUNT": get_env_var("GOOGLE_SERVICE_ACCOUNT", required=True),
+            "DRIVE_ID": get_env_var("DRIVE_ID", required=True),
+            "GITHUB_TOKEN": get_env_var("GITHUB_TOKEN", default=None)
+        }
 
         return cls(
             slug=slug,
             client_name=settings.get("client_name"),
             settings=settings,
+            env=env_vars,
             config_path=config_path,
             mapping_path=(config_path.parent / "semantic_mapping.yaml"),
             base_dir=base_dir,
             output_dir=base_dir / "output" / f"timmy-kb-{slug}",
             raw_dir=base_dir / "output" / f"timmy-kb-{slug}" / "raw",
             md_dir=base_dir / "output" / f"timmy-kb-{slug}" / "book",
-            log_dir=base_dir / "output" / f"timmy-kb-{slug}" / "logs",
-            drive_folders=settings.get("drive_folders", {}),
-            github_repo=settings.get("github_repo", "")
+            log_dir=base_dir / "output" / f"timmy-kb-{slug}" / "logs"
         )
 
     # --- Utility per tracking stato ---
     def log_error(self, msg: str):
-        from pipeline.logging_utils import get_structured_logger
-        logger = get_structured_logger(__name__, context=self)
         self.error_list.append(msg)
-        logger.error(msg, extra={"slug": self.slug})
+        logger.error(msg)
 
     def log_warning(self, msg: str):
-        from pipeline.logging_utils import get_structured_logger
-        logger = get_structured_logger(__name__, context=self)
         self.warning_list.append(msg)
-        logger.warning(msg, extra={"slug": self.slug})
+        logger.warning(msg)
 
     def set_step_status(self, step: str, status: str):
-        from pipeline.logging_utils import get_structured_logger
-        logger = get_structured_logger(__name__, context=self)
         self.step_status[step] = status
-        logger.info(f"Step '{step}' → {status}", extra={"slug": self.slug})
+        logger.info(f"Step '{step}' → {status}")
 
     def summary(self) -> Dict[str, Any]:
         return {

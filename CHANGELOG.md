@@ -2,6 +2,46 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## v1.9.0 – Refactor Pre-Onboarding, Gestione `.env` e Consolidamento Modalità Interattiva
+**Data:** 2025-08-10  
+
+### 🚀 Novità  
+- Introdotto caricamento variabili di configurazione sensibili da `.env` tramite nuovo modulo `env_utils.py`  
+- Aggiornato `ClientContext` per includere campo `env` con variabili `.env` (`GOOGLE_SERVICE_ACCOUNT`, `DRIVE_ID`, `GITHUB_TOKEN`)  
+- Consolidato l’uso di `context.env` come unica fonte per i parametri di integrazione esterna (Drive, GitHub)  
+- Integrazione di parametri `.env` in `get_drive_service()` rimuovendo la dipendenza dal `config.yaml`  
+- Adattamento di `pre_onboarding.py` per:  
+  - Caricare il file YAML di struttura locale da percorso dinamico (`local_structure_file` in `config.yaml`)  
+  - Supportare modalità interattiva completa se non in fase di test  
+  - Gestire creazione `config.yaml` iniziale senza dover caricare un contesto incompleto  
+
+### 🔧 Modifiche  
+- **`ClientContext`**:  
+  - Aggiunto caricamento variabili `.env` in `load()`  
+  - Uniformata la gestione di `config_path` come riferimento al file di configurazione  
+  - Eliminata distinzione `config_file`/`config_dir` per semplificare il flusso  
+- **`pre_onboarding.py`**:  
+  - Aggiornata chiamata a `create_local_base_structure()` per usare `yaml_path` specificato in configurazione  
+  - Copia del template `config.yaml` e `semantic_mapping.yaml` nella cartella del cliente  
+  - Gestione interattiva di `slug` e `client_name` con creazione diretta del file `config.yaml`  
+  - Allineamento chiamate a `upload_config_to_drive_folder()` e `create_drive_structure_from_yaml()`  
+- **`drive_utils.py`**:  
+  - Aggiornato `get_drive_service()` per leggere credenziali da `context.env["GOOGLE_SERVICE_ACCOUNT"]`  
+  - Uniformata firma di `upload_config_to_drive_folder()` per accettare `ClientContext`  
+- **`logging_utils.py`**:  
+  - Rimosso potenziale problema di circular import spostando l’uso del logger di contesto in fase runtime  
+
+### 🐛 Bug Fix  
+- Risolto `AttributeError: 'ClientContext' object has no attribute 'config_file'` in pre-onboarding  
+- Corretta mancata individuazione del file `cartelle_raw.yaml` nella creazione della struttura locale  
+- Fix per caricamento interattivo di slug/nome cliente senza forzare `ClientContext.load()` prima della creazione del config  
+
+### 📌 Stato attuale  
+- Pre-onboarding ora crea correttamente struttura locale e copia file di configurazione  
+- Gestione `.env` implementata ma connessione a Google Drive ancora bloccata da parametri non caricati correttamente in `get_drive_service()`  
+- Prossimo step: completare l’integrazione di `env_utils.py` e validare end-to-end la pipeline con modalità interattiva HiTL e CLI skip test-ready  
+
+
 ## [2025-08-10] fix/refactor: stabilizzazione onboarding_full.py e github_utils.py con gestione esplicita di settings e slug
 
 ### 🛠️ Modifiche a `onboarding_full.py`

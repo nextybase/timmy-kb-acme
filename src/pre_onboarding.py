@@ -33,10 +33,8 @@ from pipeline.context import ClientContext
 
 
 def update_config_with_drive_ids(context: ClientContext, new_data: dict, logger) -> None:
-    """
-    Aggiorna il config.yaml del cliente con i nuovi dati Drive, mantenendo un backup sicuro.
-    """
-    config_path = context.config_file
+    """Aggiorna il config.yaml del cliente con i nuovi dati Drive, mantenendo un backup sicuro."""
+    config_path = context.config_path
     if not config_path.exists():
         raise ConfigError(f"Config cliente non trovato: {config_path}")
 
@@ -59,35 +57,33 @@ def update_config_with_drive_ids(context: ClientContext, new_data: dict, logger)
 
 
 def pre_onboarding_main(slug: str, no_interactive: bool = False, dry_run: bool = False):
-    """
-    Esegue il pre-onboarding del cliente specificato.
-    """
+    """Esegue il pre-onboarding del cliente specificato."""
     # Carica contesto cliente
     context = ClientContext.load(slug)
     logger = get_structured_logger("pre_onboarding", context=context)
     logger.info(f"🚀 Avvio pre-onboarding per cliente: {context.slug}")
 
     try:
-        # Legge il file YAML della struttura locale dal config cliente
+        # Determina il file YAML per la struttura locale
         structure_file = context.settings.get("local_structure_file", "cartelle_raw.yaml")
-        local_structure_yaml = Path("config") / structure_file
+        yaml_path = Path("config") / structure_file
 
         # Creazione struttura locale
-        base_dir = create_local_base_structure(context, local_structure_yaml)
+        base_dir = create_local_base_structure(context, yaml_path)
         logger.info(f"📂 Struttura locale creata: {base_dir}")
 
         # Copia config template
         template_config_path = Path("config") / CONFIG_FILE_NAME
         if not template_config_path.exists():
             raise ConfigError(f"Template config non trovato: {template_config_path}")
-        shutil.copy(template_config_path, context.config_file)
-        logger.info(f"📄 Config template copiato in: {context.config_file}")
+        shutil.copy(template_config_path, context.config_path)
+        logger.info(f"📄 Config template copiato in: {context.config_path}")
 
         # Copia mapping semantico se esiste
         global_mapping_path = Path("config") / "semantic_mapping.yaml"
         if global_mapping_path.exists():
-            shutil.copy(global_mapping_path, context.config_dir / "semantic_mapping.yaml")
-            logger.info(f"📄 Mapping semantico copiato in: {context.config_dir / 'semantic_mapping.yaml'}")
+            shutil.copy(global_mapping_path, context.config_path.parent / "semantic_mapping.yaml")
+            logger.info(f"📄 Mapping semantico copiato in: {context.config_path.parent / 'semantic_mapping.yaml'}")
         else:
             logger.warning("⚠️ Nessun mapping semantico globale trovato.")
 
@@ -99,15 +95,14 @@ def pre_onboarding_main(slug: str, no_interactive: bool = False, dry_run: bool =
         drive_service = get_drive_service(context)
 
         # Creazione cartella cliente su Drive
-        client_folder_id = create_drive_folder(drive_service, context.slug, context.settings.DRIVE_ID)
+        client_folder_id = create_drive_folder(drive_service, context.slug, context.env.get("DRIVE_ID"))
         logger.info(f"📂 Cartella cliente su Drive creata: {client_folder_id}")
 
         # Creazione struttura su Drive da YAML
-        yaml_path = Path("config") / "cartelle_raw.yaml"
         drive_folder_ids = create_drive_structure_from_yaml(drive_service, yaml_path, client_folder_id)
 
         # Upload config.yaml su Drive
-        upload_config_to_drive_folder(drive_service, context.config_file, client_folder_id, context.base_dir)
+        upload_config_to_drive_folder(drive_service, context, client_folder_id)
 
         # Aggiornamento config locale con ID Drive
         update_config_with_drive_ids(
