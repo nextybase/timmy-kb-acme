@@ -2,13 +2,6 @@
 """
 Genera e avvia la preview locale della documentazione (GitBook/Honkit)
 usando container Docker isolato.
-
-Refactor v1.0:
-- Validazione path con is_safe_subpath da path_utils.py
-- Uso costante da constants.py
-- Eccezioni uniformi (PreviewError)
-- Logger coerente con il resto della pipeline
-- Rimossi _resolve_settings, uso diretto di ClientContext
 """
 
 import subprocess
@@ -21,16 +14,14 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PreviewError, PipelineError
 from pipeline.constants import BOOK_JSON_NAME, PACKAGE_JSON_NAME
 from pipeline.context import ClientContext
-from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import per robustezza path
+from pipeline.path_utils import is_safe_subpath
 
 logger = get_structured_logger("pipeline.gitbook_preview")
 
 
 def ensure_book_json(book_dir: Path) -> None:
-    """
-    Garantisce la presenza di un file book.json nella directory markdown.
-    """
-    if not is_safe_subpath(book_dir, book_dir.parent):  # ✅ controllo path sicuro
+    """Garantisce la presenza di un file book.json nella directory markdown."""
+    if not is_safe_subpath(book_dir, book_dir.parent):
         raise PreviewError(f"Path non sicuro per book.json: {book_dir}")
 
     book_json_path = book_dir / BOOK_JSON_NAME
@@ -51,10 +42,8 @@ def ensure_book_json(book_dir: Path) -> None:
 
 
 def ensure_package_json(book_dir: Path) -> None:
-    """
-    Garantisce la presenza di un file package.json nella directory markdown.
-    """
-    if not is_safe_subpath(book_dir, book_dir.parent):  # ✅ controllo path sicuro
+    """Garantisce la presenza di un file package.json nella directory markdown."""
+    if not is_safe_subpath(book_dir, book_dir.parent):
         raise PreviewError(f"Path non sicuro per package.json: {book_dir}")
 
     package_json_path = book_dir / PACKAGE_JSON_NAME
@@ -87,12 +76,13 @@ def run_gitbook_docker_preview(
 ) -> None:
     """
     Avvia la preview GitBook/Honkit in Docker.
+    Include la gestione della chiusura con un solo INVIO.
     """
     if not context.slug:
         raise PipelineError("Slug cliente mancante nel contesto per preview.")
 
-    if not is_safe_subpath(context.md_dir, context.base_dir):  # ✅ controllo path sicuro
-        raise PreviewError(f"Path markdown non sicuro: {context.md_dir}")
+    if not is_safe_subpath(context.md_dir, context.base_dir):
+        raise PreviewError(f"Percorso markdown non sicuro: {context.md_dir}")
 
     md_output_path = context.md_dir.resolve()
 
@@ -116,7 +106,7 @@ def run_gitbook_docker_preview(
         logger.error("❌ Errore durante 'honkit build'.")
         raise PreviewError(f"Errore 'honkit build': {e}")
 
-    # Servizio live preview
+    # Avvio live preview
     serve_cmd = [
         "docker", "run", "-d",
         "--name", container_name,
@@ -134,8 +124,9 @@ def run_gitbook_docker_preview(
 
         if not os.environ.get("BATCH_TEST"):
             input("⏹ Premi INVIO per chiudere l'anteprima e arrestare Docker...")
-        subprocess.run(["docker", "stop", container_name], check=False)
-        subprocess.run(["docker", "rm", "-f", container_name], check=False)
+            subprocess.run(["docker", "stop", container_name], check=False)
+            subprocess.run(["docker", "rm", container_name], check=False)
+            logger.info("🛑 Preview GitBook terminata.")
 
     except subprocess.CalledProcessError as e:
         logger.error("❌ Errore durante 'honkit serve'.")

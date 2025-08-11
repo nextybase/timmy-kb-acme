@@ -2,6 +2,21 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [0.9.8] - 2025-08-11
+### Added
+- Integrazione avvio **preview GitBook** in `onboarding_full.py` in modalità interattiva.
+- Chiusura preview Docker con **singolo INVIO**.
+- Funzione di push automatico su GitHub alla fine del flusso di onboarding.
+
+### Changed
+- `github_utils.py`: rimosso completamente il requisito di `GITHUB_ORG`, ora basta `GITHUB_TOKEN`.
+- `github_utils.py`: filtrati i file da pushare, includendo **solo `.md`** ed escludendo backup e asset HTML.
+- Struttura cartelle YAML: rinominata cartella/file `identità` → `identity` per evitare problemi di encoding nei nomi file.
+
+### Fixed
+- Bug doppio INVIO nella chiusura della preview GitBook.
+
+
 ## [Unreleased]
 
 ### Added

@@ -1,122 +1,86 @@
 # src/pipeline/github_utils.py
+"""
+Utility per interagire con GitHub:
+- Creazione repo cliente
+- Push contenuto cartella 'book' (solo file .md senza .bak)
+"""
 
-import os
 import shutil
+import tempfile
+import subprocess
 from pathlib import Path
-from git import Repo
+
 from github import Github
-from github.GithubException import UnknownObjectException
-
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PushError
-from pipeline.constants import LOGS_DIR_NAME
-from pipeline.context import ClientContext
-from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import
+from pipeline.exceptions import PipelineError
 
-logger = get_structured_logger("pipeline.github_utils", f"{LOGS_DIR_NAME}/onboarding.log")
+logger = get_structured_logger("pipeline.github_utils")
 
 
-def push_output_to_github(context: ClientContext, md_dir_path: Path = None) -> str:
+def push_output_to_github(context, github_token: str, interactive_mode: bool = True) -> None:
     """
-    Esegue il deploy automatico della cartella markdown su GitHub.
-    Crea il repository se non esiste e forza il push su main/master.
+    Esegue il push dei file .md presenti nella cartella 'book' del cliente su GitHub.
+    Crea il repository se non esiste.
 
-    Args:
-        context: ClientContext inizializzato per il cliente corrente.
-        md_dir_path: Path contenente i markdown da pushare (default: context.md_dir).
-
-    Returns:
-        str: Percorso della directory pubblicata.
-
-    Raises:
-        PushError: Se mancano token, repo o il push fallisce.
+    :param context: ClientContext
+    :param github_token: Token personale GitHub
+    :param interactive_mode: Se True, mostra i file e chiede conferma con INVIO prima di pushare
     """
-    if not context:
-        raise PushError("Context mancante per push_output_to_github")
+    book_dir = context.md_dir
+    if not book_dir.exists():
+        raise PipelineError(f"Cartella book non trovata: {book_dir}")
 
-    github_token = context.settings.get("GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
-    repo_name = context.settings.get("GITHUB_REPO") or f"timmy-kb-{context.slug}"
-    output_path = md_dir_path or context.md_dir
-
-    if not github_token:
-        logger.error("❌ GITHUB_TOKEN mancante.")
-        raise PushError("GITHUB_TOKEN mancante.")
-    if not repo_name:
-        logger.error("❌ Nome repository GitHub mancante.")
-        raise PushError("Nome repository GitHub mancante.")
-    if not output_path.exists():
-        logger.error(f"❌ output_path non trovato: {output_path}")
-        raise PushError(f"output_path non trovato: {output_path}")
-
-    # ✅ Controllo path sicuro
-    if not is_safe_subpath(output_path, context.base_dir):
-        raise PushError(f"Path non sicuro per push: {output_path}")
-
-    # Lista file markdown
-    md_files = list(output_path.glob("*.md"))
+    # Trova solo file .md validi (no .bak)
+    md_files = [f for f in book_dir.glob("*.md") if not f.name.endswith(".bak")]
     if not md_files:
-        logger.warning(f"⚠️ Nessun file markdown trovato in {output_path}. Push annullato.")
-        return str(output_path)
+        logger.warning("⚠️ Nessun file .md valido trovato nella cartella book. Push annullato.")
+        return
 
-    logger.info(f"📄 File markdown trovati per il push: {[f.name for f in md_files]}")
+    logger.info(f"📂 Trovati {len(md_files)} file .md da pushare.")
 
+    # Mostra lista file e chiede conferma in interattivo
+    if interactive_mode:
+        logger.info("📋 Elenco file pronti per il push:")
+        for f in md_files:
+            logger.info(f" - {f.name}")
+        input("⏩ Premi INVIO per confermare il push su GitHub...")
+
+    # Autenticazione GitHub
+    gh = Github(github_token)
+    user = gh.get_user()
+    repo_name = f"timmy-kb-{context.slug}"
+
+    # Recupera o crea repo remoto
     try:
-        github = Github(github_token)
-        github_user = github.get_user()
-        logger.info(f"👤 Deploy GitHub per utente {github_user.login} → repo: {repo_name} (privata)")
+        repo = user.get_repo(repo_name)
+        logger.info(f"📡 Repository remoto trovato: {repo.full_name}")
+    except Exception:
+        logger.info(f"📡 Repository non trovato. Creazione di {repo_name}...")
+        repo = user.create_repo(repo_name, private=True)
+        logger.info(f"✅ Repository creato: {repo.full_name}")
 
-        # Controlla se repo esiste, altrimenti la crea
+    # Crea repo locale temporaneo per push
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+
+        # Copia solo i .md validi nella cartella temporanea
+        for f in md_files:
+            shutil.copy2(f, tmp_path / f.name)
+
         try:
-            repo = github_user.get_repo(repo_name)
-            logger.info(f"📂 Repo trovata: {repo_name}")
-        except UnknownObjectException:
-            logger.info(f"📁 Repo non trovata, creazione in corso: {repo_name}")
-            repo = github_user.create_repo(
-                name=repo_name,
-                private=True,
-                auto_init=False,
-                description="Repository generata automaticamente da Timmy-KB"
+            subprocess.run(["git", "init"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "checkout", "-b", "main"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+            commit_msg = f"Aggiornamento contenuto KB per cliente {context.slug}"
+            subprocess.run(["git", "commit", "-m", commit_msg], cwd=tmp_path, check=True)
+
+            remote_url = repo.clone_url.replace(
+                "https://", f"https://{github_token}@"
             )
+            subprocess.run(["git", "remote", "add", "origin", remote_url], cwd=tmp_path, check=True)
+            subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=tmp_path, check=True)
 
-        # Prepara cartella temporanea per push
-        temp_dir = Path("tmp_repo_push")
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        temp_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"✅ Push completato su {repo.full_name}")
 
-        # Copia file markdown nella temp dir
-        for file in md_files:
-            shutil.copy(file, temp_dir / file.name)
-
-        # Inizializza repo locale
-        repo_local = Repo.init(temp_dir)
-        repo_local.index.add([str(p.relative_to(temp_dir)) for p in temp_dir.iterdir() if p.is_file()])
-        repo_local.index.commit("Upload automatico dei file markdown da pipeline Timmy-KB")
-
-        # Determina branch di default
-        default_branch = "main"
-        try:
-            if repo.default_branch:
-                default_branch = repo.default_branch
-        except Exception:
-            pass
-
-        # Configura remote e push
-        remote_url = repo.clone_url.replace("https://", f"https://{github_token}@")
-        if "origin" not in [r.name for r in repo_local.remotes]:
-            repo_local.create_remote("origin", remote_url)
-        else:
-            repo_local.remotes.origin.set_url(remote_url)
-
-        logger.info(f"🔄 Push dei file su branch '{default_branch}'...")
-        repo_local.git.push("origin", f"HEAD:{default_branch}", force=True)
-        logger.info("✅ Push su GitHub completato.")
-
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        logger.info(f"🗑️ Rimossa cartella temporanea '{temp_dir}' dopo il push.")
-
-        return str(output_path)
-
-    except Exception as e:
-        logger.error(f"❌ Errore durante il push su GitHub: {e}")
-        raise PushError(f"Errore durante il push su GitHub: {e}")
+        except subprocess.CalledProcessError as e:
+            raise PipelineError(f"Errore durante il push su GitHub: {e}")

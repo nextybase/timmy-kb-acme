@@ -1,7 +1,7 @@
 root_folders:
   - name: raw
     subfolders:
-      - name: identità
+      - name: identity
         subfolders: []
       - name: organizzazione
         subfolders: []
