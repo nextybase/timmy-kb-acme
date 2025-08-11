@@ -2,6 +2,27 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [Unreleased]
+
+### Added
+- Gestione completa del caricamento `config.yaml` cliente in `onboarding_full.py` tramite `ClientContext.load(slug)` con validazione preventiva.
+- Controlli espliciti sull'esistenza e validità di `drive_raw_folder_id` prima dell'avvio dell'onboarding.
+- Download ricorsivo e sicuro di PDF da Google Drive con logging dettagliato di stato e progressi.
+- Creazione e popolamento automatico della struttura locale (`book/`, `raw/`, `config/`) in fase di pre-onboarding.
+- Funzione `list_drive_files` in `drive_utils.py` per ottenere elenco file in cartella Drive, con query opzionale.
+
+### Changed
+- Rifattorizzazione `pre_onboarding.py` per allineare creazione cartelle locali e remote a partire da `cartelle_raw.yaml` e upload del `config.yaml` su Drive.
+- Aggiornamento `drive_utils.upload_config_to_drive_folder()` per caricamento file su Drive senza parametro `overwrite` e con gestione robusta degli errori.
+- Pulizia e consolidamento delle funzioni in `config_utils.py` mantenendo tutte le funzioni esistenti e aggiungendo commenti esplicativi.
+
+### Fixed
+- Corretto bug in `onboarding_full.py` dove veniva passato direttamente il `config_path` al `ClientContext`, bypassando la logica di caricamento e causando errori di lettura ID Drive.
+- Risolto problema di import mancanti (`list_drive_files`, `update_config_with_drive_ids`) riallineando i file alla versione completa del repo.
+- Ripristinata creazione automatica del file `cartelle_raw.yaml` se mancante in pre-onboarding.
+- Risolto caricamento incompleto di PDF e conversione in markdown strutturato, ora gestiti per tutte le cartelle del cliente.
+
+
 ## **Changelog – Refactor Pipeline Timmy-KB (Sessione Agosto 2025)**
 
 ### **Stato generale**
