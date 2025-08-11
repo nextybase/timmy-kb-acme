@@ -4,113 +4,85 @@
 
 Pipeline modulare e automatizzata per l’onboarding strutturato di PMI nella piattaforma NeXT, con generazione di knowledge base in Markdown semantico e pubblicazione continua su GitHub/GitBook.
 
-## 🧠 Filosofia e Obiettivi
+## 📜 Filosofia e Obiettivi
 
-La pipeline Timmy-KB garantisce che ogni informazione, tag, relazione e categoria sia esplicitamente dichiarata e tracciabile, secondo policy e mapping YAML forniti a monte. Nessuna inferenza automatica viene applicata senza controllo: la semantica è sempre dichiarata, non dedotta.
+Timmy-KB fornisce un flusso completo, dal recupero dei materiali grezzi (PDF) fino alla generazione, revisione e distribuzione della knowledge base. Il progetto integra le best practice del **modello NeXT** e supporta sia esecuzioni automatiche che modalità interattive, garantendo:
 
-- Parsing e strutturazione deterministici e auditabili
-- Semantica e relazioni forti, sempre definite da configurazione
-- Ideale per generare database relazionali e knowledge graph affidabili
+- **Riproducibilità**: flussi chiari, parametrizzabili e documentati.
+- **Automazione end-to-end**: gestione cartelle Drive, conversione, generazione, preview e push.
+- **Flessibilità**: CLI parametrica e modalità interattiva.
+- **Output standardizzato**: struttura coerente e semantica.
+- **Compatibilità multi-target**: GitHub per versionamento, GitBook per fruizione web.
 
-## 🎯 Scopo
+## 🎯 Funzionalità chiave
 
-- Automatizzare onboarding documentale e operativo per organizzazioni in ecosistemi NeXT
-- Generare una Knowledge Base semantica e normalizzata, pronta per le successive fasi AI
-- Separare orchestrazione e semantica, mantenendo la pipeline come layer tecnico
-- Centralizzare configurazione e logging per massimo controllo
-- Supportare preview locale (Docker/Honkit), test end-to-end e deploy automatico
+- Gestione sicura di cartelle e file su Google Drive (controlli path). 
+- Conversione PDF → Markdown strutturato.
+- Generazione automatica di **SUMMARY.md** e **README.md**.
+- Anteprima locale con **Honkit/Docker** con stop controllato.
+- Push automatico su GitHub (solo file `.md` della cartella `book`).
+- Modalità **interattiva** e **batch**.
+- Gestione configurazioni cliente tramite YAML.
 
-## 🧩 Architettura (overview)
+## 🛠 Architettura
 
-- **Pipeline modulare**: separazione tra moduli tecnici (`src/pipeline/`), semantici (`src/semantic/`), e strumenti (`src/tools/`)
-- **Orchestratori CLI-ready**: orchestratori root (`src/pre_onboarding.py`, `src/onboarding_full.py`) gestiscono tutto il flusso e sono utilizzabili sia in modalità manuale (con input guidato) che automatica (parametri CLI)
-- **Configurazione centralizzata**: variabili d’ambiente e YAML gestiti da moduli dedicati
-- **Output knowledge base**: Markdown generati raccolti in `output/book/`, pronti per deploy
-- **Logging strutturato**: ogni step loggato su file/console tramite logger dedicato
+### Orchestratori
 
-## 🏗️ Struttura cartelle principale
+- `` – Prepara configurazioni cliente, crea struttura cartelle di output, valida requisiti minimi, verifica dipendenze. Supporta modalità interattiva e CLI.
+- `` – Esegue onboarding completo: caricamento configurazioni, gestione cartelle Drive, conversione in Markdown, generazione documenti, anteprima GitBook in interattivo, push GitHub. Implementa controlli di sicurezza e gestione eccezioni.
 
+### Moduli `src/pipeline/`
+
+- `cleanup_utils.py` – Pulizia e riorganizzazione file/cartelle di output.
+- `config_utils.py` – Gestione configurazioni YAML, backup e update.
+- `constants.py` – Costanti globali.
+- `content_utils.py` – Conversione PDF → MD, generazione SUMMARY e README.
+- `context.py` – Contesto cliente (path, settings, variabili).
+- `drive_utils.py` – Gestione cartelle su Google Drive e download sicuro.
+- `env_utils.py` – Caricamento e validazione variabili `.env`.
+- `exceptions.py` – Eccezioni specifiche pipeline.
+- `gitbook_preview.py` – Gestione anteprima GitBook in Docker con stop controllato.
+- `github_utils.py` – Push `.md` su GitHub con creazione repo.
+- `logging_utils.py` – Logging strutturato.
+- `path_utils.py` – Verifica path sicuri e gestione sottocartelle.
+
+### Altri moduli
+
+- `` – (in costruzione) Logica semantica per categorizzazione contenuti.
+- `` – Script ausiliari (`gen_dummy_kb.py` per generazione dati fittizi).
+
+## ⚙️ Configurazione
+
+Variabili gestite tramite `.env` e `env_utils.py`:
+
+```env
+DRIVE_ID=...
+SERVICE_ACCOUNT_FILE=...
+BASE_DRIVE=...
+GITHUB_TOKEN=...
+GITBOOK_TOKEN=...
 ```
-project-root/
-├── output/
-│   └── timmy-kb-<slug>/
-│       ├── raw/           # PDF originali da Drive
-│       ├── book/          # Markdown generati
-│       └── config/        # File di configurazione cliente
-├── src/
-│   ├── pipeline/          # Moduli tecnici
-│   ├── semantic/          # Funzioni semantiche
-│   └── tools/             # Strumenti di supporto e dummy KB
-├── tests/                 # Test unitari ed E2E
-├── logs/                  # Log strutturati
-└── .env                   # Configurazione centralizzata
-```
 
-## ⚙️ Prerequisiti
+> **Nota:** `GITHUB_ORG` non richiesto; gestione interna.
 
-- Python 3.10+
-- Docker
-- Account Google Drive + service account JSON
-- Token GitHub con permessi repo
-- Variabili configurate in `.env`
-
-## 🚦 Quickstart
-
-1. **Clona il repository e installa le dipendenze**
-2. \*\*Configura \*\*\`\` (vedi esempio nel repo)
-3. **Esegui il pre-onboarding:**
-   ```bash
-   python src/pre_onboarding.py
-   ```
-   Segui i prompt per slug/nome cliente oppure usa i parametri CLI (`--slug`, `--client-name`, `--no-interactive`)
-4. **Popola la cartella Drive** con i PDF richiesti
-5. **Esegui onboarding completo:**
-   ```bash
-   python src/onboarding_full.py
-   ```
-   Usa i flag CLI per modalità automatica (`--slug`, `--auto-push`, `--skip-preview`, `--no-interactive`), oppure interagisci guidato
-
-## 🧪 Testing e Dummy Data
-
-Tutti i dati di test sono generati tramite:
+## 🚀 Esecuzione
 
 ```bash
-python src/tools/gen_dummy_kb.py
+python src/onboarding_full.py               # Interattivo
+python src/onboarding_full.py --slug acme-srl --no-drive   # Batch
 ```
 
-- Slug di test: sempre `dummy`
-- Output test separato da dati reali (`output/timmy-kb-dummy/`)
-- Tutti i test (`tests/`) sono idempotenti, batch/manuale friendly e automatizzati
-- In modalità batch (`BATCH_TEST=1 pytest tests/`): nessun input richiesto, cleanup automatico
+## 🧪 Testing
 
-## 📦 Funzioni principali e CLI orchestratori
+- Test unitari in `tests/`
+- Modalità batch per test senza input
+- Generazione dati dummy con `gen_dummy_kb.py`
 
-Gli orchestratori supportano:
+## 📦 Output
 
-- `--slug`: slug del cliente
-- `--client-name`: nome cliente (pre-onboarding)
-- `--no-interactive`: disabilita input (solo batch/CI)
-- `--auto-push`: push GitHub automatico senza conferma
-- `--skip-preview`: salta preview Honkit/Docker
+Output in `output/timmy-kb-<slug>/book/` conforme alla struttura YAML.
 
-Tutti i parametri possono essere combinati per workflow automatici. In assenza, il tool guida l’utente passo-passo.
+## 📐 Regole di sviluppo
 
-## 🪵 Logging e Debug
-
-- Log sempre su file in `logs/` e in console
-- Debug e errori tracciati da logger strutturato, mai via print
-- Ogni funzione tecnica/semantica deve loggare input/output/errore
-
-## 📝 Policy, regole e documentazione
-
-- **Regole di coding**: [coding\_rule.md](coding_rule.md)
-- **Manifesto tecnico**: [manifesto\_tecnico.md](manifesto_tecnico.md)
-- **Best practice pipeline**: PDF “Best practices per pipeline Python” (Kedro, Airflow, Luigi)
-- **Modello NeXT**: Paper NeXT allegato
-
-Consulta sempre questi file PRIMA di modificare la pipeline o aprire PR.
-
----
-
-**Per bug/anomalie, apri issue su GitHub allegando log e dettagli.**
+Definite in `coding_rules.md`: naming, struttura moduli, formattazione e linee guida di coerenza.
 
