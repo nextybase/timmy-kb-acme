@@ -2,6 +2,78 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## **Changelog – Refactor Pipeline Timmy-KB (Sessione Agosto 2025)**
+
+### **Stato generale**
+- **`pre_onboarding.py`**: flusso completo testato, funzionante e stabile  
+- **`onboarding_full.py`**: avvio funzionante ma bloccato su import legacy (`_safe_write_file`) → richiede intervento di refactor in `content_utils.py` per usare `safe_write_file` di `path_utils.py`.
+
+---
+
+### **Principali modifiche effettuate**
+1. **ClientContext**
+   - Creazione automatica struttura base cliente se inesistente
+   - Copia automatica di `config/config.yaml` come template
+   - Lettura variabili `.env` aggiornate (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`)
+   - Fix path per evitare cartelle `output` annidate
+
+2. **`path_utils.py`**
+   - Aggiunte funzioni di sicurezza e sanitizzazione:
+     - `is_safe_subpath` → validazione path
+     - `sanitize_filename` → nomi sicuri per file/cartelle
+     - `safe_write_file` → scrittura sicura (replaces `_safe_write_file`)
+
+3. **`pre_onboarding.py`**
+   - Aggiunta validazione path sicuri
+   - Uso di `sanitize_filename` per Drive
+   - Supporto modalità `dry_run`
+   - Supporto mapping semantico globale o default
+   - Backup e ripristino automatico di `config.yaml` in caso di errore
+   - Flusso end-to-end testato con successo → crea cartelle locali, cartelle su Drive e aggiorna config
+
+4. **`drive_utils.py`**
+   - Sanificazione nomi file/cartelle
+   - Validazione path locali
+   - Logging migliorato
+   - Allineamento alla funzione `create_local_base_structure` (repo)
+
+5. **`onboarding_full.py`**
+   - Aggiornamento per usare `convert_files_to_structured_markdown` di `content_utils`
+   - Validazione `raw_dir` e `md_dir` con `is_safe_subpath`
+   - Conversione PDF → MD dopo download
+   - **Da completare:** `content_utils.py` deve eliminare dipendenza da `_safe_write_file`
+
+6. **`content_utils.py`**
+   - Analisi funzione `convert_files_to_structured_markdown` → attualmente punta a `_safe_write_file`
+   - Decisione: modificare per usare `safe_write_file` di `path_utils.py`
+   - Questa modifica è bloccante per il completamento del flusso `onboarding_full.py`
+
+---
+
+### **Stato attuale dei flussi**
+- **Pre-Onboarding** ✅  
+  Funzionamento confermato:  
+  - Crea struttura locale cliente  
+  - Crea cartelle su Drive e le popola  
+  - Copia `config.yaml` e mapping  
+  - Aggiorna config con ID Drive  
+  - Backup automatico config
+
+- **Onboarding Full** ⚠️  
+  Funziona fino alla fase di import dei moduli  
+  - Errore: `ImportError: cannot import name '_safe_write_file'`  
+  - Blocco risolvibile aggiornando `content_utils.py` a usare `safe_write_file`  
+
+---
+
+### **Prossimi passi (prima della semantica)**
+1. **Refactor `content_utils.py`** per:
+   - Eliminare `_safe_write_file`
+   - Usare `safe_write_file` di `path_utils`
+2. Ritestare `onboarding_full.py` end-to-end
+3. Push finale con pipeline robusta e coerente
+
+
 ## v1.9.0 – Refactor Pre-Onboarding, Gestione `.env` e Consolidamento Modalità Interattiva
 **Data:** 2025-08-10  
 

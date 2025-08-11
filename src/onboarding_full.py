@@ -1,64 +1,52 @@
-"""
-Procedura di onboarding completa Timmy-KB:
-- Scarica file PDF dal Drive cliente
-- Converte PDF in Markdown
-- Aggiorna struttura locale e book
-"""
-
 import sys
 import argparse
 from pathlib import Path
 
 from pipeline.logging_utils import get_structured_logger
+from pipeline.constants import CONFIG_FILE_NAME
+from pipeline.exceptions import PipelineError, ConfigError, DriveDownloadError
 from pipeline.context import ClientContext
-from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from pipeline.path_utils import is_safe_subpath
-from pipeline.exceptions import PipelineError
+from pipeline.content_utils import convert_files_to_structured_markdown  # ✅ Conversione PDF → MD
 
-
-def onboarding_full_main(slug: str, no_interactive: bool = False, dry_run: bool = False):
-    """Esegue l'onboarding completo di un cliente."""
+def onboarding_full_main(slug: str, dry_run: bool = False):
+    """Esegue l'onboarding completo del cliente specificato."""
     context = ClientContext.load(slug)
     logger = get_structured_logger("onboarding_full", context=context)
     logger.info(f"🚀 Avvio onboarding completo per cliente: {context.slug}")
 
     try:
-        # ✅ Validazione path di lavoro
-        if not is_safe_subpath(context.raw_dir, context.base_dir):
-            raise PipelineError(f"Path raw_dir non sicuro: {context.raw_dir}")
-        if not is_safe_subpath(context.md_dir, context.base_dir):
-            raise PipelineError(f"Path md_dir non sicuro: {context.md_dir}")
-
-        # Controllo presenza ID cartella Drive
+        # Recupera ID cartella RAW da config
         drive_raw_folder_id = context.settings.get("drive_raw_folder_id")
         if not drive_raw_folder_id:
-            raise PipelineError(
-                "ID cartella 'drive_raw_folder_id' mancante nel config. "
-                "Esegui prima pre_onboarding.py per generare la struttura."
-            )
+            raise ConfigError("ID cartella RAW su Drive mancante in config.yaml")
 
-        # Scarica PDF da Drive (se non in dry-run)
-        if not dry_run:
-            logger.info("📥 Download PDF da Drive...")
-            drive_service = get_drive_service(context)
-            download_drive_pdfs_to_local(
-                service=drive_service,
-                context=context,
-                drive_folder_id=drive_raw_folder_id,
-                local_path=context.raw_dir
-            )
+        if dry_run:
+            logger.info("🏁 Modalità dry-run attiva. Interrompo prima del download.")
+            return
 
-        # TODO: Conversione PDF → MD (da implementare)
-        # logger.info("🛠 Conversione PDF in Markdown...")
-        # convert_pdfs_to_md(context.raw_dir, context.md_dir)
+        # Connessione a Drive
+        drive_service = get_drive_service(context)
 
-        # TODO: Generazione Book (da implementare)
-        # logger.info("📚 Generazione Book...")
-        # build_book(context)
+        # Download PDF da Drive
+        logger.info("📥 Download PDF da Drive...")
+        if not is_safe_subpath(context.raw_dir, context.base_dir):
+            raise PipelineError(f"Percorso RAW non sicuro: {context.raw_dir}")
 
+        download_drive_pdfs_to_local(drive_service, context, drive_raw_folder_id, context.raw_dir)
+
+        # ✅ Conversione PDF → Markdown
+        if not is_safe_subpath(context.md_dir, context.base_dir):
+            raise PipelineError(f"Percorso MD non sicuro: {context.md_dir}")
+
+        convert_files_to_structured_markdown(context.raw_dir, context.md_dir)
+        logger.info(f"📄 Conversione PDF → Markdown completata in: {context.md_dir}")
+
+        # TODO: Generazione Book
         logger.info(f"✅ Onboarding completo terminato per cliente: {context.slug}")
 
-    except PipelineError as e:
+    except (PipelineError, ConfigError, DriveDownloadError) as e:
         logger.error(f"❌ Errore onboarding: {e}")
         raise
     except Exception as e:
@@ -69,15 +57,14 @@ def onboarding_full_main(slug: str, no_interactive: bool = False, dry_run: bool 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Onboarding completo Timmy-KB")
     parser.add_argument("--slug", type=str, help="Slug cliente (es: acme-srl)")
-    parser.add_argument("--no-interactive", action="store_true", help="Salta richieste interattive")
-    parser.add_argument("--dry-run", action="store_true", help="Esegui senza operazioni esterne")
+    parser.add_argument("--dry-run", action="store_true", help="Esegui solo parte locale senza interazione con Drive")
     args = parser.parse_args()
 
     # Modalità interattiva
-    if not args.slug and not args.no_interactive:
+    if not args.slug:
         args.slug = input("🔹 Inserisci lo slug cliente (es: acme-srl): ").strip()
 
     try:
-        onboarding_full_main(slug=args.slug, no_interactive=args.no_interactive, dry_run=args.dry_run)
+        onboarding_full_main(slug=args.slug, dry_run=args.dry_run)
     except PipelineError:
         sys.exit(1)
