@@ -22,9 +22,9 @@ from pipeline.context import ClientContext
 
 logger = get_structured_logger("pipeline.config_utils")
 
-# ---------------------------
-# Validazione impostazioni cliente
-# ---------------------------
+# ----------------------------------------------------------
+#  Modello pydantic per configurazione cliente
+# ----------------------------------------------------------
 class Settings(PydanticBaseSettings):
     """Modello di configurazione cliente per pipeline Timmy-KB."""
 
@@ -61,11 +61,11 @@ class Settings(PydanticBaseSettings):
 
         return self
 
-# ---------------------------
-# Scrittura config cliente
-# ---------------------------
+# ----------------------------------------------------------
+#  Scrittura configurazione cliente su file YAML
+# ----------------------------------------------------------
 def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> Path:
-    """Scrive il file config.yaml nella cartella cliente."""
+    """Scrive il file config.yml nella cartella cliente, con backup."""
     config_dir = context.output_dir / CONFIG_DIR_NAME
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path = config_dir / CONFIG_FILE_NAME
@@ -74,7 +74,7 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     if config_path.exists():
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
         shutil.copy(config_path, backup_path)
-        logger.info(f"🔄 Backup config esistente in {backup_path}")
+        logger.info(f"📝 Backup config esistente in {backup_path}")
 
     tmp_path = config_path.with_suffix(config_path.suffix + TMP_SUFFIX)
     try:
@@ -84,14 +84,14 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     except Exception as e:
         raise ConfigError(f"Errore scrittura config {config_path}: {e}")
 
-    logger.info(f"✅ Config cliente salvato in {config_path}")
+    logger.info(f"📄 Config cliente salvato in {config_path}")
     return config_path
 
-# ---------------------------
-# Lettura config cliente
-# ---------------------------
+# ----------------------------------------------------------
+#  Lettura configurazione cliente
+# ----------------------------------------------------------
 def get_client_config(context: ClientContext) -> Dict[str, Any]:
-    """Restituisce il contenuto del config.yaml dal contesto."""
+    """Restituisce il contenuto del config.yml dal contesto."""
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
@@ -100,9 +100,9 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     except Exception as e:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}")
 
-# ---------------------------
-# Validazione slug
-# ---------------------------
+# ----------------------------------------------------------
+#  Validazione slug cliente
+# ----------------------------------------------------------
 def is_valid_slug(slug: Optional[str]) -> bool:
     """Verifica che lo slug rispetti il formato consentito."""
     if not slug:
@@ -114,9 +114,9 @@ def is_valid_slug(slug: Optional[str]) -> bool:
         return False
     return True
 
-# ---------------------------
-# Validazione pre-onboarding
-# ---------------------------
+# ----------------------------------------------------------
+#  Validazione pre-onboarding
+# ----------------------------------------------------------
 def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None):
     """
     STEP 1: verifica config principale.
@@ -124,22 +124,22 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
     """
     base_dir = base_dir or context.base_dir
 
-    # Verifica file config
+    # Verifica config file
     if not context.config_path.exists():
-        logger.error(f"❌ Config cliente non trovato: {context.config_path}")
+        logger.error(f"❗ Config cliente non trovato: {context.config_path}")
         raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
     try:
         cfg = yaml.safe_load(open(context.config_path, "r", encoding="utf-8"))
     except Exception as e:
-        logger.error(f"❌ Errore lettura/parsing YAML in {context.config_path}: {e}")
+        logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
         raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}")
 
     # Chiavi obbligatorie
     required_keys = ["cartelle_raw_yaml"]
     missing = [k for k in required_keys if k not in cfg]
     if missing:
-        logger.error(f"❌ Chiavi obbligatorie mancanti in config: {missing}")
+        logger.error(f"❗ Chiavi obbligatorie mancanti in config: {missing}")
         raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica cartelle richieste
@@ -152,11 +152,18 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
 
     logger.info(f"✅ Ambiente pre-onboarding valido per cliente {context.slug}")
 
-# ---------------------------
-# Scrittura sicura di file generici
-# ---------------------------
+# ----------------------------------------------------------
+#  Scrittura sicura di file generici (STANDARD v1.0 stable)
+# ----------------------------------------------------------
 def safe_write_file(file_path: Path, content: str):
-    """Scrive un file in modalità sicura con backup."""
+    """
+    Scrive un file in modalità sicura con backup.
+
+    - Crea cartelle necessarie.
+    - Crea backup se esiste un file precedente.
+    - Sovrascrive in UTF-8.
+    - Log automatico di operazioni ed errori.
+    """
     if file_path.exists():
         backup_path = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
         shutil.copy(file_path, backup_path)
@@ -168,3 +175,44 @@ def safe_write_file(file_path: Path, content: str):
     except Exception as e:
         logger.error(f"Errore scrittura file {file_path}: {e}")
         raise PipelineError(f"Errore scrittura file {file_path}: {e}")
+
+def update_config_with_drive_ids(context: ClientContext, updates: dict, logger=None):
+    """
+    Aggiorna il file config.yml del cliente con i valori forniti in 'updates'.
+    - Esegue backup .bak del config esistente.
+    - Aggiorna solo le chiavi presenti in 'updates'.
+    - Usa scrittura sicura tramite safe_write_file.
+
+    Args:
+        context (ClientContext): Contesto del cliente.
+        updates (dict): Chiavi/valori da aggiornare nel config.
+        logger: Logger strutturato opzionale.
+    """
+    config_path = context.config_path
+
+    if not config_path.exists():
+        raise ConfigError(f"Config file non trovato: {config_path}")
+
+    # 📦 Backup file esistente
+    backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
+    shutil.copy(config_path, backup_path)
+    if logger:
+        logger.info(f"💾 Backup config creato: {backup_path}")
+
+    # 📥 Carica config esistente
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config_data = yaml.safe_load(f) or {}
+    except Exception as e:
+        raise ConfigError(f"Errore lettura config {config_path}: {e}")
+
+    # 🔄 Aggiorna solo le chiavi passate
+    config_data.update(updates)
+
+    # ✍️ Scrittura sicura
+    try:
+        safe_write_file(config_path, yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True))
+        if logger:
+            logger.info(f"✅ Config aggiornato in {config_path}")
+    except Exception as e:
+        raise ConfigError(f"Errore scrittura config {config_path}: {e}")

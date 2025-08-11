@@ -8,14 +8,13 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import (
-    _safe_write_file,
-)
+from pipeline.config_utils import safe_write_file  # ✅ Standard v1.0 stable
 from pipeline.exceptions import PipelineError
 from pipeline.context import ClientContext
-from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import
+from pipeline.path_utils import is_safe_subpath  # ✅ Controllo sicurezza path
 
 logger = get_structured_logger("pipeline.content_utils")
+
 
 def convert_files_to_structured_markdown(
     context: ClientContext,
@@ -25,12 +24,21 @@ def convert_files_to_structured_markdown(
 ):
     """
     Converte i PDF presenti nella cartella raw in file markdown univoci per cartella.
+
+    Args:
+        context (ClientContext): contesto cliente con path e config.
+        raw_dir (Path, opzionale): path alternativo alla cartella raw del contesto.
+        md_dir (Path, opzionale): path alternativo per la cartella markdown.
+        log (logger, opzionale): logger alternativo (default = logger di modulo).
+
+    Raises:
+        PipelineError: se rileva path non sicuro o errori in scrittura file.
     """
     raw_dir = raw_dir or context.raw_dir
     md_dir = md_dir or context.md_dir
-    local_logger = log or get_structured_logger("pipeline.content_utils")
+    local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):  # ✅ sostituzione validazione path
+    if not is_safe_subpath(md_dir, context.base_dir):
         raise PipelineError(f"Tentativo di scrivere file in path non sicuro: {md_dir}")
     md_dir.mkdir(parents=True, exist_ok=True)
 
@@ -42,11 +50,11 @@ def convert_files_to_structured_markdown(
                 content += f"## {pdf_file.name}\n"
                 content += f"(Contenuto estratto/conversione da {pdf_file.name}...)\n\n"
 
-            _safe_write_file(md_path, content, logger=local_logger)
-            local_logger.info(f"✅ Creato file markdown aggregato: {md_path}")
+            local_logger.info(f"Creazione file markdown aggregato: {md_path}")
+            safe_write_file(md_path, content)
+            local_logger.info(f"File markdown scritto correttamente: {md_path}")
 
         except Exception as e:
-            # ✅ gestione errori per file singolo
             local_logger.error(f"Errore nella creazione markdown {md_path}: {e}")
             continue
 
@@ -60,9 +68,9 @@ def generate_summary_markdown(
     Genera il file SUMMARY.md nella directory markdown.
     """
     md_dir = md_dir or context.md_dir
-    local_logger = log or get_structured_logger("pipeline.content_utils")
+    local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):  # ✅ sostituzione validazione path
+    if not is_safe_subpath(md_dir, context.base_dir):
         raise PipelineError(f"Tentativo di scrivere file in path non sicuro: {md_dir}")
 
     summary_path = md_dir / "SUMMARY.md"
@@ -72,8 +80,10 @@ def generate_summary_markdown(
             if md_file.name not in ("SUMMARY.md", "README.md"):
                 content += f"* [{md_file.stem}]({md_file.name})\n"
 
-        _safe_write_file(summary_path, content, logger=local_logger)
-        local_logger.info(f"✅ Generato SUMMARY.md in {summary_path}")
+        local_logger.info(f"Generazione SUMMARY.md in {summary_path}")
+        safe_write_file(summary_path, content)
+        local_logger.info("SUMMARY.md generato con successo.")
+
     except Exception as e:
         local_logger.error(f"Errore generazione SUMMARY.md: {e}")
         raise PipelineError("Errore generazione SUMMARY.md")
@@ -88,16 +98,18 @@ def generate_readme_markdown(
     Genera il file README.md nella directory markdown.
     """
     md_dir = md_dir or context.md_dir
-    local_logger = log or get_structured_logger("pipeline.content_utils")
+    local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):  # ✅ sostituzione validazione path
+    if not is_safe_subpath(md_dir, context.base_dir):
         raise PipelineError(f"Tentativo di scrivere file in path non sicuro: {md_dir}")
 
     readme_path = md_dir / "README.md"
     try:
         content = "# Documentazione Timmy-KB\n"
-        _safe_write_file(readme_path, content, logger=local_logger)
-        local_logger.info(f"✅ Generato README.md in {readme_path}")
+        local_logger.info(f"Generazione README.md in {readme_path}")
+        safe_write_file(readme_path, content)
+        local_logger.info("README.md generato con successo.")
+
     except Exception as e:
         local_logger.error(f"Errore generazione README.md: {e}")
         raise PipelineError("Errore generazione README.md")
@@ -112,14 +124,14 @@ def validate_markdown_dir(
     Verifica che la directory markdown esista e sia valida.
     """
     md_dir = md_dir or context.md_dir
-    local_logger = log or get_structured_logger("pipeline.content_utils")
+    local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):  # ✅ sostituzione validazione path
-        raise PipelineError(f"Tentativo di accedere a path non sicuro: {md_dir}")
+    if not is_safe_subpath(md_dir, context.base_dir):
+        raise PipelineError(f"Tentativo di accedere a un path non sicuro: {md_dir}")
 
     if not md_dir.exists():
-        local_logger.error(f"❌ La cartella markdown non esiste: {md_dir}")
+        local_logger.error(f"La cartella markdown non esiste: {md_dir}")
         raise FileNotFoundError(f"La cartella markdown non esiste: {md_dir}")
     if not md_dir.is_dir():
-        local_logger.error(f"❌ Il path non è una directory: {md_dir}")
+        local_logger.error(f"Il path non è una directory: {md_dir}")
         raise NotADirectoryError(f"Il path non è una directory: {md_dir}")
