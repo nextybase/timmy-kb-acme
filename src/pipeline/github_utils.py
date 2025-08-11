@@ -9,9 +9,9 @@ from github.GithubException import UnknownObjectException
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PushError
-from pipeline.config_utils import _validate_path_in_base_dir
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.context import ClientContext
+from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import
 
 logger = get_structured_logger("pipeline.github_utils", f"{LOGS_DIR_NAME}/onboarding.log")
 
@@ -48,7 +48,9 @@ def push_output_to_github(context: ClientContext, md_dir_path: Path = None) -> s
         logger.error(f"❌ output_path non trovato: {output_path}")
         raise PushError(f"output_path non trovato: {output_path}")
 
-    _validate_path_in_base_dir(output_path, context.base_dir)
+    # ✅ Controllo path sicuro
+    if not is_safe_subpath(output_path, context.base_dir):
+        raise PushError(f"Path non sicuro per push: {output_path}")
 
     # Lista file markdown
     md_files = list(output_path.glob("*.md"))
@@ -68,12 +70,12 @@ def push_output_to_github(context: ClientContext, md_dir_path: Path = None) -> s
             repo = github_user.get_repo(repo_name)
             logger.info(f"📂 Repo trovata: {repo_name}")
         except UnknownObjectException:
-            logger.info(f"📂 Repo non trovata, creazione in corso: {repo_name}")
+            logger.info(f"📁 Repo non trovata, creazione in corso: {repo_name}")
             repo = github_user.create_repo(
                 name=repo_name,
                 private=True,
                 auto_init=False,
-                description="Repository generato automaticamente da Timmy-KB"
+                description="Repository generata automaticamente da Timmy-KB"
             )
 
         # Prepara cartella temporanea per push
@@ -106,12 +108,12 @@ def push_output_to_github(context: ClientContext, md_dir_path: Path = None) -> s
         else:
             repo_local.remotes.origin.set_url(remote_url)
 
-        logger.info(f"⬆️ Push dei file su branch '{default_branch}'...")
+        logger.info(f"🔄 Push dei file su branch '{default_branch}'...")
         repo_local.git.push("origin", f"HEAD:{default_branch}", force=True)
         logger.info("✅ Push su GitHub completato.")
 
         shutil.rmtree(temp_dir, ignore_errors=True)
-        logger.info(f"🧹 Rimossa cartella temporanea '{temp_dir}' dopo il push.")
+        logger.info(f"🗑️ Rimossa cartella temporanea '{temp_dir}' dopo il push.")
 
         return str(output_path)
 

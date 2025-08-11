@@ -10,15 +10,16 @@ from googleapiclient.errors import HttpError
 from google.oauth2 import service_account
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError
+from pipeline.exceptions import DriveDownloadError, DriveUploadError, PipelineError, ConfigError
 from pipeline.constants import GDRIVE_FOLDER_MIME, PDF_MIME_TYPE
 from pipeline.context import ClientContext
+from pipeline.path_utils import is_safe_subpath, sanitize_filename  # ✅ robustezza path e nomi file
 
 logger = get_structured_logger("pipeline.drive_utils")
 
-# ---------------------------
+# ---------------------------------------
 # Wrapper API Google Drive con retry
-# ---------------------------
+# ---------------------------------------
 def drive_api_call(func, *args, **kwargs):
     for attempt in range(3):
         try:
@@ -31,14 +32,14 @@ def drive_api_call(func, *args, **kwargs):
             raise
     raise DriveDownloadError("API Google Drive fallita dopo 3 tentativi")
 
-# ---------------------------
+# ---------------------------------------
 # Creazione servizio Drive
-# ---------------------------
+# ---------------------------------------
 def get_drive_service(context: ClientContext):
     """Crea un servizio Google Drive autenticato usando variabili da .env."""
-    service_account_path = context.env.get("GOOGLE_SERVICE_ACCOUNT")
+    service_account_path = context.env.get("SERVICE_ACCOUNT_FILE")
     if not service_account_path or not Path(service_account_path).exists():
-        raise PipelineError("File di service account Google mancante o non trovato. Verifica GOOGLE_SERVICE_ACCOUNT in .env.")
+        raise PipelineError("File di service account Google mancante o non trovato. Verifica SERVICE_ACCOUNT_FILE in .env.")
 
     creds = service_account.Credentials.from_service_account_file(
         service_account_path,
@@ -46,17 +47,18 @@ def get_drive_service(context: ClientContext):
     )
     return build("drive", "v3", credentials=creds)
 
-# ---------------------------
+# ---------------------------------------
 # Funzioni di utilità Drive
-# ---------------------------
+# ---------------------------------------
 def create_drive_folder(service, name: str, parent_id: str = None) -> str:
-    file_metadata = {"name": name, "mimeType": GDRIVE_FOLDER_MIME}
+    safe_name = sanitize_filename(name)
+    file_metadata = {"name": safe_name, "mimeType": GDRIVE_FOLDER_MIME}
     if parent_id:
         file_metadata["parents"] = [parent_id]
 
     folder = drive_api_call(service.files().create, body=file_metadata, fields="id", supportsAllDrives=True).execute()
     folder_id = folder.get("id")
-    logger.info(f"📂 Creata cartella '{name}' (ID: {folder_id}) su Drive (parent: {parent_id})")
+    logger.info(f"📂 Creata cartella '{safe_name}' (ID: {folder_id}) su Drive (parent: {parent_id})")
     return folder_id
 
 def upload_config_to_drive_folder(service, context: ClientContext, folder_id: str):
@@ -91,24 +93,23 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -
     def _create_subfolders(base_parent_id, folders):
         ids = {}
         for folder in folders:
-            folder_id = create_drive_folder(service, folder["name"], base_parent_id)
+            safe_name = sanitize_filename(folder["name"])
+            folder_id = create_drive_folder(service, safe_name, base_parent_id)
             ids[folder["name"]] = folder_id
             if folder.get("subfolders"):
                 ids.update(_create_subfolders(folder_id, folder["subfolders"]))
         return ids
 
-    logger.info(f"📂 Creazione struttura Drive da {yaml_path}")
+    logger.info(f"🗂 Creazione struttura Drive da {yaml_path}")
     mapping = _create_subfolders(parent_id, config.get("root_folders", []))
     logger.info(f"✅ Struttura Drive creata con {len(mapping)} cartelle.")
     return mapping
 
-# ---------------------------
+# ---------------------------------------
 # Download PDF da Drive
-# ---------------------------
+# ---------------------------------------
 def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_id: str, local_path: Path):
-    """
-    Scarica i file PDF dalla cartella Drive indicata al percorso locale.
-    """
+    """Scarica i file PDF dalla cartella Drive indicata al percorso locale."""
     local_path.mkdir(parents=True, exist_ok=True)
 
     def _download_folder_contents(folder_id: str, current_local_path: Path):
@@ -120,20 +121,20 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
                 q=query,
                 fields="files(id, name, mimeType)",
                 corpora="drive",
-                driveId=context.env.get("DRIVE_ID"),  # ⬅️ ora legge da .env
+                driveId=context.env.get("DRIVE_ID"),
                 includeItemsFromAllDrives=True,
                 supportsAllDrives=True
             ).execute()
 
             items = results.get("files", [])
             for item in items:
-                name = item["name"]
+                name = sanitize_filename(item["name"])
                 mime_type = item["mimeType"]
 
                 if mime_type == PDF_MIME_TYPE:
                     file_id = item["id"]
                     local_file_path = current_local_path / name
-                    logger.info(f"⬇️ Scaricamento PDF: {name} → {local_file_path}")
+                    logger.info(f"📥 Scaricamento PDF: {name} → {local_file_path}")
 
                     request = service.files().get_media(fileId=file_id)
                     fh = io.FileIO(local_file_path, "wb")
@@ -144,7 +145,7 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
                         logger.info(f"   Progresso: {int(status.progress() * 100)}%")
                 elif mime_type == GDRIVE_FOLDER_MIME:
                     sub_local_path = current_local_path / name
-                    logger.info(f"📁 Entrando nella cartella: {name}")
+                    logger.info(f"📂 Entrando nella cartella: {name}")
                     _download_folder_contents(item["id"], sub_local_path)
 
         except HttpError as error:
@@ -153,14 +154,21 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
 
     _download_folder_contents(drive_folder_id, local_path)
 
-# ---------------------------
+# ---------------------------------------
 # Creazione struttura locale cliente
-# ---------------------------
-def create_local_base_structure(context: ClientContext, yaml_path: Path):
-    """Crea la struttura locale per un cliente a partire dal file YAML."""
+# ---------------------------------------
+def create_local_base_structure(context: ClientContext, yaml_path: Path) -> Path:
+    """
+    Crea la struttura locale per un cliente a partire dal file YAML.
+    - Valida che il path sia sicuro
+    - Crea cartelle 'book', 'config', 'raw'
+    """
     local_logger = get_structured_logger("preonboarding.structure")
 
     base_dir = context.output_dir
+    if not is_safe_subpath(base_dir, context.base_dir):
+        raise PipelineError(f"Base dir non sicura: {base_dir}")
+
     (base_dir / "book").mkdir(parents=True, exist_ok=True)
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     raw_dir = base_dir / "raw"
@@ -177,7 +185,7 @@ def create_local_base_structure(context: ClientContext, yaml_path: Path):
         if folder["name"] == "raw" and folder.get("subfolders"):
             for sub in folder["subfolders"]:
                 (raw_dir / sub["name"]).mkdir(parents=True, exist_ok=True)
-                local_logger.info(f"📁 Creata cartella locale: {raw_dir / sub['name']}")
+                local_logger.info(f"📂 Creata cartella locale: {raw_dir / sub['name']}")
 
     local_logger.info(f"📦 Struttura locale creata in {base_dir}")
     return base_dir

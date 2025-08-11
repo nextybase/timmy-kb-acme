@@ -10,10 +10,24 @@ from pathlib import Path
 import yaml
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import _validate_path_in_base_dir
-from pipeline.exceptions import PipelineError
+from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import
+from pipeline.exceptions import PipelineError, FileNotFoundError
 from pipeline.constants import SEMANTIC_MAPPING_FILE
 from pipeline.context import ClientContext
+
+logger = get_structured_logger("semantic.mapping")
+
+# ✅ schema minimo di validazione
+REQUIRED_MAPPING_KEYS = {"concepts"}  # esempio: deve contenere almeno "concepts" come chiave di primo livello
+
+
+def _validate_mapping_schema(mapping: dict) -> bool:
+    """
+    Verifica che il mapping rispetti lo schema minimo richiesto.
+    """
+    if not isinstance(mapping, dict):
+        return False
+    return REQUIRED_MAPPING_KEYS.issubset(mapping.keys())
 
 
 def load_semantic_mapping(context: ClientContext, logger=None) -> dict:
@@ -30,7 +44,8 @@ def load_semantic_mapping(context: ClientContext, logger=None) -> dict:
     logger = logger or get_structured_logger("semantic.mapping", context=context)
 
     mapping_path = context.config_dir / SEMANTIC_MAPPING_FILE
-    _validate_path_in_base_dir(mapping_path, context.base_dir)
+    if not is_safe_subpath(mapping_path, context.base_dir):  # ✅ controllo path sicuro
+        raise PipelineError(f"Path mapping non sicuro: {mapping_path}")
 
     if not mapping_path.exists():
         logger.error(f"❌ File di mapping semantico non trovato: {mapping_path}")
@@ -40,7 +55,24 @@ def load_semantic_mapping(context: ClientContext, logger=None) -> dict:
         with open(mapping_path, "r", encoding="utf-8") as f:
             mapping = yaml.safe_load(f) or {}
         logger.info(f"📄 Mapping semantico caricato da {mapping_path}")
-        return mapping
     except Exception as e:
         logger.error(f"❌ Errore lettura/parsing mapping {mapping_path}: {e}")
         raise PipelineError(f"Errore lettura mapping: {e}")
+
+    # ✅ validazione schema + fallback
+    if not _validate_mapping_schema(mapping):
+        logger.warning(f"⚠️ Mapping semantico vuoto o non valido, caricamento fallback...")
+        default_path = Path("config/default_semantic_mapping.yaml")
+        if default_path.exists():
+            try:
+                with open(default_path, "r", encoding="utf-8") as f:
+                    mapping = yaml.safe_load(f) or {}
+                logger.info(f"📄 Mapping di fallback caricato da {default_path}")
+            except Exception as e:
+                logger.error(f"❌ Errore caricamento mapping di fallback: {e}")
+                raise PipelineError(f"Errore caricamento mapping di fallback: {e}")
+        else:
+            logger.error("❌ Mapping di fallback non trovato, impossibile continuare.")
+            raise PipelineError("Mapping di fallback mancante.")
+
+    return mapping

@@ -35,7 +35,7 @@ from semantic.semantic_extractor import enrich_markdown_folder
 from semantic.semantic_mapping import load_semantic_mapping
 from pipeline.exceptions import PipelineError, ConfigError, DriveDownloadError
 from pipeline.context import ClientContext
-
+from pipeline.path_utils import is_safe_subpath  # ✅ nuovo import
 
 def onboarding_full_main(slug: str, skip_preview: bool = False, auto_push: bool = False):
     """
@@ -45,6 +45,15 @@ def onboarding_full_main(slug: str, skip_preview: bool = False, auto_push: bool 
     context = ClientContext.load(slug)
     logger = get_structured_logger("onboarding_full", context=context)
     logger.info(f"🚀 Avvio onboarding completo per: {context.slug}")
+
+    # ✅ Validazione path sicuri prima di operare
+    for path_name, path_value in [
+        ("raw_dir", context.raw_dir),
+        ("book_dir", context.book_dir),
+        ("md_dir", context.md_dir),
+    ]:
+        if not is_safe_subpath(path_value, context.base_dir):
+            raise PipelineError(f"Path non sicuro per {path_name}: {path_value}")
 
     try:
         # 1. Pulizia cartelle
@@ -65,7 +74,7 @@ def onboarding_full_main(slug: str, skip_preview: bool = False, auto_push: bool 
         convert_files_to_structured_markdown(context, log=logger)
 
         # 4. Arricchimento semantico
-        semantic_mapping = load_semantic_mapping(context, logger=logger)
+        load_semantic_mapping(context, logger=logger)
         enrich_markdown_folder(context, logger=logger)
 
         # 5. Generazione SUMMARY.md e README.md
@@ -85,7 +94,7 @@ def onboarding_full_main(slug: str, skip_preview: bool = False, auto_push: bool 
         if auto_push:
             push_output_to_github(context)
 
-        logger.info(f"✅ Onboarding completato per: {context.slug}")
+        logger.info(f"🎯 Onboarding completato per: {context.slug}")
 
     except (PipelineError, ConfigError, DriveDownloadError) as e:
         logger.error(f"❌ Errore onboarding: {e}")

@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
 import logging
+import shutil
 
 from .exceptions import ConfigError
-from .env_utils import get_env_var  # ⬅️ nuovo import per variabili .env
+from .env_utils import get_env_var  # importa per variabili da .env
 
-# Logger semplice per uso interno, evita import circolare
+# Logger semplice per uso interno
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -46,14 +47,22 @@ class ClientContext:
     @classmethod
     def load(cls, slug: str) -> "ClientContext":
         """
-        Carica e valida la configurazione cliente, restituendo un ClientContext pronto all'uso.
+        Carica e valida la configurazione cliente.
+        Se la cartella/config non esiste, viene creata automaticamente.
         """
-        base_dir = Path(__file__).resolve().parents[2]
-        config_path = base_dir / "output" / f"timmy-kb-{slug}" / "config" / "config.yaml"
+        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+        config_path = base_dir / "config" / "config.yaml"
 
+        # ✅ Creazione automatica per nuovo cliente
         if not config_path.exists():
-            raise ConfigError(f"Config file non trovato per slug '{slug}'")
+            logger.info(f"Cliente '{slug}' non trovato: creazione struttura base.")
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            template_config = Path("config") / "config.yaml"
+            if not template_config.exists():
+                raise ConfigError(f"Template config.yaml globale non trovato: {template_config}")
+            shutil.copy(template_config, config_path)
 
+        # Lettura config
         with open(config_path, "r", encoding="utf-8") as f:
             settings = yaml.safe_load(f)
 
@@ -61,7 +70,7 @@ class ClientContext:
 
         # Carica variabili da .env
         env_vars = {
-            "GOOGLE_SERVICE_ACCOUNT": get_env_var("GOOGLE_SERVICE_ACCOUNT", required=True),
+            "SERVICE_ACCOUNT_FILE": get_env_var("SERVICE_ACCOUNT_FILE", required=True),
             "DRIVE_ID": get_env_var("DRIVE_ID", required=True),
             "GITHUB_TOKEN": get_env_var("GITHUB_TOKEN", default=None)
         }
@@ -74,13 +83,13 @@ class ClientContext:
             config_path=config_path,
             mapping_path=(config_path.parent / "semantic_mapping.yaml"),
             base_dir=base_dir,
-            output_dir=base_dir / "output" / f"timmy-kb-{slug}",
-            raw_dir=base_dir / "output" / f"timmy-kb-{slug}" / "raw",
-            md_dir=base_dir / "output" / f"timmy-kb-{slug}" / "book",
-            log_dir=base_dir / "output" / f"timmy-kb-{slug}" / "logs"
+            output_dir=base_dir,
+            raw_dir=base_dir / "raw",
+            md_dir=base_dir / "book",
+            log_dir=base_dir / "logs"
         )
 
-    # --- Utility per tracking stato ---
+    # -- Utility per tracking stato --
     def log_error(self, msg: str):
         self.error_list.append(msg)
         logger.error(msg)
