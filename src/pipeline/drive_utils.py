@@ -221,7 +221,6 @@ def list_drive_files(drive_service, parent_id: str, query: str = None):
     ).execute()
     return results.get("files", [])
 
-
 def delete_drive_file(drive_service, file_id: str):
     """
     Elimina un file da Google Drive dato il suo ID.
