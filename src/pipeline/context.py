@@ -23,6 +23,7 @@ class ClientContext:
     # Configurazione e path
     settings: Dict[str, Any] = field(default_factory=dict)
     config_path: Path = None
+    config_dir: Optional[Path] = None  # ✅ aggiunto per accesso diretto alla cartella di configurazione
     mapping_path: Optional[Path] = None
     base_dir: Path = None
     output_dir: Path = None
@@ -99,6 +100,7 @@ class ClientContext:
             settings=settings,
             env=env_vars,
             config_path=config_path,
+            config_dir=config_path.parent,  # ✅ inizializzazione della nuova proprietà
             mapping_path=(config_path.parent / "semantic_mapping.yaml"),
             base_dir=base_dir,
             output_dir=base_dir,
