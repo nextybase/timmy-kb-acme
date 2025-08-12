@@ -2,6 +2,15 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+
+### **[1.0.1] – 2025-08-12**
+#### **Changed**
+- `onboarding_full.py`: allineato a `pre_onboarding.py` con logging arricchito, validazione config cliente con gestione errori YAML, sicurezza path e payload contestuale negli errori.
+- Dipendenze (`github_utils.py`, `gitbook_preview.py`, `content_utils.py`) verificate e allineate per compatibilità con orchestratore.
+- Moduli `semantic_extractor.py` e `semantic_mapping.py` revisionati per coerenza con flusso `onboarding_full`.
+- Validato comportamento in modalità interattiva, test mode e batch mode.
+
+
 ## [1.0.1] - 2025-08-12
 ### Modificato
 - Migliorata gestione eccezioni in `exceptions.py` con aggiunta di payload contestuale (`slug`, `file_path`, `drive_id`) e `__str__` personalizzato.
