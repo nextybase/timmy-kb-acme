@@ -1,4 +1,3 @@
-# src/pipeline/github_utils.py
 """
 Utility per interagire con GitHub:
 - Creazione repo cliente
@@ -13,6 +12,7 @@ from pathlib import Path
 from github import Github
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError
+from pipeline.path_utils import is_safe_subpath  # ✅ import per controllo sicurezza path
 
 logger = get_structured_logger("pipeline.github_utils")
 
@@ -30,8 +30,11 @@ def push_output_to_github(context, github_token: str, interactive_mode: bool = T
     if not book_dir.exists():
         raise PipelineError(f"Cartella book non trovata: {book_dir}")
 
-    # Trova solo file .md validi (no .bak)
-    md_files = [f for f in book_dir.glob("*.md") if not f.name.endswith(".bak")]
+    # Trova solo file .md validi (no .bak) e con path sicuro ✅
+    md_files = [
+        f for f in book_dir.glob("*.md")
+        if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)
+    ]
     if not md_files:
         logger.warning("⚠️ Nessun file .md valido trovato nella cartella book. Push annullato.")
         return
