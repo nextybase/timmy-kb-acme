@@ -1,6 +1,8 @@
 from pathlib import Path
 import unicodedata
 import re
+import yaml
+import os
 
 
 def is_safe_subpath(path: Path, base: Path) -> bool:
@@ -19,13 +21,31 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
+def _load_slug_regex():
+    """
+    Carica la regex slug da config/config.yaml, se presente.
+    Ritorna la regex di default se il file non esiste o la chiave non è definita.
+    """
+    config_path = os.path.join("config", "config.yaml")
+    default_regex = r"^[a-z0-9-]+$"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            return cfg.get("slug_regex", default_regex)
+        except Exception:
+            return default_regex
+    return default_regex
+
+
 def is_valid_slug(slug: str) -> bool:
     """
     Verifica se lo slug rispetta il formato consentito:
-    - Solo lettere minuscole, numeri e trattini
-    - Nessuno spazio o carattere speciale
+    - Caratteri definiti da regex in config/config.yaml, oppure
+    - Solo lettere minuscole, numeri e trattini (default).
     """
-    return bool(re.fullmatch(r"[a-z0-9\\-]+", slug))
+    pattern = _load_slug_regex()
+    return bool(re.fullmatch(pattern, slug))
 
 
 def normalize_path(path: Path) -> Path:
@@ -47,17 +67,17 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
     Pulisce un nome file rimuovendo caratteri non sicuri per il filesystem.
     - Rimuove caratteri vietati: <>:"/\\|?*
     - Normalizza Unicode in forma compatta (NFKC)
-    - Trunca alla lunghezza massima specificata
+    - Tronca alla lunghezza massima specificata
     """
     try:
         # Normalizzazione unicode
         safe_name = unicodedata.normalize("NFKC", name)
 
         # Rimozione caratteri vietati
-        safe_name = re.sub(r'[<>:"/\\\\|?*]', '_', safe_name)
+        safe_name = re.sub(r'[<>:"/\\|?*]', "_", safe_name)
 
         # Rimozione caratteri di controllo e trim spazi
-        safe_name = re.sub(r'[\\x00-\\x1f\\x7f]', '', safe_name).strip()
+        safe_name = re.sub(r'[\x00-\x1f\x7f]', '', safe_name).strip()
 
         # Troncamento
         if len(safe_name) > max_length:

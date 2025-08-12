@@ -39,7 +39,11 @@ def get_drive_service(context: ClientContext):
     """Crea un servizio Google Drive autenticato usando variabili da .env."""
     service_account_path = context.env.get("SERVICE_ACCOUNT_FILE")
     if not service_account_path or not Path(service_account_path).exists():
-        raise PipelineError("File di service account Google mancante o non trovato. Verifica SERVICE_ACCOUNT_FILE in .env.")
+        raise PipelineError(
+            "File di service account Google mancante o non trovato. Verifica SERVICE_ACCOUNT_FILE in .env.",
+            slug=context.slug if context else None,
+            file_path=service_account_path
+        )
 
     creds = service_account.Credentials.from_service_account_file(
         service_account_path,
@@ -65,7 +69,12 @@ def upload_config_to_drive_folder(service, context: ClientContext, folder_id: st
     """Carica il config.yml nella cartella Drive indicata e restituisce l'ID del file."""
     config_path = context.config_path
     if not config_path.exists():
-        raise DriveUploadError(f"Config file non trovato: {config_path}")
+        raise DriveUploadError(
+            f"Config file non trovato: {config_path}",
+            slug=context.slug,
+            file_path=config_path,
+            drive_id=folder_id
+        )
 
     file_metadata = {"name": config_path.name, "parents": [folder_id]}
     media = MediaFileUpload(str(config_path), mimetype="application/x-yaml")
@@ -81,7 +90,12 @@ def upload_config_to_drive_folder(service, context: ClientContext, folder_id: st
         logger.info(f"📤 Config caricato: {config_path} → cartella {folder_id} (ID: {file_id})")
         return file_id
     except Exception as e:
-        raise DriveUploadError(f"Errore upload config {config_path}: {e}")
+        raise DriveUploadError(
+            f"Errore upload config {config_path}: {e}",
+            slug=context.slug,
+            file_path=config_path,
+            drive_id=folder_id
+        )
 
 def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -> Dict[str, str]:
     """Crea su Drive la struttura di cartelle definita in un file YAML."""
@@ -90,7 +104,7 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, parent_id: str) -
             config = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❌ Errore lettura YAML {yaml_path}: {e}")
-        raise PipelineError(e)
+        raise PipelineError(e, file_path=yaml_path)
 
     def _create_subfolders(base_parent_id, folders):
         ids = {}
@@ -138,6 +152,14 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
                 if mime_type == PDF_MIME_TYPE:
                     file_id = item["id"]
                     local_file_path = current_local_path / name
+
+                    if not is_safe_subpath(local_file_path, context.base_dir):
+                        raise PipelineError(
+                            f"Percorso non sicuro per il salvataggio: {local_file_path}",
+                            slug=context.slug,
+                            file_path=local_file_path
+                        )
+
                     logger.info(f"📥 Scaricamento PDF: {name} → {local_file_path}")
 
                     request = service.files().get_media(fileId=file_id)
@@ -158,15 +180,20 @@ def download_drive_pdfs_to_local(service, context: ClientContext, drive_folder_i
 
         except HttpError as error:
             logger.error(f"❌ Errore durante download da Drive: {error}")
-            raise DriveDownloadError(error)
+            raise DriveDownloadError(
+                str(error),
+                slug=context.slug,
+                drive_id=folder_id
+            )
 
     _download_folder_contents(drive_folder_id, local_path)
 
-    # ✅ Controllo finale
     if downloaded_count == 0:
         raise DriveDownloadError(
             f"Nessun PDF scaricato da Drive (folder ID: {drive_folder_id}). "
-            "Verifica che l'ID sia corretto e che la cartella contenga file PDF."
+            "Verifica che l'ID sia corretto e che la cartella contenga file PDF.",
+            slug=context.slug,
+            drive_id=drive_folder_id
         )
     else:
         logger.info(f"📊 Download completato: {downloaded_count} PDF scaricati in {local_path}")
@@ -180,7 +207,11 @@ def create_local_base_structure(context: ClientContext, yaml_path: Path) -> Path
     """
     base_dir = context.output_dir
     if not is_safe_subpath(base_dir, context.base_dir):
-        raise PipelineError(f"Base dir non sicura: {base_dir}")
+        raise PipelineError(
+            f"Base dir non sicura: {base_dir}",
+            slug=context.slug,
+            file_path=base_dir
+        )
 
     (base_dir / "book").mkdir(parents=True, exist_ok=True)
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
@@ -192,7 +223,7 @@ def create_local_base_structure(context: ClientContext, yaml_path: Path) -> Path
             cfg = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❌ Errore nel leggere {yaml_path}: {e}")
-        raise PipelineError(e)
+        raise PipelineError(e, slug=context.slug, file_path=yaml_path)
 
     for folder in cfg.get("root_folders", []):
         if folder["name"] == "raw" and folder.get("subfolders"):
@@ -204,15 +235,7 @@ def create_local_base_structure(context: ClientContext, yaml_path: Path) -> Path
     return base_dir
 
 def list_drive_files(drive_service, parent_id: str, query: str = None):
-    """
-    Restituisce la lista di file presenti in una cartella Drive.
-    Args:
-        drive_service: servizio autenticato Google Drive API
-        parent_id: ID della cartella
-        query: filtro aggiuntivo per nome o tipo file
-    Returns:
-        Lista di dict con ID e nome file
-    """
+    """Restituisce la lista di file presenti in una cartella Drive."""
     q = f"'{parent_id}' in parents and trashed=false"
     if query:
         q += f" and {query}"
@@ -222,10 +245,5 @@ def list_drive_files(drive_service, parent_id: str, query: str = None):
     return results.get("files", [])
 
 def delete_drive_file(drive_service, file_id: str):
-    """
-    Elimina un file da Google Drive dato il suo ID.
-    Args:
-        drive_service: servizio autenticato Google Drive API
-        file_id: ID del file da eliminare
-    """
+    """Elimina un file da Google Drive dato il suo ID."""
     drive_service.files().delete(fileId=file_id).execute()

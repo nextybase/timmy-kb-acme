@@ -3,6 +3,19 @@
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [1.0.1] - 2025-08-12
+### Modificato
+- Migliorata gestione eccezioni in `exceptions.py` con aggiunta di payload contestuale (`slug`, `file_path`, `drive_id`) e `__str__` personalizzato.
+- Aggiornati `drive_utils.py`, `pre_onboarding.py` e `context.py` per propagare le informazioni di contesto nelle eccezioni.
+- Validazione `slug` uniformata con supporto a regex da configurazione.
+- Gestione input interattiva/non-interattiva consolidata in `pre_onboarding.py`.
+- Log arricchiti con dettagli cliente e file in fase di creazione struttura locale e remota.
+
+### Corretto
+- Migliorata tracciabilità degli errori nei flussi di creazione config e strutture Drive.
+- Prevenzione percorsi non sicuri con controllo `is_safe_subpath` su più funzioni critiche.
+
+
+## [1.0.1] - 2025-08-12
 ### Miglioramenti
 - **ClientContext** (`src/pipeline/context.py`): aggiunto attributo `config_dir` e inizializzazione automatica in `load()` per supporto futuro a `load_semantic_mapping`, migliorando robustezza e compatibilità.
 - **GitHub Utils** (`src/pipeline/github_utils.py`): aggiunto controllo di sicurezza `is_safe_subpath` sui file `.md` prima del push per prevenire scritture non sicure fuori dalla cartella `book`.
