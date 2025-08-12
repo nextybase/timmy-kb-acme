@@ -2,6 +2,20 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [Unreleased]
+
+### Added
+- Conferma interattiva Y/N per il push su GitHub in modalità interattiva, mantenendo la conferma semplice con INVIO in modalità CLI di test.
+- Verifica preventiva della disponibilità di Docker prima di avviare l’anteprima GitBook.
+
+### Changed
+- Migliorata la validazione dei percorsi in `path_utils.py` con gestione più robusta delle eccezioni.
+- Aggiornata la sanitizzazione dei nomi file per rimuovere caratteri non validi, normalizzare Unicode e gestire troncamenti.
+
+### Fixed
+- Gestione più chiara delle modalità CLI vs interattiva per evitare comportamenti inattesi durante il push.
+
+
 ## [2025-08-12] Refactoring gestione contesto, fix circular imports e miglioramenti UX pipeline
 
 ### Aggiunto
