@@ -2,6 +2,16 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.1] - 2025-08-12
+### Miglioramenti
+- **ClientContext** (`src/pipeline/context.py`): aggiunto attributo `config_dir` e inizializzazione automatica in `load()` per supporto futuro a `load_semantic_mapping`, migliorando robustezza e compatibilità.
+- **GitHub Utils** (`src/pipeline/github_utils.py`): aggiunto controllo di sicurezza `is_safe_subpath` sui file `.md` prima del push per prevenire scritture non sicure fuori dalla cartella `book`.
+
+### Note
+- Modifiche retrocompatibili con la versione **1.0 Stable**.
+- Nessun impatto sui flussi degli orchestratori esistenti.
+
+
 ## [1.0.0] - YYYY-MM-DD
 ### Aggiunto
 - Documentazione riorganizzata in `docs/` con guide per utenti e sviluppatori
