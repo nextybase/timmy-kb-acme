@@ -2,6 +2,27 @@
 
 Tutte le modifiche rilevanti al progetto saranno documentate in questo file.
 
+## [2025-08-12] Refactoring gestione contesto, fix circular imports e miglioramenti UX pipeline
+
+### Aggiunto
+- Check preliminare in `onboarding_full` per verificare se Docker Desktop è in esecuzione prima dell'avvio dell'anteprima GitBook; in caso contrario, la procedura viene interrotta con messaggio esplicativo.
+- Prompt di conferma **Y/N** per il push su GitHub in modalità interattiva; mantenuta conferma solo con `INVIO` in modalità CLI/test.
+- Log di debug percorso (`DEBUG PATH CHECK`) in `onboarding_full` per verifica consistenza directory di lavoro.
+
+### Modificato
+- Rifattorizzato `pipeline/context.py` per rimuovere import globali di `get_structured_logger`, sostituendoli con import locali nelle funzioni, prevenendo errori di **circular import**.
+- Aggiornato `pipeline/path_utils.py` rimuovendo la dipendenza da `get_structured_logger` come import globale, mantenendo logging tramite istanza interna.
+- Migliorata gestione di `pre_onboarding` e `onboarding_full` per garantire compatibilità con le modifiche a `ClientContext`.
+- Consolidata creazione di logger strutturato passando l'istanza al `ClientContext` per contesto coerente nei log.
+
+### Corretto
+- Risolto errore `ImportError` causato da import circolari tra `logging_utils`, `context` e `path_utils`.
+- Allineati comportamenti di creazione struttura locale e aggiornamento config in `pre_onboarding`.
+- Eliminati riferimenti non sicuri ai path con controlli aggiuntivi `is_safe_subpath`.
+
+---
+
+
 ## [0.9.8] - 2025-08-11
 ### Added
 - Integrazione avvio **preview GitBook** in `onboarding_full.py` in modalità interattiva.

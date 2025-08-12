@@ -60,8 +60,9 @@ def ensure_cartelle_raw_yaml_exists(yaml_path: Path, logger):
 
 def pre_onboarding_main(slug: str, client_name: str = None, no_interactive: bool = False, dry_run: bool = False):
     """Esegue il pre-onboarding del cliente specificato."""
-    context = ClientContext.load(slug)
-    logger = get_structured_logger("pre_onboarding", context=context)
+    # Logger strutturato creato qui e passato al ClientContext
+    logger = get_structured_logger("pre_onboarding")
+    context = ClientContext.load(slug, logger=logger)
     logger.info(f"🚀 Avvio pre-onboarding per cliente: {context.slug}")
 
     try:

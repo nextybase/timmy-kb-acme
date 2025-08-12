@@ -2,14 +2,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
-import logging
+import sys
 import shutil
 
 from .exceptions import ConfigError
-from .env_utils import get_env_var  # importa per variabili da .env
+from .env_utils import get_env_var   # importa per variabili da .env
+from .path_utils import is_valid_slug
 
-# Logger semplice per uso interno
-logger = logging.getLogger(__name__)
+# Rimosso l'import globale di get_structured_logger per evitare circular import
+logger = None  # inizializzato in load()
 
 @dataclass
 class ClientContext:
@@ -45,15 +46,32 @@ class ClientContext:
     step_status: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def load(cls, slug: str) -> "ClientContext":
+    def load(cls, slug: str, logger=None, interactive=None):
         """
         Carica e valida la configurazione cliente.
         Se la cartella/config non esiste, viene creata automaticamente.
         """
+        from .logging_utils import get_structured_logger  # import locale per evitare circular import
+
+        # Rileva modalità interattiva
+        if interactive is None:
+            interactive = sys.stdin.isatty()
+
+        # Logger strutturato di default
+        logger = logger or get_structured_logger(__name__)
+
+        # Validazione slug
+        while not is_valid_slug(slug):
+            if interactive:
+                logger.warning(f"Slug non valido: '{slug}'. Deve contenere solo minuscole, numeri e trattini.")
+                slug = input("🔐 Reinserisci lo slug cliente: ").strip()
+            else:
+                raise ConfigError(f"Invalid slug format: '{slug}'")
+
         base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
         config_path = base_dir / "config" / "config.yaml"
 
-        # ✅ Creazione automatica per nuovo cliente
+        # 📂 Creazione automatica per nuovo cliente
         if not config_path.exists():
             logger.info(f"Cliente '{slug}' non trovato: creazione struttura base.")
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +84,7 @@ class ClientContext:
         with open(config_path, "r", encoding="utf-8") as f:
             settings = yaml.safe_load(f)
 
-        logger.info(f"Config cliente caricato: {config_path}")
+        logger.info(f"Config cliente caricata: {config_path}")
 
         # Carica variabili da .env
         env_vars = {
@@ -91,16 +109,22 @@ class ClientContext:
 
     # -- Utility per tracking stato --
     def log_error(self, msg: str):
+        from .logging_utils import get_structured_logger
+        log = get_structured_logger(__name__)
         self.error_list.append(msg)
-        logger.error(msg)
+        log.error(msg)
 
     def log_warning(self, msg: str):
+        from .logging_utils import get_structured_logger
+        log = get_structured_logger(__name__)
         self.warning_list.append(msg)
-        logger.warning(msg)
+        log.warning(msg)
 
     def set_step_status(self, step: str, status: str):
+        from .logging_utils import get_structured_logger
+        log = get_structured_logger(__name__)
         self.step_status[step] = status
-        logger.info(f"Step '{step}' → {status}")
+        log.info(f"Step '{step}' → {status}")
 
     def summary(self) -> Dict[str, Any]:
         return {

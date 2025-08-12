@@ -1,5 +1,6 @@
 import sys
 import argparse
+import subprocess
 from pathlib import Path
 
 from pipeline.logging_utils import get_structured_logger
@@ -16,6 +17,20 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.env_utils import get_env_var
+
+
+def is_docker_running() -> bool:
+    """Controlla se Docker è in esecuzione."""
+    try:
+        subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
 
 
 def validate_client_config_schema(config_path: Path):
@@ -38,8 +53,9 @@ def onboarding_full_main(slug: str, dry_run: bool = False, no_drive: bool = Fals
         raise ConfigError(f"Config cliente non trovato: {client_config_path}")
     validate_client_config_schema(client_config_path)
 
-    context = ClientContext.load(slug)
-    logger = get_structured_logger("onboarding_full", context=context)
+    # Logger strutturato creato qui e passato al ClientContext
+    logger = get_structured_logger("onboarding_full")
+    context = ClientContext.load(slug, logger=logger)
     logger.info(f"🚀 Avvio onboarding completo per cliente: {context.slug}")
 
     try:
@@ -79,7 +95,11 @@ def onboarding_full_main(slug: str, dry_run: bool = False, no_drive: bool = Fals
 
         # Avvio anteprima GitBook in Docker solo se interattivo
         if interactive_mode:
+            if not is_docker_running():
+                logger.error("❌ Docker Desktop non è in esecuzione. Avvialo e ripeti la procedura.")
+                raise PipelineError("Docker non in esecuzione.")
             logger.info("🚀 Avvio anteprima GitBook in Docker...")
+            logger.info(f"DEBUG PATH CHECK → base_dir={context.base_dir} | md_dir={context.md_dir}")
             run_gitbook_docker_preview(context)
 
         # Push su GitHub usando variabili da env_utils
@@ -88,6 +108,14 @@ def onboarding_full_main(slug: str, dry_run: bool = False, no_drive: bool = Fals
         if not github_token:
             logger.warning("⚠️ Variabile GITHUB_TOKEN non impostata. Push su GitHub saltato.")
         else:
+            if interactive_mode:
+                confirm = input("📤 Vuoi procedere con il push su GitHub? [Y/N]: ").strip().lower()
+                if confirm != "y":
+                    logger.info("❌ Push su GitHub annullato dall'utente.")
+                    return
+            else:
+                input("📤 Premi INVIO per procedere con il push su GitHub...")
+
             push_output_to_github(context, github_token, interactive_mode=interactive_mode)
     
     except DriveDownloadError as e:
