@@ -81,55 +81,75 @@ root/
 ## 📦 Funzioni Riutilizzabili
 
 ### Gestione Path e Slug (`path_utils.py`)
-- **is_safe_subpath(path: Path, base: Path) -> bool** – Verifica anti-path traversal.  
-- **is_valid_slug(slug: str) -> bool** – Validazione slug via regex configurabile.  
-- **normalize_path(path: Path) -> Path** – Normalizzazione e risoluzione path.  
-- **sanitize_filename(name: str, max_length=100) -> str** – Pulizia nomi file sicura.  
+- **is_safe_subpath(path: Path, base: Path) -> bool** – Previene path traversal: verifica che `path` rimanga sotto `base`.  
+  _Uso:_ `assert is_safe_subpath(file_path, context.base_dir)`
+- **is_valid_slug(slug: str) -> bool** – Valida lo slug secondo la regex di progetto (caricata da config).  
+  _Uso:_ `if not is_valid_slug(slug): raise ConfigError(...)`
+- **normalize_path(path: Path) -> Path** – Normalizza e risolve il path (assoluto, senza segmenti “.”/“..”).  
+  _Uso:_ `norm = normalize_path(Path(input_path))`
+- **sanitize_filename(name: str, max_length: int = 100) -> str** – Ripulisce nomi file (caratteri sicuri, lunghezza massima).  
+  _Uso:_ `safe = sanitize_filename(title)`
 
 ### Gestione Configurazioni (`config_utils.py`)
-- **safe_write_file(file_path: Path, content: str)** – Scrittura sicura con backup.  
-- **update_config_with_drive_ids(context, updates: dict, logger=None)** – Aggiornamento parziale config YAML con backup.  
-- **write_client_config_file(context, config: dict) -> Path** – Salvataggio config cliente con backup.  
-- **get_client_config(context) -> dict** – Lettura config cliente.  
+- **safe_write_file(file_path: Path, content: str)** – Scrittura atomica con backup (rollback sicuro).  
+  _Uso:_ `safe_write_file(context.config_path, yaml_dump)`
+- **update_config_with_drive_ids(context, updates: dict, logger=None)** – Merge incrementale nella `config.yaml` cliente con backup automatico.  
+  _Uso:_ `update_config_with_drive_ids(ctx, {"drive_folder_id": "...", ...}, logger)`
+- **write_client_config_file(context, config: dict) -> Path** – Crea/riscrive la `config.yaml` del cliente nella cartella `output/timmy-kb-<slug>/config/`.  
+  _Uso:_ `path = write_client_config_file(ctx, new_cfg)`
+- **get_client_config(context) -> dict** – Ritorna la configurazione cliente già validata.  
+  _Uso:_ `cfg = get_client_config(ctx)`
 
 ### Gestione Variabili di Ambiente (`env_utils.py`)
-- **get_env_var(key: str, default=None, required=False)** – Accesso centralizzato a variabili ambiente con validazione.  
+- **get_env_var(key: str, default=None, required: bool = False)** – Accesso centralizzato a `.env` con validazione (solleva `ConfigError` se `required=True` e mancante).  
+  _Uso:_ `token = get_env_var("GITHUB_TOKEN", default=None)`
 
 ### Gestione Logging (`logging_utils.py`)
-- **get_structured_logger(name="default", log_file=None, level=None, rotate=False, ...)** – Logger uniforme console/file.  
+- **get_structured_logger(name="default", log_file: Path|str|None=None, level=None, rotate=False, max_bytes=5*1024*1024, backup_count=3, context=None) -> logging.Logger** – Logger uniforme (console/file), formatter consistente e opzionale rotazione; se passi `context`, aggiunge automaticamente lo `slug` ai log.  
+  _Uso:_ `logger = get_structured_logger("pre_onboarding", context=ctx)`
 
 ### Google Drive (`drive_utils.py`)
-- **drive_api_call(func, *args, **kwargs)** – Retry generico API Drive.  
-- **create_drive_folder(service, name, parent_id=None) -> str** – Creazione cartella Drive sicura.  
-- **list_drive_files(drive_service, parent_id, query=None)** – Elenco file cartella Drive.  
-- **delete_drive_file(drive_service, file_id)** – Eliminazione file Drive.  
+- **get_drive_service(context)** – Inizializza il client Drive usando il Service Account dal `.env`.  
+  _Uso:_ `drive = get_drive_service(ctx)`
+- **create_drive_folder(service, name: str, parent_id: str|None=None) -> str** – Crea cartella e ritorna l’ID.  
+  _Uso:_ `client_folder_id = create_drive_folder(drive, ctx.slug, ctx.env["DRIVE_ID"])`
+- **create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id: str) -> dict** – Genera la gerarchia di cartelle dal YAML (es. `cartelle_raw.yaml`) e ritorna una mappa `{nome: id}`.  
+  _Uso:_ `ids = create_drive_structure_from_yaml(drive, yaml_path, client_folder_id)`
+- **list_drive_files(service, parent_id: str, query: str|None=None) -> list[dict]** – Elenca file sotto una cartella (con query opzionale).  
+  _Uso:_ `existing = list_drive_files(drive, client_folder_id, "name='config.yaml'")`
+- **delete_drive_file(service, file_id: str)** – Elimina file su Drive per ID.  
+  _Uso:_ `delete_drive_file(drive, f["id"])`
+- **upload_config_to_drive_folder(service, context, parent_id: str) -> str** – Carica la `config.yaml` del cliente nella cartella target e ritorna l’ID del file.  
+  _Uso:_ `cfg_id = upload_config_to_drive_folder(drive, ctx, client_folder_id)`
+- **create_local_base_structure(context, yaml_path: Path)** – Crea la struttura di directory locale coerente con il mapping YAML.  
+  _Uso:_ `create_local_base_structure(ctx, yaml_path)`
 
 ### GitHub (`github_utils.py`)
-- **push_output_to_github(context, github_token, confirm_push=True)** – Push cartella Markdown su repo GitHub (riusabile se parametrizzato).  
+- **push_output_to_github(context, github_token: str|None, confirm_push: bool = True)** – Esegue il push dei Markdown generati (cartella `book/`) verso il repo/branch configurato; applica controlli di sicurezza su path `.md` prima della pubblicazione.  
+  _Uso:_ `push_output_to_github(ctx, get_env_var("GITHUB_TOKEN"), confirm_push=True)`
 
 ### Honkit Preview (`gitbook_preview.py`)
-- **ensure_book_json(book_dir, slug=None)** – Generazione file base `book.json`.  
-- **ensure_package_json(book_dir, slug=None)** – Generazione file base `package.json`.  
-- **run_gitbook_docker_preview(context, port=4000, container_name="honkit_preview", wait_on_exit=True)** – Avvio preview Docker (riusabile se modularizzato).  
+- **ensure_book_json(book_dir: Path, slug: str|None=None)** – Garantisce un `book.json` minimo per Honkit (autogenerato se assente).  
+  _Uso:_ `ensure_book_json(ctx.md_dir, slug=ctx.slug)`
+- **ensure_package_json(book_dir: Path, slug: str|None=None)** – Garantisce un `package.json` coerente per l’esecuzione locale.  
+  _Uso:_ `ensure_package_json(ctx.md_dir, slug=ctx.slug)`
+- **run_gitbook_docker_preview(context, port: int = 4000, container_name: str = "honkit_preview", wait_on_exit: bool = True)** – Avvia la preview Docker+Honkit della KB; opzionalmente blocca finché non chiudi la preview.  
+  _Uso:_ `run_gitbook_docker_preview(ctx, port=4000)`
 
 ### Client Context (`context.py`)
-- **ClientContext.load(slug, ...)** – Creazione/validazione contesto cliente.  
-- **log_error(msg)**, **log_warning(msg)**, **set_step_status(step, status)** – Tracking stato esecuzione.  
-- **summary()** – Resoconto finale esecuzione.  
-- Funzioni helper: **get_or_prompt**, **validate_slug**.  
+- **ClientContext.load(slug: str, logger=None, interactive: bool|None=None, **kwargs) -> ClientContext** – Carica/inizializza il contesto cliente (cartelle output, `config.yaml`, variabili `.env`).  
+  _Uso:_ `ctx = ClientContext.load(slug)`
+- **log_error(msg)** • **log_warning(msg)** • **set_step_status(step, status)** – Tracking omogeneo dello stato e degli eventi.  
+  _Uso:_ `ctx.set_step_status("pre_onboarding", "ok")`
+- **summary() -> dict** – Riepilogo finale (errori, warning, step).  
+  _Uso:_ `print(ctx.summary())`
+- Helper: **get_or_prompt(value, prompt, non_interactive=False, slug=None)** • **validate_slug(slug)** – Gestione input e validazione slug.  
+  _Uso:_ `slug = validate_slug(slug)`
 
 ### Eccezioni Comuni (`exceptions.py`)
-- Tutte ereditano da **PipelineError**:
-  - **DriveDownloadError**
-  - **DriveUploadError**
-  - **ConversionError**
-  - **PushError**
-  - **ConfigError**
-  - **CleanupError**
-  - **PreviewError**
-  - **EnrichmentError**
-  - **SemanticMappingError**
-  - **PreOnboardingValidationError**
+- Tutte ereditano da **PipelineError** e propagano contesto utile nei messaggi:  
+  **DriveDownloadError**, **DriveUploadError**, **ConversionError**, **PushError**, **ConfigError**, **CleanupError**, **PreviewError**, **EnrichmentError**, **SemanticMappingError**, **PreOnboardingValidationError**.
+
 
 ---
 

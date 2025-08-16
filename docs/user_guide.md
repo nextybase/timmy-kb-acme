@@ -133,7 +133,6 @@ Usa le opzioni CLI per esecuzioni **senza prompt** (es. automazioni CI):
   ```
   - `--dry-run` Simula l’esecuzione senza effetti collaterali: non scrive file definitivi e non effettua push, ma genera log e output temporanei utili per il debug.
   - `--no-drive` Usa i PDF locali già presenti in output/timmy-kb-<slug>/raw/ invece di scaricarli da Google Drive.
-  - `--non-interactive` Disabilita ogni prompt (preview/push inclusi), utile in CI/CD.
 
 > Nota: in modalità non interattiva non vengono richieste conferme (preview/push). Configura le variabili in `.env` e i percorsi prima dell’esecuzione.
 
