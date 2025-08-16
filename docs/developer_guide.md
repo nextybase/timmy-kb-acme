@@ -1,6 +1,6 @@
 # Guida Sviluppatore – Timmy-KB
 
-Questa guida fornisce tutte le informazioni necessarie per comprendere l’architettura, contribuire allo sviluppo e mantenere **Timmy-KB** in linea con le best practice aziendali e open-source. È basata su `manifesto_tecnico.md`, `coding_rule.md` e sullo storico evolutivo del progetto (`CHANGELOG.md`).
+Questa guida fornisce tutte le informazioni necessarie per comprendere l’architettura, contribuire allo sviluppo e mantenere **Timmy-KB** in linea con le best practice aziendali e open-source. È basata su `architecure.md`, `coding_rule.md` e sullo storico evolutivo del progetto (`CHANGELOG.md`).
 
 ---
 
@@ -29,9 +29,10 @@ root/
 4. **Livello 3 – Dashboard semantica**: interfaccia avanzata di consultazione.
 
 ### Componenti principali
-- **pipeline/**: orchestratori (`pre_onboarding.py`, `onboarding_full.py`) per l’esecuzione modulare e sequenziale della pipeline.
-- **semantic/**: moduli core per elaborazione semantica (`semantic_extractor.py`, `semantic_mapping.py`, `rosetta_validator.py`, `keyword_generator.py`).
-- **tools/**: script ausiliari per validazioni, refactoring e CLI helper.
+- **src/**: orchestratori (`pre_onboarding.py`, `onboarding_full.py`) che avviano i passi della pipeline (validazione config, download RAW, conversione PDF→MD, preview, push).  
+- **src/pipeline/**: moduli core per la **costruzione** dei file e i servizi di pipeline (es. `content_utils.py`, `github_utils.py`, `drive_utils.py`, `path_utils.py`, `logging_utils.py`, `constants.py`, `exceptions.py`).  
+- **src/semantic/**: componenti di arricchimento semantico (`semantic_extractor.py`, `semantic_mapping.py`).  
+- **src/tools/**: utility CLI e supporto (es. `refactor_tool.py`, `gen_dummy_kb.py`).
 
 ---
 

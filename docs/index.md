@@ -11,7 +11,7 @@ Benvenuto nella documentazione ufficiale di **Timmy-KB**, organizzata per fornir
 
 ### 2. Sviluppo e Standard
 - [Guida sviluppatore](developer_guide.md) → Struttura del repository, principi architetturali, flussi di lavoro.
-- [Regole di codifica](coding_rules.md) → Convenzioni, standard di scrittura del codice, sicurezza e principi NeXT.
+- [Regole di codifica](coding_rule.md) → Convenzioni, standard di scrittura del codice, sicurezza e principi NeXT.
 
 ### 3. Utilizzo e Operatività
 - [Guida utente](user_guide.md) → Installazione, esecuzione pipeline (pre-onboarding e onboarding full), output e troubleshooting.

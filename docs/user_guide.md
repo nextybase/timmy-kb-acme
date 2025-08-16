@@ -6,7 +6,7 @@ Questa guida ti accompagna passo-passo nell’uso di **Timmy-KB**, dalla configu
 
 ## 📋 Prerequisiti
 
-- **Python** 3.9 o superiore
+- **Python** 3.10 o superiore
 - **Poetry** o **pip** installati
 - Accesso al repository GitHub
 - File di configurazione `.env` e YAML corretti
@@ -31,6 +31,17 @@ Questa guida ti accompagna passo-passo nell’uso di **Timmy-KB**, dalla configu
    - Crea un file `.env` nella root del progetto con le variabili necessarie (es. credenziali API, token GitHub, percorso Google Drive)
    - Assicurati che i file YAML in `config/` siano corretti e completi
 
+## Ambiente virtuale (Windows/macOS/Linux)
+
+> Consigliato usare una cartella `.venv` nella root del repo.
+
+### Creazione
+```bash
+python -m venv .venv
+
+### Attivazione
+```bash
+.\venv\Scripts\Activate
 ---
 
 ## ▶️ Esecuzione della pipeline (interattiva e in due fasi)
@@ -41,7 +52,6 @@ La pipeline Timmy-KB si esegue tipicamente in **due fasi**: `pre_onboarding` e `
 
 Questa fase prepara l’ambiente e genera le configurazioni iniziali.
 
-```bash
 py src/pre_onboarding.py
 ```
 
@@ -52,13 +62,13 @@ Durante questa fase ti verrà chiesto di:
 
 ### 2. Popolamento cartelle Google Drive
 
-Prima di eseguire `onboarding_full`, **carica i file PDF** nella cartella dedicata del Google Drive indicata in configurazione (`drive/pdf_input`). Questa cartella è strutturata in sottodirectory tematiche pensate per una lettura semantica ottimale dei contenuti: ogni tipologia di documento (manuali, schede tecniche, presentazioni, ecc.) ha la propria posizione specifica, così da facilitare il parsing e l’analisi durante l’elaborazione. I documenti caricati in queste cartelle saranno la base per la generazione della knowledge base.
+Prima di eseguire `onboarding_full`, **carica i file PDF** nella cartella dedicata del Google Drive indicata in configurazione (`DRIVE_ID/<slug>/raw>`). La gerarchia di sottocartelle è generata automaticamente in base a **config/cartelle_raw.yaml** e organizza i documenti per tema (manuali, schede tecniche, presentazioni, ecc.), ottimizzando il parsing semantico e l’analisi.
+I file presenti in RAW/ costituiranno la base della knowledge base.
 
 ### 3. Onboarding Full
 
 Questa fase esegue l’intero flusso di elaborazione, arricchimento semantico, validazione, generazione e pubblicazione.
 
-```bash
 py src/onboarding_full.py
 ```
 
@@ -97,6 +107,6 @@ Al termine della procedura, l’output generato sarà disponibile in `output/` e
 ## 📚 Risorse utili
 
 - [Guida sviluppatore](developer_guide.md)
-- [Regole di codifica](coding_rules.md)
+- [Regole di codifica](coding_rule.md)
 - [Architettura tecnica](architecture.md)
 
