@@ -1,4 +1,4 @@
-# Coding Rules – Timmy-KB (docs/coding\_rule.md)
+# Coding Rules – Timmy‑KB (docs/coding\_rule.md)
 
 > **Scopo** Queste regole assicurano codice coerente, manutenibile e sicuro per la pipeline Timmy‑KB. Valgono per tutto il repository, con enfasi su orchestratori (`src/pre_onboarding.py`, `src/onboarding_full.py`) e moduli in `src/pipeline/`, `src/semantic/`, `src/tools/`.
 
@@ -7,11 +7,11 @@
 ## 1) Versioni, dipendenze e ambiente
 
 - **Python**: ≥ **3.10**. Evitare feature deprecate o non compatibili.
-- **Dipendenze**: dichiarate in `requirements.txt` (pin/upper-bound dove necessario). Evitare dipendenze non essenziali.
-- **Ambiente**: usare `python -m venv .venv` e attivazione locale. Niente path hard‑coded; usare variabili d’ambiente e `.env` (mai committare segreti).
+- **Dipendenze**: dichiarate in `requirements.txt` (pin/upper‑bound dove necessario). Evitare dipendenze non essenziali.
+- **Ambiente**: usare `python -m venv .venv` e attivazione locale. Nessun path hard‑coded; usare variabili d’ambiente e `.env` (mai committare segreti).
 - **Compatibilità OS**: usare sempre `pathlib` per i percorsi.
 
-## 2) Struttura del repository (fonte di verità)
+## 2) Struttura del repository (fonte di verità) 
 
 ```txt
 root/
@@ -56,7 +56,7 @@ root/
           ValueError: Se `nodes` è vuoto.
       """
   ```
-- **Imports**: assoluti rispetto a `src/`; vietati i print di debug; vietato il wildcard import.
+- **Imports**: assoluti rispetto a `src/`; vietati i `print` di debug; vietato il wildcard import.
 - **Style**: preferire `black` (format), `ruff/flake8` (lint) e `isort` (imports). Nessun commit con lint/format falliti.
 
 ## 5) Logging & osservabilità

@@ -20,7 +20,7 @@ Benvenuto nella documentazione ufficiale di **Timmy-KB**, organizzata per fornir
 
 ## 🔍 Come usare questa documentazione
 1. **Per iniziare** → Leggi la [Guida utente](user_guide.md) per capire come installare e avviare Timmy-KB.
-2. **Per contribuire** → Consulta la [Guida sviluppatore](developer_guide.md) e le [Regole di codifica](coding_rules.md) prima di aprire una Pull Request.
+2. **Per contribuire** → Consulta la [Guida sviluppatore](developer_guide.md) e le [Regole di codifica](coding_rule.md) prima di aprire una Pull Request.
 3. **Per comprendere il funzionamento interno** → Approfondisci l’[Architettura tecnica](architecture.md).
 
 ---

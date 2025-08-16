@@ -6,19 +6,20 @@ Questa guida fornisce tutte le informazioni necessarie per comprendere l’archi
 
 ## 📂 Struttura del repository
 
-```
+```txt
 root/
  ├── src/
- │    ├── pipeline/     # Orchestrazione e logica di esecuzione (no logica semantica)
- │    ├── semantic/     # Parsing, tagging, mapping, validazione e arricchimento semantico
- │    └── tools/        # Utility, validatori, refactoring
- ├── config/            # Configurazioni YAML
- ├── output/            # Output Markdown/YAML generati
- ├── tests/             # Test end-to-end e unitari
- ├── docs/              # Documentazione utente e sviluppatore
-```
+ │   ├── pre_onboarding.py      # orchestratore fase 0 (interattivo di default)
+ │   ├── onboarding_full.py     # orchestratore end-to-end (interattivo di default)
+ │   ├── pipeline/              # moduli core (drive, github, utils, logging, eccezioni, costanti, …)
+ │   ├── semantic/              # estrazione/mapping semantico e post-processing
+ │   └── tools/                 # utility CLI, validatori, refactoring
+ ├── config/                     # YAML (cartelle_raw.yaml, mapping, template)
+ ├── output/                     # output Markdown/YAML generati
+ ├── tests/                      # unit + end-to-end
+ └── docs/                       # documentazione
 
----
+```
 
 ## 🧩 Architettura tecnica
 

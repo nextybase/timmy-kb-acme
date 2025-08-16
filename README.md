@@ -56,6 +56,13 @@ py src/pre_onboarding.py --slug acme-srl --name "ACME S.r.l." --non-interactive 
 - `--dry-run` crea solo struttura locale, **senza** contattare Drive
 
 ### 2) Onboarding completo (download, conversione, anteprima, push)
+
+> **Prima di procedere**
+>
+> Prima di eseguirlo, assicurati che i PDF siano nella cartella **RAW** dello Shared Drive configurato (`DRIVE_ID/<slug>/RAW/`).  
+> La gerarchia di sottocartelle è **generata automaticamente** in base a `config/cartelle_raw.yaml` e organizza i documenti per tema (manuali, schede tecniche, presentazioni, ecc.), ottimizzando il parsing semantico e l’analisi.  
+> I file presenti in **RAW/** costituiranno la base della knowledge base.
+
 Scarica i PDF (se abilitato), converte in Markdown, genera `README.md`/`SUMMARY.md`, fa la preview Docker/Honkit e opzionalmente il push su GitHub.
 ```bash
 py src/onboarding_full.py
