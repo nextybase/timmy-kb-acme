@@ -2,6 +2,22 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.2] - 2025-08-16
+### Modificato
+- Refactoring orchestratori `pre_onboarding.py` e `onboarding_full.py` per allineamento completo con la gestione logging centralizzata.
+- Aggiornata gestione percorsi dei file di configurazione (`cartelle_raw.yaml`) per coerenza con la directory `config/`.
+- Migliorata robustezza caricamento configurazioni cliente in fase di avvio pipeline, con validazione più chiara e tracciabilità.
+- Consolidata coerenza tra i due orchestratori nella gestione errori (`ConfigError`) e nei messaggi di log.
+
+### Corretto
+- Risolto errore di compatibilità con `get_structured_logger` rimuovendo argomenti non previsti.
+- Sistemato caricamento configurazioni da `context.py` per propagare correttamente i percorsi cliente.
+
+### Note
+- Modifiche retrocompatibili con la versione **1.0.1 Stable**.
+- Nessun impatto sul flusso semantico né sui moduli ausiliari (`semantic/`, `tools/`).
+
+
 
 ### **[1.0.1] – 2025-08-12**
 #### **Changed**
