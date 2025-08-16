@@ -13,16 +13,18 @@ root/
  │    ├── pipeline/              # moduli core della pipeline (drive/github/utils/logging/…)
  │    ├── semantic/              # parsing, tagging, mapping e arricchimento semantico
  │    └── tools/                 # utility CLI, validatori, refactoring
- ├── config/                     # YAML (cartelle_raw.yaml, mapping, template, env)
+ ├── config/                     # YAML (cartelle_raw.yaml, mapping, template)
  ├── output/                     # output Markdown/YAML generati per cliente
  ├── tests/                      # test unitari ed end-to-end
- └── docs/                       # documentazione utente e sviluppatore
+ ├── docs/                       # documentazione utente e sviluppatore
+ └── .env                        # credenziali API, token e configurazioni locali
+```
 
 ---
 
 ## 🧩 Livelli funzionali
 1. **Livello 0 – Sandbox AI**: ambiente sperimentale per test e prototipi.
-2. **Livello 1 – KB documentale statico**: generazione contenuti Markdown/YAML per GitBook o Honkit.
+2. **Livello 1 – KB documentale statico**: generazione contenuti Markdown/YAML per Honkit (fork open-source di GitBook).
 3. **Livello 2 – Parsing + KB vettoriale**: estrazione strutturata e indicizzazione per ricerca semantica.
 4. **Livello 3 – Dashboard semantica**: interfaccia di consultazione avanzata.
 
@@ -40,7 +42,7 @@ root/
   - `config/*.yaml` → parametri personalizzati.
   - `pipeline/constants.py` → valori predefiniti.
 - **Output**:
-  - `config/config.yaml` aggiornato.
+  - `config/clienti/<slug>/config/config.yaml` aggiornato.
   - Struttura cartelle input/output.
 
 ### **2. onboarding_full.py**
@@ -86,7 +88,6 @@ root/
 
 ### Gestione Configurazioni (`config_utils.py`)
 - **safe_write_file(file_path: Path, content: str)** – Scrittura sicura con backup.  
-- **is_valid_slug(slug: Optional[str]) -> bool** – Variante semplificata di validazione slug.  
 - **update_config_with_drive_ids(context, updates: dict, logger=None)** – Aggiornamento parziale config YAML con backup.  
 - **write_client_config_file(context, config: dict) -> Path** – Salvataggio config cliente con backup.  
 - **get_client_config(context) -> dict** – Lettura config cliente.  
@@ -106,7 +107,7 @@ root/
 ### GitHub (`github_utils.py`)
 - **push_output_to_github(context, github_token, confirm_push=True)** – Push cartella Markdown su repo GitHub (riusabile se parametrizzato).  
 
-### GitBook/Honkit Preview (`gitbook_preview.py`)
+### Honkit Preview (`gitbook_preview.py`)
 - **ensure_book_json(book_dir, slug=None)** – Generazione file base `book.json`.  
 - **ensure_package_json(book_dir, slug=None)** – Generazione file base `package.json`.  
 - **run_gitbook_docker_preview(context, port=4000, container_name="honkit_preview", wait_on_exit=True)** – Avvio preview Docker (riusabile se modularizzato).  
@@ -149,7 +150,7 @@ root/
 - **C** = Consulted (coinvolto attivamente)  
 - **I** = Informed (informato)  
 
-Questa matrice integra i **punti di validazione umana (HiTL)** descritti nella sezione precedente e li collega ai ruoli operativi, permettendo un tracciamento chiaro delle responsabilità all’interno della pipeline Timmy-KB.
+> Nota: al punto 3 il Revisore è consultato in particolare per garantire la qualità semantica.
 
 ---
 
@@ -164,5 +165,4 @@ Questa matrice integra i **punti di validazione umana (HiTL)** descritti nella s
 ## 📚 Collegamenti utili
 - [Guida sviluppatore](developer_guide.md)
 - [Guida utente](user_guide.md)
-- [Regole di codifica](coding_rules.md)
-
+- [Regole di codifica](coding_rule.md)

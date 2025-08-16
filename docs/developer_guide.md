@@ -1,6 +1,6 @@
 # Guida Sviluppatore – Timmy-KB
 
-Questa guida fornisce tutte le informazioni necessarie per comprendere l’architettura, contribuire allo sviluppo e mantenere **Timmy-KB** in linea con le best practice aziendali e open-source. È basata su `architecure.md`, `coding_rule.md` e sullo storico evolutivo del progetto (`CHANGELOG.md`).
+Questa guida fornisce tutte le informazioni necessarie per comprendere l’architettura, contribuire allo sviluppo e mantenere **Timmy-KB** in linea con le best practice aziendali e open-source. È basata su `architecture.md`, `coding_rule.md` e sullo storico evolutivo del progetto (`CHANGELOG.md`).
 
 ---
 
@@ -43,8 +43,7 @@ root/
 - **Funzioni**: no variabili globali (tranne costanti), CLI con `argparse`.
 - **Logging**: esclusivamente tramite `pipeline/logging_utils.py`, formati `INFO`, `DEBUG`, `WARNING`, `ERROR`.
 - **Test**: organizzati in `tests/`, preferire test end-to-end, no dati sensibili.
-- **Separazione semantica**: orchestrazione in `pipeline/`, logica semantica in `semantic/`.
-- **Keyword Extraction**: file `timmy_tags.yaml` in `output/.../config/`.
+- **Separazione semantica**: orchestrazione in `src/`, logica semantica in `semantic/`.
 
 ---
 
@@ -96,6 +95,5 @@ Dalla versione `0.9.0-beta` a `1.0.0`:
 ## 📚 Risorse utili
 - [Architettura tecnica](architecture.md)
 - [Guida utente](user_guide.md)
-- [Regole di codifica](coding_rules.md)
+- [Regole di codifica](coding_rule.md)
 - [Contributing](../CONTRIBUTING.md)
-

@@ -1,6 +1,6 @@
-# Guida Utente – Timmy‑KB
+# Guida Utente – Timmy-KB
 
-Questa guida ti accompagna passo‑passo nell’uso di **Timmy‑KB**, dalla configurazione iniziale all’esecuzione della pipeline, con focus su modalità **interattiva** (default) e varianti **test/CI**.
+Questa guida ti accompagna passo-passo nell’uso di **Timmy-KB**, dalla configurazione iniziale all’esecuzione della pipeline, con focus su modalità **interattiva** (default) e varianti **test/CI**.
 
 ---
 
@@ -34,7 +34,7 @@ Questa guida ti accompagna passo‑passo nell’uso di **Timmy‑KB**, dalla con
 3. **Installa le dipendenze**
    ```bash
    pip install -r requirements.txt
-   # In alternativa
+   # In alternativa:
    # poetry install
    ```
 4. **Configura le variabili**
@@ -59,7 +59,7 @@ python -m venv .venv
   ```
 - **Windows – CMD**
   ```bat
-  .\venv\Scripts\activate.bat
+  .\.venv\Scripts\activate.bat
   ```
 - **Git Bash / WSL / macOS / Linux**
   ```bash
@@ -87,7 +87,7 @@ deactivate
 
 La pipeline si esegue tipicamente in **due fasi**: `pre_onboarding` e `onboarding_full`, entrambe **interattive** di default.
 
-### 1) Pre‑onboarding (crea struttura cliente e config)
+### 1) Pre-onboarding (crea struttura cliente e config)
 Prepara l’ambiente locale/Drive, genera `config.yaml` e aggiorna i riferimenti.
 ```bash
 py src/pre_onboarding.py
@@ -123,7 +123,7 @@ Durante l’esecuzione interattiva:
 
 Usa le opzioni CLI per esecuzioni **senza prompt** (es. automazioni CI):
 
-- **Pre‑onboarding**
+- **Pre-onboarding**
   ```bash
   py src/pre_onboarding.py --slug acme-srl --name "ACME S.r.l." --non-interactive [--dry-run]
   ```
@@ -131,7 +131,9 @@ Usa le opzioni CLI per esecuzioni **senza prompt** (es. automazioni CI):
   ```bash
   py src/onboarding_full.py --slug acme-srl [--dry-run] [--no-drive]
   ```
-  - `--no-drive` usa i PDF **locali** già presenti in `output/timmy-kb-<slug>/raw/`
+  - `--dry-run` Simula l’esecuzione senza effetti collaterali: non scrive file definitivi e non effettua push, ma genera log e output temporanei utili per il debug.
+  - `--no-drive` Usa i PDF locali già presenti in output/timmy-kb-<slug>/raw/ invece di scaricarli da Google Drive.
+  - `--non-interactive` Disabilita ogni prompt (preview/push inclusi), utile in CI/CD.
 
 > Nota: in modalità non interattiva non vengono richieste conferme (preview/push). Configura le variabili in `.env` e i percorsi prima dell’esecuzione.
 
@@ -162,4 +164,3 @@ Al termine, troverai in `output/`:
 - [Guida sviluppatore](developer_guide.md)
 - [Regole di codifica](coding_rule.md)
 - [Architettura tecnica](architecture.md)
-
