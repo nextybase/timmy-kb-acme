@@ -4,8 +4,8 @@ Utility per interagire con GitHub:
 - Creazione/rilevamento repo cliente
 - Push del contenuto della cartella 'book' (solo file .md, esclusi .bak)
 - Branch di default configurabile via (in ordine di priorità):
-    1) context.env["GIT_DEFAULT_BRANCH"]  oppure context.env["GITHUB_BRANCH"]
-    2) os.getenv("GIT_DEFAULT_BRANCH")     oppure os.getenv("GITHUB_BRANCH")
+    1) context.env["GIT_DEFAULT_BRANCH"] 
+    2) os.getenv("GIT_DEFAULT_BRANCH") 
     3) fallback "main"
 """
 
