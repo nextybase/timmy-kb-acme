@@ -1,114 +1,208 @@
-import sys
-import os
-import subprocess
+# tests/test_config_utils.py
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
+import logging
+import yaml
 import pytest
 
-# Fai vedere src/ come package root
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+from pipeline.config_utils import (
+    Settings,
+    write_client_config_file,
+    get_client_config,
+    validate_preonboarding_environment,
+    safe_write_file,
+    update_config_with_drive_ids,
+)
+from pipeline.exceptions import ConfigError, PreOnboardingValidationError
 
-from pipeline.config_utils import get_config
-from pipeline.logging_utils import get_structured_logger
 
-SLUG = "dummy"
-logger = get_structured_logger("test_config_utils")
+# --- Helper: contesto minimale compatibile con config_utils ---
+@dataclass
+class _MiniContext:
+    slug: str
+    base_dir: Path
+    output_dir: Path
+    config_path: Path
 
-@pytest.fixture(scope="session", autouse=True)
-def ensure_dummy_kb():
-    """Crea la struttura dummy KB se non esiste."""
-    kb_root = Path("output/timmy-kb-dummy/config/config.yaml")
-    if not kb_root.exists():
-        logger.info("Creazione KB dummy di test tramite gen_dummy_kb.py")
-        subprocess.run(["python", "src/tools/gen_dummy_kb.py"], check=True)
 
-def debug_config(unified):
-    logger.debug("\n=== DEBUG CONFIG LOADED ===")
-    logger.debug("[TimmyConfig]")
-    for field in unified.__class__.model_fields:
-        logger.debug(f"{field}: {getattr(unified, field)!r}")
-    logger.debug("[TimmySecrets]")
-    if hasattr(unified, "secrets"):
-        for field in getattr(unified.secrets.__class__, "model_fields", []):
-            logger.debug(f"{field}: {getattr(unified.secrets, field)!r}")
+def _mk_ctx(dummy_kb) -> _MiniContext:
+    base = dummy_kb["base"]
+    return _MiniContext(
+        slug="dummy",
+        base_dir=base,
+        output_dir=base,
+        config_path=(dummy_kb["config"] / "config.yaml"),
+    )
 
-def test_config_valid_load():
-    """Verifica che la configurazione unificata venga caricata correttamente."""
-    from pipeline import config_utils
-    unified = get_config(SLUG)
-    debug_config(unified)
-    # Controlla che i campi fondamentali esistano
-    for attr in ["slug", "raw_dir", "md_output_path", "output_dir", "secrets"]:
-        assert hasattr(unified, attr), f"{attr} mancante"
-    assert getattr(unified, "slug", None) == SLUG
 
-def test_config_missing_yaml(tmp_path, monkeypatch):
-    """Verifica che mancando il config.yaml venga sollevato FileNotFoundError."""
-    fake_slug = "nonexistent_client_123"
-    from pipeline import config_utils
-    with pytest.raises(FileNotFoundError):
-        get_config(fake_slug)
+# -----------------------------
+# Settings (Pydantic)
+# -----------------------------
+def test_settings_ok_with_required_fields(monkeypatch):
+    # Isoliamo i test dall'ENV del processo
+    for k in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN", "LOG_LEVEL", "DEBUG"):
+        monkeypatch.delenv(k, raising=False)
 
-def test_config_override_env(monkeypatch):
-    """Verifica che l'override da .env prevale sui valori YAML."""
-    monkeypatch.setenv("DRIVE_ID", "env_drive_override")
-    monkeypatch.setenv("GITHUB_TOKEN", "env_token_override")
-    from pipeline import config_utils
-    unified = get_config(SLUG)
-    # Controlla override su secrets
-    assert getattr(unified.secrets, "DRIVE_ID", None) == "env_drive_override", "Override DRIVE_ID da ENV non riuscito"
-    assert getattr(unified.secrets, "GITHUB_TOKEN", None) == "env_token_override", "Override GITHUB_TOKEN da ENV non riuscito"
+    s = Settings(
+        DRIVE_ID="drive",
+        SERVICE_ACCOUNT_FILE="/tmp/sa.json",
+        GITHUB_TOKEN="gh_tok",
+        slug="dummy",
+        LOG_LEVEL="INFO",
+        DEBUG=False,
+    )
+    assert s.DRIVE_ID == "drive"
+    assert s.slug == "dummy"
 
-def test_config_properties_consistency():
-    """Verifica che le proprietà shortcut coincidano con i valori attesi."""
-    from pipeline import config_utils
-    unified = get_config(SLUG)
-    # Coerenza tra property e campo in secrets/config (se previsti)
-    assert getattr(unified.secrets, "DRIVE_ID", None) is not None
-    assert getattr(unified.secrets, "SERVICE_ACCOUNT_FILE", None) is not None
 
-def test_config_yaml_malformed(tmp_path):
-    """Verifica che un file YAML malformato lanci eccezione."""
-    bad_yaml = tmp_path / "output" / "timmy-kb-bad" / "config"
-    bad_yaml.mkdir(parents=True)
-    cfg_path = bad_yaml / "config.yaml"
-    cfg_path.write_text("::: this: is not: yaml ::::")
-    from pipeline import config_utils
-    with pytest.raises(Exception):
-        get_config("bad")
+def test_settings_missing_critical_raises(monkeypatch):
+    # Rimuoviamo DRIVE_ID per essere certi che manchi
+    monkeypatch.delenv("DRIVE_ID", raising=False)
 
-def test_config_yaml_empty(tmp_path):
-    """Verifica che un file YAML vuoto lanci eccezione."""
-    empty_yaml = tmp_path / "output" / "timmy-kb-empty" / "config"
-    empty_yaml.mkdir(parents=True)
-    cfg_path = empty_yaml / "config.yaml"
-    cfg_path.write_text("")
-    from pipeline import config_utils
-    with pytest.raises(Exception):
-        get_config("empty")
+    with pytest.raises(ValueError):
+        Settings(  # manca DRIVE_ID
+            SERVICE_ACCOUNT_FILE="/tmp/sa.json",
+            GITHUB_TOKEN="gh_tok",
+            slug="dummy",
+        )
 
-# SALTA il test su campi extra non previsti (non rilevante per la dummy)
-@pytest.mark.skip(reason="Test extra fields ignorato: path temp non rilevante per flusso reale")
-def test_config_yaml_extra_fields(tmp_path):
-    extra_yaml = tmp_path / "output" / "timmy-kb-extra" / "config"
-    extra_yaml.mkdir(parents=True)
-    cfg_path = extra_yaml / "config.yaml"
-    cfg_path.write_text("""
-slug: extra
-raw_dir: /fake/path
-md_output_path: /fake/md
-UNEXPECTED_FIELD: true
-""")
-    from pipeline import config_utils
-    unified = get_config("extra")
-    assert getattr(unified, "slug", None) == "extra"
-    assert hasattr(unified, "raw_dir")
-    assert not hasattr(unified, "UNEXPECTED_FIELD")
 
-# SALTA anche il test sulla env incoerente: non rilevante, comportamento conforme all'implementazione
-@pytest.mark.skip(reason="Test su DRIVE_ID vuoto non rilevante: la pipeline considera env vuota come valore vuoto, senza fallback su YAML")
-def test_config_env_incoherent(monkeypatch):
-    monkeypatch.setenv("DRIVE_ID", "")
-    from pipeline import config_utils
-    unified = get_config(SLUG)
-    drive_id = getattr(unified.secrets, "DRIVE_ID", None)
-    assert drive_id is not None, "DRIVE_ID non trovato in nessuna fonte"
+def test_settings_missing_slug_raises(monkeypatch):
+    # Settiamo i critici via ENV per far fallire sullo slug mancante
+    monkeypatch.setenv("DRIVE_ID", "drive-env")
+    monkeypatch.setenv("SERVICE_ACCOUNT_FILE", "/tmp/sa.json")
+    monkeypatch.setenv("GITHUB_TOKEN", "gh_tok")
+
+    with pytest.raises(ValueError):
+        Settings()  # slug mancante
+
+
+# -----------------------------
+# write_client_config_file / get_client_config
+# -----------------------------
+def test_write_and_get_client_config_roundtrip(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    cfg = {"cartelle_raw_yaml": ["raw/a.yaml"], "k": 1}
+    path = write_client_config_file(ctx, cfg)
+    assert path == ctx.config_path and path.exists()
+
+    out = get_client_config(ctx)
+    assert out["k"] == 1
+    assert out["cartelle_raw_yaml"] == ["raw/a.yaml"]
+
+
+def test_write_client_config_creates_backup_if_exists(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+
+    # Prima scrittura
+    write_client_config_file(ctx, {"k": 1})
+    assert ctx.config_path.exists()
+
+    # Seconda scrittura -> deve creare .bak
+    write_client_config_file(ctx, {"k": 2})
+    bak = ctx.config_path.with_suffix(ctx.config_path.suffix + ".bak")
+    assert bak.exists()
+    # Il file finale deve contenere k:2
+    assert get_client_config(ctx)["k"] == 2
+
+
+def test_get_client_config_missing_file_raises(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    if ctx.config_path.exists():
+        ctx.config_path.unlink()
+    with pytest.raises(ConfigError):
+        get_client_config(ctx)
+
+
+def test_get_client_config_malformed_yaml_raises(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    ctx.config_path.parent.mkdir(parents=True, exist_ok=True)
+    ctx.config_path.write_text("a: [1, 2\n", encoding="utf-8")  # YAML invalido
+    with pytest.raises(ConfigError):
+        get_client_config(ctx)
+
+
+# -----------------------------
+# validate_preonboarding_environment
+# -----------------------------
+def test_validate_preonboarding_missing_config_raises(dummy_kb, monkeypatch):
+    ctx = _mk_ctx(dummy_kb)
+    if ctx.config_path.exists():
+        ctx.config_path.unlink()
+    with pytest.raises(PreOnboardingValidationError):
+        validate_preonboarding_environment(ctx)
+
+
+def test_validate_preonboarding_missing_required_keys_raises(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    write_client_config_file(ctx, {"foo": "bar"})  # manca cartelle_raw_yaml
+    with pytest.raises(PreOnboardingValidationError):
+        validate_preonboarding_environment(ctx)
+
+
+def test_validate_preonboarding_creates_logs_and_passes(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    # config minimo valido
+    write_client_config_file(ctx, {"cartelle_raw_yaml": ["raw/a.yaml"]})
+    logs_dir = ctx.base_dir / "logs"
+    if logs_dir.exists():
+        # pulizia preventiva per testare autogenerazione
+        for p in logs_dir.glob("*"):
+            p.unlink()
+        logs_dir.rmdir()
+    validate_preonboarding_environment(ctx)
+    assert logs_dir.exists() and logs_dir.is_dir()
+
+
+# -----------------------------
+# safe_write_file
+# -----------------------------
+def test_safe_write_file_atomically_writes_and_backs_up(tmp_path: Path):
+    target = tmp_path / "x" / "conf.yaml"
+
+    # Prima scrittura
+    safe_write_file(target, "k: 1\n")
+    assert target.exists()
+    assert yaml.safe_load(target.read_text(encoding="utf-8")) == {"k": 1}
+
+    # Seconda scrittura -> deve creare .bak e aggiornare contenuto
+    safe_write_file(target, "k: 2\n")
+    bak = target.with_suffix(target.suffix + ".bak")
+    assert bak.exists()
+    assert yaml.safe_load(target.read_text(encoding="utf-8")) == {"k": 2}
+
+
+def test_safe_write_file_errors_are_wrapped(tmp_path: Path, monkeypatch):
+    target = tmp_path / "x" / "conf.yaml"
+
+    def boom(*_a, **_kw):
+        raise OSError("disk full")
+
+    # Forziamo failure durante lo swap atomico
+    monkeypatch.setattr(Path, "replace", boom, raising=True)
+    with pytest.raises(Exception) as ei:
+        safe_write_file(target, "a: 1\n")
+    # deve essere PipelineError, ma non importiamo direttamente per evitare coupling
+    assert "Errore scrittura file" in str(ei.value)
+
+
+# -----------------------------
+# update_config_with_drive_ids
+# -----------------------------
+def test_update_config_with_drive_ids_updates_and_backs_up(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    # config iniziale
+    write_client_config_file(ctx, {"a": 1, "b": 2})
+
+    # aggiorniamo solo alcune chiavi
+    update_config_with_drive_ids(ctx, {"a": 9})
+
+    # finale: a==9, b resta 2
+    data = yaml.safe_load(ctx.config_path.read_text(encoding="utf-8"))
+    assert data["a"] == 9 and data["b"] == 2
+
+    # deve esistere almeno un backup
+    bak = ctx.config_path.with_suffix(ctx.config_path.suffix + ".bak")
+    assert bak.exists()

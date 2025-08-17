@@ -31,12 +31,6 @@ def _titleize(name: str) -> str:
       - rimuove l'estensione
       - sostituisce `_` e `-` con spazio
       - capitalizza ogni parola
-
-    Args:
-        name: Nome di file o cartella.
-
-    Returns:
-        Titolo leggibile derivato da `name`.
     """
     base = name.rsplit(".", 1)[0]
     return " ".join(part.capitalize() for part in base.replace("_", " ").replace("-", " ").split())
@@ -48,23 +42,13 @@ def _ensure_heading_stack(
     headings: List[str],
     parts: List[str],
 ) -> List[str]:
-    """Garantisce la presenza delle intestazioni fino a `desired_depth`.
+    """Garantisce le intestazioni fino a `desired_depth` **incluso**.
 
-    Costruisce progressivamente i livelli di heading in base ai segmenti di percorso
-    presenti in `parts`. Esempio: depth 1 => "## 2023", depth 2 => "### Q4", ecc.
-
-    Args:
-        current_depth: Profondità corrente (parte da 1 per la prima sottocartella).
-        desired_depth: Profondità desiderata in base a `parts`.
-        headings: Lista accumulata di heading.
-        parts: Segmenti di percorso (cartelle) da convertire in heading.
-
-    Returns:
-        La lista `headings` aggiornata.
+    Esempio: parts=['2024','Q4'] -> depth 1 => '## 2024', depth 2 => '### Q4'.
     """
-    while current_depth < desired_depth:
+    while current_depth <= desired_depth:
         title = _titleize(parts[current_depth - 1])
-        level = "#" * (current_depth + 1)  # depth 1 => "##", depth 2 => "###"
+        level = "#" * (current_depth + 1)  # depth 1 => "##", depth 2 => "###", ...
         headings.append(f"{level} {title}\n")
         current_depth += 1
     return headings
@@ -80,19 +64,6 @@ def convert_files_to_structured_markdown(
 
     Supporta strutture annidate: le sezioni nel `.md` riflettono la gerarchia di
     sottocartelle relative alla categoria.
-
-    Args:
-        context: Contesto cliente con path e config.
-        raw_dir: Path alternativo alla cartella `raw` del contesto.
-        md_dir: Path alternativo alla cartella `book` del contesto.
-        log: Logger alternativo.
-
-    Raises:
-        PipelineError: Se il path di output non è sicuro o se la scrittura fallisce.
-
-    Side Effects:
-        - Scrive file Markdown nella directory `md_dir`.
-        - Registra log strutturati.
     """
     raw_dir = raw_dir or context.raw_dir
     md_dir = md_dir or context.md_dir
@@ -130,12 +101,14 @@ def convert_files_to_structured_markdown(
                     rel = pdf_path.parent.relative_to(category)  # path rispetto alla categoria
                     parts = list(rel.parts) if rel.parts else []
 
-                    # Costruisci (se mancano) le intestazioni per i livelli di profondità correnti
+                    # Costruisci (se mancano) le intestazioni per tutti i livelli
                     heading_stack: List[str] = []
                     current_depth = 1  # prima sottocartella => "##"
                     desired_depth = len(parts)
                     if desired_depth > 0:
-                        heading_stack = _ensure_heading_stack(current_depth, desired_depth, heading_stack, parts)
+                        heading_stack = _ensure_heading_stack(
+                            current_depth, desired_depth, heading_stack, parts
+                        )
 
                     # Titolo del PDF come sezione terminale
                     pdf_title = _titleize(pdf_path.name)
@@ -150,7 +123,7 @@ def convert_files_to_structured_markdown(
                     if heading_stack:
                         content_parts.extend(heading_stack)
                     content_parts.append(heading_line)
-                    # Placeholder per contenuto estratto/conversione (da estendere con OCR/estrazione vera)
+                    # Placeholder contenuto estratto (da estendere con OCR/estrazione vera)
                     content_parts.append(f"(Contenuto estratto/conversione da `{pdf_path.name}`)\n\n")
 
             # Scrivi file
@@ -180,14 +153,6 @@ def generate_summary_markdown(
 
     Elenca tutti i file `.md` (esclusi `SUMMARY.md` e `README.md`) presenti
     in `md_dir`, creando voci di indice in formato GitBook/Honkit.
-
-    Args:
-        context: Contesto cliente.
-        md_dir: Path alternativo alla cartella Markdown (`book/`).
-        log: Logger alternativo.
-
-    Raises:
-        PipelineError: Se il path di output non è sicuro o se la scrittura fallisce.
     """
     md_dir = md_dir or context.md_dir
     local_logger = log or logger
@@ -228,16 +193,7 @@ def generate_readme_markdown(
     md_dir: Optional[Path] = None,
     log: Optional[logging.Logger] = None,
 ) -> None:
-    """Genera il file `README.md` nella directory Markdown.
-
-    Args:
-        context: Contesto cliente.
-        md_dir: Path alternativo alla cartella Markdown (`book/`).
-        log: Logger alternativo.
-
-    Raises:
-        PipelineError: Se il path di output non è sicuro o se la scrittura fallisce.
-    """
+    """Genera il file `README.md` nella directory Markdown."""
     md_dir = md_dir or context.md_dir
     local_logger = log or logger
 
@@ -274,11 +230,6 @@ def validate_markdown_dir(
     log: Optional[logging.Logger] = None,
 ) -> None:
     """Verifica che la directory Markdown esista e sia valida.
-
-    Args:
-        context: Contesto cliente.
-        md_dir: Path alternativo alla cartella Markdown.
-        log: Logger alternativo.
 
     Raises:
         FileNotFoundError: Se la cartella non esiste.

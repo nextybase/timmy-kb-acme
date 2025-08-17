@@ -1,103 +1,179 @@
 # tests/test_github_utils.py
+from __future__ import annotations
 
-import sys
-import os
-import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, List
+import logging
 import pytest
 
-# Fai vedere src/ come package root
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
-from pipeline.config_utils import get_config
 from pipeline.github_utils import push_output_to_github
-from github import Github
-from github.GithubException import GithubException
-from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import PipelineError
 
-SLUG = "dummy"
-REPO_NAME = "timmy-kb-dummytest"
-DUMMY_REPO_PATH = Path("filetest/dummy_repo")
-logger = get_structured_logger("test_github_utils")
+# --- Mini contesto compatibile con github_utils (duck typing) ---
+@dataclass
+class _Ctx:
+    slug: str
+    md_dir: Path
+    env: dict  # usato per risolvere il branch di default, se supportato dal modulo
 
-@pytest.fixture(scope="session", autouse=True)
-def ensure_dummy_repo():
-    """Assicura che la dummy_repo esista e sia pronta per il test."""
-    if not DUMMY_REPO_PATH.exists():
-        logger.error(f"Dummy repo non trovata in {DUMMY_REPO_PATH}")
-        raise RuntimeError(f"Dummy repo non trovata in {DUMMY_REPO_PATH}")
 
-def debug_github_config(config):
-    logger.debug("\n=== DEBUG CONFIG GITHUB ===")
-    for k, v in config.items():
-        logger.debug(f"{k}: {v}")
+def _enable_propagation(logger_name: str, monkeypatch) -> logging.Logger:
+    """Abilita temporaneamente la propagazione per consentire a caplog di catturare i record."""
+    lg = logging.getLogger(logger_name)
+    monkeypatch.setattr(lg, "propagate", True, raising=False)
+    return lg
 
-def scan_for_dotgit(base_path):
-    base_path = Path(base_path)
-    return [str(p) for p in base_path.rglob('.git')]
 
-def list_files(base_path):
-    base_path = Path(base_path)
-    logger.debug(f"\nContenuto di {base_path}:")
-    for p in base_path.rglob('*'):
-        logger.debug(f"   {p.relative_to(base_path)}{' (dir)' if p.is_dir() else ''}")
+# ------------
+# push_output_to_github
+# ------------
+def test_push_raises_if_token_missing(tmp_path: Path):
+    md = tmp_path / "book"
+    md.mkdir()
+    (md / "a.md").write_text("# A\n", encoding="utf-8")
+    ctx = _Ctx(slug="dummy", md_dir=md, env={})
+    with pytest.raises(PipelineError):
+        push_output_to_github(ctx, github_token="", confirm_push=True)
 
-def delete_repo_on_github(repo_name, github_token):
-    try:
-        github = Github(github_token)
-        user = github.get_user()
-        repo = user.get_repo(repo_name)
-        repo.delete()
-        logger.info(f"🗑️ Repository '{repo_name}' eliminata con successo su GitHub (via API).")
-    except GithubException as e:
-        if e.status == 403 or e.status == 401:
-            logger.warning("⚠️ Permessi insufficienti via API (403/401). Tenterò via GitHub CLI.")
-        else:
-            logger.warning(f"⚠️ Errore API PyGithub: {e}")
-            return
-    except Exception as e:
-        logger.warning(f"⚠️ Errore API PyGithub: {e}")
-        return
-    # Tenta via CLI
-    try:
-        logger.info(f"Tento eliminazione repo '{repo_name}' via GitHub CLI...")
-        subprocess.run(["gh", "repo", "delete", repo_name, "--yes"], check=True)
-        logger.info(f"🗑️ Repository '{repo_name}' eliminata via CLI (gh).")
-    except Exception as e:
-        logger.error(f"❌ Impossibile cancellare la repo '{repo_name}' con nessun metodo. Errore: {e}")
 
-def test_github_push_and_cleanup(monkeypatch):
+def test_push_returns_if_no_md_files(monkeypatch, tmp_path: Path, caplog):
+    md = tmp_path / "book"
+    md.mkdir()
+    # solo file non-md
+    (md / "a.txt").write_text("x", encoding="utf-8")
+    ctx = _Ctx(slug="dummy", md_dir=md, env={})
+
+    # se provasse a usare PyGithub o git falliremmo: confermiamo che esce prima
+    called: dict[str, Any] = {"github": False, "git": False}
+
+    class _DummyGH:
+        def __init__(self, *_a, **_k):
+            called["github"] = True
+
+    monkeypatch.setattr("pipeline.github_utils.Github", _DummyGH, raising=True)
+
+    def _fake_run(*_a, **_k):
+        called["git"] = True
+        return None
+
+    monkeypatch.setattr("pipeline.github_utils.subprocess.run", _fake_run, raising=True)
+
+    _enable_propagation("pipeline.github_utils", monkeypatch)
+    with caplog.at_level("WARNING", logger="pipeline.github_utils"):
+        push_output_to_github(ctx, github_token="x", confirm_push=True)
+        assert any(
+            r.name == "pipeline.github_utils" and r.levelname == "WARNING" for r in caplog.records
+        ), f"Log WARNING atteso non presente. Records: {[ (r.name, r.levelname, r.getMessage()) for r in caplog.records ]}"
+    assert called["github"] is False and called["git"] is False
+
+
+def test_push_short_circuits_on_confirm_push_false(monkeypatch, tmp_path: Path, caplog):
+    md = tmp_path / "book"
+    md.mkdir()
+    (md / "a.md").write_text("# A\n", encoding="utf-8")
+    (md / "b.md.bak").write_text("# backup\n", encoding="utf-8")
+    ctx = _Ctx(slug="dummy", md_dir=md, env={})
+
+    called = {"github": False, "git": False}
+
+    class _RaiseIfCalled:
+        def __init__(self, *_a, **_k):
+            called["github"] = True
+            raise AssertionError("Github() non dovrebbe essere chiamato con confirm_push=False")
+
+    monkeypatch.setattr("pipeline.github_utils.Github", _RaiseIfCalled, raising=True)
+
+    def _raise_run(*_a, **_k):
+        called["git"] = True
+        raise AssertionError("subprocess.run non dovrebbe essere chiamato con confirm_push=False")
+
+    monkeypatch.setattr("pipeline.github_utils.subprocess.run", _raise_run, raising=True)
+
+    _enable_propagation("pipeline.github_utils", monkeypatch)
+    with caplog.at_level("INFO", logger="pipeline.github_utils"):
+        push_output_to_github(ctx, github_token="token", confirm_push=False)
+        assert any(
+            r.name == "pipeline.github_utils" and r.levelname == "INFO" for r in caplog.records
+        ), f"Log INFO atteso non presente. Records: {[ (r.name, r.levelname, r.getMessage()) for r in caplog.records ]}"
+    assert called["github"] is False and called["git"] is False
+
+
+def test_push_copies_only_md_excluding_bak_and_uses_selected_branch(monkeypatch, tmp_path: Path):
     """
-    Test completo del push su GitHub di una repo dummy.
-    - Verifica che non siano presenti .git residue.
-    - Esegue push.
-    - Facoltativamente esegue cleanup finale cancellando la repo.
+    Eseguiamo il flusso "happy path" senza rete:
+    - mock di PyGithub e di git (subprocess.run)
+    - TemporaryDirectory -> cartella controllata per ispezionare i file copiati
+    - verifichiamo che ci siano solo .md (no .bak, no .txt) e che il checkout usi il branch risolto
     """
-    unified = get_config(SLUG)
-    github_token = unified.secrets.GITHUB_TOKEN
-    output_path = str(DUMMY_REPO_PATH.resolve())
+    md = tmp_path / "book"
+    (md / "nested").mkdir(parents=True)
+    (md / "a.md").write_text("# A\n", encoding="utf-8")
+    (md / "nested" / "b.md").write_text("# B\n", encoding="utf-8")
+    (md / "c.md.bak").write_text("# backup\n", encoding="utf-8")
+    (md / "d.txt").write_text("nope\n", encoding="utf-8")
 
-    config = {
-        "github_token": github_token,
-        "github_repo": REPO_NAME,
-        "output_path": output_path
-    }
+    ctx = _Ctx(slug="dummy", md_dir=md, env={"GIT_DEFAULT_BRANCH": "dev"})
 
-    debug_github_config(config)
-    list_files(config['output_path'])
-    dotgits = scan_for_dotgit(config['output_path'])
+    # Stub PyGithub (user + repo minimal)
+    class _Repo:
+        full_name = "user/timmy-kb-dummy"
 
-    assert not dotgits, f"Trovate cartelle/file .git nella repo da pushare: {dotgits}"
+        @property
+        def clone_url(self):
+            return "https://github.com/user/timmy-kb-dummy.git"
 
-    try:
-        push_output_to_github(config)
-        logger.info("✅ Push completato.")
-    except Exception as e:
-        pytest.fail(f"❌ Errore nel test push: {e}")
+    class _User:
+        def get_repo(self, name: str):
+            return _Repo()
 
-    # Cleanup finale (solo se variabile DELETE_TEST_REPO=1)
-    if github_token and os.environ.get("DELETE_TEST_REPO", "0") == "1":
-        delete_repo_on_github(config["github_repo"], github_token)
-        logger.info("🧹 Cleanup completato (repo eliminata su GitHub).")
-    else:
-        logger.info("ℹ️ Cleanup automatico non eseguito. Imposta DELETE_TEST_REPO=1 per eliminare la repo test.")
+        def create_repo(self, name: str, private: bool = True):
+            return _Repo()
+
+    class _GH:
+        def __init__(self, token: str):
+            assert token == "gh_token"
+
+        def get_user(self):
+            return _User()
+
+    monkeypatch.setattr("pipeline.github_utils.Github", _GH, raising=True)
+
+    # intercettiamo tutte le chiamate git
+    git_calls: List[List[str]] = []
+
+    def _fake_run(args, cwd=None, check=None):
+        git_calls.append(list(args))
+
+        class _P:
+            ...
+
+        return _P()
+
+    monkeypatch.setattr("pipeline.github_utils.subprocess.run", _fake_run, raising=True)
+
+    # Forziamo TemporaryDirectory su una cartella controllata per ispezione
+    work = tmp_path / "tmprepo"
+    work.mkdir()
+
+    class _TD:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return str(work)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("pipeline.github_utils.tempfile.TemporaryDirectory", _TD, raising=True)
+
+    push_output_to_github(ctx, github_token="gh_token", confirm_push=True)
+
+    # Verifica: solo .md copiati, preservando struttura
+    copied = sorted(str(p.relative_to(work)).replace("\\", "/") for p in work.rglob("*") if p.is_file())
+    assert copied == ["a.md", "nested/b.md"]
+
+    # Verifica: è stato usato il branch 'dev' (se il modulo esegue checkout -b)
+    assert any(call[:3] == ["git", "checkout", "-b"] and call[3] == "dev" for call in git_calls) or \
+           any(call[:2] == ["git", "checkout"] and call[2] == "dev" for call in git_calls)

@@ -2,6 +2,22 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [0.6.0] - 2025-08-17
+### Added
+- Creati i test unitari per `github_utils.py` con copertura dei casi principali:
+  - token mancante
+  - assenza di file `.md`
+  - `confirm_push=False`
+  - flusso "happy path" con copia selettiva dei file e branch personalizzato
+- Creati i test unitari per `drive_utils.py` con gestione dei casi edge (es. slug mancante).
+
+### Fixed
+- Corretto bug di indentazione in `tests/test_github_utils.py` che impediva la raccolta dei test.
+- Migliorata la robustezza nella cattura dei log (`caplog`) per i test di `github_utils`.
+
+### Changed
+- Aggiornata la logica dei test per assicurare che vengano intercettati i log corretti e che i comandi GitHub/Git non vengano invocati quando non necessario.
+
 ## [1.0.5] — 2025-08-17
 ### Added
 - `tools/refactor_tool.py`: nuova modalità **“Trova (solo ricerca)”** che elenca i file e il numero di occorrenze senza modificare nulla.
