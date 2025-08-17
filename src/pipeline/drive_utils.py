@@ -9,6 +9,7 @@ Utility Google Drive per la pipeline Timmy-KB.
 - Creazione struttura locale convenzionale (raw/book/config) con categorie SOLO da RAW/raw
 - Upload di config.yaml
 - Download PDF idempotente con verifica md5/size e file handle sicuri
+  ➕ (Agg.) Download RICORSIVO: visita BFS di sottocartelle, preservando la gerarchia locale
 
 Requisiti: variabili d'ambiente/contesto per SERVICE_ACCOUNT_FILE.
 """
@@ -392,7 +393,7 @@ def create_local_base_structure(context, yaml_path: Path) -> None:
 
 
 # ---------------------------------------------------------
-# Download PDF (idempotente)
+# Download PDF (idempotente, ora RICORSIVO)
 # ---------------------------------------------------------
 def download_drive_pdfs_to_local(
     service,
@@ -403,7 +404,7 @@ def download_drive_pdfs_to_local(
 ) -> Tuple[int, int]:
     """
     Scarica TUTTI i PDF dalle sottocartelle di `remote_root_folder_id` in `local_root_dir`,
-    preservando la gerarchia (nome cartella locale = nome cartella remota).
+    preservando la gerarchia (ogni sottocartella remota → sottocartella locale).
 
     Idempotenza:
         se il file esiste ed è identico (md5 o size) → skip.
@@ -414,20 +415,25 @@ def download_drive_pdfs_to_local(
     local_root_dir = Path(local_root_dir)
     _ensure_dir(local_root_dir)
 
-    subfolders = list_drive_files(service, remote_root_folder_id, query=f"mimeType = '{MIME_FOLDER}'")
+    # Seed: sottocartelle immediate della radice remota
+    top_subfolders = list_drive_files(service, remote_root_folder_id, query=f"mimeType = '{MIME_FOLDER}'")
+    queue: List[Tuple[str, List[str]]] = []
+    for folder in top_subfolders:
+        queue.append((folder["id"], [sanitize_filename(folder["name"])]))
+
     downloaded_count = 0
     skipped_count = 0
 
-    for folder in subfolders:
-        folder_id = folder["id"]
-        folder_name = folder["name"]
-        logger.info(f"📂 Entrando nella cartella: {folder_name}")
-
-        pdfs = list_drive_files(service, folder_id, query=f"mimeType = '{MIME_PDF}'")
-
-        local_subdir = local_root_dir / sanitize_filename(folder_name)
+    while queue:
+        current_id, rel_parts = queue.pop(0)
+        rel_path = Path(*rel_parts)
+        local_subdir = local_root_dir / rel_path
         _ensure_dir(local_subdir)
 
+        logger.info(f"📂 Cartella: {rel_path.as_posix()}")
+
+        # PDF nel livello corrente
+        pdfs = list_drive_files(service, current_id, query=f"mimeType = '{MIME_PDF}'")
         for f in pdfs:
             remote_file_id = f["id"]
             remote_name = f.get("name") or "download.pdf"
@@ -502,6 +508,11 @@ def download_drive_pdfs_to_local(
 
             downloaded_count += 1
             logger.info(f"✅ PDF salvato: {local_file_path}")
+
+        # Sottocartelle (ricorsione BFS)
+        child_folders = list_drive_files(service, current_id, query=f"mimeType = '{MIME_FOLDER}'")
+        for cf in child_folders:
+            queue.append((cf["id"], rel_parts + [sanitize_filename(cf["name"])]))
 
     logger.info(
         f"📊 Download completato: {downloaded_count} PDF scaricati in {local_root_dir}"

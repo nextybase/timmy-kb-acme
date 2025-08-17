@@ -2,6 +2,26 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+
+## [1.0.2] - 2025-08-17
+### Added
+- **Download Drive ricorsivo**: `download_drive_pdfs_to_local()` ora visita l’intera gerarchia (BFS) e preserva la struttura locale, mantenendo idempotenza su `md5Checksum/size`.
+- **Conversione Markdown annidata**: `convert_files_to_structured_markdown()` supporta sottocartelle; i titoli riflettono la gerarchia (output invariato: un `.md` per categoria top-level).
+
+### Changed
+- **Branch GitHub configurabile**: `push_output_to_github()` risolve il branch da `GIT_DEFAULT_BRANCH` (prima `context.env`, poi env di processo; fallback `main`). Push e checkout usano ora il branch risolto.
+
+### Deprecated
+- Nessuna voce.
+
+### Fixed
+- Aggiornati i commenti di `github_utils.py` per evitare riferimenti obsoleti a variabili non più supportate (solo docstring; nessun impatto funzionale).
+
+### Notes
+- Nessun cambio di flusso né di firma pubblica; orchestratori **immutati**.  
+- Prossimo passo: **migliorie accessorie** (type hints estesi, modularità e docstring).
+
+
 ## [1.0.1] - 2025-08-17
 
 ### Added

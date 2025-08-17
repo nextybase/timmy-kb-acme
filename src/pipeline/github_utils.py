@@ -1,13 +1,21 @@
 # src/pipeline/github_utils.py
 """
 Utility per interagire con GitHub:
-- Creazione repo cliente
-- Push contenuto cartella 'book' (solo file .md senza .bak)
+- Creazione/rilevamento repo cliente
+- Push del contenuto della cartella 'book' (solo file .md, esclusi .bak)
+- Branch di default configurabile via (in ordine di priorità):
+    1) context.env["GIT_DEFAULT_BRANCH"]  oppure context.env["GITHUB_BRANCH"]
+    2) os.getenv("GIT_DEFAULT_BRANCH")     oppure os.getenv("GITHUB_BRANCH")
+    3) fallback "main"
 """
-import shutil
-import tempfile
-import subprocess
+
+from __future__ import annotations
+
 import base64
+import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 from github import Github
@@ -17,7 +25,25 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError
 from pipeline.path_utils import is_safe_subpath  # sicurezza path
 
+
 logger = get_structured_logger("pipeline.github_utils")
+
+
+def _resolve_default_branch(context) -> str:
+    """Risoluzione branch di default con fallback a 'main'."""
+    # 1) variabili nel contesto (preferite)
+    if getattr(context, "env", None):
+        br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
+        if br:
+            return br
+
+    # 2) variabili d'ambiente
+    br = os.getenv("GIT_DEFAULT_BRANCH") or os.getenv("GITHUB_BRANCH")
+    if br:
+        return br
+
+    # 3) fallback sicuro
+    return "main"
 
 
 def push_output_to_github(context, github_token: str, confirm_push: bool = True) -> None:
@@ -27,7 +53,7 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
 
     :param context: ClientContext (deve esporre .md_dir e .slug)
     :param github_token: Token personale GitHub (PAT)
-    :param confirm_push: Se False, NON esegue il push (il prompt/consenso va gestito dagli orchestratori).
+    :param confirm_push: Se False, NON esegue il push (il consenso/prompt è gestito dagli orchestratori).
     """
     book_dir = context.md_dir
     if not book_dir.exists():
@@ -37,7 +63,7 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
             file_path=book_dir,
         )
 
-    # Trova file .md (anche nelle sottocartelle), escludendo .bak e assicurando path sicuri
+    # Seleziona file .md validi (path-safety) ricorsivamente
     md_files = sorted(
         f
         for f in book_dir.rglob("*.md")
@@ -50,12 +76,6 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
         )
         return
 
-    logger.info(
-        f"📦 Trovati {len(md_files)} file .md da pushare.",
-        extra={"slug": context.slug},
-    )
-
-    # Rispetta il flag: niente I/O qui, il consenso avviene a livello CLI/orchestratore
     if confirm_push is False:
         logger.info(
             "Push disattivato: confirm_push=False (dry run a carico dell'orchestratore).",
@@ -63,7 +83,11 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
         )
         return
 
-    logger.info("📤 Preparazione push su GitHub", extra={"slug": context.slug})
+    default_branch = _resolve_default_branch(context)
+    logger.info(
+        f"📤 Preparazione push su GitHub (branch: {default_branch})",
+        extra={"slug": context.slug},
+    )
 
     # Autenticazione GitHub
     gh = Github(github_token)
@@ -92,15 +116,16 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
 
-        # Copia preservando la struttura di directory relativa
+        # Copia preservando la struttura relativa
         for f in md_files:
             dst = tmp_path / f.relative_to(book_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
 
         try:
+            # init repo locale
             subprocess.run(["git", "init"], cwd=tmp_path, check=True)
-            subprocess.run(["git", "checkout", "-b", "main"], cwd=tmp_path, check=True)
+            subprocess.run(["git", "checkout", "-b", default_branch], cwd=tmp_path, check=True)
             subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
 
             commit_msg = f"Aggiornamento contenuto KB per cliente {context.slug}"
@@ -120,7 +145,7 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
             )
 
             # Config remota senza esporre il token nell'URL
-            remote_url = repo.clone_url
+            remote_url = repo.clone_url  # usa https
             subprocess.run(
                 ["git", "remote", "add", "origin", remote_url],
                 cwd=tmp_path,
@@ -132,13 +157,13 @@ def push_output_to_github(context, github_token: str, confirm_push: bool = True)
             extra = f"http.https://github.com/.extraheader=Authorization: Basic {header}"
 
             subprocess.run(
-                ["git", "-c", extra, "push", "-u", "origin", "main", "--force"],
+                ["git", "-c", extra, "push", "-u", "origin", default_branch, "--force"],
                 cwd=tmp_path,
                 check=True,
             )
 
             logger.info(
-                f"✅ Push completato su {repo.full_name}",
+                f"✅ Push completato su {repo.full_name} ({default_branch})",
                 extra={"slug": context.slug, "repo": repo.full_name},
             )
         except subprocess.CalledProcessError as e:
