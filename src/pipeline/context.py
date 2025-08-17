@@ -7,14 +7,14 @@ from typing import Dict, Any, List, Optional
 import yaml
 import sys
 import shutil
-import logging  # ⬅️ per tipizzare il logger
+import logging  # per tipizzare/gestire il logger
 
 from .exceptions import ConfigError
 from .env_utils import get_env_var
 from .path_utils import is_valid_slug
 
-# Rimosso l'import globale di get_structured_logger per evitare import circolari.
-# Il logger viene risolto lazy quando serve (vedi _get_logger()).
+# Nota: evitiamo import globali di logging_utils per non introdurre cicli.
+# Il logger viene risolto "lazy" quando serve (vedi _get_logger()).
 logger: Optional[logging.Logger] = None
 
 
@@ -46,7 +46,7 @@ def get_or_prompt(
         return value
     if non_interactive:
         raise ConfigError(f"Parametro mancante: {prompt}", slug=slug)
-    return input(prompt)
+    return input(prompt).strip()
 
 
 def validate_slug(slug: str) -> str:
@@ -79,8 +79,9 @@ class ClientContext:
     - Logger strutturato **iniettato** e riutilizzato (niente ricreazioni ad ogni chiamata).
 
     Nota di architettura:
-    - Il modulo **non** interagisce con l’utente, salvo nei casi in cui il metodo `load()` venga
-      invocato in modalità interattiva per rientrare in un flusso guidato (prompt di correzione slug).
+    - Il modulo **non** interagisce con l’utente, salvo nei casi in cui il metodo `load()`
+      venga invocato in modalità interattiva per rientrare in un flusso guidato
+      (prompt di correzione slug).
     """
 
     # Identità cliente
@@ -114,7 +115,7 @@ class ClientContext:
     step_status: Dict[str, str] = field(default_factory=dict)
 
     # Logger (iniettato una sola volta)
-    logger: Optional[logging.Logger] = None  # ⬅️ nuovo campo
+    logger: Optional[logging.Logger] = None  # teniamo il riferimento (nessun print)
 
     @classmethod
     def load(
@@ -206,7 +207,7 @@ class ClientContext:
             raw_dir=base_dir / "raw",
             md_dir=base_dir / "book",
             log_dir=base_dir / "logs",
-            logger=_logger,  # ⬅️ iniettiamo il logger nel contesto
+            logger=_logger,  # iniettiamo il logger nel contesto
         )
 
     # -- Utility per tracking stato --
@@ -215,8 +216,7 @@ class ClientContext:
         """Ritorna il logger del contesto; se assente lo crea in modo lazy e coerente."""
         if self.logger:
             return self.logger
-        # Fallback: creare un logger compat, evitando import ciclici
-        from .logging_utils import get_structured_logger
+        from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
         self.logger = get_structured_logger(__name__)
         return self.logger
 

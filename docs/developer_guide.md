@@ -129,8 +129,19 @@ Esempi comuni:
 
 ---
 
-## 📌 Note finali v1.0.3
-- Consolidata la gestione della **preview** (auto‑skip in non‑interattivo, prompt in interattivo).
-- **Slug posizionale “soft”** documentato e supportato.
-- Nessun cambio di flusso; pulizia `__main__` degli orchestratori (rimozione `print()` a favore del logger).
+## Gestione del logging e del contesto
+
+Tutti i moduli che gestiscono contesto e configurazioni devono utilizzare il **logger strutturato**
+(`logging_utils.get_structured_logger`) per qualsiasi output diagnostico o operativo.  
+L’uso di `print()` è vietato.  
+
+Le eccezioni interattive sono ammesse solo nei casi in cui l’utente debba confermare
+o correggere valori critici (ad esempio lo *slug* del cliente). In questi scenari viene
+utilizzata la funzione `input()`, limitatamente all’esecuzione in modalità interattiva.  
+
+Questa regola garantisce:
+- **Centralizzazione dei log**, con tracciabilità uniforme.
+- **Pulizia della console**, senza messaggi informali o “silenti”.
+- **Coerenza con le pipeline**, che intercettano gli eventi solo dal logger.
+
 
