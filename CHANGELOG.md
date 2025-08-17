@@ -2,6 +2,24 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.4] — 2025-08-17
+### Added
+- `path_utils`: `clear_slug_regex_cache()` per invalidare esplicitamente la cache della regex dello slug.
+
+### Changed
+- `gitbook_preview`: esecuzione **detached** di default (nessun blocco), rimozione di qualsiasi prompt dal modulo.
+- `onboarding_full` (orchestratore): gestione preview **solo** lato orchestratore, con **stop automatico del container all’uscita** (anche senza push).
+- `context`: **logging centralizzato** (niente `print()`), correzione slug solo in modalità interattiva.
+- `github_utils`: validazione esplicita del `GITHUB_TOKEN` e chiarimento branch da `GIT_DEFAULT_BRANCH` (fallback `main`).
+- Documentazione allineata: `README`, `user_guide`, `architecture`, `coding_rule`, `CONTRIBUTING`, regola base in `developer_guide`.
+
+### Fixed
+- Blocchi in CI dovuti a preview in foreground.
+- Comportamento preview coerente tra modalità interattiva e non–interattiva (auto-skip senza Docker in batch).
+
+### Compatibility
+- **Nessun breaking change.** Patch di robustezza/UX; flusso invariato.
+
 ## [micro-refine docs] - 2025-08-17
 
 ### Changed

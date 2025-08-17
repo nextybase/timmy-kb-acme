@@ -1,53 +1,54 @@
-# Contributing – Timmy-KB
+# Contributing Guide — Timmy-KB
 
-Grazie per il tuo interesse a contribuire a **Timmy-KB**! Segui queste linee guida per garantire coerenza e qualità nel codice e nella documentazione.
+Grazie per contribuire a Timmy-KB! Questo documento definisce le regole **operative** per contribuire in modo consistente e sicuro, allineate alla documentazione in `/docs` e al flusso di pipeline.
 
----
+## Principi di base
+- **Separa orchestrazione e moduli**: gli orchestratori gestiscono UX/CLI (prompt, conferme, mapping errori); i moduli eseguono azioni tecniche e **non** fanno prompt né terminano il processo.
+- **Logging centralizzato**: usa sempre `logging_utils.get_structured_logger`; l’uso di `print()` è vietato. I segreti non devono mai comparire nei log.
+- **Modalità**: in `--non-interactive` nessun prompt; comportamento deterministico (preview auto-skip se Docker assente, push disabilitato salvo `--push`).
+- **Sicurezza I/O**: valida percorsi con `is_safe_subpath`, usa scritture atomiche, non serializzare segreti su disco.
+- **Doc e codice insieme**: ogni modifica al comportamento richiede aggiornare contestualmente la documentazione correlata in `/docs` e il `README.md`.
 
-## 📌 Come iniziare
-1. **Fork** del repository e crea un branch dedicato:
-   ```bash
-   git checkout -b feature/nome-funzionalita
-   ```
-2. Assicurati di avere Python 3.9+ e tutte le dipendenze installate.
-3. Configura variabili `.env` e file YAML in `config/` se necessari.
+## Branching e versioning
+- **Branch di base**: letto da `GIT_DEFAULT_BRANCH` (fallback `main`).
+- **SemVer leggero**: MAJOR (breaking), MINOR (feature compatibile), PATCH (bugfix/refactor interno). Mantieni **retrocompatibilità** quando possibile.
+- Ogni release deve aggiornare **CHANGELOG.md** con note brevi e orientate all’utente.
 
----
+## Pull Request — Checklist
+1. **Ambito chirurgico**: la PR deve essere piccola, mirata e senza side-effect non necessari.
+2. **Log**: nessun `print()`. Logger strutturati presenti negli orchestratori e nei moduli chiave.
+3. **Interattività**: solo negli orchestratori. I moduli non devono usare `input()`/`sys.exit()`.
+4. **Preview Docker**: invocata *detached*; stop automatico all’uscita dell’orchestratore.
+5. **Push GitHub**: eseguito da `github_utils.py` con `GITHUB_TOKEN`; branch da env. Niente token in chiaro in URL o log.
+6. **Path-safety**: verifica `is_safe_subpath` per tutti i file generati/modificati.
+7. **Slug**: validazione via regex in `path_utils.py`. Se la config è stata aggiornata, ricorda `clear_slug_regex_cache()`.
+8. **Docs**: aggiorna pagine interessate (`architecture.md`, `developer_guide.md`, `user_guide.md`, policy), oltre al `README.md`.
+9. **CHANGELOG**: aggiungi entry coerente (PATCH/MINOR/MAJOR).
+10. **Test**: esegui almeno i comandi base
+    - `py src/pre_onboarding.py --slug demo --non-interactive --dry-run`
+    - `py src/onboarding_full.py --slug demo --no-drive --non-interactive`
+    - Se Docker attivo: verifica che la preview parta *detached* e venga fermata automaticamente all’uscita.
 
-## 🛠 Stile di sviluppo
-- Segui le regole definite in [`docs/coding_rules.md`](docs/coding_rules.md).
-- Mantieni separazione tra moduli `pipeline/`, `semantic/` e `tools/`.
-- Usa **logging strutturato** tramite `pipeline/logging_utils.py`.
-- Niente `print()` nei moduli di produzione.
-- Evita hardcoding di percorsi o credenziali: usa configurazione esterna.
+## Stile dei commit
+Usa prefissi brevi e chiari:
+- `fix(...)`: correzioni di bug/robustezza — es. `fix(preview): run detached and stop at exit`
+- `feat(...)`: nuove funzionalità **compatibili** — es. `feat(slug): add clear_slug_regex_cache()`
+- `perf(...)`: ottimizzazioni interne — es. `perf(path): cache slug regex`
+- `docs(...)`: aggiornamenti documentazione — es. `docs(architecture): reflect detached preview`
+- `chore(...)`: manutenzione — es. `chore(ci): bump actions/setup-python`
 
----
-
-## 🧪 Test
-- I nuovi contributi devono includere test pertinenti.
-- Esegui i test prima di creare la pull request:
-  ```bash
-  pytest tests/
-  ```
-- Mantieni il codice compatibile con la struttura esistente.
-
----
-
-## 🔄 Processo Pull Request
-1. **Commit chiari e descrittivi**:
-   - Usa il formato: `tipo: descrizione breve` (es. `fix: corregge parsing PDF`).
-   - Esempi di tipi: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
-2. Aggiorna il `CHANGELOG.md` nella sezione *Unreleased* con le modifiche.
-3. Apri la PR verso il branch `main`.
-4. Compila il template PR fornito.
-5. Aspetta la revisione e applica eventuali modifiche richieste.
+## Codice di condotta
+Rimani rispettoso, proattivo e orientato alla soluzione. Le discussioni tecniche vanno motivate con riferimenti al codice e alle policy del repo.
 
 ---
 
-## 🛡 Licenza
-Contribuendo accetti che il tuo codice sia rilasciato sotto la licenza [MIT](LICENSE).
+## Domande frequenti (FAQ)
 
----
+**D: Posso chiedere all’utente conferme dal modulo?**  
+R: No. Le conferme/prompt sono responsabilità degli orchestratori. I moduli devono essere “batch-safe”.
 
-Per domande o chiarimenti, apri una **issue** o contatta il team di mantenimento.
+**D: Cosa succede se Docker non è installato?**  
+R: In `--non-interactive`, la preview viene **saltata automaticamente**. In interattivo, l’orchestratore chiede se proseguire senza anteprima.
 
+**D: Dove scrivo i log?**  
+R: Nel file unico del cliente `output/timmy-kb-<slug>/logs/onboarding.log`, utilizzando il logger strutturato.

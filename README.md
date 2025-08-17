@@ -1,137 +1,132 @@
-# Timmy-KB – Pipeline per la Knowledge Base di Onboarding NeXT
+# Timmy-KB — Knowledge Base Pipeline
 
-## 📌 Descrizione
-**Timmy-KB** è una pipeline **modulare** che parte dai documenti del cliente (oggi PDF) e produce **Markdown “AI‑ready”** con `README.md` e `SUMMARY.md` pronti per GitBook/Honkit. Include preview **Honkit in Docker** e (opzionalmente) **push su GitHub**. Il flusso non cambia rispetto alle versioni precedenti.
+Pipeline modulare per trasformare i PDF del cliente in una **KB Markdown AI‑ready** (GitBook/HonKit), con anteprima Docker opzionale e (opzionale) push su GitHub.
 
-## 🛠 Requisiti
-- **Python ≥ 3.10**
-- **Docker** (solo per anteprima Honkit, opzionale ma consigliato)
-- **Git** e **GitHub token (PAT)** se abiliti il push
-- **Google Drive (Shared Drive)** con **Service Account JSON** (condividi lo *Shared Drive* con l’email del Service Account)
-- Dipendenze in `requirements.txt`
-
-## 📂 Struttura (essenziale)
-```
-root/
- ├─ src/
- │   ├─ pre_onboarding.py      # orchestratore fase 0
- │   ├─ onboarding_full.py     # orchestratore completo
- │   └─ pipeline/              # moduli richiamati dagli orchestratori
- ├─ config/                    # YAML di configurazione e mapping
- ├─ output/                    # output per cliente (md, summary, readme, config, logs)
- └─ docs/                      # guide e policy
-```
-
-## ⚙️ Configurazione rapida
-1. Crea `.env` con le variabili necessarie (es. `GITHUB_TOKEN`, `DRIVE_ID` / `DRIVE_PARENT_FOLDER_ID`, ecc.).  
-2. Prepara il **Service Account JSON** di Google e **condividi** lo *Shared Drive* con la sua **email**. Imposta `DRIVE_ID` nel `.env`.
-
-### 🌿 Variabili d’ambiente (estratto)
-| Nome | Descrizione | Esempio |
-|---|---|---|
-| `GIT_DEFAULT_BRANCH` | Branch di default per checkout/push | `main` |
-| `GITHUB_TOKEN` | PAT per il push su GitHub | `ghp_xxx` |
-| `DRIVE_ID` | ID dello *Shared Drive* sorgente | `0A...` |
-| `DRIVE_PARENT_FOLDER_ID` | (Opz.) Cartella padre alternativa su Drive | `1B...` |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path al JSON del Service Account | `./.secrets/sa.json` |
-
-> Non committare `.env` o credenziali. Gestisci i segreti localmente.
-
-## 🚀 Installazione
-```bash
-# Clona il repository
-git clone https://github.com/nextybase/timmy-kb-acme.git
-cd timmy-kb-acme
-
-# Crea ambiente e installa dipendenze
-python -m venv .venv
-# macOS/Linux/WSL
-source .venv/bin/activate
-# Windows (PowerShell)
-# .\.venv\Scripts\Activate
-pip install -r requirements.txt
-```
-
-## ▶️ Flusso tipico in 2 step
-### 1) Pre-onboarding (crea struttura cliente e config)
-Prepara `output/timmy-kb-<slug>/{raw,book,config,logs}`, genera/aggiorna `config.yaml` e la struttura remota su Drive (se non in `--dry-run`).  
-**Interattivo**
-```bash
-py src/pre_onboarding.py
-```
-In modalità interattiva ti vengono richiesti **slug** e **nome cliente**.  
-**Non‑interattivo / CI**
-```bash
-py src/pre_onboarding.py --slug acme-srl --name "ACME S.r.l." --non-interactive [--dry-run]
-```
-
-### 2) Onboarding completo (download → conversione → preview → push)
-Scarica i PDF dallo *Shared Drive* (se abilitato), converte in Markdown, genera `README.md`/`SUMMARY.md`, avvia la preview **Honkit** in Docker e, su conferma, effettua il **push su GitHub**.  
-**Interattivo**
-```bash
-py src/onboarding_full.py
-```
-**Non‑interattivo / CI**
-```bash
-py src/onboarding_full.py --slug acme-srl [--dry-run] [--no-drive] [--push|--no-push]
-```
-
-> **Nota Preview Docker**  
-> - In **modalità non‑interattiva**: se Docker non è disponibile, la preview viene **saltata automaticamente**.  
-> - In **modalità interattiva**: se Docker non è disponibile ti viene chiesto se **continuare senza anteprima**.
-
-> **Slug posizionale (soft)**  
-> Puoi passare lo **slug** come primo argomento posizionale oppure con `--slug`. Se assente in interattivo, viene richiesto a prompt.
-
-> **Alias deprecati**  
-> `--skip-drive`, `--skip-push` sono **deprecati** (ancora accettati con warning). Usa `--no-drive`, `--no-push`.
-
-## 🔧 Opzioni più usate
-- `--slug <slug>`: richiesto in **non‑interattivo** (in interattivo può essere richiesto a prompt)
-- `--dry-run`: esecuzione locale senza chiamate ai servizi remoti
-- `--no-drive`: usa i PDF **già presenti** in `output/timmy-kb-<slug>/raw/`
-- `--push` / `--no-push`: forza o inibisce il push (se omesso: domanda in interattivo, **false** in non‑interattivo)
-- `--port <4000>`: porta locale per la preview Honkit
-
-## 📦 Output
-Al termine trovi in `output/timmy-kb-<slug>/`:
-- cartella **book/** con i Markdown generati (`*.md`), incluso `README.md` e `SUMMARY.md`,
-- cartella **raw/** con i PDF scaricati o caricati manualmente,
-- cartella **config/** con `config.yaml` (e backup),
-- cartella **logs/** con un **unico file** di log consolidato.
-
-## 🧪 Exit Codes (deterministici)
-| Codice | Eccezione                              |
-|-------:|----------------------------------------|
-| 0      | Successo                               |
-| 1      | `PipelineError`                        |
-| 2      | `ConfigError`                          |
-| 3      | `PreOnboardingValidationError`         |
-| 10     | `ConversionError`                      |
-| 21     | `DriveDownloadError`                   |
-| 22     | `DriveUploadError`                     |
-| 30     | `PreviewError`                         |
-| 40     | `PushError`                            |
-| 50     | `CleanupError`                         |
-| 60     | `EnrichmentError`                      |
-| 61     | `SemanticMappingError`                 |
-| 130    | Interruzione utente (`CTRL+C`)         |
-
-## 🛟 Troubleshooting
-- **Docker non in esecuzione** → Avvia Docker Desktop/daemon. In **non‑interattivo** la preview viene **saltata** automaticamente.  
-- **`GITHUB_TOKEN` mancante** → il push viene **saltato**. Imposta la variabile d’ambiente o esegui il push manuale.  
-- **Permessi Google Drive (Shared Drive)** → verifica `DRIVE_ID` e condividi lo *Shared Drive* con l’**email del Service Account** presente nel JSON.  
-- **`ModuleNotFoundError` / path errati** → esegui dalla **root** del progetto e assicurati che `.venv` sia attivo.
-
-## 📚 Documentazione
-- **Indice**: `docs/index.md`  
-- **Guida Utente**: `docs/user_guide.md`  
-- **Guida Sviluppatore**: `docs/developer_guide.md`  
-- **Regole di Codifica**: `docs/coding_rule.md`  
-- **Architettura**: `docs/architecture.md`
-
-## 📜 Licenza
-Distribuito sotto licenza **MIT** (vedi `LICENSE`).
+> **Stato**: v1.0.3 Stable (documento aggiornato con i micro‑fix di robustezza introdotti in questa sessione; il bump versione verrà finalizzato nel `CHANGELOG.md`).
 
 ---
-**Autori**: NeXT Dev Team
+
+## TL;DR
+1. **Pre‑onboarding** (setup locale + Drive opzionale)  
+   ```bash
+   py src/pre_onboarding.py --slug acme --non-interactive --dry-run
+   ```
+2. **Onboarding completo** (download → conversione → preview → push)  
+   ```bash
+   # senza Drive e senza push (anteprima *detached* se Docker è disponibile)
+   py src/onboarding_full.py --slug acme --no-drive --non-interactive
+   ```
+
+---
+
+## Requisiti
+- **Python ≥ 3.10**
+- **Docker** (solo per la preview HonKit; se assente la preview viene saltata in batch)
+- **Google Drive API**: credenziali Service Account (.json)
+- **GitHub**: `GITHUB_TOKEN` (solo se si vuole eseguire il push)
+
+### Variabili d’ambiente
+- `SERVICE_ACCOUNT_FILE` / `GOOGLE_APPLICATION_CREDENTIALS` — credenziali GCP
+- `DRIVE_ID` (o `DRIVE_PARENT_FOLDER_ID`) — radice per i PDF del cliente
+- `GITHUB_TOKEN` — PAT per il push (opzionale)
+- `GIT_DEFAULT_BRANCH` — branch di default per il push (fallback `main`)
+
+---
+
+## Struttura di output per cliente
+```
+output/timmy-kb-<slug>/
+  ├─ raw/        # PDF scaricati (opzionale)
+  ├─ book/       # Markdown generati + SUMMARY.md + README.md
+  ├─ config/     # config.yaml, mapping semantico
+  └─ logs/       # onboarding.log (logger unico per cliente)
+```
+
+---
+
+## Flussi
+
+### 1) Pre‑onboarding
+Crea la struttura locale, inizializza/aggiorna `config.yaml` e, se richiesto, prepara/aggiorna la struttura su Drive.
+
+Esempi:
+```bash
+# setup minimale, senza servizi remoti
+py src/pre_onboarding.py --slug acme --non-interactive --dry-run
+
+# setup con Drive (richiede variabili d'ambiente corrette)
+py src/pre_onboarding.py --slug acme
+```
+
+### 2) Onboarding completo
+Converte i PDF in Markdown strutturato, genera `SUMMARY.md` e `README.md`, avvia la **preview HonKit** (se Docker disponibile) e, se richiesto, pubblica su GitHub.
+
+Esempi:
+```bash
+# batch/CI: niente prompt, preview saltata se Docker non c'è, push disabilitato
+py src/onboarding_full.py --slug acme --no-drive --non-interactive
+
+# interattivo: se Docker assente chiede se proseguire; chiede conferma push
+py src/onboarding_full.py --slug acme --no-drive
+```
+
+---
+
+## Anteprima (HonKit + Docker)
+- L’anteprima viene eseguita **sempre in modalità _detached_** (non blocca il flusso).
+- L’**orchestratore** arresta **automaticamente** il container **alla fine** dell’esecuzione.
+- Se Docker **non è disponibile**:  
+  - in `--non-interactive` la preview è **auto‑skip**;  
+  - in modalità interattiva viene chiesto se proseguire senza anteprima (default **NO**).
+
+Porta e container:
+- Porta default: `4000` (override: `--port 4000`)
+- Nome container: `honkit_preview_<slug>`
+
+---
+
+## Push su GitHub (opzionale)
+- Eseguito da `src/pipeline/github_utils.py`
+- Richiede `GITHUB_TOKEN`
+- Branch letto da `GIT_DEFAULT_BRANCH` (fallback `main`)
+- In batch il push **non** avviene a meno di `--push`; in interattivo viene richiesto all’utente
+- Pubblica **solo** i file `.md` sotto `book/` (esclusi `.bak`)
+
+Esempi:
+```bash
+# push esplicito in batch
+export GITHUB_TOKEN=ghp_xxx
+export GIT_DEFAULT_BRANCH=main
+py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
+```
+
+---
+
+## Regole operative (estratto)
+- **Orchestratori**: UX/CLI, prompt e mapping deterministico eccezioni→EXIT_CODES
+- **Moduli**: azioni tecniche, **niente `input()`/`sys.exit()`**
+- **Logging**: solo logger strutturati (`onboarding.log`), **no `print()`**
+- **Sicurezza I/O**: `is_safe_subpath`, scritture atomiche, niente segreti nei log
+- **Slug**: validazione via regex (da `config/config.yaml`), con **cache** e funzione di `clear`
+
+---
+
+## Exit codes (estratto)
+- `0` — esecuzione completata
+- `2` — `ConfigError` (es. variabili mancanti, slug invalido in batch)
+- `30` — `PreviewError`
+- `40` — `PushError`
+
+> La mappatura completa è nella documentazione utente.
+
+---
+
+## Troubleshooting
+- **Docker non installato** → la preview è saltata in batch; in interattivo puoi scegliere se proseguire senza anteprima.
+- **Token GitHub mancante** → il push fallisce: imposta `GITHUB_TOKEN` o usa `--no-push`.
+- **Slug invalido** → in batch errore; in interattivo ti verrà richiesto di correggerlo.
+
+---
+
+## Licenza
+TBD.
