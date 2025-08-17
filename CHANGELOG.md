@@ -2,6 +2,22 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.5] — 2025-08-17
+### Added
+- `tools/refactor_tool.py`: nuova modalità **“Trova (solo ricerca)”** che elenca i file e il numero di occorrenze senza modificare nulla.
+
+### Changed
+- `tools/cleanup_repo.py`: ora **sempre interattivo** con prompt per slug, opzioni “includi artefatti globali” e “elimina repo remoto (gh)”, **conferma finale**, path-safety, **logging strutturato** (gli “skip path assente” passano a **DEBUG**), niente `sys.exit()` nel modulo, bootstrap `PYTHONPATH`.
+- `tools/gen_dummy_kb.py`: riallineato al comportamento del repo → **slug fisso `dummy`**, generazione di `book/`, `config/`, `raw/` guidata da `config/cartelle_raw.yaml` e `config/pdf_dummy.yaml`, prompt **solo** per creare la cartella `repo/` di test; **fallback `.txt`** se `fpdf` manca; logging strutturato e path-safety.
+- `tools/refactor_tool.py`: menu aggiornato con **1) Trova**, **2) Trova & Sostituisci**, **3) Esci**; anteprima conteggi, conferma prima dell’applicazione, **backup `.bak`**, filtri predefiniti per estensioni/cartelle escluse, logging a DEBUG per skip/letture fallite.
+
+### Removed
+- `tools/validate_structure.py`: rimosso (script non referenziato/obsoleto).
+
+### Compatibility
+- Nessun breaking change: aggiornamenti UX e robustezza dei tools, pipeline invariata.
+
+
 ## [1.0.4] — 2025-08-17
 ### Added
 - `path_utils`: `clear_slug_regex_cache()` per invalidare esplicitamente la cache della regex dello slug.

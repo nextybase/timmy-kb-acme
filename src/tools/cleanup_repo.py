@@ -1,128 +1,162 @@
-#!/usr/bin/env python3
-"""
-Strumento autonomo di cleanup per la pipeline Timmy-KB.
-Allineato alla versione NeXT v1.3:
-- Configurazione centralizzata (TimmySecrets)
-- Logging strutturato
-"""
+# src/tools/cleanup_repo.py
+from __future__ import annotations
 
-import os
-import shutil
-import subprocess
+# --- PYTHONPATH bootstrap (consente import "pipeline.*" quando esegui da src/tools) ---
+import sys as _sys
+from pathlib import Path as _P
+_SRC_DIR = _P(__file__).resolve().parents[1]  # .../src
+if str(_SRC_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SRC_DIR))
+# --------------------------------------------------------------------------------------
+
 from pathlib import Path
-import sys
-
-# Setup import locale
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import subprocess
+from typing import Iterable, List, Optional
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.config_utils import TimmySecrets
+from pipeline.path_utils import is_safe_subpath, is_valid_slug
+from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 
-# === Logger
-logger = get_structured_logger("tools.cleanup_repo")
+logger = get_structured_logger("tools.cleanup")
 
-# === Configurazione centralizzata
-try:
-    secrets = TimmySecrets()
-except Exception as e:
-    print(f"❌ Errore caricando configurazione globale: {e}")
-    sys.exit(1)
 
-# === Percorsi base
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CLIENTI_BASE_PATH = Path(secrets.clienti_base_path)
-OUTPUT_BASE_PATH = PROJECT_ROOT / "output"
-BOOK_JSON_PATH = PROJECT_ROOT / "book.json"
-PACKAGE_JSON_PATH = PROJECT_ROOT / "package.json"
-BOOK_DIR = PROJECT_ROOT / "_book"
-GITHUB_ORG = secrets.github_org or "nextybase"
-
-def on_rm_error(func, path, exc_info):
-    import stat
+def _rm_path(p: Path) -> None:
+    """Rimozione best-effort di file o directory."""
     try:
-        os.chmod(path, stat.S_IWRITE)
-        func(path)
+        if p.is_dir():
+            for child in sorted(p.rglob("*"), reverse=True):
+                try:
+                    if child.is_file() or child.is_symlink():
+                        try:
+                            child.unlink(missing_ok=True)  # per Py>=3.8
+                        except TypeError:
+                            if child.exists() or child.is_symlink():
+                                child.unlink()
+                    elif child.is_dir():
+                        child.rmdir()
+                except Exception:
+                    pass
+            p.rmdir()
+        elif p.exists() or p.is_symlink():
+            try:
+                p.unlink(missing_ok=True)
+            except TypeError:
+                p.unlink()
+        logger.info("🗑️  Rimosso", extra={"file_path": str(p)})
     except Exception as e:
-        logger.error(f"❌ Errore rimuovendo {path}: {e}")
+        logger.warning(f"Impossibile rimuovere {p}: {e}", extra={"file_path": str(p)})
 
-def delete_folder(folder: Path, label: str):
-    if folder.exists():
-        try:
-            shutil.rmtree(folder, onerror=on_rm_error)
-            logger.info(f"🧹 {label} eliminata: {folder}")
-        except Exception as e:
-            logger.error(f"❌ Errore nella rimozione di {label}: {e}")
-    else:
-        logger.info(f"📁 {label} non trovata: {folder}")
 
-def clear_folder(folder: Path, label: str):
-    if folder.exists():
-        try:
-            for item in folder.rglob("*"):
-                if item.is_file() or item.is_symlink():
-                    item.unlink()
-                elif item.is_dir():
-                    shutil.rmtree(item, onerror=on_rm_error)
-            logger.info(f"🧺 {label} svuotata: {folder}")
-        except Exception as e:
-            logger.error(f"❌ Errore nello svuotamento di {label}: {e}")
-    else:
-        logger.info(f"📂 {label} non trovata: {folder}")
-
-def delete_file(path: Path, label: str):
-    if path.exists():
-        try:
-            path.unlink()
-            logger.info(f"🗑️  {label} eliminato: {path}")
-        except Exception as e:
-            logger.error(f"❌ Errore eliminando {label}: {e}")
-    else:
-        logger.info(f"📄 {label} non presente: {path}")
-
-def delete_github_repo(repo_fullname: str):
+def _gh_repo_delete(full_name: str) -> None:
+    """Elimina un repository GitHub via gh CLI, se installata."""
     try:
-        subprocess.run(["gh", "repo", "delete", repo_fullname, "--yes"], check=True)
-        logger.info(f"✅ Repo GitHub eliminata: {repo_fullname}")
+        subprocess.run(
+            ["gh", "repo", "delete", full_name, "--yes"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("🗑️  Repo GitHub eliminato", extra={"repo": full_name})
+    except FileNotFoundError:
+        logger.warning("gh CLI non trovata: skip delete remoto", extra={"repo": full_name})
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Errore GitHub CLI: {e}")
+        logger.warning(f"Delete repo fallito: {e}", extra={"repo": full_name})
 
-def run_cleanup(slug: str, elimina_repo: bool = True):
-    slug = slug.strip().lower().replace("_", "-")
-    folder_clienti = CLIENTI_BASE_PATH / f"timmy-kb-{slug}"
-    folder_output  = OUTPUT_BASE_PATH / f"timmy-kb-{slug}"
-    repo_fullname  = f"{GITHUB_ORG}/timmy-kb-{slug}"
 
-    logger.info("🔍 Avvio procedura di cleanup completa...")
-    delete_folder(folder_clienti, "Cartella clienti")
-    clear_folder(folder_output, "Cartella output")
+def _ensure_safe(paths: Iterable[Path], base: Path) -> List[Path]:
+    safe: List[Path] = []
+    for p in paths:
+        if is_safe_subpath(p, base):
+            safe.append(p)
+        else:
+            logger.warning("Path non sicuro: skip", extra={"file_path": str(p)})
+    return safe
 
-    delete_file(BOOK_JSON_PATH, "book.json")
-    delete_file(PACKAGE_JSON_PATH, "package.json")
-    delete_folder(BOOK_DIR, "_book (build Docker)")
 
-    if elimina_repo:
-        logger.info(f"🔄 Eliminazione repo GitHub: {repo_fullname}")
-        delete_github_repo(repo_fullname)
+def cleanup_local(project_root: Path, slug: str, include_global: bool) -> None:
+    """Pulisce artefatti locali per lo slug indicato; opzionalmente rimuove anche artefatti globali."""
+    targets: List[Path] = [
+        project_root / "output" / f"timmy-kb-{slug}",
+        project_root / "clienti" / slug,
+    ]
+    if include_global:
+        targets += [
+            project_root / "_book",
+            project_root / "book.json",
+            project_root / "package.json",
+        ]
+    targets = _ensure_safe(targets, project_root.resolve())
+    for t in targets:
+        if t.exists():
+            _rm_path(t)
+        else:
+            # Log meno rumoroso: livello DEBUG + path esplicito
+            logger.debug(f"Skip (path assente): {t}", extra={"file_path": str(t)})
 
-    logger.info("✅ Cleanup completo terminato.")
 
-def main():
-    slug = input("🆔 Inserisci lo slug cliente da eliminare (es: prova): ").strip().lower()
-    repo_fullname = f"{GITHUB_ORG}/timmy-kb-{slug}"
+def cleanup_remote(slug: str, github_namespace: Optional[str] = None) -> None:
+    """Elimina il repo remoto convenzionale timmy-kb-<slug> nel namespace indicato (o utente corrente)."""
+    repo_name = f"timmy-kb-{slug}"
+    full_name = f"{github_namespace}/{repo_name}" if github_namespace else repo_name
+    _gh_repo_delete(full_name)
 
-    print(f"\n🚨 ATTENZIONE: stai per eliminare:")
-    print(f"- Cartella clienti: {CLIENTI_BASE_PATH / f'timmy-kb-{slug}'}")
-    print(f"- Cartella output:  {OUTPUT_BASE_PATH / f'timmy-kb-{slug}'}")
-    print(f"- File book.json:   {BOOK_JSON_PATH}")
-    print(f"- File package.json:{PACKAGE_JSON_PATH}")
-    print(f"- Cartella _book/:  {BOOK_DIR}")
-    print(f"- Repo GitHub:      {repo_fullname}")
-    conferma = input("✋ Confermi? Scrivi 'ok' per procedere: ").strip().lower()
 
-    if conferma == "ok":
-        run_cleanup(slug, elimina_repo=True)
-    else:
-        logger.info("⛔ Operazione annullata dall'utente.")
+def _prompt_bool(question: str, default_no: bool = True) -> bool:
+    """Prompt sì/no con default NO (invio vuoto = default)."""
+    ans = input(f"{question} [{'Y/n' if not default_no else 'y/N'}]: ").strip().lower()
+    if not ans:
+        return not default_no
+    return ans in ("y", "yes", "s", "si", "sí")
+
+
+def _prompt_slug() -> Optional[str]:
+    """Chiede all'utente lo slug finché valido; ritorna None se l’utente annulla (invio vuoto)."""
+    while True:
+        s = input("Inserisci slug cliente (obbligatorio, invio per annullare): ").strip()
+        if not s:
+            return None
+        if is_valid_slug(s):
+            return s
+        logger.warning("Slug non valido: minuscole/numeri/trattini soltanto (es: 'acme' o 'acme-2025').")
+
+
+def main() -> int:
+    project_root = Path(__file__).resolve().parents[2]
+
+    # 1) Slug (obbligatorio, interattivo)
+    slug = _prompt_slug()
+    if not slug:
+        logger.info("Operazione annullata: slug non fornito")
+        return 0
+
+    # 2) Opzioni interattive
+    include_global = _prompt_bool("Includere anche artefatti globali (_book, book.json, package.json)?", default_no=True)
+    do_remote = _prompt_bool("Eliminare anche il repository GitHub remoto timmy-kb-<slug>?", default_no=True)
+    namespace = ""
+    if do_remote:
+        namespace = input("Namespace GitHub (org o user) [invio per usare quello corrente]: ").strip()
+
+    # 3) Riepilogo + conferma
+    summary = f"Pulizia per slug={slug} | global={'yes' if include_global else 'no'} | remote={'yes' if do_remote else 'no'}"
+    ans = input(f"{summary}\nConfermi? [y/N]: ").strip().lower()
+    if ans not in ("y", "yes", "s", "si", "sí"):
+        logger.info("Operazione annullata dall'utente")
+        return 0
+
+    # 4) Esecuzione
+    try:
+        cleanup_local(project_root, slug, include_global=include_global)
+        if do_remote:
+            cleanup_remote(slug, github_namespace=(namespace or None))
+        logger.info("✅ Cleanup completato", extra={"slug": slug})
+        return 0
+    except ConfigError:
+        return EXIT_CODES.get("ConfigError", 2)
+    except PipelineError:
+        return EXIT_CODES.get("PipelineError", 1)
+    except Exception:
+        return EXIT_CODES.get("PipelineError", 1)
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -121,6 +121,23 @@ py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
 
 ---
 
+## Tools
+
+Gli strumenti in `src/tools/` sono **standalone e interattivi** (si eseguono da terminale).
+
+- **cleanup_repo.py** — pulizia sicura degli artefatti locali di uno *slug* e, opzionalmente, eliminazione del repo GitHub convenzionale via `gh`.  
+  *Uso:* `py src/tools/cleanup_repo.py` → segui i prompt (slug, global, remote, conferma).
+
+- **gen_dummy_kb.py** — genera una KB di test completa con **slug `dummy`**, cartelle RAW da `config/cartelle_raw.yaml` e PDF dummy da `config/pdf_dummy.yaml` (fallback `.txt` se `fpdf` non è disponibile).  
+  *Uso:* `py src/tools/gen_dummy_kb.py` → opzionale creazione `output/timmy-kb-dummy/repo`.
+
+- **refactor_tool.py** — utility con due modalità: **Trova** (solo ricerca) e **Trova & Sostituisci** (anteprima e backup `.bak`).  
+  *Uso:* `py src/tools/refactor_tool.py` → scegli dal menu (Trova / Trova & Sostituisci / Esci).
+
+> Nota: logging strutturato; “path assenti/skip non critici” sono a livello **DEBUG**.
+
+---
+
 ## Troubleshooting
 - **Docker non installato** → la preview è saltata in batch; in interattivo puoi scegliere se proseguire senza anteprima.
 - **Token GitHub mancante** → il push fallisce: imposta `GITHUB_TOKEN` o usa `--no-push`.
