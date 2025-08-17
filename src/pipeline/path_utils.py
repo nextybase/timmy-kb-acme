@@ -1,9 +1,10 @@
+# src/pipeline/path_utils.py
 from pathlib import Path
 import unicodedata
 import re
 import yaml
 import os
-
+from typing import Optional
 
 def is_safe_subpath(path: Path, base: Path) -> bool:
     """
@@ -21,7 +22,7 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
-def _load_slug_regex():
+def _load_slug_regex() -> str:
     """
     Carica la regex slug da config/config.yaml, se presente.
     Ritorna la regex di default se il file non esiste o la chiave non è definita.
@@ -40,9 +41,8 @@ def _load_slug_regex():
 
 def is_valid_slug(slug: str) -> bool:
     """
-    Verifica se lo slug rispetta il formato consentito:
-    - Caratteri definiti da regex in config/config.yaml, oppure
-    - Solo lettere minuscole, numeri e trattini (default).
+    Valida lo slug secondo la regex configurata in config/config.yaml (chiave 'slug_regex'),
+    altrimenti usa il default: solo lettere minuscole, numeri e trattini.
     """
     pattern = _load_slug_regex()
     return bool(re.fullmatch(pattern, slug))
@@ -68,6 +68,7 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
     - Rimuove caratteri vietati: <>:"/\\|?*
     - Normalizza Unicode in forma compatta (NFKC)
     - Tronca alla lunghezza massima specificata
+    - Garantisce un valore di fallback non vuoto
     """
     try:
         # Normalizzazione unicode

@@ -1,9 +1,11 @@
+# src/pipeline/context.py
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
 import sys
 import shutil
+import logging  # ⬅️ per tipizzare il logger
 
 from .exceptions import ConfigError
 from .env_utils import get_env_var
@@ -67,6 +69,9 @@ class ClientContext:
     warning_list: List[str] = field(default_factory=list)
     step_status: Dict[str, str] = field(default_factory=dict)
 
+    # Logger (iniettato una sola volta)
+    logger: Optional[logging.Logger] = None  # ⬅️ nuovo campo
+
     @classmethod
     def load(cls, slug: str, logger=None, interactive=None, **kwargs):
         """
@@ -79,13 +84,13 @@ class ClientContext:
         if interactive is None:
             interactive = sys.stdin.isatty()
 
-        # Logger strutturato
-        logger = logger or get_structured_logger(__name__)
+        # Logger strutturato (una sola istanza)
+        _logger = logger or get_structured_logger(__name__)
 
         # Validazione slug
         if not is_valid_slug(slug):
             if interactive:
-                logger.warning(f"Slug non valido: '{slug}'. Deve contenere solo caratteri ammessi.")
+                _logger.warning(f"Slug non valido: '{slug}'. Deve contenere solo caratteri ammessi.")
                 slug = input("📌 Reinserisci lo slug cliente: ").strip()
                 slug = validate_slug(slug)
             else:
@@ -96,7 +101,7 @@ class ClientContext:
 
         # 📦 Creazione automatica per nuovo cliente
         if not config_path.exists():
-            logger.info(f"Cliente '{slug}' non trovato: creazione struttura base.")
+            _logger.info(f"Cliente '{slug}' non trovato: creazione struttura base.")
             config_path.parent.mkdir(parents=True, exist_ok=True)
             template_config = Path("config") / "config.yaml"
             if not template_config.exists():
@@ -114,7 +119,7 @@ class ClientContext:
         except Exception as e:
             raise ConfigError(f"Errore lettura config cliente: {e}", slug=slug, file_path=config_path)
 
-        logger.info(f"Config cliente caricata: {config_path}")
+        _logger.info(f"Config cliente caricata: {config_path}")
 
         # Variabili da .env
         env_vars = {
@@ -135,25 +140,32 @@ class ClientContext:
             output_dir=base_dir,
             raw_dir=base_dir / "raw",
             md_dir=base_dir / "book",
-            log_dir=base_dir / "logs"
+            log_dir=base_dir / "logs",
+            logger=_logger,  # ⬅️ iniettiamo il logger nel contesto
         )
 
     # -- Utility per tracking stato --
-    def log_error(self, msg: str):
+    def _get_logger(self) -> logging.Logger:
+        """Ritorna il logger del contesto o ne crea uno compatibile (fallback)."""
+        if self.logger:
+            return self.logger
+        # Fallback: creare un logger compat, evitando import ciclici
         from .logging_utils import get_structured_logger
-        log = get_structured_logger(__name__)
+        self.logger = get_structured_logger(__name__)
+        return self.logger
+
+    def log_error(self, msg: str):
+        log = self._get_logger()
         self.error_list.append(msg)
         log.error(msg)
 
     def log_warning(self, msg: str):
-        from .logging_utils import get_structured_logger
-        log = get_structured_logger(__name__)
+        log = self._get_logger()
         self.warning_list.append(msg)
         log.warning(msg)
 
     def set_step_status(self, step: str, status: str):
-        from .logging_utils import get_structured_logger
-        log = get_structured_logger(__name__)
+        log = self._get_logger()
         self.step_status[step] = status
         log.info(f"Step '{step}' → {status}")
 

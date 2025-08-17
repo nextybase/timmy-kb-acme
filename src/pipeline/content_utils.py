@@ -1,3 +1,5 @@
+# src/pipeline/content_utils.py
+
 """
 src/pipeline/content_utils.py
 
@@ -5,6 +7,7 @@ Utility per la generazione e validazione di file markdown a partire da PDF raw,
 nell'ambito della pipeline Timmy-KB.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,7 +24,7 @@ def convert_files_to_structured_markdown(
     context: ClientContext,
     raw_dir: Optional[Path] = None,
     md_dir: Optional[Path] = None,
-    log: Optional[object] = None
+    log: Optional[logging.Logger] = None
 ):
     """
     Converte i PDF presenti nella cartella raw in file markdown univoci per cartella.
@@ -66,7 +69,7 @@ def convert_files_to_structured_markdown(
 def generate_summary_markdown(
     context: ClientContext,
     md_dir: Optional[Path] = None,
-    log: Optional[object] = None
+    log: Optional[logging.Logger] = None
 ):
     """Genera il file SUMMARY.md nella directory markdown."""
     md_dir = md_dir or context.md_dir
@@ -97,7 +100,7 @@ def generate_summary_markdown(
 def generate_readme_markdown(
     context: ClientContext,
     md_dir: Optional[Path] = None,
-    log: Optional[object] = None
+    log: Optional[logging.Logger] = None
 ):
     """Genera il file README.md nella directory markdown."""
     md_dir = md_dir or context.md_dir
@@ -124,7 +127,7 @@ def generate_readme_markdown(
 def validate_markdown_dir(
     context: ClientContext,
     md_dir: Optional[Path] = None,
-    log: Optional[object] = None
+    log: Optional[logging.Logger] = None
 ):
     """Verifica che la directory markdown esista e sia valida."""
     md_dir = md_dir or context.md_dir

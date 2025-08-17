@@ -1,5 +1,4 @@
 # src/pipeline/config_utils.py
-
 import os
 import shutil
 import yaml
@@ -21,6 +20,7 @@ from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidat
 from pipeline.context import ClientContext
 
 logger = get_structured_logger("pipeline.config_utils")
+
 
 # ----------------------------------------------------------
 #  Modello pydantic per configurazione cliente
@@ -65,7 +65,7 @@ class Settings(PydanticBaseSettings):
 #  Scrittura configurazione cliente su file YAML
 # ----------------------------------------------------------
 def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> Path:
-    """Scrive il file config.yml nella cartella cliente, con backup."""
+    """Scrive il file config.yml nella cartella cliente, con backup e scrittura atomica."""
     config_dir = context.output_dir / CONFIG_DIR_NAME
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path = config_dir / CONFIG_FILE_NAME
@@ -101,18 +101,10 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}")
 
 # ----------------------------------------------------------
-#  Validazione slug cliente
+#  [RIMOSSO] Validazione slug cliente (duplicato)
+#  Nota: la validazione slug è canonicamente gestita in pipeline.path_utils.is_valid_slug.
+#  Questo evita ambiguità e mantiene un solo punto di verità.
 # ----------------------------------------------------------
-def is_valid_slug(slug: Optional[str]) -> bool:
-    """Verifica che lo slug rispetti il formato consentito."""
-    if not slug:
-        return False
-    normalized_slug = slug.replace("_", "-").lower()
-    pattern = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
-    if not re.fullmatch(pattern, normalized_slug):
-        logger.debug(f"Slug '{slug}' non valido. Normalizzato: '{normalized_slug}'")
-        return False
-    return True
 
 # ----------------------------------------------------------
 #  Validazione pre-onboarding
@@ -153,25 +145,31 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
     logger.info(f"✅ Ambiente pre-onboarding valido per cliente {context.slug}")
 
 # ----------------------------------------------------------
-#  Scrittura sicura di file generici (STANDARD v1.0 stable)
+#  Scrittura sicura di file generici (STANDARD v1.0 stable) – ATOMICA
 # ----------------------------------------------------------
 def safe_write_file(file_path: Path, content: str):
     """
-    Scrive un file in modalità sicura con backup.
+    Scrive un file in modalità sicura con backup e replace atomico.
 
     - Crea cartelle necessarie.
-    - Crea backup se esiste un file precedente.
-    - Sovrascrive in UTF-8.
+    - Crea backup se esiste un file precedente (.bak).
+    - Scrive su file temporaneo (.tmp) e sostituisce con replace atomico.
     - Log automatico di operazioni ed errori.
     """
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Backup se già esiste
     if file_path.exists():
         backup_path = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
         shutil.copy(file_path, backup_path)
         logger.info(f"Backup creato: {backup_path}")
 
+    # Scrittura atomica: tmp + replace
+    tmp_path = file_path.with_suffix(file_path.suffix + TMP_SUFFIX)
     try:
-        with open(file_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(content)
+        tmp_path.replace(file_path)
     except Exception as e:
         logger.error(f"Errore scrittura file {file_path}: {e}")
         raise PipelineError(f"Errore scrittura file {file_path}: {e}")
@@ -209,7 +207,7 @@ def update_config_with_drive_ids(context: ClientContext, updates: dict, logger=N
     # 🔄 Aggiorna solo le chiavi passate
     config_data.update(updates)
 
-    # ✍️ Scrittura sicura
+    # ✍️ Scrittura sicura (atomica)
     try:
         safe_write_file(config_path, yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True))
         if logger:

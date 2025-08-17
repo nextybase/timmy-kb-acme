@@ -1,3 +1,4 @@
+# src/pipeline/drive_utils.py
 """
 Utility Google Drive per la pipeline:
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import random
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -51,7 +53,7 @@ def _md5sum(path: Path, chunk_size: int = 1024 * 1024) -> str:
 
 
 def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff: float = 1.6):
-    """Retry esponenziale per chiamate Drive (HttpError)."""
+    """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati."""
     _delay = delay
     for attempt in range(1, tries + 1):
         try:
@@ -64,7 +66,9 @@ def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff
                 f"HTTP {status} su Drive; retry {attempt}/{tries}",
                 extra={"error": str(e)},
             )
-            time.sleep(_delay)
+            # jitter: +/- 30% del delay corrente
+            jitter = 1.0 + random.uniform(-0.3, 0.3)
+            time.sleep(max(0.0, _delay * jitter))
             _delay *= backoff
 
 
@@ -136,7 +140,28 @@ def get_drive_service(context_or_sa_file: Any, drive_id: Optional[str] = None):
 # Operazioni di base (Shared Drives compat)
 # ---------------------------------------------------------
 def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> str:
-    """Crea una cartella su Drive e ritorna l'ID (compatibile con Shared Drives)."""
+    """
+    Crea una cartella su Drive e ritorna l'ID (compatibile con Shared Drives).
+
+    Idempotenza: se sotto `parent_id` esiste già una cartella con lo stesso `name`,
+    riusa quell'ID invece di crearne una nuova.
+    """
+    # Lookup preventivo per idempotenza
+    if parent_id:
+        try:
+            existing = list_drive_files(
+                service,
+                parent_id,
+                query=f"name = '{name}' and mimeType = '{MIME_FOLDER}'",
+            )
+            if existing:
+                folder_id = existing[0].get("id")
+                if folder_id:
+                    logger.info(f"↺ Riutilizzo cartella esistente '{name}' ({folder_id}) sotto parent {parent_id}")
+                    return folder_id
+        except Exception as e:
+            logger.warning(f"Lookup cartella '{name}' fallito, procedo con creazione: {e}")
+
     file_metadata = {"name": name, "mimeType": MIME_FOLDER}
     if parent_id:
         file_metadata["parents"] = [parent_id]

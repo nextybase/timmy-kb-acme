@@ -2,6 +2,29 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.3] - 2025-08-17
+### Aggiunto
+- Controllo Docker **prima** dell’avvio: prompt immediato “proseguire senza anteprima?” in modalità interattiva; in non-interactive la preview viene saltata automaticamente.
+- Slug **facoltativo** da CLI: supporto slug posizionale “soft” e `--slug`; se assente viene richiesto via prompt.
+
+### Modificato
+- `onboarding_full.py`: preview Honkit condizionata alla decisione presa nel pre-check; warning Docker **sintetico** (niente stderr rumoroso); compatibilità con flag storici (`--skip-drive`, `--skip-push`).
+- `drive_utils.py`: retry esponenziale con **jitter**; `create_drive_folder` resa **idempotente** tramite lookup/reuse.
+- `context.py`: logger **iniettato** nel `ClientContext` e riutilizzato da metodi di stato (niente ricreazioni ad ogni chiamata).
+- `config_utils.py`: `safe_write_file` ora è atomica (tmp + replace + backup); rimosso duplicato `is_valid_slug` (fonte unica in `path_utils.py`).
+- `path_utils.py`: rafforzate type hints e docstring; confermata qui la validazione slug come **punto di verità**.
+- `content_utils.py`: type hints corretti per `log: Optional[logging.Logger]`.
+- `env_utils.py`: allineata l’eccezione a `ConfigError` per coerenza con gli orchestratori.
+
+### Corretto
+- Import non validi e potenziali **cicli** (es. `gitbook_utils` → `gitbook_preview`, auto-import in `config_utils`); ripuliti gli import e i fallback.
+- Gestione CLI: slug richiesto solo se non passato via argomenti; messaggistica più chiara nei prompt.
+
+### Note
+- Modifiche **retrocompatibili** con la 1.0.2: nessun cambio alla logica funzionale della pipeline; interventi di pulizia e robustezza.
+- I test automatici saranno **rivisti nella prossima sessione** (attualmente esclusi dal refactor).
+
+
 ## [1.0.2] - 2025-08-16
 ### Modificato
 - Refactoring orchestratori `pre_onboarding.py` e `onboarding_full.py` per allineamento completo con la gestione logging centralizzata.
