@@ -16,6 +16,7 @@ import re
 import yaml
 import os
 from typing import Optional
+from functools import lru_cache  # ← aggiunto per caching
 
 from pipeline.logging_utils import get_structured_logger
 
@@ -47,6 +48,7 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
+@lru_cache(maxsize=1)  # ← cache 1-entry: invalida esplicitamente dopo update config
 def _load_slug_regex() -> str:
     """
     Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
@@ -71,6 +73,19 @@ def _load_slug_regex() -> str:
             # in caso di parsing/lettura problematica, fallback silenzioso
             return default_regex
     return default_regex
+
+
+def clear_slug_regex_cache() -> None:
+    """
+    Svuota la cache della regex dello slug.
+
+    Usa questa funzione dopo aver aggiornato/sovrascritto `config/config.yaml`
+    per rendere effettivo il nuovo valore di `slug_regex` senza riavviare il processo.
+    """
+    try:
+        _load_slug_regex.cache_clear()  # type: ignore[attr-defined]
+    except Exception as e:
+        _logger.error(f"Errore nel reset della cache slug_regex: {e}")
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -159,6 +174,7 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
 __all__ = [
     "is_safe_subpath",
     "_load_slug_regex",
+    "clear_slug_regex_cache",  # ← export della funzione di reset cache
     "is_valid_slug",
     "normalize_path",
     "sanitize_filename",

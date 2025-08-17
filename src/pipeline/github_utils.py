@@ -7,6 +7,10 @@ Utility per interagire con GitHub:
     1) context.env["GIT_DEFAULT_BRANCH"]
     2) os.getenv("GIT_DEFAULT_BRANCH")
     3) fallback "main"
+
+Note architetturali (v1.0.3+):
+- Nessuna interattività in questo modulo (niente prompt/input). Le decisioni di
+  conferma push sono responsabilità degli orchestratori (CLI/UX).
 """
 
 from __future__ import annotations
@@ -84,14 +88,22 @@ def push_output_to_github(
     I file considerati sono esclusivamente quelli con estensione `.md` (esclusi `.bak`), e
     solo se i relativi path ricadono **sotto** `context.md_dir` (path-safety).
 
+    Architettura:
+        - Nessun prompt/nessuna conferma qui: l'orchestratore decide e passa `confirm_push`.
+        - Nessun `sys.exit()`; in caso di errore solleva `PipelineError`.
+
     Args:
         context: Contesto con attributi `slug`, `md_dir` e (opz.) `env`.
-        github_token: Token personale GitHub (PAT).
-        confirm_push: Se `False`, NON esegue il push (il consenso/prompt è gestito dagli orchestratori).
+        github_token: Token personale GitHub (PAT). Deve essere valorizzato.
+        confirm_push: Se `False`, NON esegue il push (dry-run controllato dall'orchestratore).
 
     Raises:
-        PipelineError: Se `book_dir` non esiste, oppure in caso di errori durante il push.
+        PipelineError: Se prerequisiti mancanti (cartella o token) o in caso di errori push.
     """
+    # Validazione basilare prerequisiti
+    if not github_token:
+        raise PipelineError("GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.", slug=getattr(context, "slug", None))
+
     book_dir = context.md_dir
     if not book_dir.exists():
         raise PipelineError(
