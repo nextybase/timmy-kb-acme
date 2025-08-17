@@ -2,6 +2,22 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.3] - 2025-08-17
+### Aggiunto
+- Controllo Docker **prima** dell’avvio: in modalità interattiva prompt “proseguire senza anteprima?”, in non-interactive la preview viene saltata automaticamente.
+- Slug **facoltativo** da CLI: supporto slug posizionale “soft” e `--slug`; se assente viene richiesto a prompt.
+- Documentazione: nuove pagine `docs/policy_push.md` e `docs/versioning_policy.md`.
+
+### Modificato
+- `onboarding_full.py`: logging “early” al posto dei `print()`, messaggistica preview più sintetica, compatibilità con flag storici (`--skip-drive`, `--skip-push`) con **warning** e rimappatura a `--no-*`.
+- `pre_onboarding.py`: uso coerente dell’early logger nello `__main__`, validazioni/prompt slug allineati, mappatura eccezioni → `EXIT_CODES` invariata.
+- Documentazione consolidata: `README.md`, `docs/index.md`, `docs/user_guide.md`, `docs/developer_guide.md`, `docs/architecture.md`, `docs/coding_rule.md` aggiornati per riflettere preview/push, variabili d’ambiente (incl. `GIT_DEFAULT_BRANCH`) e regole operative.
+
+### Corretto
+- Pulizia import in `gitbook_preview.py` (nessun cambio di firma); piccoli refusi CLI/avvisi allineati.
+
+### Note
+- Release di **consolidamento**: nessuna modifica di flusso né delle firme pubbliche. Le nuove policy documentano il comportamento effettivo (push come riflesso dell’output locale; SemVer leggero).
 
 ## [1.0.2] - 2025-08-17
 ### Added

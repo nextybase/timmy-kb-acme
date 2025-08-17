@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -196,20 +195,23 @@ def _parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = _parse_args()
 
+    # Logger console “early” (prima di avere lo slug) per messaggi iniziali
+    early_logger = get_structured_logger("onboarding_full")
+
     # Risoluzione slug
     slug = args.slug_pos or args.slug
     if not slug and args.non_interactive:
-        print("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).", file=sys.stderr)
+        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     if not slug:
         slug = _prompt("Inserisci slug cliente: ").strip()
 
     # Normalizza alias deprecati
     if args.skip_drive:
-        print("⚠️  --skip-drive è deprecato; usare --no-drive", file=sys.stderr)
+        early_logger.warning("⚠️  --skip-drive è deprecato; usare --no-drive")
         args.no_drive = True
-    if args.skip_push:
-        print("⚠️  --skip-push è deprecato; usare --no-push", file=sys.stderr)
+    if args.skip_push:  # <-- fix del refuso
+        early_logger.warning("⚠️  --skip-push è deprecato; usare --no-push")
         args.no_push = True
 
     # Determinazione push (priorità: --no-push > --push)

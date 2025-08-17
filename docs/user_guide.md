@@ -1,165 +1,153 @@
-# Guida Utente – Timmy-KB
+# Guida Utente – Timmy‑KB (v1.0.3)
 
-Questa guida ti accompagna passo-passo nell’uso di **Timmy-KB**, dalla configurazione iniziale all’esecuzione della pipeline, con focus su modalità **interattiva** (default) e varianti **test/CI**.
+Questa guida ti accompagna nell'uso operativo della pipeline Timmy‑KB. È allineata al comportamento degli orchestratori aggiornati (preview Docker coerente, slug posizionale “soft”, alias deprecati `--skip-*`).
 
 ---
 
-## 📋 Prerequisiti
-
+## Prerequisiti
 - **Python ≥ 3.10**
-- **Git** installato
-- **pip** (oppure **Poetry**) per le dipendenze
-- **Docker** attivo per la **preview Honkit** (opzionale ma consigliato)
-- Accesso al **repository GitHub**
-- File `.env` con le variabili necessarie (es. `DRIVE_ID`, `GITHUB_TOKEN`, …)
-- **Google Drive (Shared Drive)** + **Service Account (JSON)**: usa un *Drive Condiviso* e **condividilo** con l’**email** del Service Account indicata nel JSON
+- **Git**
+- **Docker** (solo per l’anteprima HonKit; opzionale)
+- **Google Drive (Shared Drive)** con **Service Account JSON** (condividi lo *Shared Drive* con l’email del SA)
+- (Opzionale) **GitHub token (PAT)** per abilitare il push
+
+### Variabili d’ambiente (essenziale)
+| Nome | Descrizione | Esempio |
+|---|---|---|
+| `GIT_DEFAULT_BRANCH` | Branch di default per checkout/push | `main` |
+| `GITHUB_TOKEN` | PAT per il push su GitHub | `ghp_xxx` |
+| `DRIVE_ID` | ID dello *Shared Drive* sorgente | `0A...` |
+| `DRIVE_PARENT_FOLDER_ID` | (Opz.) Cartella padre alternativa su Drive | `1B...` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path al JSON del Service Account | `./.secrets/sa.json` |
+
+> Non committare `.env` o credenziali nel repo.
 
 ---
 
-## ⚡ Installazione
-
-1. **Clona il repository**
-   ```bash
-   git clone https://github.com/nextybase/timmy-kb-acme.git
-   cd timmy-kb-acme
-   ```
-2. **Crea l’ambiente virtuale e attivalo**  
-   *(vedi sezione dedicata sotto per tutti i sistemi)*
-   ```bash
-   python -m venv .venv
-   # Attiva su macOS/Linux/WSL
-   source .venv/bin/activate
-   ```
-   > Su Windows vedi i comandi specifici in **Ambiente virtuale**.
-3. **Installa le dipendenze**
-   ```bash
-   pip install -r requirements.txt
-   # In alternativa:
-   # poetry install
-   ```
-4. **Configura le variabili**
-   - Crea `.env` nella root (es.: `DRIVE_ID`, `GITHUB_TOKEN`, altre variabili richieste dal tuo setup)
-   - Verifica i file YAML in `config/` (in particolare `cartelle_raw.yaml`, mapping e template)
-
----
-
-## 🧰 Ambiente virtuale (Windows/macOS/Linux)
-
-> Consigliato usare `.venv` nella root del repo.
-
-### Creazione
+## Installazione rapida
 ```bash
+git clone https://github.com/nextybase/timmy-kb-acme.git
+cd timmy-kb-acme
+
 python -m venv .venv
-```
+# macOS/Linux/WSL
+source .venv/bin/activate
+# Windows (PowerShell)
+# .\.venv\Scripts\Activate
 
-### Attivazione
-- **Windows – PowerShell**
-  ```powershell
-  .\.venv\Scripts\Activate
-  ```
-- **Windows – CMD**
-  ```bat
-  .\.venv\Scripts\activate.bat
-  ```
-- **Git Bash / WSL / macOS / Linux**
-  ```bash
-  source .venv/bin/activate
-  ```
-
-> Se PowerShell blocca l’esecuzione:
-> ```powershell
-> Set-ExecutionPolicy -Scope Process RemoteSigned
-> ```
-
-### Installazione dipendenze
-```bash
 pip install -r requirements.txt
 ```
 
-### Disattivazione
+---
+
+## Flusso standard in 2 step
+### 1) Pre‑onboarding (crea struttura cliente + config)
+- Genera `output/timmy-kb-<slug>/{raw,book,config,logs}`
+- Crea/aggiorna `config.yaml`
+- (Se non `--dry-run`) prepara la struttura su Drive e carica `config.yaml`
+
+**Esecuzione**
 ```bash
-deactivate
+# Interattivo: chiede slug e nome cliente
+py src/pre_onboarding.py
+
+# Non‑interattivo / CI
+py src/pre_onboarding.py --slug acme-srl --name "ACME S.r.l." --non-interactive [--dry-run]
 ```
+
+> **Slug posizionale “soft”**: puoi passarlo come primo argomento o con `--slug`. In interattivo, se assente, viene richiesto.
 
 ---
 
-## ▶️ Esecuzione della pipeline (interattiva, in due fasi)
+### 2) Onboarding completo (download → conversione → preview → push)
+- Scarica i PDF da Drive (se abilitato)
+- Converte in Markdown strutturato e genera `README.md`/`SUMMARY.md`
+- Avvia anteprima **HonKit** in Docker (se disponibile o accettata l’assenza)
+- Esegue (opz.) il **push** su GitHub
 
-La pipeline si esegue tipicamente in **due fasi**: `pre_onboarding` e `onboarding_full`, entrambe **interattive** di default.
+**Esecuzione**
+```bash
+# Interattivo
+py src/onboarding_full.py
 
-### 1) Pre-onboarding (crea struttura cliente e config)
-Prepara l’ambiente locale/Drive, genera `config.yaml` e aggiorna i riferimenti.
+# Non‑interattivo / CI
+py src/onboarding_full.py --slug acme-srl [--dry-run] [--no-drive] [--push|--no-push] [--port 4000]
+```
+
+> **Preview Docker**
+> - In **non‑interattivo**: se Docker non è disponibile, la preview viene **saltata automaticamente**.
+> - In **interattivo**: se Docker non è disponibile, viene chiesto se **proseguire senza anteprima**.
+
+> **Push**
+> - In **interattivo**: viene chiesto se eseguire il push (default **NO**).
+> - In **non‑interattivo**: il push è **disabilitato** a meno che passi `--push`.
+> - Se `GITHUB_TOKEN` manca, il push fallisce con errore: imposta la variabile o usa `--no-push`.
+
+> **Alias deprecati**: `--skip-drive` e `--skip-push` sono accettati con **warning**. Usa `--no-drive` e `--no-push`.
+
+---
+
+## Output atteso
+Struttura in `output/timmy-kb-<slug>/`:
+- **book/** → Markdown generati (`*.md`), inclusi `README.md` e `SUMMARY.md`
+- **raw/** → PDF scaricati da Drive o caricati manualmente
+- **config/** → `config.yaml` (con backup)
+- **logs/** → file di log unificato `onboarding.log`
+
+---
+
+## Esempi pratici
+**Dry‑run locale senza Drive né push**
+```bash
+py src/pre_onboarding.py --slug demo --name "Demo" --non-interactive --dry-run
+py src/onboarding_full.py --slug demo --no-drive --no-push
+```
+
+**Flusso completo con Drive e anteprima (Docker attivo)**
 ```bash
 py src/pre_onboarding.py
+# carica PDF in RAW su Drive
+py src/onboarding_full.py --slug demo
+# se richiesto: conferma preview/push
 ```
-Durante questa fase ti verrà chiesto di inserire:
-- lo **slug** del cliente;
-- il **nome reale del cliente**.
 
-### 2) Popolamento Google Drive (Shared Drive)
-> **Prima di procedere**
->
-> Prima di eseguire l’onboarding completo, assicurati che i PDF siano nella cartella **RAW** dello Shared Drive configurato (`DRIVE_ID/<slug>/RAW/`).  
-> La gerarchia di sottocartelle è **generata automaticamente** in base a `config/cartelle_raw.yaml` e organizza i documenti per tema (manuali, schede tecniche, presentazioni, ecc.), ottimizzando il parsing semantico e l’analisi.  
-> I file presenti in **RAW/** costituiranno la base della knowledge base.
-
-### 3) Onboarding completo (download → conversione → preview → push)
-Esegue l’intero flusso: scarica i PDF (se abilitato), converte in Markdown, genera `README.md`/`SUMMARY.md`, avvia la **preview Docker/Honkit** e propone il **push su GitHub**.
+**Batch non‑interattivo con push esplicito**
 ```bash
-py src/onboarding_full.py
+export GITHUB_TOKEN=ghp_xxx
+py src/onboarding_full.py --slug demo --no-drive --push --non-interactive
 ```
-Durante l’esecuzione interattiva:
-1. Elabora i documenti caricati applicando **arricchimento semantico** (estrazione keyword, tagging tematico, normalizzazioni).
-2. Genera la **KB in anteprima** con frontmatter, link coerenti e navigazione.
-3. Avvia una **Preview Docker** (Honkit). Se Docker non è attivo, verrà segnalato: avvialo o esegui in modalità che salta la preview.
-4. Alla fine della revisione, **premi INVIO** per confermare.
-5. Ti verrà chiesto se procedere con il **push su GitHub**:
-   - Se confermi, pubblica sul branch configurato.
-   - Se rifiuti, la pipeline termina lasciando i file generati in locale.
 
 ---
 
-## 🧪 Varianti non interattive (test/CI)
-
-Usa le opzioni CLI per esecuzioni **senza prompt** (es. automazioni CI):
-
-- **Pre-onboarding**
-  ```bash
-  py src/pre_onboarding.py --slug acme-srl --name "ACME S.r.l." --non-interactive [--dry-run]
-  ```
-- **Onboarding completo**
-  ```bash
-  py src/onboarding_full.py --slug acme-srl [--dry-run] [--no-drive]
-  ```
-  - `--dry-run` Simula l’esecuzione senza effetti collaterali: non scrive file definitivi e non effettua push, ma genera log e output temporanei utili per il debug.
-  - `--no-drive` Usa i PDF locali già presenti in output/timmy-kb-<slug>/raw/ invece di scaricarli da Google Drive.
-
-> Nota: in modalità non interattiva non vengono richieste conferme (preview/push). Configura le variabili in `.env` e i percorsi prima dell’esecuzione.
+## Troubleshooting
+- **Docker non in esecuzione** → Avvia Docker Desktop/daemon. In non‑interattivo la preview viene **saltata**; in interattivo puoi scegliere se proseguire.
+- **`GITHUB_TOKEN` mancante** → imposta la variabile o usa `--no-push`.
+- **Permessi Google Drive** → verifica `DRIVE_ID` e che lo *Shared Drive* sia condiviso con l’**email del Service Account**.
+- **Nessun `.md` generato** → controlla che ci siano PDF in `raw/` (o che il download da Drive sia avvenuto).
+- **Slug mancante in non‑interattivo** → passalo come posizionale o `--slug` (altrimenti `ConfigError`).
 
 ---
 
-## 📂 Output finale
-
-Al termine, troverai in `output/`:
-- **Markdown arricchiti** (`*.md`) con frontmatter, keyword/tag e metadati;
-- **`README.md` e `SUMMARY.md`** coerenti con la struttura generata;
-- **File YAML** (configurazioni/mappature aggiornate ove previsto);
-- **Log strutturato** dell’esecuzione (unico file di log configurato dagli orchestratori).
+## Exit Codes (deterministici)
+| Codice | Eccezione |
+|---:|---|
+| 0 | Successo |
+| 1 | `PipelineError` |
+| 2 | `ConfigError` |
+| 3 | `PreOnboardingValidationError` |
+| 10 | `ConversionError` |
+| 21 | `DriveDownloadError` |
+| 22 | `DriveUploadError` |
+| 30 | `PreviewError` |
+| 40 | `PushError` |
+| 50 | `CleanupError` |
+| 60 | `EnrichmentError` |
+| 61 | `SemanticMappingError` |
+| 130 | Interruzione utente (`CTRL+C`) |
 
 ---
 
-## 🛟 Troubleshooting
-
-- **Docker non in esecuzione** → Avvia Docker Desktop/daemon prima della preview; in alternativa, esegui in modalità che salta la preview o usa la variante non interattiva.
-- **`GITHUB_TOKEN` mancante** → Il push viene **saltato**. Imposta la variabile d’ambiente o effettua il push manuale.
-- **Permessi Google Drive (Shared Drive)** → Verifica `DRIVE_ID` e che il **Service Account** (email nel JSON) abbia accesso al **Drive Condiviso**.
-- **`ModuleNotFoundError` / path errati** → Esegui i comandi **dalla root** del progetto e assicurati che l’ambiente `.venv` sia attivo.
-- **Windows PowerShell** → Se l’attivazione `.venv` fallisce, usa `Set-ExecutionPolicy -Scope Process RemoteSigned` e riprova.
-
----
-
-## 📚 Risorse utili
-
-- [Guida sviluppatore](developer_guide.md)
-- [Regole di codifica](coding_rule.md)
-- [Architettura tecnica](architecture.md)
+## Note di versione (v1.0.3)
+- **Anteprima coerente**: auto‑skip in non‑interattivo; prompt in interattivo.
+- **Slug CLI “soft”**: supporto posizionale o `--slug` con richiesta a prompt se assente in interattivo.
+- **Nessun cambio di flusso**: release di consolidamento, retro‑compatibile con v1.0.2.

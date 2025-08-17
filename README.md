@@ -1,7 +1,7 @@
 # Timmy-KB – Pipeline per la Knowledge Base di Onboarding NeXT
 
 ## 📌 Descrizione
-**Timmy-KB** è una pipeline **modulare** che parte dai documenti del cliente (oggi PDF) e produce **Markdown “AI‑ready”** con `README.md` e `SUMMARY.md` pronti per GitBook/Honkit. Include preview **Honkit in Docker** e (opzionalmente) **push su GitHub**.
+**Timmy-KB** è una pipeline **modulare** che parte dai documenti del cliente (oggi PDF) e produce **Markdown “AI‑ready”** con `README.md` e `SUMMARY.md` pronti per GitBook/Honkit. Include preview **Honkit in Docker** e (opzionalmente) **push su GitHub**. Il flusso non cambia rispetto alle versioni precedenti.
 
 ## 🛠 Requisiti
 - **Python ≥ 3.10**
@@ -25,6 +25,17 @@ root/
 ## ⚙️ Configurazione rapida
 1. Crea `.env` con le variabili necessarie (es. `GITHUB_TOKEN`, `DRIVE_ID` / `DRIVE_PARENT_FOLDER_ID`, ecc.).  
 2. Prepara il **Service Account JSON** di Google e **condividi** lo *Shared Drive* con la sua **email**. Imposta `DRIVE_ID` nel `.env`.
+
+### 🌿 Variabili d’ambiente (estratto)
+| Nome | Descrizione | Esempio |
+|---|---|---|
+| `GIT_DEFAULT_BRANCH` | Branch di default per checkout/push | `main` |
+| `GITHUB_TOKEN` | PAT per il push su GitHub | `ghp_xxx` |
+| `DRIVE_ID` | ID dello *Shared Drive* sorgente | `0A...` |
+| `DRIVE_PARENT_FOLDER_ID` | (Opz.) Cartella padre alternativa su Drive | `1B...` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path al JSON del Service Account | `./.secrets/sa.json` |
+
+> Non committare `.env` o credenziali. Gestisci i segreti localmente.
 
 ## 🚀 Installazione
 ```bash
@@ -68,6 +79,9 @@ py src/onboarding_full.py --slug acme-srl [--dry-run] [--no-drive] [--push|--no-
 > **Nota Preview Docker**  
 > - In **modalità non‑interattiva**: se Docker non è disponibile, la preview viene **saltata automaticamente**.  
 > - In **modalità interattiva**: se Docker non è disponibile ti viene chiesto se **continuare senza anteprima**.
+
+> **Slug posizionale (soft)**  
+> Puoi passare lo **slug** come primo argomento posizionale oppure con `--slug`. Se assente in interattivo, viene richiesto a prompt.
 
 > **Alias deprecati**  
 > `--skip-drive`, `--skip-push` sono **deprecati** (ancora accettati con warning). Usa `--no-drive`, `--no-push`.

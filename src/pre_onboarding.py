@@ -146,11 +146,15 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+
+    # Logger console “early” (prima di avere lo slug) per messaggi iniziali
+    early_logger = get_structured_logger("pre_onboarding")
+
     # Risoluzione slug: posizionale > --slug > prompt
     slug = args.slug_pos or args.slug
     if not slug and args.non_interactive:
-        # In batch non possiamo chiedere; mantenere UX chiara
-        print("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).", file=sys.stderr)
+        # In batch non possiamo chiedere; manteniamo UX chiara ma senza print()
+        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     if not slug:
         slug = _prompt("Inserisci slug cliente: ").strip()
