@@ -110,7 +110,15 @@ def pre_onboarding_main(
         client_name = slug  # fallback innocuo
 
     # === Caricamento/creazione contesto cliente ===
-    context: ClientContext = ClientContext.load(slug=slug, interactive=interactive)
+    # require_env=False in dry-run o non-interactive per abilitare flussi offline
+    require_env = not (dry_run or (not interactive))
+    context: ClientContext = ClientContext.load(
+        slug=slug,
+        interactive=interactive,
+        require_env=require_env,
+    )
+    if not require_env:
+        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("🚀 Avvio pre-onboarding")
 

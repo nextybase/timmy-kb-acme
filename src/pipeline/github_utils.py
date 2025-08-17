@@ -112,6 +112,15 @@ def push_output_to_github(
             file_path=book_dir,
         )
 
+    # ✅ Guard-rail: il book_dir deve essere sotto la base del cliente, se disponibile
+    base_dir = getattr(context, "base_dir", None)
+    if base_dir and not is_safe_subpath(book_dir, base_dir):
+        raise PipelineError(
+            f"Percorso book non sicuro: {book_dir} (fuori da {base_dir})",
+            slug=context.slug,
+            file_path=book_dir,
+        )
+
     # Seleziona file .md validi (path-safety) ricorsivamente
     md_files = sorted(
         f

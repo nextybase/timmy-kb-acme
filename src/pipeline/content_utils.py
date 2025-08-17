@@ -20,6 +20,7 @@ from pipeline.config_utils import safe_write_file  # ✅ Standard v1.0 stable
 from pipeline.exceptions import PipelineError
 from pipeline.context import ClientContext
 from pipeline.path_utils import is_safe_subpath  # ✅ Controllo sicurezza path
+from pipeline.path_utils import sanitize_filename  # ✅ Sanitizzazione nomi file
 
 logger = get_structured_logger("pipeline.content_utils")
 
@@ -80,9 +81,10 @@ def convert_files_to_structured_markdown(
     # Ogni sottocartella immediata di raw/ è una "categoria" che genera un .md
     categories = [p for p in raw_dir.iterdir() if p.is_dir()]
     for category in categories:
-        md_path = md_dir / f"{category.name}.md"
+        safe_name = sanitize_filename(category.name)  # ✅ usa nome sanificato per il file .md
+        md_path = md_dir / f"{safe_name}.md"
         try:
-            # Header principale del file per la categoria
+            # Header principale del file per la categoria (titolo leggibile → dall'originale)
             content_parts: List[str] = [f"# {_titleize(category.name)}\n\n"]
 
             # Trova TUTTI i PDF annidati dentro la categoria (ricorsivo)

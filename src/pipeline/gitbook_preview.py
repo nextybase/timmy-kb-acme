@@ -23,6 +23,7 @@ from typing import Optional
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, PreviewError
 from pipeline.path_utils import is_safe_subpath
+from pipeline.config_utils import safe_write_file  # ✅ scritture atomiche
 
 logger = get_structured_logger("pipeline.gitbook_preview")
 
@@ -41,7 +42,8 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             "plugins": [],
         }
         try:
-            book_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            # ✅ scrittura atomica
+            safe_write_file(book_json_path, json.dumps(data, indent=2))
             logger.info(
                 "📖 book.json generato",
                 extra={"slug": slug, "file_path": str(book_json_path)},
@@ -77,7 +79,8 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             },
         }
         try:
-            package_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            # ✅ scrittura atomica
+            safe_write_file(package_json_path, json.dumps(data, indent=2))
             logger.info(
                 "📦 package.json generato",
                 extra={"slug": slug, "file_path": str(package_json_path)},

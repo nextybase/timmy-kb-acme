@@ -2,6 +2,15 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [PR-1] - 2025-08-17
+### Changed
+- Refactor orchestratori e pipeline per maggiore robustezza e maneggevolezza.
+- Unificazione gestione logger: introdotto file unico `onboarding.log` per cliente, con propagazione coerente dei messaggi.
+- Migliorata idempotenza nei moduli di orchestrazione (`pre_onboarding.py`, `onboarding_full.py`, ecc.) senza alterare il flusso della pipeline.
+- Gestione Docker resa opzionale: se non disponibile, la preview viene saltata (non-interactive) o confermata da prompt (interactive).
+- Preview HonKit resa non bloccante: avvio *detached* e stop automatico all’uscita.
+- Pulizia selettiva dei container Docker di preview per evitare residui tra run successivi.
+
 ## [0.6.0] - 2025-08-17
 ### Added
 - Creati i test unitari per `github_utils.py` con copertura dei casi principali:

@@ -107,10 +107,19 @@ def onboarding_full_main(
         Se Docker è disponibile, la preview parte *detached* e verrà **fermata automaticamente all’uscita**.
     """
     # Carica contesto e logger file-based unificato
-    context: ClientContext = ClientContext.load(slug=slug, interactive=not non_interactive)
+    # require_env=False in modalità offline: no_drive, dry_run o non_interactive
+    require_env = not (no_drive or dry_run or non_interactive)
+    context: ClientContext = ClientContext.load(
+        slug=slug,
+        interactive=not non_interactive,
+        require_env=require_env,
+    )
     log_file = Path("output") / f"timmy-kb-{slug}" / "logs" / "onboarding.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context)
+
+    if not require_env:
+        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
 
     logger.info("🚀 Avvio onboarding_full")
 

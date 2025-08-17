@@ -13,41 +13,6 @@ from .exceptions import ConfigError
 from .env_utils import get_env_var
 from .path_utils import is_valid_slug
 
-# Nota: evitiamo import globali di logging_utils per non introdurre cicli.
-# Il logger viene risolto "lazy" quando serve (vedi _get_logger()).
-logger: Optional[logging.Logger] = None
-
-
-def get_or_prompt(
-    value: Optional[str],
-    prompt: str,
-    non_interactive: bool = False,
-    slug: Optional[str] = None,
-) -> str:
-    """Restituisce `value` se presente, altrimenti gestisce l’input in modo UX-safe.
-
-    Comportamento:
-    - **Interattivo**: chiede input all’utente tramite `input(prompt)`.
-    - **Non interattivo**: solleva `ConfigError` esplicitando il parametro mancante.
-
-    Args:
-        value: Valore già disponibile (se truthy viene restituito).
-        prompt: Messaggio da mostrare in caso di input interattivo.
-        non_interactive: Se `True`, nessun prompt; errore se `value` assente.
-        slug: Slug cliente da includere nel payload dell’eccezione.
-
-    Returns:
-        Il valore definitivo (esistente o inserito dall’utente).
-
-    Raises:
-        ConfigError: quando `non_interactive=True` e `value` è assente.
-    """
-    if value:
-        return value
-    if non_interactive:
-        raise ConfigError(f"Parametro mancante: {prompt}", slug=slug)
-    return input(prompt).strip()
-
 
 def validate_slug(slug: str) -> str:
     """Valida lo slug rispetto alle regole di progetto (fonte: `path_utils.is_valid_slug`).
@@ -123,6 +88,8 @@ class ClientContext:
         slug: str,
         logger: Optional[logging.Logger] = None,
         interactive: Optional[bool] = None,
+        *,
+        require_env: bool = True,
         **kwargs: Any,
     ) -> "ClientContext":
         """Carica (o inizializza) il contesto cliente e valida la configurazione.
@@ -136,6 +103,9 @@ class ClientContext:
             slug: Identificativo cliente da caricare/inizializzare.
             logger: Logger pre-esistente (riusato); se assente, viene creato lazy.
             interactive: `True` per abilitare prompt; `False` per batch; `None` → auto-detect.
+            require_env: Se `True`, richiede obbligatoriamente variabili env esterne
+                         (es. DRIVE_ID, SERVICE_ACCOUNT_FILE). Se `False`, consente
+                         flussi offline/dry-run.
 
         Returns:
             ClientContext popolato con path, config e logger.
@@ -187,12 +157,15 @@ class ClientContext:
 
         _logger.info(f"Config cliente caricata: {config_path}")
 
-        # Variabili da .env
-        env_vars: Dict[str, Any] = {
-            "SERVICE_ACCOUNT_FILE": get_env_var("SERVICE_ACCOUNT_FILE", required=True),
-            "DRIVE_ID": get_env_var("DRIVE_ID", required=True),
-            "GITHUB_TOKEN": get_env_var("GITHUB_TOKEN", default=None),
-        }
+        # Variabili da .env (condizionate da require_env)
+        env_vars: Dict[str, Any] = {}
+        if require_env:
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", required=True)
+            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", required=True)
+        else:
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
+            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
+        env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
 
         return cls(
             slug=slug,
