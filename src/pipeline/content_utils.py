@@ -9,7 +9,7 @@ nell'ambito della pipeline Timmy-KB.
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import safe_write_file  # ✅ Standard v1.0 stable

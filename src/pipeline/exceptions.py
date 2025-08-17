@@ -69,3 +69,36 @@ class PreOnboardingValidationError(PipelineError):
 
 # Utilizzo consigliato:
 # from pipeline.exceptions import <ExcClass> e non importare direttamente PipelineError.
+
+# ------------------------------------------------------------
+# Mappa centralizzata dei codici di uscita (nessun I/O, no side effects)
+# Gli orchestratori useranno questa tabella per sys.exit() coerenti.
+# ------------------------------------------------------------
+EXIT_CODES = {
+    "PipelineError": 1,
+    "ConfigError": 2,
+    "PreOnboardingValidationError": 3,
+    "ConversionError": 10,
+    "DriveDownloadError": 21,
+    "DriveUploadError": 22,
+    "PreviewError": 30,
+    "PushError": 40,
+    "CleanupError": 50,
+    "EnrichmentError": 60,
+    "SemanticMappingError": 61,
+}
+
+__all__ = [
+    "PipelineError",
+    "DriveDownloadError",
+    "DriveUploadError",
+    "ConversionError",
+    "PushError",
+    "ConfigError",
+    "CleanupError",
+    "PreviewError",
+    "EnrichmentError",
+    "SemanticMappingError",
+    "PreOnboardingValidationError",
+    "EXIT_CODES",
+]

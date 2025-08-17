@@ -1,15 +1,16 @@
 # src/pipeline/drive_utils.py
+
 """
-Utility Google Drive per la pipeline:
+Utility Google Drive per la pipeline Timmy-KB.
 
 - Inizializzazione client (Service Account)
 - Creazione / elenco / cancellazione cartelle e file (compatibile con Shared Drives)
-- Creazione struttura remota da YAML (supporto formato mapping e legacy root_folders)
+- Creazione struttura remota da YAML (supporto mapping moderno e legacy root_folders)
 - Creazione struttura locale convenzionale (raw/book/config) con categorie SOLO da RAW/raw
 - Upload di config.yaml
 - Download PDF idempotente con verifica md5/size e file handle sicuri
 
-Requisiti: variabili d'ambiente/contesto per SERVICE_ACCOUNT_FILE (e DRIVE_ID a livello orchestratore).
+Requisiti: variabili d'ambiente/contesto per SERVICE_ACCOUNT_FILE.
 """
 
 from __future__ import annotations
@@ -262,7 +263,7 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
         except Exception as e:
             logger.warning(
                 "Impossibile rimuovere config pre-esistente su Drive",
-                extra={"error": str(e)},
+                extra={"error": str(e), "slug": getattr(context, "slug", None)},
             )
 
     media = MediaFileUpload(str(config_path), mimetype="text/yaml", resumable=True)
@@ -383,7 +384,7 @@ def create_local_base_structure(context, yaml_path: Path) -> None:
     else:
         logger.warning(
             "YAML senza sezione RAW/raw: nessuna categoria creata in output/<slug>/raw",
-            extra={"yaml_path": str(yaml_path)},
+            extra={"yaml_path": str(yaml_path), "slug": getattr(context, "slug", None)},
         )
 
     for name in categories:

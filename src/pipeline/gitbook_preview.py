@@ -1,3 +1,4 @@
+# src/pipeline/gitbook_preview.py
 """
 Genera e avvia la preview locale della documentazione (GitBook/HonKit)
 usando container Docker isolato.

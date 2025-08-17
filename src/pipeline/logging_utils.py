@@ -1,4 +1,5 @@
 # src/pipeline/logging_utils.py
+
 """
 Utility per la creazione di logger strutturati per la pipeline Timmy-KB.
 Supporta configurazione via settings centralizzato o ClientContext,
@@ -7,14 +8,9 @@ del percorso file log.
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional, Union
 from logging.handlers import RotatingFileHandler
-
-from pipeline.constants import LOGS_DIR_NAME
-from pipeline.exceptions import PipelineError
-from pipeline.context import ClientContext
 
 
 def get_structured_logger(
@@ -24,11 +20,11 @@ def get_structured_logger(
     rotate: bool = False,
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 3,
-    context: Optional[ClientContext] = None
+    context: Optional[object] = None
 ) -> logging.Logger:
     """
     Crea un logger strutturato con supporto per console e file, opzionalmente
-    legato ad un ClientContext.
+    legato ad un ClientContext (o qualunque oggetto con attributo `.slug`).
 
     Args:
         name: Nome del logger.
@@ -37,7 +33,7 @@ def get_structured_logger(
         rotate: Abilita RotatingFileHandler.
         max_bytes: Dimensione massima file log per rotazione.
         backup_count: Numero massimo file di backup.
-        context: (opzionale) ClientContext per associare automaticamente lo slug nei log.
+        context: (opzionale) Oggetto con attributo `.slug` da associare nei log.
 
     Returns:
         logging.Logger: Logger configurato.
@@ -53,6 +49,9 @@ def get_structured_logger(
         level = logging.INFO
     logger.setLevel(level)
 
+    # Importante: non propagare al root logger per evitare doppie emissioni
+    logger.propagate = False
+
     # Formatter uniforme
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(name)s"
@@ -65,7 +64,7 @@ def get_structured_logger(
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
     if context:
-        ch.addFilter(lambda record: setattr(record, "slug", context.slug) or True)
+        ch.addFilter(lambda record: setattr(record, "slug", getattr(context, "slug", "n/a")) or True)
     logger.addHandler(ch)
 
     # Handler file, se richiesto
@@ -74,14 +73,17 @@ def get_structured_logger(
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             if rotate:
-                fh = RotatingFileHandler(log_file_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
+                fh = RotatingFileHandler(
+                    log_file_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+                )
             else:
                 fh = logging.FileHandler(log_file_path, encoding="utf-8")
             fh.setFormatter(formatter)
             if context:
-                fh.addFilter(lambda record: setattr(record, "slug", context.slug) or True)
+                fh.addFilter(lambda record: setattr(record, "slug", getattr(context, "slug", "n/a")) or True)
             logger.addHandler(fh)
         except Exception as e:
+            # Se il file non è creabile, degrada elegantemente a console-only
             logger.warning(f"Impossibile creare file di log {log_file_path}: {e}. Logging solo su console.")
 
     return logger

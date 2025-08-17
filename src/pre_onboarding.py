@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
+# src/pre_onboarding.py
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, ConfigError
+from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 from pipeline.context import ClientContext
 from pipeline.config_utils import (
     get_client_config,
@@ -21,11 +23,12 @@ from pipeline.drive_utils import (
     create_local_base_structure,
 )
 
+# Percorso YAML struttura cartelle (fonte di verità in /config)
 YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
 
 
 def _prompt(msg: str) -> str:
-    # prompt consentito solo qui (orchestratore)
+    # Prompt consentito solo negli orchestratori
     return input(msg).strip()
 
 
@@ -38,104 +41,102 @@ def pre_onboarding_main(
 ) -> None:
     """
     Prepara contesto cliente locale + struttura su Drive (se non dry_run):
+
       - struttura locale: output/timmy-kb-<slug>/{raw,book,config}
       - struttura Drive da YAML
       - upload config.yaml su Drive
       - aggiornamento config locale con ID Drive
+
+    Il flusso è invariato; l’uscita è consolidata negli handler di __main__ (EXIT_CODES).
     """
     # === Logger unificato: file unico per cliente ===
     log_file = Path("output") / f"timmy-kb-{slug}" / "logs" / "onboarding.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("pre_onboarding", log_file=log_file)
 
+    # Validazioni base input (senza cambiare UX)
+    if not slug:
+        raise ConfigError("Slug mancante.")
+    if client_name is None and interactive:
+        client_name = _prompt("Inserisci nome cliente: ").strip()
+    if not client_name:
+        client_name = slug  # fallback innocuo
+
+    # === Caricamento/creazione contesto cliente ===
+    context: ClientContext = ClientContext.load(slug=slug, interactive=interactive)
+    logger.info(f"Config cliente caricata: {context.config_path}")
+    logger.info("🚀 Avvio pre-onboarding")
+
+    # === Config iniziale: assicurati che esista un file config.yaml coerente ===
+    cfg: Dict[str, Any] = {}
     try:
-        # === Validazione minima input ===
-        if not slug:
-            raise ConfigError("Slug mancante.")
-        if client_name is None and interactive:
-            client_name = _prompt("Inserisci nome cliente: ").strip()
-        if not client_name:
-            client_name = slug  # fallback innocuo
+        cfg = get_client_config(context) or {}
+    except ConfigError:
+        # Se non esiste ancora, procediamo con un config minimo
+        cfg = {}
+    if client_name:
+        cfg["client_name"] = client_name
+    write_client_config_file(context, cfg)  # crea/aggiorna con backup .bak
 
-        # === Caricamento/creazione contesto cliente ===
-        context: ClientContext = ClientContext.load(slug=slug, interactive=interactive)
-        logger.info(f"Config cliente caricata: {context.config_path}")
+    # === Struttura locale convenzionale ===
+    if not YAML_STRUCTURE_FILE.exists():
+        raise ConfigError(
+            f"File YAML per struttura cartelle non trovato: {YAML_STRUCTURE_FILE}",
+            file_path=YAML_STRUCTURE_FILE,
+        )
+    create_local_base_structure(context, YAML_STRUCTURE_FILE)
 
-        logger.info("🚀 Avvio pre-onboarding")
+    if dry_run:
+        logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
+        logger.info("✅ Pre-onboarding locale completato (dry-run).")
+        return
 
-        # === Config iniziale: assicurati che esista un file config.yaml coerente ===
-        cfg: Dict[str, Any] = get_client_config(context) or {}
-        if client_name:
-            cfg["client_name"] = client_name
-        write_client_config_file(context, cfg)  # crea/aggiorna con backup .bak
+    # === Inizializza client Google Drive (Service Account) ===
+    service = get_drive_service(context)
 
-        # === Struttura locale convenzionale ===
-        if not YAML_STRUCTURE_FILE.exists():
-            raise ConfigError(
-                f"File YAML per struttura cartelle non trovato: {YAML_STRUCTURE_FILE}",
-                file_path=YAML_STRUCTURE_FILE,
-            )
-        create_local_base_structure(context, YAML_STRUCTURE_FILE)
+    # Determina parent della cartella cliente (Shared Drive o cartella specifica)
+    drive_parent_id = context.env.get("DRIVE_PARENT_FOLDER_ID") or context.env.get("DRIVE_ID")
+    if not drive_parent_id:
+        raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")
 
-        if dry_run:
-            logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
-            logger.info("✅ Pre-onboarding locale completato (dry-run).")
-            return
+    # === Crea cartella cliente sul Drive condiviso ===
+    client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id)
+    logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
 
-        # === Inizializza client Google Drive (Service Account) ===
-        service = get_drive_service(context)
+    # === Crea struttura remota da YAML ===
+    created_map = create_drive_structure_from_yaml(service, YAML_STRUCTURE_FILE, client_folder_id)
+    logger.info(f"📄 Struttura Drive creata: {created_map}")
 
-        # Determina parent della cartella cliente (Shared Drive o cartella specifica)
-        drive_parent_id = context.env.get("DRIVE_PARENT_FOLDER_ID") or context.env.get("DRIVE_ID")
-        if not drive_parent_id:
-            raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")
+    # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
+    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
+    if not drive_raw_folder_id:
+        raise ConfigError(
+            "Cartella RAW non trovata su Drive: verifica YAML di struttura cartelle.",
+            drive_id=client_folder_id,
+            slug=context.slug,
+        )
 
-        # === Crea cartella cliente sul Drive condiviso ===
-        client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id)
-        logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
+    # === Carica config.yaml su Drive (sostituisce se esiste) ===
+    uploaded_cfg_id = upload_config_to_drive_folder(service, context, parent_id=client_folder_id)
+    logger.info(f"📤 Config caricato su Drive con ID: {uploaded_cfg_id}")
 
-        # === Crea struttura remota da YAML ===
-        created_map = create_drive_structure_from_yaml(service, YAML_STRUCTURE_FILE, client_folder_id)
-        logger.info(f"📄 Struttura Drive creata: {created_map}")
+    # === Aggiorna config locale con gli ID Drive ===
+    updates = {
+        "drive_folder_id": client_folder_id,
+        "drive_raw_folder_id": drive_raw_folder_id,
+        "drive_config_folder_id": client_folder_id,
+        "client_name": client_name,
+    }
+    update_config_with_drive_ids(context, updates=updates, logger=logger)
+    logger.info(f"🔑 Config aggiornato con dati: {updates}")
 
-        # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
-        drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
-        if not drive_raw_folder_id:
-            raise ConfigError(
-                "Cartella RAW non trovata su Drive: verifica YAML di struttura cartelle.",
-                drive_id=client_folder_id,
-                slug=context.slug,
-            )
-
-        # === Carica config.yaml su Drive (sostituisce se esiste) ===
-        uploaded_cfg_id = upload_config_to_drive_folder(service, context, parent_id=client_folder_id)
-        logger.info(f"📤 Config caricato su Drive con ID: {uploaded_cfg_id}")
-
-        # === Aggiorna config locale con gli ID Drive ===
-        updates = {
-            "drive_folder_id": client_folder_id,
-            "drive_raw_folder_id": drive_raw_folder_id,
-            "drive_config_folder_id": client_folder_id,
-            "client_name": client_name,
-        }
-        update_config_with_drive_ids(context, updates=updates, logger=logger)
-        logger.info(f"🔑 Config aggiornato con dati: {updates}")
-
-        logger.info(f"✅ Pre-onboarding completato per cliente: {slug}")
-
-    except (PipelineError, ConfigError) as e:
-        logger.error(f"⚠️ Errore pre-onboarding: {e}", exc_info=True)
-        raise
-    except KeyboardInterrupt:
-        logger.warning("Operazione annullata dall'utente.")
-        raise
-    except Exception as e:
-        logger.error(f"🔥 Errore imprevisto: {e}", exc_info=True)
-        raise
+    logger.info(f"✅ Pre-onboarding completato per cliente: {slug}")
 
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
+    # slug “soft” posizionale (opzionale) + flag --slug (retrocompat)
+    p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
     p.add_argument("--name", type=str, help="Nome cliente (es. ACME Srl)")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
@@ -145,10 +146,32 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    slug = args.slug or _prompt("Inserisci slug cliente: ").strip()
-    pre_onboarding_main(
-        slug=slug,
-        client_name=args.name,
-        interactive=not args.non_interactive,
-        dry_run=args.dry_run,
-    )
+    # Risoluzione slug: posizionale > --slug > prompt
+    slug = args.slug_pos or args.slug
+    if not slug and args.non_interactive:
+        # In batch non possiamo chiedere; mantenere UX chiara
+        print("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).", file=sys.stderr)
+        sys.exit(EXIT_CODES.get("ConfigError", 2))
+    if not slug:
+        slug = _prompt("Inserisci slug cliente: ").strip()
+
+    try:
+        pre_onboarding_main(
+            slug=slug,
+            client_name=args.name,
+            interactive=not args.non_interactive,
+            dry_run=args.dry_run,
+        )
+        sys.exit(0)
+    except KeyboardInterrupt:
+        # Uscita standard per interruzione utente
+        sys.exit(130)
+    except PipelineError as e:
+        # Mapping deterministico verso EXIT_CODES
+        code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
+        sys.exit(code)
+    except ConfigError:
+        sys.exit(EXIT_CODES.get("ConfigError", 2))
+    except Exception:
+        # Fallback “safe”
+        sys.exit(EXIT_CODES.get("PipelineError", 1))

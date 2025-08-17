@@ -1,9 +1,9 @@
+# src/pipeline/github_utils.py
 """
 Utility per interagire con GitHub:
 - Creazione repo cliente
 - Push contenuto cartella 'book' (solo file .md senza .bak)
 """
-
 import shutil
 import tempfile
 import subprocess

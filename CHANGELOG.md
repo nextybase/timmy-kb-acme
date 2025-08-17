@@ -2,6 +2,28 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.1] - 2025-08-17
+
+### Added
+- **EXIT_CODES** centralizzati in `src/pipeline/exceptions.py` e gestione delle uscite **deterministica** negli orchestratori (`pre_onboarding.py`, `onboarding_full.py`).
+
+### Changed
+- `src/onboarding_full.py`: modalità **non-interactive first**; se Docker non è disponibile, la **preview viene saltata automaticamente** in non-interattivo; alias storici gestiti con avviso; log uniformati.
+- `src/pre_onboarding.py`: supporto **slug posizionale**, catch → `EXIT_CODES`, log consolidati; flusso invariato.
+- `src/pipeline/logging_utils.py`: rimosso import di `ClientContext` (niente cicli), `propagate=False`, pulizia handler duplicati.
+- Pulizia/robustezza senza cambiare il flusso in: `path_utils.py`, `config_utils.py` (scrittura atomica), `content_utils.py`, `drive_utils.py` (retry+jitter, idempotenza), `github_utils.py` (path-safety, push), `gitbook_preview.py` (pre-check/build/serve), `cleanup_utils.py`.
+
+### Deprecated
+- Flag **`--skip-drive`** e **`--skip-push`** (ancora accettati con **warning**). Usare **`--no-drive`** e **`--no-push`**.
+
+### Fixed
+- **Import circolare** tra `logging_utils` ↔ `context` ↔ `path_utils`.
+- Messaggi e livelli di log allineati; minor hardening su path-safety e scritture atomiche.
+
+### Notes
+- **Nessuna modifica di flusso**: pipeline e UX restano quelle già documentate; questa è una release di consolidamento.
+
+
 ## [1.0.3] - 2025-08-17
 ### Aggiunto
 - Controllo Docker **prima** dell’avvio: prompt immediato “proseguire senza anteprima?” in modalità interattiva; in non-interactive la preview viene saltata automaticamente.
