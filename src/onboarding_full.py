@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 # src/onboarding_full.py
+"""Orchestratore della fase di **onboarding completo** per Timmy-KB.
+
+Responsabilità (immutate):
+- Orchestrare il flusso end-to-end: download PDF (opzionale), conversione in Markdown,
+  generazione `SUMMARY.md`/`README.md`, preview HonKit in Docker (se disponibile) e push (opzionale).
+- Gestire UX/CLI (prompt, conferme) e il mapping deterministico **eccezioni → EXIT_CODES**.
+- Delegare il lavoro tecnico ai moduli di `pipeline.*` (i moduli **non** terminano il processo
+  e **non** chiedono input).
+
+Comportamento UX:
+- **non_interactive=True** → nessun prompt; se Docker non c’è la preview è **saltata**; `push=False`
+  salvo override `--push`.  
+- **non_interactive=False** → prompt sulla preview quando Docker manca; prompt sul push (default no).
+
+Sicurezza/Log:
+- Logger **condiviso** per cliente (file unico), niente segreti in chiaro; coerenza con policy dei log.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -35,10 +53,30 @@ from pipeline.github_utils import push_output_to_github
 # Helpers interazione CLI
 # -----------------------
 def _prompt(msg: str) -> str:
+    """Raccoglie input da CLI (abilitato **solo** negli orchestratori).
+
+    Args:
+        msg: Messaggio da mostrare all’utente.
+
+    Returns:
+        La risposta inserita dall’utente (ripulita con `strip()`).
+
+    Note:
+        I moduli di `pipeline.*` non devono usare prompt.
+    """
     return input(msg).strip()
 
 
 def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
+    """Chiede conferma sì/no con default configurabile.
+
+    Args:
+        msg: Testo della domanda (senza suffisso).
+        default_no: Se `True`, default = **No** (`[y/N]`), altrimenti **Sì** (`[Y/n]`).
+
+    Returns:
+        `True` se l’utente conferma (y/yes/s/sì), altrimenti `False`.
+    """
     suffix = " [y/N]: " if default_no else " [Y/n]: "
     ans = input(msg + suffix).strip().lower()
     if not ans:
@@ -47,6 +85,14 @@ def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
 
 
 def _docker_available() -> bool:
+    """Verifica la disponibilità del comando `docker` nel PATH.
+
+    Returns:
+        `True` se `docker --version` esegue con successo, altrimenti `False`.
+
+    Notes:
+        In **non-interattivo** la preview viene **saltata** se Docker non è disponibile.
+    """
     try:
         # Controllo semplice: esistenza comando docker
         subprocess.run(["docker", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -67,18 +113,35 @@ def onboarding_full_main(
     push: Optional[bool] = None,
     port: int = 4000,
 ) -> None:
-    """
-    Esegue l'onboarding completo per il cliente <slug>.
+    """Esegue l'onboarding completo per il cliente indicato da `slug`.
 
-    Fasi (invariato):
-      1) (opz.) Download PDF da Drive → output/<slug>/raw/
-      2) Conversione/Generazione Markdown → output/<slug>/book/
-      3) (opz.) Preview HonKit in Docker (se disponibile o accettata l'assenza)
-      4) (opz.) Push su GitHub (previa conferma e token presente)
+    Fasi:
+      1) (opz.) Download PDF da Drive → `output/<slug>/raw/`
+      2) Conversione/Generazione Markdown → `output/<slug>/book/`
+      3) (opz.) Preview HonKit in Docker
+      4) (opz.) Push su GitHub
 
-    NOTE UX:
-      - non_interactive=True: nessun prompt; se Docker non c'è → skip preview; push=False a meno di --push.
-      - non_interactive=False: prompt su preview se Docker manca; prompt su push (default no).
+    UX invariata:
+      - `non_interactive=True`: nessun prompt; se Docker non c'è → **skip preview**; `push=False` salvo `--push`.
+      - `non_interactive=False`: prompt su preview se Docker manca; prompt su push (default **no**).
+
+    Args:
+        slug: Identificativo cliente (usato per risolvere la root `output/timmy-kb-<slug>`).
+        non_interactive: Se `True`, esecuzione batch senza prompt.
+        dry_run: Se `True`, nessun accesso ai servizi remoti (Drive); esegue solo la parte locale.
+        no_drive: Se `True`, salta il download da Drive anche quando non è dry-run.
+        push: `True` forza il push; `False` lo disabilita; `None` → decide UX (prompt o default).
+        port: Porta locale per la preview HonKit (default: 4000).
+
+    Raises:
+        ConfigError: Config mancante/errata (es. `drive_raw_folder_id` assente) o richieste UX non soddisfatte.
+        PreviewError: Errori legati all’anteprima HonKit (propagati dai moduli).
+        PipelineError: Errori non tipizzati propagati dai moduli.
+
+    Side Effects:
+        - Scrive markdown e file di log sotto `output/timmy-kb-<slug>/`.
+        - Può creare/leggere risorse su Google Drive e avviare un container Docker per la preview.
+        - Può effettuare un push su GitHub (se autorizzato).
     """
     # Carica contesto e logger file-based unificato
     context: ClientContext = ClientContext.load(slug=slug, interactive=not non_interactive)
@@ -167,6 +230,18 @@ def onboarding_full_main(
 # Argparse / __main__
 # -----------------------
 def _parse_args() -> argparse.Namespace:
+    """Parsa gli argomenti CLI dell’orchestratore `onboarding_full`.
+
+    Returns:
+        Namespace con:
+            - `slug_pos`: slug posizionale (opzionale).
+            - `--slug`: slug esplicito (retrocompat).
+            - `--non-interactive`: esecuzione senza prompt.
+            - `--dry-run`: nessun accesso ai servizi remoti; conversione locale.
+            - `--no-drive`: forza lo skip del download da Drive.
+            - `--push` / `--no-push`: controlla il push su GitHub (alias deprecati supportati).
+            - `--port`: porta locale per la preview HonKit.
+    """
     p = argparse.ArgumentParser(description="Onboarding completo Timmy-KB")
 
     # Slug “soft” posizionale con compat --slug
@@ -210,7 +285,7 @@ if __name__ == "__main__":
     if args.skip_drive:
         early_logger.warning("⚠️  --skip-drive è deprecato; usare --no-drive")
         args.no_drive = True
-    if args.skip_push:  # <-- fix del refuso
+    if args.skip_push:  # <-- manteniamo l'alias deprecato con warning
         early_logger.warning("⚠️  --skip-push è deprecato; usare --no-push")
         args.no_push = True
 

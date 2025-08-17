@@ -1,5 +1,4 @@
 # src/pipeline/path_utils.py
-
 """
 Utility di gestione path e slug per la pipeline Timmy-KB.
 
@@ -9,11 +8,14 @@ Utility di gestione path e slug per la pipeline Timmy-KB.
 - Logging strutturato solo in caso di errore (silenzioso quando tutto va bene).
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import unicodedata
 import re
 import yaml
 import os
+from typing import Optional
 
 from pipeline.logging_utils import get_structured_logger
 
@@ -24,8 +26,17 @@ _logger = get_structured_logger("pipeline.path_utils")
 def is_safe_subpath(path: Path, base: Path) -> bool:
     """
     Verifica in modo sicuro se `path` è contenuto all'interno di `base`.
-    Usa path risolti per prevenire path traversal.
-    Ritorna False in caso di eccezioni durante la risoluzione.
+
+    Usa i percorsi **risolti** (realpath) per prevenire path traversal e link simbolici
+    indesiderati. In caso di eccezioni durante la risoluzione, ritorna `False`
+    e registra un errore sul logger di modulo.
+
+    Args:
+        path: Path da validare.
+        base: Directory radice consentita.
+
+    Returns:
+        `True` se `path` è uguale a `base` o è un suo discendente; `False` altrimenti.
     """
     try:
         path_resolved = Path(path).resolve()
@@ -38,9 +49,15 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
 
 def _load_slug_regex() -> str:
     """
-    Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: slug_regex).
+    Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
+
     Se il file non esiste o la chiave è assente/non valida, usa un default sicuro.
-    Nota: qui non si usa ClientContext per evitare dipendenze circolari.
+
+    Note:
+        Non si usa `ClientContext` per evitare dipendenze circolari.
+
+    Returns:
+        La regex (come stringa) da usare per la validazione dello slug.
     """
     config_path = os.path.join("config", "config.yaml")
     default_regex = r"^[a-z0-9-]+$"
@@ -59,7 +76,14 @@ def _load_slug_regex() -> str:
 def is_valid_slug(slug: str) -> bool:
     """
     Valida lo `slug` secondo la regex di progetto (configurabile via `config/config.yaml`).
+
     Default: minuscole, numeri e trattini (`^[a-z0-9-]+$`).
+
+    Args:
+        slug: Stringa da validare come identificatore cliente.
+
+    Returns:
+        `True` se lo slug è conforme alla regex di progetto, `False` altrimenti.
     """
     pattern = _load_slug_regex()
     try:
@@ -73,7 +97,15 @@ def is_valid_slug(slug: str) -> bool:
 def normalize_path(path: Path) -> Path:
     """
     Restituisce il path normalizzato/risolto.
-    In caso di errore, ritorna il path originale senza interrompere il flusso.
+
+    In caso di errore, ritorna il path originale senza interrompere il flusso
+    e registra l'errore sul logger.
+
+    Args:
+        path: Percorso da normalizzare.
+
+    Returns:
+        Il percorso risolto (o quello originale in caso di errore).
     """
     try:
         return Path(path).resolve()
@@ -84,12 +116,21 @@ def normalize_path(path: Path) -> Path:
 
 def sanitize_filename(name: str, max_length: int = 100) -> str:
     """
-    Pulisce un nome file per l’uso su filesystem:
+    Pulisce un nome file per l’uso su filesystem.
+
+    Operazioni:
     - normalizza Unicode (NFKC)
     - sostituisce i caratteri vietati con underscore
     - rimuove controlli ASCII
     - tronca a `max_length`
     - garantisce un fallback non vuoto
+
+    Args:
+        name: Nome file di partenza (potenzialmente non sicuro).
+        max_length: Lunghezza massima consentita per il nome finale.
+
+    Returns:
+        Un nome file sicuro e non vuoto.
     """
     try:
         # Normalizzazione unicode

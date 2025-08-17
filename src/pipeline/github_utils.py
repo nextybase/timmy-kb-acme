@@ -4,8 +4,8 @@ Utility per interagire con GitHub:
 - Creazione/rilevamento repo cliente
 - Push del contenuto della cartella 'book' (solo file .md, esclusi .bak)
 - Branch di default configurabile via (in ordine di priorità):
-    1) context.env["GIT_DEFAULT_BRANCH"] 
-    2) os.getenv("GIT_DEFAULT_BRANCH") 
+    1) context.env["GIT_DEFAULT_BRANCH"]
+    2) os.getenv("GIT_DEFAULT_BRANCH")
     3) fallback "main"
 """
 
@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Optional, Protocol, runtime_checkable, Iterable
 
 from github import Github
 from github.GithubException import GithubException
@@ -29,8 +30,34 @@ from pipeline.path_utils import is_safe_subpath  # sicurezza path
 logger = get_structured_logger("pipeline.github_utils")
 
 
-def _resolve_default_branch(context) -> str:
-    """Risoluzione branch di default con fallback a 'main'."""
+@runtime_checkable
+class _SupportsContext(Protocol):
+    """Protocol minimale per il contesto richiesto da queste utility.
+
+    Richiede:
+        - slug: str — identificativo cliente, usato per naming e logging.
+        - md_dir: Path — directory che contiene i markdown da pubblicare.
+        - env: dict — mappa di variabili d'ambiente risolte (opzionale).
+    """
+    slug: str
+    md_dir: Path
+    env: dict
+
+
+def _resolve_default_branch(context: _SupportsContext) -> str:
+    """Risoluzione branch di default con fallback a 'main'.
+
+    Ordine di priorità:
+      1) `context.env["GIT_DEFAULT_BRANCH"]` o `context.env["GITHUB_BRANCH"]` (se presenti)
+      2) variabili di processo: `GIT_DEFAULT_BRANCH` o `GITHUB_BRANCH`
+      3) fallback sicuro: `"main"`
+
+    Args:
+        context: Oggetto compatibile con `_SupportsContext`.
+
+    Returns:
+        Nome del branch da usare come default.
+    """
     # 1) variabili nel contesto (preferite)
     if getattr(context, "env", None):
         br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
@@ -46,14 +73,24 @@ def _resolve_default_branch(context) -> str:
     return "main"
 
 
-def push_output_to_github(context, github_token: str, confirm_push: bool = True) -> None:
-    """
-    Esegue il push dei file .md presenti nella cartella 'book' del cliente su GitHub.
-    Crea il repository se non esiste.
+def push_output_to_github(
+    context: _SupportsContext,
+    github_token: str,
+    confirm_push: bool = True,
+) -> None:
+    """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub.
 
-    :param context: ClientContext (deve esporre .md_dir e .slug)
-    :param github_token: Token personale GitHub (PAT)
-    :param confirm_push: Se False, NON esegue il push (il consenso/prompt è gestito dagli orchestratori).
+    Se il repository non esiste, viene creato nel namespace dell'utente associato al token.
+    I file considerati sono esclusivamente quelli con estensione `.md` (esclusi `.bak`), e
+    solo se i relativi path ricadono **sotto** `context.md_dir` (path-safety).
+
+    Args:
+        context: Contesto con attributi `slug`, `md_dir` e (opz.) `env`.
+        github_token: Token personale GitHub (PAT).
+        confirm_push: Se `False`, NON esegue il push (il consenso/prompt è gestito dagli orchestratori).
+
+    Raises:
+        PipelineError: Se `book_dir` non esiste, oppure in caso di errori durante il push.
     """
     book_dir = context.md_dir
     if not book_dir.exists():

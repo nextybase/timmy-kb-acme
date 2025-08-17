@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 # src/pre_onboarding.py
+"""Orchestratore della fase di **pre-onboarding** per Timmy-KB.
+
+Responsabilità:
+- Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
+- Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
+- Creare struttura locale e, se non in `--dry-run`, la struttura remota su Google Drive.
+- Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
+
+Nota architetturale:
+- Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
+  (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** devono chiamare
+  `sys.exit()` o `input()`. Questo file rispetta tali regole.
+
+Questo modulo **non** modifica dati sensibili nei log e utilizza un **logger unificato**
+(file unico per cliente). Vedi anche README/Docs per dettagli sul flusso.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +45,17 @@ YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle
 
 
 def _prompt(msg: str) -> str:
+    """Raccoglie input da CLI (abilitato **solo** negli orchestratori).
+
+    Args:
+        msg: Messaggio da mostrare all’utente.
+
+    Returns:
+        La stringa inserita dall’utente, ripulita con `strip()`.
+
+    Note:
+        Le funzioni di **pipeline** non devono utilizzare prompt.
+    """
     # Prompt consentito solo negli orchestratori
     return input(msg).strip()
 
@@ -39,15 +67,34 @@ def pre_onboarding_main(
     interactive: bool = True,
     dry_run: bool = False,
 ) -> None:
-    """
-    Prepara contesto cliente locale + struttura su Drive (se non dry_run):
+    """Esegue la fase di pre-onboarding per il cliente indicato.
 
-      - struttura locale: output/timmy-kb-<slug>/{raw,book,config}
-      - struttura Drive da YAML
-      - upload config.yaml su Drive
-      - aggiornamento config locale con ID Drive
+    Operazioni:
+        1) Carica/crea il contesto cliente e inizializza il **logger file-based**.
+        2) Genera/aggiorna `config.yaml` (con fallback minimale).
+        3) Crea la **struttura locale** da YAML canonico (`cartelle_raw.yaml`).
+        4) Se `dry_run` è `False`:
+           - Crea la cartella cliente su **Google Drive** (Shared Drive o parent specificato).
+           - Crea la **struttura remota** da YAML.
+           - Carica `config.yaml` su Drive e
+             **aggiorna localmente** gli ID (`drive_*_id`) in `config.yaml`.
 
-    Il flusso è invariato; l’uscita è consolidata negli handler di __main__ (EXIT_CODES).
+    Args:
+        slug: Identificativo cliente (ammesso anche come fallback per `client_name`).
+        client_name: Nome leggibile del cliente; se omesso in modalità interattiva
+            viene richiesto via prompt, altrimenti cade su `slug`.
+        interactive: Se `True`, abilita prompt; se `False`, nessun input utente.
+        dry_run: Se `True`, salta tutte le operazioni **remote** (Drive).
+
+    Raises:
+        ConfigError: Slug mancante, file YAML struttura non trovato,
+            env non configurato (`DRIVE_ID`/`DRIVE_PARENT_FOLDER_ID`), errori di config.
+        PipelineError: Errori bloccanti non tipizzati in fase di update/scrittura.
+
+    Side Effects:
+        - Scrive file e directory sotto `output/timmy-kb-<slug>/...`.
+        - Scrive su file di log unificato `onboarding.log`.
+        - In modalità non-dry-run, crea risorse su Google Drive.
     """
     # === Logger unificato: file unico per cliente ===
     log_file = Path("output") / f"timmy-kb-{slug}" / "logs" / "onboarding.log"
@@ -134,6 +181,16 @@ def pre_onboarding_main(
 
 
 def _parse_args() -> argparse.Namespace:
+    """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding.
+
+    Returns:
+        Namespace con:
+            - `slug_pos`: slug posizionale (opzionale).
+            - `--slug`: slug esplicito (retrocompat).
+            - `--name`: nome cliente.
+            - `--non-interactive`: esecuzione senza prompt.
+            - `--dry-run`: esegue solo la parte locale (salta Google Drive).
+    """
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
     # slug “soft” posizionale (opzionale) + flag --slug (retrocompat)
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")

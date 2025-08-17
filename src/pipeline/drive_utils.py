@@ -3,15 +3,20 @@
 """
 Utility Google Drive per la pipeline Timmy-KB.
 
-- Inizializzazione client (Service Account)
-- Creazione / elenco / cancellazione cartelle e file (compatibile con Shared Drives)
-- Creazione struttura remota da YAML (supporto mapping moderno e legacy root_folders)
-- Creazione struttura locale convenzionale (raw/book/config) con categorie SOLO da RAW/raw
-- Upload di config.yaml
-- Download PDF idempotente con verifica md5/size e file handle sicuri
-  ➕ (Agg.) Download RICORSIVO: visita BFS di sottocartelle, preservando la gerarchia locale
+Funzioni principali:
+- Inizializzazione client (Service Account).
+- Creazione / elenco / cancellazione cartelle e file (compatibile con Shared Drives).
+- Creazione struttura remota da YAML (supporto mapping moderno e legacy `root_folders`).
+- Creazione struttura locale convenzionale (raw/book/config) con categorie SOLO da RAW/raw.
+- Upload di `config.yaml`.
+- Download PDF idempotente con verifica md5/size e file handle sicuri.
+  ➕ (Agg.) Download RICORSIVO: visita BFS di sottocartelle, preservando la gerarchia locale.
 
-Requisiti: variabili d'ambiente/contesto per SERVICE_ACCOUNT_FILE.
+Requisiti: variabili d'ambiente/contesto per `SERVICE_ACCOUNT_FILE`.
+
+Note:
+- Le funzioni qui NON terminano il processo; eventuali errori sono propagati come eccezioni tipizzate.
+- Logging strutturato tramite logger di modulo (nessun segreto in chiaro).
 """
 
 from __future__ import annotations
@@ -46,7 +51,15 @@ MIME_PDF = "application/pdf"
 # Helpers locali
 # ---------------------------------------------------------
 def _md5sum(path: Path, chunk_size: int = 1024 * 1024) -> str:
-    """Calcola l’MD5 del file in streaming (robusto su file grandi)."""
+    """Calcola l’MD5 del file in streaming (robusto su file grandi).
+
+    Args:
+        path: Percorso del file locale.
+        chunk_size: Dimensione dei chunk di lettura.
+
+    Returns:
+        Stringa esadecimale MD5 del file.
+    """
     h = hashlib.md5()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(chunk_size), b""):
@@ -54,8 +67,21 @@ def _md5sum(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff: float = 1.6):
-    """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati."""
+def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff: float = 1.6) -> Any:
+    """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati.
+
+    Args:
+        fn: Funzione senza argomenti da eseguire con retry.
+        tries: Numero massimo di tentativi.
+        delay: Ritardo iniziale tra i tentativi (secondi).
+        backoff: Fattore di moltiplicazione del ritardo a ogni retry.
+
+    Returns:
+        Il valore ritornato da `fn` in caso di successo.
+
+    Raises:
+        HttpError: se tutti i tentativi falliscono.
+    """
     _delay = delay
     for attempt in range(1, tries + 1):
         try:
@@ -75,21 +101,24 @@ def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff
 
 
 def _ensure_dir(path: Path) -> None:
+    """Crea la directory (e genitori) se non esiste (idempotente)."""
     path.mkdir(parents=True, exist_ok=True)
 
 
 def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
-    """
-    Normalizza la struttura YAML della gerarchia remota.
+    """Normalizza la struttura YAML della gerarchia remota.
 
     Accetta:
-      1) Mapping moderno: { RAW: {categoria: {}}, YAML: {} }
-      2) Legacy: { root_folders: [ {name: "raw", subfolders: [...]}, ... ] }
+      1) Mapping moderno: `{ RAW: {categoria: {}}, YAML: {} }`
+      2) Legacy: `{ root_folders: [ {name: "raw", subfolders: [...]}, ... ] }`
 
-    Ritorna sempre un dict annidato {nome: {sotto: {...}}}.
-    (N.B. qui NON aggiungiamo alias RAW/YAML per evitare doppioni su Drive;
-    eventuali alias sono aggiunti SOLO nel valore di ritorno di
-    create_drive_structure_from_yaml.)
+    Returns:
+        Un dizionario annidato `{nome: {sotto: {...}}}`.
+
+    Note:
+        Qui NON aggiungiamo alias `RAW`/`YAML` per evitare doppioni su Drive.
+        Gli alias sono aggiunti solo nel valore di ritorno di
+        `create_drive_structure_from_yaml`.
     """
     if isinstance(data, dict) and "root_folders" in data and isinstance(data["root_folders"], list):
         def to_map(items: List[dict]) -> Dict[str, Any]:
@@ -112,15 +141,18 @@ def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
 # Inizializzazione client
 # ---------------------------------------------------------
 def get_drive_service(context_or_sa_file: Any, drive_id: Optional[str] = None):
-    """
-    Inizializza il client Google Drive (v3).
+    """Inizializza il client Google Drive (v3).
 
     Args:
-        context_or_sa_file: oggetto con .env['SERVICE_ACCOUNT_FILE'] oppure Path/str al JSON del Service Account.
-        drive_id: non utilizzato qui; mantenuto per compat futura.
+        context_or_sa_file: Oggetto con `.env['SERVICE_ACCOUNT_FILE']` oppure
+            percorso (Path/str) al JSON del Service Account.
+        drive_id: Non utilizzato qui; mantenuto per compat futura.
 
     Returns:
-        service Drive v3
+        Oggetto service Drive v3 (googleapiclient.discovery.Resource).
+
+    Raises:
+        ConfigError: se il file delle credenziali non è configurato o non esiste.
     """
     if hasattr(context_or_sa_file, "env"):
         sa_path = context_or_sa_file.env.get("SERVICE_ACCOUNT_FILE")
@@ -142,11 +174,22 @@ def get_drive_service(context_or_sa_file: Any, drive_id: Optional[str] = None):
 # Operazioni di base (Shared Drives compat)
 # ---------------------------------------------------------
 def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> str:
-    """
-    Crea una cartella su Drive e ritorna l'ID (compatibile con Shared Drives).
+    """Crea una cartella su Drive e ritorna l'ID (compatibile con Shared Drives).
 
-    Idempotenza: se sotto `parent_id` esiste già una cartella con lo stesso `name`,
-    riusa quell'ID invece di crearne una nuova.
+    Idempotenza:
+        se sotto `parent_id` esiste già una cartella con lo stesso `name`,
+        riusa quell'ID invece di crearne una nuova.
+
+    Args:
+        service: Client Drive v3.
+        name: Nome cartella.
+        parent_id: ID della cartella padre (opzionale).
+
+    Returns:
+        ID della cartella creata o esistente.
+
+    Raises:
+        DriveUploadError: se la creazione fallisce per cause di permessi/parent errato.
     """
     # Lookup preventivo per idempotenza
     if parent_id:
@@ -194,15 +237,15 @@ def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> 
 
 
 def list_drive_files(service, parent_id: str, query: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Elenca file sotto una cartella Drive.
+    """Elenca file sotto una cartella Drive.
 
     Args:
-        parent_id: ID della cartella padre
-        query: filtro addizionale (es. "mimeType='application/pdf'")
+        service: Client Drive v3.
+        parent_id: ID della cartella padre.
+        query: Filtro addizionale (es. `"mimeType='application/pdf'"`).
 
     Returns:
-        Lista di dict con campi: id, name, mimeType, md5Checksum, size
+        Lista di dict con campi: `id`, `name`, `mimeType`, `md5Checksum`, `size`.
     """
     base_q = f"'{parent_id}' in parents and trashed = false"
     q = f"{base_q} and {query}" if query else base_q
@@ -234,7 +277,7 @@ def list_drive_files(service, parent_id: str, query: Optional[str] = None) -> Li
 
 
 def delete_drive_file(service, file_id: str) -> None:
-    """Cancella un file su Drive per ID."""
+    """Cancella un file su Drive per ID (compat Shared Drives)."""
     def _do():
         return service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
 
@@ -242,15 +285,19 @@ def delete_drive_file(service, file_id: str) -> None:
 
 
 def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
-    """
-    Carica la config del cliente su Drive (sostituisce se esiste).
+    """Carica la config del cliente su Drive (sostituisce se esiste).
 
     Args:
-        context: espone .config_path: Path
-        parent_id: ID cartella cliente su Drive
+        service: Client Drive v3.
+        context: Oggetto che espone `config_path: Path`.
+        parent_id: ID della cartella cliente su Drive.
 
     Returns:
-        ID del file caricato
+        L'ID del file caricato su Drive.
+
+    Raises:
+        ConfigError: se `config.yaml` è assente localmente.
+        DriveUploadError: in caso di errori durante l'upload.
     """
     config_path: Path = context.config_path
     if not config_path.exists():
@@ -292,11 +339,15 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
 # Strutture (remoto e locale)
 # ---------------------------------------------------------
 def _create_remote_tree_from_mapping(service, root_id: str, mapping: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Crea ricorsivamente la struttura di cartelle su Drive partendo da un mapping dict.
+    """Crea ricorsivamente la struttura di cartelle su Drive partendo da un mapping dict.
+
+    Args:
+        service: Client Drive v3.
+        root_id: ID della cartella radice (cliente).
+        mapping: Dizionario `{nome: sottostruttura}`.
 
     Returns:
-        Dict {nome_cartella: id} per i livelli creati (non tutta la profondità).
+        Dizionario `{nome_cartella: id}` per i livelli creati (non tutta la profondità).
     """
     created: Dict[str, str] = {}
 
@@ -312,17 +363,24 @@ def _create_remote_tree_from_mapping(service, root_id: str, mapping: Dict[str, A
 
 
 def create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id: str) -> Dict[str, str]:
-    """
-    Crea su Drive la gerarchia definita in YAML.
+    """Crea su Drive la gerarchia definita in YAML.
 
     Supporta:
-      - mapping: { RAW: {...}, YAML: {...} }
-      - legacy:  { root_folders: [ {name, subfolders: [...]}, ... ] }
+      - mapping: `{ RAW: {...}, YAML: {...} }`
+      - legacy:  `{ root_folders: [ {name, subfolders: [...]}, ... ] }`
+
+    Args:
+        service: Client Drive v3.
+        yaml_path: Percorso del file YAML con la struttura.
+        client_folder_id: ID della cartella radice del cliente su Drive.
 
     Returns:
-        Dict con {nome_cartella: id}; aggiunge alias in uscita:
+        Dizionario con `{nome_cartella: id}`; aggiunge alias in uscita:
         se esiste 'raw' → aggiunge chiave 'RAW' con lo stesso ID (e viceversa per 'yaml'/'YAML'),
-        SENZA creare doppioni su Drive.
+        **senza** creare doppioni su Drive.
+
+    Raises:
+        ConfigError: se `yaml_path` non esiste o YAML non valido/supportato.
     """
     if not yaml_path.exists():
         raise ConfigError(f"YAML struttura non trovato: {yaml_path}", file_path=yaml_path)
@@ -343,8 +401,7 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id:
 
 
 def create_local_base_structure(context, yaml_path: Path) -> None:
-    """
-    Crea la struttura locale convenzionale sotto output/<slug>/.
+    """Crea la struttura locale convenzionale sotto `output/<slug>/`.
 
     Convenzione locale:
         output/<slug>/
@@ -352,8 +409,16 @@ def create_local_base_structure(context, yaml_path: Path) -> None:
           ├─ book/
           └─ config/
 
-    Nota: le categorie top-level NON finite sotto RAW/raw nel YAML
-          NON vengono replicate in output/<slug>/raw.
+    Nota:
+        Le categorie top-level NON finite sotto RAW/raw nel YAML
+        non vengono replicate in `output/<slug>/raw`.
+
+    Args:
+        context: Contesto con `output_dir`/`base_dir` e path canonici.
+        yaml_path: YAML che definisce la struttura remota (per derivare le categorie RAW/raw).
+
+    Raises:
+        ConfigError: se il contesto non ha base/output dir o se lo YAML è assente.
     """
     base = getattr(context, "output_dir", None) or getattr(context, "base_dir", None)
     if not base:
@@ -402,15 +467,24 @@ def download_drive_pdfs_to_local(
     *,
     progress: bool = True,
 ) -> Tuple[int, int]:
-    """
-    Scarica TUTTI i PDF dalle sottocartelle di `remote_root_folder_id` in `local_root_dir`,
-    preservando la gerarchia (ogni sottocartella remota → sottocartella locale).
+    """Scarica TUTTI i PDF dalle sottocartelle di `remote_root_folder_id` in `local_root_dir`.
+
+    La gerarchia locale replica quella remota: ogni sottocartella remota → sottocartella locale.
 
     Idempotenza:
-        se il file esiste ed è identico (md5 o size) → skip.
+        Se il file esiste ed è identico (md5 o size) → skip.
+
+    Args:
+        service: Client Drive v3.
+        remote_root_folder_id: ID della cartella remota contenente le categorie.
+        local_root_dir: Radice locale in cui salvare i PDF.
+        progress: Se `True`, logga avanzamento dei chunk durante il download.
 
     Returns:
-        (downloaded_count, skipped_count)
+        `tuple(downloaded_count, skipped_count)`.
+
+    Raises:
+        DriveDownloadError: in caso di errori di download dal servizio Drive.
     """
     local_root_dir = Path(local_root_dir)
     _ensure_dir(local_root_dir)
@@ -477,7 +551,7 @@ def download_drive_pdfs_to_local(
                     skipped_count += 1
                     continue
 
-            # Download sicuro
+            # Download sicuro (streaming a chunk)
             request = service.files().get_media(fileId=remote_file_id, supportsAllDrives=True)
             try:
                 with open(local_file_path, "wb") as fh:

@@ -2,6 +2,28 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [micro-refine docs] - 2025-08-17
+
+### Changed
+- **Docstring e commenti**: revisione estensiva per chiarezza, coerenza terminologica e uniformità di stile in tutta la pipeline.
+- **Messaggi di log**: testo più informativo e coerente (senza esporre segreti), uso di emoji solo a supporto semantico.
+- **Type hints e protocolli**: esplicitazione dei contratti dove utile, senza introdurre nuove dipendenze o vincoli runtime.
+
+### Modules/Files interessati
+- `src/pipeline/exceptions.py`: docstring per tutte le eccezioni; `__str__` documentato con contesto `slug/file/drive_id`.
+- `src/pipeline/logging_utils.py`: docstring più complete; chiarita la logica di formatter/handler e rotazione.
+- `src/pipeline/path_utils.py`: docstring e commenti su sicurezza path, regex slug da config e sanitizzazione filename.
+- `src/pipeline/config_utils.py`: docstring, messaggi di errore coerenti; note su scrittura atomica/backup; validazioni pre-onboarding documentate.
+- `src/pipeline/content_utils.py`: docstring su struttura annidata markdown; spiegato heading stack e invarianti di sicurezza.
+- `src/pipeline/github_utils.py`: docstring, chiarito `_resolve_default_branch`; commenti su push sicuro via header PAT.
+- `src/pipeline/drive_utils.py`: docstring e commenti su retry con jitter/backoff, idempotenza md5/size e BFS ricorsivo.
+- `src/pipeline/gitbook_preview.py`: docstring su pre-requisiti e path-safety; chiariti passaggi `build`/`serve` in Docker.
+- `src/pipeline/cleanup_utils.py`: docstring e logging per pulizia sicura dentro `base_dir`, alias retrocompat documentati.
+
+### Notes
+- Invariati: firme pubbliche, side-effects e comportamento runtime.
+- Standard confermati: scrittura atomica (tmp → replace), path-safety (`is_safe_subpath`), gestione errori tipizzata.
+
 ## [1.0.3] - 2025-08-17
 ### Aggiunto
 - Controllo Docker **prima** dell’avvio: in modalità interattiva prompt “proseguire senza anteprima?”, in non-interactive la preview viene saltata automaticamente.
