@@ -115,6 +115,7 @@ def _retry(
     tries: int = 3,
     delay: float = 0.8,
     backoff: float = 1.6,
+    max_total_delay: Optional[float] = 60.0,  # ⬅️ NOVITÀ: tetto massimo ai sleep cumulati (secondi)
     redact_logs: bool = False,  # 👈 opzionale: redazione nei log dei retry
 ) -> Any:
     """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati.
@@ -124,6 +125,8 @@ def _retry(
         tries: Numero massimo di tentativi.
         delay: Ritardo iniziale tra i tentativi (secondi).
         backoff: Fattore di moltiplicazione del ritardo a ogni retry.
+        max_total_delay: Se impostato, limite superiore (in secondi) del tempo di attesa cumulato
+                         tra i tentativi. Al superamento, interrompe con eccezione.
         redact_logs: Se True, maschera eventuali segreti nei messaggi di log.
 
     Returns:
@@ -131,8 +134,10 @@ def _retry(
 
     Raises:
         HttpError: se tutti i tentativi falliscono.
+        TimeoutError: se il budget `max_total_delay` viene superato prima di esaurire i tentativi.
     """
     _delay = delay
+    elapsed = 0.0
     for attempt in range(1, tries + 1):
         try:
             return fn()
@@ -155,10 +160,24 @@ def _retry(
             # jitter: +/- 30% del delay corrente
             jitter_factor = 1.0 + random.uniform(-0.3, 0.3)
             sleep_s = max(0.0, _delay * jitter_factor)
+
+            # 🔒 Limite di budget sugli sleep cumulati
+            if max_total_delay is not None and (elapsed + sleep_s) > max_total_delay:
+                logger.warning(
+                    _maybe_redact(
+                        f"⏱️ Limite retry superato: sleep cumulato {elapsed:.1f}s + next {sleep_s:.1f}s > {max_total_delay:.1f}s",
+                        redact_logs,
+                    ),
+                    extra={"retries_so_far": attempt - 1, "max_total_delay": max_total_delay},
+                )
+                # Interrompe subito: nessun ulteriore sleep
+                raise TimeoutError(f"Drive retry budget exceeded ({elapsed:.1f}s >= {max_total_delay:.1f}s)")
+
+            # Aggiorna metriche e dormi
             if _METRICS_CTX is not None:
-                # arrotonda a millisecondi per leggibilità
                 _METRICS_CTX.backoff_total_ms += int(round(sleep_s * 1000))
             time.sleep(sleep_s)
+            elapsed += sleep_s
             _delay *= backoff
 
 

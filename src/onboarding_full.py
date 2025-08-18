@@ -33,6 +33,7 @@ from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
+from pipeline.path_utils import is_valid_slug  # 👈 validazione slug lato orchestratore
 
 
 def _prompt(msg: str) -> str:
@@ -59,51 +60,40 @@ def _stop_preview_container(container_name: str) -> None:
     subprocess.run(["docker", "rm", "-f", container_name], check=False)
 
 
-def onboarding_full_main(
-    slug: str,
+def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
+    """Valida/ottiene uno slug valido PRIMA di creare contesto/logger file-based."""
+    slug = (initial_slug or "").strip()
+    while True:
+        if not slug:
+            if not interactive:
+                raise ConfigError("Slug mancante.")
+            slug = _prompt("Inserisci slug cliente: ").strip()
+            continue
+        if is_valid_slug(slug):
+            return slug
+        # slug non valido
+        early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
+        if not interactive:
+            raise ConfigError(f"Slug '{slug}' non valido.")
+        slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
+
+
+# =========================
+#   HELPER ESTRATTI (Fase A)
+# =========================
+
+def _run_preview(
+    context: ClientContext,
     *,
-    non_interactive: bool = False,
-    dry_run: bool = False,
-    no_drive: bool = False,
-    push: Optional[bool] = None,
-    port: int = 4000,
-    allow_offline_env: bool = False,
-    docker_retries: int = 3,
-    run_id: Optional[str] = None,
-) -> None:
-    # 🚦 Policy più rigorosa: se NON è dry-run e NON c'è --no-drive ⇒ richiedi env,
-    # indipendentemente da --non-interactive. Override con --allow-offline-env.
-    if allow_offline_env:
-        require_env = not (no_drive or dry_run or non_interactive)  # era il comportamento originale
-    else:
-        require_env = (not no_drive) and (not dry_run)  # più sicuro di L70 originale
-    context: ClientContext = ClientContext.load(
-        slug=slug,
-        interactive=not non_interactive,
-        require_env=require_env,
-        run_id=run_id,
-    )
-    # 🌟 Logger file-based allineato alle costanti
-    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
-
-    if not require_env:
-        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
-
-    logger.info("🚀 Avvio onboarding_full")
-
-    # Config cliente
-    try:
-        cfg: Dict[str, Any] = get_client_config(context) or {}
-    except ConfigError as e:
-        logger.error(str(e))
-        raise
-
-    # Toggle redazione centralizzato
-    redact = is_log_redaction_enabled(context)
-
-    # Controllo precoce Docker / policy preview
+    slug: str,
+    port: int,
+    docker_retries: int,
+    non_interactive: bool,
+    redact: bool,
+    logger,
+) -> bool:
+    """Incapsula la logica della preview (check Docker + avvio container)."""
+    # Controllo/policy Docker
     preview_allowed = True
     if non_interactive:
         if not _docker_available():
@@ -132,6 +122,120 @@ def onboarding_full_main(
                         logger.warning(f"⚠️  Docker ancora non disponibile (tentativo {attempts}/{max_attempts}).")
                 if attempts >= max_attempts and not preview_allowed:
                     raise ConfigError("Docker non disponibile dopo i tentativi concessi.")
+
+    container_name = f"honkit_preview_{slug}"
+    if preview_allowed and _docker_available():
+        logger.info("🔎 Docker disponibile: avvio preview HonKit (detached)")
+        run_gitbook_docker_preview(
+            context,
+            port=port,
+            container_name=container_name,
+            wait_on_exit=False,
+            redact_logs=redact,  # 🔐 passa il toggle anche alla preview
+        )
+        logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
+        return True
+    elif preview_allowed:
+        logger.warning("⚠️ Docker non più disponibile al momento dell'avvio: anteprima saltata")
+    else:
+        logger.info("⏭️  Anteprima disabilitata per scelta/policy iniziale")
+    return False
+
+
+def _maybe_push(
+    context: ClientContext,
+    *,
+    push_flag: Optional[bool],
+    non_interactive: bool,
+    redact: bool,
+    logger,
+) -> None:
+    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale."""
+    token = context.env.get("GITHUB_TOKEN")
+
+    if push_flag is not None:
+        do_push = push_flag
+    else:
+        do_push = False if non_interactive else _confirm_yes_no("Eseguire il push su GitHub?", default_no=True)
+
+    if not do_push:
+        logger.info("⏭️  Push su GitHub non eseguito")
+        return
+
+    if not token:
+        raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
+
+    logger.info("📤 Avvio push su GitHub")
+    push_output_to_github(context, github_token=token, do_push=True, redact_logs=redact)
+
+    # Cleanup artefatti locali post-push (solo interattivo, non bloccante)
+    if not non_interactive and _confirm_yes_no(
+        "Pulire eventuali artefatti locali di push legacy (es. .git in book/)?",
+        default_no=True,
+    ):
+        try:
+            report = clean_push_leftovers(context)
+            logger.info("🧹 Cleanup artefatti completato", extra=report)
+        except Exception as e:
+            # warning intenzionale: non vogliamo far fallire l'onboarding per cleanup
+            logger.warning("⚠️  Cleanup artefatti fallito", extra={"error": str(e)})
+
+
+# =========================
+#   FUNZIONE PRINCIPALE
+# =========================
+
+def onboarding_full_main(
+    slug: str,
+    *,
+    non_interactive: bool = False,
+    dry_run: bool = False,
+    no_drive: bool = False,
+    push: Optional[bool] = None,
+    port: int = 4000,
+    allow_offline_env: bool = False,
+    docker_retries: int = 3,
+    run_id: Optional[str] = None,
+) -> None:
+    # Logger console “early” per validazione slug (prima del contesto)
+    early_logger = get_structured_logger("onboarding_full", run_id=run_id)
+
+    # ✅ VALIDAZIONE SLUG NELL’ORCHESTRATORE (loop solo qui)
+    slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
+
+    # 🚦 Policy più rigorosa: se NON è dry-run e NON c'è --no-drive ⇒ richiedi env,
+    # indipendentemente da --non-interactive. Override con --allow-offline-env.
+    if allow_offline_env:
+        require_env = not (no_drive or dry_run or non_interactive)  # era il comportamento originale
+    else:
+        require_env = (not no_drive) and (not dry_run)  # più sicuro di L70 originale
+
+    context: ClientContext = ClientContext.load(
+        slug=slug,
+        interactive=not non_interactive,  # mantenuto per compatibilità; il modulo non usa più input()
+        require_env=require_env,
+        run_id=run_id,
+    )
+
+    # 🌟 Logger file-based allineato alle costanti
+    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
+
+    if not require_env:
+        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
+
+    logger.info("🚀 Avvio onboarding_full")
+
+    # Config cliente
+    try:
+        cfg: Dict[str, Any] = get_client_config(context) or {}
+    except ConfigError as e:
+        logger.error(str(e))
+        raise
+
+    # Toggle redazione centralizzato
+    redact = is_log_redaction_enabled(context)
 
     # 1) Download da Drive (opzionale)
     if not no_drive and not dry_run:
@@ -163,53 +267,28 @@ def onboarding_full_main(
     generate_readme_markdown(context)
     validate_markdown_dir(context)
 
-    # 3) Preview HonKit in Docker (mai bloccante)
-    container_name = f"honkit_preview_{slug}"
+    # 3) Preview HonKit in Docker (mai bloccante) — ora incapsulata
     preview_started = False
-    if preview_allowed and _docker_available():
-        logger.info("🔎 Docker disponibile: avvio preview HonKit (detached)")
-        run_gitbook_docker_preview(
-            context,
-            port=port,
-            container_name=container_name,
-            wait_on_exit=False,
-            redact_logs=redact,  # 🔐 passa il toggle anche alla preview
-        )
-        preview_started = True
-        logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
-    elif preview_allowed:
-        logger.warning("⚠️ Docker non più disponibile al momento dell'avvio: anteprima saltata")
-    else:
-        logger.info("⏭️  Anteprima disabilitata per scelta/policy iniziale")
-
-    # 4) Push su GitHub (opzionale) — cleanup del container in finally, SEMPRE
-    token = context.env.get("GITHUB_TOKEN")
-    if push is not None:
-        do_push = push
-    else:
-        do_push = False if non_interactive else _confirm_yes_no("Eseguire il push su GitHub?", default_no=True)
-
+    container_name = f"honkit_preview_{slug}"
     try:
-        if do_push:
-            if not token:
-                raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
+        preview_started = _run_preview(
+            context,
+            slug=slug,
+            port=port,
+            docker_retries=docker_retries,
+            non_interactive=non_interactive,
+            redact=redact,
+            logger=logger,
+        )
 
-            logger.info("📤 Avvio push su GitHub")
-            push_output_to_github(context, github_token=token, do_push=True, redact_logs=redact)
-
-            # ➕ Prompt pulizia artefatti push (solo interattivo)
-            if not non_interactive and _confirm_yes_no(
-                "Pulire eventuali artefatti locali di push legacy (es. .git in book/)?",
-                default_no=True,
-            ):
-                try:
-                    report = clean_push_leftovers(context)
-                    logger.info("🧹 Cleanup artefatti completato", extra=report)
-                except Exception as e:
-                    # warning intenzionale: non vogliamo far fallire l'onboarding per cleanup
-                    logger.warning("⚠️  Cleanup artefatti fallito", extra={"error": str(e)})
-        else:
-            logger.info("⏭️  Push su GitHub non eseguito")
+        # 4) Push su GitHub (opzionale) — incapsulato
+        _maybe_push(
+            context,
+            push_flag=push,
+            non_interactive=non_interactive,
+            redact=redact,
+            logger=logger,
+        )
     finally:
         if preview_started:
             _stop_preview_container(container_name)
@@ -242,12 +321,14 @@ if __name__ == "__main__":
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
 
-    slug = args.slug_pos or args.slug
-    if not slug and args.non_interactive:
+    unresolved_slug = args.slug_pos or args.slug
+    if not unresolved_slug and args.non_interactive:
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
-    if not slug:
-        slug = _prompt("Inserisci slug cliente: ").strip()
+    try:
+        slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
+    except ConfigError:
+        sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     if args.skip_drive:
         early_logger.warning("⚠️  --skip-drive è deprecato; usare --no-drive")

@@ -3,6 +3,33 @@
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [1.0.4] - 2025-08-18
+
+### Changed
+- **Validazione slug spostata negli orchestratori**: rimossa ogni interattività dai moduli.
+  - `ClientContext.load(...)` ora solleva sempre `ConfigError` in caso di slug mancante/non valido (nessun `input()` nel modulo).
+  - `pre_onboarding.py` e `onboarding_full.py`: loop di acquisizione/validazione slug (solo qui), gestione errori con `EXIT_CODES`.
+- **Refactor `onboarding_full_main`**: estratte funzioni dedicate per ridurre complessità e migliorare i test.
+  - `_run_preview(...)` (controllo Docker + avvio preview HonKit in detached, stop automatico in `finally`).
+  - `_maybe_push(...)` (conferma in interattivo, verifica `GITHUB_TOKEN`, push e cleanup opzionale).
+  - Comportamento invariato lato CLI/flag; logging strutturato coerente.
+
+### Added
+- **Retry con tetto massimo (Drive)**: in `drive_utils._retry(...)` introdotto `max_total_delay` (default **60s**).
+  - Se il budget di sleep cumulato verrebbe superato: warning e `TimeoutError` immediato.
+  - Metriche aggiornate (`backoff_total_ms`) e logging chiaro del superamento soglia.
+
+### Migration Notes
+- Se script esterni si affidavano a prompt nei moduli per lo *slug*, ora devono:
+  - passare lo slug esplicitamente **oppure**
+  - gestire `ConfigError` a livello di orchestratore (mappando a `EXIT_CODES`).
+- Facoltativo: mappare `TimeoutError` del retry Drive a un exit code dedicato (o a `DriveDownloadError`) negli orchestratori.
+
+### Docs
+- Aggiornare brevemente **developer_guide** / **architecture** per riflettere:
+  - validazione slug lato orchestratori,
+  - estrazione helper `_run_preview` e `_maybe_push`.
+
+## [1.0.4] - 2025-08-18
 ### Added
 - Introduzione del campo `run_id` in `ClientContext`, propagato automaticamente ai logger e alle eccezioni.
 - Supporto `run_id` in `PipelineError` e nei filtri di logging per correlare i log di una singola esecuzione.

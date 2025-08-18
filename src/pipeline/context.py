@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
-import sys
 import shutil
 import logging  # per tipizzare/gestire il logger
 
@@ -44,9 +43,7 @@ class ClientContext:
     - Logger strutturato **iniettato** e riutilizzato (niente ricreazioni ad ogni chiamata).
 
     Nota di architettura:
-    - Il modulo **non** interagisce con l’utente, salvo nei casi in cui il metodo `load()`
-      venga invocato in modalità interattiva per rientrare in un flusso guidato
-      (prompt di correzione slug).
+    - Il modulo **non** interagisce con l’utente. Eventuali input/loop sono responsabilità degli orchestratori.
     """
 
     # Identità cliente
@@ -90,7 +87,7 @@ class ClientContext:
         cls,
         slug: str,
         logger: Optional[logging.Logger] = None,
-        interactive: Optional[bool] = None,
+        interactive: Optional[bool] = None,  # mantenuto per compatibilità, ma ignorato
         *,
         require_env: bool = True,
         run_id: Optional[str] = None,
@@ -100,13 +97,12 @@ class ClientContext:
 
         Comportamento:
         - Se la struttura cliente non esiste, viene creata e viene copiato un `config.yaml` di template.
-        - In modalità interattiva consente correzione dello slug non valido via prompt.
         - Raccoglie variabili critiche dall’ambiente e costruisce i path canonici.
 
         Args:
             slug: Identificativo cliente da caricare/inizializzare.
             logger: Logger pre-esistente (riusato); se assente, viene creato lazy.
-            interactive: `True` per abilitare prompt; `False` per batch; `None` → auto-detect.
+            interactive: mantenuto per compatibilità; l’interattività NON è gestita qui.
             require_env: Se `True`, richiede obbligatoriamente variabili env esterne
                          (es. DRIVE_ID, SERVICE_ACCOUNT_FILE). Se `False`, consente
                          flussi offline/dry-run.
@@ -115,29 +111,16 @@ class ClientContext:
             ClientContext popolato con path, config e logger.
 
         Raises:
-            ConfigError: se slug invalido (in batch), se `config.yaml`/template mancano
-                o in caso di errori di lettura della configurazione.
+            ConfigError: se slug invalido (nessuna interattività in questo modulo),
+                se `config.yaml`/template mancano o in caso di errori di lettura della configurazione.
         """
         from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
-
-        # Rileva modalità interattiva
-        if interactive is None:
-            interactive = sys.stdin.isatty()
 
         # Logger strutturato (una sola istanza) — includiamo run_id se presente
         _logger = logger or get_structured_logger(__name__, run_id=run_id)
 
-        # Validazione slug
-        if not is_valid_slug(slug):
-            if interactive:
-                _logger.warning(
-                    f"Slug non valido: '{slug}'. Deve contenere solo caratteri ammessi.",
-                    extra={"slug": slug},
-                )
-                slug = input("📌 Reinserisci lo slug cliente: ").strip()
-                slug = validate_slug(slug)
-            else:
-                raise ConfigError(f"Invalid slug format: '{slug}'", slug=slug)
+        # Validazione slug (nessun prompt: eventuali correzioni sono responsabilità dell'orchestratore)
+        validate_slug(slug)
 
         base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
         config_path = base_dir / "config" / "config.yaml"

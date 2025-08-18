@@ -41,6 +41,7 @@ from pipeline.drive_utils import (
 )
 from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
+from pipeline.path_utils import is_valid_slug  # 👈 validazione slug lato orchestratore
 
 # Percorso YAML struttura cartelle (fonte di verità in /config)
 YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
@@ -49,6 +50,24 @@ YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle
 def _prompt(msg: str) -> str:
     """Raccoglie input da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
+
+
+def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
+    """Valida/ottiene uno slug valido prima di creare i path/log o caricare il contesto."""
+    slug = (initial_slug or "").strip()
+    while True:
+        if not slug:
+            if not interactive:
+                raise ConfigError("Slug mancante.")
+            slug = _prompt("Inserisci slug cliente: ").strip()
+            continue
+        if is_valid_slug(slug):
+            return slug
+        # slug non valido
+        early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
+        if not interactive:
+            raise ConfigError(f"Slug '{slug}' non valido.")
+        slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
 
 
 def pre_onboarding_main(
@@ -78,7 +97,7 @@ def pre_onboarding_main(
         dry_run: Se `True`, salta tutte le operazioni **remote** (Drive).
 
     Raises:
-        ConfigError: Slug mancante, file YAML struttura non trovato,
+        ConfigError: Slug mancante/non valido, file YAML struttura non trovato,
             env non configurato (`DRIVE_ID`/`DRIVE_PARENT_FOLDER_ID`), errori di config.
         PipelineError: Errori bloccanti non tipizzati in fase di update/scrittura.
 
@@ -87,14 +106,18 @@ def pre_onboarding_main(
         - Scrive su file di log unificato.
         - In modalità non-dry-run, crea risorse su Google Drive.
     """
+    # === Logger console “early” (prima dei path cliente) ===
+    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
+
+    # ✅ Validazione slug PRIMA di costruire i path/log di cliente
+    slug = _ensure_valid_slug(slug, interactive, early_logger)
+
     # === Logger unificato: file unico per cliente ===
     log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("pre_onboarding", log_file=log_file, run_id=run_id)
 
     # Validazioni base input (senza cambiare UX)
-    if not slug:
-        raise ConfigError("Slug mancante.")
     if client_name is None and interactive:
         client_name = _prompt("Inserisci nome cliente: ").strip()
     if not client_name:
@@ -214,14 +237,16 @@ if __name__ == "__main__":
     # Logger console “early” (prima di avere lo slug) per messaggi iniziali
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
-    # Risoluzione slug: posizionale > --slug > prompt
-    slug = args.slug_pos or args.slug
-    if not slug and args.non_interactive:
+    # Risoluzione slug: posizionale > --slug > prompt (validazione inclusa)
+    unresolved_slug = args.slug_pos or args.slug
+    if not unresolved_slug and args.non_interactive:
         # In batch non possiamo chiedere; manteniamo UX chiara ma senza print()
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
-    if not slug:
-        slug = _prompt("Inserisci slug cliente: ").strip()
+    try:
+        slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
+    except ConfigError:
+        sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     try:
         pre_onboarding_main(
