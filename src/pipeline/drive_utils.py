@@ -27,6 +27,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from contextvars import ContextVar  # ← thread-safe metrics context
 
 import yaml
 from google.oauth2.service_account import Credentials
@@ -69,19 +70,17 @@ class _DriveRetryMetrics:
             "backoff_total_ms": self.backoff_total_ms,
         }
 
-# Contesto metrico corrente (per thread singolo/processo pipeline)
-_METRICS_CTX: Optional[_DriveRetryMetrics] = None
+# Context var per le metriche (thread-safe; default=None)
+_METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar("drive_metrics_ctx", default=None)
 
 @contextmanager
 def _metrics_scope(metrics: _DriveRetryMetrics):
     """Imposta metriche correnti per includere anche retry interni (list/create/etc.)."""
-    global _METRICS_CTX
-    prev = _METRICS_CTX
-    _METRICS_CTX = metrics
+    token = _METRICS_CTX.set(metrics)
     try:
         yield
     finally:
-        _METRICS_CTX = prev
+        _METRICS_CTX.reset(token)
 
 
 # ---------------------------------------------------------
@@ -115,7 +114,7 @@ def _retry(
     tries: int = 3,
     delay: float = 0.8,
     backoff: float = 1.6,
-    max_total_delay: Optional[float] = 60.0,  # ⬅️ NOVITÀ: tetto massimo ai sleep cumulati (secondi)
+    max_total_delay: Optional[float] = 60.0,  # ⬅️ tetto massimo ai sleep cumulati (secondi)
     redact_logs: bool = False,  # 👈 opzionale: redazione nei log dei retry
 ) -> Any:
     """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati.
@@ -147,11 +146,12 @@ def _retry(
                 raise
             # Telemetria (se attiva)
             status = getattr(getattr(e, "resp", None), "status", "?")
-            if _METRICS_CTX is not None:
-                _METRICS_CTX.retries_total += 1
-                _METRICS_CTX.retries_by_error[type(e).__name__] += 1
-                _METRICS_CTX.last_error = str(e)
-                _METRICS_CTX.last_status = status
+            current = _METRICS_CTX.get()
+            if current is not None:
+                current.retries_total += 1
+                current.retries_by_error[type(e).__name__] += 1
+                current.last_error = str(e)
+                current.last_status = status
 
             logger.warning(
                 _maybe_redact(f"HTTP {status} su Drive; retry {attempt}/{tries}", redact_logs),
@@ -174,8 +174,9 @@ def _retry(
                 raise TimeoutError(f"Drive retry budget exceeded ({elapsed:.1f}s >= {max_total_delay:.1f}s)")
 
             # Aggiorna metriche e dormi
-            if _METRICS_CTX is not None:
-                _METRICS_CTX.backoff_total_ms += int(round(sleep_s * 1000))
+            current = _METRICS_CTX.get()
+            if current is not None:
+                current.backoff_total_ms += int(round(sleep_s * 1000))
             time.sleep(sleep_s)
             elapsed += sleep_s
             _delay *= backoff
@@ -454,7 +455,7 @@ def _create_remote_tree_from_mapping(
     root_id: str,
     mapping: Dict[str, Any],
     *,
-    redact_logs: bool = False,  # 👈 NOVITÀ: propagazione redazione
+    redact_logs: bool = False,  # 👈 propagazione redazione
 ) -> Dict[str, str]:
     """Crea ricorsivamente la struttura di cartelle su Drive partendo da un mapping dict.
 
@@ -485,7 +486,7 @@ def create_drive_structure_from_yaml(
     yaml_path: Path,
     client_folder_id: str,
     *,
-    redact_logs: bool = False,  # 👈 NOVITÀ: parametro opt-in
+    redact_logs: bool = False,  # 👈 parametro opt-in
 ) -> Dict[str, str]:
     """Crea su Drive la gerarchia definita in YAML.
 
@@ -699,9 +700,10 @@ def download_drive_pdfs_to_local(
                                     pass
                 except HttpError as e:
                     # annota errore su metriche (best-effort)
-                    if _METRICS_CTX is not None:
-                        _METRICS_CTX.last_error = str(e)
-                        _METRICS_CTX.last_status = getattr(getattr(e, "resp", None), "status", "?")
+                    current = _METRICS_CTX.get()
+                    if current is not None:
+                        current.last_error = str(e)
+                        current.last_status = getattr(getattr(e, "resp", None), "status", "?")
                     # Eccezione immutata (no redazione qui): diagnosi piena a carico chiamante
                     raise DriveDownloadError(f"Errore download '{remote_name}': {e}") from e
 

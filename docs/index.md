@@ -31,14 +31,16 @@ Benvenuto nella documentazione ufficiale di **Timmy-KB**, organizzata per fornir
 ---
 
 ## 📅 Versione attuale
-- **Versione**: 1.0.3 Stable
-- **Data rilascio**: 17 Agosto 2025
-- **Stato**: Documentazione aggiornata e allineata al CHANGELOG 1.0.3.
+- **Versione**: 1.0.4 Stable  
+- **Data rilascio**: 18 Agosto 2025  
+- **Stato**: Documentazione aggiornata e allineata al CHANGELOG 1.0.4.
 
 ### Note su questa versione
-- **Pre‑check Docker** e comportamento coerente della preview: in non‑interattivo la preview viene saltata automaticamente; in interattivo compare un prompt per proseguire senza anteprima.
-- **Slug CLI “soft”**: supporto allo **slug posizionale** e a `--slug`; se assente in interattivo viene richiesto a prompt.
-- **Nessun cambio di flusso**: release di consolidamento, retro‑compatibile con 1.0.2.
+- **Logging strutturato unico**: un solo file per cliente con supporto opzionale a rotazione e degradazione sicura a console-only.  
+- **Drive utils patchati**: BFS ricorsivo, retry con tetto temporale, idempotenza MD5/size e redazione log opzionale.  
+- **Preview Docker migliorata**: auto-skip in non-interattivo, prompt in interattivo; supporto redazione log.  
+- **Slug CLI “soft”**: supporto allo slug posizionale e a `--slug`; in interattivo, se assente, viene richiesto a prompt.  
+- **Release di consolidamento**: nessun cambio di flusso, retro-compatibile con 1.0.3.  
 
 ---
 

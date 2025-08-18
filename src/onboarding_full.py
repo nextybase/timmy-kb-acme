@@ -33,7 +33,9 @@ from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
-from pipeline.path_utils import is_valid_slug  # 👈 validazione slug lato orchestratore
+# ⬇️ Quick win: usa helper condiviso per validazione slug
+from pipeline.path_utils import validate_slug as _validate_slug_helper
+from pipeline.exceptions import InvalidSlug  # eccezione dominio per slug non valido
 
 
 def _prompt(msg: str) -> str:
@@ -69,13 +71,15 @@ def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_log
                 raise ConfigError("Slug mancante.")
             slug = _prompt("Inserisci slug cliente: ").strip()
             continue
-        if is_valid_slug(slug):
+        try:
+            # ✅ usa helper condiviso (alza InvalidSlug se non conforme)
+            _validate_slug_helper(slug)
             return slug
-        # slug non valido
-        early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
-        if not interactive:
-            raise ConfigError(f"Slug '{slug}' non valido.")
-        slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
+        except InvalidSlug:
+            early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
+            if not interactive:
+                raise ConfigError(f"Slug '{slug}' non valido.")
+            slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
 
 
 # =========================

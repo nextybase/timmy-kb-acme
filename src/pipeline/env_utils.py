@@ -36,7 +36,7 @@ __all__ = [
     "is_log_redaction_enabled",
 ]
 
-def get_env_var(key: str, default=None, required: bool = False):
+def get_env_var(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
     """
     Recupera una variabile d'ambiente con comportamento retro-compatibile.
 
@@ -46,7 +46,7 @@ def get_env_var(key: str, default=None, required: bool = False):
         required: se True, solleva ConfigError quando la variabile è assente **o vuota**
 
     Returns:
-        Il valore della variabile o il default.
+        Il valore della variabile o il default (None o stringa).
 
     Raises:
         ConfigError: se required=True e la variabile è assente o vuota

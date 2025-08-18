@@ -2,6 +2,37 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.4] — 2025-08-19
+### Added
+- Introdotto file `coding_rules.py` con regole operative unificate per la scrittura e la manutenzione della pipeline.
+- Linee guida su linguaggio, tipizzazione, naming e ordine degli import, con supporto a Ruff/Black/Mypy.
+- Tassonomia centralizzata di eccezioni (`exceptions.py`) con mapping deterministico a `EXIT_CODES`.
+- Logging strutturato tramite `logging_utils` con supporto a `redact_logs` e metadati contestuali (`slug`, `file_path`, `step`).
+- Policy di sicurezza: validazione percorsi con `is_safe_subpath`, scritture atomiche, gestione sicura delle variabili tramite `env_utils`.
+- Gestione standardizzata di subprocess, Docker preview e push GitHub con ruoli chiari tra orchestratori e moduli.
+- Retry con backoff esponenziale e download idempotente per Google Drive.
+- Regole di deprecazione e compatibilità retroattiva per CLI e moduli.
+- Test minimi manuali documentati per `pre_onboarding`, `onboarding_full` e push GitHub.
+- Linee guida per la qualità del codice e best practice di manutenibilità.
+
+### Changed
+- Rivista e uniformata la struttura di `coding_rules.py`: consolidamento in sezioni chiare (linguaggio, orchestratori vs moduli, logging, I/O, configurazioni, rete, deprecazione, test).
+- Logging ripulito da `print()` ed eccezioni generiche, sostituiti da logger strutturati e tassonomia dedicata.
+- Regole di preview Docker: ora sempre **detached**, con stop automatico demandato agli orchestratori.
+- Uniformata la gestione di variabili e config YAML tramite `env_utils` e cache slug centralizzata.
+- Aggiornati esempi di codice per riflettere i nuovi standard.
+
+### Fixed
+- Eliminati casi di `input()` o `sys.exit()` all’interno dei moduli: ora confinati negli orchestratori.
+- Sistemata gestione di eccezioni non tipizzate in moduli critici (preview, push, drive).
+- Migliorata robustezza della validazione slug e pulizia della cache dopo modifiche.
+- Corretta gestione dei log con percorsi assenti o skip non critici (ora marcati DEBUG, non WARNING).
+
+### Deprecated
+- Flag `--skip-push` marcato come deprecato in favore di `--no-push` (verrà rimosso in una futura MINOR).
+- Alias e vecchie firme dei moduli mantenuti per retrocompatibilità fino alla prossima release MINOR.
+
+
 ## [1.0.4] - 2025-08-18
 ### Changed
 - Aggiornato `gitbook_preview.py`: anteprima HonKit sempre in modalità *detached* con auto-stop del container al termine della pipeline. Aggiunta opzione di redazione log.

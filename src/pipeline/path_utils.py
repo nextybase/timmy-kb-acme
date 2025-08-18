@@ -19,6 +19,7 @@ from typing import Optional
 from functools import lru_cache  # ← aggiunto per caching
 
 from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import InvalidSlug  # ← aggiunta per helper validate_slug
 
 # Punto di verità per messaggi di errore di questo modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -112,6 +113,24 @@ def is_valid_slug(slug: str) -> bool:
         return bool(re.fullmatch(r"^[a-z0-9-]+$", slug))
 
 
+# -------------------------
+# Helper dominio (quick win)
+# -------------------------
+def validate_slug(slug: str) -> str:
+    """
+    Valida lo slug e alza un'eccezione di dominio in caso di non conformità.
+
+    Returns:
+        Lo slug originale se valido.
+
+    Raises:
+        InvalidSlug: se lo slug non rispetta la regex configurata.
+    """
+    if not is_valid_slug(slug):
+        raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
+    return slug
+
+
 def normalize_path(path: Path) -> Path:
     """
     Restituisce il path normalizzato/risolto.
@@ -178,6 +197,7 @@ __all__ = [
     "is_safe_subpath",
     "clear_slug_regex_cache",  # ← export della funzione di reset cache
     "is_valid_slug",
+    "validate_slug",           # ← nuovo helper dominio
     "normalize_path",
     "sanitize_filename",
 ]

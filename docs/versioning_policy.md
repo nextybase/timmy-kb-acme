@@ -1,4 +1,4 @@
-# Versioning & Release Policy – Timmy‑KB (v1.0.3 Stable)
+# Versioning & Release Policy – Timmy‑KB (v1.0.34 Stable)
 
 Questa policy definisce **come versioniamo** e **come rilasciamo**. È allineata alla 1.0.3 (release di consolidamento) e alle modifiche di questa sessione. Obiettivo: evitare rotture non intenzionali e mantenere la documentazione sempre coerente con il codice.
 
@@ -91,4 +91,4 @@ Struttura consigliata:
 
 ---
 
-**Stato:** policy attiva dalla v1.0.3. Le prossime release dovranno rispettarla.
+**Stato:** policy attiva dalla v1.0.4. Le prossime release dovranno rispettarla.

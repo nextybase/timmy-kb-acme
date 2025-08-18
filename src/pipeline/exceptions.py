@@ -136,10 +136,27 @@ class PreOnboardingValidationError(PipelineError):
     pass
 
 
-# ------------------------------------------------------------
+# === Quick win: eccezioni tipizzate per I/O input e slug =====================
+
+class InputDirectoryMissing(PipelineError):
+    """Directory di input attesa ma assente (es. raw/ o sottocartella richieste)."""
+    pass
+
+
+class InputFileMissing(PipelineError):
+    """File di input atteso ma assente (es. singolo PDF o YAML richiesto)."""
+    pass
+
+
+class InvalidSlug(PipelineError):
+    """Slug non valido secondo il pattern configurato."""
+    pass
+
+
+# -----------------------------------------------------------------------------
 # Mappa centralizzata dei codici di uscita (nessun I/O, no side effects)
 # Gli orchestratori useranno questa tabella per sys.exit() coerenti.
-# ------------------------------------------------------------
+# -----------------------------------------------------------------------------
 EXIT_CODES = {
     "PipelineError": 1,
     "ConfigError": 2,
@@ -166,5 +183,9 @@ __all__ = [
     "EnrichmentError",
     "SemanticMappingError",
     "PreOnboardingValidationError",
+    # Quick win
+    "InputDirectoryMissing",
+    "InputFileMissing",
+    "InvalidSlug",
     "EXIT_CODES",
 ]

@@ -102,7 +102,8 @@ class ClientContext:
         Args:
             slug: Identificativo cliente da caricare/inizializzare.
             logger: Logger pre-esistente (riusato); se assente, viene creato lazy.
-            interactive: mantenuto per compatibilità; l’interattività NON è gestita qui.
+            interactive: **[DEPRECATO]** parametro mantenuto solo per compatibilità.
+                         L’interattività NON è gestita qui: delegata agli orchestratori.
             require_env: Se `True`, richiede obbligatoriamente variabili env esterne
                          (es. DRIVE_ID, SERVICE_ACCOUNT_FILE). Se `False`, consente
                          flussi offline/dry-run.
@@ -118,6 +119,14 @@ class ClientContext:
 
         # Logger strutturato (una sola istanza) — includiamo run_id se presente
         _logger = logger or get_structured_logger(__name__, run_id=run_id)
+
+        # 🔕 Deprecation notice soft: loggato una sola volta se il parametro viene usato
+        if interactive is not None:
+            _logger.debug(
+                "Parametro 'interactive' è deprecato e viene ignorato; "
+                "gestire l'I/O utente negli orchestratori.",
+                extra={"slug": slug},
+            )
 
         # Validazione slug (nessun prompt: eventuali correzioni sono responsabilità dell'orchestratore)
         validate_slug(slug)

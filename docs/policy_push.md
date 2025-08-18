@@ -1,4 +1,4 @@
-# Policy di Push – Timmy‑KB (v1.0.3 Stable)
+# Policy di Push – Timmy‑KB (v1.0.4 Stable)
 
 Questa policy definisce quando e come eseguire il **push** dei contenuti generati dalla pipeline verso il repository remoto (e, a cascata, gli spazi di pubblicazione). È coerente con le modifiche della sessione corrente e con il CHANGELOG 1.0.3.
 
@@ -89,4 +89,4 @@ py src/onboarding_full.py --slug demo --no-drive --no-push
 
 ---
 
-**Stato:** policy allineata a v1.0.3, retro‑compatibile. Nessun cambio di flusso.
+**Stato:** policy allineata a v1.0.4, retro‑compatibile. Nessun cambio di flusso.
