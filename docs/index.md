@@ -1,4 +1,4 @@
-# Documentazione Timmy-KB – Versione 1.0.3 (Stable)
+# Documentazione Timmy-KB – Versione 1.0.4 (Stable)
 
 Benvenuto nella documentazione ufficiale di **Timmy-KB**, organizzata per fornire una panoramica chiara e navigabile delle funzionalità, dell’architettura e delle regole di sviluppo del progetto.
 

@@ -3,6 +3,25 @@
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [1.0.4] - 2025-08-18
+### Changed
+- Aggiornato `gitbook_preview.py`: anteprima HonKit sempre in modalità *detached* con auto-stop del container al termine della pipeline. Aggiunta opzione di redazione log.
+- Rafforzata la gestione delle variabili d’ambiente in `env_utils.py`: `require_env` più rigoroso, helper `get_bool`/`get_int`, sistema di redazione segreti abilitabile via `LOG_REDACTION`.
+- Migliorata la validazione slug in `path_utils.py`: regex caricata da `config.yaml` con caching e funzione di reset (`clear_slug_regex_cache`).
+- Logging centralizzato: ora tutti i moduli usano `logging_utils.py` con rotazione e formattazione uniforme.
+- `content_utils.py`: generazione consolidata di `README.md` e `SUMMARY.md` con validazioni più robuste.
+- `github_utils.py`: push `.md` da `book/` con risoluzione branch da env e logging redatto se abilitato.
+- `drive_utils.py`: download BFS ricorsivo da Drive con idempotenza e metriche di retry.
+
+### Added
+- Nuovo modulo `cleanup_utils.py` per la rimozione sicura di artefatti locali post-push legacy.
+- Nuovo modulo `env_utils.py` per la gestione delle `.env` e helper centralizzati.
+
+### Fixed
+- Eliminata possibilità di preview interattiva bloccante in `gitbook_preview.py`.
+- Uniformata la gestione degli slug “soft” nei moduli di path.
+
+
+## [1.0.4] - 2025-08-18
 
 ### Changed
 - **Validazione slug spostata negli orchestratori**: rimossa ogni interattività dai moduli.

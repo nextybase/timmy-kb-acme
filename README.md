@@ -2,7 +2,7 @@
 
 Pipeline modulare per trasformare i PDF del cliente in una **KB Markdown AI‑ready** (GitBook/HonKit), con anteprima Docker opzionale e (opzionale) push su GitHub.
 
-> **Stato**: v1.0.3 Stable (documento aggiornato con i micro‑fix di robustezza introdotti in questa sessione; il bump versione verrà finalizzato nel `CHANGELOG.md`).
+> **Stato**: v1.0.4 Stable (documento aggiornato con i micro‑fix di robustezza introdotti in questa sessione; il bump versione verrà finalizzato nel `CHANGELOG.md`).
 
 ---
 
