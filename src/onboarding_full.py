@@ -30,9 +30,12 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
+from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
+
 
 def _prompt(msg: str) -> str:
     return input(msg).strip()
+
 
 def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
     suffix = " [y/N]: " if default_no else " [Y/n]: "
@@ -41,6 +44,7 @@ def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
         return not default_no
     return ans in ("y", "yes", "s", "si", "sí")
 
+
 def _docker_available() -> bool:
     try:
         subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -48,8 +52,10 @@ def _docker_available() -> bool:
     except Exception:
         return False
 
+
 def _stop_preview_container(container_name: str) -> None:
     subprocess.run(["docker", "rm", "-f", container_name], check=False)
+
 
 def onboarding_full_main(
     slug: str,
@@ -81,6 +87,9 @@ def onboarding_full_main(
     except ConfigError as e:
         logger.error(str(e))
         raise
+
+    # Toggle redazione centralizzato
+    redact = is_log_redaction_enabled(context)
 
     # Controllo precoce Docker / policy preview
     preview_allowed = True
@@ -120,6 +129,7 @@ def onboarding_full_main(
             local_root_dir=context.raw_dir,
             progress=not non_interactive,
             context=context,
+            redact_logs=redact,  # 🔐 redazione log secondo policy
         )
     else:
         if no_drive:
@@ -146,6 +156,7 @@ def onboarding_full_main(
             port=port,
             container_name=container_name,
             wait_on_exit=False,
+            redact_logs=redact,  # 🔐 passa il toggle anche alla preview
         )
         preview_started = True
         logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
@@ -167,7 +178,7 @@ def onboarding_full_main(
                 raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
 
             logger.info("📤 Avvio push su GitHub")
-            push_output_to_github(context, github_token=token, do_push=True)
+            push_output_to_github(context, github_token=token, do_push=True, redact_logs=redact)
 
             # ➕ Prompt pulizia artefatti push (solo interattivo)
             if not non_interactive and _confirm_yes_no(
@@ -188,6 +199,7 @@ def onboarding_full_main(
 
     logger.info("✅ Onboarding completo")
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Onboarding completo Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
@@ -201,6 +213,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--skip-push", action="store_true", help="(Deprecato) Usa --no-push")
     p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
     return p.parse_args()
+
 
 if __name__ == "__main__":
     args = _parse_args()

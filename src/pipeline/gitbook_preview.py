@@ -12,7 +12,12 @@ Modifiche (v1.0.4 - PATCH):
 
 Queste scelte rispettano le regole v1.0.3:
 - Niente prompt nei moduli; l’interattività è solo negli orchestratori.
-- Anteprima gestita/decisa dagli orchestratori (auto-skip o conferma). 
+- Anteprima gestita/decisa dagli orchestratori (auto-skip o conferma).
+
+Aggiornamento PATCH:
+- Introduce parametro opzionale `redact_logs: bool = False`. Se True, applica
+  la redazione dei messaggi di log potenzialmente sensibili tramite
+  `pipeline.env_utils.redact_secrets`. Nessun impatto sui messaggi delle eccezioni.
 """
 
 import json
@@ -24,14 +29,20 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, PreviewError
 from pipeline.path_utils import is_safe_subpath
 from pipeline.config_utils import safe_write_file  # ✅ scritture atomiche
+from pipeline.env_utils import redact_secrets  # 🔐 redazione opzionale nei log
 
 logger = get_structured_logger("pipeline.gitbook_preview")
+
+
+def _maybe_redact(text: str, redact: bool) -> str:
+    """Applica redazione ai messaggi di log solo se richiesto."""
+    return redact_secrets(text) if (redact and text) else text
 
 
 # ----------------------------
 # Helpers idempotenti di setup
 # ----------------------------
-def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
+def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """
     Crea un book.json minimo se mancante (idempotente).
     """
@@ -45,7 +56,7 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             # ✅ scrittura atomica
             safe_write_file(book_json_path, json.dumps(data, indent=2))
             logger.info(
-                "📖 book.json generato",
+                _maybe_redact("📖 book.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(book_json_path)},
             )
         except Exception as e:
@@ -56,12 +67,12 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             )
     else:
         logger.info(
-            "📖 book.json già presente",
+            _maybe_redact("📖 book.json già presente", redact_logs),
             extra={"slug": slug, "file_path": str(book_json_path)},
         )
 
 
-def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
+def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """
     Crea un package.json minimo se mancante (idempotente).
     """
@@ -82,7 +93,7 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             # ✅ scrittura atomica
             safe_write_file(package_json_path, json.dumps(data, indent=2))
             logger.info(
-                "📦 package.json generato",
+                _maybe_redact("📦 package.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(package_json_path)},
             )
         except Exception as e:
@@ -93,7 +104,7 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None) -> None:
             )
     else:
         logger.info(
-            "📦 package.json già presente",
+            _maybe_redact("📦 package.json già presente", redact_logs),
             extra={"slug": slug, "file_path": str(package_json_path)},
         )
 
@@ -106,6 +117,8 @@ def run_gitbook_docker_preview(
     port: int = 4000,
     container_name: str = "honkit_preview",
     wait_on_exit: bool = False,  # ← default non-interattivo
+    *,
+    redact_logs: bool = False,   # ← NOVITÀ: redazione opt-in dei messaggi di log
 ) -> None:
     """
     Avvia la preview GitBook/HonKit in Docker.
@@ -121,6 +134,7 @@ def run_gitbook_docker_preview(
         port: Porta locale da esporre (default 4000).
         container_name: Nome del container Docker.
         wait_on_exit: Se True, esegue `serve` in foreground (senza -d).
+        redact_logs: Se True, applica redazione ai messaggi di log (non alle eccezioni).
 
     Raises:
         PipelineError: se `slug` mancante nel contesto.
@@ -139,13 +153,13 @@ def run_gitbook_docker_preview(
 
     md_output_path = Path(context.md_dir).resolve()
     logger.info(
-        "📂 Directory per anteprima",
+        _maybe_redact("📂 Directory per anteprima", redact_logs),
         extra={"slug": context.slug, "file_path": str(md_output_path)},
     )
 
     # File necessari (idempotente)
-    ensure_book_json(md_output_path, slug=context.slug)
-    ensure_package_json(md_output_path, slug=context.slug)
+    ensure_book_json(md_output_path, slug=context.slug, redact_logs=redact_logs)
+    ensure_package_json(md_output_path, slug=context.slug, redact_logs=redact_logs)
 
     # Build statica
     build_cmd = [
@@ -163,9 +177,11 @@ def run_gitbook_docker_preview(
     ]
     try:
         subprocess.run(build_cmd, check=True)
-        logger.info("🔨 Build statica HonKit completata.", extra={"slug": context.slug})
+        logger.info(_maybe_redact("🔨 Build statica HonKit completata.", redact_logs), extra={"slug": context.slug})
     except subprocess.CalledProcessError as e:
-        logger.error("❌ Errore durante 'honkit build'", extra={"slug": context.slug})
+        msg = "❌ Errore durante 'honkit build'"
+        logger.error(_maybe_redact(msg, redact_logs), extra={"slug": context.slug})
+        # Manteniamo i dettagli completi nell'eccezione (nessuna redazione qui)
         raise PreviewError(f"Errore 'honkit build': {e}", slug=context.slug)
 
     # Serve
@@ -200,12 +216,13 @@ def run_gitbook_docker_preview(
             try:
                 subprocess.run(serve_cmd, check=False)
             finally:
+                # Nessun log aggiuntivo qui per non alterare la verbosità; eccezione come prima
                 raise PreviewError(f"Errore 'honkit serve' (fg): {e}", slug=context.slug)
         finally:
             # Best-effort cleanup (se il container è rimasto in vita)
             subprocess.run(["docker", "rm", "-f", container_name], check=False)
             logger.info(
-                "🧹 Cleanup container (fg) completato",
+                _maybe_redact("🧹 Cleanup container (fg) completato", redact_logs),
                 extra={"slug": context.slug, "file_path": container_name},
             )
     else:
@@ -230,7 +247,7 @@ def run_gitbook_docker_preview(
         try:
             subprocess.run(serve_cmd, check=True)
             logger.info(
-                "▶️ HonKit serve avviato (detached).",
+                _maybe_redact("▶️ HonKit serve avviato (detached).", redact_logs),
                 extra={
                     "slug": context.slug,
                     "file_path": f"{container_name}@{port}",
@@ -242,11 +259,12 @@ def run_gitbook_docker_preview(
             try:
                 subprocess.run(serve_cmd, check=True)
                 logger.info(
-                    "▶️ HonKit serve avviato (detached) dopo retry.",
+                    _maybe_redact("▶️ HonKit serve avviato (detached) dopo retry.", redact_logs),
                     extra={
                         "slug": context.slug,
                         "file_path": f"{container_name}@{port}",
                     },
                 )
             except subprocess.CalledProcessError as e2:
+                # Coerente con il comportamento precedente: eccezione senza log aggiuntivi
                 raise PreviewError(f"Errore 'honkit serve' (bg): {e2}", slug=context.slug)

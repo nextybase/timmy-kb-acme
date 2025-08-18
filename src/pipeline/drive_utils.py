@@ -37,6 +37,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from pipeline.exceptions import ConfigError, DriveDownloadError, DriveUploadError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import sanitize_filename
+from pipeline.env_utils import redact_secrets  # 🔐 redazione opzionale nei log
 
 logger = get_structured_logger("pipeline.drive_utils")
 
@@ -103,7 +104,19 @@ def _md5sum(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff: float = 1.6) -> Any:
+def _maybe_redact(text: str, redact: bool) -> str:
+    """Applica redazione solo se richiesto."""
+    return redact_secrets(text) if (redact and text) else text
+
+
+def _retry(
+    fn: Callable[[], Any],
+    *,
+    tries: int = 3,
+    delay: float = 0.8,
+    backoff: float = 1.6,
+    redact_logs: bool = False,  # 👈 opzionale: redazione nei log dei retry
+) -> Any:
     """Retry esponenziale per chiamate Drive (HttpError) con jitter per evitare retry sincronizzati.
 
     Args:
@@ -111,6 +124,7 @@ def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff
         tries: Numero massimo di tentativi.
         delay: Ritardo iniziale tra i tentativi (secondi).
         backoff: Fattore di moltiplicazione del ritardo a ogni retry.
+        redact_logs: Se True, maschera eventuali segreti nei messaggi di log.
 
     Returns:
         Il valore ritornato da `fn` in caso di successo.
@@ -135,8 +149,8 @@ def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff
                 _METRICS_CTX.last_status = status
 
             logger.warning(
-                f"HTTP {status} su Drive; retry {attempt}/{tries}",
-                extra={"error": str(e)},
+                _maybe_redact(f"HTTP {status} su Drive; retry {attempt}/{tries}", redact_logs),
+                extra={"error": _maybe_redact(str(e), redact_logs)},
             )
             # jitter: +/- 30% del delay corrente
             jitter_factor = 1.0 + random.uniform(-0.3, 0.3)
@@ -221,7 +235,7 @@ def get_drive_service(context_or_sa_file: Any, drive_id: Optional[str] = None):
 # ---------------------------------------------------------
 # Operazioni di base (Shared Drives compat)
 # ---------------------------------------------------------
-def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> str:
+def create_drive_folder(service, name: str, parent_id: Optional[str] = None, *, redact_logs: bool = False) -> str:
     """Crea una cartella su Drive e ritorna l'ID (compatibile con Shared Drives).
 
     Idempotenza:
@@ -232,6 +246,7 @@ def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> 
         service: Client Drive v3.
         name: Nome cartella.
         parent_id: ID della cartella padre (opzionale).
+        redact_logs: Se True, applica redazione ai log di warning/error.
 
     Returns:
         ID della cartella creata o esistente.
@@ -250,10 +265,17 @@ def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> 
             if existing:
                 folder_id = existing[0].get("id")
                 if folder_id:
-                    logger.info(f"↺ Riutilizzo cartella esistente '{name}' ({folder_id}) sotto parent {parent_id}")
+                    logger.info(
+                        _maybe_redact(
+                            f"↺ Riutilizzo cartella esistente '{name}' ({folder_id}) sotto parent {parent_id}",
+                            redact_logs,
+                        )
+                    )
                     return folder_id
         except Exception as e:
-            logger.warning(f"Lookup cartella '{name}' fallito, procedo con creazione: {e}")
+            logger.warning(
+                _maybe_redact(f"Lookup cartella '{name}' fallito, procedo con creazione: {e}", redact_logs)
+            )
 
     file_metadata = {"name": name, "mimeType": MIME_FOLDER}
     if parent_id:
@@ -267,7 +289,7 @@ def create_drive_folder(service, name: str, parent_id: Optional[str] = None) -> 
         ).execute()
 
     try:
-        res = _retry(_do)
+        res = _retry(_do, redact_logs=redact_logs)
     except HttpError as e:
         # 404 tipico quando il SA non è membro della Drive/parent o l'ID parent è errato
         if getattr(e, "resp", None) and getattr(e.resp, "status", None) == 404 and parent_id:
@@ -315,7 +337,7 @@ def list_drive_files(service, parent_id: str, query: Optional[str] = None) -> Li
                 .execute()
             )
 
-        resp = _retry(_do)
+        resp = _retry(_do)  # nessun contenuto sensibile previsto: redazione non necessaria
         files = resp.get("files", [])
         results.extend(files)
         page_token = resp.get("nextPageToken")
@@ -332,13 +354,14 @@ def delete_drive_file(service, file_id: str) -> None:
     _retry(_do)
 
 
-def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
+def upload_config_to_drive_folder(service, context, parent_id: str, *, redact_logs: bool = False) -> str:
     """Carica la config del cliente su Drive (sostituisce se esiste).
 
     Args:
         service: Client Drive v3.
         context: Oggetto che espone `config_path: Path`.
         parent_id: ID della cartella cliente su Drive.
+        redact_logs: Se True, applica redazione ai log di warning/error.
 
     Returns:
         L'ID del file caricato su Drive.
@@ -360,8 +383,8 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
                 delete_drive_file(service, f["id"])
             except Exception as e:
                 logger.warning(
-                    "Impossibile rimuovere config pre-esistente su Drive",
-                    extra={"error": str(e), "slug": getattr(context, "slug", None)},
+                    _maybe_redact("Impossibile rimuovere config pre-esistente su Drive", redact_logs),
+                    extra={"error": _maybe_redact(str(e), redact_logs), "slug": getattr(context, "slug", None)},
                 )
 
         media = MediaFileUpload(str(config_path), mimetype="text/yaml", resumable=True)
@@ -376,12 +399,13 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
             ).execute()
 
         try:
-            res = _retry(_do)
+            res = _retry(_do, redact_logs=redact_logs)
             file_id = res.get("id")
             if not file_id:
                 raise DriveUploadError("Upload config su Drive fallito: ID mancante")
             return file_id
         except HttpError as e:
+            # Eccezione immutata (no redazione qui): diagnosi piena a carico chiamante
             raise DriveUploadError(f"Errore upload config su Drive: {e}") from e
         finally:
             # Log strutturato riepilogativo metriche
@@ -406,13 +430,20 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
 # ---------------------------------------------------------
 # Strutture (remoto e locale)
 # ---------------------------------------------------------
-def _create_remote_tree_from_mapping(service, root_id: str, mapping: Dict[str, Any]) -> Dict[str, str]:
+def _create_remote_tree_from_mapping(
+    service,
+    root_id: str,
+    mapping: Dict[str, Any],
+    *,
+    redact_logs: bool = False,  # 👈 NOVITÀ: propagazione redazione
+) -> Dict[str, str]:
     """Crea ricorsivamente la struttura di cartelle su Drive partendo da un mapping dict.
 
     Args:
         service: Client Drive v3.
         root_id: ID della cartella radice (cliente).
         mapping: Dizionario `{nome: sottostruttura}`.
+        redact_logs: Se True, applica redazione ai log durante la creazione cartelle.
 
     Returns:
         Dizionario `{nome_cartella: id}` per i livelli creati (non tutta la profondità).
@@ -421,7 +452,7 @@ def _create_remote_tree_from_mapping(service, root_id: str, mapping: Dict[str, A
 
     def _walk(parent_id: str, subtree: Dict[str, Any]) -> None:
         for name, children in subtree.items():
-            folder_id = create_drive_folder(service, name, parent_id)
+            folder_id = create_drive_folder(service, name, parent_id, redact_logs=redact_logs)
             created[name] = folder_id
             if isinstance(children, dict) and children:
                 _walk(folder_id, children)
@@ -430,7 +461,13 @@ def _create_remote_tree_from_mapping(service, root_id: str, mapping: Dict[str, A
     return created
 
 
-def create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id: str) -> Dict[str, str]:
+def create_drive_structure_from_yaml(
+    service,
+    yaml_path: Path,
+    client_folder_id: str,
+    *,
+    redact_logs: bool = False,  # 👈 NOVITÀ: parametro opt-in
+) -> Dict[str, str]:
     """Crea su Drive la gerarchia definita in YAML.
 
     Supporta:
@@ -441,6 +478,7 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id:
         service: Client Drive v3.
         yaml_path: Percorso del file YAML con la struttura.
         client_folder_id: ID della cartella radice del cliente su Drive.
+        redact_logs: Se True, applica redazione ai log durante la creazione cartelle.
 
     Returns:
         Dizionario con `{nome_cartella: id}`; aggiunge alias in uscita:
@@ -457,7 +495,7 @@ def create_drive_structure_from_yaml(service, yaml_path: Path, client_folder_id:
         raw = yaml.safe_load(f) or {}
 
     mapping = _normalize_yaml_structure(raw)
-    created = _create_remote_tree_from_mapping(service, client_folder_id, mapping)
+    created = _create_remote_tree_from_mapping(service, client_folder_id, mapping, redact_logs=redact_logs)
 
     # Alias SOLO nel risultato (compat CLI/orchestratori)
     if "raw" in created and "RAW" not in created:
@@ -535,6 +573,7 @@ def download_drive_pdfs_to_local(
     *,
     progress: bool = True,
     context: Any = None,
+    redact_logs: bool = False,  # 👈 opzionale: redazione nei log
 ) -> Tuple[int, int]:
     """Scarica TUTTI i PDF dalle sottocartelle di `remote_root_folder_id` in `local_root_dir`.
 
@@ -549,6 +588,7 @@ def download_drive_pdfs_to_local(
         local_root_dir: Radice locale in cui salvare i PDF.
         progress: Se `True`, logga avanzamento dei chunk durante il download.
         context: (opz.) `ClientContext` per snapshot metriche in `step_status`.
+        redact_logs: Se True, applica redazione ai log di warning/error.
 
     Returns:
         `tuple(downloaded_count, skipped_count)`.
@@ -597,7 +637,8 @@ def download_drive_pdfs_to_local(
                             fields="md5Checksum,size,name",
                             supportsAllDrives=True,
                         )
-                        .execute()
+                        .execute(),
+                        redact_logs=redact_logs,
                     )
                 except Exception:
                     meta = {}
@@ -642,6 +683,7 @@ def download_drive_pdfs_to_local(
                     if _METRICS_CTX is not None:
                         _METRICS_CTX.last_error = str(e)
                         _METRICS_CTX.last_status = getattr(getattr(e, "resp", None), "status", "?")
+                    # Eccezione immutata (no redazione qui): diagnosi piena a carico chiamante
                     raise DriveDownloadError(f"Errore download '{remote_name}': {e}") from e
 
                 # Verifica integrità post-download (se md5 remoto disponibile)
@@ -650,8 +692,11 @@ def download_drive_pdfs_to_local(
                         downloaded_md5 = _md5sum(local_file_path)
                         if downloaded_md5 != meta["md5Checksum"]:
                             logger.warning(
-                                f"⚠️  md5 mismatch per {local_file_path}: "
-                                f"{downloaded_md5} != {meta['md5Checksum']}"
+                                _maybe_redact(
+                                    f"⚠️  md5 mismatch per {local_file_path}: "
+                                    f"{downloaded_md5} != {meta['md5Checksum']}",
+                                    redact_logs,
+                                )
                             )
                     except Exception:
                         pass

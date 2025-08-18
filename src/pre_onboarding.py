@@ -39,6 +39,7 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
+from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
 
 # Percorso YAML struttura cartelle (fonte di verità in /config)
 YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
@@ -158,12 +159,19 @@ def pre_onboarding_main(
     if not drive_parent_id:
         raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")
 
+    # Toggle redazione centralizzato
+    redact = is_log_redaction_enabled(context)
+
     # === Crea cartella cliente sul Drive condiviso ===
-    client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id)
+    client_folder_id = create_drive_folder(
+        service, context.slug, parent_id=drive_parent_id, redact_logs=redact
+    )
     logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
 
     # === Crea struttura remota da YAML ===
-    created_map = create_drive_structure_from_yaml(service, YAML_STRUCTURE_FILE, client_folder_id)
+    created_map = create_drive_structure_from_yaml(
+        service, YAML_STRUCTURE_FILE, client_folder_id, redact_logs=redact
+    )
     logger.info(f"📄 Struttura Drive creata: {created_map}")
 
     # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
@@ -176,7 +184,9 @@ def pre_onboarding_main(
         )
 
     # === Carica config.yaml su Drive (sostituisce se esiste) ===
-    uploaded_cfg_id = upload_config_to_drive_folder(service, context, parent_id=client_folder_id)
+    uploaded_cfg_id = upload_config_to_drive_folder(
+        service, context, parent_id=client_folder_id, redact_logs=redact
+    )
     logger.info(f"📤 Config caricato su Drive con ID: {uploaded_cfg_id}")
 
     # === Aggiorna config locale con gli ID Drive ===

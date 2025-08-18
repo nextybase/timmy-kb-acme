@@ -2,6 +2,35 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.4] - 2025-08-18
+
+### Added
+- **Redazione log (opt-in)**: introdotto e propagato il flag `redact_logs` per evitare leakage di segreti nei messaggi di log.
+  - `pipeline.drive_utils`: supporto a `redact_logs` in `_retry`, `create_drive_folder`, `upload_config_to_drive_folder`,
+    `create_drive_structure_from_yaml` (e `_create_remote_tree_from_mapping`), `download_drive_pdfs_to_local`.
+  - `pipeline.github_utils`: nuovo parametro `redact_logs` per mascherare token/URL nei log e nei messaggi di errore.
+  - `pipeline.gitbook_preview`: nuovo parametro `redact_logs` per redigere messaggi di build/serve (le eccezioni restano integre).
+- **Toggle centralizzato redazione**: `pipeline.env_utils.is_log_redaction_enabled(context)` per determinare a runtime se attivare la redazione.
+- **Utility ambiente tipizzate**: `require_env`, `get_bool`, `get_int` e `redact_secrets` (retro-compat con `get_env_var`).
+
+### Changed
+- **Orchestratori**:
+  - `pre_onboarding.py`: utilizza il toggle centralizzato e passa `redact_logs` a `create_drive_folder` e `upload_config_to_drive_folder`.
+  - `onboarding_full.py`: utilizza il toggle centralizzato e passa `redact_logs` a `download_drive_pdfs_to_local`,
+    `run_gitbook_docker_preview` e `push_output_to_github`.
+- **Logger unificato**: `pipeline.logging_utils` allineato (formatter unico, filtro `slug`, rotazione opzionale, fallback console-only).
+
+### Fixed
+- `onboarding_full.py`: corretto l’argomento CLI `--skip-push` → `action="store_true"`.
+
+### Security
+- Redazione proattiva di token/segret* nei log tramite `redact_secrets` e flag `redact_logs` propagato dagli orchestratori.
+
+---
+
+#### Prossimo passo
+Estendere il supporto `redact_logs` e la coerenza del logging a **tutti** i moduli restanti (`content_utils.py`, `config_utils.py`, `cleanup_utils.py`, …), aggiornare la documentazione sull’uso del toggle e aggiungere smoke test per verificare la redazione e le metriche di retry.
+
 ## [2025-08-18] Onboarding pipeline – sessione refactor e bugfix
 
 ### 🚀 Nuove funzionalità
