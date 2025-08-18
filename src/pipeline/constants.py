@@ -10,6 +10,9 @@ LOGS_DIR_NAME = "logs"
 CONFIG_FILE_NAME = "config.yaml"
 SEMANTIC_MAPPING_FILE = "semantic_mapping.yaml"
 
+# 🪵 Logging
+LOG_FILE_NAME = "onboarding.log"  # nome log usato dagli orchestratori
+
 # 📄 Suffissi di backup e temporanei
 BACKUP_SUFFIX = ".bak"
 TMP_SUFFIX = ".tmp"
@@ -29,6 +32,20 @@ CONFIG_DIR_NAME = "config"
 # 📄 MIME Types generici
 PDF_MIME_TYPE = "application/pdf"
 
-# 📄 File tipici di GitBook
+# 📄 File tipici di GitBook/HonKit
 BOOK_JSON_NAME = "book.json"
 PACKAGE_JSON_NAME = "package.json"
+SUMMARY_MD_NAME = "SUMMARY.md"
+README_MD_NAME = "README.md"
+
+# 🐙 Git/GitHub
+REPO_NAME_PREFIX = "timmy-kb-"
+GIT_COMMIT_USER_NAME = "Timmy KB"
+GIT_COMMIT_USER_EMAIL = "kb+noreply@local"
+# Chiavi d'ambiente da cui risolvere il branch di default (in ordine di priorità)
+DEFAULT_GIT_BRANCH_ENV_KEYS = ("GIT_DEFAULT_BRANCH", "GITHUB_BRANCH")
+
+# 📚 HonKit/GitBook Preview
+HONKIT_DOCKER_IMAGE = "honkit/honkit"
+PREVIEW_DEFAULT_PORT = 4000
+HONKIT_CONTAINER_NAME_PREFIX = "honkit_preview"

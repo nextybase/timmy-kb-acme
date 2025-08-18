@@ -2,6 +2,31 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [Unreleased]
+
+### Added
+- Supporto alla redazione centralizzata dei log tramite `is_log_redaction_enabled`, esteso a tutte le funzioni sensibili (Drive, GitHub, preview).
+- Cleanup automatico del container Docker di anteprima al termine della procedura (`onboarding_full`).
+- Costanti strutturali centralizzate in `constants.py` per directory, file e MIME types, ora utilizzate anche negli orchestratori.
+- Gestione di `DRIVE_PARENT_FOLDER_ID` come env opzionale, con precedenza su `DRIVE_ID` se presente.
+
+### Changed
+- Allineamento completo degli orchestratori (`pre_onboarding.py`, `onboarding_full.py`) alle costanti `OUTPUT_DIR_NAME`, `LOGS_DIR_NAME`, `LOG_FILE_NAME`.
+- Migliorata l’ordine dei blocchi `except`: catch specifici ora precedono quelli generici, evitando mascheramenti.
+- Logging arricchito con metadati contestuali e uniformato su unico file log (`onboarding.log`).
+- `ConfigError`, `PreviewError` e altre eccezioni tipizzate gestite in maniera consistente negli orchestratori.
+- Conversione `content_utils` resa più robusta: gestione gerarchie annidate, `SUMMARY.md` e `README.md` idempotenti.
+- `drive_utils` migliorato con retry con jitter, download ricorsivo dei PDF e compatibilità con Shared Drives.
+- `github_utils` aggiornato con push sicuro, gestione branch di default e credenziali via `GIT_HTTP_EXTRAHEADER`.
+- `exceptions.py`: metodi `__str__` sicuri, senza esposizione di token o ID completi (mascheramento automatico).
+- `path_utils`: validazione slug tramite regex configurabile, caching e funzioni di sanitizzazione filename.
+- `cleanup_utils`: rimozione sicura di artefatti `.git` legacy dopo il push.
+
+### Fixed
+- Risolti casi in cui stringhe vuote nelle env venivano considerate valide (ora trattate come mancanti).
+- Bug nel logging di errori in `path_utils` (ora più chiaro e consistente).
+- Gestione corretta dei fallback quando `DRIVE_ID` o `drive_raw_folder_id` non sono definiti.
+
 ## [1.0.4] - 2025-08-18
 
 ### Added

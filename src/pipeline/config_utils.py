@@ -113,7 +113,11 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     if config_path.exists():
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
         shutil.copy(config_path, backup_path)
-        logger.info(f"📝 Backup config esistente in {backup_path}")
+        # ➕ metadati di contesto nei log
+        logger.info(
+            f"📝 Backup config esistente in {backup_path}",
+            extra={"slug": context.slug, "file_path": str(backup_path)},
+        )
 
     tmp_path = config_path.with_suffix(config_path.suffix + TMP_SUFFIX)
     try:
@@ -123,7 +127,11 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     except Exception as e:
         raise ConfigError(f"Errore scrittura config {config_path}: {e}")
 
-    logger.info(f"📄 Config cliente salvato in {config_path}")
+    # ➕ metadati di contesto nei log
+    logger.info(
+        f"📄 Config cliente salvato in {config_path}",
+        extra={"slug": context.slug, "file_path": str(config_path)},
+    )
     return config_path
 
 

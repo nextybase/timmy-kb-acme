@@ -40,6 +40,7 @@ from pipeline.drive_utils import (
     create_local_base_structure,
 )
 from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
+from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
 
 # Percorso YAML struttura cartelle (fonte di verità in /config)
 YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
@@ -94,11 +95,11 @@ def pre_onboarding_main(
 
     Side Effects:
         - Scrive file e directory sotto `output/timmy-kb-<slug>/...`.
-        - Scrive su file di log unificato `onboarding.log`.
+        - Scrive su file di log unificato.
         - In modalità non-dry-run, crea risorse su Google Drive.
     """
     # === Logger unificato: file unico per cliente ===
-    log_file = Path("output") / f"timmy-kb-{slug}" / "logs" / "onboarding.log"
+    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("pre_onboarding", log_file=log_file)
 
@@ -249,12 +250,13 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Uscita standard per interruzione utente
         sys.exit(130)
+    # 👇 Ordine corretto: eccezioni specifiche prima di PipelineError
+    except ConfigError:
+        sys.exit(EXIT_CODES.get("ConfigError", 2))
     except PipelineError as e:
         # Mapping deterministico verso EXIT_CODES
         code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
         sys.exit(code)
-    except ConfigError:
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
     except Exception:
         # Fallback “safe”
         sys.exit(EXIT_CODES.get("PipelineError", 1))

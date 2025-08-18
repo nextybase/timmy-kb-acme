@@ -31,7 +31,7 @@ class PipelineError(Exception):
     Note:
         - Le sottoclassi non devono alterare la semantica del costruttore
           salvo aggiungere campi contestuali non funzionali.
-        - Il metodo `__str__` include automaticamente il contesto se presente.
+        - Il metodo `__str__` include automaticamente un contesto *sicuro* se presente.
     """
 
     def __init__(
@@ -43,20 +43,39 @@ class PipelineError(Exception):
         drive_id: Optional[str] = None,
         **_: Any,
     ) -> None:
-        super().__init__(message)
+        super().__init__(message or "")
         self.slug: Optional[str] = slug
         self.file_path: Optional[str | Path] = file_path
         self.drive_id: Optional[str] = drive_id
 
+    @staticmethod
+    def _safe_file_repr(fp: str | Path) -> str:
+        """Mostra solo il nome (niente path assoluti)."""
+        try:
+            return Path(fp).name or str(fp)
+        except Exception:
+            return str(fp)
+
+    @staticmethod
+    def _mask_id(val: str, keep: int = 6) -> str:
+        """Maschera l'ID (es. Drive) lasciando solo le ultime `keep` cifre."""
+        try:
+            s = str(val)
+            if len(s) <= keep:
+                return s
+            return f"…{s[-keep:]}"
+        except Exception:
+            return "…"
+
     def __str__(self) -> str:
-        base_msg = super().__str__()
+        base_msg = super().__str__() or self.__class__.__name__
         context_parts: list[str] = []
         if self.slug:
             context_parts.append(f"slug={self.slug}")
         if self.file_path:
-            context_parts.append(f"file={self.file_path}")
+            context_parts.append(f"file={self._safe_file_repr(self.file_path)}")
         if self.drive_id:
-            context_parts.append(f"drive_id={self.drive_id}")
+            context_parts.append(f"drive_id={self._mask_id(self.drive_id)}")
         context_info = f" [{' | '.join(context_parts)}]" if context_parts else ""
         return f"{base_msg}{context_info}"
 

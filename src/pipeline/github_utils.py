@@ -13,7 +13,8 @@ Note architetturali (v1.0.3+):
   conferma push sono responsabilità degli orchestratori (CLI/UX).
 
 Aggiornamento:
-- Introduce la redazione dei segreti nei log/messeggi d'errore come opzione (redact_logs=False di default).
+- Introduce la redazione dei segreti nei log/messaggi d'errore come opzione (redact_logs=False di default).
+- Migliorati i metadati strutturati nei log (repo/branch) e l’hardening degli errori in creazione repo.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from github.GithubException import GithubException
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError
 from pipeline.path_utils import is_safe_subpath  # sicurezza path
-from pipeline.env_utils import redact_secrets  # 🔐 nuova dipendenza per redazione
+from pipeline.env_utils import redact_secrets  # 🔐 redazione
 
 logger = get_structured_logger("pipeline.github_utils")
 
@@ -79,7 +80,7 @@ def push_output_to_github(
     *,
     github_token: str,
     do_push: bool = True,
-    redact_logs: bool = False,  # 👈 nuovo flag opzionale (default: nessun cambio di comportamento)
+    redact_logs: bool = False,  # 👈 flag opzionale (default: nessun cambio di comportamento)
 ) -> None:
     """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub.
 
@@ -98,7 +99,7 @@ def push_output_to_github(
         redact_logs: Se `True`, applica redazione ai messaggi di errore/log potenzialmente sensibili.
 
     Raises:
-        PipelineError: Se prerequisiti mancanti (cartella o token) o in caso di errori push.
+        PipelineError: Se prerequisiti mancanti (cartella o token) o in caso di errori push/creazione repo.
     """
     # Validazione basilare prerequisiti
     if not github_token:
@@ -142,11 +143,20 @@ def push_output_to_github(
 
     default_branch = _resolve_default_branch(context)
     msg = f"📤 Preparazione push su GitHub (branch: {default_branch})"
-    logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+    logger.info(
+        redact_secrets(msg) if redact_logs else msg,
+        extra={"slug": context.slug, "branch": default_branch},
+    )
 
     # Autenticazione GitHub
     gh = Github(github_token)
-    user = gh.get_user()
+    try:
+        user = gh.get_user()
+    except GithubException as e:
+        raw = f"Errore autenticazione GitHub: {e}"
+        safe = redact_secrets(raw) if redact_logs else raw
+        raise PipelineError(safe, slug=context.slug)
+
     repo_name = f"timmy-kb-{context.slug}"
 
     # Recupera o crea repo remoto
@@ -155,17 +165,25 @@ def push_output_to_github(
         msg = f"🔄 Repository remoto trovato: {repo.full_name}"
         logger.info(
             redact_secrets(msg) if redact_logs else msg,
-            extra={"slug": context.slug, "repo": repo.full_name},
+            extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
         )
     except GithubException:
         msg = f"➕ Repository non trovato. Creazione di {repo_name}..."
-        logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
-        repo = user.create_repo(repo_name, private=True)
-        msg = f"✅ Repository creato: {repo.full_name}"
         logger.info(
             redact_secrets(msg) if redact_logs else msg,
-            extra={"slug": context.slug, "repo": repo.full_name},
+            extra={"slug": context.slug, "repo": repo_name, "branch": default_branch},
         )
+        try:
+            repo = user.create_repo(repo_name, private=True)
+            msg = f"✅ Repository creato: {repo.full_name}"
+            logger.info(
+                redact_secrets(msg) if redact_logs else msg,
+                extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
+            )
+        except GithubException as e:
+            raw = f"Errore durante la creazione del repository {repo_name}: {e}"
+            safe = redact_secrets(raw) if redact_logs else raw
+            raise PipelineError(safe, slug=context.slug)
 
     # Push locale temporaneo
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -217,10 +235,10 @@ def push_output_to_github(
             msg = f"✅ Push completato su {repo.full_name} ({default_branch})"
             logger.info(
                 redact_secrets(msg) if redact_logs else msg,
-                extra={"slug": context.slug, "repo": repo.full_name},
+                extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
             )
         except subprocess.CalledProcessError as e:
-            # Messaggio sicuro: non include più l'header in chiaro/base64 nella command line
+            # Messaggio sicuro: non include l’header in chiaro/base64 nella command line
             raw = f"Errore durante il push su GitHub: {e}"
             safe = redact_secrets(raw) if redact_logs else raw
             raise PipelineError(safe, slug=context.slug)

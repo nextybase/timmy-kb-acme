@@ -1,3 +1,5 @@
+# src/pipeline/env_utils.py
+
 """
 Utility per la gestione delle variabili d'ambiente.
 
@@ -41,18 +43,18 @@ def get_env_var(key: str, default=None, required: bool = False):
     Args:
         key: nome della variabile d'ambiente
         default: valore di fallback se la variabile non è presente
-        required: se True, solleva ConfigError quando la variabile è assente
+        required: se True, solleva ConfigError quando la variabile è assente **o vuota**
 
     Returns:
         Il valore della variabile o il default.
 
     Raises:
-        ConfigError: se required=True e la variabile è assente
+        ConfigError: se required=True e la variabile è assente o vuota
     """
     value = os.getenv(key, default)
-    if required and value is None:
-        # Coerenza con l’error handling della pipeline
-        raise ConfigError(f"Variabile di ambiente '{key}' mancante e richiesta")
+    if required and (value is None or str(value).strip() == ""):
+        # Coerenza con l’error handling della pipeline e con require_env()
+        raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
     return value
 
 

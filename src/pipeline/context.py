@@ -126,7 +126,10 @@ class ClientContext:
         # Validazione slug
         if not is_valid_slug(slug):
             if interactive:
-                _logger.warning(f"Slug non valido: '{slug}'. Deve contenere solo caratteri ammessi.")
+                _logger.warning(
+                    f"Slug non valido: '{slug}'. Deve contenere solo caratteri ammessi.",
+                    extra={"slug": slug},
+                )
                 slug = input("📌 Reinserisci lo slug cliente: ").strip()
                 slug = validate_slug(slug)
             else:
@@ -137,7 +140,10 @@ class ClientContext:
 
         # 📦 Creazione automatica per nuovo cliente
         if not config_path.exists():
-            _logger.info(f"Cliente '{slug}' non trovato: creazione struttura base.")
+            _logger.info(
+                f"Cliente '{slug}' non trovato: creazione struttura base.",
+                extra={"slug": slug, "file_path": str(config_path)},
+            )
             config_path.parent.mkdir(parents=True, exist_ok=True)
             template_config = Path("config") / "config.yaml"
             if not template_config.exists():
@@ -155,7 +161,10 @@ class ClientContext:
         except Exception as e:
             raise ConfigError(f"Errore lettura config cliente: {e}", slug=slug, file_path=config_path)
 
-        _logger.info(f"Config cliente caricata: {config_path}")
+        _logger.info(
+            f"Config cliente caricata: {config_path}",
+            extra={"slug": slug, "file_path": str(config_path)},
+        )
 
         # Variabili da .env (condizionate da require_env)
         env_vars: Dict[str, Any] = {}
@@ -165,7 +174,12 @@ class ClientContext:
         else:
             env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
             env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
+
+        # Variabili opzionali utili alla pipeline/orchestratori
+        env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
         env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
+        env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
+        env_vars["ENV"] = get_env_var("ENV", default=None)
 
         return cls(
             slug=slug,
@@ -197,19 +211,19 @@ class ClientContext:
         """Aggiunge un errore al tracking e lo registra nel logger."""
         log = self._get_logger()
         self.error_list.append(msg)
-        log.error(msg)
+        log.error(msg, extra={"slug": self.slug})
 
     def log_warning(self, msg: str) -> None:
         """Aggiunge un warning al tracking e lo registra nel logger."""
         log = self._get_logger()
         self.warning_list.append(msg)
-        log.warning(msg)
+        log.warning(msg, extra={"slug": self.slug})
 
     def set_step_status(self, step: str, status: str) -> None:
         """Registra lo stato di uno step della pipeline (es. 'download' → 'done')."""
         log = self._get_logger()
         self.step_status[step] = status
-        log.info(f"Step '{step}' → {status}")
+        log.info(f"Step '{step}' → {status}", extra={"slug": self.slug, "step": step, "status": status})
 
     def summary(self) -> Dict[str, Any]:
         """Restituisce un riassunto sintetico dello stato corrente del contesto."""

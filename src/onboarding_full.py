@@ -31,6 +31,7 @@ from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
+from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
 
 
 def _prompt(msg: str) -> str:
@@ -72,7 +73,8 @@ def onboarding_full_main(
         interactive=not non_interactive,
         require_env=require_env,
     )
-    log_file = Path("output") / f"timmy-kb-{slug}" / "logs" / "onboarding.log"
+    # 🌟 Logger file-based allineato alle costanti
+    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context)
 
@@ -252,12 +254,13 @@ if __name__ == "__main__":
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(130)
-    except PipelineError as e:
-        code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
-        sys.exit(code)
+    # 👇 Ordine corretto: specifiche prima di PipelineError
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     except PreviewError:
         sys.exit(EXIT_CODES.get("PreviewError", 30))
+    except PipelineError as e:
+        code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
+        sys.exit(code)
     except Exception:
         sys.exit(EXIT_CODES.get("PipelineError", 1))

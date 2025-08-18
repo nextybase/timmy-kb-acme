@@ -44,7 +44,10 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         base_resolved = Path(base).resolve()
         return base_resolved in path_resolved.parents or path_resolved == base_resolved
     except Exception as e:
-        _logger.error(f"Errore nella validazione path: {e}")
+        _logger.error(
+            f"Errore nella validazione path: {e}",
+            extra={"path": str(path), "base": str(base)},
+        )
         return False
 
 
@@ -173,7 +176,6 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
 
 __all__ = [
     "is_safe_subpath",
-    "_load_slug_regex",
     "clear_slug_regex_cache",  # ← export della funzione di reset cache
     "is_valid_slug",
     "normalize_path",
