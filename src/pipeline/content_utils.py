@@ -82,13 +82,21 @@ def convert_files_to_structured_markdown(
             f"La cartella raw non esiste: {raw_dir}",
             extra={"slug": context.slug, "file_path": raw_dir},
         )
-        raise FileNotFoundError(f"La cartella raw non esiste: {raw_dir}")
+        raise PipelineError(
+            f"La cartella raw non esiste: {raw_dir}",
+            slug=context.slug,
+            file_path=raw_dir,
+        )
     if not raw_dir.is_dir():
         local_logger.error(
             f"Il path raw non è una directory: {raw_dir}",
             extra={"slug": context.slug, "file_path": raw_dir},
         )
-        raise NotADirectoryError(f"Il path raw non è una directory: {raw_dir}")
+        raise PipelineError(
+            f"Il path raw non è una directory: {raw_dir}",
+            slug=context.slug,
+            file_path=raw_dir,
+        )
 
     if not is_safe_subpath(md_dir, context.base_dir):
         raise PipelineError(
@@ -254,9 +262,8 @@ def validate_markdown_dir(
     """Verifica che la directory Markdown esista e sia valida.
 
     Raises:
-        FileNotFoundError: Se la cartella non esiste.
-        NotADirectoryError: Se il path non è una directory.
-        PipelineError: Se il path è fuori dalla base consentita.
+        PipelineError: Se la cartella non esiste, non è una directory o il path è
+            fuori dalla base consentita.
     """
     md_dir = md_dir or context.md_dir
     local_logger = log or logger
@@ -273,10 +280,18 @@ def validate_markdown_dir(
             f"La cartella markdown non esiste: {md_dir}",
             extra={"slug": context.slug, "file_path": md_dir},
         )
-        raise FileNotFoundError(f"La cartella markdown non esiste: {md_dir}")
+        raise PipelineError(
+            f"La cartella markdown non esiste: {md_dir}",
+            slug=context.slug,
+            file_path=md_dir,
+        )
     if not md_dir.is_dir():
         local_logger.error(
             f"Il path non è una directory: {md_dir}",
             extra={"slug": context.slug, "file_path": md_dir},
         )
-        raise NotADirectoryError(f"Il path non è una directory: {md_dir}")
+        raise PipelineError(
+            f"Il path non è una directory: {md_dir}",
+            slug=context.slug,
+            file_path=md_dir,
+        )

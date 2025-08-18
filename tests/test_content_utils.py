@@ -146,7 +146,7 @@ def test_validate_markdown_dir_nonexistent_raises(dummy_kb):
         for p in ctx.md_dir.glob("*"):
             p.unlink()
         ctx.md_dir.rmdir()
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(PipelineError):
         validate_markdown_dir(ctx)
 
 
@@ -156,7 +156,7 @@ def test_validate_markdown_dir_not_a_directory_raises(dummy_kb):
     # Creiamo un file con lo stesso nome
     ctx.md_dir.write_text("not a dir", encoding="utf-8")
     try:
-        with pytest.raises(NotADirectoryError):
+        with pytest.raises(PipelineError):
             validate_markdown_dir(ctx)
     finally:
         # cleanup per non interferire con altri test
