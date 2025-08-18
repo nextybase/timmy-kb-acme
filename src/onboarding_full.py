@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
 # src/onboarding_full.py
-"""Orchestratore della fase di **onboarding completo** per Timmy-KB.
-
-Responsabilità (immutate):
-- Orchestrare il flusso end-to-end: download PDF (opzionale), conversione in Markdown,
-  generazione `SUMMARY.md`/`README.md`, preview HonKit in Docker (se disponibile) e push (opzionale).
-- Gestire UX/CLI (prompt, conferme) e il mapping deterministico **eccezioni → EXIT_CODES**.
-- Delegare il lavoro tecnico ai moduli di `pipeline.*` (i moduli **non** terminano il processo
-  e **non** chiedono input).
-
-Comportamento UX:
-- **non_interactive=True** → nessun prompt; se Docker non c’è la preview è **saltata**; `push=False`
-  salvo override `--push`.
-- **non_interactive=False** → prompt solo quando Docker manca (chiede se proseguire senza anteprima)
-  e sul push (default no). Se Docker è disponibile, la preview parte *detached* e non blocca.
-
-Sicurezza/Log:
-- Logger **condiviso** per cliente (file unico), niente segreti in chiaro; coerenza con policy dei log.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -48,42 +29,28 @@ from pipeline.content_utils import (
 )
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
+from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 
-
-# -----------------------
-# Helpers interazione CLI
-# -----------------------
 def _prompt(msg: str) -> str:
-    """Raccoglie input da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
 
-
 def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
-    """Chiede conferma sì/no con default configurabile."""
     suffix = " [y/N]: " if default_no else " [Y/n]: "
     ans = input(msg + suffix).strip().lower()
     if not ans:
         return not default_no
     return ans in ("y", "yes", "s", "si", "sí")
 
-
 def _docker_available() -> bool:
-    """Verifica la disponibilità del comando `docker` nel PATH."""
     try:
-        subprocess.run(["docker", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except Exception:
         return False
 
-
 def _stop_preview_container(container_name: str) -> None:
-    """Best-effort cleanup del container di anteprima (nessun errore se non esiste)."""
     subprocess.run(["docker", "rm", "-f", container_name], check=False)
 
-
-# -----------------------------------
-# Orchestratore principale (flusso)
-# -----------------------------------
 def onboarding_full_main(
     slug: str,
     *,
@@ -93,21 +60,6 @@ def onboarding_full_main(
     push: Optional[bool] = None,
     port: int = 4000,
 ) -> None:
-    """Esegue l'onboarding completo per il cliente indicato da `slug`.
-
-    Fasi:
-      1) (opz.) Download PDF da Drive → `output/<slug>/raw/`
-      2) Conversione/Generazione Markdown → `output/<slug>/book/`
-      3) (opz.) Preview HonKit in Docker
-      4) (opz.) Push su GitHub
-
-    UX invariata (con fix preview non bloccante):
-      - `non_interactive=True`: nessun prompt; se Docker non c'è → **skip preview**; `push=False` salvo `--push`.
-      - `non_interactive=False`: prompt su preview **solo** quando Docker manca; prompt su push (default **no**).
-        Se Docker è disponibile, la preview parte *detached* e verrà **fermata automaticamente all’uscita**.
-    """
-    # Carica contesto e logger file-based unificato
-    # require_env=False in modalità offline: no_drive, dry_run o non_interactive
     require_env = not (no_drive or dry_run or non_interactive)
     context: ClientContext = ClientContext.load(
         slug=slug,
@@ -130,6 +82,31 @@ def onboarding_full_main(
         logger.error(str(e))
         raise
 
+    # Controllo precoce Docker / policy preview
+    preview_allowed = True
+    if non_interactive:
+        if not _docker_available():
+            preview_allowed = False
+            logger.info("⏭️  Modalità non-interattiva: Docker assente → anteprima saltata automaticamente")
+    else:
+        if not _docker_available():
+            logger.warning("⚠️ Docker non disponibile")
+            if _confirm_yes_no("Vuoi proseguire senza anteprima?", default_no=False):
+                preview_allowed = False
+                logger.info("⏭️  L'utente ha scelto di proseguire senza anteprima (sarà totalmente esclusa)")
+            else:
+                logger.info("🛠️  Attiva Docker quindi conferma per riprovare il controllo")
+                while True:
+                    ans = _confirm_yes_no("Hai attivato Docker? Vuoi riprovare ora il controllo?", default_no=False)
+                    if not ans:
+                        raise ConfigError("Anteprima richiesta ma Docker non è stato attivato. Interruzione.")
+                    if _docker_available():
+                        logger.info("✅ Docker rilevato. La preview sarà attivata più avanti.")
+                        preview_allowed = True
+                        break
+                    else:
+                        logger.warning("⚠️  Docker ancora non disponibile. Puoi riprovare o annullare.")
+
     # 1) Download da Drive (opzionale)
     if not no_drive and not dry_run:
         drive_raw_folder_id = cfg.get("drive_raw_folder_id")
@@ -142,6 +119,7 @@ def onboarding_full_main(
             remote_root_folder_id=drive_raw_folder_id,
             local_root_dir=context.raw_dir,
             progress=not non_interactive,
+            context=context,
         )
     else:
         if no_drive:
@@ -158,94 +136,76 @@ def onboarding_full_main(
     generate_readme_markdown(context)
     validate_markdown_dir(context)
 
-    # 3) Preview HonKit in Docker (mai bloccante; stop automatico)
+    # 3) Preview HonKit in Docker (mai bloccante)
     container_name = f"honkit_preview_{slug}"
     preview_started = False
-
-    if _docker_available():
+    if preview_allowed and _docker_available():
         logger.info("🔎 Docker disponibile: avvio preview HonKit (detached)")
         run_gitbook_docker_preview(
             context,
             port=port,
             container_name=container_name,
-            wait_on_exit=False,  # sempre detached per non bloccare
+            wait_on_exit=False,
         )
         preview_started = True
         logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
+    elif preview_allowed:
+        logger.warning("⚠️ Docker non più disponibile al momento dell'avvio: anteprima saltata")
     else:
-        logger.warning("⚠️ Docker non disponibile")
-        if non_interactive:
-            logger.info("⏭️  Modalità non-interattiva: anteprima saltata automaticamente")
-        else:
-            proceed = _confirm_yes_no("Docker non disponibile. Vuoi continuare senza anteprima?", default_no=True)
-            if not proceed:
-                raise ConfigError("Anteprima non disponibile e utente ha scelto di non proseguire.")
-            logger.info("⏭️  Anteprima saltata su scelta dell'utente")
+        logger.info("⏭️  Anteprima disabilitata per scelta/policy iniziale")
 
-    # 4) Push su GitHub (opzionale)
+    # 4) Push su GitHub (opzionale) — cleanup del container in finally, SEMPRE
     token = context.env.get("GITHUB_TOKEN")
     if push is not None:
         do_push = push
     else:
         do_push = False if non_interactive else _confirm_yes_no("Eseguire il push su GitHub?", default_no=True)
 
-    if do_push:
-        if not token:
-            # Fermiamo comunque l'anteprima se avviata
-            if preview_started:
-                _stop_preview_container(container_name)
-                logger.info("🧹 Anteprima fermata (token mancante)", extra={"file_path": container_name})
-            raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
-        logger.info("📤 Avvio push su GitHub")
-        push_output_to_github(context, github_token=token, confirm_push=True)
-    else:
-        logger.info("⏭️  Push su GitHub non eseguito")
+    try:
+        if do_push:
+            if not token:
+                raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
 
-    # Stop automatico anteprima all'uscita, indipendentemente dal push
-    if preview_started:
-        _stop_preview_container(container_name)
-        logger.info("🧹 Anteprima fermata automaticamente", extra={"file_path": container_name})
+            logger.info("📤 Avvio push su GitHub")
+            push_output_to_github(context, github_token=token, do_push=True)
+
+            # ➕ Prompt pulizia artefatti push (solo interattivo)
+            if not non_interactive and _confirm_yes_no(
+                "Pulire eventuali artefatti locali di push legacy (es. .git in book/)?",
+                default_no=True,
+            ):
+                try:
+                    report = clean_push_leftovers(context)
+                    logger.info("🧹 Cleanup artefatti completato", extra=report)
+                except Exception as e:
+                    logger.warning("⚠️  Cleanup artefatti fallito", extra={"error": str(e)})
+        else:
+            logger.info("⏭️  Push su GitHub non eseguito")
+    finally:
+        if preview_started:
+            _stop_preview_container(container_name)
+            logger.info("🧹 Anteprima fermata automaticamente", extra={"file_path": container_name})
 
     logger.info("✅ Onboarding completo")
 
-
-# -----------------------
-# Argparse / __main__
-# -----------------------
 def _parse_args() -> argparse.Namespace:
-    """Parsa gli argomenti CLI dell’orchestratore `onboarding_full`."""
     p = argparse.ArgumentParser(description="Onboarding completo Timmy-KB")
-
-    # Slug “soft” posizionale con compat --slug
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
-
-    # Modalità/controllo flusso
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     p.add_argument("--dry-run", action="store_true", help="Nessun accesso a servizi remoti; esegue conversione locale")
     p.add_argument("--no-drive", action="store_true", help="Salta sempre download da Drive")
-
-    # Push
     p.add_argument("--push", action="store_true", help="Forza il push su GitHub (solo se GITHUB_TOKEN è presente)")
     p.add_argument("--no-push", action="store_true", help="Disabilita esplicitamente il push su GitHub")
-
-    # Alias storici (deprecati)
     p.add_argument("--skip-drive", action="store_true", help="(Deprecato) Usa --no-drive")
     p.add_argument("--skip-push", action="store_true", help="(Deprecato) Usa --no-push")
-
-    # Preview
     p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
-
     return p.parse_args()
-
 
 if __name__ == "__main__":
     args = _parse_args()
-
-    # Logger console “early” (prima di avere lo slug) per messaggi iniziali
     early_logger = get_structured_logger("onboarding_full")
 
-    # Risoluzione slug
     slug = args.slug_pos or args.slug
     if not slug and args.non_interactive:
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
@@ -253,7 +213,6 @@ if __name__ == "__main__":
     if not slug:
         slug = _prompt("Inserisci slug cliente: ").strip()
 
-    # Normalizza alias deprecati
     if args.skip_drive:
         early_logger.warning("⚠️  --skip-drive è deprecato; usare --no-drive")
         args.no_drive = True
@@ -261,14 +220,12 @@ if __name__ == "__main__":
         early_logger.warning("⚠️  --skip-push è deprecato; usare --no-push")
         args.no_push = True
 
-    # Determinazione push (priorità: --no-push > --push)
-    push_flag: Optional[bool]
     if args.no_push:
         push_flag = False
     elif args.push:
         push_flag = True
     else:
-        push_flag = None  # domanda in interattivo, false in non-interattivo
+        push_flag = None
 
     try:
         onboarding_full_main(

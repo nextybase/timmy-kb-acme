@@ -55,12 +55,6 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
       1) `context.env["GIT_DEFAULT_BRANCH"]` o `context.env["GITHUB_BRANCH"]` (se presenti)
       2) variabili di processo: `GIT_DEFAULT_BRANCH` o `GITHUB_BRANCH`
       3) fallback sicuro: `"main"`
-
-    Args:
-        context: Oggetto compatibile con `_SupportsContext`.
-
-    Returns:
-        Nome del branch da usare come default.
     """
     # 1) variabili nel contesto (preferite)
     if getattr(context, "env", None):
@@ -79,8 +73,9 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
 
 def push_output_to_github(
     context: _SupportsContext,
+    *,
     github_token: str,
-    confirm_push: bool = True,
+    do_push: bool = True,
 ) -> None:
     """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub.
 
@@ -89,13 +84,13 @@ def push_output_to_github(
     solo se i relativi path ricadono **sotto** `context.md_dir` (path-safety).
 
     Architettura:
-        - Nessun prompt/nessuna conferma qui: l'orchestratore decide e passa `confirm_push`.
+        - Nessun prompt/nessuna conferma qui: l'orchestratore decide e passa `do_push`.
         - Nessun `sys.exit()`; in caso di errore solleva `PipelineError`.
 
     Args:
         context: Contesto con attributi `slug`, `md_dir` e (opz.) `env`.
         github_token: Token personale GitHub (PAT). Deve essere valorizzato.
-        confirm_push: Se `False`, NON esegue il push (dry-run controllato dall'orchestratore).
+        do_push: Se `False`, NON esegue il push (dry-run controllato dall'orchestratore).
 
     Raises:
         PipelineError: Se prerequisiti mancanti (cartella o token) o in caso di errori push.
@@ -134,9 +129,9 @@ def push_output_to_github(
         )
         return
 
-    if confirm_push is False:
+    if do_push is False:
         logger.info(
-            "Push disattivato: confirm_push=False (dry run a carico dell'orchestratore).",
+            "Push disattivato: do_push=False (dry run a carico dell'orchestratore).",
             extra={"slug": context.slug},
         )
         return

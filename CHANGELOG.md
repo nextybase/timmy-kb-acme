@@ -2,6 +2,22 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [2025-08-18] Onboarding pipeline – sessione refactor e bugfix
+
+### 🚀 Nuove funzionalità
+- Aggiunto prompt per **pulizia artefatti post-push** in `onboarding_full`.
+- Introdotto controllo interattivo Docker con possibilità di **skip** o **retry** (preview opzionale).
+
+### 🛠 Correzioni
+- Ripristinato funzionamento `push_output_to_github` con gestione coerente del flag `--push`.
+- Corretto bug nei log di `content_utils` con **rebind del logger** al file cliente.
+- `cleanup_utils` reso puro modulo di utility (niente `input()`), con logica interattiva spostata su `onboarding_full`.
+- `onboarding_full`: preview container Docker ora stoppato sempre in `finally`.
+
+### 📖 Note architetturali
+- Confermata eliminazione degli **alias legacy** (`--skip-drive`, `--skip-push`) a partire da v2.0.
+- Pulizia e semplificazione del flusso: input utente consentito solo negli orchestratori, utility ridotte a funzioni pure.
+
 ## [PR-1] - 2025-08-17
 ### Changed
 - Refactor orchestratori e pipeline per maggiore robustezza e maneggevolezza.

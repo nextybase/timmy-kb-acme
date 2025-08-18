@@ -70,6 +70,26 @@ def convert_files_to_structured_markdown(
     md_dir = md_dir or context.md_dir
     local_logger = log or logger
 
+    # 🔒 Guard-rail anche su RAW (coerente con md_dir)
+    if not is_safe_subpath(raw_dir, context.base_dir):
+        raise PipelineError(
+            f"Tentativo di leggere da un path non sicuro: {raw_dir}",
+            slug=context.slug,
+            file_path=raw_dir,
+        )
+    if not raw_dir.exists():
+        local_logger.error(
+            f"La cartella raw non esiste: {raw_dir}",
+            extra={"slug": context.slug, "file_path": raw_dir},
+        )
+        raise FileNotFoundError(f"La cartella raw non esiste: {raw_dir}")
+    if not raw_dir.is_dir():
+        local_logger.error(
+            f"Il path raw non è una directory: {raw_dir}",
+            extra={"slug": context.slug, "file_path": raw_dir},
+        )
+        raise NotADirectoryError(f"Il path raw non è una directory: {raw_dir}")
+
     if not is_safe_subpath(md_dir, context.base_dir):
         raise PipelineError(
             f"Tentativo di scrivere file in path non sicuro: {md_dir}",

@@ -1,5 +1,4 @@
 # src/pipeline/drive_utils.py
-
 """
 Utility Google Drive per la pipeline Timmy-KB.
 
@@ -18,12 +17,14 @@ Note:
 - Le funzioni qui NON terminano il processo; eventuali errori sono propagati come eccezioni tipizzate.
 - Logging strutturato tramite logger di modulo (nessun segreto in chiaro).
 """
-
 from __future__ import annotations
 
 import hashlib
 import time
 import random
+from dataclasses import dataclass, field
+from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -45,6 +46,41 @@ logger = get_structured_logger("pipeline.drive_utils")
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 MIME_FOLDER = "application/vnd.google-apps.folder"
 MIME_PDF = "application/pdf"
+
+# ---------------------------------------------------------
+# Metriche retry (osservabilità non invasiva)
+# ---------------------------------------------------------
+@dataclass
+class _DriveRetryMetrics:
+    """Contatori lightweight per osservabilità dei retry/backoff Drive."""
+    retries_total: int = 0
+    retries_by_error: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    last_error: Optional[str] = None
+    last_status: Optional[Any] = None
+    backoff_total_ms: int = 0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "retries_total": self.retries_total,
+            "retries_by_error": dict(self.retries_by_error),
+            "last_error": self.last_error,
+            "last_status": self.last_status,
+            "backoff_total_ms": self.backoff_total_ms,
+        }
+
+# Contesto metrico corrente (per thread singolo/processo pipeline)
+_METRICS_CTX: Optional[_DriveRetryMetrics] = None
+
+@contextmanager
+def _metrics_scope(metrics: _DriveRetryMetrics):
+    """Imposta metriche correnti per includere anche retry interni (list/create/etc.)."""
+    global _METRICS_CTX
+    prev = _METRICS_CTX
+    _METRICS_CTX = metrics
+    try:
+        yield
+    finally:
+        _METRICS_CTX = prev
 
 
 # ---------------------------------------------------------
@@ -87,16 +123,28 @@ def _retry(fn: Callable[[], Any], *, tries: int = 3, delay: float = 0.8, backoff
         try:
             return fn()
         except HttpError as e:
+            # Ultimo tentativo: propaga
             if attempt >= tries:
                 raise
-            status = getattr(e, "resp", None).status if getattr(e, "resp", None) else "?"
+            # Telemetria (se attiva)
+            status = getattr(getattr(e, "resp", None), "status", "?")
+            if _METRICS_CTX is not None:
+                _METRICS_CTX.retries_total += 1
+                _METRICS_CTX.retries_by_error[type(e).__name__] += 1
+                _METRICS_CTX.last_error = str(e)
+                _METRICS_CTX.last_status = status
+
             logger.warning(
                 f"HTTP {status} su Drive; retry {attempt}/{tries}",
                 extra={"error": str(e)},
             )
             # jitter: +/- 30% del delay corrente
-            jitter = 1.0 + random.uniform(-0.3, 0.3)
-            time.sleep(max(0.0, _delay * jitter))
+            jitter_factor = 1.0 + random.uniform(-0.3, 0.3)
+            sleep_s = max(0.0, _delay * jitter_factor)
+            if _METRICS_CTX is not None:
+                # arrotonda a millisecondi per leggibilità
+                _METRICS_CTX.backoff_total_ms += int(round(sleep_s * 1000))
+            time.sleep(sleep_s)
             _delay *= backoff
 
 
@@ -303,36 +351,56 @@ def upload_config_to_drive_folder(service, context, parent_id: str) -> str:
     if not config_path.exists():
         raise ConfigError(f"config.yaml non trovato: {config_path}", file_path=config_path)
 
-    # rimuovi eventuale file esistente con lo stesso nome
-    existing = list_drive_files(service, parent_id, query=f"name = '{config_path.name}'")
-    for f in existing:
+    metrics = _DriveRetryMetrics()
+    with _metrics_scope(metrics):
+        # rimuovi eventuale file esistente con lo stesso nome
+        existing = list_drive_files(service, parent_id, query=f"name = '{config_path.name}'")
+        for f in existing:
+            try:
+                delete_drive_file(service, f["id"])
+            except Exception as e:
+                logger.warning(
+                    "Impossibile rimuovere config pre-esistente su Drive",
+                    extra={"error": str(e), "slug": getattr(context, "slug", None)},
+                )
+
+        media = MediaFileUpload(str(config_path), mimetype="text/yaml", resumable=True)
+        metadata = {"name": config_path.name, "parents": [parent_id]}
+
+        def _do():
+            return service.files().create(
+                body=metadata,
+                media_body=media,
+                fields="id",
+                supportsAllDrives=True,
+            ).execute()
+
         try:
-            delete_drive_file(service, f["id"])
-        except Exception as e:
-            logger.warning(
-                "Impossibile rimuovere config pre-esistente su Drive",
-                extra={"error": str(e), "slug": getattr(context, "slug", None)},
+            res = _retry(_do)
+            file_id = res.get("id")
+            if not file_id:
+                raise DriveUploadError("Upload config su Drive fallito: ID mancante")
+            return file_id
+        except HttpError as e:
+            raise DriveUploadError(f"Errore upload config su Drive: {e}") from e
+        finally:
+            # Log strutturato riepilogativo metriche
+            logger.info(
+                "metrics.drive.summary (upload_config)",
+                extra={
+                    "metrics.drive.retries_total": metrics.retries_total,
+                    "metrics.drive.retries_by_error": dict(metrics.retries_by_error),
+                    "metrics.drive.backoff_total_ms": metrics.backoff_total_ms,
+                    "slug": getattr(context, "slug", None),
+                },
             )
-
-    media = MediaFileUpload(str(config_path), mimetype="text/yaml", resumable=True)
-    metadata = {"name": config_path.name, "parents": [parent_id]}
-
-    def _do():
-        return service.files().create(
-            body=metadata,
-            media_body=media,
-            fields="id",
-            supportsAllDrives=True,
-        ).execute()
-
-    try:
-        res = _retry(_do)
-        file_id = res.get("id")
-        if not file_id:
-            raise DriveUploadError("Upload config su Drive fallito: ID mancante")
-        return file_id
-    except HttpError as e:
-        raise DriveUploadError(f"Errore upload config su Drive: {e}") from e
+            # Snapshot leggero su contesto (se disponibile)
+            try:
+                if hasattr(context, "set_step_status"):
+                    context.set_step_status("drive_retries", str(metrics.retries_total))
+            except Exception:
+                # best-effort, nessuna propagazione
+                pass
 
 
 # ---------------------------------------------------------
@@ -466,6 +534,7 @@ def download_drive_pdfs_to_local(
     local_root_dir: Path,
     *,
     progress: bool = True,
+    context: Any = None,
 ) -> Tuple[int, int]:
     """Scarica TUTTI i PDF dalle sottocartelle di `remote_root_folder_id` in `local_root_dir`.
 
@@ -479,6 +548,7 @@ def download_drive_pdfs_to_local(
         remote_root_folder_id: ID della cartella remota contenente le categorie.
         local_root_dir: Radice locale in cui salvare i PDF.
         progress: Se `True`, logga avanzamento dei chunk durante il download.
+        context: (opz.) `ClientContext` per snapshot metriche in `step_status`.
 
     Returns:
         `tuple(downloaded_count, skipped_count)`.
@@ -489,107 +559,133 @@ def download_drive_pdfs_to_local(
     local_root_dir = Path(local_root_dir)
     _ensure_dir(local_root_dir)
 
-    # Seed: sottocartelle immediate della radice remota
-    top_subfolders = list_drive_files(service, remote_root_folder_id, query=f"mimeType = '{MIME_FOLDER}'")
-    queue: List[Tuple[str, List[str]]] = []
-    for folder in top_subfolders:
-        queue.append((folder["id"], [sanitize_filename(folder["name"])]))
-
+    metrics = _DriveRetryMetrics()
     downloaded_count = 0
     skipped_count = 0
 
-    while queue:
-        current_id, rel_parts = queue.pop(0)
-        rel_path = Path(*rel_parts)
-        local_subdir = local_root_dir / rel_path
-        _ensure_dir(local_subdir)
+    with _metrics_scope(metrics):
+        # Seed: sottocartelle immediate della radice remota
+        top_subfolders = list_drive_files(service, remote_root_folder_id, query=f"mimeType = '{MIME_FOLDER}'")
+        queue: List[Tuple[str, List[str]]] = []
+        for folder in top_subfolders:
+            queue.append((folder["id"], [sanitize_filename(folder["name"])]))
 
-        logger.info(f"📂 Cartella: {rel_path.as_posix()}")
+        while queue:
+            current_id, rel_parts = queue.pop(0)
+            rel_path = Path(*rel_parts)
+            local_subdir = local_root_dir / rel_path
+            _ensure_dir(local_subdir)
 
-        # PDF nel livello corrente
-        pdfs = list_drive_files(service, current_id, query=f"mimeType = '{MIME_PDF}'")
-        for f in pdfs:
-            remote_file_id = f["id"]
-            remote_name = f.get("name") or "download.pdf"
-            safe_name = sanitize_filename(remote_name)
-            local_file_path = local_subdir / safe_name
+            logger.info(f"📂 Cartella: {rel_path.as_posix()}")
 
-            logger.info(f"📥 Scaricamento PDF: {remote_name} → {local_file_path}")
+            # PDF nel livello corrente
+            pdfs = list_drive_files(service, current_id, query=f"mimeType = '{MIME_PDF}'")
+            for f in pdfs:
+                remote_file_id = f["id"]
+                remote_name = f.get("name") or "download.pdf"
+                safe_name = sanitize_filename(remote_name)
+                local_file_path = local_subdir / safe_name
 
-            # Metadata per idempotenza/integrità
-            try:
-                meta = _retry(
-                    lambda: service.files()
-                    .get(
-                        fileId=remote_file_id,
-                        fields="md5Checksum,size,name",
-                        supportsAllDrives=True,
-                    )
-                    .execute()
-                )
-            except Exception:
-                meta = {}
+                logger.info(f"📥 Scaricamento PDF: {remote_name} → {local_file_path}")
 
-            _ensure_dir(local_file_path.parent)
-
-            # Idempotenza: md5 o size
-            if local_file_path.exists():
-                local_md5 = None
+                # Metadata per idempotenza/integrità
                 try:
-                    local_md5 = _md5sum(local_file_path)
-                except Exception:
-                    local_md5 = None
-
-                remote_md5 = meta.get("md5Checksum")
-                remote_size = int(meta.get("size", -1)) if meta.get("size") else -1
-                local_size = local_file_path.stat().st_size
-
-                if (remote_md5 and local_md5 and remote_md5 == local_md5) or (
-                    remote_size >= 0 and local_size == remote_size
-                ):
-                    logger.info(f"⏭️  Invariato, skip download: {local_file_path}")
-                    skipped_count += 1
-                    continue
-
-            # Download sicuro (streaming a chunk)
-            request = service.files().get_media(fileId=remote_file_id, supportsAllDrives=True)
-            try:
-                with open(local_file_path, "wb") as fh:
-                    downloader = MediaIoBaseDownload(fh, request)
-                    done = False
-                    while not done:
-                        status, done = downloader.next_chunk()
-                        if progress and status:
-                            try:
-                                perc = int(status.progress() * 100)
-                                logger.info(f"   ↳ Progresso: {perc}%")
-                            except Exception:
-                                pass
-            except HttpError as e:
-                raise DriveDownloadError(f"Errore download '{remote_name}': {e}") from e
-
-            # Verifica integrità post-download (se md5 remoto disponibile)
-            if meta.get("md5Checksum"):
-                try:
-                    downloaded_md5 = _md5sum(local_file_path)
-                    if downloaded_md5 != meta["md5Checksum"]:
-                        logger.warning(
-                            f"⚠️  md5 mismatch per {local_file_path}: "
-                            f"{downloaded_md5} != {meta['md5Checksum']}"
+                    meta = _retry(
+                        lambda: service.files()
+                        .get(
+                            fileId=remote_file_id,
+                            fields="md5Checksum,size,name",
+                            supportsAllDrives=True,
                         )
+                        .execute()
+                    )
                 except Exception:
-                    pass
+                    meta = {}
 
-            downloaded_count += 1
-            logger.info(f"✅ PDF salvato: {local_file_path}")
+                _ensure_dir(local_file_path.parent)
 
-        # Sottocartelle (ricorsione BFS)
-        child_folders = list_drive_files(service, current_id, query=f"mimeType = '{MIME_FOLDER}'")
-        for cf in child_folders:
-            queue.append((cf["id"], rel_parts + [sanitize_filename(cf["name"])]))
+                # Idempotenza: md5 o size
+                if local_file_path.exists():
+                    local_md5 = None
+                    try:
+                        local_md5 = _md5sum(local_file_path)
+                    except Exception:
+                        local_md5 = None
 
+                    remote_md5 = meta.get("md5Checksum")
+                    remote_size = int(meta.get("size", -1)) if meta.get("size") else -1
+                    local_size = local_file_path.stat().st_size
+
+                    if (remote_md5 and local_md5 and remote_md5 == local_md5) or (
+                        remote_size >= 0 and local_size == remote_size
+                    ):
+                        logger.info(f"⏭️  Invariato, skip download: {local_file_path}")
+                        skipped_count += 1
+                        continue
+
+                # Download sicuro (streaming a chunk)
+                request = service.files().get_media(fileId=remote_file_id, supportsAllDrives=True)
+                try:
+                    with open(local_file_path, "wb") as fh:
+                        downloader = MediaIoBaseDownload(fh, request)
+                        done = False
+                        while not done:
+                            status, done = downloader.next_chunk()
+                            if progress and status:
+                                try:
+                                    perc = int(status.progress() * 100)
+                                    logger.info(f"   ↳ Progresso: {perc}%")
+                                except Exception:
+                                    pass
+                except HttpError as e:
+                    # annota errore su metriche (best-effort)
+                    if _METRICS_CTX is not None:
+                        _METRICS_CTX.last_error = str(e)
+                        _METRICS_CTX.last_status = getattr(getattr(e, "resp", None), "status", "?")
+                    raise DriveDownloadError(f"Errore download '{remote_name}': {e}") from e
+
+                # Verifica integrità post-download (se md5 remoto disponibile)
+                if meta.get("md5Checksum"):
+                    try:
+                        downloaded_md5 = _md5sum(local_file_path)
+                        if downloaded_md5 != meta["md5Checksum"]:
+                            logger.warning(
+                                f"⚠️  md5 mismatch per {local_file_path}: "
+                                f"{downloaded_md5} != {meta['md5Checksum']}"
+                            )
+                    except Exception:
+                        pass
+
+                downloaded_count += 1
+                logger.info(f"✅ PDF salvato: {local_file_path}")
+
+            # Sottocartelle (ricorsione BFS)
+            child_folders = list_drive_files(service, current_id, query=f"mimeType = '{MIME_FOLDER}'")
+            for cf in child_folders:
+                queue.append((cf["id"], rel_parts + [sanitize_filename(cf["name"])]))
+
+    # Riepilogo download
     logger.info(
         f"📊 Download completato: {downloaded_count} PDF scaricati in {local_root_dir}"
         + (f" (skip: {skipped_count})" if skipped_count else "")
     )
+    # Snapshot metriche Drive
+    logger.info(
+        "metrics.drive.summary (download)",
+        extra={
+            "metrics.drive.retries_total": metrics.retries_total,
+            "metrics.drive.retries_by_error": dict(metrics.retries_by_error),
+            "metrics.drive.backoff_total_ms": metrics.backoff_total_ms,
+            "metrics.drive.downloaded": downloaded_count,
+            "metrics.drive.skipped": skipped_count,
+        },
+    )
+    # Propaga nel contesto (se disponibile)
+    try:
+        if context is not None and hasattr(context, "set_step_status"):
+            context.set_step_status("drive_retries", str(metrics.retries_total))
+    except Exception:
+        # best-effort
+        pass
+
     return downloaded_count, skipped_count

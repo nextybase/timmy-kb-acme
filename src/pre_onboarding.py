@@ -117,6 +117,10 @@ def pre_onboarding_main(
         interactive=interactive,
         require_env=require_env,
     )
+
+    # 🔁 Rebind logger con il contesto (coerente con onboarding_full)
+    logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context)
+
     if not require_env:
         logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
     logger.info(f"Config cliente caricata: {context.config_path}")

@@ -1,127 +1,88 @@
 # src/pipeline/cleanup_utils.py
 """
-Utility di pulizia sicura delle cartelle di output della pipeline Timmy-KB.
+Utility di pulizia per la pipeline Timmy-KB.
 
-Consente di svuotare in sicurezza il contenuto di una directory (file e sottocartelle),
-lasciando intatta la cartella stessa. Include protezione da path critici (root, home, ecc.).
+Ruolo:
+- Fornire funzioni *pure* di cleanup senza interazione utente né terminazioni del processo.
+- Limitarsi a rimuovere in sicurezza eventuali artefatti locali creati dai flussi di push
+  legacy (es. una `.git` annidata in `book/`) o run precedenti.
+
+⚠️ Niente input()/print()/sys.exit(): i prompt stanno negli orchestratori.
 """
 
 from __future__ import annotations
 
 import shutil
-import argparse
 from pathlib import Path
+from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME
-from pipeline.exceptions import CleanupError
+from pipeline.path_utils import is_safe_subpath
 from pipeline.context import ClientContext
-from pipeline.path_utils import is_safe_subpath  # controllo path robusto
 
-logger = get_structured_logger("pipeline.cleanup")
+logger = get_structured_logger("pipeline.cleanup_utils")
 
 
-# -------------------------
-# Pulizia sicura
-# -------------------------
-def cleanup_directory(folder_path: Path, context: ClientContext) -> None:
-    """Svuota in sicurezza il contenuto della cartella specificata (file e sottocartelle).
-
-    La cartella stessa non viene rimossa.
-
-    Args:
-        folder_path: Percorso della cartella da svuotare.
-        context: Contesto cliente (per verificare base_dir).
-
-    Raises:
-        CleanupError: se il percorso non è sicuro o non validabile.
+def _rmtree_safe(target: Path) -> bool:
     """
-    folder = Path(folder_path).resolve()
-
+    Rimozione directory con log e senza eccezioni verso l'alto.
+    Ritorna True se la directory è stata rimossa o non esisteva.
+    """
     try:
-        base_dir = context.base_dir
-        if not is_safe_subpath(folder, base_dir):
-            raise CleanupError(f"Tentativo di pulire un path non sicuro: {folder}")
-    except ValueError as e:
-        logger.error(f"❌ Tentativo di pulire path non sicuro: {folder}")
-        raise CleanupError(f"Tentativo di pulire path non sicuro: {folder}") from e
-
-    if not folder.exists():
-        logger.info(f"ℹ️ La cartella {folder} non esiste, nessuna azione necessaria.")
-        return
-
-    for item in folder.iterdir():
-        try:
-            if item.is_dir():
-                shutil.rmtree(item)
-                logger.info(f"🗑️ Rimossa sottocartella: {item}")
-            else:
-                item.unlink()
-                logger.info(f"🗑️ Rimosso file: {item}")
-        except Exception as e:
-            logger.warning(f"⚠️ Impossibile rimuovere {item}: {e}")
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=False)
+            logger.info("🧹 Rimossa directory", extra={"file_path": target})
+        else:
+            logger.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": target})
+        return True
+    except Exception as e:
+        logger.warning("⚠️  Impossibile rimuovere directory", extra={"file_path": target, "error": str(e)})
+        return False
 
 
-# Alias per retrocompatibilità interna (non più usati direttamente)
-safe_clean_dir = cleanup_directory
-cleanup_output_folder = cleanup_directory
+def clean_push_leftovers(
+    context: ClientContext,
+    *,
+    logger_name: str = "pipeline.cleanup_utils",
+) -> Dict[str, Any]:
+    """
+    Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali di push.
 
+    Attualmente:
+    - elimina `.git` eventualmente presente sotto `context.md_dir` (book/),
+      tipico di run legacy che inizializzavano un repo lì.
 
-# -------------------------
-# Modalità interattiva CLI
-# -------------------------
-def interactive_cleanup(context: ClientContext) -> None:
-    """Modalità CLI interattiva: chiede conferma per cancellare `output_dir` del cliente."""
-    default_folder = str(context.output_dir)
-    folder = input(f"\n[Timmy-KB] Inserisci il percorso della cartella da svuotare [default: {default_folder}]: ").strip()
-    if not folder:
-        folder = default_folder
+    Non elimina `book/` né altri file `.md` generati dalla pipeline.
 
-    logger.info(f"Stai per svuotare: {folder}")
-    confirm = input("Sei sicuro? [y/N]: ").strip().lower()
-    if confirm == "y":
-        try:
-            cleanup_directory(Path(folder), context)
-            logger.info("✅ Pulizia completata.")
-        except CleanupError as e:
-            logger.error(f"Errore: {e}")
-    else:
-        logger.info("Operazione annullata.")
+    Returns:
+        Report con esito per ciascun target pulito.
+    """
+    _logger = get_structured_logger(logger_name, context=context)
 
+    book_dir: Path = context.md_dir
+    base_dir: Path = context.base_dir
 
-# -------------------------
-# Entry point CLI
-# -------------------------
-def cli_cleanup() -> None:
-    """Entry-point CLI: parsing argomenti e chiamata a `cleanup_directory()`."""
-    parser = argparse.ArgumentParser(
-        description="Svuota il contenuto di una cartella di output in modo sicuro.",
-        epilog="Esempio: python cleanup_utils.py --slug mio-cliente --folder output/timmy-kb-mio-cliente/"
-    )
-    parser.add_argument("--folder", type=str, help="Percorso della cartella da svuotare (default: context.output_dir)")
-    parser.add_argument("--slug", type=str, required=True, help="Slug cliente per caricare ClientContext")
-    parser.add_argument("--force", action="store_true", help="Esegui senza conferma")
+    # Guard-rail: non operare fuori dalla base cliente
+    if not is_safe_subpath(book_dir, base_dir):
+        _logger.warning(
+            "Path book non sicuro: skip cleanup",
+            extra={"file_path": book_dir},
+        )
+        return {"ok": False, "reason": "unsafe_path", "targets": []}
 
-    args = parser.parse_args()
+    targets = []
+    # Artefatto principale noto: repo Git locale legacy
+    git_dir = book_dir / ".git"
+    if git_dir.exists():
+        targets.append(git_dir)
 
-    # Caricamento contesto cliente
-    context = ClientContext.load(args.slug)
+    results = {}
+    for t in targets:
+        results[str(t)] = _rmtree_safe(t)
 
-    folder = args.folder or str(context.output_dir)
-    if not args.force:
-        logger.info(f"Attenzione: stai per svuotare {folder}")
-        confirm = input("Sei sicuro? [y/N]: ").strip().lower()
-        if confirm != "y":
-            logger.info("Operazione annullata.")
-            return
-
-    try:
-        cleanup_directory(Path(folder), context)
-        logger.info("✅ Pulizia completata.")
-    except CleanupError as e:
-        logger.error(f"Errore: {e}")
-        exit(1)
-
-
-if __name__ == "__main__":
-    cli_cleanup()
+    summary = {
+        "ok": all(results.values()) if results else True,
+        "targets": list(results.keys()),
+    }
+    _logger.info("✅ Cleanup completato", extra=summary)
+    return summary
