@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -66,17 +67,26 @@ def onboarding_full_main(
     no_drive: bool = False,
     push: Optional[bool] = None,
     port: int = 4000,
+    allow_offline_env: bool = False,
+    docker_retries: int = 3,
+    run_id: Optional[str] = None,
 ) -> None:
-    require_env = not (no_drive or dry_run or non_interactive)
+    # 🚦 Policy più rigorosa: se NON è dry-run e NON c'è --no-drive ⇒ richiedi env,
+    # indipendentemente da --non-interactive. Override con --allow-offline-env.
+    if allow_offline_env:
+        require_env = not (no_drive or dry_run or non_interactive)  # era il comportamento originale
+    else:
+        require_env = (not no_drive) and (not dry_run)  # più sicuro di L70 originale
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
         require_env=require_env,
+        run_id=run_id,
     )
     # 🌟 Logger file-based allineato alle costanti
     log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context)
+    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
 
     if not require_env:
         logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
@@ -107,7 +117,9 @@ def onboarding_full_main(
                 logger.info("⏭️  L'utente ha scelto di proseguire senza anteprima (sarà totalmente esclusa)")
             else:
                 logger.info("🛠️  Attiva Docker quindi conferma per riprovare il controllo")
-                while True:
+                attempts = 0
+                max_attempts = max(1, int(docker_retries))
+                while attempts < max_attempts:
                     ans = _confirm_yes_no("Hai attivato Docker? Vuoi riprovare ora il controllo?", default_no=False)
                     if not ans:
                         raise ConfigError("Anteprima richiesta ma Docker non è stato attivato. Interruzione.")
@@ -116,7 +128,10 @@ def onboarding_full_main(
                         preview_allowed = True
                         break
                     else:
-                        logger.warning("⚠️  Docker ancora non disponibile. Puoi riprovare o annullare.")
+                        attempts += 1
+                        logger.warning(f"⚠️  Docker ancora non disponibile (tentativo {attempts}/{max_attempts}).")
+                if attempts >= max_attempts and not preview_allowed:
+                    raise ConfigError("Docker non disponibile dopo i tentativi concessi.")
 
     # 1) Download da Drive (opzionale)
     if not no_drive and not dry_run:
@@ -191,6 +206,7 @@ def onboarding_full_main(
                     report = clean_push_leftovers(context)
                     logger.info("🧹 Cleanup artefatti completato", extra=report)
                 except Exception as e:
+                    # warning intenzionale: non vogliamo far fallire l'onboarding per cleanup
                     logger.warning("⚠️  Cleanup artefatti fallito", extra={"error": str(e)})
         else:
             logger.info("⏭️  Push su GitHub non eseguito")
@@ -214,12 +230,17 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--skip-drive", action="store_true", help="(Deprecato) Usa --no-drive")
     p.add_argument("--skip-push", action="store_true", help="(Deprecato) Usa --no-push")
     p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
+    p.add_argument("--allow-offline-env", action="store_true",
+                   help="Permette require_env=False anche in modalità non-interactive (uso avanzato/CI).")
+    p.add_argument("--docker-retries", type=int, default=3,
+                   help="Numero massimo di retry per il controllo Docker in modalità interattiva (default: 3).")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    early_logger = get_structured_logger("onboarding_full")
+    run_id = uuid.uuid4().hex
+    early_logger = get_structured_logger("onboarding_full", run_id=run_id)
 
     slug = args.slug_pos or args.slug
     if not slug and args.non_interactive:
@@ -250,6 +271,9 @@ if __name__ == "__main__":
             no_drive=args.no_drive,
             push=push_flag,
             port=args.port,
+            allow_offline_env=args.allow_offline_env,
+            docker_retries=args.docker_retries,
+            run_id=run_id,
         )
         sys.exit(0)
     except KeyboardInterrupt:

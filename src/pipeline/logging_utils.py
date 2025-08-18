@@ -155,3 +155,6 @@ def get_structured_logger(
             logger.warning(f"Impossibile creare file di log {log_file_path}: {e}. Logging solo su console.")
 
     return logger
+
+
+__all__ = ["get_structured_logger", "SupportsSlug"]

@@ -16,11 +16,11 @@ Nota architetturale:
 Questo modulo **non** modifica dati sensibili nei log e utilizza un **logger unificato**
 (file unico per cliente). Vedi anche README/Docs per dettagli sul flusso.
 """
-
 from __future__ import annotations
 
 import argparse
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -47,18 +47,7 @@ YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle
 
 
 def _prompt(msg: str) -> str:
-    """Raccoglie input da CLI (abilitato **solo** negli orchestratori).
-
-    Args:
-        msg: Messaggio da mostrare all’utente.
-
-    Returns:
-        La stringa inserita dall’utente, ripulita con `strip()`.
-
-    Note:
-        Le funzioni di **pipeline** non devono utilizzare prompt.
-    """
-    # Prompt consentito solo negli orchestratori
+    """Raccoglie input da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
 
 
@@ -68,6 +57,7 @@ def pre_onboarding_main(
     *,
     interactive: bool = True,
     dry_run: bool = False,
+    run_id: Optional[str] = None,
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato.
 
@@ -78,8 +68,7 @@ def pre_onboarding_main(
         4) Se `dry_run` è `False`:
            - Crea la cartella cliente su **Google Drive** (Shared Drive o parent specificato).
            - Crea la **struttura remota** da YAML.
-           - Carica `config.yaml` su Drive e
-             **aggiorna localmente** gli ID (`drive_*_id`) in `config.yaml`.
+           - Carica `config.yaml` su Drive e **aggiorna localmente** gli ID (`drive_*_id`) in `config.yaml`.
 
     Args:
         slug: Identificativo cliente (ammesso anche come fallback per `client_name`).
@@ -101,7 +90,7 @@ def pre_onboarding_main(
     # === Logger unificato: file unico per cliente ===
     log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("pre_onboarding", log_file=log_file)
+    logger = get_structured_logger("pre_onboarding", log_file=log_file, run_id=run_id)
 
     # Validazioni base input (senza cambiare UX)
     if not slug:
@@ -118,10 +107,11 @@ def pre_onboarding_main(
         slug=slug,
         interactive=interactive,
         require_env=require_env,
+        run_id=run_id,
     )
 
     # 🔁 Rebind logger con il contesto (coerente con onboarding_full)
-    logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context)
+    logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     if not require_env:
         logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
@@ -204,16 +194,7 @@ def pre_onboarding_main(
 
 
 def _parse_args() -> argparse.Namespace:
-    """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding.
-
-    Returns:
-        Namespace con:
-            - `slug_pos`: slug posizionale (opzionale).
-            - `--slug`: slug esplicito (retrocompat).
-            - `--name`: nome cliente.
-            - `--non-interactive`: esecuzione senza prompt.
-            - `--dry-run`: esegue solo la parte locale (salta Google Drive).
-    """
+    """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding."""
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
     # slug “soft” posizionale (opzionale) + flag --slug (retrocompat)
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
@@ -227,8 +208,11 @@ def _parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = _parse_args()
 
+    # run_id univoco per correlazione log dell’esecuzione
+    run_id = uuid.uuid4().hex
+
     # Logger console “early” (prima di avere lo slug) per messaggi iniziali
-    early_logger = get_structured_logger("pre_onboarding")
+    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
     # Risoluzione slug: posizionale > --slug > prompt
     slug = args.slug_pos or args.slug
@@ -245,6 +229,7 @@ if __name__ == "__main__":
             client_name=args.name,
             interactive=not args.non_interactive,
             dry_run=args.dry_run,
+            run_id=run_id,
         )
         sys.exit(0)
     except KeyboardInterrupt:

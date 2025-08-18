@@ -12,12 +12,14 @@ if str(_SRC_DIR) not in _sys.path:
 from pathlib import Path
 import subprocess
 from typing import Iterable, List, Optional
+import uuid  # per run_id
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import is_safe_subpath, is_valid_slug
 from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 
-logger = get_structured_logger("tools.cleanup")
+# Logger inizializzato in main() con run_id; qui solo la dichiarazione
+logger = None  # verrà assegnato in main()
 
 
 def _rm_path(p: Path) -> None:
@@ -121,6 +123,12 @@ def _prompt_slug() -> Optional[str]:
 
 
 def main() -> int:
+    global logger
+
+    # run_id univoco per correlazione log
+    run_id = uuid.uuid4().hex
+    logger = get_structured_logger("tools.cleanup", run_id=run_id)
+
     project_root = Path(__file__).resolve().parents[2]
 
     # 1) Slug (obbligatorio, interattivo)
@@ -155,8 +163,11 @@ def main() -> int:
     except PipelineError:
         return EXIT_CODES.get("PipelineError", 1)
     except Exception:
+        # Tracciamo stacktrace e mappiamo a EXIT_CODES
+        logger.exception("Errore imprevisto durante il cleanup", extra={"slug": slug})
         return EXIT_CODES.get("PipelineError", 1)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import sys
+    sys.exit(main())

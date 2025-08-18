@@ -82,6 +82,9 @@ class ClientContext:
     # Logger (iniettato una sola volta)
     logger: Optional[logging.Logger] = None  # teniamo il riferimento (nessun print)
 
+    # Correlazione run
+    run_id: Optional[str] = None
+
     @classmethod
     def load(
         cls,
@@ -90,6 +93,7 @@ class ClientContext:
         interactive: Optional[bool] = None,
         *,
         require_env: bool = True,
+        run_id: Optional[str] = None,
         **kwargs: Any,
     ) -> "ClientContext":
         """Carica (o inizializza) il contesto cliente e valida la configurazione.
@@ -120,8 +124,8 @@ class ClientContext:
         if interactive is None:
             interactive = sys.stdin.isatty()
 
-        # Logger strutturato (una sola istanza)
-        _logger = logger or get_structured_logger(__name__)
+        # Logger strutturato (una sola istanza) — includiamo run_id se presente
+        _logger = logger or get_structured_logger(__name__, run_id=run_id)
 
         # Validazione slug
         if not is_valid_slug(slug):
@@ -195,6 +199,7 @@ class ClientContext:
             md_dir=base_dir / "book",
             log_dir=base_dir / "logs",
             logger=_logger,  # iniettiamo il logger nel contesto
+            run_id=run_id,   # correlazione del run
         )
 
     # -- Utility per tracking stato --
@@ -204,7 +209,8 @@ class ClientContext:
         if self.logger:
             return self.logger
         from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
-        self.logger = get_structured_logger(__name__)
+        # Lazy: includiamo sia il contesto (per slug) sia il run_id
+        self.logger = get_structured_logger(__name__, context=self, run_id=self.run_id)
         return self.logger
 
     def log_error(self, msg: str) -> None:
@@ -229,6 +235,7 @@ class ClientContext:
         """Restituisce un riassunto sintetico dello stato corrente del contesto."""
         return {
             "slug": self.slug,
+            "run_id": self.run_id,
             "error_count": len(self.error_list),
             "warning_count": len(self.warning_list),
             "steps": self.step_status,

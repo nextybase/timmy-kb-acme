@@ -12,6 +12,7 @@ Linee guida:
 - NESSUNA di queste classi deve eseguire I/O (file/network) o terminare il processo.
 - Gli orchestratori mappano le eccezioni in `EXIT_CODES` per produrre `sys.exit(<code>)`.
 - Ogni eccezione ha una docstring specifica per l'auto-documentazione.
+- Evitare `raise Exception`: se non esiste una tipizzata, usare `PipelineError`.
 """
 
 
@@ -19,7 +20,7 @@ class PipelineError(Exception):
     """Eccezione generica per errori bloccanti nella pipeline NeXT/Timmy.
 
     Questa è la base di tutte le eccezioni di dominio. Accetta un messaggio e
-    un payload contestuale opzionale (slug, percorso file, id Drive) utile per
+    un payload contestuale opzionale (slug, percorso file, id Drive, run_id) utile per
     il logging strutturato e la diagnosi.
 
     Args:
@@ -27,6 +28,7 @@ class PipelineError(Exception):
         slug: Slug del cliente coinvolto (se rilevante).
         file_path: Percorso del file coinvolto (Path o stringa).
         drive_id: ID di risorsa su Google Drive (cartella/file).
+        run_id: Identificativo univoco dell'esecuzione (per correlazione nei log).
 
     Note:
         - Le sottoclassi non devono alterare la semantica del costruttore
@@ -41,12 +43,14 @@ class PipelineError(Exception):
         slug: Optional[str] = None,
         file_path: Optional[str | Path] = None,
         drive_id: Optional[str] = None,
+        run_id: Optional[str] = None,
         **_: Any,
     ) -> None:
         super().__init__(message or "")
         self.slug: Optional[str] = slug
         self.file_path: Optional[str | Path] = file_path
         self.drive_id: Optional[str] = drive_id
+        self.run_id: Optional[str] = run_id
 
     @staticmethod
     def _safe_file_repr(fp: str | Path) -> str:
@@ -76,6 +80,8 @@ class PipelineError(Exception):
             context_parts.append(f"file={self._safe_file_repr(self.file_path)}")
         if self.drive_id:
             context_parts.append(f"drive_id={self._mask_id(self.drive_id)}")
+        if self.run_id:
+            context_parts.append(f"run_id={self.run_id}")
         context_info = f" [{' | '.join(context_parts)}]" if context_parts else ""
         return f"{base_msg}{context_info}"
 

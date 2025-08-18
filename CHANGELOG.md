@@ -2,7 +2,20 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
-## [Unreleased]
+## [1.0.4] - 2025-08-18
+### Added
+- Introduzione del campo `run_id` in `ClientContext`, propagato automaticamente ai logger e alle eccezioni.
+- Supporto `run_id` in `PipelineError` e nei filtri di logging per correlare i log di una singola esecuzione.
+
+### Changed
+- `pre_onboarding.py` e `onboarding_full.py`: logging unificato con `run_id`, gestione migliorata degli errori e mapping coerente su `EXIT_CODES`.
+- `onboarding_full.py`: nuova policy di validazione `require_env` che consente modalità offline (`--no-drive`, `--dry-run`, `--allow-offline-env`).
+- `onboarding_full.py`: introdotto limite configurabile di retry per il preview Docker (`--docker-retries`), evitando loop infiniti.
+- `tools/cleanup_repo.py`: sostituito `raise SystemExit(...)` con `sys.exit(...)` per coerenza e leggibilità; logging degli errori arricchito con `logger.exception`.
+
+### Fixed
+- Rimossi i `raise Exception` generici residui: ora tutte le eccezioni sono tipizzate (`PipelineError`, `ConfigError`, ecc.).
+- Logging coerente su tutti gli orchestratori e tool, evitando duplicazioni o perdita di messaggi.
 
 ### Added
 - Supporto alla redazione centralizzata dei log tramite `is_log_redaction_enabled`, esteso a tutte le funzioni sensibili (Drive, GitHub, preview).
