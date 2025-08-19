@@ -9,6 +9,8 @@ Caratteristiche:
 - Possibilità di iniettare campi extra di base (`extra_base`) su ogni record.
 - Comportamento “safe”: nessun crash se il file di log non è scrivibile
   (degrada a console-only con avviso).
+- **Redazione centralizzata**: se `context.redact_logs` è True, applica mascheratura
+  ai messaggi/argomenti tramite `env_utils.redact_secrets(...)`.
 
 Note architetturali:
 - Nessun I/O non necessario oltre alla creazione opzionale del file di log.
@@ -21,6 +23,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Union, Protocol, runtime_checkable, Dict, Any
 from logging.handlers import RotatingFileHandler
+
+from .env_utils import redact_secrets  # 🔐 mascheratura token/segreti
 
 
 @runtime_checkable
@@ -61,6 +65,46 @@ def _make_context_filter(
     return _filter
 
 
+def _make_redaction_filter(context: Optional[SupportsSlug]):
+    """
+    Crea un filtro che applica la redazione ai record se `context.redact_logs` è True.
+
+    La redazione viene applicata a:
+      - `record.msg` (stringhe)
+      - `record.args` (tuple/dict contenenti stringhe)
+    Non modifica `exc_info`, ma eventuali token presenti nel testo del messaggio
+    vengono mascherati prima della formattazione.
+    """
+    def _redact_obj(obj):
+        try:
+            if isinstance(obj, str):
+                return redact_secrets(obj)
+            if isinstance(obj, tuple):
+                return tuple(_redact_obj(x) for x in obj)
+            if isinstance(obj, list):
+                return [_redact_obj(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: _redact_obj(v) for k, v in obj.items()}
+            return obj
+        except Exception:
+            return obj
+
+    def _filter(record: logging.LogRecord) -> bool:
+        try:
+            redact = bool(getattr(context, "redact_logs", False)) if context is not None else False
+            if not redact:
+                return True
+            # Applica redazione a msg/args
+            record.msg = _redact_obj(record.msg)
+            record.args = _redact_obj(record.args)
+        except Exception:
+            # mai bloccare il logging per errori di filtro
+            pass
+        return True
+
+    return _filter
+
+
 def get_structured_logger(
     name: str = "default",
     log_file: Optional[Union[str, Path]] = None,
@@ -92,10 +136,6 @@ def get_structured_logger(
     Returns:
         logging.Logger: Logger configurato e pronto all'uso.
 
-    Raises:
-        Nessuna eccezione viene propagata per errori sul file di log: in tal caso
-        il logger degrada a console-only e registra un `warning`.
-
     Side Effects:
         - Se `log_file` è indicato, crea la cartella padre e il file (se possibile).
         - Azzera gli handler esistenti sul logger nominato per evitare duplicazioni.
@@ -124,13 +164,15 @@ def get_structured_logger(
 
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # Filtro che arricchisce i record
+    # Filtri: contesto + redazione (ordine non vincolante)
     ctx_filter = _make_context_filter(context, run_id, extra_base)
+    redact_filter = _make_redaction_filter(context)
 
     # Handler console
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
     ch.addFilter(ctx_filter)
+    ch.addFilter(redact_filter)
     logger.addHandler(ch)
 
     # Handler file, se richiesto
@@ -149,6 +191,7 @@ def get_structured_logger(
                 fh = logging.FileHandler(log_file_path, encoding="utf-8")
             fh.setFormatter(formatter)
             fh.addFilter(ctx_filter)
+            fh.addFilter(redact_filter)
             logger.addHandler(fh)
         except Exception as e:
             # Se il file non è creabile, degrada elegantemente a console-only

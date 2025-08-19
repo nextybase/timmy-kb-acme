@@ -163,7 +163,7 @@ def convert_files_to_structured_markdown(
                 f"File markdown scritto correttamente: {md_path}",
                 extra={"slug": context.slug, "file_path": md_path},
             )
-        except Exception as e:
+        except (OSError, ValueError) as e:
             local_logger.error(
                 f"Errore nella creazione markdown {md_path}: {e}",
                 extra={"slug": context.slug, "file_path": md_path},
@@ -207,7 +207,7 @@ def generate_summary_markdown(
             "SUMMARY.md generato con successo.",
             extra={"slug": context.slug, "file_path": summary_path},
         )
-    except Exception as e:
+    except OSError as e:
         local_logger.error(
             f"Errore generazione SUMMARY.md: {e}",
             extra={"slug": context.slug, "file_path": summary_path},
@@ -243,7 +243,7 @@ def generate_readme_markdown(
             "README.md generato con successo.",
             extra={"slug": context.slug, "file_path": readme_path},
         )
-    except Exception as e:
+    except OSError as e:
         local_logger.error(
             f"Errore generazione README.md: {e}",
             extra={"slug": context.slug, "file_path": readme_path},

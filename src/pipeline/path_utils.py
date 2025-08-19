@@ -43,7 +43,8 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        return base_resolved in path_resolved.parents or path_resolved == base_resolved
+        # ✅ Implementazione aggiornata: più chiara e robusta sugli edge-case
+        return path_resolved.is_relative_to(base_resolved)
     except Exception as e:
         _logger.error(
             f"Errore nella validazione path: {e}",

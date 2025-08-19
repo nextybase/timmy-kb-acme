@@ -8,13 +8,13 @@ import yaml
 import shutil
 import logging  # per tipizzare/gestire il logger
 
-from .exceptions import ConfigError
-from .env_utils import get_env_var
-from .path_utils import is_valid_slug
+from .exceptions import ConfigError, InvalidSlug
+from .env_utils import get_env_var, get_bool
+from .path_utils import validate_slug as _validate_slug
 
 
 def validate_slug(slug: str) -> str:
-    """Valida lo slug rispetto alle regole di progetto (fonte: `path_utils.is_valid_slug`).
+    """Valida lo slug delegando a `path_utils.validate_slug` e mappando l'errore di dominio.
 
     Args:
         slug: Identificativo cliente da validare.
@@ -25,9 +25,11 @@ def validate_slug(slug: str) -> str:
     Raises:
         ConfigError: se lo slug non rispetta la regex configurata.
     """
-    if not is_valid_slug(slug):
-        raise ConfigError(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
-    return slug
+    try:
+        return _validate_slug(slug)
+    except InvalidSlug as e:
+        # Mappa l'eccezione di dominio in ConfigError per coerenza con il resto della pipeline
+        raise ConfigError(str(e), slug=slug) from e
 
 
 @dataclass
@@ -82,6 +84,9 @@ class ClientContext:
     # Correlazione run
     run_id: Optional[str] = None
 
+    # Toggle redazione log (calcolato in load())
+    redact_logs: bool = False
+
     @classmethod
     def load(
         cls,
@@ -93,7 +98,7 @@ class ClientContext:
         run_id: Optional[str] = None,
         **kwargs: Any,
     ) -> "ClientContext":
-        """Carica (o inizializza) il contesto cliente e valida la configurazione.
+        """Carica (or inizializza) il contesto cliente e valida la configurazione.
 
         Comportamento:
         - Se la struttura cliente non esiste, viene creata e viene copiato un `config.yaml` di template.
@@ -176,6 +181,33 @@ class ClientContext:
         env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
+        env_vars["CI"] = get_env_var("CI", default=None)
+
+        # --- Policy redazione log centralizzata (auto|on|off) ---
+        # - auto => ON se ENV ∈ {prod, production, ci} oppure CI=true, oppure presenti credenziali
+        # - on   => sempre ON
+        # - off  => sempre OFF
+        # - debug locale (log_level=DEBUG) forza OFF
+        log_level = str(kwargs.get("log_level", "INFO")).upper()
+        debug_mode = (log_level == "DEBUG")
+
+        mode_raw = env_vars.get("LOG_REDACTION") or get_env_var("LOG_REDACTION", default="auto")
+        mode = str(mode_raw or "auto").strip().lower()
+
+        env_name = (env_vars.get("ENV") or get_env_var("ENV", default="dev") or "dev").strip().lower()
+        ci_flag = get_bool("CI", default=False) or str(env_vars.get("CI") or "").strip().lower() in {"1", "true", "yes", "on"}
+        has_credentials = bool(env_vars.get("GITHUB_TOKEN") or env_vars.get("SERVICE_ACCOUNT_FILE"))
+
+        if mode in {"always", "on"} or str(mode) in {"1", "true", "yes", "on"}:
+            redact = True
+        elif mode in {"never", "off"} or str(mode) in {"0", "false", "no", "off"}:
+            redact = False
+        else:
+            # auto
+            redact = (env_name in {"prod", "production", "ci"}) or ci_flag or has_credentials
+
+        if debug_mode:
+            redact = False
 
         return cls(
             slug=slug,
@@ -190,8 +222,10 @@ class ClientContext:
             raw_dir=base_dir / "raw",
             md_dir=base_dir / "book",
             log_dir=base_dir / "logs",
-            logger=_logger,  # iniettiamo il logger nel contesto
-            run_id=run_id,   # correlazione del run
+            logger=_logger,   # iniettiamo il logger nel contesto
+            run_id=run_id,    # correlazione del run
+            log_level=log_level,
+            redact_logs=redact,
         )
 
     # -- Utility per tracking stato --
@@ -231,4 +265,5 @@ class ClientContext:
             "error_count": len(self.error_list),
             "warning_count": len(self.warning_list),
             "steps": self.step_status,
+            "redact_logs": self.redact_logs,
         }

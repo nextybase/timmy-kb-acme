@@ -31,7 +31,6 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
-from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
 # ⬇️ Quick win: usa helper condiviso per validazione slug
 from pipeline.path_utils import validate_slug as _validate_slug_helper
@@ -154,7 +153,7 @@ def _maybe_push(
     redact: bool,
     logger,
 ) -> None:
-    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale."""
+    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale)."""
     token = context.env.get("GITHUB_TOKEN")
 
     if push_flag is not None:
@@ -207,6 +206,10 @@ def onboarding_full_main(
     # ✅ VALIDAZIONE SLUG NELL’ORCHESTRATORE (loop solo qui)
     slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
 
+    # ✅ VALIDAZIONE PORTA (QW4): range obbligatorio 1..65535
+    if not (1 <= int(port) <= 65535):
+        raise ConfigError(f"Porta fuori range: {port}. Valori validi 1..65535.")
+
     # 🚦 Policy più rigorosa: se NON è dry-run e NON c'è --no-drive ⇒ richiedi env,
     # indipendentemente da --non-interactive. Override con --allow-offline-env.
     if allow_offline_env:
@@ -238,8 +241,8 @@ def onboarding_full_main(
         logger.error(str(e))
         raise
 
-    # Toggle redazione centralizzato
-    redact = is_log_redaction_enabled(context)
+    # Toggle redazione centralizzato (QW7)
+    redact = context.redact_logs
 
     # 1) Download da Drive (opzionale)
     if not no_drive and not dry_run:

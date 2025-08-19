@@ -2,6 +2,46 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.1.0] — 2025-08-19
+
+### Added
+- **Redazione log centralizzata (toggle)**: `is_log_redaction_enabled(context)` ora usata dagli orchestratori per propagare `redact_logs` ai moduli sensibili (Drive, Preview, GitHub); documentazione aggiornata.  
+  File: `src/onboarding_full.py`, `src/pipeline/env_utils.py`, `docs/developer_guide.md`, `docs/policy_push.md`.
+
+### Changed
+- **Push GitHub → incrementale di default (no force)**: clone in working dir temporanea **dentro** `output/timmy-kb-<slug>`, `pull --rebase`, commit solo se ci sono diff, `push` senza `--force` con **un retry** su rifiuto non-fast-forward. Token veicolato via `GIT_HTTP_EXTRAHEADER`.  
+  File: `src/pipeline/github_utils.py`.  
+  Policy: se conflitti persistono, la funzione solleva `PipelineError` con istruzioni operative (branch dedicato/PR o force controllato lato orchestratore).
+
+- **Validazione porta preview**: in `onboarding_full.py` la `--port` deve essere `1..65535`; messaggio di errore tipizzato (`ConfigError`).  
+  File: `src/onboarding_full.py`.
+
+- **Validazione slug**: rimozione duplicazioni; `context.validate_slug` delega a `path_utils.validate_slug` (che alza `InvalidSlug`) e mappa a `ConfigError`.  
+  File: `src/pipeline/context.py`, `src/pipeline/path_utils.py`.
+
+- **Path-safety**: `is_safe_subpath` semplificata con `Path.is_relative_to(...)` (chiarezza e robustezza sugli edge case).  
+  File: `src/pipeline/path_utils.py`.
+
+- **Hardening contenuti Markdown**: `content_utils` usa eccezioni di dominio (`InputDirectoryMissing`) per directory mancanti/non valide e rafforza i guard-rail di path-safety.  
+  File: `src/pipeline/content_utils.py`.
+
+- **.env & helper**: `env_utils` carica automaticamente `.env`, mantiene `get_env_var(...)` per retro-compatibilità ed espone `require_env/get_bool/get_int/redact_secrets`.  
+  File: `src/pipeline/env_utils.py`.
+
+- **Docs**: guida sviluppatore e policy di push aggiornate per riflettere il push incrementale, il toggle di redazione e i ruoli tra orchestratori e moduli.  
+  File: `docs/developer_guide.md`, `docs/policy_push.md`.
+
+### Fixed
+- Messaggi e metadati di log più coerenti/strutturati negli orchestratori; stop del container di preview in `finally` preservato.  
+  File: `src/onboarding_full.py`.
+
+### Migration Notes
+- **Comportamento di push modificato**: il default non sovrascrive più la storia remota. Se dipendevi dal force-push, usa un branch dedicato e apri PR, oppure abilita il force a livello di orchestratore in maniera esplicita e governata (vedi `docs/policy_push.md`).
+
+### Compatibility
+- Nessun breaking change su CLI o firme pubbliche. Modifica di policy **safe-by-default** sul push.
+
+
 ## [1.0.4] — 2025-08-19
 ### Added
 - Introdotto file `coding_rules.py` con regole operative unificate per la scrittura e la manutenzione della pipeline.

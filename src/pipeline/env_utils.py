@@ -5,11 +5,12 @@ Utility per la gestione delle variabili d'ambiente.
 
 - Carica automaticamente il file .env nella root del progetto (se presente).
 - Mantiene la funzione legacy `get_env_var(...)` per retro-compatibilità.
+- **Linee guida**: usare SEMPRE queste funzioni al posto di `os.getenv` nei moduli.
 - Aggiunge utility tipizzate e sicure:
     - require_env(key): stringa obbligatoria (vuoto = errore)
     - get_bool(key, default=False): parsing booleano tollerante
     - get_int(key, default=None, required=False): intero con validazione
-    - redact_secrets(text): redazione di token/segretì nei messaggi/log
+    - redact_secrets(text): redazione di token/segreti nei messaggi/log
     - is_log_redaction_enabled(context): toggle centralizzato per la redazione log
 """
 
@@ -39,6 +40,10 @@ __all__ = [
 def get_env_var(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
     """
     Recupera una variabile d'ambiente con comportamento retro-compatibile.
+
+    Uso raccomandato in TUTTI i moduli al posto di `os.getenv`, per centralizzare:
+    - default e gestione 'required'
+    - messaggistica coerente con la pipeline
 
     Args:
         key: nome della variabile d'ambiente
@@ -130,7 +135,7 @@ _SECRET_KEYS = (
 
 def redact_secrets(text: str) -> str:
     """
-    Maschera nei messaggi eventuali token/segretì presenti nell'ambiente.
+    Maschera nei messaggi eventuali token/segreti presenti nell'ambiente.
     Utile per logging di errori/traceback senza rischi di leakage.
     """
     if not text:
