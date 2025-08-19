@@ -7,11 +7,13 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Changed
 - Flusso operativo di base reso **interattivo**: ora basta eseguire `py src/pre_onboarding.py` e `py src/onboarding_full.py`.
 - Documentazione CLI aggiornata (User Guide) con la sequenza completa di input richiesti al cliente.
+- Eliminate funzioni legacu
 
 ### Fixed
 - **Anteprima HonKit** avviata in modalità *detached* con stop automatico a fine pipeline.
 - **Logging centralizzato** su `onboarding.log` per ogni cliente.
 - **Validazione slug** più chiara: in interattivo viene chiesto e, se invalido, reinserito con messaggio esplicativo.
+- **Orchestratori** eliminate le funzioni legacy (--skip-drive e --skip-push)
 
 
 ## [1.0.4] — 2025-08-19

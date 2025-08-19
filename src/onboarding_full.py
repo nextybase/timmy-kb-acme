@@ -31,8 +31,7 @@ from pipeline.content_utils import (
 from pipeline.gitbook_preview import run_gitbook_docker_preview
 from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
-from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
-# ⬇️ Quick win: usa helper condiviso per validazione slug
+from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
 from pipeline.exceptions import InvalidSlug  # eccezione dominio per slug non valido
 
@@ -71,8 +70,7 @@ def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_log
             slug = _prompt("Inserisci slug cliente: ").strip()
             continue
         try:
-            # ✅ usa helper condiviso (alza InvalidSlug se non conforme)
-            _validate_slug_helper(slug)
+            _validate_slug_helper(slug)  # alza InvalidSlug se non conforme
             return slug
         except InvalidSlug:
             early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
@@ -206,20 +204,20 @@ def onboarding_full_main(
     # ✅ VALIDAZIONE SLUG NELL’ORCHESTRATORE (loop solo qui)
     slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
 
-    # ✅ VALIDAZIONE PORTA (QW4): range obbligatorio 1..65535
+    # ✅ VALIDAZIONE PORTA: range obbligatorio 1..65535
     if not (1 <= int(port) <= 65535):
         raise ConfigError(f"Porta fuori range: {port}. Valori validi 1..65535.")
 
-    # 🚦 Policy più rigorosa: se NON è dry-run e NON c'è --no-drive ⇒ richiedi env,
-    # indipendentemente da --non-interactive. Override con --allow-offline-env.
+    # 🚦 Policy env: se NON è dry-run e NON c'è --no-drive ⇒ require_env=True
+    # Override possibile con --allow-offline-env
     if allow_offline_env:
-        require_env = not (no_drive or dry_run or non_interactive)  # era il comportamento originale
+        require_env = not (no_drive or dry_run or non_interactive)
     else:
-        require_env = (not no_drive) and (not dry_run)  # più sicuro di L70 originale
+        require_env = (not no_drive) and (not dry_run)
 
     context: ClientContext = ClientContext.load(
         slug=slug,
-        interactive=not non_interactive,  # mantenuto per compatibilità; il modulo non usa più input()
+        interactive=not non_interactive,  # prompt solo negli orchestratori
         require_env=require_env,
         run_id=run_id,
     )
@@ -241,7 +239,7 @@ def onboarding_full_main(
         logger.error(str(e))
         raise
 
-    # Toggle redazione centralizzato (QW7)
+    # Toggle redazione centralizzato
     redact = context.redact_logs
 
     # 1) Download da Drive (opzionale)
@@ -257,7 +255,7 @@ def onboarding_full_main(
             local_root_dir=context.raw_dir,
             progress=not non_interactive,
             context=context,
-            redact_logs=redact,  # 🔐 redazione log secondo policy
+            redact_logs=redact,
         )
     else:
         if no_drive:
@@ -311,15 +309,24 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     p.add_argument("--dry-run", action="store_true", help="Nessun accesso a servizi remoti; esegue conversione locale")
     p.add_argument("--no-drive", action="store_true", help="Salta sempre download da Drive")
-    p.add_argument("--push", action="store_true", help="Forza il push su GitHub (solo se GITHUB_TOKEN è presente)")
-    p.add_argument("--no-push", action="store_true", help="Disabilita esplicitamente il push su GitHub")
-    p.add_argument("--skip-drive", action="store_true", help="(Deprecato) Usa --no-drive")
-    p.add_argument("--skip-push", action="store_true", help="(Deprecato) Usa --no-push")
+
+    # Push: rendiamo i due flag mutuamente esclusivi per evitare ambiguità
+    grp_push = p.add_mutually_exclusive_group()
+    grp_push.add_argument("--push", action="store_true", help="Forza il push su GitHub (se GITHUB_TOKEN è presente)")
+    grp_push.add_argument("--no-push", action="store_true", help="Disabilita esplicitamente il push su GitHub")
+
     p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
-    p.add_argument("--allow-offline-env", action="store_true",
-                   help="Permette require_env=False anche in modalità non-interactive (uso avanzato/CI).")
-    p.add_argument("--docker-retries", type=int, default=3,
-                   help="Numero massimo di retry per il controllo Docker in modalità interattiva (default: 3).")
+    p.add_argument(
+        "--allow-offline-env",
+        action="store_true",
+        help="Permette require_env=False anche in modalità non-interactive (uso avanzato/CI).",
+    )
+    p.add_argument(
+        "--docker-retries",
+        type=int,
+        default=3,
+        help="Numero massimo di retry per il controllo Docker in modalità interattiva (default: 3).",
+    )
     return p.parse_args()
 
 
@@ -337,13 +344,7 @@ if __name__ == "__main__":
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
-    if args.skip_drive:
-        early_logger.warning("⚠️  --skip-drive è deprecato; usare --no-drive")
-        args.no_drive = True
-    if args.skip_push:
-        early_logger.warning("⚠️  --skip-push è deprecato; usare --no-push")
-        args.no_push = True
-
+    # Risoluzione del comportamento push
     if args.no_push:
         push_flag = False
     elif args.push:
@@ -376,3 +377,4 @@ if __name__ == "__main__":
         sys.exit(code)
     except Exception:
         sys.exit(EXIT_CODES.get("PipelineError", 1))
+v

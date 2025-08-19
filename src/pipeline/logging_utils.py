@@ -1,4 +1,3 @@
-# src/pipeline/logging_utils.py
 """
 Utility per la creazione di logger strutturati per la pipeline Timmy-KB.
 
@@ -15,6 +14,7 @@ Caratteristiche:
 Note architetturali:
 - Nessun I/O non necessario oltre alla creazione opzionale del file di log.
 - Nessuna dipendenza dai moduli di orchestrazione; può essere usato ovunque.
+- Design decision: handler sempre “puliti” (reset) per evitare duplicazioni.
 """
 
 from __future__ import annotations
@@ -70,10 +70,13 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
     Crea un filtro che applica la redazione ai record se `context.redact_logs` è True.
 
     La redazione viene applicata a:
-      - `record.msg` (stringhe)
-      - `record.args` (tuple/dict contenenti stringhe)
-    Non modifica `exc_info`, ma eventuali token presenti nel testo del messaggio
-    vengono mascherati prima della formattazione.
+      - `record.msg` (stringhe o contenenti token sensibili)
+      - `record.args` (tuple/list/dict con stringhe potenzialmente sensibili)
+
+    Note:
+    - Non modifica `exc_info`.
+    - Qualsiasi eccezione nel processo di redazione viene silenziata:
+      il logging non deve mai andare in errore.
     """
     def _redact_obj(obj):
         try:
@@ -125,24 +128,24 @@ def get_structured_logger(
         name: Nome del logger (namespace).
         log_file: Percorso del file di log; se `None` scrive solo su console.
         level: Livello di logging (default: `logging.INFO`).
-        rotate: Se `True`, abilita `RotatingFileHandler` per il file di log.
+        rotate: Se `True`, abilita rotazione con `RotatingFileHandler`.
         max_bytes: Dimensione massima del file prima della rotazione.
         backup_count: Numero massimo di file di backup per la rotazione.
         context: Oggetto opzionale con attributo `.slug` da riportare nei record.
         run_id: Identificativo opzionale per correlare i log di una singola esecuzione.
-        extra_base: Dizionario di campi extra da iniettare in ogni record (non stampati
-                    se non inclusi nel formatter).
+        extra_base: Dizionario di campi extra da iniettare in ogni record.
 
     Returns:
         logging.Logger: Logger configurato e pronto all'uso.
 
     Side Effects:
         - Se `log_file` è indicato, crea la cartella padre e il file (se possibile).
-        - Azzera gli handler esistenti sul logger nominato per evitare duplicazioni.
+        - Reset degli handler esistenti sul logger nominato per coerenza.
+        - Non propaga al root logger (evita doppie emissioni).
     """
     logger = logging.getLogger(name)
 
-    # Evita handler duplicati (design decision: logger "pulito" per coerenza output)
+    # Evita handler duplicati
     if logger.hasHandlers():
         logger.handlers.clear()
 
@@ -151,7 +154,7 @@ def get_structured_logger(
         level = logging.INFO
     logger.setLevel(level)
 
-    # Importante: non propagare al root logger per evitare doppie emissioni
+    # Importante: non propagare al root logger
     logger.propagate = False
 
     # Formatter uniforme; include slug/run_id solo se forniti
@@ -164,7 +167,7 @@ def get_structured_logger(
 
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # Filtri: contesto + redazione (ordine non vincolante)
+    # Filtri: contesto + redazione
     ctx_filter = _make_context_filter(context, run_id, extra_base)
     redact_filter = _make_redaction_filter(context)
 
@@ -194,8 +197,11 @@ def get_structured_logger(
             fh.addFilter(redact_filter)
             logger.addHandler(fh)
         except Exception as e:
-            # Se il file non è creabile, degrada elegantemente a console-only
-            logger.warning(f"Impossibile creare file di log {log_file_path}: {e}. Logging solo su console.")
+            # Se il file non è creabile, degrada a console-only
+            logger.warning(
+                f"Impossibile creare file di log {log_file_path}: {e}. "
+                "Logging solo su console."
+            )
 
     return logger
 

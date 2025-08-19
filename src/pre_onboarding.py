@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
+from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES, InvalidSlug
 from pipeline.context import ClientContext
 from pipeline.config_utils import (
     get_client_config,
@@ -39,11 +39,9 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
-from pipeline.env_utils import is_log_redaction_enabled  # 👈 toggle centralizzato
-from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME  # 👈 allineamento costanti
-# ⬇️ Quick win: usa helper condiviso per validazione slug (eccezione di dominio)
+from pipeline.env_utils import is_log_redaction_enabled
+from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
-from pipeline.exceptions import InvalidSlug  # eccezione dominio per slug non valido
 
 # Percorso YAML struttura cartelle (fonte di verità in /config)
 YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
@@ -64,11 +62,9 @@ def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_log
             slug = _prompt("Inserisci slug cliente: ").strip()
             continue
         try:
-            # ✅ usa helper condiviso (alza InvalidSlug se non conforme)
             _validate_slug_helper(slug)
             return slug
         except InvalidSlug:
-            # slug non valido
             early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
             if not interactive:
                 raise ConfigError(f"Slug '{slug}' non valido.")
@@ -93,13 +89,6 @@ def pre_onboarding_main(
            - Crea la cartella cliente su **Google Drive** (Shared Drive o parent specificato).
            - Crea la **struttura remota** da YAML.
            - Carica `config.yaml` su Drive e **aggiorna localmente** gli ID (`drive_*_id`) in `config.yaml`.
-
-    Args:
-        slug: Identificativo cliente (ammesso anche come fallback per `client_name`).
-        client_name: Nome leggibile del cliente; se omesso in modalità interattiva
-            viene richiesto via prompt, altrimenti cade su `slug`.
-        interactive: Se `True`, abilita prompt; se `False`, nessun input utente.
-        dry_run: Se `True`, salta tutte le operazioni **remote** (Drive).
 
     Raises:
         ConfigError: Slug mancante/non valido, file YAML struttura non trovato,
@@ -138,7 +127,7 @@ def pre_onboarding_main(
         run_id=run_id,
     )
 
-    # 🔁 Rebind logger con il contesto (coerente con onboarding_full)
+    # 🔁 Rebind logger con il contesto
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     if not require_env:
@@ -151,7 +140,6 @@ def pre_onboarding_main(
     try:
         cfg = get_client_config(context) or {}
     except ConfigError:
-        # Se non esiste ancora, procediamo con un config minimo
         cfg = {}
     if client_name:
         cfg["client_name"] = client_name
@@ -224,12 +212,16 @@ def pre_onboarding_main(
 def _parse_args() -> argparse.Namespace:
     """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding."""
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
-    # slug “soft” posizionale (opzionale) + flag --slug (retrocompat)
+    # slug “soft” posizionale (opzionale) + flag --slug
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
     p.add_argument("--name", type=str, help="Nome cliente (es. ACME Srl)")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
-    p.add_argument("--dry-run", action="store_true", help="Esegue solo la parte locale, salta Google Drive")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Esegue solo la parte locale, salta Google Drive",
+    )
     return p.parse_args()
 
 
@@ -245,7 +237,6 @@ if __name__ == "__main__":
     # Risoluzione slug: posizionale > --slug > prompt (validazione inclusa)
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        # In batch non possiamo chiedere; manteniamo UX chiara ma senza print()
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
@@ -263,15 +254,11 @@ if __name__ == "__main__":
         )
         sys.exit(0)
     except KeyboardInterrupt:
-        # Uscita standard per interruzione utente
         sys.exit(130)
-    # 👇 Ordine corretto: eccezioni specifiche prima di PipelineError
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     except PipelineError as e:
-        # Mapping deterministico verso EXIT_CODES
         code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
         sys.exit(code)
     except Exception:
-        # Fallback “safe”
         sys.exit(EXIT_CODES.get("PipelineError", 1))
