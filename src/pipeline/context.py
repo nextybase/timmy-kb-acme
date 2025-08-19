@@ -1,4 +1,3 @@
-# src/pipeline/context.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -46,6 +45,8 @@ class ClientContext:
 
     Nota di architettura:
     - Il modulo **non** interagisce con l’utente. Eventuali input/loop sono responsabilità degli orchestratori.
+    - La **policy di redazione log** è centralizzata qui: campo `redact_logs` calcolato
+      in base a variabili env e log_level.
     """
 
     # Identità cliente
@@ -103,22 +104,14 @@ class ClientContext:
         Comportamento:
         - Se la struttura cliente non esiste, viene creata e viene copiato un `config.yaml` di template.
         - Raccoglie variabili critiche dall’ambiente e costruisce i path canonici.
+        - Calcola il flag `redact_logs` secondo la policy centralizzata (auto|on|off).
 
-        Args:
-            slug: Identificativo cliente da caricare/inizializzare.
-            logger: Logger pre-esistente (riusato); se assente, viene creato lazy.
-            interactive: **[DEPRECATO]** parametro mantenuto solo per compatibilità.
-                         L’interattività NON è gestita qui: delegata agli orchestratori.
-            require_env: Se `True`, richiede obbligatoriamente variabili env esterne
-                         (es. DRIVE_ID, SERVICE_ACCOUNT_FILE). Se `False`, consente
-                         flussi offline/dry-run.
-
-        Returns:
-            ClientContext popolato con path, config e logger.
-
-        Raises:
-            ConfigError: se slug invalido (nessuna interattività in questo modulo),
-                se `config.yaml`/template mancano o in caso di errori di lettura della configurazione.
+        Policy `LOG_REDACTION`:
+        - `auto` (default): attiva redazione se ENV ∈ {prod, production, ci} oppure CI=true,
+          oppure se sono presenti credenziali (GitHub o Service Account).
+        - `on`: forza redazione sempre.
+        - `off`: disattiva redazione sempre.
+        - In ogni caso, se `log_level=DEBUG`, la redazione è **forzata OFF** (debug locale).
         """
         from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
 
@@ -133,7 +126,7 @@ class ClientContext:
                 extra={"slug": slug},
             )
 
-        # Validazione slug (nessun prompt: eventuali correzioni sono responsabilità dell'orchestratore)
+        # Validazione slug
         validate_slug(slug)
 
         base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
@@ -176,18 +169,14 @@ class ClientContext:
             env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
             env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
 
-        # Variabili opzionali utili alla pipeline/orchestratori
+        # Variabili opzionali utili
         env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
         env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)
 
-        # --- Policy redazione log centralizzata (auto|on|off) ---
-        # - auto => ON se ENV ∈ {prod, production, ci} oppure CI=true, oppure presenti credenziali
-        # - on   => sempre ON
-        # - off  => sempre OFF
-        # - debug locale (log_level=DEBUG) forza OFF
+        # --- Policy redazione log centralizzata ---
         log_level = str(kwargs.get("log_level", "INFO")).upper()
         debug_mode = (log_level == "DEBUG")
 
@@ -200,14 +189,14 @@ class ClientContext:
 
         if mode in {"always", "on"} or str(mode) in {"1", "true", "yes", "on"}:
             redact = True
-        elif mode in {"never", "off"} or str(mode) in {"0", "false", "no", "off"}:
+        elif mode in {"never", "off"} or str(mode) in {"0", "false", "no"}:
             redact = False
         else:
             # auto
             redact = (env_name in {"prod", "production", "ci"}) or ci_flag or has_credentials
 
         if debug_mode:
-            redact = False
+            redact = False  # debug locale forza OFF
 
         return cls(
             slug=slug,
@@ -222,8 +211,8 @@ class ClientContext:
             raw_dir=base_dir / "raw",
             md_dir=base_dir / "book",
             log_dir=base_dir / "logs",
-            logger=_logger,   # iniettiamo il logger nel contesto
-            run_id=run_id,    # correlazione del run
+            logger=_logger,
+            run_id=run_id,
             log_level=log_level,
             redact_logs=redact,
         )
@@ -235,7 +224,6 @@ class ClientContext:
         if self.logger:
             return self.logger
         from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
-        # Lazy: includiamo sia il contesto (per slug) sia il run_id
         self.logger = get_structured_logger(__name__, context=self, run_id=self.run_id)
         return self.logger
 

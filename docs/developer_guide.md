@@ -1,6 +1,6 @@
 # Guida Sviluppatore – Timmy‑KB (v1.0.4)
 
-Questa guida è rivolta a chi mantiene e sviluppa la pipeline. È allineata a **v1.0.4** (patch release) e include i miglioramenti non‑breaking in logging (redazione centralizzata), Drive, preview e push.
+Questa guida è rivolta a chi mantiene e sviluppa la pipeline. È allineata a **v1.0.4** (release di consolidamento) e include i miglioramenti non‑breaking su logging (redazione centralizzata), anteprima HonKit in Docker e push GitHub.
 
 ---
 
@@ -21,17 +21,18 @@ src/
  ├─ pre_onboarding.py           # orchestratore fase iniziale
  ├─ onboarding_full.py          # orchestratore completo
  └─ pipeline/
-     ├─ context.py             # caricamento env/.env, percorsi cliente, toggle redazione
-     ├─ logging_utils.py       # get_structured_logger(...), rotazione + redazione
+     ├─ context.py             # env/.env, percorsi cliente, policy redazione, logger iniettato
+     ├─ logging_utils.py       # get_structured_logger(...): filtri contesto + redazione, rotazione
      ├─ env_utils.py           # get_env_var/get_bool/get_int, redact_secrets
      ├─ exceptions.py          # tassonomia errori + EXIT_CODES
      ├─ config_utils.py        # gestione config.yaml (lettura/scrittura/merge)
-     ├─ drive_utils.py         # Google Drive API (BFS ricorsivo, retry con budget)
+     ├─ drive_utils.py         # Google Drive API (BFS, retry con budget)
      ├─ content_utils.py       # PDF→Markdown, README/SUMMARY, validazioni
-     ├─ gitbook_preview.py     # build/serve HonKit in Docker (logs redatti su toggle)
+     ├─ gitbook_preview.py     # build/serve HonKit in Docker (rispetta logger redatto)
      ├─ github_utils.py        # push su GitHub (branch da env, push incrementale)
      ├─ path_utils.py          # safety: is_safe_subpath, validate_slug, sanitize_filename
-     └─ constants.py           # nomi file/dir comuni (BOOK_JSON_NAME, ecc.)
+     └─ constants.py           # nomi file/dir comuni
+
 docs/
  ├─ index.md
  ├─ user_guide.md
@@ -48,16 +49,16 @@ docs/
 
 Gli orchestratori sono gli **unici** autorizzati a:
 
-- leggere **input interattivi** (`input()`/prompt);
+- leggere **input interattivi** (prompt);
 - determinare la **modalità** (`--non-interactive`, `--dry-run`, `--no-drive`, `--push|--no-push`);
-- gestire la **preview Docker** (pre‑check e scelta utente);
+- gestire la **preview Docker** (pre‑check e scelte utente);
 - mappare eccezioni → `EXIT_CODES`.
 
 ### Convenzioni CLI (v1.0.4)
 
 - **Slug “soft”**: posizionale oppure `--slug`. In interattivo, se assente, viene chiesto a prompt.
 - **Alias deprecati**: `--skip-drive`, `--skip-push` accettati con **warning** e rimappati a `--no-drive`/`--no-push`.
-- **Preview**: in **non‑interattivo**, se Docker non è disponibile → **auto‑skip**; in interattivo è prevista conferma/ritentativi.
+- **Preview**: in **non‑interattivo**, se Docker non è disponibile → **auto‑skip**; in interattivo è prevista conferma (default **Sì**) o proseguimento senza preview.
 - **Push**: in **non‑interattivo** è **false** a meno di `--push`; in interattivo viene chiesto (default **NO**). Il push è **incrementale** (pull‑rebase→commit→push), senza `--force` di default.
 
 ---
@@ -67,7 +68,7 @@ Gli orchestratori sono gli **unici** autorizzati a:
 ### Logging (aggiornato)
 
 - Usa `get_structured_logger(name, log_file=..., context=..., run_id=..., extra_base=..., rotate=...)`.
-- **Redazione centralizzata**: il toggle è in `context.redact_logs` (vedi sotto). Se `True`, gli orchestratori passano il flag ai moduli che trattano dati sensibili (es. preview/push), i quali applicano `env_utils.redact_secrets(...)` ai messaggi potenzialmente sensibili; `logging_utils` non riscrive i record.
+- **Redazione centralizzata nel logger**: se `context.redact_logs` è `True`, i messaggi/argomenti vengono **mascherati** via filtro interno (usa `env_utils.redact_secrets`). I moduli **non** implementano redazione personalizzata.
 - **Vietato** `print()` nei moduli; usa `logger.info/warning/error`.
 - Unico file per cliente: `output/timmy-kb-<slug>/logs/onboarding.log` (rotazione opzionale).
 - Includi metadati utili (`slug`, `file_path`, ecc.) tramite `extra={...}`.
@@ -76,7 +77,7 @@ Gli orchestratori sono gli **unici** autorizzati a:
 ### Error handling
 
 - Solleva solo eccezioni della tassonomia in `exceptions.py` (es. `ConfigError`, `DriveDownloadError`, `PreviewError`).
-- **Niente `sys.exit()` nei moduli: l’uscita è gestita negli orchestratori.
+- **Niente `sys.exit()` nei moduli**: l’uscita è gestita negli orchestratori.
 - Evita `except Exception` generici; cattura tipi specifici e rilancia `PipelineError`/derivate con contesto.
 
 ### Path & IO
@@ -87,9 +88,9 @@ Gli orchestratori sono gli **unici** autorizzati a:
 
 ### Dipendenze esterne
 
-- Drive in `drive_utils.py` (**BFS ricorsivo**, **retry esponenziale con tetto**).
+- Drive in `drive_utils.py` (**BFS** e **retry** esponenziale con tetto).
 - Conversione in `content_utils.py` (PDF→Markdown + `README.md`/`SUMMARY.md`).
-- Preview Docker in `gitbook_preview.py` (container **detached**; `redact_logs` passato dall’orchestratore).
+- Preview Docker in `gitbook_preview.py` (container **detached**; rispetta il logger redatto; parametro `redact_logs` resta **supportato per compatibilità** con servizi che emettono log grezzi).
 - Git in `github_utils.py` (branch da `GIT_DEFAULT_BRANCH`; **push incrementale** senza `--force` per default).
 
 ---
@@ -106,26 +107,26 @@ Gli orchestratori sono gli **unici** autorizzati a:
 
 > Non committare `.env` o il JSON delle credenziali.
 
-### Policy di redazione log (QW7)
+### Policy di redazione log (aggiornata)
 
-- Il valore viene valutato dagli orchestratori con `env_utils.is_log_redaction_enabled(context)`; non è memorizzato nel contesto.
-- `LOG_REDACTION=on|always|1|true|yes|on` ⇒ **redazione attiva**.
-- `LOG_REDACTION=off|never|0|false|no` ⇒ **redazione disattiva**.
-- `LOG_REDACTION=auto` (default): **ON** se `ENV ∈ {prod, production, ci}` **oppure** `CI=true` **oppure** sono presenti credenziali sensibili nel contesto; **OFF** se `log_level=DEBUG`.
-- I moduli **non** devono implementare logiche custom: usano `get_structured_logger(..., context=context)` e passano eventuale `redact_logs` ai servizi esterni (es. preview/push).
+- Il flag effettivo **vive nel contesto** (`ClientContext.redact_logs`) ed è calcolato in `ClientContext.load()` considerando:
+  - `LOG_REDACTION=on|always|1|true|yes|on` ⇒ **redazione attiva**;
+  - `LOG_REDACTION=off|never|0|false|no` ⇒ **redazione disattiva**;
+  - `LOG_REDACTION=auto` (default): **ON** se `ENV ∈ {prod, production, ci}` **oppure** `CI=true` **oppure** sono presenti credenziali sensibili; **OFF** se `log_level=DEBUG`.
+- I moduli usano il logger strutturato con `context` collegato; **nessuna** valutazione duplicata lato orchestratori.
 
 ---
 
 ## 🧩 Flussi tecnici (sintesi)
 
-1. **pre_onboarding**: crea struttura locale; opzionale struttura su Drive, carica `config.yaml` e aggiorna gli ID nel config locale.
-2. **onboarding_full**: opzionale download da Drive (RAW) → conversione in Markdown (BOOK) → validazioni → preview Docker → push opzionale (**incrementale**).
+1. **pre_onboarding**: crea struttura locale; opzionale struttura su Drive; carica/aggiorna `config.yaml` con backup `.bak`.
+2. **onboarding_full**: opzionale download da Drive (RAW) → conversione in Markdown (BOOK) → validazioni → preview Docker → push opzionale (**incrementale**) → cleanup.
 
 Entrambi scrivono sullo **stesso file di log** del cliente.
 
 ---
 
-## 🚦 EXIT\_CODES e tassonomia errori
+## 🚦 EXIT_CODES e tassonomia errori
 
 Gli orchestratori mappano le eccezioni dei moduli verso codici deterministici. Mantieni la tassonomia aggiungendo nuove eccezioni solo quando necessario e aggiornando la tabella.
 
@@ -145,31 +146,29 @@ Esempi comuni:
 - Supporta **rotazione** opzionale via `RotatingFileHandler`.
 - Accetta `run_id` per correlare i log di una singola esecuzione e `extra_base` per campi extra costanti.
 - Inietta automaticamente `slug`/`run_id` nei record via filtro contestuale.
-- **Nota**: la redazione dei messaggi è demandata ai moduli che gestiscono dati sensibili; `logging_utils` non altera i record.
+- **Redazione integrata**: se `context.redact_logs` è `True`, i messaggi/argomenti vengono mascherati prima della formattazione.
 - Degrada a **console‑only** se il file non è scrivibile (nessun crash).
 
 ### `context.ClientContext.load`
 
 - Parametro `interactive` **deprecato** e ignorato (log DEBUG una sola volta).
-- Non calcola un flag di redazione; la valutazione è demandata agli orchestratori tramite `is_log_redaction_enabled(context)`.
+- **Calcola** il flag `redact_logs` in base a `ENV`, `CI`, `LOG_REDACTION`, presenza credenziali e `log_level`.
 - Ritorna un contesto con logger **iniettato** e path canonici (`output/raw/book/config/logs`).
 
 ### `gitbook_preview.run_gitbook_docker_preview`
 
-- Default **detached**: `wait_on_exit=False`.
-- Accetta `redact_logs: bool`: redazione dei messaggi di log (non delle eccezioni), passato dagli orchestratori.
-- Build/serve HonKit **idempotenti**, con creazione `book.json`/`package.json` minimi se mancanti (scrittura **atomica**).
+- Default **detached**.
+- Può ricevere `redact_logs: bool` per compatibilità con sorgenti di log esterni; in ogni caso **rispetta** il logger redatto.
 
 ### `github_utils.push_output_to_github`
 
-- **Default incrementale**: clone in `output/timmy-kb-<slug>/.push_<rand>` → `git pull --rebase` → `commit` (solo se diff) → `git push` (senza `--force`).
+- **Default incrementale**: pull‑rebase → commit (solo se diff) → push (senza `--force`).
 - Retry automatico singolo in caso di rifiuto non‑fast‑forward; conflitti bloccano l’operazione con messaggio chiaro.
 
 ### `drive_utils` (focus storico)
 
-- **BFS ricorsivo** con **idempotenza** MD5/size; **retry esponenziale** con jitter e tetto (`max_total_delay`).
+- **BFS ricorsivo** con **idempotenza** MD5/size; **retry** esponenziale con jitter e tetto.
 - Metriche leggere su logger e `context.step_status`.
-- `redact_logs` propagato ai log sensibili.
 
 ---
 
@@ -195,7 +194,7 @@ Esempi comuni:
 
 ## 🛠️ Troubleshooting rapido
 
-- **Docker non disponibile**: in non‑interattivo la preview viene saltata automaticamente; in interattivo gli orchestratori gestiscono conferme/ritentativi.
+- **Docker non disponibile**: in non‑interattivo la preview viene saltata automaticamente; in interattivo gli orchestratori gestiscono conferme.
 - **Service Account file mancante**: i moduli sollevano `ConfigError` con messaggio chiaro; in `pre_onboarding` è possibile operare in `--dry-run`.
 - **Rifiuto push (non‑fast‑forward)**: la procedura incrementale tenta un `pull --rebase` automatico; in caso di conflitto, interrompe con indicazioni.
 

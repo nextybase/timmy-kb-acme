@@ -1,4 +1,4 @@
-# Architettura Tecnica – Timmy-KB (v1.0.3 Stable)
+# Architettura Tecnica – Timmy-KB (v1.0.4 Stable)
 
 Questa pagina descrive l’architettura **attuale** (release di consolidamento). È allineata al CHANGELOG 1.0.3 e recepisce i fix di robustezza introdotti (preview *detached* con stop automatico, logging centralizzato in `context.py`, cache regex slug in `path_utils.py`). **Flusso invariato.**
 

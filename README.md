@@ -178,6 +178,6 @@ I log degli strumenti sono strutturati; i path assenti e gli skip non critici so
 ---
 
 ## Licenza
-
-TBD.
+Questo progetto è rilasciato sotto i termini della GNU General Public License v3.0 (GPL-3.0).  
+Per maggiori dettagli consulta il file [LICENSE](LICENSE.md).
 

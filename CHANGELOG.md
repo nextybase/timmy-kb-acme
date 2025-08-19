@@ -2,7 +2,19 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
-## [1.1.0] — 2025-08-19
+## [1.0.4] - 2025-08-19
+
+### Changed
+- Flusso operativo di base reso **interattivo**: ora basta eseguire `py src/pre_onboarding.py` e `py src/onboarding_full.py`.
+- Documentazione CLI aggiornata (User Guide) con la sequenza completa di input richiesti al cliente.
+
+### Fixed
+- **Anteprima HonKit** avviata in modalità *detached* con stop automatico a fine pipeline.
+- **Logging centralizzato** su `onboarding.log` per ogni cliente.
+- **Validazione slug** più chiara: in interattivo viene chiesto e, se invalido, reinserito con messaggio esplicativo.
+
+
+## [1.0.4] — 2025-08-19
 
 ### Added
 - **Redazione log centralizzata (toggle)**: `is_log_redaction_enabled(context)` ora usata dagli orchestratori per propagare `redact_logs` ai moduli sensibili (Drive, Preview, GitHub); documentazione aggiornata.  
