@@ -6,7 +6,6 @@ Questa guida è rivolta a chi mantiene e sviluppa la pipeline. È allineata a **
 
 ## 🎯 Obiettivi e principi
 
-- **Nessun cambio di flusso** negli orchestratori: release di consolidamento.
 - **Idempotenza** dove possibile; side‑effect (I/O, rete) confinati in funzioni dedicate.
 - **Separazione ruoli**: orchestratori gestiscono UX/CLI; i moduli eseguono lavoro tecnico e **non** chiamano `sys.exit()` né `input()`.
 - **Logging strutturato** unico per cliente; **no `print()`** nei moduli.
@@ -57,7 +56,6 @@ Gli orchestratori sono gli **unici** autorizzati a:
 ### Convenzioni CLI (v1.0.4)
 
 - **Slug “soft”**: posizionale oppure `--slug`. In interattivo, se assente, viene chiesto a prompt.
-- **Alias deprecati**: `--skip-drive`, `--skip-push` accettati con **warning** e rimappati a `--no-drive`/`--no-push`.
 - **Preview**: in **non‑interattivo**, se Docker non è disponibile → **auto‑skip**; in interattivo è prevista conferma (default **Sì**) o proseguimento senza preview.
 - **Push**: in **non‑interattivo** è **false** a meno di `--push`; in interattivo viene chiesto (default **NO**). Il push è **incrementale** (pull‑rebase→commit→push), senza `--force` di default.
 
