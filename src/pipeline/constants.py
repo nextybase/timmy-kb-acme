@@ -49,3 +49,8 @@ DEFAULT_GIT_BRANCH_ENV_KEYS = ("GIT_DEFAULT_BRANCH", "GITHUB_BRANCH")
 HONKIT_DOCKER_IMAGE = "honkit/honkit"
 PREVIEW_DEFAULT_PORT = 4000
 HONKIT_CONTAINER_NAME_PREFIX = "honkit_preview"
+
+# ⚙️ Parametri di performance (tuning)
+# Nota: default "morbidi" letti dai moduli; gli orchestratori possono override.
+MAX_CONCURRENCY = 4           # Concorrenza consigliata per operazioni a grana grossa (es. per categoria)
+SKIP_IF_UNCHANGED = True      # Abilita lo skip basato su fingerprint quando l'input non è cambiato

@@ -15,11 +15,11 @@ import unicodedata
 import re
 import yaml
 import os
-from typing import Optional
-from functools import lru_cache  # ← aggiunto per caching
+from typing import Optional, Iterable, List, Tuple
+from functools import lru_cache  # ← caching per slug regex
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import InvalidSlug  # ← aggiunta per helper validate_slug
+from pipeline.exceptions import InvalidSlug  # helper dominio
 
 # Punto di verità per messaggi di errore di questo modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -32,18 +32,11 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
     Usa i percorsi **risolti** (realpath) per prevenire path traversal e link simbolici
     indesiderati. In caso di eccezioni durante la risoluzione, ritorna `False`
     e registra un errore sul logger di modulo.
-
-    Args:
-        path: Path da validare.
-        base: Directory radice consentita.
-
-    Returns:
-        `True` se `path` è uguale a `base` o è un suo discendente; `False` altrimenti.
     """
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        # ✅ Implementazione aggiornata: più chiara e robusta sugli edge-case
+        # Implementazione robusta sugli edge-case
         return path_resolved.is_relative_to(base_resolved)
     except Exception as e:
         _logger.error(
@@ -53,18 +46,13 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
-@lru_cache(maxsize=1)  # ← cache 1-entry: invalida esplicitamente dopo update config
+@lru_cache(maxsize=1)
 def _load_slug_regex() -> str:
     """
     Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
 
     Se il file non esiste o la chiave è assente/non valida, usa un default sicuro.
-
-    Note:
-        Non si usa `ClientContext` per evitare dipendenze circolari.
-
-    Returns:
-        La regex (come stringa) da usare per la validazione dello slug.
+    Non si usa `ClientContext` per evitare dipendenze circolari.
     """
     config_path = os.path.join("config", "config.yaml")
     default_regex = r"^[a-z0-9-]+$"
@@ -81,12 +69,7 @@ def _load_slug_regex() -> str:
 
 
 def clear_slug_regex_cache() -> None:
-    """
-    Svuota la cache della regex dello slug.
-
-    Usa questa funzione dopo aver aggiornato/sovrascritto `config/config.yaml`
-    per rendere effettivo il nuovo valore di `slug_regex` senza riavviare il processo.
-    """
+    """Svuota la cache della regex dello slug (da chiamare dopo update della config)."""
     try:
         _load_slug_regex.cache_clear()  # type: ignore[attr-defined]
     except Exception as e:
@@ -98,12 +81,6 @@ def is_valid_slug(slug: str) -> bool:
     Valida lo `slug` secondo la regex di progetto (configurabile via `config/config.yaml`).
 
     Default: minuscole, numeri e trattini (`^[a-z0-9-]+$`).
-
-    Args:
-        slug: Stringa da validare come identificatore cliente.
-
-    Returns:
-        `True` se lo slug è conforme alla regex di progetto, `False` altrimenti.
     """
     pattern = _load_slug_regex()
     try:
@@ -120,12 +97,6 @@ def is_valid_slug(slug: str) -> bool:
 def validate_slug(slug: str) -> str:
     """
     Valida lo slug e alza un'eccezione di dominio in caso di non conformità.
-
-    Returns:
-        Lo slug originale se valido.
-
-    Raises:
-        InvalidSlug: se lo slug non rispetta la regex configurata.
     """
     if not is_valid_slug(slug):
         raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
@@ -138,12 +109,6 @@ def normalize_path(path: Path) -> Path:
 
     In caso di errore, ritorna il path originale senza interrompere il flusso
     e registra l'errore sul logger.
-
-    Args:
-        path: Percorso da normalizzare.
-
-    Returns:
-        Il percorso risolto (o quello originale in caso di errore).
     """
     try:
         return Path(path).resolve()
@@ -162,13 +127,6 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
     - rimuove controlli ASCII
     - tronca a `max_length`
     - garantisce un fallback non vuoto
-
-    Args:
-        name: Nome file di partenza (potenzialmente non sicuro).
-        max_length: Lunghezza massima consentita per il nome finale.
-
-    Returns:
-        Un nome file sicuro e non vuoto.
     """
     try:
         # Normalizzazione unicode
@@ -194,11 +152,60 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
         return "file"
 
 
+# ----------------------------------------
+# Nuovo helper: ordinamento deterministico
+# ----------------------------------------
+def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
+    """
+    Restituisce i path ordinati in modo deterministico.
+
+    Criterio: confronto case-insensitive sul path **relativo** a `base` (se fornita),
+    altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
+    con fallback non-eccezionale e inclusi comunque nell’ordinamento.
+
+    Args:
+        paths: Iterable di Path (o compatibili) da ordinare.
+        base: Base opzionale per calcolare il relativo (migliora la stabilità).
+
+    Returns:
+        Lista di Path ordinati stabilmente.
+    """
+    items: List[Tuple[str, Path]] = []
+    base_resolved: Optional[Path] = None
+    if base is not None:
+        try:
+            base_resolved = Path(base).resolve()
+        except Exception:
+            base_resolved = None
+
+    for p in paths:
+        q = Path(p)
+        key: str
+        try:
+            q_res = q.resolve()
+        except Exception:
+            q_res = q
+
+        if base_resolved is not None:
+            try:
+                rel = q_res.relative_to(base_resolved).as_posix()
+            except Exception:
+                rel = q_res.as_posix()
+            key = rel.lower()
+        else:
+            key = q_res.as_posix().lower()
+
+        items.append((key, q))
+    items.sort(key=lambda t: t[0])
+    return [q for _, q in items]
+
+
 __all__ = [
     "is_safe_subpath",
-    "clear_slug_regex_cache",  # ← export della funzione di reset cache
+    "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",
-    "validate_slug",           # ← nuovo helper dominio
+    "validate_slug",           # helper dominio
     "normalize_path",
     "sanitize_filename",
+    "sorted_paths",            # ← nuovo export
 ]

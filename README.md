@@ -51,33 +51,70 @@ output/timmy-kb-<slug>/
 
 ## Flussi
 
-### 1) Pre‑onboarding
+### A) Pre-onboarding (setup) — *flusso interattivo di base*
 
-Crea la struttura locale, inizializza o aggiorna `config.yaml` e, se richiesto, prepara la struttura su Drive. Al termine, se non è in `--dry-run`, carica la config su Drive e aggiorna localmente gli ID remoti.
-
-Esempi:
+Per avviare la preparazione dell’ambiente cliente esegui:
 
 ```bash
-# setup minimale, senza servizi remoti
-py src/pre_onboarding.py --slug acme --non-interactive --dry-run
-
-# setup con Drive (richiede variabili d'ambiente corrette)
-py src/pre_onboarding.py --slug acme
+py src/pre_onboarding.py
 ```
 
-### 2) Onboarding completo
+**Sequenza tipica**
 
-Converte i PDF in Markdown strutturato, genera `SUMMARY.md` e `README.md`, valida la directory `book/`, avvia la **preview HonKit** (se Docker è disponibile) e, se richiesto, pubblica su GitHub.
+1. **Slug cliente** → viene richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega il motivo e chiede un nuovo valore.
+2. **Creazione struttura locale** → conferma la generazione delle cartelle `raw/`, `book/`, `config/`, `logs/` e del file `config.yaml` (con backup `.bak` se già presente).
+3. **Google Drive (opzionale)**
 
-Esempi:
+   * Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.
+   * Se le credenziali mancano: chiede se proseguire senza Drive.
+4. **Riepilogo finale** → stampa le azioni eseguite e indica dove trovare i file.
+
+> Nota: in questa fase non ci sono né anteprima né push. Serve solo a predisporre l’ambiente locale e, se richiesto, quello su Drive.
+
+---
+
+### B) Onboarding completo — *flusso interattivo di base*
+
+Per completare l’onboarding esegui:
 
 ```bash
-# batch/CI: niente prompt, preview saltata se Docker non c'è, push disabilitato
-py src/onboarding_full.py --slug acme --no-drive --non-interactive
-
-# interattivo: se Docker assente chiede se proseguire; chiede conferma per il push
-py src/onboarding_full.py --slug acme --no-drive
+py src/onboarding_full.py
 ```
+
+**Sequenza tipica**
+
+1. **Slug cliente** → viene richiesto lo *slug*, con validazione e richiesta di reinserimento se necessario.
+2. **Conversione PDF → Markdown** → avvio automatico con log di avanzamento; genera `SUMMARY.md` e `README.md` sotto `book/`.
+3. **Anteprima HonKit (Docker)**
+
+   * Se Docker è disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte in modalità *detached*, non blocca la pipeline e viene fermata automaticamente al termine.
+   * Se Docker non è disponibile: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua senza preview.
+4. **Pubblicazione su GitHub (opzionale)**
+
+   * *«Eseguire il push su GitHub?»* (default **No**). Se accetti, controlla `GITHUB_TOKEN` e propone il branch di default (`GIT_DEFAULT_BRANCH`, fallback `main`), che puoi confermare o modificare.
+5. **Pulizia finale**
+
+   * *«Eseguire il cleanup?»* (default **Sì**). Rimuove file temporanei e backup, verificando che la preview non sia più attiva. Se lo fosse ancora, propone la chiusura forzata.
+
+**Dettagli tecnici anteprima**
+
+* Porta: `4000` (modificabile via prompt o `--port 4000`).
+* Nome container: `honkit_preview_<slug>`.
+
+---
+
+## 4) Comandi rapidi
+
+### Flusso consigliato (interattivo)
+
+```bash
+# 1) Setup cliente
+py src/pre_onboarding.py
+
+# 2) Onboarding completo (conversione, anteprima, push opzionale, cleanup)
+py src/onboarding_full.py
+```
+
 
 ---
 

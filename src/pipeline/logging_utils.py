@@ -26,6 +26,17 @@ from logging.handlers import RotatingFileHandler
 
 from .env_utils import redact_secrets  # 🔐 mascheratura token/segreti
 
+# --- Nuovi import non vincolanti per metriche (safe fallback) ---
+import time
+try:
+    import psutil  # type: ignore
+except Exception:  # pragma: no cover
+    psutil = None  # fallback
+try:
+    import resource  # Unix-only; usato solo se presente
+except Exception:  # pragma: no cover
+    resource = None  # type: ignore
+
 
 @runtime_checkable
 class SupportsSlug(Protocol):
@@ -206,4 +217,83 @@ def get_structured_logger(
     return logger
 
 
-__all__ = ["get_structured_logger", "SupportsSlug"]
+# -------------------------------
+#  Helpers metriche (non invasivi)
+# -------------------------------
+
+def _get_rss_mb() -> Optional[float]:
+    """Ritorna la memoria RSS in MB se disponibile, altrimenti None (fallback safe)."""
+    try:
+        if psutil is not None:
+            p = psutil.Process()  # processo corrente
+            return float(p.memory_info().rss) / (1024 * 1024)
+    except Exception:
+        pass
+    try:
+        if resource is not None:
+            # ru_maxrss: kilobytes su Linux, bytes su macOS; normalizziamo a MB
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            ru = float(getattr(usage, "ru_maxrss", 0.0))
+            # Heuristica piattaforma: se troppo grande assumiamo bytes→MB, altrimenti KB→MB
+            return (ru / (1024 * 1024)) if ru > 10**9 else (ru / 1024.0)
+    except Exception:
+        pass
+    return None
+
+
+class metrics_scope:
+    """
+    Context manager per registrare metriche di performance a fine blocco senza
+    modificare il formato dei log.
+
+    Uso:
+        with metrics_scope(logger, stage="build_md", category="contratti"):
+            ... # codice da misurare
+
+    Effetto:
+        - misura elapsed_ms
+        - prova a misurare rss_mb (se possibile, con fallback safe)
+        - emette un log INFO alla chiusura con extra standardizzati (stage, elapsed_ms, rss_mb, **kv)
+    """
+    def __init__(self, logger: logging.Logger, *, stage: str, level: int = logging.INFO, **kv: Any) -> None:
+        self._logger = logger
+        self._stage = stage
+        self._kv = kv
+        self._level = level
+        self._t0 = 0.0
+
+    def __enter__(self):
+        self._t0 = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        elapsed_ms = int((time.perf_counter() - self._t0) * 1000)
+        rss_mb = _get_rss_mb()
+        extra = {"stage": self._stage, "elapsed_ms": elapsed_ms}
+        if rss_mb is not None:
+            extra["rss_mb"] = round(rss_mb, 2)
+        # merge dei kv custom, senza sovrascrivere quelli già presenti
+        for k, v in self._kv.items():
+            if k not in extra:
+                extra[k] = v
+        try:
+            self._logger.log(self._level, f"metrics: {self._stage}", extra=extra)
+        except Exception:
+            # i log non devono mai rompere il flusso
+            pass
+        # Non sopprime eventuali eccezioni nel blocco
+        return False
+
+
+def log_with_metrics(logger: logging.Logger, level: int, msg: str, **kv: Any) -> None:
+    """
+    Utility one-shot per loggare un messaggio aggiungendo campi extra standardizzati.
+    Non altera il formatter né la pipeline di redazione.
+    """
+    try:
+        logger.log(level, msg, extra=kv or None)
+    except Exception:
+        pass
+
+
+__all__ = ["get_structured_logger", "SupportsSlug", "metrics_scope", "log_with_metrics"]

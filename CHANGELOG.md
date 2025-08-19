@@ -2,7 +2,27 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
-## [1.0.5] - 2025-08-19
+## [Unreleased]
+
+### Added
+- Gestione fingerprint deterministico per ogni categoria, calcolato su path relativo, mtime e size dei PDF.
+- Parametri opzionali `skip_if_unchanged` e `max_workers` (con fallback da `constants`) per ottimizzare la generazione Markdown.
+- Supporto alla concorrenza a grana grossa (per categoria) tramite `ThreadPoolExecutor`.
+
+### Changed
+- `_build_category_markdown`: ora evita la ripetizione di intestazioni identiche per PDF consecutivi nella stessa sottocartella (`last_parts`).
+- Ordinamento deterministico di categorie e PDF (case-insensitive).
+- Convalida robusta di `raw_dir` e `md_dir` con `is_safe_subpath` e nuove eccezioni di dominio (`InputDirectoryMissing`).
+- Utilizzo di `sanitize_filename` per i nomi dei file `.md` generati.
+- Logging esteso e uniforme, allineato a `logging_utils`.
+
+### Fixed
+- Scrittura atomica del fingerprint `.fp` per ogni file Markdown, evitando rigenerazioni non necessarie.
+- Gestione resiliente di file volatilizzati durante `stat` (ignorati senza crash).
+- Eliminata la duplicazione di heading in caso di più PDF nella stessa cartella.
+
+
+## [1.0.4] - 2025-08-19
 
 ### Added
 - **Force push governance (two-factor):** introdotti i flag `--force-push` e `--force-ack <TAG>` nell’orchestratore. Il force è consentito solo quando entrambi i fattori sono presenti.

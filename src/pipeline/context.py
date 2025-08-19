@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
@@ -47,6 +47,8 @@ class ClientContext:
     - Il modulo **non** interagisce con l’utente. Eventuali input/loop sono responsabilità degli orchestratori.
     - La **policy di redazione log** è centralizzata qui: campo `redact_logs` calcolato
       in base a variabili env e log_level.
+    - (NEW, non-breaking) `stage`: etichetta opzionale per la fase corrente (es. "scan_raw", "build_md"),
+      utile per correlare i log insieme a `run_id`.
     """
 
     # Identità cliente
@@ -85,6 +87,9 @@ class ClientContext:
     # Correlazione run
     run_id: Optional[str] = None
 
+    # Fase corrente (NEW, opzionale)
+    stage: Optional[str] = None
+
     # Toggle redazione log (calcolato in load())
     redact_logs: bool = False
 
@@ -97,6 +102,7 @@ class ClientContext:
         *,
         require_env: bool = True,
         run_id: Optional[str] = None,
+        stage: Optional[str] = None,
         **kwargs: Any,
     ) -> "ClientContext":
         """Carica (or inizializza) il contesto cliente e valida la configurazione.
@@ -213,6 +219,7 @@ class ClientContext:
             log_dir=base_dir / "logs",
             logger=_logger,
             run_id=run_id,
+            stage=stage,
             log_level=log_level,
             redact_logs=redact,
         )
@@ -250,8 +257,26 @@ class ClientContext:
         return {
             "slug": self.slug,
             "run_id": self.run_id,
+            "stage": self.stage,
             "error_count": len(self.error_list),
             "warning_count": len(self.warning_list),
             "steps": self.step_status,
             "redact_logs": self.redact_logs,
         }
+
+    # -- Utility non-invasive per run_id/stage (NEW) --
+
+    def with_stage(self, stage: Optional[str]) -> "ClientContext":
+        """Ritorna una copia del contesto con `stage` aggiornato."""
+        return replace(self, stage=stage)
+
+    def with_run_id(self, run_id: Optional[str]) -> "ClientContext":
+        """Ritorna una copia del contesto con `run_id` aggiornato."""
+        return replace(self, run_id=run_id)
+
+    # Alias legacy (se qualche chiamante li usasse già): manteniamo la semantica
+    def set_stage(self, stage: Optional[str]) -> "ClientContext":  # pragma: no cover
+        return self.with_stage(stage)
+
+    def set_run_id(self, run_id: Optional[str]) -> "ClientContext":  # pragma: no cover
+        return self.with_run_id(run_id)
