@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # src/pre_onboarding.py
-"""Orchestratore della fase di **pre-onboarding** per Timmy-KB.
+"""
+Orchestratore della fase di **pre-onboarding** per Timmy-KB.
 
 Responsabilità:
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
@@ -13,12 +14,12 @@ Nota architetturale:
   (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** devono chiamare
   `sys.exit()` o `input()`. Questo file rispetta tali regole.
 
-Questo modulo **non** modifica dati sensibili nei log e utilizza un **logger unificato**
-(file unico per cliente). Vedi anche README/Docs per dettagli sul flusso.
+Questo modulo **non** stampa segreti nei log (maschera ID e percorsi sensibili).
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -42,9 +43,6 @@ from pipeline.drive_utils import (
 from pipeline.env_utils import is_log_redaction_enabled
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
-
-# Percorso YAML struttura cartelle (fonte di verità in /config)
-YAML_STRUCTURE_FILE = Path(__file__).resolve().parents[1] / "config" / "cartelle_raw.yaml"
 
 
 def _prompt(msg: str) -> str:
@@ -71,6 +69,55 @@ def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_log
             slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
 
 
+def _mask(s: Optional[str]) -> str:
+    """Maschera parziale di ID/percorsi per log non sensibili."""
+    if not s:
+        return ""
+    s = str(s)
+    if len(s) <= 7:
+        return "***"
+    return f"{s[:3]}***{s[-3:]}"
+
+
+def _resolve_yaml_structure_file() -> Path:
+    """
+    Risolve in modo robusto il percorso dello YAML della struttura cartelle.
+
+    Ordine di ricerca:
+      1) Env `YAML_STRUCTURE_FILE` (se definita).
+      2) `<repo_root>/config/cartelle_raw.yaml`  (../config dal file corrente).
+      3) `<repo_root>/src/config/cartelle_raw.yaml` (./src/config).
+
+    Ritorna:
+        Path esistente allo YAML.
+
+    Solleva:
+        ConfigError se nessun candidato esiste.
+    """
+    # 1) Override via env
+    env_path = os.environ.get("YAML_STRUCTURE_FILE")
+    if env_path:
+        p = Path(env_path).expanduser().resolve()
+        if p.is_file():
+            return p
+
+    here = Path(__file__).resolve()
+    repo_root = here.parents[1]  # …/<repo>
+    candidates = [
+        repo_root / "config" / "cartelle_raw.yaml",
+        repo_root / "src" / "config" / "cartelle_raw.yaml",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+
+    raise ConfigError(
+        "File YAML per struttura cartelle non trovato in nessuno dei percorsi noti. "
+        "Imposta YAML_STRUCTURE_FILE oppure aggiungi config/cartelle_raw.yaml.",
+        file_path="; ".join(str(c) for c in candidates),
+    )
+
+
 def pre_onboarding_main(
     slug: str,
     client_name: Optional[str] = None,
@@ -79,26 +126,17 @@ def pre_onboarding_main(
     dry_run: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
-    """Esegue la fase di pre-onboarding per il cliente indicato.
+    """
+    Esegue la fase di pre-onboarding per il cliente indicato.
 
     Operazioni:
         1) Carica/crea il contesto cliente e inizializza il **logger file-based**.
         2) Genera/aggiorna `config.yaml` (con fallback minimale).
-        3) Crea la **struttura locale** da YAML canonico (`cartelle_raw.yaml`).
+        3) Crea la **struttura locale** da YAML canonico.
         4) Se `dry_run` è `False`:
            - Crea la cartella cliente su **Google Drive** (Shared Drive o parent specificato).
            - Crea la **struttura remota** da YAML.
            - Carica `config.yaml` su Drive e **aggiorna localmente** gli ID (`drive_*_id`) in `config.yaml`.
-
-    Raises:
-        ConfigError: Slug mancante/non valido, file YAML struttura non trovato,
-            env non configurato (`DRIVE_ID`/`DRIVE_PARENT_FOLDER_ID`), errori di config.
-        PipelineError: Errori bloccanti non tipizzati in fase di update/scrittura.
-
-    Side Effects:
-        - Scrive file e directory sotto `output/timmy-kb-<slug>/...`.
-        - Scrive su file di log unificato.
-        - In modalità non-dry-run, crea risorse su Google Drive.
     """
     # === Logger console “early” (prima dei path cliente) ===
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
@@ -145,39 +183,63 @@ def pre_onboarding_main(
         cfg["client_name"] = client_name
     write_client_config_file(context, cfg)  # crea/aggiorna con backup .bak
 
-    # === Struttura locale convenzionale ===
-    if not YAML_STRUCTURE_FILE.exists():
-        raise ConfigError(
-            f"File YAML per struttura cartelle non trovato: {YAML_STRUCTURE_FILE}",
-            file_path=YAML_STRUCTURE_FILE,
-        )
-    create_local_base_structure(context, YAML_STRUCTURE_FILE)
+    # === Risoluzione YAML + Struttura locale convenzionale ===
+    try:
+        yaml_structure_file = _resolve_yaml_structure_file()
+        logger.info("pre_onboarding.yaml.resolved", extra={"yaml_path": str(yaml_structure_file)})
+        create_local_base_structure(context, yaml_structure_file)
+    except ConfigError as e:
+        # Log esplicito prima di uscire (per capire subito perché si ferma)
+        logger.error("❌ Impossibile creare la struttura locale: " + str(e))
+        raise
 
     if dry_run:
         logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
         logger.info("✅ Pre-onboarding locale completato (dry-run).")
         return
 
+    # === Allineamento env: unisci chiavi critiche da os.environ in context.env (conservativo) ===
+    for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_PARENT_FOLDER_ID", "DRIVE_ID"):
+        if not context.env.get(key) and os.environ.get(key):
+            context.env[key] = os.environ[key]
+
+    # Preflight (log non sensibili, mascherati)
+    logger.info(
+        "pre_onboarding.drive.preflight",
+        extra={
+            "SERVICE_ACCOUNT_FILE": _mask(context.env.get("SERVICE_ACCOUNT_FILE") or os.environ.get("SERVICE_ACCOUNT_FILE")),
+            "DRIVE_PARENT_FOLDER_ID": _mask(context.env.get("DRIVE_PARENT_FOLDER_ID") or os.environ.get("DRIVE_PARENT_FOLDER_ID")),
+            "DRIVE_ID": _mask(context.env.get("DRIVE_ID") or os.environ.get("DRIVE_ID")),
+        },
+    )
+
     # === Inizializza client Google Drive (Service Account) ===
     service = get_drive_service(context)
 
     # Determina parent della cartella cliente (Shared Drive o cartella specifica)
-    drive_parent_id = context.env.get("DRIVE_PARENT_FOLDER_ID") or context.env.get("DRIVE_ID")
+    drive_parent_id = (
+        context.env.get("DRIVE_PARENT_FOLDER_ID")
+        or os.environ.get("DRIVE_PARENT_FOLDER_ID")
+        or context.env.get("DRIVE_ID")
+        or os.environ.get("DRIVE_ID")
+    )
     if not drive_parent_id:
         raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")
 
     # Toggle redazione centralizzato
     redact = is_log_redaction_enabled(context)
 
-    # === Crea cartella cliente sul Drive condiviso ===
+    logger.info("pre_onboarding.drive.start", extra={"parent": _mask(drive_parent_id)})
+
+    # === Crea cartella cliente sul Drive condiviso (idempotente) ===
     client_folder_id = create_drive_folder(
         service, context.slug, parent_id=drive_parent_id, redact_logs=redact
     )
     logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
 
-    # === Crea struttura remota da YAML ===
+    # === Crea struttura remota da YAML (idempotente) ===
     created_map = create_drive_structure_from_yaml(
-        service, YAML_STRUCTURE_FILE, client_folder_id, redact_logs=redact
+        service, _resolve_yaml_structure_file(), client_folder_id, redact_logs=redact
     )
     logger.info(f"📄 Struttura Drive creata: {created_map}")
 
@@ -255,10 +317,14 @@ if __name__ == "__main__":
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(130)
-    except ConfigError:
+    except ConfigError as e:
+        # Log finale per avere sempre il motivo della chiusura
+        early_logger.error("Uscita per ConfigError: " + str(e))
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     except PipelineError as e:
         code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
+        early_logger.error(f"Uscita per PipelineError: {e}")
         sys.exit(code)
-    except Exception:
+    except Exception as e:
+        early_logger.error(f"Uscita per errore non gestito: {e}")
         sys.exit(EXIT_CODES.get("PipelineError", 1))

@@ -4,6 +4,40 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ## [1.0.4] - 2025-08-19
 
+### Added
+- Pacchetto `pipeline.drive/` con suddivisione del monolite:
+  - `client.py` → costruzione client Drive, `list_drive_files`, `get_file_metadata`, policy di retry centralizzata.
+  - `upload.py` → creazione cartelle/albero da YAML (moderno e legacy), upload `config.yaml`, creazione struttura locale.
+  - `download.py` → download **ricorsivo** PDF (BFS), idempotenza (MD5/size), verifica integrità e progress per chunk.
+  - `__init__.py` del sotto-pacchetto.
+- Telemetria retry: `drive_metrics_scope()` + `get_retry_metrics()` (retries totali, per-errore, backoff cumulato, ultimo HTTP status).
+
+### Changed
+- `pipeline/drive_utils.py` ridotto a **facciata** stabile (≤200 righe): re-export delle API storiche; import **statici** verso `client/upload/download`.
+- YAML: normalizzazione **permissiva** (mapping moderno o `root_folders` legacy). Alias `raw/RAW` e `yaml/YAML` aggiunti **solo nel risultato** (niente doppioni su Drive).
+- Struttura locale: `create_local_base_structure(...)` imposta/usa `raw_dir`, `book_dir`, `config_dir` nel contesto (fallback su `output/timmy-kb-<slug>`); creazione categorie da sezione `RAW`.
+- `pre_onboarding.py`: risoluzione robusta del file YAML (env → `config/` → `src/config/`), **merge** conservativo di variabili d’ambiente (ripristino permissività del flusso), preflight log e messaggi diagnostici.
+
+### Fixed
+- Logging: evitato il campo riservato `name` nei `LogRecord` → sostituito con `folder_name`/`folder_id` (“Attempt to overwrite 'name' in LogRecord”).
+- Import: eliminati import “lazy” dal facade che causavano `ImportError` in assenza di simboli; ora mapping esplicito verso i moduli del pacchetto.
+- Idempotenza/compat: sostituzione sicura di `config.yaml` se già presente; accettazione corretta di YAML legacy; gestione path locali non inizializzati.
+
+### Deprecated
+- N/D.
+
+### Removed
+- N/D (nessuna API pubblica rimossa).
+
+### Security
+- Redazione opzionale nei log di ID/cartelle sensibili durante operazioni Drive.
+
+> Note di migrazione
+- **Nessun breaking change** per gli orchestratori: API pubbliche e flusso utente invariati.
+- Verificare `.env`: `SERVICE_ACCOUNT_FILE` obbligatorio; usare `DRIVE_PARENT_FOLDER_ID` oppure `DRIVE_ID` per la radice remota.
+
+## [1.0.4] - 2025-08-19
+
 ### Changed
 - Flusso operativo di base reso **interattivo**: ora basta eseguire `py src/pre_onboarding.py` e `py src/onboarding_full.py`.
 - Documentazione CLI aggiornata (User Guide) con la sequenza completa di input richiesti al cliente.
