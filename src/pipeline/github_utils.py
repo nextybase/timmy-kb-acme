@@ -33,7 +33,7 @@ from github import Github
 from github.GithubException import GithubException
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError
+from pipeline.exceptions import PipelineError, ForcePushError  # ✅ micro-fix: import ForcePushError
 from pipeline.path_utils import is_safe_subpath  # sicurezza path
 from pipeline.env_utils import redact_secrets, get_env_var  # 🔐 redazione + env resolver
 
@@ -99,16 +99,41 @@ def _git_status_porcelain(cwd: Path, env: dict | None = None) -> str:
     return proc.stdout or ""
 
 
+def _git_rev_parse(ref: str, cwd: Path, env: dict | None = None) -> str:
+    """Ritorna lo SHA (full) per un ref (es. HEAD, origin/main)."""
+    proc = subprocess.run(
+        ["git", "rev-parse", ref],
+        cwd=str(cwd),
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    return (proc.stdout or "").strip()
+
+
+def _mask_ack(tag: str) -> str:
+    """Maschera l'ACK per il logging."""
+    if not tag:
+        return ""
+    if len(tag) <= 4:
+        return "***"
+    return f"{tag[:2]}…{tag[-2:]}"
+
+
 def push_output_to_github(
     context: _SupportsContext,
     *,
     github_token: str,
     do_push: bool = True,
+    # ✅ nuovi parametri per governance del force (no I/O qui)
+    force_push: bool = False,
+    force_ack: str | None = None,
     redact_logs: bool = False,
 ) -> None:
-    """Esegue il push **incrementale** dei file `.md` presenti nella cartella `book` del cliente su GitHub.
+    """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub.
 
-    Strategia:
+    Strategia **di default** (incrementale):
     - `git clone` del repo remoto in una cartella temporanea **dentro** `output/timmy-kb-<slug>`
     - checkout (o creazione) del branch di lavoro
     - `git pull --rebase` per sincronizzarsi con il remoto
@@ -116,14 +141,11 @@ def push_output_to_github(
     - `git add -A` → commit se ci sono modifiche → `git push` (no --force)
     - retry singolo in caso di rifiuto non-fast-forward con ulteriore `pull --rebase`
 
-    Args:
-        context: Contesto con attributi `slug`, `md_dir`, `base_dir` e (opz.) `env`.
-        github_token: Token personale GitHub (PAT). Deve essere valorizzato.
-        do_push: Se `False`, NON esegue il push (dry-run controllato dall'orchestratore).
-        redact_logs: Se `True`, applica redazione ai messaggi di errore/log potenzialmente sensibili.
-
-    Raises:
-        PipelineError: Se prerequisiti mancanti (cartella o token) o in caso di errori push/creazione repo.
+    Strategia **governata** (force):
+    - abilitata solo se `force_push=True` **e** `force_ack` valorizzato (contratto con orchestratore)
+    - `git fetch origin <branch>` e acquisizione dello SHA remoto
+    - `git push --force-with-lease=refs/heads/<branch>:<sha_remoto>`
+    - commit message con trailer `Force-Ack: <TAG>`
     """
     # Validazione basilare prerequisiti
     if not github_token:
@@ -169,7 +191,7 @@ def push_output_to_github(
         return
 
     default_branch = _resolve_default_branch(context)
-    msg = f"📤 Preparazione push incrementale su GitHub (branch: {default_branch})"
+    msg = f"📤 Preparazione push su GitHub (branch: {default_branch})"
     logger.info(
         redact_secrets(msg) if redact_logs else msg,
         extra={"slug": context.slug, "branch": default_branch},
@@ -274,7 +296,11 @@ def push_output_to_github(
             logger.info("ℹ️  Nessuna modifica da pubblicare (working dir identica)", extra={"slug": context.slug})
             return
 
+        # Commit message (aggiunge trailer Force-Ack se presente)
         commit_msg = f"Aggiornamento contenuto KB per cliente {context.slug}"
+        if force_ack:
+            commit_msg = f"{commit_msg}\n\nForce-Ack: {force_ack}"
+
         _run(
             [
                 "git",
@@ -290,31 +316,64 @@ def push_output_to_github(
             env=env,
         )
 
-        # Push (no force) + retry con rebase se rifiutato
-        def _attempt_push() -> None:
-            _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env)
-
-        try:
-            logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
-            _attempt_push()
-        except subprocess.CalledProcessError as e1:
-            # Ritenta una volta con rebase (conflitti -> fallisce)
-            logger.warning(
-                "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...",
-                extra={"slug": context.slug, "branch": default_branch},
-            )
-            try:
-                _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env)
-                _attempt_push()
-            except subprocess.CalledProcessError as e2:
-                raw = (
-                    "Push fallito dopo retry con rebase. "
-                    "Possibili conflitti tra contenuto locale e remoto. "
-                    "Suggerimenti: usare un branch dedicato (GIT_DEFAULT_BRANCH) e aprire una PR, "
-                    "oppure — consapevolmente — abilitare il force in orchestratore."
+        # Ramo di push: incrementale (default) o force governato
+        if force_push:
+            if not force_ack:
+                raise ForcePushError(  # ✅ micro-fix: usa eccezione specifica
+                    "Force push richiesto senza ACK. Contratto violato: serve force_ack valorizzato.",
+                    slug=context.slug,
                 )
-                safe = redact_secrets(raw) if redact_logs else raw
-                raise PipelineError(safe, slug=context.slug) from e2
+
+            # Fetch e calcolo SHA locali/remoti per il lease
+            _run(["git", "fetch", "origin", default_branch], cwd=tmp_dir, env=env)
+            remote_sha = _git_rev_parse(f"origin/{default_branch}", cwd=tmp_dir, env=env)
+            local_sha = _git_rev_parse("HEAD", cwd=tmp_dir, env=env)
+
+            # Logging strutturato del ramo force (ack mascherato)
+            logger.info(
+                "📌 Force push governato (with-lease)",
+                extra={
+                    "slug": context.slug,
+                    "branch": default_branch,
+                    "local_sha": local_sha,
+                    "remote_sha": remote_sha,
+                    "force_ack": _mask_ack(force_ack),
+                },
+            )
+
+            # Push con lease esplicito sul ref remoto
+            lease_ref = f"refs/heads/{default_branch}:{remote_sha}"
+            _run(
+                ["git", "push", "--force-with-lease=" + lease_ref, "origin", default_branch],
+                cwd=tmp_dir,
+                env=env,
+            )
+        else:
+            # Push (no force) + retry con rebase se rifiutato
+            def _attempt_push() -> None:
+                _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env)
+
+            try:
+                logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
+                _attempt_push()
+            except subprocess.CalledProcessError as e1:
+                # Ritenta una volta con rebase (conflitti -> fallisce)
+                logger.warning(
+                    "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...",
+                    extra={"slug": context.slug, "branch": default_branch},
+                )
+                try:
+                    _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env)
+                    _attempt_push()
+                except subprocess.CalledProcessError as e2:
+                    raw = (
+                        "Push fallito dopo retry con rebase. "
+                        "Possibili conflitti tra contenuto locale e remoto. "
+                        "Suggerimenti: usare un branch dedicato (GIT_DEFAULT_BRANCH) e aprire una PR, "
+                        "oppure — consapevolmente — abilitare il force in orchestratore."
+                    )
+                    safe = redact_secrets(raw) if redact_logs else raw
+                    raise PipelineError(safe, slug=context.slug) from e2
 
         logger.info(
             "✅ Push completato su %s (%s)",

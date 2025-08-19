@@ -1,20 +1,8 @@
 # src/pipeline/env_utils.py
-
-"""
-Utility per la gestione delle variabili d'ambiente.
-
-- Carica automaticamente il file .env nella root del progetto (se presente).
-- Mantiene la funzione legacy `get_env_var(...)` per retro-compatibilità.
-- **Linee guida**: usare SEMPRE queste funzioni al posto di `os.getenv` nei moduli.
-- Aggiunge utility tipizzate e sicure:
-    - require_env(key): stringa obbligatoria (vuoto = errore)
-    - get_bool(key, default=False): parsing booleano tollerante
-    - get_int(key, default=None, required=False): intero con validazione
-    - redact_secrets(text): redazione di token/segreti nei messaggi/log
-    - is_log_redaction_enabled(context): toggle centralizzato per la redazione log
-"""
+from __future__ import annotations
 
 import os
+import fnmatch  # ✅ NEW: per matching glob dei branch
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -35,26 +23,14 @@ __all__ = [
     "get_int",
     "redact_secrets",
     "is_log_redaction_enabled",
+    # ✅ NEW:
+    "get_force_allowed_branches",
+    "is_branch_allowed_for_force",
 ]
 
 def get_env_var(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
     """
     Recupera una variabile d'ambiente con comportamento retro-compatibile.
-
-    Uso raccomandato in TUTTI i moduli al posto di `os.getenv`, per centralizzare:
-    - default e gestione 'required'
-    - messaggistica coerente con la pipeline
-
-    Args:
-        key: nome della variabile d'ambiente
-        default: valore di fallback se la variabile non è presente
-        required: se True, solleva ConfigError quando la variabile è assente **o vuota**
-
-    Returns:
-        Il valore della variabile o il default (None o stringa).
-
-    Raises:
-        ConfigError: se required=True e la variabile è assente o vuota
     """
     value = os.getenv(key, default)
     if required and (value is None or str(value).strip() == ""):
@@ -70,13 +46,7 @@ def get_env_var(key: str, default: Optional[str] = None, required: bool = False)
 _TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
 
 def require_env(key: str) -> str:
-    """
-    Versione 'required' esplicita.
-    Considera stringa vuota ('') come mancante.
-
-    Raises:
-        ConfigError: se la variabile è assente o vuota
-    """
+    """Versione 'required' esplicita."""
     val = os.getenv(key)
     if val is None or str(val).strip() == "":
         raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
@@ -84,12 +54,7 @@ def require_env(key: str) -> str:
 
 
 def get_bool(key: str, default: bool = False) -> bool:
-    """
-    Lettura booleana tollerante.
-    True se il valore (case-insensitive) ∈ {_TRUE_SET}, altrimenti:
-      - False se non presente
-      - default per valori non riconosciuti
-    """
+    """Lettura booleana tollerante."""
     v = os.getenv(key)
     if v is None:
         return default
@@ -97,20 +62,7 @@ def get_bool(key: str, default: bool = False) -> bool:
 
 
 def get_int(key: str, default: Optional[int] = None, *, required: bool = False) -> Optional[int]:
-    """
-    Lettura intera con validazione minima.
-
-    Args:
-        key: nome della variabile
-        default: valore di fallback se assente/non valido
-        required: se True, solleva ConfigError se assente/vuota/non numerica
-
-    Returns:
-        int o default/None
-
-    Raises:
-        ConfigError: se required=True e la variabile è assente/vuota/non numerica
-    """
+    """Lettura intera con validazione minima."""
     v = os.getenv(key, None)
     if v is None or str(v).strip() == "":
         if required:
@@ -151,15 +103,7 @@ def redact_secrets(text: str) -> str:
 def is_log_redaction_enabled(context=None) -> bool:
     """
     Determina se la redazione dei log deve essere attiva.
-
-    Logica:
-      - LOG_REDACTION=always  → True
-      - LOG_REDACTION=never   → False
-      - LOG_REDACTION in {1,true,yes,on} → True
-      - LOG_REDACTION in {0,false,no,off} → False
-      - LOG_REDACTION=auto (default): True se ENV ∈ {prod, production}, altrimenti False
-
-    La precedenza è: context.env > os.environ.
+    Precedenza: context.env > os.environ.
     """
     def _from_ctx(key: str, default: Optional[str] = None) -> Optional[str]:
         try:
@@ -180,3 +124,54 @@ def is_log_redaction_enabled(context=None) -> bool:
     # auto
     envv = _from_ctx("ENV") or os.getenv("ENV", "dev")
     return str(envv).strip().lower() in ("prod", "production")
+
+
+# ================================
+# ✅ NEW: Force-push branch allowlist
+# ================================
+
+def get_force_allowed_branches(context=None) -> list[str]:
+    """
+    Legge l'allow-list dei branch per il force push dalla variabile:
+      GIT_FORCE_ALLOWED_BRANCHES=main,release/*
+
+    - Supporta lista separata da virgole e/o newline.
+    - Legge prima da context.env (se presente), poi da os.environ.
+    - Ritorna una lista di pattern glob (es. ["main", "release/*"]).
+    - Se non impostata o vuota → [] (nessun vincolo lato helper).
+
+    Nota: l’orchestratore può interpretare [] come “nessun filtro” e,
+    in tal caso, decidere se consentire tutto o bloccare by-policy.
+    """
+    raw = None
+    try:
+        if context is not None and hasattr(context, "env") and isinstance(context.env, dict):
+            raw = context.env.get("GIT_FORCE_ALLOWED_BRANCHES", None)
+    except Exception:
+        raw = None
+    if raw is None:
+        raw = os.getenv("GIT_FORCE_ALLOWED_BRANCHES", "")
+
+    # Normalizzazione: separatori = virgola o newline
+    tokens = str(raw or "").replace("\n", ",").split(",")
+    patterns = [t.strip() for t in tokens if t and t.strip()]
+    return patterns
+
+
+def is_branch_allowed_for_force(branch: str, context=None, *, allow_if_unset: bool = True) -> bool:
+    """
+    Verifica se `branch` è consentito per il force push.
+
+    Args:
+        branch: nome del branch (es. "main", "release/1.2.x").
+        context: opzionale; se presente può fornire `context.env`.
+        allow_if_unset: se True e la lista non è configurata/è vuota → consenti.
+
+    Returns:
+        True se almeno un pattern della allow-list combacia (fnmatch), altrimenti False.
+        Se la allow-list non è impostata/è vuota → `allow_if_unset`.
+    """
+    patterns = get_force_allowed_branches(context)
+    if not patterns:
+        return allow_if_unset
+    return any(fnmatch.fnmatch(branch, pat) for pat in patterns)

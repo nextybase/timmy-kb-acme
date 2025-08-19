@@ -15,6 +15,7 @@ from pipeline.exceptions import (
     ConfigError,
     PreviewError,
     EXIT_CODES,
+    ForcePushError,  # ✅ usa l'eccezione specifica per il gate force
 )
 from pipeline.context import ClientContext
 from pipeline.config_utils import get_client_config
@@ -34,6 +35,10 @@ from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
 from pipeline.exceptions import InvalidSlug  # eccezione dominio per slug non valido
+from pipeline.env_utils import (  # ✅ allow-list branch + lettura env
+    is_branch_allowed_for_force,
+    get_env_var,
+)
 
 
 def _prompt(msg: str) -> str:
@@ -143,6 +148,21 @@ def _run_preview(
     return False
 
 
+def _resolve_target_branch(context: ClientContext) -> str:
+    """
+    Risolve il branch di lavoro coerentemente con il modulo GitHub:
+    1) context.env[GIT_DEFAULT_BRANCH] o context.env[GITHUB_BRANCH]
+    2) variabili di processo (get_env_var)
+    3) fallback 'main'
+    """
+    if getattr(context, "env", None):
+        br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
+        if br:
+            return str(br)
+    br = get_env_var("GIT_DEFAULT_BRANCH") or get_env_var("GITHUB_BRANCH")
+    return br or "main"
+
+
 def _maybe_push(
     context: ClientContext,
     *,
@@ -150,10 +170,55 @@ def _maybe_push(
     non_interactive: bool,
     redact: bool,
     logger,
+    # ✅ Nuovi parametri per governance force push (non I/O nei moduli)
+    force_push: Optional[bool] = None,
+    force_ack: Optional[str] = None,
 ) -> None:
-    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale)."""
-    token = context.env.get("GITHUB_TOKEN")
+    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale).
 
+    Policy R1 (governance force push, orchestratore):
+    - Non-interactive/CI: force consentito SOLO con entrambi i fattori presenti
+      (--force-push + --force-ack <TAG>) → altrimenti ForcePushError (exit 41).
+    - Interattivo: se force senza ack, chiedi conferma e acquisisci ack.
+    - Allow-list branch: se il branch non è ammesso per il force → ForcePushError.
+    """
+    token = context.env.get("GITHUB_TOKEN")
+    target_branch = _resolve_target_branch(context)
+
+    # Determina se si vuole forzare
+    want_force = bool(force_push)
+
+    # Gate force push
+    if want_force:
+        # allow-list branch
+        if not is_branch_allowed_for_force(target_branch, context=context, allow_if_unset=True):
+            raise ForcePushError(
+                f"Force push non consentito sul branch '{target_branch}' secondo GIT_FORCE_ALLOWED_BRANCHES.",
+                slug=context.slug,
+            )
+
+        if non_interactive:
+            # In CI il force richiede SEMPRE entrambi i fattori
+            if not force_ack:
+                raise ForcePushError(
+                    "Force push in modalità non-interattiva senza --force-ack <TAG>.",
+                    slug=context.slug,
+                )
+            # ok: procederemo passando i flag al modulo GitHub
+        else:
+            # Interattivo: se manca l'ack, chiedi un tag esplicito
+            if not force_ack:
+                logger.warning("⚠️ Richiesta di force push senza ACK esplicito.")
+                if not _confirm_yes_no("Confermi di voler procedere con un force push?", default_no=True):
+                    logger.info("⏭️  Force push annullato dall'utente")
+                    want_force = False  # ricade su push normale (se abilitato)
+                else:
+                    entered = _prompt("Inserisci un tag di conferma (Force-Ack): ").strip()
+                    if not entered:
+                        raise ForcePushError("Force push annullato: ACK mancante.", slug=context.slug)
+                    force_ack = entered  # ✅ acquisito interattivamente
+
+    # Risoluzione intenzione push (normale/incrementale)
     if push_flag is not None:
         do_push = push_flag
     else:
@@ -166,8 +231,21 @@ def _maybe_push(
     if not token:
         raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
 
-    logger.info("📤 Avvio push su GitHub")
-    push_output_to_github(context, github_token=token, do_push=True, redact_logs=redact)
+    logger.info(
+        "📤 Avvio push su GitHub (%s)",
+        "force-with-lease" if want_force else "incrementale",
+        extra={"branch": target_branch},
+    )
+
+    # ✅ Chiama il modulo GitHub passando i nuovi parametri (force governato)
+    push_output_to_github(
+        context,
+        github_token=token,
+        do_push=True,
+        force_push=want_force,
+        force_ack=force_ack,
+        redact_logs=redact,
+    )
 
     # Cleanup artefatti locali post-push (solo interattivo, non bloccante)
     if not non_interactive and _confirm_yes_no(
@@ -197,6 +275,9 @@ def onboarding_full_main(
     allow_offline_env: bool = False,
     docker_retries: int = 3,
     run_id: Optional[str] = None,
+    # ✅ Nuovi parametri propagati all’helper push
+    force_push: Optional[bool] = None,
+    force_ack: Optional[str] = None,
 ) -> None:
     # Logger console “early” per validazione slug (prima del contesto)
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
@@ -293,6 +374,8 @@ def onboarding_full_main(
             non_interactive=non_interactive,
             redact=redact,
             logger=logger,
+            force_push=force_push,
+            force_ack=force_ack,
         )
     finally:
         if preview_started:
@@ -314,6 +397,18 @@ def _parse_args() -> argparse.Namespace:
     grp_push = p.add_mutually_exclusive_group()
     grp_push.add_argument("--push", action="store_true", help="Forza il push su GitHub (se GITHUB_TOKEN è presente)")
     grp_push.add_argument("--no-push", action="store_true", help="Disabilita esplicitamente il push su GitHub")
+
+    # ✅ Nuovi flag per governance force-push (gated)
+    p.add_argument(
+        "--force-push",
+        action="store_true",
+        help="(Avanzato) Richiedi force push. Richiede anche --force-ack <TAG>.",
+    )
+    p.add_argument(
+        "--force-ack",
+        type=str,
+        help="Tag di conferma obbligatorio quando si usa --force-push (ack a due fattori).",
+    )
 
     p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
     p.add_argument(
@@ -363,6 +458,9 @@ if __name__ == "__main__":
             allow_offline_env=args.allow_offline_env,
             docker_retries=args.docker_retries,
             run_id=run_id,
+            # ✅ Propagazione nuovi flag
+            force_push=args.force_push,
+            force_ack=args.force_ack,
         )
         sys.exit(0)
     except KeyboardInterrupt:
@@ -377,4 +475,3 @@ if __name__ == "__main__":
         sys.exit(code)
     except Exception:
         sys.exit(EXIT_CODES.get("PipelineError", 1))
-v

@@ -106,6 +106,12 @@ class PushError(PipelineError):
     pass
 
 
+# ✅ NUOVO: eccezione specifica per governance del force push (gate a due fattori)
+class ForcePushError(PipelineError):
+    """Violazioni della policy di force push (richiede flag + ACK)."""
+    pass
+
+
 class ConfigError(PipelineError):
     """Errore di caricamento o validazione della configurazione."""
     pass
@@ -166,6 +172,7 @@ EXIT_CODES = {
     "DriveUploadError": 22,
     "PreviewError": 30,
     "PushError": 40,
+    "ForcePushError": 41,  # ✅ nuovo codice per force push governance
     "CleanupError": 50,
     "EnrichmentError": 60,
     "SemanticMappingError": 61,
@@ -177,6 +184,7 @@ __all__ = [
     "DriveUploadError",
     "ConversionError",
     "PushError",
+    "ForcePushError",  # ✅ export
     "ConfigError",
     "CleanupError",
     "PreviewError",

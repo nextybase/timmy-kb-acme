@@ -2,6 +2,34 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.5] - 2025-08-19
+
+### Added
+- **Force push governance (two-factor):** introdotti i flag `--force-push` e `--force-ack <TAG>` nell’orchestratore. Il force è consentito solo quando entrambi i fattori sono presenti.
+- **Commit trailer:** se presente `--force-ack`, i commit includono il trailer `Force-Ack: <TAG>` per auditabilità.
+- **Branch allow-list:** nuova variabile `GIT_FORCE_ALLOWED_BRANCHES` (glob, es. `main,release/*`) con helper `is_branch_allowed_for_force(...)` per limitare il force a branch ammessi.
+- **Eccezione dedicata:** `ForcePushError` mappata in `EXIT_CODES` con codice **41**.
+
+### Changed
+- **`src/onboarding_full.py`:** gating del force in CI/non-interactive (richiede due fattori), conferma in interactive, pass-through dei nuovi parametri a `push_output_to_github(...)`.
+- **`src/pipeline/github_utils.py`:** estesa la firma con `force_push`, `force_ack`, `redact_logs`; ramo governato di push con `git fetch` + `git push --force-with-lease=refs/heads/<branch>:<remote_sha>`; logging strutturato di `branch`, `local_sha`, `remote_sha` e ack mascherato.
+- **`src/pipeline/env_utils.py`:** aggiunti `get_force_allowed_branches()` e `is_branch_allowed_for_force()`; export aggiornato.
+- **`src/pipeline/exceptions.py`:** registrata `ForcePushError` in `EXIT_CODES`.
+
+### Fixed
+- Messaggistica di errore più chiara in fase di push rifiutato (retry con `pull --rebase` e suggerimenti operativi).
+
+### Security
+- Force push subordinato a **`--force-with-lease`** con verifica dello **SHA remoto**; log redatti per token/ack; blocco preventivo su branch non ammessi.
+
+### Migration notes
+- **Default invariato:** il push resta incrementale; nessuna rottura per i flussi esistenti.
+- **CI:** per abilitare il force usare *entrambi* i flag:  
+  `--force-push --force-ack <TAG>`  
+  In assenza dei due fattori l’orchestratore esce con **41**.
+- **Env:** opzionale `GIT_FORCE_ALLOWED_BRANCHES` (consigliato: `main,gh-pages`).
+- **Audit:** verificare nei log la presenza di `local_sha`, `remote_sha` e trailer `Force-Ack:` nei commit forzati.
+
 ## [1.0.4] - 2025-08-19
 
 ### Added
