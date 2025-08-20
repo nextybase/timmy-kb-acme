@@ -1,220 +1,168 @@
-# Timmy-KB — Knowledge Base Pipeline (v1.0.4 Stable)
+﻿## <a name="header"></a><a name="content"></a><a name="readme.md"></a>README.md
+# <a name="xb014f7d5516556b37fe1f684436ebd3b6f237b3"></a>Timmy-KB — Knowledge Base Pipeline (v1.0.5 Stable)
+Pipeline modulare per trasformare i PDF del cliente in una **KB Markdown AI‑ready** (GitBook/Honkit), con anteprima Docker opzionale e push opzionale su GitHub.
 
-Pipeline modulare per trasformare i PDF del cliente in una **KB Markdown AI‑ready** (GitBook/HonKit), con anteprima Docker opzionale e push opzionale su GitHub.
+Stato: **v1.0.5 Stable**. Documentazione aggiornata alle migliorie introdotte (strumenti CLI potenziati, fix minori) e allineata al CHANGELOG 1.0.5. Nessun cambiamento ai flussi principali rispetto alla 1.0.4.
 
-> Stato: **v1.0.4 Stable**. Documento aggiornato ai micro‑fix di robustezza introdotti in questa sessione; il bump è allineato al CHANGELOG.
+-----
+## <a name="tldr"></a>TL;DR
+1. **Pre‑onboarding** (setup locale + Drive opzionale)
 
----
+   py src/pre\_onboarding.py --slug acme --non-interactive --dry-run
+1. **Onboarding completo** (download → conversione → preview → push)
 
-## TL;DR
+   # senza Drive e senza push (anteprima detached se Docker è disponibile)\
+   py src/onboarding\_full.py --slug acme --no-drive --non-interactive
+-----
+## <a name="requisiti"></a>Requisiti
+- **Python ≥ 3.10**
+- **Docker** (per la preview HonKit; se assente la preview viene saltata in batch)
+- **Credenziali Google Drive** (Service Account JSON) per accedere alle API Drive
+- **GitHub token** (GITHUB\_TOKEN) solo se si vuole eseguire il push
+### <a name="variabili-dambiente"></a>Variabili d’ambiente
+- SERVICE\_ACCOUNT\_FILE / GOOGLE\_APPLICATION\_CREDENTIALS – path al file JSON del Service Account GCP
+- DRIVE\_ID / DRIVE\_PARENT\_FOLDER\_ID – ID della radice (Drive condiviso o cartella) per i PDF del cliente
+- GITHUB\_TOKEN – token GitHub per autorizzare il push (opzionale, richiesto solo per push)
+- GIT\_DEFAULT\_BRANCH – nome del branch Git predefinito per il push (default: main)
+- LOG\_REDACTION – policy di redazione log sensibili (auto|on|off)
+-----
+## <a name="struttura-di-output-per-cliente"></a>Struttura di output per cliente
+output/timmy-kb-<slug>/\
+`  `├─ raw/        # PDF scaricati (opzionale)\
+`  `├─ book/       # Markdown generati + SUMMARY.md + README.md\
+`  `├─ config/     # config.yaml (mapping semantico)\
+`  `└─ logs/       # onboarding.log (unico log strutturato per cliente, rotazione opzionale)
 
-1. Pre‑onboarding (setup locale + Drive opzionale)
-   ```bash
-   py src/pre_onboarding.py --slug acme --non-interactive --dry-run
-   ```
-2. Onboarding completo (download → conversione → preview → push)
-   ```bash
-   # senza Drive e senza push (anteprima detached se Docker è disponibile)
-   py src/onboarding_full.py --slug acme --no-drive --non-interactive
-   ```
-
----
-
-## Requisiti
-
-- Python ≥ 3.10.
-- Docker per la preview HonKit; se assente la preview viene saltata in batch.
-- Google Drive API con credenziali Service Account (.json).
-- GitHub `GITHUB_TOKEN` solo se si vuole eseguire il push.
-
-### Variabili d’ambiente
-
-- `SERVICE_ACCOUNT_FILE` oppure `GOOGLE_APPLICATION_CREDENTIALS` per le credenziali GCP.
-- `DRIVE_ID` oppure `DRIVE_PARENT_FOLDER_ID` come radice per i PDF del cliente.
-- `GITHUB_TOKEN` per il push (opzionale).
-- `GIT_DEFAULT_BRANCH` come branch di default per il push (fallback `main`).
-- `LOG_REDACTION` per abilitare la redazione di log sensibili.
-
----
-
-## Struttura di output per cliente
-
-```
-output/timmy-kb-<slug>/
-  ├─ raw/        # PDF scaricati (opzionale)
-  ├─ book/       # Markdown generati + SUMMARY.md + README.md
-  ├─ config/     # config.yaml, mapping semantico
-  └─ logs/       # onboarding.log (logger unico per cliente, rotazione opzionale)
-```
-
----
-
-## Flussi
-
-### A) Pre-onboarding (setup) — *flusso interattivo di base*
-
+-----
+## <a name="flussi"></a>Flussi
+### <a name="x505b8b28674f33bae77ed5795ca09a71975b05b"></a>A) Pre-onboarding (setup) — *flusso interattivo di base*
 Per avviare la preparazione dell’ambiente cliente esegui:
 
-```bash
-py src/pre_onboarding.py
-```
+py src/pre\_onboarding.py
 
-**Sequenza tipica**
+**Sequenza tipica:**
 
-1. **Slug cliente** → viene richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega il motivo e chiede un nuovo valore.
-2. **Creazione struttura locale** → conferma la generazione delle cartelle `raw/`, `book/`, `config/`, `logs/` e del file `config.yaml` (con backup `.bak` se già presente).
-3. **Google Drive (opzionale)**
+1. **Slug cliente** – viene richiesto lo *slug* (es. acme). Se non valido, il sistema spiega il motivo e chiede un nuovo valore.
+1. **Creazione struttura locale** – conferma la generazione delle cartelle raw/, book/, config/, logs/ e del file config.yaml (con backup .bak se era già presente).
+1. **Google Drive (opzionale)** –
+1. Se le variabili Drive sono configurate, mostra l’ID rilevato e chiede conferma per creare/aggiornare la struttura su Drive.
+1. Se le credenziali mancano, chiede se procedere **senza** operazioni su Drive.
+1. **Riepilogo finale** – stampa le azioni eseguite e indica dove trovare i file generati.
 
-   * Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.
-   * Se le credenziali mancano: chiede se proseguire senza Drive.
-4. **Riepilogo finale** → stampa le azioni eseguite e indica dove trovare i file.
+*Nota:* in questa fase **non** viene eseguita alcuna anteprima né push. Il pre-onboarding serve unicamente a predisporre l’ambiente locale (e remoto su Drive, se richiesto).
 
-> Nota: in questa fase non ci sono né anteprima né push. Serve solo a predisporre l’ambiente locale e, se richiesto, quello su Drive.
-
----
-
-### B) Onboarding completo — *flusso interattivo di base*
-
+-----
+### <a name="x3eb9f8c87220d78972897c25749c6111c0e2dbd"></a>B) Onboarding completo — *flusso interattivo di base*
 Per completare l’onboarding esegui:
 
-```bash
-py src/onboarding_full.py
-```
+py src/onboarding\_full.py
 
-**Sequenza tipica**
+**Sequenza tipica:**
 
-1. **Slug cliente** → viene richiesto lo *slug*, con validazione e richiesta di reinserimento se necessario.
-2. **Conversione PDF → Markdown** → avvio automatico con log di avanzamento; genera `SUMMARY.md` e `README.md` sotto `book/`.
-3. **Anteprima HonKit (Docker)**
+1. **Slug cliente** – viene richiesto lo *slug*, con validazione immediata; se non conforme, spiega l’errore e richiede un nuovo valore.
+1. **Conversione PDF → Markdown** – parte automaticamente (nessun prompt) con log di avanzamento; al termine genera SUMMARY.md e README.md sotto book/.
+1. **Anteprima HonKit (Docker)** –
+1. Se Docker è disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). In caso di conferma, la preview parte in modalità **detached** (non blocca la pipeline) e viene **fermata automaticamente** al termine.
+1. Se Docker non è disponibile: *«Proseguire senza anteprima?»* (default **No**). Se confermi (rispondendo Sì), la pipeline continua senza avviare la preview.
+1. **Pubblicazione su GitHub (opzionale)** –
+1. *«Eseguire il push su GitHub?»* (default **No**). Se accetti, la pipeline verifica la presenza di GITHUB\_TOKEN e propone il branch di destinazione di default (letto da GIT\_DEFAULT\_BRANCH, es. main), consentendoti di confermarlo o modificarlo.
+1. **Pulizia finale** –
+1. *«Eseguire il cleanup?»* (default **Sì**). Rimuove eventuali file temporanei e backup non più necessari, verificando che la preview sia stata arrestata. Se per qualche motivo il container dell’anteprima risultasse ancora attivo, viene proposta la chiusura forzata.
 
-   * Se Docker è disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte in modalità *detached*, non blocca la pipeline e viene fermata automaticamente al termine.
-   * Se Docker non è disponibile: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua senza preview.
-4. **Pubblicazione su GitHub (opzionale)**
+**Dettagli tecnici anteprima:**\
+\- Porta predefinita 4000 (puoi cambiarla via prompt o passando --port 4000).\
+\- Nome container Docker: honkit\_preview\_<slug>.
 
-   * *«Eseguire il push su GitHub?»* (default **No**). Se accetti, controlla `GITHUB_TOKEN` e propone il branch di default (`GIT_DEFAULT_BRANCH`, fallback `main`), che puoi confermare o modificare.
-5. **Pulizia finale**
+-----
+## <a name="comandi-rapidi"></a>4) Comandi rapidi
+### <a name="flusso-consigliato-interattivo"></a>Flusso consigliato (interattivo)
+\# 1) Setup cliente (solo locale + config Drive)\
+py src/pre\_onboarding.py\
+\
+\# 2) Onboarding completo (conversione, anteprima, push opzionale, cleanup finale)\
+py src/onboarding\_full.py
+### <a name="varianti-batchci-senza-prompt"></a>Varianti batch/CI (senza prompt)
+\# Setup minimale (nessun accesso a servizi remoti)\
+py src/pre\_onboarding.py --slug acme --non-interactive --dry-run\
+\
+\# Onboarding senza Drive e anteprima (auto-skip preview se Docker non c'è), push disabilitato\
+py src/onboarding\_full.py --slug acme --no-drive --non-interactive\
+\
+\# Onboarding completo con push esplicito (token e branch preimpostati)\
+export GITHUB\_TOKEN=ghp\_xxx\
+export GIT\_DEFAULT\_BRANCH=main\
+py src/onboarding\_full.py --slug acme --no-drive --non-interactive --push
 
-   * *«Eseguire il cleanup?»* (default **Sì**). Rimuove file temporanei e backup, verificando che la preview non sia più attiva. Se lo fosse ancora, propone la chiusura forzata.
+*Tip:* Su Linux/Mac usa python al posto di py se preferisci.
 
-**Dettagli tecnici anteprima**
+-----
+## <a name="anteprima-honkit-docker"></a>Anteprima (HonKit + Docker)
+- L’anteprima viene eseguita **in modalità detached** e **non** blocca il flusso della pipeline.
+- L’orchestratore arresta **automaticamente** il container Docker alla fine dell’esecuzione (anche se salti la fase di push).
+- In --non-interactive (batch/CI), se Docker non è disponibile la preview viene **saltata automaticamente**. In modalità interattiva, in assenza di Docker ti verrà chiesto se proseguire senza anteprima (default **NO**).
 
-* Porta: `4000` (modificabile via prompt o `--port 4000`).
-* Nome container: `honkit_preview_<slug>`.
+**Porta e container default:** porta HTTP 4000 (override con --port), container honkit\_preview\_<slug>.
 
----
+-----
+## <a name="push-su-github-opzionale"></a>Push su GitHub (opzionale)
+- Gestito dal modulo src/pipeline/github\_utils.py (funzione push\_output\_to\_github).
+- Richiede un GITHUB\_TOKEN valido nel contesto.
+- Il branch di destinazione è letto da GIT\_DEFAULT\_BRANCH (se non impostato, fallback su main).
+- In modalità batch/CI, il push **non** avviene a meno di specificare --push. In interattivo viene sempre richiesta conferma prima di procedere.
+- Vengono pubblicati **solo** i file .md sotto book/ (ignora eventuali file di backup .bak).
+- Dopo il push, l’orchestratore può proporre un cleanup degli artefatti legacy generati (es. repository temporaneo di push).
 
-## 4) Comandi rapidi
+**Esempio – push in batch:**
 
-### Flusso consigliato (interattivo)
+export GITHUB\_TOKEN=ghp\_xxx\
+export GIT\_DEFAULT\_BRANCH=main\
+py src/onboarding\_full.py --slug acme --no-drive --non-interactive --push
 
-```bash
-# 1) Setup cliente
-py src/pre_onboarding.py
+-----
+## <a name="regole-operative-estratto"></a>Regole operative (estratto)
+- **Orchestratori:** gestiscono UX/CLI, prompt e mappatura deterministica delle eccezioni → EXIT\_CODES.
+- **Moduli pipeline:** eseguono azioni tecniche; **no** input() e **no** sys.exit() (non terminano mai il processo).
+- **Logging:** utilizzare sempre logger strutturati (file onboarding.log unico per cliente); niente print(). La redazione dei log sensibili è abilitabile via policy centralizzata.
+- **Sicurezza I/O:** verificare i percorsi con is\_safe\_subpath; usare scritture atomiche; mai includere segreti nei log.
+- **Slug:** validato tramite regex definita in config/config.yaml (viene **messa in cache**, con funzione di clear in caso di modifica runtime).
+- **Alias deprecati:** --skip-drive e --skip-push sono accettati solo per retrocompatibilità (generano un warning) e vengono rimappati internamente a --no-drive e --no-push.
+-----
+## <a name="exit-codes-estratto"></a>Exit codes (estratto)
+- 0 → esecuzione completata con successo
+- 2 → ConfigError (es. variabili richieste mancanti, slug non valido in modalità batch)
+- 21 → DriveDownloadError (errore durante download da Google Drive)
+- 30 → PreviewError (errore nella fase di anteprima Docker)
+- 40 → PushError (errore nella fase di push su GitHub)
+- 41 → ForcePushError (tentativo di push forzato non consentito)
 
-# 2) Onboarding completo (conversione, anteprima, push opzionale, cleanup)
-py src/onboarding_full.py
-```
+La mappatura completa dei codici di uscita è definita nel file pipeline/exceptions.py ed è documentata nella Guida Utente.
 
+-----
+## <a name="tools"></a>Tools
+Gli strumenti ausiliari in src/tools/ sono script **standalone interattivi** (vanno eseguiti manualmente da terminale). Servono per compiti di manutenzione e debug del repository.
 
----
+- **cleanup\_repo.py** – Pulizia sicura degli artefatti locali di uno specifico slug e, se richiesto, eliminazione del repository GitHub corrispondente (tramite CLI gh).\
+  *Uso:*
 
-## Anteprima (HonKit + Docker)
+  py src/tools/cleanup\_repo.py
+- **gen\_dummy\_kb.py** – Genera una KB di test completa con slug fissato dummy. Crea la struttura raw/, book/, config/ usando gli YAML di esempio (config/cartelle\_raw.yaml e config/pdf\_dummy.yaml) e produce PDF fittizi (usa file .txt se la libreria fpdf non è disponibile).\
+  *Uso:*
 
-- L’anteprima è eseguita **in modalità detached** e non blocca il flusso.
-- L’orchestratore arresta **automaticamente** il container alla fine dell’esecuzione.
-- Se Docker non è disponibile, in `--non-interactive` la preview è **auto‑skip**; in modalità interattiva viene chiesto se proseguire senza anteprima (default **NO**).
+  py src/tools/gen\_dummy\_kb.py
+- **refactor\_tool.py** – Utility interattiva per ricerca/sostituzione nel codice. Offre due modalità: **1) Trova** (solo ricerca, elenca file e occorrenze) e **2) Trova & Sostituisci** (richiede conferma prima di applicare modifiche). Crea backup automatici con estensione .bak per ogni file modificato.\
+  *Uso:*
 
-Porta e container:
+  py src/tools/refactor\_tool.py
 
-- Porta di default `4000` (override con `--port 4000`).
-- Nome container `honkit_preview_<slug>`.
+*Tutti i log generati dagli strumenti sono strutturati come quelli della pipeline.* Le azioni di skip o i percorsi non trovati vengono registrati a livello DEBUG (non interrompono l’esecuzione).
 
----
-
-## Push su GitHub (opzionale)
-
-- Eseguito da `src/pipeline/github_utils.py`.
-- Richiede `GITHUB_TOKEN`.
-- Il branch è letto da `GIT_DEFAULT_BRANCH` (fallback `main`).
-- In batch il push non avviene a meno di `--push`; in interattivo viene richiesta conferma.
-- Pubblica solo i file `.md` sotto `book/` e ignora i backup.
-- Dopo il push, l’orchestratore può proporre un cleanup degli artefatti legacy.
-
-Esempio:
-
-```bash
-export GITHUB_TOKEN=ghp_xxx
-export GIT_DEFAULT_BRANCH=main
-py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
-```
-
----
-
-## Regole operative (estratto)
-
-- Orchestratori: UX/CLI, prompt e mapping deterministico eccezioni→EXIT\_CODES.
-- Moduli: azioni tecniche, niente `input()` e niente `sys.exit()`.
-- Logging: logger strutturati (`onboarding.log`), nessun `print()`, redazione log opzionale.
-- Sicurezza I/O: `is_safe_subpath`, scritture atomiche, nessun segreto nei log.
-- Slug: validazione via regex da `config/config.yaml` con cache e funzione di clear.
-- Alias deprecati: `--skip-drive` e `--skip-push` sono mantenuti come avvisi e rimappati a `--no-drive` e `--no-push`.
-
----
-
-## Exit codes (estratto)
-
-- `0` esecuzione completata.
-- `2` `ConfigError` (per esempio variabili mancanti o slug invalido in batch).
-- `21` `DriveDownloadError`.
-- `30` `PreviewError`.
-- `40` `PushError`.
-
-La mappatura completa è nella documentazione utente.
-
----
-
-## Tools
-
-Gli strumenti in `src/tools/` sono **standalone e interattivi** (si eseguono da terminale).
-
-- `cleanup_repo.py` per la pulizia sicura degli artefatti locali di uno slug e, se richiesto, l’eliminazione del repository GitHub convenzionale tramite `gh`.
-
-  Uso:
-
-  ```bash
-  py src/tools/cleanup_repo.py
-  ```
-
-- `gen_dummy_kb.py` per generare una KB di test completa con slug `dummy`, cartelle RAW da `config/cartelle_raw.yaml` e PDF dummy da `config/pdf_dummy.yaml` (fallback `.txt` se `fpdf` non è disponibile).
-
-  Uso:
-
-  ```bash
-  py src/tools/gen_dummy_kb.py
-  ```
-
-- `refactor_tool.py` come utility con due modalità: Trova e Trova & Sostituisci, con anteprima e backup `.bak`.
-
-  Uso:
-
-  ```bash
-  py src/tools/refactor_tool.py
-  ```
-
-I log degli strumenti sono strutturati; i path assenti e gli skip non critici sono a livello `DEBUG`.
-
----
-
-## Troubleshooting
-
-- Docker non installato: la preview è saltata in batch; in interattivo puoi scegliere se proseguire senza anteprima.
-- Token GitHub mancante: il push fallisce; imposta `GITHUB_TOKEN` o usa `--no-push`.
-- Slug invalido: in batch errore; in interattivo viene richiesto di correggerlo.
-- Drive non configurato: in `pre_onboarding` con Drive attivo viene sollevato `ConfigError`.
-
----
-
-## Licenza
-Questo progetto è rilasciato sotto i termini della GNU General Public License v3.0 (GPL-3.0).  
-Per maggiori dettagli consulta il file [LICENSE](LICENSE.md).
+-----
+## <a name="troubleshooting"></a>Troubleshooting
+- **Docker non installato:** in modalità batch la preview viene saltata automaticamente; in interattivo potrai scegliere se proseguire senza anteprima.
+- **Token GitHub mancante:** il push fallisce con errore; assicurati di impostare GITHUB\_TOKEN oppure esegui con --no-push per evitare il tentativo.
+- **Slug non valido:** in modalità batch l’esecuzione termina con errore (exit code 2); in interattivo viene richiesto di inserirne uno valido finché non soddisfa la regex.
+- **Drive non configurato:** se esegui pre\_onboarding.py senza --dry-run ma non hai impostato DRIVE\_ID/DRIVE\_PARENT\_FOLDER\_ID e credenziali, otterrai un ConfigError. Usa --dry-run o configura le variabili richieste.
+-----
+## <a name="licenza"></a>Licenza
+Questo progetto è distribuito sotto licenza **GNU GPL v3.0**. Per dettagli, consulta il file [LICENSE](LICENSE.md).
 

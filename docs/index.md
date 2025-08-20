@@ -1,49 +1,35 @@
-# Documentazione Timmy-KB – Versione 1.0.4 (Stable)
-
+## <a name="docsindex.md"></a>docs/index.md
+# <a name="xe09dcdb8fbc9c1f9794ebbaed8d0b414460c30b"></a>Documentazione Timmy-KB – Versione 1.0.5 (Stable)
 Benvenuto nella documentazione ufficiale di **Timmy-KB**, organizzata per fornire una panoramica chiara e navigabile delle funzionalità, dell’architettura e delle regole di sviluppo del progetto.
 
----
-
-## 📚 Indice dei documenti
-
-### 1. Architettura e Struttura Tecnica
-- [Architettura tecnica](architecture.md) → Panoramica del sistema, flusso degli orchestratori, funzioni chiave e fonti dati.
-
-### 2. Sviluppo e Standard
-- [Guida sviluppatore](developer_guide.md) → Struttura del repository, principi architetturali, flussi di lavoro.
+-----
+## <a name="indice-dei-documenti"></a>📚 Indice dei documenti
+### <a name="architettura-e-struttura-tecnica"></a>1. Architettura e Struttura Tecnica
+- [Architettura tecnica](architecture.md) → Panoramica del sistema, flusso degli orchestratori, funzioni chiave e struttura dei dati.
+### <a name="sviluppo-e-standard"></a>2. Sviluppo e Standard
+- [Guida sviluppatore](developer_guide.md) → Struttura del repository, principi architetturali e flussi di lavoro.
 - [Regole di codifica](coding_rule.md) → Convenzioni, standard di scrittura del codice, sicurezza e principi NeXT.
-
-### 3. Utilizzo e Operatività
-- [Guida utente](user_guide.md) → Installazione, esecuzione pipeline (pre-onboarding e onboarding full), output e troubleshooting.
-
-### 4. Policy e Governance Documentale
-- [Policy di push](policy_push.md) → Quando pubblicare, quando usare `--no-push`, uso consapevole di `--force` e coerenza con `GIT_DEFAULT_BRANCH`.
-- [Versioning](versioning_policy.md) → Regole di SemVer leggero, tag di rilascio e aggiornamento contestuale del CHANGELOG.
-
----
-
-## 🔍 Come usare questa documentazione
-1. **Per iniziare** → Leggi la [Guida utente](user_guide.md) per capire come installare e avviare Timmy-KB.
-2. **Per contribuire** → Consulta la [Guida sviluppatore](developer_guide.md) e le [Regole di codifica](coding_rule.md) prima di aprire una Pull Request.
-3. **Per comprendere il funzionamento interno** → Approfondisci l’[Architettura tecnica](architecture.md).
-4. **Per pubblicare correttamente** → Verifica [Policy di push](policy_push.md) e [Versioning](versioning_policy.md).
-
----
-
-## 📅 Versione attuale
-- **Versione**: 1.0.4 Stable  
-- **Data rilascio**: 18 Agosto 2025  
-- **Stato**: Documentazione aggiornata e allineata al CHANGELOG 1.0.4.
-
-### Note su questa versione
-- **Logging strutturato unico**: un solo file per cliente con supporto opzionale a rotazione e degradazione sicura a console-only.  
-- **Drive utils patchati**: BFS ricorsivo, retry con tetto temporale, idempotenza MD5/size e redazione log opzionale.  
-- **Preview Docker migliorata**: auto-skip in non-interattivo, prompt in interattivo; supporto redazione log.  
-- **Slug CLI “soft”**: supporto allo slug posizionale e a `--slug`; in interattivo, se assente, viene richiesto a prompt.  
-- **Release di consolidamento**: nessun cambio di flusso, retro-compatibile con 1.0.3.  
-
----
-
-## 📌 Note finali
-- Tutti i file `.md` nella cartella `docs/` sono mantenuti aggiornati in parallelo all’evoluzione del codice.
-- Le modifiche al codice che impattano la documentazione devono essere accompagnate da un aggiornamento coerente dei file.
+### <a name="utilizzo-e-operatività"></a>3. Utilizzo e Operatività
+- [Guida utente](user_guide.md) → Installazione, esecuzione pipeline (pre-onboarding e onboarding completo), output e troubleshooting.
+### <a name="policy-e-governance-documentale"></a>4. Policy e Governance Documentale
+- [Policy di push](policy_push.md) → Quando pubblicare, quando usare --no-push, uso consapevole di --force e coerenza con GIT\_DEFAULT\_BRANCH.
+- [Versioning](versioning_policy.md) → Regole di versionamento (SemVer leggero), tag di rilascio e aggiornamento contestuale del CHANGELOG.
+-----
+## <a name="come-usare-questa-documentazione"></a>🔍 Come usare questa documentazione
+1. **Per iniziare** – leggi la [Guida utente](user_guide.md) per capire come installare e avviare Timmy-KB.
+1. **Per contribuire** – consulta la [Guida sviluppatore](developer_guide.md) e le [Regole di codifica](coding_rule.md) prima di aprire una Pull Request.
+1. **Per comprendere il funzionamento interno** – approfondisci l’[Architettura tecnica](architecture.md).
+1. **Per pubblicare correttamente** – verifica la [Policy di push](policy_push.md) e la [Versioning](versioning_policy.md) prima di effettuare rilasci o push forzati.
+-----
+## <a name="versione-attuale"></a>📅 Versione attuale
+- **Versione:** 1.0.5 Stable
+- **Data rilascio:** 19 Agosto 2025
+- **Stato:** Documentazione aggiornata e allineata al CHANGELOG **1.0.5**.
+### <a name="note-su-questa-versione"></a>Note su questa versione
+- **Strumenti CLI potenziati:** refactor\_tool.py supporta la modalità “Trova” (solo ricerca di occorrenze, senza modifica automatica); cleanup\_repo.py è ora sempre interattivo, con opzioni avanzate (inclusa eliminazione del repo remoto via gh) e conferma finale; gen\_dummy\_kb.py allineato al comportamento del repository (slug fisso dummy, struttura generata da YAML, fallback a .txt se fpdf non disponibile).
+- **Script obsoleti rimossi:** eliminato validate\_structure.py (funzionalità integrate altrove).
+- **Pipeline invariata:** nessuna modifica ai flussi di pre-onboarding/onboarding rispetto alla 1.0.4 (patch di mantenimento completamente retro-compatibile).
+-----
+## <a name="note-finali"></a>📌 Note finali
+- Tutti i file .md nella cartella docs/ vengono mantenuti aggiornati in parallelo all’evoluzione del codice.
+- Ogni modifica al codice che impatta il comportamento **deve** essere accompagnata da un aggiornamento coerente della documentazione (in docs/ e nel README.md).
