@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/github_utils.py
 """
 Utility per interagire con GitHub:
@@ -13,6 +14,8 @@ Note architetturali (v1.1+):
   conferma push sono responsabilità degli orchestratori (CLI/UX).
 - Push **incrementale** di default (no --force). In caso di rifiuto non-fast-forward
   effettuiamo un `pull --rebase` e ritentiamo una volta. Se emergono conflitti, alziamo errore.
+- Fase 2: uso di `proc_utils.run_cmd` con timeout/retry e log strutturati.
+  Gli errori di `git` sono mappati su `PushError` con messaggi compatti (stderr tail).
 
 Sicurezza:
 - Path-safety: convalida dei percorsi con `is_safe_subpath`.
@@ -24,7 +27,6 @@ from __future__ import annotations
 import base64
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -33,9 +35,10 @@ from github import Github
 from github.GithubException import GithubException
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, ForcePushError  # ✅ micro-fix: import ForcePushError
+from pipeline.exceptions import PipelineError, ForcePushError, PushError
 from pipeline.path_utils import is_safe_subpath  # sicurezza path
 from pipeline.env_utils import redact_secrets, get_env_var  # 🔐 redazione + env resolver
+from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
 logger = get_structured_logger("pipeline.github_utils")
 
@@ -61,7 +64,7 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
 
     Ordine di priorità:
       1) `context.env["GIT_DEFAULT_BRANCH"]` o `context.env["GITHUB_BRANCH"]` (se presenti)
-      2) variabili di processo risolte con env_utils.get_env_var
+      2) variabili d'ambiente tramite env_utils.get_env_var
       3) fallback sicuro: `"main"`
     """
     # 1) variabili nel contesto (preferite)
@@ -81,35 +84,25 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
     return "main"
 
 
-def _run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None) -> None:
-    """Helper per subprocess.run con check=True e logging essenziale."""
-    subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True, env=env)
+# ----------------------------
+# Wrappers git (proc_utils)
+# ----------------------------
+
+def _run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, op: str = "git") -> None:
+    """Helper compatibile che delega a run_cmd (capture disattivato)."""
+    run_cmd(cmd, cwd=str(cwd) if cwd else None, env=env, capture=True, logger=logger, op=op)
 
 
 def _git_status_porcelain(cwd: Path, env: dict | None = None) -> str:
     """Ritorna l'output di `git status --porcelain`."""
-    proc = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=str(cwd),
-        check=True,
-        env=env,
-        text=True,
-        capture_output=True,
-    )
-    return proc.stdout or ""
+    cp = run_cmd(["git", "status", "--porcelain"], cwd=str(cwd), env=env, capture=True, logger=logger, op="git status")
+    return cp.stdout or ""
 
 
 def _git_rev_parse(ref: str, cwd: Path, env: dict | None = None) -> str:
     """Ritorna lo SHA (full) per un ref (es. HEAD, origin/main)."""
-    proc = subprocess.run(
-        ["git", "rev-parse", ref],
-        cwd=str(cwd),
-        check=True,
-        env=env,
-        text=True,
-        capture_output=True,
-    )
-    return (proc.stdout or "").strip()
+    cp = run_cmd(["git", "rev-parse", ref], cwd=str(cwd), env=env, capture=True, logger=logger, op="git rev-parse")
+    return (cp.stdout or "").strip()
 
 
 def _mask_ack(tag: str) -> str:
@@ -126,7 +119,7 @@ def push_output_to_github(
     *,
     github_token: str,
     do_push: bool = True,
-    # ✅ nuovi parametri per governance del force (no I/O qui)
+    # governance del force (no I/O qui)
     force_push: bool = False,
     force_ack: str | None = None,
     redact_logs: bool = False,
@@ -237,7 +230,6 @@ def push_output_to_github(
     remote_url = repo.clone_url  # https://github.com/<org>/<repo>.git
 
     # Cartella temporanea **dentro** output/timmy-kb-<slug>
-    # Uso mkdtemp con dir=base_dir per garantire path interno controllato.
     tmp_dir = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
     if not is_safe_subpath(tmp_dir, base_dir):
         # Ultra-cautela: non dovrebbe mai accadere
@@ -255,32 +247,25 @@ def push_output_to_github(
     try:
         # Clone e checkout/creazione branch
         logger.info("⬇️  Clonazione repo remoto in working dir temporanea", extra={"slug": context.slug, "file_path": tmp_dir})
-        _run(["git", "clone", remote_url, str(tmp_dir)], env=env)
+        _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
-        exists_remote_branch = False
+        exists_remote_branch = True
         try:
-            subprocess.run(
-                ["git", "rev-parse", f"origin/{default_branch}"],
-                cwd=str(tmp_dir),
-                check=True,
-                env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            run_cmd(["git", "rev-parse", f"origin/{default_branch}"], cwd=str(tmp_dir), env=env, capture=True, logger=logger, op="git rev-parse")
             exists_remote_branch = True
-        except subprocess.CalledProcessError:
+        except CmdError:
             exists_remote_branch = False
 
         if exists_remote_branch:
-            _run(["git", "checkout", "-B", default_branch, f"origin/{default_branch}"], cwd=tmp_dir, env=env)
+            _run(["git", "checkout", "-B", default_branch, f"origin/{default_branch}"], cwd=tmp_dir, env=env, op="git checkout")
         else:
-            _run(["git", "checkout", "-B", default_branch], cwd=tmp_dir, env=env)
+            _run(["git", "checkout", "-B", default_branch], cwd=tmp_dir, env=env, op="git checkout")
 
         # Sync iniziale
         if exists_remote_branch:
             logger.info("↕️  Pull --rebase per sincronizzazione iniziale", extra={"slug": context.slug, "branch": default_branch})
-            _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env)
+            _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
 
         # Copia contenuti .md da book/ nella working dir clonata
         logger.info("🧩 Preparazione contenuti da book/", extra={"slug": context.slug, "file_path": str(book_dir)})
@@ -290,7 +275,7 @@ def push_output_to_github(
             shutil.copy2(f, dst)
 
         # Stage e commit se necessario
-        _run(["git", "add", "-A"], cwd=tmp_dir, env=env)
+        _run(["git", "add", "-A"], cwd=tmp_dir, env=env, op="git add")
         status = _git_status_porcelain(tmp_dir, env=env)
         if not status.strip():
             logger.info("ℹ️  Nessuna modifica da pubblicare (working dir identica)", extra={"slug": context.slug})
@@ -314,18 +299,19 @@ def push_output_to_github(
             ],
             cwd=tmp_dir,
             env=env,
+            op="git commit",
         )
 
         # Ramo di push: incrementale (default) o force governato
         if force_push:
             if not force_ack:
-                raise ForcePushError(  # ✅ micro-fix: usa eccezione specifica
+                raise ForcePushError(
                     "Force push richiesto senza ACK. Contratto violato: serve force_ack valorizzato.",
                     slug=context.slug,
                 )
 
             # Fetch e calcolo SHA locali/remoti per il lease
-            _run(["git", "fetch", "origin", default_branch], cwd=tmp_dir, env=env)
+            _run(["git", "fetch", "origin", default_branch], cwd=tmp_dir, env=env, op="git fetch")
             remote_sha = _git_rev_parse(f"origin/{default_branch}", cwd=tmp_dir, env=env)
             local_sha = _git_rev_parse("HEAD", cwd=tmp_dir, env=env)
 
@@ -347,25 +333,26 @@ def push_output_to_github(
                 ["git", "push", "--force-with-lease=" + lease_ref, "origin", default_branch],
                 cwd=tmp_dir,
                 env=env,
+                op="git push --force-with-lease",
             )
         else:
             # Push (no force) + retry con rebase se rifiutato
             def _attempt_push() -> None:
-                _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env)
+                _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
             try:
                 logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
                 _attempt_push()
-            except subprocess.CalledProcessError as e1:
+            except CmdError as e1:
                 # Ritenta una volta con rebase (conflitti -> fallisce)
                 logger.warning(
                     "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...",
                     extra={"slug": context.slug, "branch": default_branch},
                 )
                 try:
-                    _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env)
+                    _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
                     _attempt_push()
-                except subprocess.CalledProcessError as e2:
+                except CmdError as e2:
                     raw = (
                         "Push fallito dopo retry con rebase. "
                         "Possibili conflitti tra contenuto locale e remoto. "
@@ -373,7 +360,7 @@ def push_output_to_github(
                         "oppure — consapevolmente — abilitare il force in orchestratore."
                     )
                     safe = redact_secrets(raw) if redact_logs else raw
-                    raise PipelineError(safe, slug=context.slug) from e2
+                    raise PushError(safe, slug=context.slug) from e2
 
         logger.info(
             "✅ Push completato su %s (%s)",
@@ -381,10 +368,13 @@ def push_output_to_github(
             default_branch,
             extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
         )
-    except subprocess.CalledProcessError as e:
-        raw = f"Errore durante le operazioni Git: {e}"
+    except CmdError as e:
+        # Fallimenti generici di git → PushError con messaggio compattato
+        tail = (e.stderr or e.stdout or "").strip()
+        tail = tail[-2000:] if tail else ""
+        raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) → {tail}"
         safe = redact_secrets(raw) if redact_logs else raw
-        raise PipelineError(safe, slug=context.slug)
+        raise PushError(safe, slug=context.slug) from e
     finally:
         # Cleanup working dir temporanea
         try:

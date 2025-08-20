@@ -2,6 +2,23 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.0.] — 2025-08-20 · Operational hardening (Fase 2)
+
+### Added
+- **proc_utils.py**: wrapper unico `run_cmd(...)` con **timeout**, **retry/backoff**, cattura `stdout/stderr`, logging strutturato e `CmdError`. Aggiunto `wait_for_port(...)` per readiness TCP.
+- **Env knobs (opzionali)**: `PROC_CMD_TIMEOUT`, `DOCKER_CMD_TIMEOUT`, `GIT_CMD_TIMEOUT`, `PREVIEW_READY_TIMEOUT` (fallback sicuri se assenti).
+
+### Changed
+- **gitbook_preview.py**: rifattorizzato per usare `proc_utils.run_cmd`; funzioni separate (`build_static_site`, `run_container_detached`, `wait_until_ready`, `stop_container_safely`), scritture atomiche dei file (`safe_write_file`), **nessun prompt**, modalità **detached** invariata, readiness opzionale via `PREVIEW_READY_TIMEOUT`.
+- **github_utils.py**: migrazione a `proc_utils.run_cmd` con mapping errori su **`PushError`**; push **incrementale** con **retry** su `pull --rebase`. Force-push **governato**: `--force-with-lease` + trailer `Force-Ack:` (ACK mascherato in log).
+
+### Docs
+- Aggiornata `.env` (sample) con i nuovi knob di Fase 2 e note su readiness preview.
+- Note per *Developer Guide*: uso di `run_cmd` al posto di `subprocess.run` nei moduli.
+
+### Compatibility
+- **Nessun breaking change**: orchestratori e CLI invariati; API pubbliche dei moduli stabili.
+
 ## [Unreleased]
 
 ### Added
