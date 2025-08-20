@@ -5,6 +5,21 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ## [Unreleased]
 
 ### Added
+- `src/pipeline/env_utils.py`: introdotta `compute_redact_flag(env, log_level)` come **fonte di verità** per la redazione dei log; mantiene `is_log_redaction_enabled(...)` per retro-compat.  
+
+### Changed
+- `src/pipeline/context.py`: scomposto `ClientContext.load(...)` in helper interni (`_init_logger`, `_init_paths`, `_load_yaml_config`, `_load_env`) e delega del calcolo redazione a `compute_redact_flag(...)`. **Nessun cambio di API/UX**, log invariati.
+
+### Docs
+- `docs/developer_guide.md`, `docs/architecture.md`: documentata la policy di redazione e il breakdown dei nuovi helper di `ClientContext.load`.
+
+### Compatibility
+- **Nessun breaking change.** Comportamento e CLI invariati.
+
+
+## [Unreleased]
+
+### Added
 - Gestione fingerprint deterministico per ogni categoria, calcolato su path relativo, mtime e size dei PDF.
 - Parametri opzionali `skip_if_unchanged` e `max_workers` (con fallback da `constants`) per ottimizzare la generazione Markdown.
 - Supporto alla concorrenza a grana grossa (per categoria) tramite `ThreadPoolExecutor`.

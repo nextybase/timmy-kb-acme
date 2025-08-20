@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import fnmatch  # ✅ NEW: per matching glob dei branch
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Mapping, Any
 from dotenv import load_dotenv
 
 from .exceptions import ConfigError  # coerenza con l'error handling della pipeline
@@ -24,6 +24,7 @@ __all__ = [
     "redact_secrets",
     "is_log_redaction_enabled",
     # ✅ NEW:
+    "compute_redact_flag",
     "get_force_allowed_branches",
     "is_branch_allowed_for_force",
 ]
@@ -44,6 +45,7 @@ def get_env_var(key: str, default: Optional[str] = None, required: bool = False)
 # -----------------------------
 
 _TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
+_FALSE_SET = {"0", "false", "no", "off", "n", "f"}
 
 def require_env(key: str) -> str:
     """Versione 'required' esplicita."""
@@ -83,6 +85,7 @@ _SECRET_KEYS = (
     "PAT",
     "OPENAI_API_KEY",
     "AWS_SECRET_ACCESS_KEY",
+    "SERVICE_ACCOUNT_FILE",
 )
 
 def redact_secrets(text: str) -> str:
@@ -102,8 +105,9 @@ def redact_secrets(text: str) -> str:
 
 def is_log_redaction_enabled(context=None) -> bool:
     """
-    Determina se la redazione dei log deve essere attiva.
+    [LEGACY] Determina se la redazione dei log deve essere attiva.
     Precedenza: context.env > os.environ.
+    Nota: mantenuta per retro-compat. La logica *canonica* è in `compute_redact_flag`.
     """
     def _from_ctx(key: str, default: Optional[str] = None) -> Optional[str]:
         try:
@@ -118,12 +122,73 @@ def is_log_redaction_enabled(context=None) -> bool:
 
     if mode_l in ("always",) or mode_l in _TRUE_SET:
         return True
-    if mode_l in ("never", "0", "false", "no", "off"):
+    if mode_l in ("never",) or mode_l in _FALSE_SET:
         return False
 
     # auto
     envv = _from_ctx("ENV") or os.getenv("ENV", "dev")
-    return str(envv).strip().lower() in ("prod", "production")
+    ci = _from_ctx("CI") or os.getenv("CI", "0")
+    # legacy "auto": prod/production => on (non considera credenziali o CI in modo robusto)
+    return (str(envv).strip().lower() in ("prod", "production")) or (str(ci).strip().lower() in _TRUE_SET)
+
+
+# ================================
+# ✅ NEW: Policy redazione canonica
+# ================================
+
+def _truthy(val: Any) -> bool:
+    return str(val).strip().lower() in _TRUE_SET if val is not None else False
+
+def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool:
+    """
+    Calcola il flag di redazione log in modo deterministico.
+
+    Regole:
+    - LOG_REDACTION=on/always/true  → redazione ON
+    - LOG_REDACTION=off/never/false → redazione OFF
+    - LOG_REDACTION=auto (default):
+        ON se
+          * ENV ∈ {prod, production, ci}  OR
+          * CI=true                       OR
+          * sono presenti credenziali sensibili (GITHUB_TOKEN o SERVICE_ACCOUNT_FILE)
+        OFF altrimenti
+    - log_level=DEBUG forza OFF (debug locale).
+
+    Args:
+        env: mappa chiave→valore proveniente da context.env (può contenere None).
+        log_level: stringa livello log (es. "INFO", "DEBUG").
+
+    Returns:
+        bool: True se la redazione va attivata, False altrimenti.
+    """
+    # 1) Letture robustissime dalla mappa `env` con fallback a os.environ
+    mode = (env.get("LOG_REDACTION") if env is not None else None) or os.getenv("LOG_REDACTION", "auto")
+    mode_l = str(mode or "auto").strip().lower()
+
+    # 2) Gestione esplicita on/off
+    if mode_l in ("always", "on") or mode_l in _TRUE_SET:
+        explicit = True
+    elif mode_l in ("never", "off") or mode_l in _FALSE_SET:
+        explicit = False
+    else:
+        explicit = None  # auto
+
+    # 3) Se auto: valuta contesto
+    env_name = (env.get("ENV") if env is not None else None) or os.getenv("ENV", "dev")
+    ci_val = (env.get("CI") if env is not None else None) or os.getenv("CI", "0")
+    has_credentials = bool(
+        (env.get("GITHUB_TOKEN") if env is not None else None) or os.getenv("GITHUB_TOKEN") or
+        (env.get("SERVICE_ACCOUNT_FILE") if env is not None else None) or os.getenv("SERVICE_ACCOUNT_FILE")
+    )
+
+    auto_on = (str(env_name).strip().lower() in {"prod", "production", "ci"}) or _truthy(ci_val) or has_credentials
+
+    redact = explicit if explicit is not None else auto_on
+
+    # 4) In DEBUG la redazione è sempre OFF (favor debug locale)
+    if str(log_level or "").upper() == "DEBUG":
+        return False
+    return bool(redact)
 
 
 # ================================

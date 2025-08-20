@@ -3,22 +3,57 @@
 """
 Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
 
-Obiettivo:
-- Mantenere **invariata** l'API pubblica storica (`pipeline.drive_utils.*`)
-  delegando l’implementazione ai moduli interni suddivisi:
+Obiettivo
+---------
+- Mantenere **invariata** l'API pubblica storica (`pipeline.drive_utils.*`) delegando
+  l’implementazione ai moduli interni suddivisi:
   - `pipeline.drive.client`   → client e primitive di lettura/elenco
   - `pipeline.drive.upload`   → creazione/albero/upload e struttura locale
   - `pipeline.drive.download` → download dei contenuti (PDF, ecc.)
 
-Nota:
-- Questo file non contiene logica: effettua solo import **statici** e re-export.
+Note
+----
+- Questo file non contiene logica di business: effettua solo import **statici** e re-export.
   In questo modo evitiamo import “lazy” a runtime e ogni rischio di cicli/race.
+- **Compat test**: riesporta `MIME_FOLDER`, `MIME_PDF` e `MediaIoBaseDownload` per
+  compatibilità con i test che monkeypatchano questi simboli a livello di facciata.
 - Gli orchestratori e il resto del codice continuano a importare da qui.
 """
 
 from __future__ import annotations
 
-# ----------------------------- Import espliciti (statici) -------------------------
+# ---------------------------------- Costanti MIME ----------------------------------
+# Alcuni test si aspettano che le costanti MIME siano accessibili come:
+#   DU.MIME_FOLDER  /  DU.MIME_PDF
+try:
+    from .constants import GDRIVE_FOLDER_MIME as MIME_FOLDER, PDF_MIME_TYPE as MIME_PDF  # type: ignore
+except Exception:  # pragma: no cover - fallback sicuro per ambienti minimi
+    # Fallback conservativo: valori standard noti
+    MIME_FOLDER = "application/vnd.google-apps.folder"
+    MIME_PDF = "application/pdf"
+
+# ------------------------ Classe MediaIoBaseDownload (compat) ----------------------
+# I test patchano DU.MediaIoBaseDownload; la riesportiamo dal pacchetto googleapiclient
+# se disponibile, altrimenti forniamo un placeholder (sostituibile via monkeypatch).
+try:  # pragma: no cover - dipendenza opzionale in ambienti CI minimali
+    from googleapiclient.http import MediaIoBaseDownload as _GAPI_MediaIoBaseDownload  # type: ignore
+    MediaIoBaseDownload = _GAPI_MediaIoBaseDownload  # re-export
+except Exception:  # pragma: no cover
+    class MediaIoBaseDownload:  # type: ignore
+        """Placeholder per `googleapiclient.http.MediaIoBaseDownload`.
+
+        Viene definito solo se la libreria `google-api-python-client` non è presente.
+        È pensato per essere rimpiazzato nei test con `monkeypatch.setattr(...)`.
+        Qualsiasi istanziazione diretta solleva un ImportError esplicito.
+        """
+
+        def __init__(self, *args, **kwargs) -> None:
+            raise ImportError(
+                "googleapiclient non installato: `MediaIoBaseDownload` è un placeholder. "
+                "Installa `google-api-python-client` oppure monkeypatcha questa classe nei test."
+            )
+
+# ----------------------------- Import espliciti (statici) --------------------------
 
 # Client/lettura (Drive v3)
 try:
@@ -58,9 +93,13 @@ except Exception:
             "Aggiungi 'src/pipeline/drive/download.py' oppure aggiorna l'installazione del pacchetto."
         )
 
-# ----------------------------- Superficie pubblica --------------------------------
+# ----------------------------- Superficie pubblica ---------------------------------
 
 __all__ = [
+    # costanti/compat test
+    "MIME_FOLDER",
+    "MIME_PDF",
+    "MediaIoBaseDownload",
     # client/lettura
     "get_drive_service",
     "list_drive_files",

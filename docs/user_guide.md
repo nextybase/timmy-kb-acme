@@ -1,8 +1,8 @@
-# User Guide — Timmy‑KB (v1.0.5 Stable)
+# User Guide — Timmy‑KB (v1.0.4 Stable)
 
-Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire dai PDF del cliente, con anteprima HonKit (Docker) e, se vuoi, push su GitHub.
+Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con anteprima HonKit (Docker) e, se vuoi, push su GitHub.
 
-> Stato: **1.0.5 Stable** (19/08/2025). La guida è allineata alla documentazione e al comportamento reale degli orchestratori (pre_onboarding/onboarding_full).
+> Nota: i micro‑fix introdotti (preview *detached* con **stop automatico** in uscita, logging centralizzato, cache regex slug) sono già riflessi qui. Il bump versione verrà finalizzato nel `CHANGELOG.md` quando chiudiamo il giro.
 
 ---
 
@@ -21,7 +21,7 @@ Imposta le variabili (via `.env` o ambiente di sistema):
 - `DRIVE_ID` (o `DRIVE_PARENT_FOLDER_ID`) → radice/parent dello spazio Drive
 - `GITHUB_TOKEN` → necessario solo se vuoi pubblicare su GitHub
 - `GIT_DEFAULT_BRANCH` → branch di default per il push (fallback `main`)
-- `LOG_REDACTION` → politica redazione log (`auto` | `on` | `off`)
+- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
 
 ---
 
@@ -35,13 +35,13 @@ output/timmy-kb-<slug>/
   └─ logs/       # onboarding.log (logger unico per cliente)
 ```
 
-> Lo **slug** deve rispettare la regex definita in `config/config.yaml`. In interattivo, se non valido, ti verrà chiesto di reinserirlo.
+> Lo **slug** deve rispettare la regex definita in `config/config.yaml`. In interattivo, se non valido ti verrà chiesto di correggerlo.
 
 ---
 
 ## 3) Flussi operativi
 
-### A) Pre‑onboarding (setup) — *comportamento reale*
+### A) Pre‑onboarding (setup) — *flusso interattivo di base*
 
 ```bash
 py src/pre_onboarding.py
@@ -49,14 +49,14 @@ py src/pre_onboarding.py
 
 **Sequenza tipica**
 
-1. **Slug cliente** → richiesto lo *slug* (es. `acme`). Se non valido, viene spiegato il motivo e richiesto un nuovo valore.
-2. **Creazione struttura locale** → la pipeline **crea direttamente** le cartelle `raw/`, `book/`, `config/`, `logs/` e il file `config.yaml` (con backup `.bak` se già presente). **Nessun prompt di conferma** in questa fase.
+1. **Slug cliente** → richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega e chiede nuovo valore.
+2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml` (con backup `.bak` se già presente).
 3. **Google Drive (opzionale)**  
-   - Se le variabili sono **configurate**, la pipeline **procede automaticamente** a creare/aggiornare la struttura su Drive e a caricare `config.yaml` nella cartella cliente.  
-   - Se **mancano** le credenziali Drive e **non** stai usando `--dry-run`, l’esecuzione termina con **ConfigError**. Per predisporre solo l’ambiente locale senza toccare Drive, usa `--dry-run`.
+   - Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.  
+   - Se mancano credenziali: chiede se proseguire senza Drive.  
 4. **Riepilogo finale** → mostra azioni eseguite e dove trovare i file.
 
-> In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente (locale e, se configurato, remoto).
+> In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente.
 
 ---
 
@@ -69,7 +69,7 @@ py src/onboarding_full.py
 **Sequenza tipica**
 
 1. **Slug cliente** → richiesto e validato.  
-2. **Conversione PDF → Markdown** → avvio automatico con log; al termine genera `SUMMARY.md` e `README.md` in `book/`.  
+2. **Conversione PDF → Markdown** → avvio automatico con log; genera `SUMMARY.md` e `README.md` in `book/`.  
 3. **Anteprima HonKit (Docker)**  
    - Se Docker disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached*, non blocca la pipeline e viene fermata automaticamente.  
    - Se Docker assente: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua.  
@@ -119,36 +119,32 @@ py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
 ## 5) Log ed Exit Codes
 
 - Log centralizzati in `output/timmy-kb-<slug>/logs/onboarding.log`.
-- **Nessun `print()`** nei moduli; prompt solo negli orchestratori.
-- Redazione log controllata da `LOG_REDACTION` e dal contesto (`is_log_redaction_enabled`).
+- Nessun `print()` nei moduli; prompt solo negli orchestratori.
 
 **Exit codes (estratto)**
 
 - `0`  → ok  
 - `2`  → `ConfigError` (variabili mancanti, slug invalido in batch)  
-- `21` → `DriveDownloadError`  
 - `30` → `PreviewError`  
 - `40` → `PushError`  
-- `41` → `ForcePushError`  
 
 ---
 
 ## 6) Troubleshooting
 
-- **Docker non installato** → interattivo: puoi scegliere se proseguire senza anteprima; batch: viene saltata automaticamente.  
+- **Docker non installato** → interattivo: domanda se proseguire senza anteprima.  
 - **Anteprima non raggiungibile** → verifica porta `4000`, forzare stop con `docker rm -f honkit_preview_<slug>`.  
 - **Push fallito** → controlla `GITHUB_TOKEN` e `GIT_DEFAULT_BRANCH`.  
-- **Slug non valido** → richiesto reinserimento in interattivo; in batch genera `ConfigError` (exit `2`).  
-- **Drive non configurato** → in `pre_onboarding.py` senza `--dry-run` produce `ConfigError`. Usa `--dry-run` o configura le variabili richieste.
+- **Slug non valido** → richiesto reinserimento.  
 
 ---
 
 ## 7) Policy operative (estratto)
 
 - **Orchestratori** → UX/CLI, prompt e mapping deterministico errori.  
-- **Moduli** → azioni tecniche, nessun prompt/exit.  
+- **Moduli** → azioni tecniche, no prompt.  
 - **Sicurezza I/O** → `is_safe_subpath`, scritture atomiche, no segreti nei log.  
-- **Coerenza doc/codice** → ogni modifica richiede aggiornamento della documentazione.
+- **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.  
 
 ---
 
@@ -173,10 +169,10 @@ Sì: `--port 4000`.
 La pipeline usa redazione log centralizzata:
 
 - Modalità (`LOG_REDACTION`):  
-  - `auto` (default) → attiva in contesti CI/prod o in presenza di credenziali sensibili.  
+  - `auto` (default) → attiva se `ENV` ∈ {prod, production, ci} o `CI=true`, o se presenti credenziali sensibili.  
   - `on` → sempre attiva.  
   - `off` → disattiva.  
-- In `DEBUG`, la redazione è disattivata.  
-- Dati sensibili (token, path credenziali) vengono mascherati automaticamente.
+- In debug (`log_level=DEBUG`), redazione sempre disattiva.  
+- Dati sensibili (token, path credenziali) mascherati.  
 
-Il flag effettivo `redact_logs` viene calcolato in `ClientContext` e propagato agli orchestratori e ai moduli sensibili.
+Il flag `redact_logs` è calcolato in `ClientContext` e riflesso nei log strutturati.

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import yaml
 import shutil
 import logging  # per tipizzare/gestire il logger
 
 from .exceptions import ConfigError, InvalidSlug
-from .env_utils import get_env_var, get_bool
+from .env_utils import get_env_var, get_bool, compute_redact_flag
 from .path_utils import validate_slug as _validate_slug
 
 
@@ -41,14 +41,12 @@ class ClientContext:
     - Configurazione YAML caricata (in `settings`) e path di riferimento (`config_path`, `mapping_path`);
     - Variabili d’ambiente risolte da `.env`/processo (`env`);
     - Flag runtime e strutture di tracking (`error_list`, `warning_list`, `step_status`);
-    - Logger strutturato **iniettato** e riutilizzato (niente ricreazioni ad ogni chiamata).
+    - Logger strutturato **iniettato** e riutilizzato (niente print).
 
     Nota di architettura:
     - Il modulo **non** interagisce con l’utente. Eventuali input/loop sono responsabilità degli orchestratori.
-    - La **policy di redazione log** è centralizzata qui: campo `redact_logs` calcolato
-      in base a variabili env e log_level.
-    - (NEW, non-breaking) `stage`: etichetta opzionale per la fase corrente (es. "scan_raw", "build_md"),
-      utile per correlare i log insieme a `run_id`.
+    - La **policy di redazione log** è centralizzata e calcolata via `compute_redact_flag(...)` in `env_utils.py`.
+    - (NEW, non-breaking) `stage`: etichetta opzionale per la fase corrente (es. "scan_raw", "build_md").
     """
 
     # Identità cliente
@@ -93,6 +91,8 @@ class ClientContext:
     # Toggle redazione log (calcolato in load())
     redact_logs: bool = False
 
+    # =============================== Caricamento/inizializzazione ===============================
+
     @classmethod
     def load(
         cls,
@@ -105,104 +105,40 @@ class ClientContext:
         stage: Optional[str] = None,
         **kwargs: Any,
     ) -> "ClientContext":
-        """Carica (or inizializza) il contesto cliente e valida la configurazione.
+        """Carica (o inizializza) il contesto cliente e valida la configurazione.
 
         Comportamento:
         - Se la struttura cliente non esiste, viene creata e viene copiato un `config.yaml` di template.
         - Raccoglie variabili critiche dall’ambiente e costruisce i path canonici.
-        - Calcola il flag `redact_logs` secondo la policy centralizzata (auto|on|off).
-
-        Policy `LOG_REDACTION`:
-        - `auto` (default): attiva redazione se ENV ∈ {prod, production, ci} oppure CI=true,
-          oppure se sono presenti credenziali (GitHub o Service Account).
-        - `on`: forza redazione sempre.
-        - `off`: disattiva redazione sempre.
-        - In ogni caso, se `log_level=DEBUG`, la redazione è **forzata OFF** (debug locale).
+        - Calcola il flag `redact_logs` tramite `compute_redact_flag(...)`.
         """
-        from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
-
-        # Logger strutturato (una sola istanza) — includiamo run_id se presente
-        _logger = logger or get_structured_logger(__name__, run_id=run_id)
+        # 0) Logger (unico) – includiamo run_id se presente
+        _logger = cls._init_logger(logger, run_id)
 
         # 🔕 Deprecation notice soft: loggato una sola volta se il parametro viene usato
         if interactive is not None:
             _logger.debug(
-                "Parametro 'interactive' è deprecato e viene ignorato; "
-                "gestire l'I/O utente negli orchestratori.",
+                "Parametro 'interactive' è deprecato e viene ignorato; gestire l'I/O utente negli orchestratori.",
                 extra={"slug": slug},
             )
 
-        # Validazione slug
+        # 1) Validazione slug (triggera anche cache regex in path_utils, se applicabile)
         validate_slug(slug)
 
-        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        config_path = base_dir / "config" / "config.yaml"
+        # 2) Path & bootstrap minima (crea config se non presente)
+        base_dir, config_path = cls._init_paths(slug, _logger)
 
-        # 📦 Creazione automatica per nuovo cliente
-        if not config_path.exists():
-            _logger.info(
-                f"Cliente '{slug}' non trovato: creazione struttura base.",
-                extra={"slug": slug, "file_path": str(config_path)},
-            )
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            template_config = Path("config") / "config.yaml"
-            if not template_config.exists():
-                raise ConfigError(
-                    f"Template config.yaml globale non trovato: {template_config}",
-                    slug=slug,
-                    file_path=template_config,
-                )
-            shutil.copy(template_config, config_path)
+        # 3) Carica config cliente (yaml)
+        settings = cls._load_yaml_config(config_path, _logger)
 
-        # Lettura config
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                settings = yaml.safe_load(f)
-        except Exception as e:
-            raise ConfigError(f"Errore lettura config cliente: {e}", slug=slug, file_path=config_path)
+        # 4) Carica env risolto (richiesto/opzionale)
+        env_vars = cls._load_env(require_env=require_env)
 
-        _logger.info(
-            f"Config cliente caricata: {config_path}",
-            extra={"slug": slug, "file_path": str(config_path)},
-        )
-
-        # Variabili da .env (condizionate da require_env)
-        env_vars: Dict[str, Any] = {}
-        if require_env:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", required=True)
-            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", required=True)
-        else:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
-            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
-
-        # Variabili opzionali utili
-        env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
-        env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
-        env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
-        env_vars["ENV"] = get_env_var("ENV", default=None)
-        env_vars["CI"] = get_env_var("CI", default=None)
-
-        # --- Policy redazione log centralizzata ---
+        # 5) Livello log (default INFO; se passato via kwargs mantiene retro-compatibilità)
         log_level = str(kwargs.get("log_level", "INFO")).upper()
-        debug_mode = (log_level == "DEBUG")
 
-        mode_raw = env_vars.get("LOG_REDACTION") or get_env_var("LOG_REDACTION", default="auto")
-        mode = str(mode_raw or "auto").strip().lower()
-
-        env_name = (env_vars.get("ENV") or get_env_var("ENV", default="dev") or "dev").strip().lower()
-        ci_flag = get_bool("CI", default=False) or str(env_vars.get("CI") or "").strip().lower() in {"1", "true", "yes", "on"}
-        has_credentials = bool(env_vars.get("GITHUB_TOKEN") or env_vars.get("SERVICE_ACCOUNT_FILE"))
-
-        if mode in {"always", "on"} or str(mode) in {"1", "true", "yes", "on"}:
-            redact = True
-        elif mode in {"never", "off"} or str(mode) in {"0", "false", "no"}:
-            redact = False
-        else:
-            # auto
-            redact = (env_name in {"prod", "production", "ci"}) or ci_flag or has_credentials
-
-        if debug_mode:
-            redact = False  # debug locale forza OFF
+        # 6) Calcola redazione log (policy centralizzata) – NO side effects
+        redact = compute_redact_flag(env_vars, log_level)
 
         return cls(
             slug=slug,
@@ -223,6 +159,78 @@ class ClientContext:
             log_level=log_level,
             redact_logs=redact,
         )
+
+    # =============================== Helper interni (Fase 1) ===============================
+
+    @staticmethod
+    def _init_logger(logger: Optional[logging.Logger], run_id: Optional[str]) -> logging.Logger:
+        """Istanzia (o riusa) il logger strutturato dell'applicazione."""
+        if logger is not None:
+            return logger
+        from .logging_utils import get_structured_logger  # import locale per evitare ciclico import
+        return get_structured_logger(__name__, run_id=run_id)
+
+    @staticmethod
+    def _init_paths(slug: str, logger: logging.Logger) -> Tuple[Path, Path]:
+        """Calcola i path base e assicura la presenza di `config.yaml` (bootstrap da template)."""
+        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+        config_path = base_dir / "config" / "config.yaml"
+
+        if not config_path.exists():
+            logger.info(
+                "Cliente '%s' non trovato: creazione struttura base.", slug,
+                extra={"slug": slug, "file_path": str(config_path)},
+            )
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            template_config = Path("config") / "config.yaml"
+            if not template_config.exists():
+                raise ConfigError(
+                    f"Template config.yaml globale non trovato: {template_config}",
+                    slug=slug,
+                    file_path=template_config,
+                )
+            shutil.copy(template_config, config_path)
+        return base_dir, config_path
+
+    @staticmethod
+    def _load_yaml_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
+        """Carica il file YAML di configurazione del cliente."""
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                settings = yaml.safe_load(f) or {}
+        except Exception as e:  # pragma: no cover
+            raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path) from e
+
+        logger.info("Config cliente caricata: %s", config_path, extra={"file_path": str(config_path)})
+        return settings
+
+    @staticmethod
+    def _load_env(*, require_env: bool) -> Dict[str, Any]:
+        """Raccoglie variabili d'ambiente rilevanti (richieste/opzionali).
+
+        Nota: si limita a leggere i valori; la policy di redazione è calcolata da `compute_redact_flag`.
+        """
+        env_vars: Dict[str, Any] = {}
+
+        # Richieste (se require_env=True)
+        if require_env:
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", required=True)
+            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", required=True)
+        else:
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
+            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
+
+        # Opzionali utili
+        env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
+        env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
+        env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
+        env_vars["ENV"] = get_env_var("ENV", default=None)
+        env_vars["CI"] = get_env_var("CI", default=None)
+
+        # Conserviamo anche una versione booleana di CI per possibili chiamanti legacy
+        env_vars["_CI_BOOL"] = get_bool("CI", default=False)
+
+        return env_vars
 
     # -- Utility per tracking stato --
 
@@ -250,7 +258,7 @@ class ClientContext:
         """Registra lo stato di uno step della pipeline (es. 'download' → 'done')."""
         log = self._get_logger()
         self.step_status[step] = status
-        log.info(f"Step '{step}' → {status}", extra={"slug": self.slug, "step": step, "status": status})
+        log.info("Step '%s' → %s", step, status, extra={"slug": self.slug, "step": step, "status": status})
 
     def summary(self) -> Dict[str, Any]:
         """Restituisce un riassunto sintetico dello stato corrente del contesto."""
