@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 import uuid
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -15,7 +15,8 @@ from pipeline.exceptions import (
     ConfigError,
     PreviewError,
     EXIT_CODES,
-    ForcePushError,  # ✅ usa l'eccezione specifica per il gate force
+    ForcePushError,   # gate force
+    InvalidSlug,      # eccezione dominio per slug non valido
 )
 from pipeline.context import ClientContext
 from pipeline.config_utils import get_client_config
@@ -34,13 +35,16 @@ from pipeline.github_utils import push_output_to_github
 from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
-from pipeline.exceptions import InvalidSlug  # eccezione dominio per slug non valido
 from pipeline.env_utils import (  # ✅ allow-list branch + lettura env
     is_branch_allowed_for_force,
     get_env_var,
 )
+from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry + logging
 
 
+# =========================
+#   Helpers UI/Prompt
+# =========================
 def _prompt(msg: str) -> str:
     return input(msg).strip()
 
@@ -53,16 +57,43 @@ def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
     return ans in ("y", "yes", "s", "si", "sí")
 
 
+# =========================
+#   Helpers Telemetria Mini
+# =========================
+def _t_start() -> float:
+    return time.perf_counter()
+
+
+def _t_end(t0: float) -> int:
+    return int((time.perf_counter() - t0) * 1000)
+
+
+def _telem_info(logger, name: str, **extra) -> None:
+    logger.info(name, extra=extra)
+
+
+def _telem_warn(logger, name: str, **extra) -> None:
+    logger.warning(name, extra=extra)
+
+
+# =========================
+#   Helpers Docker
+# =========================
 def _docker_available() -> bool:
+    """Verifica la disponibilità di Docker usando run_cmd (con timeout/log)."""
     try:
-        subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        run_cmd(["docker", "info"], capture=True, op="docker info")
         return True
-    except Exception:
+    except CmdError:
         return False
 
 
 def _stop_preview_container(container_name: str) -> None:
-    subprocess.run(["docker", "rm", "-f", container_name], check=False)
+    """Stop/cleanup best-effort del container di preview (log + nessun errore bloccante)."""
+    try:
+        run_cmd(["docker", "rm", "-f", container_name], capture=True, op="docker rm -f")
+    except CmdError:
+        pass
 
 
 def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
@@ -98,19 +129,43 @@ def _run_preview(
     redact: bool,
     logger,
 ) -> bool:
-    """Incapsula la logica della preview (check Docker + avvio container)."""
+    """Incapsula la logica della preview (check Docker + avvio container) con telemetria."""
+    t0 = _t_start()
+    container_name = f"honkit_preview_{slug}"
+    _telem_info(logger, "evt.preview.start", slug=slug, container=container_name, port=port)
+
     # Controllo/policy Docker
     preview_allowed = True
     if non_interactive:
         if not _docker_available():
             preview_allowed = False
+            _telem_info(
+                logger,
+                "evt.preview.skip",
+                slug=slug,
+                container=container_name,
+                port=port,
+                reason="docker-missing",
+                duration_ms=_t_end(t0),
+            )
             logger.info("⏭️  Modalità non-interattiva: Docker assente → anteprima saltata automaticamente")
+            return False
     else:
         if not _docker_available():
             logger.warning("⚠️ Docker non disponibile")
             if _confirm_yes_no("Vuoi proseguire senza anteprima?", default_no=False):
                 preview_allowed = False
+                _telem_info(
+                    logger,
+                    "evt.preview.skip",
+                    slug=slug,
+                    container=container_name,
+                    port=port,
+                    reason="user-skip",
+                    duration_ms=_t_end(t0),
+                )
                 logger.info("⏭️  L'utente ha scelto di proseguire senza anteprima (sarà totalmente esclusa)")
+                return False
             else:
                 logger.info("🛠️  Attiva Docker quindi conferma per riprovare il controllo")
                 attempts = 0
@@ -118,6 +173,15 @@ def _run_preview(
                 while attempts < max_attempts:
                     ans = _confirm_yes_no("Hai attivato Docker? Vuoi riprovare ora il controllo?", default_no=False)
                     if not ans:
+                        _telem_warn(
+                            logger,
+                            "evt.preview.fail",
+                            slug=slug,
+                            container=container_name,
+                            port=port,
+                            reason="user-abort",
+                            duration_ms=_t_end(t0),
+                        )
                         raise ConfigError("Anteprima richiesta ma Docker non è stato attivato. Interruzione.")
                     if _docker_available():
                         logger.info("✅ Docker rilevato. La preview sarà attivata più avanti.")
@@ -127,23 +191,69 @@ def _run_preview(
                         attempts += 1
                         logger.warning(f"⚠️  Docker ancora non disponibile (tentativo {attempts}/{max_attempts}).")
                 if attempts >= max_attempts and not preview_allowed:
+                    _telem_warn(
+                        logger,
+                        "evt.preview.fail",
+                        slug=slug,
+                        container=container_name,
+                        port=port,
+                        reason="docker-not-available-after-retries",
+                        duration_ms=_t_end(t0),
+                    )
                     raise ConfigError("Docker non disponibile dopo i tentativi concessi.")
 
-    container_name = f"honkit_preview_{slug}"
     if preview_allowed and _docker_available():
         logger.info("🔎 Docker disponibile: avvio preview HonKit (detached)")
-        run_gitbook_docker_preview(
-            context,
-            port=port,
-            container_name=container_name,
-            wait_on_exit=False,
-            redact_logs=redact,  # 🔐 passa il toggle anche alla preview
-        )
-        logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
-        return True
+        try:
+            run_gitbook_docker_preview(
+                context,
+                port=port,
+                container_name=container_name,
+                wait_on_exit=False,
+                redact_logs=redact,  # 🔐 passa il toggle anche alla preview
+            )
+            _telem_info(
+                logger,
+                "evt.preview.ready",
+                slug=slug,
+                container=container_name,
+                port=port,
+                duration_ms=_t_end(t0),
+            )
+            logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
+            return True
+        except PreviewError:
+            _telem_warn(
+                logger,
+                "evt.preview.fail",
+                slug=slug,
+                container=container_name,
+                port=port,
+                reason="error",
+                duration_ms=_t_end(t0),
+            )
+            raise
     elif preview_allowed:
+        _telem_info(
+            logger,
+            "evt.preview.skip",
+            slug=slug,
+            container=container_name,
+            port=port,
+            reason="docker-lost",
+            duration_ms=_t_end(t0),
+        )
         logger.warning("⚠️ Docker non più disponibile al momento dell'avvio: anteprima saltata")
     else:
+        _telem_info(
+            logger,
+            "evt.preview.skip",
+            slug=slug,
+            container=container_name,
+            port=port,
+            reason="policy-disabled",
+            duration_ms=_t_end(t0),
+        )
         logger.info("⏭️  Anteprima disabilitata per scelta/policy iniziale")
     return False
 
@@ -174,24 +284,27 @@ def _maybe_push(
     force_push: Optional[bool] = None,
     force_ack: Optional[str] = None,
 ) -> None:
-    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale).
-
-    Policy R1 (governance force push, orchestratore):
-    - Non-interactive/CI: force consentito SOLO con entrambi i fattori presenti
-      (--force-push + --force-ack <TAG>) → altrimenti ForcePushError (exit 41).
-    - Interattivo: se force senza ack, chiedi conferma e acquisisci ack.
-    - Allow-list branch: se il branch non è ammesso per il force → ForcePushError.
-    """
+    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale) + telemetria."""
     token = context.env.get("GITHUB_TOKEN")
     target_branch = _resolve_target_branch(context)
 
     # Determina se si vuole forzare
     want_force = bool(force_push)
+    mode = "force-with-lease" if want_force else "incremental"
 
     # Gate force push
     if want_force:
         # allow-list branch
         if not is_branch_allowed_for_force(target_branch, context=context, allow_if_unset=True):
+            _telem_warn(
+                logger,
+                "evt.push.fail",
+                slug=context.slug,
+                branch=target_branch,
+                mode=mode,
+                reason="branch-not-allowed",
+                duration_ms=0,
+            )
             raise ForcePushError(
                 f"Force push non consentito sul branch '{target_branch}' secondo GIT_FORCE_ALLOWED_BRANCHES.",
                 slug=context.slug,
@@ -200,11 +313,19 @@ def _maybe_push(
         if non_interactive:
             # In CI il force richiede SEMPRE entrambi i fattori
             if not force_ack:
+                _telem_warn(
+                    logger,
+                    "evt.push.fail",
+                    slug=context.slug,
+                    branch=target_branch,
+                    mode=mode,
+                    reason="missing-ack-noninteractive",
+                    duration_ms=0,
+                )
                 raise ForcePushError(
                     "Force push in modalità non-interattiva senza --force-ack <TAG>.",
                     slug=context.slug,
                 )
-            # ok: procederemo passando i flag al modulo GitHub
         else:
             # Interattivo: se manca l'ack, chiedi un tag esplicito
             if not force_ack:
@@ -212,40 +333,91 @@ def _maybe_push(
                 if not _confirm_yes_no("Confermi di voler procedere con un force push?", default_no=True):
                     logger.info("⏭️  Force push annullato dall'utente")
                     want_force = False  # ricade su push normale (se abilitato)
+                    mode = "incremental"
                 else:
                     entered = _prompt("Inserisci un tag di conferma (Force-Ack): ").strip()
                     if not entered:
+                        _telem_warn(
+                            logger,
+                            "evt.push.fail",
+                            slug=context.slug,
+                            branch=target_branch,
+                            mode=mode,
+                            reason="ack-missing",
+                            duration_ms=0,
+                        )
                         raise ForcePushError("Force push annullato: ACK mancante.", slug=context.slug)
                     force_ack = entered  # ✅ acquisito interattivamente
 
     # Risoluzione intenzione push (normale/incrementale)
     if push_flag is not None:
         do_push = push_flag
+        reason_skip = "flag-no-push" if push_flag is False else ""
     else:
         do_push = False if non_interactive else _confirm_yes_no("Eseguire il push su GitHub?", default_no=True)
+        reason_skip = "user-skip" if not do_push and not non_interactive else "noninteractive-default"
 
     if not do_push:
+        _telem_info(
+            logger,
+            "evt.push.skip",
+            slug=context.slug,
+            branch=target_branch,
+            mode=mode,
+            reason=reason_skip,
+            duration_ms=0,
+        )
         logger.info("⏭️  Push su GitHub non eseguito")
         return
 
     if not token:
+        _telem_warn(
+            logger,
+            "evt.push.fail",
+            slug=context.slug,
+            branch=target_branch,
+            mode=mode,
+            reason="no-token",
+            duration_ms=0,
+        )
         raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
 
     logger.info(
         "📤 Avvio push su GitHub (%s)",
-        "force-with-lease" if want_force else "incrementale",
+        mode,
         extra={"branch": target_branch},
     )
 
-    # ✅ Chiama il modulo GitHub passando i nuovi parametri (force governato)
-    push_output_to_github(
-        context,
-        github_token=token,
-        do_push=True,
-        force_push=want_force,
-        force_ack=force_ack,
-        redact_logs=redact,
-    )
+    t0 = _t_start()
+    try:
+        # ✅ Chiama il modulo GitHub passando i nuovi parametri (force governato)
+        push_output_to_github(
+            context,
+            github_token=token,
+            do_push=True,
+            force_push=want_force,
+            force_ack=force_ack,
+            redact_logs=redact,
+        )
+        _telem_info(
+            logger,
+            "evt.push.done",
+            slug=context.slug,
+            branch=target_branch,
+            mode=mode,
+            duration_ms=_t_end(t0),
+        )
+    except PipelineError:
+        _telem_warn(
+            logger,
+            "evt.push.fail",
+            slug=context.slug,
+            branch=target_branch,
+            mode=mode,
+            reason="error",
+            duration_ms=_t_end(t0),
+        )
+        raise
 
     # Cleanup artefatti locali post-push (solo interattivo, non bloccante)
     if not non_interactive and _confirm_yes_no(

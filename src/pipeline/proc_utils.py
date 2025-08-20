@@ -10,17 +10,21 @@ Pensato per sostituire le chiamate dirette a `subprocess.run` in moduli come:
 API principali:
 - run_cmd(...): esegue un comando con timeout, retry con backoff e redazione sicura nei log
 - wait_for_port(...): attende che una porta TCP risponda entro una finestra temporale
+- docker_available(...): verifica disponibilità di Docker
+- run_docker_preview(...): build + serve HonKit in container (detached) con retry e readiness check
+- stop_docker_preview(...): stop/cleanup container di preview in modo sicuro
 """
 
 from __future__ import annotations
 
-from typing import Sequence, Mapping, Optional, Callable, Any, Tuple
+from typing import Sequence, Mapping, Optional, Callable, Any
 import os
 import time
 import shlex
 import socket
 import subprocess
 import logging
+from pathlib import Path
 
 try:
     # Preferiamo gli helper esistenti per coerenza con la pipeline
@@ -37,7 +41,14 @@ except Exception:  # pragma: no cover
     def redact_secrets(text: str) -> str:
         return text
 
-__all__ = ["CmdError", "run_cmd", "wait_for_port"]
+__all__ = [
+    "CmdError",
+    "run_cmd",
+    "wait_for_port",
+    "docker_available",
+    "run_docker_preview",
+    "stop_docker_preview",
+]
 
 
 # --------------------------------------- Error ---------------------------------------
@@ -239,7 +250,7 @@ def run_cmd(
                     },
                 )
 
-        except subprocess.TimeoutExpired as te:
+        except subprocess.TimeoutExpired:
             duration = _now_ms() - start
             err = CmdError(
                 f"Timeout esecuzione: {op_label} ({eff_timeout:.1f}s)",
@@ -300,3 +311,165 @@ def wait_for_port(host: str, port: int, timeout: float = 30.0, interval: float =
     if logger:
         logger.error("wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout})
     raise TimeoutError(f"Porta non raggiungibile: {host}:{port} entro {timeout}s")
+
+
+# ----------------------------- Docker helpers (Fase 3) ------------------------------
+
+def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None) -> bool:
+    """
+    Ritorna True se `docker` è invocabile e risponde a `docker --version`.
+    """
+    try:
+        run_cmd(
+            ["docker", "--version"],
+            timeout=timeout_s or float(get_int("PROC_CMD_TIMEOUT", 10) or 10),
+            retries=0,
+            capture=True,
+            logger=logger,
+            op="docker version",
+        )
+        return True
+    except CmdError:
+        if logger:
+            logger.warning("docker.unavailable")
+        return False
+
+
+def _docker_rm_force(name: str, *, logger: Optional[logging.Logger] = None) -> None:
+    try:
+        run_cmd(["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f")
+    except CmdError:
+        # Best-effort: non propaghiamo
+        if logger:
+            logger.debug("docker.rm_force.fail", extra={"container": name})
+
+
+def _docker_inspect_running(name: str, *, logger: Optional[logging.Logger] = None) -> bool:
+    try:
+        cp = run_cmd(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            retries=0,
+            capture=True,
+            logger=logger,
+            op="docker inspect",
+        )
+        out = (cp.stdout or "").strip().lower()
+        return out == "true"
+    except CmdError:
+        return False
+
+
+def _preview_ready_timeout() -> float:
+    # Timeout readiness in secondi (default 30)
+    return float(get_int("PREVIEW_READY_TIMEOUT", 30) or 30)
+
+
+def run_docker_preview(
+    md_dir: Path | str,
+    *,
+    port: int = 4000,
+    container_name: str = "honkit_preview",
+    retries: int = 1,
+    logger: Optional[logging.Logger] = None,
+    redact_logs: bool = False,
+) -> None:
+    """
+    Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
+    - Usa l'immagine `honkit/honkit`.
+    - Monta `md_dir` in /app.
+    - Espone :4000 dalla container su `port` host.
+    - Attende che la porta sia pronta (localhost:port) entro PREVIEW_READY_TIMEOUT.
+
+    Raises:
+        CmdError in caso di fallimento non recuperabile.
+    """
+    md_path = Path(md_dir).resolve()
+    if logger:
+        logger.info("preview.start", extra={"md_dir": str(md_path), "container": container_name, "port": port})
+
+    if not docker_available(logger=logger):
+        # Qui non solleviamo: lasciamo al chiamante la semantica (skipped vs error)
+        raise CmdError("Docker non disponibile", cmd=["docker", "--version"], op="docker version")
+
+    # Build statica (idempotente lato contenuti)
+    run_cmd(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--workdir",
+            "/app",
+            "-v",
+            f"{md_path}:/app",
+            "honkit/honkit",
+            "npm",
+            "run",
+            "build",
+        ],
+        retries=retries,
+        logger=logger,
+        op="docker honkit build",
+    )
+
+    # Se esiste un container con lo stesso nome, proviamo a rimuoverlo prima
+    _docker_rm_force(container_name, logger=logger)
+
+    # Serve detached
+    cp = run_cmd(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container_name,
+            "-p",
+            f"{int(port)}:4000",
+            "--workdir",
+            "/app",
+            "-v",
+            f"{md_path}:/app",
+            "honkit/honkit",
+            "npm",
+            "run",
+            "serve",
+        ],
+        retries=retries,
+        logger=logger,
+        op="docker honkit serve",
+    )
+
+    # container id nel stdout (non logghiamo intero per pulizia)
+    if logger:
+        cid = (cp.stdout or "").strip()
+        logger.info("preview.container.started", extra={"container": container_name, "cid_prefix": cid[:12] if cid else ""})
+
+    # Readiness: attendiamo che la porta risponda
+    try:
+        wait_for_port("127.0.0.1", int(port), timeout=_preview_ready_timeout(), logger=logger)
+        if logger:
+            logger.info("preview.ready", extra={"container": container_name, "port": port})
+    except TimeoutError as e:
+        # Proviamo a loggare lo stato container per diagnosi
+        running = _docker_inspect_running(container_name, logger=logger)
+        if logger:
+            logger.error("preview.ready.timeout", extra={"container": container_name, "port": port, "running": running})
+        # best-effort cleanup
+        _docker_rm_force(container_name, logger=logger)
+        raise CmdError(str(e), cmd=["docker", "run", "..."], op="docker honkit serve")
+
+
+def stop_docker_preview(container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None) -> None:
+    """
+    Tenta lo stop + remove del container di preview. Best-effort (non solleva).
+    """
+    try:
+        # Prova stop soft
+        run_cmd(["docker", "stop", container_name], retries=0, capture=True, logger=logger, op="docker stop")
+    except CmdError:
+        # Ignora errori (container non esistente o già stoppato)
+        pass
+    finally:
+        # Forza rm per cleanup
+        _docker_rm_force(container_name, logger=logger)
+        if logger:
+            logger.info("preview.container.cleaned", extra={"container": container_name})

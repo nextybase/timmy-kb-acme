@@ -89,7 +89,7 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
 # ----------------------------
 
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, op: str = "git") -> None:
-    """Helper compatibile che delega a run_cmd (capture disattivato)."""
+    """Helper compatibile che delega a run_cmd (con capture attivo per tail diagnostici)."""
     run_cmd(cmd, cwd=str(cwd) if cwd else None, env=env, capture=True, logger=logger, op=op)
 
 
@@ -250,7 +250,7 @@ def push_output_to_github(
         _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
-        exists_remote_branch = True
+        exists_remote_branch = False
         try:
             run_cmd(["git", "rev-parse", f"origin/{default_branch}"], cwd=str(tmp_dir), env=env, capture=True, logger=logger, op="git rev-parse")
             exists_remote_branch = True

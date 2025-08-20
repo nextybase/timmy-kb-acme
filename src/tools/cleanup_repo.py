@@ -10,33 +10,38 @@ if str(_SRC_DIR) not in _sys.path:
 # --------------------------------------------------------------------------------------
 
 from pathlib import Path
-import subprocess
 from typing import Iterable, List, Optional
 import uuid  # per run_id
+import logging
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import is_safe_subpath, is_valid_slug
 from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
+from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry/log
+from pipeline.env_utils import redact_secrets
 
 # Logger inizializzato in main() con run_id; qui solo la dichiarazione
-logger = None  # verrà assegnato in main()
+logger: Optional[logging.Logger] = None  # verrà assegnato in main()
 
 
 def _rm_path(p: Path) -> None:
-    """Rimozione best-effort di file o directory."""
+    """Rimozione best-effort di file o directory (senza seguire link fuori scope)."""
+    assert logger is not None
     try:
         if p.is_dir():
+            # rimozione bottom-up per evitare errori su dir non vuote
             for child in sorted(p.rglob("*"), reverse=True):
                 try:
                     if child.is_file() or child.is_symlink():
                         try:
-                            child.unlink(missing_ok=True)  # per Py>=3.8
+                            child.unlink(missing_ok=True)  # Py>=3.8
                         except TypeError:
                             if child.exists() or child.is_symlink():
                                 child.unlink()
                     elif child.is_dir():
                         child.rmdir()
                 except Exception:
+                    # best-effort: continuiamo con gli altri
                     pass
             p.rmdir()
         elif p.exists() or p.is_symlink():
@@ -51,21 +56,25 @@ def _rm_path(p: Path) -> None:
 
 def _gh_repo_delete(full_name: str) -> None:
     """Elimina un repository GitHub via gh CLI, se installata."""
+    assert logger is not None
     try:
-        subprocess.run(
-            ["gh", "repo", "delete", full_name, "--yes"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        logger.info("🗑️  Repo GitHub eliminato", extra={"repo": full_name})
+        # `gh` stampa messaggi su stderr/stdout: li catturiamo ma non li esponiamo
+        run_cmd(["gh", "repo", "delete", full_name, "--yes"], capture=True, op="gh repo delete")
+        logger.info("🗑️  Repo GitHub eliminato", extra={"repo": redact_secrets(full_name)})
     except FileNotFoundError:
         logger.warning("gh CLI non trovata: skip delete remoto", extra={"repo": full_name})
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Delete repo fallito: {e}", extra={"repo": full_name})
+    except CmdError as e:
+        # tail diagnostico compatto, con redazione
+        tail = (e.stderr or e.stdout or "").strip()
+        tail = tail[-1000:] if tail else ""
+        logger.warning(
+            "Delete repo fallito",
+            extra={"repo": full_name, "stderr_tail": redact_secrets(tail)},
+        )
 
 
 def _ensure_safe(paths: Iterable[Path], base: Path) -> List[Path]:
+    assert logger is not None
     safe: List[Path] = []
     for p in paths:
         if is_safe_subpath(p, base):
@@ -77,6 +86,7 @@ def _ensure_safe(paths: Iterable[Path], base: Path) -> List[Path]:
 
 def cleanup_local(project_root: Path, slug: str, include_global: bool) -> None:
     """Pulisce artefatti locali per lo slug indicato; opzionalmente rimuove anche artefatti globali."""
+    assert logger is not None
     targets: List[Path] = [
         project_root / "output" / f"timmy-kb-{slug}",
         project_root / "clienti" / slug,
@@ -92,8 +102,7 @@ def cleanup_local(project_root: Path, slug: str, include_global: bool) -> None:
         if t.exists():
             _rm_path(t)
         else:
-            # Log meno rumoroso: livello DEBUG + path esplicito
-            logger.debug(f"Skip (path assente): {t}", extra={"file_path": str(t)})
+            logger.debug("Skip (path assente)", extra={"file_path": str(t)})
 
 
 def cleanup_remote(slug: str, github_namespace: Optional[str] = None) -> None:
@@ -113,6 +122,7 @@ def _prompt_bool(question: str, default_no: bool = True) -> bool:
 
 def _prompt_slug() -> Optional[str]:
     """Chiede all'utente lo slug finché valido; ritorna None se l’utente annulla (invio vuoto)."""
+    assert logger is not None
     while True:
         s = input("Inserisci slug cliente (obbligatorio, invio per annullare): ").strip()
         if not s:
@@ -164,7 +174,8 @@ def main() -> int:
         return EXIT_CODES.get("PipelineError", 1)
     except Exception:
         # Tracciamo stacktrace e mappiamo a EXIT_CODES
-        logger.exception("Errore imprevisto durante il cleanup", extra={"slug": slug})
+        if logger is not None:
+            logger.exception("Errore imprevisto durante il cleanup", extra={"slug": slug})
         return EXIT_CODES.get("PipelineError", 1)
 
 

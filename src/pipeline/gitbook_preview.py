@@ -134,7 +134,7 @@ def run_container_detached(md_dir: Path, *, slug: Optional[str], container_name:
             extra={"slug": slug, "file_path": f"{container_name}@{port}", "container_id": container_id},
         )
         return container_id
-    except CmdError as e:
+    except CmdError:
         # Cleanup soft se un container con lo stesso nome esiste già
         try:
             run_cmd(["docker", "rm", "-f", container_name], op="docker rm -f (pre-retry)", logger=logger, capture=True)
@@ -247,7 +247,7 @@ def run_gitbook_docker_preview(
             stop_container_safely(container_name)
     else:
         # Detached: avvia e ritorna subito; orchestratore gestirà lo stop a fine run.
-        container_id = run_container_detached(
+        run_container_detached(
             md_output_path,
             slug=context.slug,
             container_name=container_name,
@@ -258,6 +258,6 @@ def run_gitbook_docker_preview(
         # 3) Attendi che la preview sia raggiungibile (best-effort, ma utile per early feedback)
         try:
             wait_until_ready("127.0.0.1", port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)
-        except PreviewError as e:
+        except PreviewError:
             # Non fermiamo il container qui (lasciamo la scelta all'orchestratore), ma segnaliamo l'errore
             raise

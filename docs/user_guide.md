@@ -1,8 +1,6 @@
-# User Guide — Timmy‑KB (v1.0.4 Stable)
+# User Guide — Timmy‑KB (v1.0.5 Stable)
 
 Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con anteprima HonKit (Docker) e, se vuoi, push su GitHub.
-
-> Nota: i micro‑fix introdotti (preview *detached* con **stop automatico** in uscita, logging centralizzato, cache regex slug) sono già riflessi qui. Il bump versione verrà finalizzato nel `CHANGELOG.md` quando chiudiamo il giro.
 
 ---
 
@@ -21,7 +19,7 @@ Imposta le variabili (via `.env` o ambiente di sistema):
 - `DRIVE_ID` (o `DRIVE_PARENT_FOLDER_ID`) → radice/parent dello spazio Drive
 - `GITHUB_TOKEN` → necessario solo se vuoi pubblicare su GitHub
 - `GIT_DEFAULT_BRANCH` → branch di default per il push (fallback `main`)
-- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
+- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre\_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
 
 ---
 
@@ -49,11 +47,12 @@ py src/pre_onboarding.py
 
 **Sequenza tipica**
 
-1. **Slug cliente** → richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega e chiede nuovo valore.
+1. **Slug cliente** → richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega e chiede nuovo valore. Puoi passarlo anche da CLI con `--slug acme` e, opzionalmente, `--name "Cliente ACME"`.
 2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml` (con backup `.bak` se già presente).
-3. **Google Drive (opzionale)**  
-   - Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.  
-   - Se mancano credenziali: chiede se proseguire senza Drive.  
+3. **Google Drive (opzionale)**
+   - Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.
+   - Se mancano credenziali e non hai passato `--no-drive`: l’esecuzione fallisce.
+   - In CI/batch puoi usare `--dry-run` o `--no-drive` per forzare il comportamento.
 4. **Riepilogo finale** → mostra azioni eseguite e dove trovare i file.
 
 > In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente.
@@ -68,19 +67,21 @@ py src/onboarding_full.py
 
 **Sequenza tipica**
 
-1. **Slug cliente** → richiesto e validato.  
-2. **Conversione PDF → Markdown** → avvio automatico con log; genera `SUMMARY.md` e `README.md` in `book/`.  
-3. **Anteprima HonKit (Docker)**  
-   - Se Docker disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached*, non blocca la pipeline e viene fermata automaticamente.  
-   - Se Docker assente: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua.  
-4. **Pubblicazione su GitHub (opzionale)**  
-   - *«Eseguire il push su GitHub?»* (default **No**). Se accetti, controlla `GITHUB_TOKEN` e propone branch (`GIT_DEFAULT_BRANCH`, fallback `main`).  
-5. **Pulizia finale**  
+1. **Slug cliente** → richiesto e validato.
+2. **Conversione PDF → Markdown** → avvio automatico con log; genera `SUMMARY.md` e `README.md` in `book/`.
+3. **Anteprima HonKit (Docker)**
+   - Se Docker disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached*, non blocca la pipeline e viene fermata automaticamente.
+   - Se Docker assente: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua.
+   - Puoi anche controllare i retry Docker con `--docker-retries N`.
+4. **Pubblicazione su GitHub (opzionale)**
+   - *«Eseguire il push su GitHub?»* (default **No**). Se accetti, controlla `GITHUB_TOKEN` e propone branch (`GIT_DEFAULT_BRANCH`, fallback `main`).
+   - Puoi abilitare il force‑push con `--force-push`; se serve un ack esplicito, passa anche `--force-ack`.
+5. **Pulizia finale**
    - *«Eseguire il cleanup?»* (default **Sì**). Elimina file temporanei/backup e ferma eventuale preview rimasta attiva.
 
 **Dettagli tecnici anteprima**
 
-- Porta: `4000` (cambiabile via prompt o `--port 4000`).  
+- Porta: `4000` (cambiabile via prompt o `--port 4000`).
 - Nome container: `honkit_preview_<slug>`.
 
 ---
@@ -101,15 +102,15 @@ py src/onboarding_full.py
 
 ```bash
 # Setup minimale, nessun accesso a servizi remoti
-py src/pre_onboarding.py --slug acme --non-interactive --dry-run
+py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive --dry-run
 
 # Generazione Markdown + auto-skip preview se Docker manca, niente push
 py src/onboarding_full.py --slug acme --no-drive --non-interactive
 
-# Con push esplicito
+# Con push esplicito, con force-push
 export GITHUB_TOKEN=ghp_xxx
 export GIT_DEFAULT_BRANCH=main
-py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
+py src/onboarding_full.py --slug acme --no-drive --non-interactive --push --force-push --force-ack
 ```
 
 > Su Linux/Mac puoi usare `python` invece di `py`.
@@ -123,44 +124,50 @@ py src/onboarding_full.py --slug acme --no-drive --non-interactive --push
 
 **Exit codes (estratto)**
 
-- `0`  → ok  
-- `2`  → `ConfigError` (variabili mancanti, slug invalido in batch)  
-- `30` → `PreviewError`  
-- `40` → `PushError`  
+- `0`  → ok
+- `2`  → `ConfigError` (variabili mancanti, slug invalido in batch)
+- `30` → `PreviewError`
+- `40` → `PushError`
 
 ---
 
 ## 6) Troubleshooting
 
-- **Docker non installato** → interattivo: domanda se proseguire senza anteprima.  
-- **Anteprima non raggiungibile** → verifica porta `4000`, forzare stop con `docker rm -f honkit_preview_<slug>`.  
-- **Push fallito** → controlla `GITHUB_TOKEN` e `GIT_DEFAULT_BRANCH`.  
-- **Slug non valido** → richiesto reinserimento.  
+- **Docker non installato** → interattivo: domanda se proseguire senza anteprima.
+- **Anteprima non raggiungibile** → verifica porta `4000`, forzare stop con `docker rm -f honkit_preview_<slug>`.
+- **Push fallito** → controlla `GITHUB_TOKEN` e `GIT_DEFAULT_BRANCH`.
+- **Slug non valido** → richiesto reinserimento.
 
 ---
 
 ## 7) Policy operative (estratto)
 
-- **Orchestratori** → UX/CLI, prompt e mapping deterministico errori.  
-- **Moduli** → azioni tecniche, no prompt.  
-- **Sicurezza I/O** → `is_safe_subpath`, scritture atomiche, no segreti nei log.  
-- **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.  
+- **Orchestratori** → UX/CLI, prompt e mapping deterministico errori.
+- **Moduli** → azioni tecniche, no prompt.
+- **Sicurezza I/O** → `is_safe_subpath`, scritture atomiche, no segreti nei log.
+- **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.
 
 ---
 
 ## 8) FAQ
 
-**Posso usare la preview se Docker non c’è?**  
-No. In batch viene saltata; in interattivo puoi proseguire senza.  
+**Posso usare la preview se Docker non c’è?**\
+No. In batch viene saltata; in interattivo puoi proseguire senza.
 
-**La preview blocca la pipeline?**  
-No. È *detached* e si ferma automaticamente.  
+**La preview blocca la pipeline?**\
+No. È *detached* e si ferma automaticamente.
 
-**Cosa viene pubblicato su GitHub?**  
-Solo i `.md` in `book/` (esclusi i `.bak`).  
+**Cosa viene pubblicato su GitHub?**\
+Solo i `.md` in `book/` (esclusi i `.bak`).
 
-**Posso cambiare la porta della preview?**  
-Sì: `--port 4000`.  
+**Posso cambiare la porta della preview?**\
+Sì: `--port 4000`.
+
+**Come gestire un push con force?**\
+Passa `--force-push` e, se richiesto, `--force-ack`.
+
+**Posso lanciare senza variabili di ambiente?**\
+Sì, ma devi passare `--allow-offline-env` (fallback su default sicuri, usato solo in test/CI).
 
 ---
 
@@ -168,11 +175,12 @@ Sì: `--port 4000`.
 
 La pipeline usa redazione log centralizzata:
 
-- Modalità (`LOG_REDACTION`):  
-  - `auto` (default) → attiva se `ENV` ∈ {prod, production, ci} o `CI=true`, o se presenti credenziali sensibili.  
-  - `on` → sempre attiva.  
-  - `off` → disattiva.  
-- In debug (`log_level=DEBUG`), redazione sempre disattiva.  
-- Dati sensibili (token, path credenziali) mascherati.  
+- Modalità (`LOG_REDACTION`):
+  - `auto` (default) → attiva se `ENV` ∈ {prod, production, ci} o `CI=true`, o se presenti credenziali sensibili.
+  - `on` → sempre attiva.
+  - `off` → disattiva.
+- In debug (`log_level=DEBUG`), redazione sempre disattiva.
+- Dati sensibili (token, path credenziali) mascherati.
 
 Il flag `redact_logs` è calcolato in `ClientContext` e riflesso nei log strutturati.
+
