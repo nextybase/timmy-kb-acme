@@ -37,7 +37,12 @@ from github.GithubException import GithubException
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, ForcePushError, PushError
 from pipeline.path_utils import is_safe_subpath  # sicurezza path
-from pipeline.env_utils import redact_secrets, get_env_var  # 🔐 redazione + env resolver
+from pipeline.env_utils import (
+    redact_secrets,
+    get_env_var,                       # 🔐 redazione + env resolver
+    is_branch_allowed_for_force,       # ✅ NEW: allow-list branch per force push
+    get_force_allowed_branches,        # ✅ NEW: per log/errore esplicativo
+)
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
 logger = get_structured_logger("pipeline.github_utils")
@@ -289,13 +294,10 @@ def push_output_to_github(
         _run(
             [
                 "git",
-                "-c",
-                "user.name=Timmy KB",
-                "-c",
-                "user.email=kb+noreply@local",
+                "-c", "user.name=Timmy KB",
+                "-c", "user.email=kb+noreply@local",
                 "commit",
-                "-m",
-                commit_msg,
+                "-m", commit_msg,
             ],
             cwd=tmp_dir,
             env=env,
@@ -307,6 +309,16 @@ def push_output_to_github(
             if not force_ack:
                 raise ForcePushError(
                     "Force push richiesto senza ACK. Contratto violato: serve force_ack valorizzato.",
+                    slug=context.slug,
+                )
+
+            # ✅ NEW: Allow-list dei branch per force push
+            if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):
+                patterns = get_force_allowed_branches(context)
+                patterns_str = ", ".join(patterns) if patterns else "(lista vuota)"
+                raise ForcePushError(
+                    f"Force push NON consentito sul branch '{default_branch}'. "
+                    f"Branch ammessi (GIT_FORCE_ALLOWED_BRANCHES): {patterns_str}",
                     slug=context.slug,
                 )
 

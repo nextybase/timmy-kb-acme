@@ -2,7 +2,35 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
-## [1.1.0] — 2025-08-22 · Semantic Enrichment & Orchestration
+## [1.0.5] — 2025-08-22 · MUST hardening & governance
+
+### Changed
+- `src/pipeline/env_utils.py`
+  - Rafforzato il resolver d’ambiente (bool/int/required) e la redazione centralizzata con `_SECRET_KEYS` e `redact_secrets(...)`. Introdotta policy deterministica `compute_redact_flag(...)`. Aggiunta allow-list per il force-push con `get_force_allowed_branches(...)` e `is_branch_allowed_for_force(...)`. :contentReference[oaicite:1]{index=1} :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5}
+
+- `src/pipeline/github_utils.py`
+  - Push **incrementale** come default; retry con `pull --rebase` in caso di non-fast-forward. Percorsi verificati con `is_safe_subpath`. Modalità **force** solo con ACK esplicito e **with-lease** sullo SHA remoto. Logging strutturato e redazione token nei messaggi. :contentReference[oaicite:6]{index=6} :contentReference[oaicite:7]{index=7} :contentReference[oaicite:8]{index=8} :contentReference[oaicite:9]{index=9}
+
+- `src/onboarding_full.py`
+  - Orchestratore “full” allineato alle util ufficiali (conversione/summary/readme), preview Docker tramite `run_gitbook_docker_preview(...)`, push via `push_output_to_github(...)` con fallback shell. Conferme interattive conservate, opzioni `--no-preview/--no-push`. :contentReference[oaicite:10]{index=10} :contentReference[oaicite:11]{index=11} :contentReference[oaicite:12]{index=12} :contentReference[oaicite:13]{index=13}
+
+- `src/pre_onboarding.py`
+  - Rafforzata la validazione dello **slug** prima della costruzione dei path; orchestratore unico per I/O e gestione exit codes; nessuna stampa di segreti nei log. Workflow locale/Drive reso esplicito. :contentReference[oaicite:14]{index=14} :contentReference[oaicite:15]{index=15} :contentReference[oaicite:16]{index=16}
+
+### Fixed
+- Messaggi e fallimenti Git resi compatti e informativi (stderr “tail”), con eccezioni `PushError/ForcePushError` più chiare. :contentReference[oaicite:17]{index=17}
+
+### Security
+- Redazione dei log abilitabile e coerente in tutta la pipeline; masking degli header HTTP per Git e cleanup delle working dir temporanee. :contentReference[oaicite:18]{index=18} :contentReference[oaicite:19]{index=19}
+
+### Compatibility
+- **Nessun breaking change**: gli orchestratori mantengono UX e prompt attuali; i moduli non introducono input interattivi. :contentReference[oaicite:20]{index=20}
+
+### Notes
+- Le util di preview e subprocess (`gitbook_preview.py`, `proc_utils.py`) sono già pronte e integrate nei call-site; nessun cambiamento di UX previsto. :contentReference[oaicite:21]{index=21} :contentReference[oaicite:22]{index=22}
+
+
+## [1.0.5] — 2025-08-22 · Semantic Enrichment & Orchestration
 
 ### Added
 - **Nuovo orchestratore** `src/tag_onboarding.py`: fase di *tag discovery* HiTL tra `pre_onboarding` e `onboarding_full`.

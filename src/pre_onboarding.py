@@ -19,7 +19,6 @@ Questo modulo **non** stampa segreti nei log (maschera ID e percorsi sensibili).
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import uuid
 from pathlib import Path
@@ -40,7 +39,7 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
-from pipeline.env_utils import is_log_redaction_enabled
+from pipeline.env_utils import is_log_redaction_enabled, get_env_var
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import validate_slug as _validate_slug_helper
 
@@ -94,8 +93,8 @@ def _resolve_yaml_structure_file() -> Path:
     Solleva:
         ConfigError se nessun candidato esiste.
     """
-    # 1) Override via env
-    env_path = os.environ.get("YAML_STRUCTURE_FILE")
+    # 1) Override via env (centralizzato; non redigiamo il path in clear nei log qui)
+    env_path = get_env_var("YAML_STRUCTURE_FILE", required=False, redact=False)
     if env_path:
         p = Path(env_path).expanduser().resolve()
         if p.is_file():
@@ -198,18 +197,20 @@ def pre_onboarding_main(
         logger.info("✅ Pre-onboarding locale completato (dry-run).")
         return
 
-    # === Allineamento env: unisci chiavi critiche da os.environ in context.env (conservativo) ===
+    # === Allineamento env: integra chiavi critiche in context.env (conservativo) ===
     for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_PARENT_FOLDER_ID", "DRIVE_ID"):
-        if not context.env.get(key) and os.environ.get(key):
-            context.env[key] = os.environ[key]
+        if not context.env.get(key):
+            val = get_env_var(key, required=require_env, redact=True)
+            if val:
+                context.env[key] = val
 
     # Preflight (log non sensibili, mascherati)
     logger.info(
         "pre_onboarding.drive.preflight",
         extra={
-            "SERVICE_ACCOUNT_FILE": _mask(context.env.get("SERVICE_ACCOUNT_FILE") or os.environ.get("SERVICE_ACCOUNT_FILE")),
-            "DRIVE_PARENT_FOLDER_ID": _mask(context.env.get("DRIVE_PARENT_FOLDER_ID") or os.environ.get("DRIVE_PARENT_FOLDER_ID")),
-            "DRIVE_ID": _mask(context.env.get("DRIVE_ID") or os.environ.get("DRIVE_ID")),
+            "SERVICE_ACCOUNT_FILE": _mask(context.env.get("SERVICE_ACCOUNT_FILE")),
+            "DRIVE_PARENT_FOLDER_ID": _mask(context.env.get("DRIVE_PARENT_FOLDER_ID")),
+            "DRIVE_ID": _mask(context.env.get("DRIVE_ID")),
         },
     )
 
@@ -219,9 +220,7 @@ def pre_onboarding_main(
     # Determina parent della cartella cliente (Shared Drive o cartella specifica)
     drive_parent_id = (
         context.env.get("DRIVE_PARENT_FOLDER_ID")
-        or os.environ.get("DRIVE_PARENT_FOLDER_ID")
         or context.env.get("DRIVE_ID")
-        or os.environ.get("DRIVE_ID")
     )
     if not drive_parent_id:
         raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")

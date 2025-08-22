@@ -9,17 +9,14 @@ Onboarding FULL: RAW → BOOK con arricchimento semantico, preview e push GitHub
 - Preview Docker (HonKit) con conferma interattiva; stop con stop_container_safely().
 - Push GitHub con conferma interattiva (o flag).
 """
-
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 import time
 import uuid
 import subprocess
-import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -43,6 +40,7 @@ from pipeline.path_utils import (
     sorted_paths,
     sanitize_filename,
 )
+from pipeline.env_utils import get_env_var  # ✅ centralizzazione ENV
 
 # Content utils ufficiali (preferenza) + fallback soft
 try:
@@ -320,7 +318,6 @@ def _run_preview(context: ClientContext, logger, *, slug: str, port: int = 4000)
     Ritorna il nome del container per eventuale stop.
     """
     container_name = f"gitbook-{slug}"
-    # La funzione del repo non ritorna path/ID (solo log). :contentReference[oaicite:4]{index=4}
     run_gitbook_docker_preview(
         context,
         port=port,
@@ -334,7 +331,6 @@ def _run_preview(context: ClientContext, logger, *, slug: str, port: int = 4000)
 def _stop_preview(logger, *, container_name: Optional[str]) -> None:
     if not container_name:
         return
-    # Usa l'helper del repo (best-effort). :contentReference[oaicite:5]{index=5}
     try:
         stop_container_safely(container_name)
         logger.info("Preview Docker fermata", extra={"container": container_name})
@@ -346,7 +342,7 @@ def _stop_preview(logger, *, container_name: Optional[str]) -> None:
 def _git_push(context: ClientContext, logger, message: str) -> None:
     if push_output_to_github is not None:
         try:
-            token = os.environ.get("GITHUB_TOKEN", "")
+            token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # ✅ aggiornato
             push_output_to_github(
                 context,
                 github_token=token,

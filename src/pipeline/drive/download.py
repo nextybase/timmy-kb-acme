@@ -275,7 +275,8 @@ def download_drive_pdfs_to_local(
         raise
     except Exception as e:  # noqa: BLE001
         # Qualsiasi altro errore → mappiamo a DriveDownloadError
-        logger.error(
+        # 👇 Modifica: usiamo logger.exception per includere lo stacktrace
+        logger.exception(
             "drive.download.unexpected_error",
             extra={
                 "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),

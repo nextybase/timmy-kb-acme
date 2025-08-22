@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import os
-import fnmatch  # ✅ NEW: per matching glob dei branch
+import fnmatch  # per matching glob dei branch
 from pathlib import Path
 from typing import Optional, Mapping, Any
+
 from dotenv import load_dotenv
 
 from .exceptions import ConfigError  # coerenza con l'error handling della pipeline
@@ -23,15 +24,32 @@ __all__ = [
     "get_int",
     "redact_secrets",
     "is_log_redaction_enabled",
-    # ✅ NEW:
+    # policy canoniche:
     "compute_redact_flag",
     "get_force_allowed_branches",
     "is_branch_allowed_for_force",
 ]
 
-def get_env_var(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+# -----------------------------
+#  Utility base non-breaking
+# -----------------------------
+
+_TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
+_FALSE_SET = {"0", "false", "no", "off", "n", "f"}
+
+def get_env_var(
+    key: str,
+    default: Optional[str] = None,
+    required: bool = False,
+    *,
+    redact: bool | str = False,  # parametro compatibile con le chiamate a valle (non logga qui)
+) -> Optional[str]:
     """
     Recupera una variabile d'ambiente con comportamento retro-compatibile.
+
+    NOTE:
+    - `redact` è accettato per compatibilità (p.es. _git_push) ma non stampa nulla qui.
+      La redazione vera avviene nei logger con `redact_secrets()` o flag di contesto.
     """
     value = os.getenv(key, default)
     if required and (value is None or str(value).strip() == ""):
@@ -39,13 +57,6 @@ def get_env_var(key: str, default: Optional[str] = None, required: bool = False)
         raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
     return value
 
-
-# -----------------------------
-#  👇 Nuove utility non-breaking
-# -----------------------------
-
-_TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
-_FALSE_SET = {"0", "false", "no", "off", "n", "f"}
 
 def require_env(key: str) -> str:
     """Versione 'required' esplicita."""
@@ -133,11 +144,12 @@ def is_log_redaction_enabled(context=None) -> bool:
 
 
 # ================================
-# ✅ NEW: Policy redazione canonica
+# Policy redazione canonica
 # ================================
 
 def _truthy(val: Any) -> bool:
     return str(val).strip().lower() in _TRUE_SET if val is not None else False
+
 
 def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool:
     """
@@ -161,7 +173,7 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
     Returns:
         bool: True se la redazione va attivata, False altrimenti.
     """
-    # 1) Letture robustissime dalla mappa `env` con fallback a os.environ
+    # 1) Letture robuste dalla mappa `env` con fallback a os.environ
     mode = (env.get("LOG_REDACTION") if env is not None else None) or os.getenv("LOG_REDACTION", "auto")
     mode_l = str(mode or "auto").strip().lower()
 
@@ -192,7 +204,7 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
 
 
 # ================================
-# ✅ NEW: Force-push branch allowlist
+# Force-push branch allowlist
 # ================================
 
 def get_force_allowed_branches(context=None) -> list[str]:

@@ -65,6 +65,7 @@ except Exception:
 def _prompt(msg: str) -> str:
     return input(msg).strip()
 
+
 def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
     slug = (initial_slug or "").strip()
     while True:
@@ -81,6 +82,7 @@ def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_log
             if not interactive:
                 raise
             slug = ""
+
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
@@ -120,6 +122,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
 
     return count
 
+
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
 def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
     """
@@ -147,6 +150,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
     logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)
 
+
 # ────────────────────────────── Stub Fase 2 ──────────────────────────────────
 def _write_tagging_readme(semantic_dir: Path, logger) -> Path:
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -160,6 +164,7 @@ def _write_tagging_readme(semantic_dir: Path, logger) -> Path:
     )
     logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
     return out
+
 
 def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger) -> Path:
     rows = (csv_path.read_text(encoding="utf-8").splitlines())[1:]  # salta header
@@ -189,6 +194,7 @@ def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info("tags_reviewed stub scritto", extra={"file_path": str(out), "suggested": len(suggested)})
     return out
+
 
 # ───────────────────────────── Validatore YAML ───────────────────────────────
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
@@ -310,6 +316,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     logger.info("Validazione OK", extra={"tags_count": result.get("count", 0)})
     return 0
 
+
 # ────────────────────────────── MAIN orchestratore ───────────────────────────
 def tag_onboarding_main(
     slug: str,
@@ -374,7 +381,8 @@ def tag_onboarding_main(
     # Fase 1: CSV in semantic/
     csv_path = semantic_dir / "tags_raw.csv"
     _emit_tags_csv(raw_dir, csv_path, logger)
-    print(f"\n⚠️  Controlla la lista keyword in: {csv_path}\n")
+    # 👇 Sostituisce il vecchio print con un log “user-friendly”
+    logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path)})
 
     # Checkpoint HiTL
     if non_interactive:
@@ -392,6 +400,7 @@ def tag_onboarding_main(
     _write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
     logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir)})
 
+
 # ─────────────────────────────────── CLI ─────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Tag onboarding (download/copertura PDF + CSV + checkpoint HiTL + stub semantico)")
@@ -403,6 +412,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--proceed", action="store_true", help="In non-interattivo: prosegue anche alla fase 2 (stub semantico)")
     p.add_argument("--validate-only", action="store_true", help="Esegue solo la validazione di tags_reviewed.yaml")
     return p.parse_args()
+
 
 if __name__ == "__main__":
     args = _parse_args()
