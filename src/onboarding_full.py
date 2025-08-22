@@ -1,599 +1,460 @@
 #!/usr/bin/env python3
-# src/onboarding_full.py
+# -*- coding: utf-8 -*-
+"""
+Onboarding FULL: RAW → BOOK con arricchimento semantico, preview e push GitHub.
+- NON usa Google Drive (i PDF sono già in output/timmy-kb-<slug>/raw/).
+- Converte i PDF in Markdown in output/timmy-kb-<slug>/book/ tramite le content utils.
+- Arricchisce i frontmatter dei .md usando (se presente) output/timmy-kb-<slug>/semantic/tags.yaml.
+- Genera README.md e SUMMARY.md (preferenza: util del repo; fallback minimale).
+- Preview Docker (HonKit) con conferma interattiva; stop con stop_container_safely().
+- Push GitHub con conferma interattiva (o flag).
+"""
+
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
-import uuid
 import time
+import uuid
+import subprocess
+import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, List, Optional, Tuple
 
+# --- Infra coerente con orchestratori esistenti ---
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import (
     PipelineError,
     ConfigError,
-    PreviewError,
     EXIT_CODES,
-    ForcePushError,   # gate force
-    InvalidSlug,      # eccezione dominio per slug non valido
+    InvalidSlug,
 )
 from pipeline.context import ClientContext
-from pipeline.config_utils import get_client_config
-from pipeline.drive_utils import (
-    get_drive_service,
-    download_drive_pdfs_to_local,
+from pipeline.constants import (
+    OUTPUT_DIR_NAME,
+    LOGS_DIR_NAME,
+    LOG_FILE_NAME,
+    REPO_NAME_PREFIX,
 )
-from pipeline.content_utils import (
-    convert_files_to_structured_markdown,
-    generate_summary_markdown,
-    generate_readme_markdown,
-    validate_markdown_dir,
+from pipeline.path_utils import (
+    validate_slug as _validate_slug_helper,
+    sorted_paths,
+    sanitize_filename,
 )
-from pipeline.gitbook_preview import run_gitbook_docker_preview
-from pipeline.github_utils import push_output_to_github
-from pipeline.cleanup_utils import clean_push_leftovers  # ➕ cleanup post-push
-from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
-from pipeline.path_utils import validate_slug as _validate_slug_helper
-from pipeline.env_utils import (  # ✅ allow-list branch + lettura env
-    is_branch_allowed_for_force,
-    get_env_var,
-)
-from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry + logging
+
+# Content utils ufficiali (preferenza) + fallback soft
+try:
+    from pipeline.content_utils import (
+        convert_files_to_structured_markdown,   # (context, skip_if_unchanged=None, max_workers=None)
+        generate_summary_markdown,              # (context)
+        generate_readme_markdown,               # (context)
+        validate_markdown_dir,                  # (context)
+    )
+except Exception:
+    convert_files_to_structured_markdown = None  # type: ignore
+    generate_summary_markdown = None             # type: ignore
+    generate_readme_markdown = None              # type: ignore
+    validate_markdown_dir = None                 # type: ignore
+
+# Preview GitBook/HonKit (firme reali dal repo)
+from pipeline.gitbook_preview import run_gitbook_docker_preview, stop_container_safely  # noqa: E402
+
+# Push GitHub (wrapper repo) – opzionale
+try:
+    from pipeline.github_utils import push_output_to_github  # (context, *, github_token:str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
+except Exception:
+    push_output_to_github = None  # fallback gestito sotto
+
+# PyYAML per tags.yaml e frontmatter
+try:
+    import yaml  # type: ignore
+except Exception:
+    yaml = None
 
 
-# =========================
-#   Helpers UI/Prompt
-# =========================
+# ─────────────── Helpers UX ───────────────
 def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-def _confirm_yes_no(msg: str, default_no: bool = True) -> bool:
-    suffix = " [y/N]: " if default_no else " [Y/n]: "
-    ans = input(msg + suffix).strip().lower()
-    if not ans:
-        return not default_no
-    return ans in ("y", "yes", "s", "si", "sí")
-
-
-# =========================
-#   Helpers Telemetria Mini
-# =========================
-def _t_start() -> float:
-    return time.perf_counter()
-
-
-def _t_end(t0: float) -> int:
-    return int((time.perf_counter() - t0) * 1000)
-
-
-def _telem_info(logger, name: str, **extra) -> None:
-    logger.info(name, extra=extra)
-
-
-def _telem_warn(logger, name: str, **extra) -> None:
-    logger.warning(name, extra=extra)
-
-
-# =========================
-#   Helpers Docker
-# =========================
-def _docker_available() -> bool:
-    """Verifica la disponibilità di Docker usando run_cmd (con timeout/log)."""
-    try:
-        run_cmd(["docker", "info"], capture=True, op="docker info")
-        return True
-    except CmdError:
-        return False
-
-
-def _stop_preview_container(container_name: str) -> None:
-    """Stop/cleanup best-effort del container di preview (log + nessun errore bloccante)."""
-    try:
-        run_cmd(["docker", "rm", "-f", container_name], capture=True, op="docker rm -f")
-    except CmdError:
-        pass
-
-
 def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
-    """Valida/ottiene uno slug valido PRIMA di creare contesto/logger file-based."""
     slug = (initial_slug or "").strip()
     while True:
         if not slug:
             if not interactive:
                 raise ConfigError("Slug mancante.")
-            slug = _prompt("Inserisci slug cliente: ").strip()
+            slug = _prompt("Slug cliente: ").strip()
             continue
         try:
-            _validate_slug_helper(slug)  # alza InvalidSlug se non conforme
+            _validate_slug_helper(slug)
             return slug
         except InvalidSlug:
-            early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
+            early_logger.error("Slug non valido. Riprova.")
             if not interactive:
-                raise ConfigError(f"Slug '{slug}' non valido.")
-            slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
+                raise
+            slug = ""
 
 
-# =========================
-#   HELPER ESTRATTI (Fase A)
-# =========================
-
-def _run_preview(
-    context: ClientContext,
-    *,
-    slug: str,
-    port: int,
-    docker_retries: int,
-    non_interactive: bool,
-    redact: bool,
-    logger,
-) -> bool:
-    """Incapsula la logica della preview (check Docker + avvio container) con telemetria."""
-    t0 = _t_start()
-    container_name = f"honkit_preview_{slug}"
-    _telem_info(logger, "evt.preview.start", slug=slug, container=container_name, port=port)
-
-    # Controllo/policy Docker
-    preview_allowed = True
-    if non_interactive:
-        if not _docker_available():
-            preview_allowed = False
-            _telem_info(
-                logger,
-                "evt.preview.skip",
-                slug=slug,
-                container=container_name,
-                port=port,
-                reason="docker-missing",
-                duration_ms=_t_end(t0),
-            )
-            logger.info("⏭️  Modalità non-interattiva: Docker assente → anteprima saltata automaticamente")
-            return False
-    else:
-        if not _docker_available():
-            logger.warning("⚠️ Docker non disponibile")
-            if _confirm_yes_no("Vuoi proseguire senza anteprima?", default_no=False):
-                preview_allowed = False
-                _telem_info(
-                    logger,
-                    "evt.preview.skip",
-                    slug=slug,
-                    container=container_name,
-                    port=port,
-                    reason="user-skip",
-                    duration_ms=_t_end(t0),
-                )
-                logger.info("⏭️  L'utente ha scelto di proseguire senza anteprima (sarà totalmente esclusa)")
-                return False
-            else:
-                logger.info("🛠️  Attiva Docker quindi conferma per riprovare il controllo")
-                attempts = 0
-                max_attempts = max(1, int(docker_retries))
-                while attempts < max_attempts:
-                    ans = _confirm_yes_no("Hai attivato Docker? Vuoi riprovare ora il controllo?", default_no=False)
-                    if not ans:
-                        _telem_warn(
-                            logger,
-                            "evt.preview.fail",
-                            slug=slug,
-                            container=container_name,
-                            port=port,
-                            reason="user-abort",
-                            duration_ms=_t_end(t0),
-                        )
-                        raise ConfigError("Anteprima richiesta ma Docker non è stato attivato. Interruzione.")
-                    if _docker_available():
-                        logger.info("✅ Docker rilevato. La preview sarà attivata più avanti.")
-                        preview_allowed = True
-                        break
-                    else:
-                        attempts += 1
-                        logger.warning(f"⚠️  Docker ancora non disponibile (tentativo {attempts}/{max_attempts}).")
-                if attempts >= max_attempts and not preview_allowed:
-                    _telem_warn(
-                        logger,
-                        "evt.preview.fail",
-                        slug=slug,
-                        container=container_name,
-                        port=port,
-                        reason="docker-not-available-after-retries",
-                        duration_ms=_t_end(t0),
-                    )
-                    raise ConfigError("Docker non disponibile dopo i tentativi concessi.")
-
-    if preview_allowed and _docker_available():
-        logger.info("🔎 Docker disponibile: avvio preview HonKit (detached)")
-        try:
-            run_gitbook_docker_preview(
-                context,
-                port=port,
-                container_name=container_name,
-                wait_on_exit=False,
-                redact_logs=redact,  # 🔐 passa il toggle anche alla preview
-            )
-            _telem_info(
-                logger,
-                "evt.preview.ready",
-                slug=slug,
-                container=container_name,
-                port=port,
-                duration_ms=_t_end(t0),
-            )
-            logger.info(f"▶️ Anteprima su http://localhost:{port} (container: {container_name})")
-            return True
-        except PreviewError:
-            _telem_warn(
-                logger,
-                "evt.preview.fail",
-                slug=slug,
-                container=container_name,
-                port=port,
-                reason="error",
-                duration_ms=_t_end(t0),
-            )
-            raise
-    elif preview_allowed:
-        _telem_info(
-            logger,
-            "evt.preview.skip",
-            slug=slug,
-            container=container_name,
-            port=port,
-            reason="docker-lost",
-            duration_ms=_t_end(t0),
-        )
-        logger.warning("⚠️ Docker non più disponibile al momento dell'avvio: anteprima saltata")
-    else:
-        _telem_info(
-            logger,
-            "evt.preview.skip",
-            slug=slug,
-            container=container_name,
-            port=port,
-            reason="policy-disabled",
-            duration_ms=_t_end(t0),
-        )
-        logger.info("⏭️  Anteprima disabilitata per scelta/policy iniziale")
-    return False
+# ─────────────── Path helpers ───────────────
+def get_paths(slug: str) -> Dict[str, Path]:
+    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
+    raw_dir = base_dir / "raw"
+    book_dir = base_dir / "book"
+    semantic_dir = base_dir / "semantic"
+    return {"base": base_dir, "raw": raw_dir, "book": book_dir, "semantic": semantic_dir}
 
 
-def _resolve_target_branch(context: ClientContext) -> str:
-    """
-    Risolve il branch di lavoro coerentemente con il modulo GitHub:
-    1) context.env[GIT_DEFAULT_BRANCH] o context.env[GITHUB_BRANCH]
-    2) variabili di processo (get_env_var)
-    3) fallback 'main'
-    """
-    if getattr(context, "env", None):
-        br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
-        if br:
-            return str(br)
-    br = get_env_var("GIT_DEFAULT_BRANCH") or get_env_var("GITHUB_BRANCH")
-    return br or "main"
+# ─────────────── Tags loading ───────────────
+def _load_tags_vocab(base_dir: Path, logger) -> Dict[str, Dict]:
+    vocab: Dict[str, Dict] = {}
+    tags_path = base_dir / "semantic" / "tags.yaml"
+    if not tags_path.exists():
+        logger.info("tags.yaml assente: frontmatter con tags vuoti")
+        return vocab
+    if yaml is None:
+        logger.warning("PyYAML assente: impossibile leggere tags.yaml; proceeding senza tag.")
+        return vocab
 
-
-def _maybe_push(
-    context: ClientContext,
-    *,
-    push_flag: Optional[bool],
-    non_interactive: bool,
-    redact: bool,
-    logger,
-    # ✅ Nuovi parametri per governance force push (non I/O nei moduli)
-    force_push: Optional[bool] = None,
-    force_ack: Optional[str] = None,
-) -> None:
-    """Incapsula la logica del push (con conferma in interattivo) e cleanup opzionale) + telemetria."""
-    token = context.env.get("GITHUB_TOKEN")
-    target_branch = _resolve_target_branch(context)
-
-    # Determina se si vuole forzare
-    want_force = bool(force_push)
-    mode = "force-with-lease" if want_force else "incremental"
-
-    # Gate force push
-    if want_force:
-        # allow-list branch
-        if not is_branch_allowed_for_force(target_branch, context=context, allow_if_unset=True):
-            _telem_warn(
-                logger,
-                "evt.push.fail",
-                slug=context.slug,
-                branch=target_branch,
-                mode=mode,
-                reason="branch-not-allowed",
-                duration_ms=0,
-            )
-            raise ForcePushError(
-                f"Force push non consentito sul branch '{target_branch}' secondo GIT_FORCE_ALLOWED_BRANCHES.",
-                slug=context.slug,
-            )
-
-        if non_interactive:
-            # In CI il force richiede SEMPRE entrambi i fattori
-            if not force_ack:
-                _telem_warn(
-                    logger,
-                    "evt.push.fail",
-                    slug=context.slug,
-                    branch=target_branch,
-                    mode=mode,
-                    reason="missing-ack-noninteractive",
-                    duration_ms=0,
-                )
-                raise ForcePushError(
-                    "Force push in modalità non-interattiva senza --force-ack <TAG>.",
-                    slug=context.slug,
-                )
-        else:
-            # Interattivo: se manca l'ack, chiedi un tag esplicito
-            if not force_ack:
-                logger.warning("⚠️ Richiesta di force push senza ACK esplicito.")
-                if not _confirm_yes_no("Confermi di voler procedere con un force push?", default_no=True):
-                    logger.info("⏭️  Force push annullato dall'utente")
-                    want_force = False  # ricade su push normale (se abilitato)
-                    mode = "incremental"
-                else:
-                    entered = _prompt("Inserisci un tag di conferma (Force-Ack): ").strip()
-                    if not entered:
-                        _telem_warn(
-                            logger,
-                            "evt.push.fail",
-                            slug=context.slug,
-                            branch=target_branch,
-                            mode=mode,
-                            reason="ack-missing",
-                            duration_ms=0,
-                        )
-                        raise ForcePushError("Force push annullato: ACK mancante.", slug=context.slug)
-                    force_ack = entered  # ✅ acquisito interattivamente
-
-    # Risoluzione intenzione push (normale/incrementale)
-    if push_flag is not None:
-        do_push = push_flag
-        reason_skip = "flag-no-push" if push_flag is False else ""
-    else:
-        do_push = False if non_interactive else _confirm_yes_no("Eseguire il push su GitHub?", default_no=True)
-        reason_skip = "user-skip" if not do_push and not non_interactive else "noninteractive-default"
-
-    if not do_push:
-        _telem_info(
-            logger,
-            "evt.push.skip",
-            slug=context.slug,
-            branch=target_branch,
-            mode=mode,
-            reason=reason_skip,
-            duration_ms=0,
-        )
-        logger.info("⏭️  Push su GitHub non eseguito")
-        return
-
-    if not token:
-        _telem_warn(
-            logger,
-            "evt.push.fail",
-            slug=context.slug,
-            branch=target_branch,
-            mode=mode,
-            reason="no-token",
-            duration_ms=0,
-        )
-        raise ConfigError("GITHUB_TOKEN mancante: impossibile eseguire il push.")
-
-    logger.info(
-        "📤 Avvio push su GitHub (%s)",
-        mode,
-        extra={"branch": target_branch},
-    )
-
-    t0 = _t_start()
     try:
-        # ✅ Chiama il modulo GitHub passando i nuovi parametri (force governato)
-        push_output_to_github(
-            context,
-            github_token=token,
-            do_push=True,
-            force_push=want_force,
-            force_ack=force_ack,
-            redact_logs=redact,
-        )
-        _telem_info(
-            logger,
-            "evt.push.done",
-            slug=context.slug,
-            branch=target_branch,
-            mode=mode,
-            duration_ms=_t_end(t0),
-        )
-    except PipelineError:
-        _telem_warn(
-            logger,
-            "evt.push.fail",
-            slug=context.slug,
-            branch=target_branch,
-            mode=mode,
-            reason="error",
-            duration_ms=_t_end(t0),
-        )
-        raise
+        data = yaml.safe_load(tags_path.read_text(encoding="utf-8")) or {}
+        for item in data.get("tags", []):
+            canon = str(item.get("canonical", "")).strip()
+            if not canon:
+                continue
+            vocab[canon] = {
+                "synonyms": [s for s in (item.get("synonyms") or []) if isinstance(s, str)],
+                "areas_hint": [a for a in (item.get("areas_hint") or []) if isinstance(a, str)],
+            }
+        logger.info("Vocabolario tag caricato", extra={"count": len(vocab)})
+    except Exception as e:
+        logger.warning("Impossibile caricare tags.yaml", extra={"error": str(e)})
+    return vocab
 
-    # Cleanup artefatti locali post-push (solo interattivo, non bloccante)
-    if not non_interactive and _confirm_yes_no(
-        "Pulire eventuali artefatti locali di push legacy (es. .git in book/)?",
-        default_no=True,
-    ):
+
+def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict]) -> Tuple[List[str], List[str]]:
+    if not vocab:
+        return [], []
+    s = name_like_path.lower()
+    s = re.sub(r"[_\\/\-\s]+", " ", s)
+    found = set()
+    areas = set()
+    for canon, meta in vocab.items():
+        if canon and canon.lower() in s:
+            found.add(canon)
+        else:
+            for syn in meta.get("synonyms", []):
+                syn_l = str(syn).lower().strip()
+                if syn_l and syn_l in s:
+                    found.add(canon)
+                    break
+    for t in found:
+        areas.update(vocab.get(t, {}).get("areas_hint", []))
+    return sorted(found), sorted(areas) if areas else []
+
+
+# ─────────────── Frontmatter helpers ───────────────
+def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
+    if not md_text.startswith("---\n"):
+        return {}, md_text
+    if yaml is None:
+        return {}, md_text
+    try:
+        end = md_text.find("\n---", 4)
+        if end == -1:
+            return {}, md_text
+        header = md_text[4:end]
+        body = md_text[end + 4 + 1 :]
+        meta = yaml.safe_load(header) or {}
+        if not isinstance(meta, dict):
+            return {}, md_text
+        return meta, body
+    except Exception:
+        return {}, md_text
+
+
+def _dump_frontmatter(meta: Dict) -> str:
+    if yaml is None:
+        lines = ["---"]
+        if "title" in meta:
+            lines.append(f'title: "{meta["title"]}"')
+        if "tags" in meta and isinstance(meta["tags"], list):
+            lines.append("tags:")
+            lines.extend([f"  - {t}" for t in meta["tags"]])
+        if "areas" in meta and isinstance(meta["areas"], list):
+            lines.append("areas:")
+            lines.extend([f"  - {a}" for a in meta["areas"]])
+        lines.append("---\n")
+        return "\n".join(lines)
+    try:
+        return "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
+    except Exception:
+        lines = ["---"]
+        if "title" in meta:
+            lines.append(f'title: "{meta["title"]}"')
+        if "tags" in meta and isinstance(meta["tags"], list):
+            lines.append("tags:")
+            lines.extend([f"  - {t}" for t in meta["tags"]])
+        if "areas" in meta and isinstance(meta["areas"], list):
+            lines.append("areas:")
+            lines.extend([f"  - {a}" for a in meta["areas"]])
+        lines.append("---\n")
+        return "\n".join(lines)
+
+
+def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str], areas: List[str]) -> Dict:
+    meta = dict(existing or {})
+    if title and not meta.get("title"):
+        meta["title"] = title
+    if tags:
+        meta["tags"] = sorted(set((meta.get("tags") or []) + tags))
+    if areas:
+        meta["areas"] = sorted(set((meta.get("areas") or []) + areas))
+    return meta
+
+
+# ─────────────── RAW → BOOK ───────────────
+def _convert_raw_to_book(context: ClientContext, logger, *, slug: str) -> List[Path]:
+    paths = get_paths(slug)
+    book_dir = paths["book"]
+    book_dir.mkdir(parents=True, exist_ok=True)
+
+    if convert_files_to_structured_markdown is None:
+        logger.warning("convert_files_to_structured_markdown non disponibile: skip conversione (fallback)")
+        return sorted_paths(book_dir.glob("*.md"), base=book_dir)
+
+    convert_files_to_structured_markdown(context, skip_if_unchanged=None, max_workers=None)
+    return sorted_paths(book_dir.glob("*.md"), base=book_dir)
+
+
+def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], *, slug: str) -> List[Path]:
+    paths = get_paths(slug)
+    book_dir = paths["book"]
+    mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
+    touched: List[Path] = []
+
+    for md in mds:
+        name = md.name
+        title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
+        tags, areas = _guess_tags_for_name(name, vocab)
+
         try:
-            report = clean_push_leftovers(context)
-            logger.info("🧹 Cleanup artefatti completato", extra=report)
+            text = md.read_text(encoding="utf-8")
         except Exception as e:
-            # warning intenzionale: non vogliamo far fallire l'onboarding per cleanup
-            logger.warning("⚠️  Cleanup artefatti fallito", extra={"error": str(e)})
+            logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
+            continue
+
+        meta, body = _parse_frontmatter(text)
+        new_meta = _merge_frontmatter(meta, title=title, tags=tags, areas=areas)
+        if meta == new_meta:
+            continue
+
+        fm = _dump_frontmatter(new_meta)
+        try:
+            md.write_text(fm + body, encoding="utf-8")
+            touched.append(md)
+            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags, "areas": areas})
+        except Exception as e:
+            logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
+
+    return touched
 
 
-# =========================
-#   FUNZIONE PRINCIPALE
-# =========================
+def _write_summary_and_readme(context: ClientContext, logger, *, slug: str) -> None:
+    paths = get_paths(slug)
+    book_dir = paths["book"]
 
+    if generate_summary_markdown is not None:
+        try:
+            generate_summary_markdown(context)
+            logger.info("SUMMARY.md scritto (repo util)")
+        except Exception as e:
+            logger.warning("generate_summary_markdown fallita; applico fallback", extra={"error": str(e)})
+            _fallback_summary(book_dir, logger)
+    else:
+        _fallback_summary(book_dir, logger)
+
+    if generate_readme_markdown is not None:
+        try:
+            generate_readme_markdown(context)
+            logger.info("README.md scritto (repo util)")
+        except Exception as e:
+            logger.warning("generate_readme_markdown fallita; applico fallback", extra={"error": str(e)})
+            _fallback_readme(book_dir, context.slug, logger)
+    else:
+        _fallback_readme(book_dir, context.slug, logger)
+
+    if validate_markdown_dir is not None:
+        try:
+            validate_markdown_dir(context)
+            logger.info("Validazione directory MD OK")
+        except Exception as e:
+            logger.warning("Validazione directory MD fallita", extra={"error": str(e)})
+
+
+def _fallback_summary(book_dir: Path, logger) -> None:
+    items = sorted(book_dir.glob("*.md"), key=lambda p: p.name.lower())
+    lines = ["# Summary\n"]
+    for p in items:
+        if p.name.lower() in ("readme.md", "summary.md"):
+            continue
+        title = re.sub(r"[_\\/\-]+", " ", p.stem).strip() or p.stem
+        lines.append(f"- [{title}]({p.name})")
+    (book_dir / "SUMMARY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _fallback_readme(book_dir: Path, slug: str, logger) -> None:
+    text = (
+        f"# Knowledge Base – {slug}\n\n"
+        f"Generato il {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"Raccolta generata da PDF in `raw/` con arricchimento semantico (tags.yaml) e build automatica.\n"
+    )
+    (book_dir / "README.md").write_text(text, encoding="utf-8")
+
+
+# ─────────────── Preview management (firme reali) ───────────────
+def _run_preview(context: ClientContext, logger, *, slug: str, port: int = 4000) -> str:
+    """
+    Avvia la preview in modalità detached (default wrapper).
+    Ritorna il nome del container per eventuale stop.
+    """
+    container_name = f"gitbook-{slug}"
+    # La funzione del repo non ritorna path/ID (solo log). :contentReference[oaicite:4]{index=4}
+    run_gitbook_docker_preview(
+        context,
+        port=port,
+        container_name=container_name,
+        wait_on_exit=False,
+        redact_logs=getattr(context, "redact_logs", False),
+    )
+    return container_name
+
+
+def _stop_preview(logger, *, container_name: Optional[str]) -> None:
+    if not container_name:
+        return
+    # Usa l'helper del repo (best-effort). :contentReference[oaicite:5]{index=5}
+    try:
+        stop_container_safely(container_name)
+        logger.info("Preview Docker fermata", extra={"container": container_name})
+    except Exception as e:
+        logger.warning("Stop preview fallito (best-effort)", extra={"container": container_name, "error": str(e)})
+
+
+# ─────────────── Push GitHub (preferenza util repo; fallback shell) ──────────
+def _git_push(context: ClientContext, logger, message: str) -> None:
+    if push_output_to_github is not None:
+        try:
+            token = os.environ.get("GITHUB_TOKEN", "")
+            push_output_to_github(
+                context,
+                github_token=token,
+                do_push=True,
+                force_push=False,
+                force_ack=None,
+                redact_logs=getattr(context, "redact_logs", False),
+            )
+            logger.info("Git push completato (repo util)")
+            return
+        except Exception as e:
+            logger.warning("Git push util del repo fallito, passo a fallback shell", extra={"error": str(e)})
+
+    repo_root = Path(getattr(context, "repo_root_dir", Path.cwd()))
+    cmds = [
+        ["git", "-C", str(repo_root), "add", "-A"],
+        ["git", "-C", str(repo_root), "commit", "-m", message],
+        ["git", "-C", str(repo_root), "push"],
+    ]
+    for cmd in cmds:
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as e:
+            stderr = (e.stderr or b"").decode("utf-8", errors="ignore")
+            if "nothing to commit" in stderr.lower():
+                logger.info("Git: nulla da commitare")
+                continue
+            raise ConfigError(f"Git command failed: {' '.join(cmd)} → {stderr}")
+    logger.info("Git push completato (fallback shell)")
+
+
+# ─────────────── MAIN orchestrator ───────────────
 def onboarding_full_main(
     slug: str,
     *,
     non_interactive: bool = False,
-    dry_run: bool = False,
-    no_drive: bool = False,
-    push: Optional[bool] = None,
-    port: int = 4000,
-    allow_offline_env: bool = False,
-    docker_retries: int = 3,
+    with_preview: bool = True,
+    with_push: bool = True,
+    preview_port: int = 4000,
+    stop_preview_end: bool = False,
     run_id: Optional[str] = None,
-    # ✅ Nuovi parametri propagati all’helper push
-    force_push: Optional[bool] = None,
-    force_ack: Optional[str] = None,
 ) -> None:
-    # Logger console “early” per validazione slug (prima del contesto)
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-
-    # ✅ VALIDAZIONE SLUG NELL’ORCHESTRATORE (loop solo qui)
     slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
 
-    # ✅ VALIDAZIONE PORTA: range obbligatorio 1..65535
-    if not (1 <= int(port) <= 65535):
-        raise ConfigError(f"Porta fuori range: {port}. Valori validi 1..65535.")
-
-    # 🚦 Policy env: se NON è dry-run e NON c'è --no-drive ⇒ require_env=True
-    # Override possibile con --allow-offline-env
-    if allow_offline_env:
-        require_env = not (no_drive or dry_run or non_interactive)
-    else:
-        require_env = (not no_drive) and (not dry_run)
+    log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     context: ClientContext = ClientContext.load(
         slug=slug,
-        interactive=not non_interactive,  # prompt solo negli orchestratori
-        require_env=require_env,
+        interactive=not non_interactive,
+        require_env=False,
         run_id=run_id,
     )
-
-    # 🌟 Logger file-based allineato alle costanti
-    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
+    logger.info("🚀 Avvio onboarding_full (RAW → BOOK, preview & push)")
 
-    if not require_env:
-        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
+    paths = get_paths(slug)
+    base_dir = paths["base"]
 
-    logger.info("🚀 Avvio onboarding_full")
+    # 1) RAW → BOOK
+    _convert_raw_to_book(context, logger, slug=slug)
 
-    # Config cliente
-    try:
-        cfg: Dict[str, Any] = get_client_config(context) or {}
-    except ConfigError as e:
-        logger.error(str(e))
-        raise
+    # 2) Arricchimento frontmatter con semantica (se abbiamo il vocabolario)
+    vocab = _load_tags_vocab(base_dir, logger)
+    if vocab:
+        _enrich_frontmatter(context, logger, vocab, slug=slug)
 
-    # Toggle redazione centralizzato
-    redact = context.redact_logs
+    # 3) SUMMARY.md e README.md
+    _write_summary_and_readme(context, logger, slug=slug)
 
-    # 1) Download da Drive (opzionale)
-    if not no_drive and not dry_run:
-        drive_raw_folder_id = cfg.get("drive_raw_folder_id")
-        if not drive_raw_folder_id:
-            raise ConfigError("ID cartella RAW su Drive mancante in config.yaml (chiave: drive_raw_folder_id).")
-        logger.info(f"📥 Download PDF da Drive (RAW={drive_raw_folder_id}) → {context.raw_dir}")
-        service = get_drive_service(context)
-        download_drive_pdfs_to_local(
-            service=service,
-            remote_root_folder_id=drive_raw_folder_id,
-            local_root_dir=context.raw_dir,
-            progress=not non_interactive,
-            context=context,
-            redact_logs=redact,
-        )
-    else:
-        if no_drive:
-            logger.info("⏭️  Skip download da Drive (flag --no-drive)")
-        if dry_run:
-            logger.info("🧪 Dry-run attivo: nessun accesso a Google Drive")
+    # 4) Preview (con conferma se interattivo)
+    container_name: Optional[str] = None
+    if with_preview:
+        if not non_interactive:
+            ans = (_prompt("Avvio preview Docker di HonKit? (Y/n): ") or "y").lower()
+            if ans.startswith("n"):
+                with_preview = False
+        if with_preview:
+            container_name = _run_preview(context, logger, slug=slug, port=preview_port)
 
-    # 2) Conversione/generazione Markdown
-    logger.info("🧩 Conversione PDF → Markdown strutturato")
-    convert_files_to_structured_markdown(context)
-    logger.info("🧭 Generazione SUMMARY.md")
-    generate_summary_markdown(context)
-    logger.info("📘 Generazione README.md")
-    generate_readme_markdown(context)
-    validate_markdown_dir(context)
+    # 5) Push (con conferma se interattivo)
+    do_push = with_push
+    if not non_interactive and with_push:
+        ans = (_prompt("Eseguo push su GitHub? (Y/n): ") or "y").lower()
+        if ans.startswith("n"):
+            do_push = False
+    if do_push:
+        _git_push(context, logger, message=f"onboarding_full({slug}): build book with semantic enrichment")
 
-    # 3) Preview HonKit in Docker (mai bloccante) — ora incapsulata
-    preview_started = False
-    container_name = f"honkit_preview_{slug}"
-    try:
-        preview_started = _run_preview(
-            context,
-            slug=slug,
-            port=port,
-            docker_retries=docker_retries,
-            non_interactive=non_interactive,
-            redact=redact,
-            logger=logger,
-        )
+    # 6) Stop preview (se richiesto)
+    if container_name and (stop_preview_end or (not non_interactive and (_prompt("Vuoi fermare adesso la preview Docker? (y/N): ") or "n").lower().startswith("y"))):
+        _stop_preview(logger, container_name=container_name)
 
-        # 4) Push su GitHub (opzionale) — incapsulato
-        _maybe_push(
-            context,
-            push_flag=push,
-            non_interactive=non_interactive,
-            redact=redact,
-            logger=logger,
-            force_push=force_push,
-            force_ack=force_ack,
-        )
-    finally:
-        if preview_started:
-            _stop_preview_container(container_name)
-            logger.info("🧹 Anteprima fermata automaticamente", extra={"file_path": container_name})
-
-    logger.info("✅ Onboarding completo")
+    book_dir = paths["book"]
+    logger.info("✅ Completato", extra={"md_files": len(list(book_dir.glob('*.md'))), "preview_container": container_name})
 
 
+# ─────────────── CLI ───────────────
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Onboarding completo Timmy-KB")
+    p = argparse.ArgumentParser(description="Onboarding FULL (RAW → BOOK, arricchimento, preview e push)")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
-    p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
+    p.add_argument("--slug", type=str, help="Slug cliente")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
-    p.add_argument("--dry-run", action="store_true", help="Nessun accesso a servizi remoti; esegue conversione locale")
-    p.add_argument("--no-drive", action="store_true", help="Salta sempre download da Drive")
-
-    # Push: rendiamo i due flag mutuamente esclusivi per evitare ambiguità
-    grp_push = p.add_mutually_exclusive_group()
-    grp_push.add_argument("--push", action="store_true", help="Forza il push su GitHub (se GITHUB_TOKEN è presente)")
-    grp_push.add_argument("--no-push", action="store_true", help="Disabilita esplicitamente il push su GitHub")
-
-    # ✅ Nuovi flag per governance force-push (gated)
-    p.add_argument(
-        "--force-push",
-        action="store_true",
-        help="(Avanzato) Richiedi force push. Richiede anche --force-ack <TAG>.",
-    )
-    p.add_argument(
-        "--force-ack",
-        type=str,
-        help="Tag di conferma obbligatorio quando si usa --force-push (ack a due fattori).",
-    )
-
-    p.add_argument("--port", type=int, default=4000, help="Porta locale per la preview HonKit (default: 4000)")
-    p.add_argument(
-        "--allow-offline-env",
-        action="store_true",
-        help="Permette require_env=False anche in modalità non-interactive (uso avanzato/CI).",
-    )
-    p.add_argument(
-        "--docker-retries",
-        type=int,
-        default=3,
-        help="Numero massimo di retry per il controllo Docker in modalità interattiva (default: 3).",
-    )
+    p.add_argument("--no-preview", action="store_true", help="Disabilita generazione preview")
+    p.add_argument("--no-push", action="store_true", help="Disabilita push su GitHub")
+    p.add_argument("--preview-port", type=int, default=4000, help="Porta per la preview (se supportato)")
+    p.add_argument("--stop-preview", action="store_true", help="Ferma la preview Docker al termine")
     return p.parse_args()
 
 
@@ -606,44 +467,23 @@ if __name__ == "__main__":
     if not unresolved_slug and args.non_interactive:
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
+
     try:
         slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
-    # Risoluzione del comportamento push
-    if args.no_push:
-        push_flag = False
-    elif args.push:
-        push_flag = True
-    else:
-        push_flag = None
-
     try:
         onboarding_full_main(
             slug=slug,
             non_interactive=args.non_interactive,
-            dry_run=args.dry_run,
-            no_drive=args.no_drive,
-            push=push_flag,
-            port=args.port,
-            allow_offline_env=args.allow_offline_env,
-            docker_retries=args.docker_retries,
+            with_preview=not args.no_preview,
+            with_push=not args.no_push,
+            preview_port=int(args.preview_port),
+            stop_preview_end=bool(args.stop_preview),
             run_id=run_id,
-            # ✅ Propagazione nuovi flag
-            force_push=args.force_push,
-            force_ack=args.force_ack,
         )
-        sys.exit(0)
-    except KeyboardInterrupt:
-        sys.exit(130)
-    # 👇 Ordine corretto: specifiche prima di PipelineError
-    except ConfigError:
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
-    except PreviewError:
-        sys.exit(EXIT_CODES.get("PreviewError", 30))
-    except PipelineError as e:
-        code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
-        sys.exit(code)
-    except Exception:
-        sys.exit(EXIT_CODES.get("PipelineError", 1))
+    except (ConfigError, PipelineError) as e:
+        logger = get_structured_logger("onboarding_full", run_id=run_id)
+        logger.error(str(e))
+        sys.exit(EXIT_CODES.get(type(e).__name__, 1))

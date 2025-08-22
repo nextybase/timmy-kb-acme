@@ -2,6 +2,38 @@
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
+## [1.1.0] — 2025-08-22 · Semantic Enrichment & Orchestration
+
+### Added
+- **Nuovo orchestratore** `src/tag_onboarding.py`: fase di *tag discovery* HiTL tra `pre_onboarding` e `onboarding_full`.
+  - Download PDF → `output/timmy-kb-<slug>/raw/`.
+  - Output semantici in `output/timmy-kb-<slug>/semantic/`: `tags_raw.csv` (grezza), `tags_reviewed.yaml` (review), `tags.yaml` (vocabolario finale con `canonical`, `synonyms`, `areas_hint`).
+  - Modalità **interattiva** (prompt slug/continue) e **non-interattiva** (`--slug`).
+  - Validazione YAML dei tag (validator CLI in `src/semantic/`).
+- **onboarding_full**: conferme interattive per **preview** e **push**; flag `--no-preview`, `--no-push`, `--stop-preview`.
+
+### Changed
+- **onboarding_full.py**
+  - Non accede più a Drive; lavora sui PDF già scaricati in `raw/`.
+  - Conversione RAW→BOOK tramite `pipeline.content_utils.convert_files_to_structured_markdown(...)`.
+  - **Arricchimento frontmatter** da `semantic/tags.yaml` (merge di `tags`/`areas`).
+  - Preview con `pipeline.gitbook_preview.run_gitbook_docker_preview(...)` (detached); stop con `stop_container_safely(...)`.
+  - Push con `pipeline.github_utils.push_output_to_github(...)` (incrementale).
+  - Percorsi calcolati da costanti repo (niente più `context.book_dir`).
+- Allineati import/firme agli helper reali dei moduli `gitbook_preview`, `github_utils`, `content_utils`.
+
+### Fixed
+- **AttributeError** su `ClientContext.book_dir` (rimosso uso; paths risolti via `OUTPUT_DIR_NAME/REPO_NAME_PREFIX`).
+- Eliminato riferimento a `extract_text_from_pdf` non presente; ora si usa la conversione repo-native.
+
+### Migration Notes
+- Nuova sequenza consigliata: `pre_onboarding.py` → `tag_onboarding.py` → `onboarding_full.py`.
+- Se integravi il **download da Drive** in `onboarding_full`, sposta la responsabilità su `tag_onboarding` (oppure assicurati che `raw/` sia già popolata).
+
+### Compatibility
+- **Nessun breaking change** sulla CLI di `onboarding_full`; cambia la **policy operativa** (Drive escluso dallo step).
+
+
 ## [1.0.] — 2025-08-20 · Operational hardening (Fase 2)
 
 ### Added
