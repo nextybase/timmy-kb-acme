@@ -1,3 +1,4 @@
+# src/pipeline/logging_utils.py
 """
 Utility per la creazione di logger strutturati per la pipeline Timmy-KB.
 
@@ -9,7 +10,8 @@ Caratteristiche:
 - Comportamento “safe”: nessun crash se il file di log non è scrivibile
   (degrada a console-only con avviso).
 - **Redazione centralizzata**: se `context.redact_logs` è True, applica mascheratura
-  ai messaggi/argomenti tramite `env_utils.redact_secrets(...)`.
+  ai messaggi/argomenti tramite `env_utils.redact_secrets(...)` e ai campi `extra`
+  considerati sensibili (es. token, secret, key, password, service_account, authorization, path).
 
 Note architetturali:
 - Nessun I/O non necessario oltre alla creazione opzionale del file di log.
@@ -36,6 +38,18 @@ try:
     import resource  # Unix-only; usato solo se presente
 except Exception:  # pragma: no cover
     resource = None  # type: ignore
+
+
+# Chiavi/substring considerate sensibili negli extra
+_SENSITIVE_EXTRA_SUBSTRS = (
+    "token",
+    "secret",
+    "key",
+    "password",
+    "service_account",
+    "authorization",
+    "path",
+)
 
 
 @runtime_checkable
@@ -83,6 +97,7 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
     La redazione viene applicata a:
       - `record.msg` (stringhe o contenenti token sensibili)
       - `record.args` (tuple/list/dict con stringhe potenzialmente sensibili)
+      - campi `extra` (solo per chiavi considerate sensibili: token/secret/key/password/service_account/authorization/path)
 
     Note:
     - Non modifica `exc_info`.
@@ -108,9 +123,28 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
             redact = bool(getattr(context, "redact_logs", False)) if context is not None else False
             if not redact:
                 return True
+
             # Applica redazione a msg/args
             record.msg = _redact_obj(record.msg)
             record.args = _redact_obj(record.args)
+
+            # NEW: redazione sugli extra sensibili nel record.__dict__
+            # Evitiamo di toccare i campi core del LogRecord; operiamo solo per chiavi che
+            # contengono le substring sensibili (_SENSITIVE_EXTRA_SUBSTRS).
+            rec_dict = getattr(record, "__dict__", {})
+            for k in list(rec_dict.keys()):
+                # salta i campi standard già gestiti sopra
+                if k in ("msg", "args"):
+                    continue
+                k_low = k.lower()
+                if any(sub in k_low for sub in _SENSITIVE_EXTRA_SUBSTRS):
+                    try:
+                        v = rec_dict[k]
+                        rec_dict[k] = _redact_obj(v)
+                    except Exception:
+                        # non deve mai bloccare il logging
+                        pass
+
         except Exception:
             # mai bloccare il logging per errori di filtro
             pass
@@ -209,10 +243,14 @@ def get_structured_logger(
             logger.addHandler(fh)
         except Exception as e:
             # Se il file non è creabile, degrada a console-only
-            logger.warning(
-                f"Impossibile creare file di log {log_file_path}: {e}. "
-                "Logging solo su console."
-            )
+            # (NB: questo warning passerà comunque dai filtri e quindi sarà redatto se necessario)
+            try:
+                logger.warning(
+                    f"Impossibile creare file di log {log_file_path}: {e}. "
+                    "Logging solo su console."
+                )
+            except Exception:
+                pass
 
     return logger
 
