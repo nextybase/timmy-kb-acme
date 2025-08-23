@@ -1,6 +1,6 @@
-# User Guide — Timmy‑KB (v1.0.5 Stable)
+# User Guide — Timmy‑KB (v1.1.0)
 
-Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con anteprima HonKit (Docker) e, se vuoi, push su GitHub.
+Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se vuoi, push su GitHub.
 
 ---
 
@@ -8,18 +8,21 @@ Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑r
 
 - **Python ≥ 3.10**
 - **Docker** (solo per l’anteprima)
-- **Credenziali Google** (Service Account JSON) per Google Drive
+- (Solo per pre‑onboarding con Drive) **Credenziali Google** (Service Account JSON)
 - (Opz.) **GitHub Token** (`GITHUB_TOKEN`) per il push
 
 ### Variabili d’ambiente
 
 Imposta le variabili (via `.env` o ambiente di sistema):
 
-- `SERVICE_ACCOUNT_FILE` oppure `GOOGLE_APPLICATION_CREDENTIALS` → path al JSON del Service Account
-- `DRIVE_ID` (o `DRIVE_PARENT_FOLDER_ID`) → radice/parent dello spazio Drive
+- `SERVICE_ACCOUNT_FILE` → path al JSON del Service Account (solo per Drive)
+- `DRIVE_ID` → radice/parent dello spazio Drive (solo per Drive)
 - `GITHUB_TOKEN` → necessario solo se vuoi pubblicare su GitHub
 - `GIT_DEFAULT_BRANCH` → branch di default per il push (fallback `main`)
-- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre\_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
+- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
+- `LOG_REDACTION` → `auto` (default), `on`, `off`
+- `ENV` → `dev`, `prod`, `ci`, ...
+- `CI` → `true`/`false`
 
 ---
 
@@ -27,10 +30,11 @@ Imposta le variabili (via `.env` o ambiente di sistema):
 
 ```
 output/timmy-kb-<slug>/
-  ├─ raw/        # PDF scaricati (opzionale)
+  ├─ raw/        # PDF locali (fonte unica)
   ├─ book/       # Markdown + SUMMARY.md + README.md
-  ├─ config/     # config.yaml, mapping semantico
-  └─ logs/       # onboarding.log (logger unico per cliente)
+  ├─ semantic/   # tags.yaml e altri enrichment
+  ├─ config/     # config.yaml (aggiornato con eventuali ID Drive)
+  └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
 ```
 
 > Lo **slug** deve rispettare la regex definita in `config/config.yaml`. In interattivo, se non valido ti verrà chiesto di correggerlo.
@@ -39,50 +43,73 @@ output/timmy-kb-<slug>/
 
 ## 3) Flussi operativi
 
-### A) Pre‑onboarding (setup) — *flusso interattivo di base*
+### Modalità interattiva vs CLI
+
+- **Interattiva**: l’utente viene guidato passo passo. Nel pre‑onboarding deve inserire *slug* e nome cliente; in onboarding può confermare/negare l’avvio della preview Docker e del push GitHub. In questa modalità i comandi si lanciano "secchi" (senza parametri), e lo script chiede via prompt i dati mancanti.  
+  - Esempi: `py src/pre_onboarding.py` oppure `py src/onboarding_full.py`.
+
+- **CLI (batch)**: tutti i parametri vanno passati via opzioni (`--slug`, `--name`, `--no-preview`, `--no-push`, ecc.). Non ci sono prompt ed è pensata per CI/CD o automazioni.  
+  - Esempi: `py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive` oppure `py src/onboarding_full.py --slug acme --no-preview --no-push`.
+
+---
+
+### A) Pre‑onboarding (setup)
 
 ```bash
-py src/pre_onboarding.py
+py src/pre_onboarding.py [--slug <id>] [--name <nome descrittivo>] [--non-interactive] [--dry-run]
 ```
 
 **Sequenza tipica**
 
-1. **Slug cliente** → richiesto lo *slug* (es. `acme`). Se non valido, il sistema spiega e chiede nuovo valore. Puoi passarlo anche da CLI con `--slug acme` e, opzionalmente, `--name "Cliente ACME"`.
+1. **Slug cliente** → richiesto lo *slug* (es. `acme`). In interattivo, se non valido il sistema chiede un nuovo valore. In CLI puoi fornirlo con `--slug acme` e, opzionalmente, `--name "Cliente ACME"`.
 2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml` (con backup `.bak` se già presente).
 3. **Google Drive (opzionale)**
-   - Se le variabili sono configurate: mostra l’ID e chiede se creare/aggiornare la struttura su Drive.
-   - Se mancano credenziali e non hai passato `--no-drive`: l’esecuzione fallisce.
-   - In CI/batch puoi usare `--dry-run` o `--no-drive` per forzare il comportamento.
+   - Se configurato: crea/aggiorna la struttura remota e carica `config.yaml`.
+   - Se mancano credenziali: in interattivo puoi usare `--dry-run` per restare in locale; in batch l’esecuzione fallisce senza il flag.
 4. **Riepilogo finale** → mostra azioni eseguite e dove trovare i file.
 
 > In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente.
 
 ---
 
-### B) Onboarding completo — *flusso interattivo di base*
+### B) Tagging semantico
 
 ```bash
-py src/onboarding_full.py
+py src/tag_onboarding.py --slug <id>
 ```
 
 **Sequenza tipica**
 
-1. **Slug cliente** → richiesto e validato.
-2. **Conversione PDF → Markdown** → avvio automatico con log; genera `SUMMARY.md` e `README.md` in `book/`.
+1. Legge i PDF in `raw/`.
+2. Genera/aggiorna `semantic/tags.yaml` con i tag riconosciuti.
+3. Prepara i dati per l’arricchimento frontmatter che avverrà in onboarding.
+
+---
+
+### C) Onboarding completo
+
+```bash
+py src/onboarding_full.py [--slug <id>] [opzioni]
+```
+
+**Sequenza tipica**
+
+1. **Conversione PDF → Markdown** → avvio automatico; genera `SUMMARY.md` e `README.md` in `book/`.
+2. **Arricchimento frontmatter** → integra tags/areas dal `tags.yaml`.
 3. **Anteprima HonKit (Docker)**
-   - Se Docker disponibile: *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached*, non blocca la pipeline e viene fermata automaticamente.
-   - Se Docker assente: *«Proseguire senza anteprima?»* (default **No**). Se confermi, la pipeline continua.
-   - Puoi anche controllare i retry Docker con `--docker-retries N`.
+   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached* e non blocca la pipeline.
+   - Se Docker assente: chiede *«Proseguire senza anteprima?»* (default **No**).
 4. **Pubblicazione su GitHub (opzionale)**
-   - *«Eseguire il push su GitHub?»* (default **No**). Se accetti, controlla `GITHUB_TOKEN` e propone branch (`GIT_DEFAULT_BRANCH`, fallback `main`).
-   - Puoi abilitare il force‑push con `--force-push`; se serve un ack esplicito, passa anche `--force-ack`.
-5. **Pulizia finale**
-   - *«Eseguire il cleanup?»* (default **Sì**). Elimina file temporanei/backup e ferma eventuale preview rimasta attiva.
+   - Chiede *«Eseguire il push su GitHub?»* (default **No**). Richiede `GITHUB_TOKEN`.
+   - In CLI puoi saltare con `--no-push` o forzare con `--force-push` + `--force-ack`.
+5. **Stop preview (se attiva)** → opzionale a fine pipeline.
 
-**Dettagli tecnici anteprima**
+**Opzioni CLI principali**
 
-- Porta: `4000` (cambiabile via prompt o `--port 4000`).
-- Nome container: `honkit_preview_<slug>`.
+- `--no-preview` → salta la preview Docker.
+- `--no-push` → salta il push GitHub.
+- `--preview-port <N>` → porta della preview (default 4000).
+- `--stop-preview` → ferma la preview al termine.
 
 ---
 
@@ -94,38 +121,38 @@ py src/onboarding_full.py
 # Setup cliente
 py src/pre_onboarding.py
 
-# Onboarding completo (conversione, anteprima, push opzionale, cleanup)
+# Tagging semantico
+py src/tag_onboarding.py
+
+# Onboarding completo
 py src/onboarding_full.py
 ```
 
-### Varianti batch/CI
+### CLI / Batch / CI
 
 ```bash
-# Setup minimale, nessun accesso a servizi remoti
+# Setup minimale, solo locale
 py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive --dry-run
 
-# Generazione Markdown + auto-skip preview se Docker manca, niente push
-py src/onboarding_full.py --slug acme --no-drive --non-interactive
+# Tagging
+py src/tag_onboarding.py --slug acme --non-interactive
 
-# Con push esplicito, con force-push
-export GITHUB_TOKEN=ghp_xxx
-export GIT_DEFAULT_BRANCH=main
-py src/onboarding_full.py --slug acme --no-drive --non-interactive --push --force-push --force-ack
+# Generazione book + enrichment, skip preview/push
+echo $GITHUB_TOKEN
+py src/onboarding_full.py --slug acme --no-preview --no-push --non-interactive
 ```
-
-> Su Linux/Mac puoi usare `python` invece di `py`.
 
 ---
 
 ## 5) Log ed Exit Codes
 
-- Log centralizzati in `output/timmy-kb-<slug>/logs/onboarding.log`.
+- Log centralizzati in `output/timmy-kb-<slug>/logs/`.
 - Nessun `print()` nei moduli; prompt solo negli orchestratori.
 
 **Exit codes (estratto)**
 
 - `0`  → ok
-- `2`  → `ConfigError` (variabili mancanti, slug invalido in batch)
+- `2`  → `ConfigError` (slug invalido, variabili mancanti)
 - `30` → `PreviewError`
 - `40` → `PushError`
 
@@ -134,8 +161,8 @@ py src/onboarding_full.py --slug acme --no-drive --non-interactive --push --forc
 ## 6) Troubleshooting
 
 - **Docker non installato** → interattivo: domanda se proseguire senza anteprima.
-- **Anteprima non raggiungibile** → verifica porta `4000`, forzare stop con `docker rm -f honkit_preview_<slug>`.
-- **Push fallito** → controlla `GITHUB_TOKEN` e `GIT_DEFAULT_BRANCH`.
+- **Anteprima non raggiungibile** → verifica porta `4000`, stop con `docker rm -f gitbook-<slug>`.
+- **Push fallito** → controlla `GITHUB_TOKEN` e branch.
 - **Slug non valido** → richiesto reinserimento.
 
 ---
@@ -151,23 +178,23 @@ py src/onboarding_full.py --slug acme --no-drive --non-interactive --push --forc
 
 ## 8) FAQ
 
-**Posso usare la preview se Docker non c’è?**\
+**Posso usare la preview se Docker non c’è?**  
 No. In batch viene saltata; in interattivo puoi proseguire senza.
 
-**La preview blocca la pipeline?**\
-No. È *detached* e si ferma automaticamente.
+**La preview blocca la pipeline?**  
+No. È *detached* e si può fermare a fine pipeline.
 
-**Cosa viene pubblicato su GitHub?**\
+**Cosa viene pubblicato su GitHub?**  
 Solo i `.md` in `book/` (esclusi i `.bak`).
 
-**Posso cambiare la porta della preview?**\
-Sì: `--port 4000`.
+**Posso cambiare la porta della preview?**  
+Sì: `--preview-port 4000`.
 
-**Come gestire un push con force?**\
+**Come gestire un push con force?**  
 Passa `--force-push` e, se richiesto, `--force-ack`.
 
-**Posso lanciare senza variabili di ambiente?**\
-Sì, ma devi passare `--allow-offline-env` (fallback su default sicuri, usato solo in test/CI).
+**Posso lanciare senza variabili di ambiente?**  
+Sì, se usi `--non-interactive` e resti in locale (`--dry-run`).
 
 ---
 
