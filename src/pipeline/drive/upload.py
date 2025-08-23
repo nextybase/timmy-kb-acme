@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Union
+from os import PathLike
 
 import yaml  # type: ignore
 from googleapiclient.errors import HttpError  # type: ignore
-from googleapiclient.http import MediaFileUpload  # type: ignore
 
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
@@ -251,7 +251,7 @@ def _create_remote_tree_from_mapping(
 
 def create_drive_structure_from_yaml(
     service: Any,
-    yaml_path: str,
+    yaml_path: Union[str, PathLike[str]],
     client_folder_id: str,
     *,
     redact_logs: bool = False,
@@ -264,11 +264,11 @@ def create_drive_structure_from_yaml(
     - Ritorna una mappa nome→ID; se compaiono `raw`/`RAW` o `yaml`/`YAML`,
       aggiunge gli alias corrispondenti **solo nel risultato** (nessuna cartella extra).
     """
-    if not os.path.isfile(yaml_path):
+    if not os.path.isfile(str(yaml_path)):
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
 
     try:
-        with open(yaml_path, "r", encoding="utf-8") as fh:
+        with open(str(yaml_path), "r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
@@ -389,6 +389,15 @@ def upload_config_to_drive_folder(
         )
         _delete_file_hard(service, existing_id)
 
+    # Lazy import: disponibile solo se effettivamente carichiamo il file
+    try:
+        from googleapiclient.http import MediaFileUpload  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise DriveUploadError(
+            "Dipendenza mancante per upload su Drive: google-api-python-client. "
+            "Installa la libreria o usa --dry-run."
+        ) from e
+
     media = MediaFileUpload(str(local_config), mimetype="application/octet-stream", resumable=False)
     body = {"name": "config.yaml", "parents": [parent_id]}
 
@@ -423,19 +432,19 @@ def upload_config_to_drive_folder(
 # ------------------------------- Struttura LOCALE (permissiva) --------------------
 
 
-def _read_yaml_structure(yaml_path: str) -> Dict[str, Any]:
+def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]:
     """Carica il file YAML e ritorna la struttura normalizzata (vedi _normalize_yaml_structure)."""
-    if not os.path.isfile(yaml_path):
+    if not os.path.isfile(str(yaml_path)):
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
     try:
-        with open(yaml_path, "r", encoding="utf-8") as fh:
+        with open(str(yaml_path), "r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
     return _normalize_yaml_structure(data)
 
 
-def create_local_base_structure(context: Any, yaml_path: str) -> None:
+def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str]]) -> None:
     """
     Crea la struttura LOCALE di base in modo **permissivo**.
 

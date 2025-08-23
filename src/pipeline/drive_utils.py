@@ -64,7 +64,7 @@ try:
         _retry,  # export interno per test avanzati
     )
 except Exception as e:  # pragma: no cover
-    raise ImportError(f"Impossibile importare 'pipeline.drive.client': {e}") from e
+    raise ImportError(f"Impossibile importare 'pipeline.drive.client'. Verifica dipendenze e path.") from e
 
 # Creazione/albero/upload/struttura locale
 try:

@@ -198,7 +198,7 @@ def pre_onboarding_main(
         return
 
     # === Allineamento env: integra chiavi critiche in context.env (conservativo) ===
-    for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_PARENT_FOLDER_ID", "DRIVE_ID"):
+    for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_ID"):
         if not context.env.get(key):
             val = get_env_var(key, required=require_env, redact=True)
             if val:
@@ -209,7 +209,6 @@ def pre_onboarding_main(
         "pre_onboarding.drive.preflight",
         extra={
             "SERVICE_ACCOUNT_FILE": _mask(context.env.get("SERVICE_ACCOUNT_FILE")),
-            "DRIVE_PARENT_FOLDER_ID": _mask(context.env.get("DRIVE_PARENT_FOLDER_ID")),
             "DRIVE_ID": _mask(context.env.get("DRIVE_ID")),
         },
     )
@@ -219,11 +218,10 @@ def pre_onboarding_main(
 
     # Determina parent della cartella cliente (Shared Drive o cartella specifica)
     drive_parent_id = (
-        context.env.get("DRIVE_PARENT_FOLDER_ID")
-        or context.env.get("DRIVE_ID")
+        context.env.get("DRIVE_ID")
     )
     if not drive_parent_id:
-        raise ConfigError("DRIVE_ID o DRIVE_PARENT_FOLDER_ID non impostati nell'ambiente (.env).")
+        raise ConfigError("DRIVE_ID non impostato nell'ambiente (.env).")
 
     # Toggle redazione centralizzato
     redact = is_log_redaction_enabled(context)
@@ -237,18 +235,21 @@ def pre_onboarding_main(
     logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
 
     # === Crea struttura remota da YAML (idempotente) ===
+    yaml_file = _resolve_yaml_structure_file()
     created_map = create_drive_structure_from_yaml(
-        service, _resolve_yaml_structure_file(), client_folder_id, redact_logs=redact
+        service, yaml_file, client_folder_id, redact_logs=redact
     )
     logger.info(f"📄 Struttura Drive creata: {created_map}")
 
     # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
-    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
+    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")  # <-- FIX: definizione esplicita
     if not drive_raw_folder_id:
         raise ConfigError(
-            "Cartella RAW non trovata su Drive: verifica YAML di struttura cartelle.",
+            f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
+            f"Verifica lo YAML di struttura: {yaml_file}",
             drive_id=client_folder_id,
             slug=context.slug,
+            file_path=str(yaml_file),
         )
 
     # === Carica config.yaml su Drive (sostituisce se esiste) ===

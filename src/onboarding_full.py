@@ -215,7 +215,16 @@ def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str],
 # ─────────────── RAW → BOOK ───────────────
 def _convert_raw_to_book(context: ClientContext, logger, *, slug: str) -> List[Path]:
     paths = get_paths(slug)
+    raw_dir = paths["raw"]
     book_dir = paths["book"]
+
+    # Verifica RAW locale e presenza PDF (niente Drive in questo step)
+    if not raw_dir.exists():
+        raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
+    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    if not local_pdfs and convert_files_to_structured_markdown is not None:
+        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
+
     book_dir.mkdir(parents=True, exist_ok=True)
 
     if convert_files_to_structured_markdown is None:
