@@ -40,8 +40,8 @@ from pipeline.path_utils import is_safe_subpath  # sicurezza path
 from pipeline.env_utils import (
     redact_secrets,
     get_env_var,                       # 🔐 redazione + env resolver
-    is_branch_allowed_for_force,       # ✅ NEW: allow-list branch per force push
-    get_force_allowed_branches,        # ✅ NEW: per log/errore esplicativo
+    is_branch_allowed_for_force,       # ✅ allow-list branch per force push
+    get_force_allowed_branches,        # ✅ per log/errore esplicativo
 )
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
@@ -58,6 +58,7 @@ class _SupportsContext(Protocol):
         - env: dict — mappa di variabili d'ambiente risolte (opzionale).
         - base_dir: Path — base della working area cliente (es. output/timmy-kb-<slug>)
     """
+
     slug: str
     md_dir: Path
     env: dict
@@ -246,7 +247,10 @@ def push_output_to_github(
 
     # Preparo env con header http basic per autenticazione su clone/pull/push
     header = base64.b64encode(f"x-access-token:{github_token}".encode()).decode()
-    env = os.environ.copy()
+    # ✅ Costruzione ambiente senza os.environ.copy():
+    #    partiamo da context.env (se presente) e integriamo PATH e l'header richiesto da git
+    env: dict[str, str] = dict(getattr(context, "env", {}) or {})
+    env.setdefault("PATH", os.getenv("PATH", ""))
     env["GIT_HTTP_EXTRAHEADER"] = f"Authorization: Basic {header}"
 
     try:
@@ -294,10 +298,13 @@ def push_output_to_github(
         _run(
             [
                 "git",
-                "-c", "user.name=Timmy KB",
-                "-c", "user.email=kb+noreply@local",
+                "-c",
+                "user.name=Timmy KB",
+                "-c",
+                "user.email=kb+noreply@local",
                 "commit",
-                "-m", commit_msg,
+                "-m",
+                commit_msg,
             ],
             cwd=tmp_dir,
             env=env,
@@ -312,7 +319,7 @@ def push_output_to_github(
                     slug=context.slug,
                 )
 
-            # ✅ NEW: Allow-list dei branch per force push
+            # ✅ Allow-list dei branch per force push
             if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):
                 patterns = get_force_allowed_branches(context)
                 patterns_str = ", ".join(patterns) if patterns else "(lista vuota)"

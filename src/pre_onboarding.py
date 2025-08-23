@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES, InvalidSlug
+from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 from pipeline.context import ClientContext
 from pipeline.config_utils import (
     get_client_config,
@@ -39,33 +39,13 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
-from pipeline.env_utils import is_log_redaction_enabled, get_env_var
+from pipeline.env_utils import get_env_var  # ← uso solo get_env_var
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
-from pipeline.path_utils import validate_slug as _validate_slug_helper
-
+from pipeline.path_utils import ensure_valid_slug  # ← helper centralizzato
 
 def _prompt(msg: str) -> str:
     """Raccoglie input da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
-
-
-def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
-    """Valida/ottiene uno slug valido prima di creare i path/log o caricare il contesto."""
-    slug = (initial_slug or "").strip()
-    while True:
-        if not slug:
-            if not interactive:
-                raise ConfigError("Slug mancante.")
-            slug = _prompt("Inserisci slug cliente: ").strip()
-            continue
-        try:
-            _validate_slug_helper(slug)
-            return slug
-        except InvalidSlug:
-            early_logger.error("Slug non valido secondo le regole configurate. Riprovare.")
-            if not interactive:
-                raise ConfigError(f"Slug '{slug}' non valido.")
-            slug = _prompt("Inserisci uno slug valido (es. acme-srl): ").strip()
 
 
 def _mask(s: Optional[str]) -> str:
@@ -140,8 +120,13 @@ def pre_onboarding_main(
     # === Logger console “early” (prima dei path cliente) ===
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
-    # ✅ Validazione slug PRIMA di costruire i path/log di cliente
-    slug = _ensure_valid_slug(slug, interactive, early_logger)
+    # ✅ Validazione slug PRIMA di costruire i path/log di cliente (helper centralizzato)
+    slug = ensure_valid_slug(
+        slug,
+        interactive=interactive,
+        prompt=_prompt,
+        logger=early_logger,
+    )
 
     # === Logger unificato: file unico per cliente ===
     log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
@@ -217,14 +202,12 @@ def pre_onboarding_main(
     service = get_drive_service(context)
 
     # Determina parent della cartella cliente (Shared Drive o cartella specifica)
-    drive_parent_id = (
-        context.env.get("DRIVE_ID")
-    )
+    drive_parent_id = context.env.get("DRIVE_ID")
     if not drive_parent_id:
         raise ConfigError("DRIVE_ID non impostato nell'ambiente (.env).")
 
-    # Toggle redazione centralizzato
-    redact = is_log_redaction_enabled(context)
+    # Toggle redazione: usa la fonte di verità del contesto
+    redact = bool(getattr(context, "redact_logs", False))
 
     logger.info("pre_onboarding.drive.start", extra={"parent": _mask(drive_parent_id)})
 
@@ -242,7 +225,7 @@ def pre_onboarding_main(
     logger.info(f"📄 Struttura Drive creata: {created_map}")
 
     # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
-    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")  # <-- FIX: definizione esplicita
+    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
@@ -302,7 +285,12 @@ if __name__ == "__main__":
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
-        slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
+        slug = ensure_valid_slug(
+            unresolved_slug,
+            interactive=not args.non_interactive,
+            prompt=_prompt,
+            logger=early_logger,
+        )
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 

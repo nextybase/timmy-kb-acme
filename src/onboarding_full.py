@@ -26,7 +26,6 @@ from pipeline.exceptions import (
     PipelineError,
     ConfigError,
     EXIT_CODES,
-    InvalidSlug,
 )
 from pipeline.context import ClientContext
 from pipeline.constants import (
@@ -36,7 +35,7 @@ from pipeline.constants import (
     REPO_NAME_PREFIX,
 )
 from pipeline.path_utils import (
-    validate_slug as _validate_slug_helper,
+    ensure_valid_slug,  # ← helper centralizzato
     sorted_paths,
     sanitize_filename,
 )
@@ -75,24 +74,6 @@ except Exception:
 # ─────────────── Helpers UX ───────────────
 def _prompt(msg: str) -> str:
     return input(msg).strip()
-
-
-def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
-    slug = (initial_slug or "").strip()
-    while True:
-        if not slug:
-            if not interactive:
-                raise ConfigError("Slug mancante.")
-            slug = _prompt("Slug cliente: ").strip()
-            continue
-        try:
-            _validate_slug_helper(slug)
-            return slug
-        except InvalidSlug:
-            early_logger.error("Slug non valido. Riprova.")
-            if not interactive:
-                raise
-            slug = ""
 
 
 # ─────────────── Path helpers ───────────────
@@ -351,7 +332,7 @@ def _stop_preview(logger, *, container_name: Optional[str]) -> None:
 def _git_push(context: ClientContext, logger, message: str) -> None:
     if push_output_to_github is not None:
         try:
-            token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # ✅ aggiornato
+            token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # ✅ obbligatorio
             push_output_to_github(
                 context,
                 github_token=token,
@@ -362,7 +343,11 @@ def _git_push(context: ClientContext, logger, message: str) -> None:
             )
             logger.info("Git push completato (repo util)")
             return
+        except ConfigError:
+            # Token mancante/invalid → NO fallback shell (policy)
+            raise
         except Exception as e:
+            # Altri errori della util → consentiamo fallback shell
             logger.warning("Git push util del repo fallito, passo a fallback shell", extra={"error": str(e)})
 
     repo_root = Path(getattr(context, "repo_root_dir", Path.cwd()))
@@ -395,7 +380,11 @@ def onboarding_full_main(
     run_id: Optional[str] = None,
 ) -> None:
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-    slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
+    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
+
+    # validazione porta preview
+    if not (1 <= int(preview_port) <= 65535):
+        raise ConfigError(f"Porta non valida per preview: {preview_port}")
 
     log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -474,7 +463,12 @@ if __name__ == "__main__":
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     try:
-        slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
+        slug = ensure_valid_slug(
+            unresolved_slug,
+            interactive=not args.non_interactive,
+            prompt=_prompt,
+            logger=early_logger,
+        )
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 

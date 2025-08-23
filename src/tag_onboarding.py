@@ -34,7 +34,6 @@ from pipeline.exceptions import (
     PipelineError,
     ConfigError,
     EXIT_CODES,
-    InvalidSlug,
 )
 from pipeline.context import ClientContext
 from pipeline.config_utils import get_client_config
@@ -47,9 +46,8 @@ from pipeline.constants import (
     REPO_NAME_PREFIX,
 )
 from pipeline.path_utils import (
-    validate_slug as _validate_slug_helper,
+    ensure_valid_slug,   # ← helper centralizzato
     is_safe_subpath,
-    normalize_path,
     sanitize_filename,
     sorted_paths,
 )
@@ -66,28 +64,11 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-def _ensure_valid_slug(initial_slug: Optional[str], interactive: bool, early_logger) -> str:
-    slug = (initial_slug or "").strip()
-    while True:
-        if not slug:
-            if not interactive:
-                raise ConfigError("Slug mancante.")
-            slug = _prompt("Inserisci slug cliente: ").strip()
-            continue
-        try:
-            _validate_slug_helper(slug)  # alza InvalidSlug se non conforme
-            return slug
-        except InvalidSlug:
-            early_logger.error("Slug non valido secondo le regole configurate. Riprova.")
-            if not interactive:
-                raise
-            slug = ""
-
-
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
-    src_dir = normalize_path(src_dir)
-    raw_dir = normalize_path(raw_dir)
+    # sostituisce normalize_path con Path.resolve()
+    src_dir = src_dir.expanduser().resolve()
+    raw_dir = raw_dir.expanduser().resolve()
 
     if not src_dir.is_dir():
         raise ConfigError(f"Percorso locale non valido: {src_dir}", file_path=str(src_dir))
@@ -105,6 +86,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
+        # corretto: verifica che 'dst' sia dentro 'raw_dir'
         if not is_safe_subpath(dst, raw_dir):
             logger.warning("Skip per path non sicuro", extra={"file_path": str(dst)})
             continue
@@ -328,7 +310,7 @@ def tag_onboarding_main(
     run_id: Optional[str] = None,
 ) -> None:
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
-    slug = _ensure_valid_slug(slug, not non_interactive, early_logger)
+    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
     # Context + logger coerenti con orchestratori
     log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
@@ -425,7 +407,12 @@ if __name__ == "__main__":
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     try:
-        slug = _ensure_valid_slug(unresolved_slug, not args.non_interactive, early_logger)
+        slug = ensure_valid_slug(
+            unresolved_slug,
+            interactive=not args.non_interactive,
+            prompt=_prompt,
+            logger=early_logger,
+        )
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 

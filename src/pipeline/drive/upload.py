@@ -186,8 +186,8 @@ def create_drive_folder(
             "drive.upload.folder.reuse",
             extra={
                 "parent": _maybe_redact(parent_id or "root", redact_logs),
-                "folder_name": name,          # ⚠️ niente chiave 'name'
-                "folder_id": existing,        # uniforme
+                "folder_name": name,                  # ⚠️ niente chiave 'name'
+                "folder_id": _maybe_redact(existing, redact_logs),
             },
         )
         return existing
@@ -199,7 +199,7 @@ def create_drive_folder(
             "drive.upload.folder.create_error",
             extra={
                 "parent": _maybe_redact(parent_id or "root", redact_logs),
-                "folder_name": name,          # ⚠️ niente chiave 'name'
+                "folder_name": name,                  # ⚠️ niente chiave 'name'
                 "message": str(e)[:300],
             },
         )
@@ -209,8 +209,8 @@ def create_drive_folder(
         "drive.upload.folder.created",
         extra={
             "parent": _maybe_redact(parent_id or "root", redact_logs),
-            "folder_name": name,              # ⚠️ niente chiave 'name'
-            "folder_id": new_id,
+            "folder_name": name,                      # ⚠️ niente chiave 'name'
+            "folder_id": _maybe_redact(new_id, redact_logs),
         },
     )
     return new_id
@@ -385,7 +385,7 @@ def upload_config_to_drive_folder(
     if existing_id:
         logger.info(
             "drive.upload.config.replace",
-            extra={"parent": _maybe_redact(parent_id, redact_logs), "old_id": existing_id},
+            extra={"parent": _maybe_redact(parent_id, redact_logs), "old_id": _maybe_redact(existing_id, redact_logs)},
         )
         _delete_file_hard(service, existing_id)
 
@@ -424,7 +424,11 @@ def upload_config_to_drive_folder(
     file_id = resp["id"]
     logger.info(
         "drive.upload.config.done",
-        extra={"parent": _maybe_redact(parent_id, redact_logs), "file_id": file_id, "local": str(local_config)},
+        extra={
+            "parent": _maybe_redact(parent_id, redact_logs),
+            "file_id": _maybe_redact(file_id, redact_logs),
+            "local": str(local_config),
+        },
     )
     return file_id
 

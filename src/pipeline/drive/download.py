@@ -28,7 +28,7 @@ from googleapiclient.http import MediaIoBaseDownload  # type: ignore
 
 from ..exceptions import DriveDownloadError
 from ..logging_utils import get_structured_logger
-from ..path_utils import sanitize_filename
+from ..path_utils import sanitize_filename, is_safe_subpath
 from .client import list_drive_files, get_file_metadata, _retry
 
 logger = get_structured_logger("pipeline.drive.download")
@@ -179,6 +179,9 @@ def download_drive_pdfs_to_local(
         while queue:
             current_remote_id, current_local_dir = queue.popleft()
 
+            # Garantisce la presenza della cartella locale del livello corrente
+            _ensure_dir(current_local_dir)
+
             # Percorso relativo per logging (solo diagnostica)
             try:
                 rel = current_local_dir.relative_to(local_root).as_posix() or "."
@@ -209,6 +212,14 @@ def download_drive_pdfs_to_local(
                 remote_name = f.get("name") or "download.pdf"
                 safe_name = sanitize_filename(remote_name if remote_name.lower().endswith(".pdf") else f"{remote_name}.pdf")
                 out_path = current_local_dir / safe_name
+
+                # Path-safety: l'output deve rimanere dentro la root locale
+                if not is_safe_subpath(out_path, local_root):
+                    logger.warning(
+                        "drive.download.skip_unsafe_path",
+                        extra={"file_id": _maybe_redact(file_id, redact_logs), "file_path": str(out_path)},
+                    )
+                    continue
 
                 # Metadati per idempotenza/integrità (con retry lato client)
                 try:
@@ -275,7 +286,6 @@ def download_drive_pdfs_to_local(
         raise
     except Exception as e:  # noqa: BLE001
         # Qualsiasi altro errore → mappiamo a DriveDownloadError
-        # 👇 Modifica: usiamo logger.exception per includere lo stacktrace
         logger.exception(
             "drive.download.unexpected_error",
             extra={
@@ -293,8 +303,7 @@ def download_drive_pdfs_to_local(
     # Compatibilità con orchestratori che annotano lo stato step nel contesto
     try:
         if context is not None and hasattr(context, "set_step_status"):
-            # Qui non tracciamo le metriche dei retry locali; best-effort a "0".
-            context.set_step_status("drive_retries", "0")
+            context.set_step_status("drive_retries", "0")  # best-effort
     except Exception:
         pass
 

@@ -31,6 +31,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 logger = get_structured_logger("pipeline.content_utils")
 
+# ----------------------------
+# Default di concorrenza/skip
+# ----------------------------
+DEFAULT_SKIP_IF_UNCHANGED: bool = True
+DEFAULT_MAX_WORKERS: int = 4
+
 
 def _titleize(name: str) -> str:
     """Converte un nome cartella/file in un titolo leggibile.
@@ -147,8 +153,9 @@ def convert_files_to_structured_markdown(
     Supporta strutture annidate: le sezioni nel `.md` riflettono la gerarchia di
     sottocartelle relative alla categoria.
     """
-    raw_dir = raw_dir or context.raw_dir
-    md_dir = md_dir or context.md_dir
+    # Cast sicuri a Path
+    raw_dir = Path(raw_dir or context.raw_dir)
+    md_dir = Path(md_dir or context.md_dir)
     local_logger = log or logger
 
     # Parametri di tuning: prova a caricarli da constants se non specificati
@@ -156,15 +163,15 @@ def convert_files_to_structured_markdown(
         try:
             from pipeline import constants as _C  # import locale per evitare hard dependency
             if skip_if_unchanged is None:
-                skip_if_unchanged = bool(getattr(_C, "SKIP_IF_UNCHANGED", True))
+                skip_if_unchanged = bool(getattr(_C, "SKIP_IF_UNCHANGED", DEFAULT_SKIP_IF_UNCHANGED))
             if max_workers is None:
-                max_workers = int(getattr(_C, "MAX_CONCURRENCY", 4))
+                max_workers = int(getattr(_C, "MAX_CONCURRENCY", DEFAULT_MAX_WORKERS))
         except Exception:
-            skip_if_unchanged = True if skip_if_unchanged is None else skip_if_unchanged
-            max_workers = 4 if max_workers is None else max_workers
+            skip_if_unchanged = DEFAULT_SKIP_IF_UNCHANGED if skip_if_unchanged is None else skip_if_unchanged
+            max_workers = DEFAULT_MAX_WORKERS if max_workers is None else max_workers
 
     # 🔒 Guard-rail anche su RAW (coerente con md_dir)
-    if not is_safe_subpath(raw_dir, context.base_dir):
+    if not is_safe_subpath(raw_dir, Path(context.base_dir)):
         raise PipelineError(
             f"Tentativo di leggere da un path non sicuro: {raw_dir}",
             slug=context.slug,
@@ -185,7 +192,7 @@ def convert_files_to_structured_markdown(
         # ✅ dominio: path non directory
         raise InputDirectoryMissing(f"Il path raw non è una directory: {raw_dir}", slug=context.slug, file_path=raw_dir)
 
-    if not is_safe_subpath(md_dir, context.base_dir):
+    if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
             f"Tentativo di scrivere file in path non sicuro: {md_dir}",
             slug=context.slug,
@@ -220,6 +227,18 @@ def convert_files_to_structured_markdown(
         md_path = md_dir / f"{safe_name}.md"
         fp_path = md_path.with_suffix(md_path.suffix + ".fp")
 
+        # 🔒 path-safety su ogni file di output
+        if not is_safe_subpath(md_path, md_dir) or not is_safe_subpath(fp_path, md_dir):
+            local_logger.error(
+                "Path di output non sicuro (fuori dal book dir).",
+                extra={"slug": context.slug, "file_path": md_path},
+            )
+            raise PipelineError(
+                f"Path di output non sicuro per {md_path}",
+                slug=context.slug,
+                file_path=md_path,
+            )
+
         try:
             # Skip se fingerprint invariato
             if skip_if_unchanged and fp_path.exists():
@@ -243,7 +262,7 @@ def convert_files_to_structured_markdown(
             # Aggiorna fingerprint sidecar (scrittura atomica)
             safe_write_file(fp_path, fp + "\n")
             local_logger.info(
-                f"File markdown scritto correttamente: {md_path}",
+                "File markdown scritto correttamente",
                 extra={"slug": context.slug, "file_path": md_path},
             )
         except (OSError, ValueError) as e:
@@ -264,10 +283,10 @@ def generate_summary_markdown(
     Elenca tutti i file `.md` (esclusi `SUMMARY.md` e `README.md`) presenti
     in `md_dir`, creando voci di indice in formato GitBook/Honkit.
     """
-    md_dir = md_dir or context.md_dir
+    md_dir = Path(md_dir or context.md_dir)
     local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):
+    if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
             f"Tentativo di scrivere file in path non sicuro: {md_dir}",
             slug=context.slug,
@@ -275,6 +294,14 @@ def generate_summary_markdown(
         )
 
     summary_path = md_dir / "SUMMARY.md"
+    # 🔒 path-safety sull’output specifico
+    if not is_safe_subpath(summary_path, md_dir):
+        raise PipelineError(
+            f"Path di output non sicuro per SUMMARY.md: {summary_path}",
+            slug=context.slug,
+            file_path=summary_path,
+        )
+
     try:
         content = "# Summary\n\n"
         for md_file in sorted(md_dir.glob("*.md")):
@@ -304,10 +331,10 @@ def generate_readme_markdown(
     log: Optional[logging.Logger] = None,
 ) -> None:
     """Genera il file `README.md` nella directory Markdown."""
-    md_dir = md_dir or context.md_dir
+    md_dir = Path(md_dir or context.md_dir)
     local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):
+    if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
             f"Tentativo di scrivere file in path non sicuro: {md_dir}",
             slug=context.slug,
@@ -315,6 +342,14 @@ def generate_readme_markdown(
         )
 
     readme_path = md_dir / "README.md"
+    # 🔒 path-safety sull’output specifico
+    if not is_safe_subpath(readme_path, md_dir):
+        raise PipelineError(
+            f"Path di output non sicuro per README.md: {readme_path}",
+            slug=context.slug,
+            file_path=readme_path,
+        )
+
     try:
         content = "# Documentazione Timmy-KB\n"
         local_logger.info(
@@ -345,10 +380,10 @@ def validate_markdown_dir(
         InputDirectoryMissing: se la cartella non esiste o non è una directory.
         PipelineError: se il path è fuori dalla base consentita.
     """
-    md_dir = md_dir or context.md_dir
+    md_dir = Path(md_dir or context.md_dir)
     local_logger = log or logger
 
-    if not is_safe_subpath(md_dir, context.base_dir):
+    if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
             f"Tentativo di accedere a un path non sicuro: {md_dir}",
             slug=context.slug,

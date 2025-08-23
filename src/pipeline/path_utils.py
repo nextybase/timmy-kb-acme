@@ -15,11 +15,10 @@ import unicodedata
 import re
 import yaml
 import os
-from typing import Optional, Iterable, List, Tuple
+from typing import Optional, Iterable, List, Tuple, Callable
 from functools import lru_cache  # ← caching per slug regex
-
+from .exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import InvalidSlug  # helper dominio
 
 # Punto di verità per messaggi di errore di questo modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -200,6 +199,35 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
     return [q for _, q in items]
 
 
+def ensure_valid_slug(
+    initial_slug: str | None,
+    *,
+    interactive: bool,
+    prompt: Callable[[str], str],
+    logger
+) -> str:
+    """
+    Richiede/valida uno slug secondo le regole configurate (usa validate_slug).
+    - In non-interactive: solleva ConfigError se slug mancante/ invalido.
+    - In interactive: ripete il prompt finché non è valido.
+    """
+    slug = (initial_slug or "").strip()
+    while True:
+        if not slug:
+            if not interactive:
+                raise ConfigError("Slug mancante.")
+            slug = (prompt("Inserisci slug cliente: ") or "").strip()
+            continue
+        try:
+            validate_slug(slug)   # già esistente nel file
+            return slug
+        except InvalidSlug:
+            logger.error("Slug non valido secondo le regole configurate.")
+            if not interactive:
+                raise
+            slug = ""
+
+
 __all__ = [
     "is_safe_subpath",
     "clear_slug_regex_cache",  # reset cache regex
@@ -208,4 +236,5 @@ __all__ = [
     "normalize_path",
     "sanitize_filename",
     "sorted_paths",            # ← nuovo export
+    "ensure_valid_slug",       # ← export mancante aggiunto
 ]

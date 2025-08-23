@@ -34,6 +34,7 @@ from google.oauth2.service_account import Credentials  # type: ignore
 
 from ..exceptions import ConfigError
 from ..logging_utils import get_structured_logger
+from ..env_utils import get_env_var  # ✅ centralizzazione ENV
 
 # Logger a livello di modulo per aderire alle convenzioni di logging strutturato del repo.
 logger = get_structured_logger("pipeline.drive.client")
@@ -221,7 +222,7 @@ def _retry(
             time.sleep(sleep_s)
             total_sleep += sleep_s
 
-            # Aggiorna accumulo metrihe (se attive)
+            # Aggiorna accumulo metriche (se attive)
             m = _METRICS_CTX.get()
             if m is not None:
                 m.backoff_total_ms += int(round(sleep_s * 1000))
@@ -237,7 +238,7 @@ def _resolve_service_account_file(context: Any) -> str:
     1) `context.service_account_file`
     2) `context.SERVICE_ACCOUNT_FILE`
     3) `context.env['SERVICE_ACCOUNT_FILE']` se presente
-    4) variabile d’ambiente `SERVICE_ACCOUNT_FILE`
+    4) variabile d’ambiente `SERVICE_ACCOUNT_FILE` (🆕 via env_utils.get_env_var)
 
     Solleva:
     - ConfigError se non trovato o non leggibile.
@@ -250,8 +251,8 @@ def _resolve_service_account_file(context: Any) -> str:
     # Mappa env nel contesto (se esiste)
     if hasattr(context, "env") and isinstance(getattr(context, "env"), dict):
         candidates.append(context.env.get("SERVICE_ACCOUNT_FILE"))  # type: ignore[assignment]
-    # Variabile d'ambiente come ultima spiaggia
-    candidates.append(os.environ.get("SERVICE_ACCOUNT_FILE"))
+    # 🆕 Variabile d'ambiente letta tramite resolver centralizzato
+    candidates.append(get_env_var("SERVICE_ACCOUNT_FILE", default=None, required=False))
 
     for cand in candidates:
         if not cand:

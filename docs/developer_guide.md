@@ -75,6 +75,7 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 - Tutte le variabili di ambiente critiche sono centralizzate in `env_utils.py`.
 - La creazione cartelle Drive è gestita unicamente in `src/pipeline/drive/` con idempotenza garantita.
 - Conversione RAW → BOOK avviene solo in locale; Drive è usato solo in fase di pre-onboarding.
+- La validazione dello **slug** è disponibile come helper dedicato in `path_utils.ensure_valid_slug`, da usare in caso di necessità per evitare duplicazioni.
 
 ---
 
