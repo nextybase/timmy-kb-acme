@@ -45,6 +45,7 @@ from pipeline.env_utils import (
 )
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
+# Logger di modulo (fallback); nei flussi reali usiamo quello contestualizzato
 logger = get_structured_logger("pipeline.github_utils")
 
 
@@ -66,26 +67,18 @@ class _SupportsContext(Protocol):
 
 
 def _resolve_default_branch(context: _SupportsContext) -> str:
-    """Risoluzione branch di default con fallback a 'main'.
-
-    Ordine di priorità:
-      1) `context.env["GIT_DEFAULT_BRANCH"]` o `context.env["GITHUB_BRANCH"]` (se presenti)
-      2) variabili d'ambiente tramite env_utils.get_env_var
-      3) fallback sicuro: `"main"`
-    """
+    """Risoluzione branch di default con fallback a 'main'."""
     # 1) variabili nel contesto (preferite)
     if getattr(context, "env", None):
         br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
         if br:
             return br
-
     # 2) variabili d'ambiente tramite resolver centralizzato
     br = get_env_var("GIT_DEFAULT_BRANCH", default=None, required=False) or get_env_var(
         "GITHUB_BRANCH", default=None, required=False
     )
     if br:
         return br
-
     # 3) fallback sicuro
     return "main"
 
@@ -130,22 +123,10 @@ def push_output_to_github(
     force_ack: str | None = None,
     redact_logs: bool = False,
 ) -> None:
-    """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub.
+    """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub."""
+    # === Logger contestualizzato (slug/run_id/redaction filter) ===
+    local_logger = get_structured_logger("pipeline.github_utils", context=context)
 
-    Strategia **di default** (incrementale):
-    - `git clone` del repo remoto in una cartella temporanea **dentro** `output/timmy-kb-<slug>`
-    - checkout (o creazione) del branch di lavoro
-    - `git pull --rebase` per sincronizzarsi con il remoto
-    - copia dei `.md` da `book/` nella working dir clonata
-    - `git add -A` → commit se ci sono modifiche → `git push` (no --force)
-    - retry singolo in caso di rifiuto non-fast-forward con ulteriore `pull --rebase`
-
-    Strategia **governata** (force):
-    - abilitata solo se `force_push=True` **e** `force_ack` valorizzato (contratto con orchestratore)
-    - `git fetch origin <branch>` e acquisizione dello SHA remoto
-    - `git push --force-with-lease=refs/heads/<branch>:<sha_remoto>`
-    - commit message con trailer `Force-Ack: <TAG>`
-    """
     # Validazione basilare prerequisiti
     if not github_token:
         raise PipelineError(
@@ -181,17 +162,17 @@ def push_output_to_github(
     )
     if not md_files:
         msg = "⚠️ Nessun file .md valido trovato nella cartella book. Push annullato."
-        logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+        local_logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
         return
 
     if do_push is False:
         msg = "Push disattivato: do_push=False (dry run a carico dell'orchestratore)."
-        logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+        local_logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
         return
 
     default_branch = _resolve_default_branch(context)
     msg = f"📤 Preparazione push su GitHub (branch: {default_branch})"
-    logger.info(
+    local_logger.info(
         redact_secrets(msg) if redact_logs else msg,
         extra={"slug": context.slug, "branch": default_branch},
     )
@@ -211,20 +192,20 @@ def push_output_to_github(
     try:
         repo = user.get_repo(repo_name)
         msg = f"🔄 Repository remoto trovato: {repo.full_name}"
-        logger.info(
+        local_logger.info(
             redact_secrets(msg) if redact_logs else msg,
             extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
         )
     except GithubException:
         msg = f"➕ Repository non trovato. Creazione di {repo_name}..."
-        logger.info(
+        local_logger.info(
             redact_secrets(msg) if redact_logs else msg,
             extra={"slug": context.slug, "repo": repo_name, "branch": default_branch},
         )
         try:
             repo = user.create_repo(repo_name, private=True)
             msg = f"✅ Repository creato: {repo.full_name}"
-            logger.info(
+            local_logger.info(
                 redact_secrets(msg) if redact_logs else msg,
                 extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
             )
@@ -238,7 +219,6 @@ def push_output_to_github(
     # Cartella temporanea **dentro** output/timmy-kb-<slug>
     tmp_dir = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
     if not is_safe_subpath(tmp_dir, base_dir):
-        # Ultra-cautela: non dovrebbe mai accadere
         raise PipelineError(
             f"Working dir temporanea fuori dalla base consentita: {tmp_dir}",
             slug=context.slug,
@@ -247,21 +227,19 @@ def push_output_to_github(
 
     # Preparo env con header http basic per autenticazione su clone/pull/push
     header = base64.b64encode(f"x-access-token:{github_token}".encode()).decode()
-    # ✅ Costruzione ambiente senza os.environ.copy():
-    #    partiamo da context.env (se presente) e integriamo PATH e l'header richiesto da git
     env: dict[str, str] = dict(getattr(context, "env", {}) or {})
     env.setdefault("PATH", os.getenv("PATH", ""))
     env["GIT_HTTP_EXTRAHEADER"] = f"Authorization: Basic {header}"
 
     try:
         # Clone e checkout/creazione branch
-        logger.info("⬇️  Clonazione repo remoto in working dir temporanea", extra={"slug": context.slug, "file_path": tmp_dir})
+        local_logger.info("⬇️  Clonazione repo remoto in working dir temporanea", extra={"slug": context.slug, "file_path": tmp_dir})
         _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
         exists_remote_branch = False
         try:
-            run_cmd(["git", "rev-parse", f"origin/{default_branch}"], cwd=str(tmp_dir), env=env, capture=True, logger=logger, op="git rev-parse")
+            run_cmd(["git", "rev-parse", f"origin/{default_branch}"], cwd=str(tmp_dir), env=env, capture=True, logger=local_logger, op="git rev-parse")
             exists_remote_branch = True
         except CmdError:
             exists_remote_branch = False
@@ -273,11 +251,11 @@ def push_output_to_github(
 
         # Sync iniziale
         if exists_remote_branch:
-            logger.info("↕️  Pull --rebase per sincronizzazione iniziale", extra={"slug": context.slug, "branch": default_branch})
+            local_logger.info("↕️  Pull --rebase per sincronizzazione iniziale", extra={"slug": context.slug, "branch": default_branch})
             _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
 
         # Copia contenuti .md da book/ nella working dir clonata
-        logger.info("🧩 Preparazione contenuti da book/", extra={"slug": context.slug, "file_path": str(book_dir)})
+        local_logger.info("🧩 Preparazione contenuti da book/", extra={"slug": context.slug, "file_path": str(book_dir)})
         for f in md_files:
             dst = tmp_dir / f.relative_to(book_dir)
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -287,7 +265,7 @@ def push_output_to_github(
         _run(["git", "add", "-A"], cwd=tmp_dir, env=env, op="git add")
         status = _git_status_porcelain(tmp_dir, env=env)
         if not status.strip():
-            logger.info("ℹ️  Nessuna modifica da pubblicare (working dir identica)", extra={"slug": context.slug})
+            local_logger.info("ℹ️  Nessuna modifica da pubblicare (working dir identica)", extra={"slug": context.slug})
             return
 
         # Commit message (aggiunge trailer Force-Ack se presente)
@@ -335,7 +313,7 @@ def push_output_to_github(
             local_sha = _git_rev_parse("HEAD", cwd=tmp_dir, env=env)
 
             # Logging strutturato del ramo force (ack mascherato)
-            logger.info(
+            local_logger.info(
                 "📌 Force push governato (with-lease)",
                 extra={
                     "slug": context.slug,
@@ -360,11 +338,11 @@ def push_output_to_github(
                 _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
             try:
-                logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
+                local_logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
                 _attempt_push()
             except CmdError as e1:
                 # Ritenta una volta con rebase (conflitti -> fallisce)
-                logger.warning(
+                local_logger.warning(
                     "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...",
                     extra={"slug": context.slug, "branch": default_branch},
                 )
@@ -381,7 +359,7 @@ def push_output_to_github(
                     safe = redact_secrets(raw) if redact_logs else raw
                     raise PushError(safe, slug=context.slug) from e2
 
-        logger.info(
+        local_logger.info(
             "✅ Push completato su %s (%s)",
             repo.full_name,
             default_branch,

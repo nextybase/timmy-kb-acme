@@ -43,6 +43,7 @@ from pipeline.env_utils import get_env_var  # ← uso solo get_env_var
 from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug  # ← helper centralizzato
 
+
 def _prompt(msg: str) -> str:
     """Raccoglie input da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
@@ -56,6 +57,34 @@ def _mask(s: Optional[str]) -> str:
     if len(s) <= 7:
         return "***"
     return f"{s[:3]}***{s[-3:]}"
+
+
+def _tail_path(p: Path, max_len: int = 120) -> str:
+    """Ritorna la coda del path per leggibilità nei log (non segreto)."""
+    s = str(p)
+    return s if len(s) <= max_len else s[-max_len:]
+
+
+def _mask_id_map(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Maschera i valori tipo ID in una mappa (es. mapping cartelle Drive)."""
+    out: Dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        if isinstance(v, str):
+            out[k] = _mask(v)
+        else:
+            out[k] = v
+    return out
+
+
+def _mask_updates(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Maschera campi potenzialmente sensibili nei dizionari di update config."""
+    out: Dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        if isinstance(v, str) and ("id" in k.lower() or "drive" in k.lower()):
+            out[k] = _mask(v)
+        else:
+            out[k] = v
+    return out
 
 
 def _resolve_yaml_structure_file() -> Path:
@@ -170,7 +199,10 @@ def pre_onboarding_main(
     # === Risoluzione YAML + Struttura locale convenzionale ===
     try:
         yaml_structure_file = _resolve_yaml_structure_file()
-        logger.info("pre_onboarding.yaml.resolved", extra={"yaml_path": str(yaml_structure_file)})
+        logger.info(
+            "pre_onboarding.yaml.resolved",
+            extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": _tail_path(yaml_structure_file)},
+        )
         create_local_base_structure(context, yaml_structure_file)
     except ConfigError as e:
         # Log esplicito prima di uscire (per capire subito perché si ferma)
@@ -215,31 +247,37 @@ def pre_onboarding_main(
     client_folder_id = create_drive_folder(
         service, context.slug, parent_id=drive_parent_id, redact_logs=redact
     )
-    logger.info(f"📄 Cartella cliente creata su Drive: {client_folder_id}")
+    logger.info("📄 Cartella cliente creata su Drive", extra={"client_folder_id": _mask(client_folder_id)})
 
     # === Crea struttura remota da YAML (idempotente) ===
-    yaml_file = _resolve_yaml_structure_file()
+    # ⚠️ Riutilizzo del path già risolto per evitare I/O ridondante
     created_map = create_drive_structure_from_yaml(
-        service, yaml_file, client_folder_id, redact_logs=redact
+        service, yaml_structure_file, client_folder_id, redact_logs=redact
     )
-    logger.info(f"📄 Struttura Drive creata: {created_map}")
+    logger.info(
+        "📄 Struttura Drive creata",
+        extra={
+            "yaml_tail": _tail_path(yaml_structure_file),
+            "created_map_masked": _mask_id_map(created_map),
+        },
+    )
 
     # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
     drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
-            f"Verifica lo YAML di struttura: {yaml_file}",
+            f"Verifica lo YAML di struttura: {yaml_structure_file}",
             drive_id=client_folder_id,
             slug=context.slug,
-            file_path=str(yaml_file),
+            file_path=str(yaml_structure_file),
         )
 
     # === Carica config.yaml su Drive (sostituisce se esiste) ===
     uploaded_cfg_id = upload_config_to_drive_folder(
         service, context, parent_id=client_folder_id, redact_logs=redact
     )
-    logger.info(f"📤 Config caricato su Drive con ID: {uploaded_cfg_id}")
+    logger.info("📤 Config caricato su Drive", extra={"uploaded_cfg_id": _mask(uploaded_cfg_id)})
 
     # === Aggiorna config locale con gli ID Drive ===
     updates = {
@@ -249,7 +287,7 @@ def pre_onboarding_main(
         "client_name": client_name,
     }
     update_config_with_drive_ids(context, updates=updates, logger=logger)
-    logger.info(f"🔑 Config aggiornato con dati: {updates}")
+    logger.info("🔑 Config aggiornato con dati", extra={"updates_masked": _mask_updates(updates)})
 
     logger.info(f"✅ Pre-onboarding completato per cliente: {slug}")
 

@@ -33,6 +33,7 @@ from ..path_utils import sanitize_filename
 from ..constants import OUTPUT_DIR_NAME
 from .client import _retry
 
+# Logger di modulo (fallback). Dove possibile, useremo un logger contestualizzato locale.
 logger = get_structured_logger("pipeline.drive.upload")
 
 _FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -377,13 +378,17 @@ def upload_config_to_drive_folder(
     if not parent_id:
         raise DriveUploadError("Parent ID mancante per upload config.")
 
+    # Logger contestualizzato + redazione auto-derivata dal contesto (come in download.py)
+    local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
+    redact_logs = bool(redact_logs or (getattr(context, "redact_logs", False) if context is not None else False))
+
     local_config = _resolve_local_config_path(context)
     if not local_config.is_file():
         raise DriveUploadError(f"File locale non trovato: {local_config}")
 
     existing_id = _find_existing_child_file_by_name(service, parent_id, "config.yaml")
     if existing_id:
-        logger.info(
+        local_logger.info(
             "drive.upload.config.replace",
             extra={"parent": _maybe_redact(parent_id, redact_logs), "old_id": _maybe_redact(existing_id, redact_logs)},
         )
@@ -411,7 +416,7 @@ def upload_config_to_drive_folder(
     try:
         resp = _retry(_call, op_name="files.create.config")
     except Exception as e:  # noqa: BLE001
-        logger.error(
+        local_logger.error(
             "drive.upload.config.error",
             extra={
                 "parent": _maybe_redact(parent_id, redact_logs),
@@ -422,7 +427,7 @@ def upload_config_to_drive_folder(
         raise DriveUploadError(f"Upload config.yaml fallito: {e}") from e
 
     file_id = resp["id"]
-    logger.info(
+    local_logger.info(
         "drive.upload.config.done",
         extra={
             "parent": _maybe_redact(parent_id, redact_logs),
@@ -461,6 +466,9 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
     - Se `context` non espone `raw_dir/book_dir/config_dir`, li imposta (stringhe assolute).
     - Idempotente.
     """
+    # Logger contestualizzato per uniformità con gli orchestratori
+    local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
+
     slug = getattr(context, "slug", "client")
     base: Optional[Path] = None
 
@@ -516,7 +524,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
 
     _mk_children(raw_dir, raw_mapping)
 
-    logger.info(
+    local_logger.info(
         "drive.upload.local_structure.created",
         extra={"raw_dir": str(raw_dir), "book_dir": str(book_dir), "config_dir": str(cfg_dir)},
     )

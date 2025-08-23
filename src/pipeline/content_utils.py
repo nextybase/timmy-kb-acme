@@ -29,6 +29,7 @@ from pipeline.exceptions import InputDirectoryMissing
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
 
+# Logger di modulo (fallback). Il default in funzione userà quello contestualizzato.
 logger = get_structured_logger("pipeline.content_utils")
 
 # ----------------------------
@@ -156,7 +157,8 @@ def convert_files_to_structured_markdown(
     # Cast sicuri a Path
     raw_dir = Path(raw_dir or context.raw_dir)
     md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or logger
+    # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
+    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
     # Parametri di tuning: prova a caricarli da constants se non specificati
     if skip_if_unchanged is None or max_workers is None:
@@ -284,7 +286,8 @@ def generate_summary_markdown(
     in `md_dir`, creando voci di indice in formato GitBook/Honkit.
     """
     md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or logger
+    # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
+    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
     if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
@@ -332,7 +335,8 @@ def generate_readme_markdown(
 ) -> None:
     """Genera il file `README.md` nella directory Markdown."""
     md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or logger
+    # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
+    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
     if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(
@@ -381,7 +385,8 @@ def validate_markdown_dir(
         PipelineError: se il path è fuori dalla base consentita.
     """
     md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or logger
+    # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
+    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
     if not is_safe_subpath(md_dir, Path(context.base_dir)):
         raise PipelineError(

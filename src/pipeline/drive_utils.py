@@ -18,6 +18,11 @@ Note
 - **Compat test**: riesporta `MIME_FOLDER`, `MIME_PDF` e `MediaIoBaseDownload` per
   compatibilità con i test che monkeypatchano questi simboli a livello di facciata.
 - Gli orchestratori e il resto del codice continuano a importare da qui.
+
+- 🔎 FYI (tracking modifiche redazione/log):
+  Il logger contestualizzato e la mascheratura di `sa_path` vengono applicati a valle,
+  nei moduli implementativi (es. `pipeline/drive/client.py`). Qui non si introduce
+  alcuna logica di logging per restare una pura facciata.
 """
 
 from __future__ import annotations

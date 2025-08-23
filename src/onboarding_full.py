@@ -313,7 +313,7 @@ def _run_preview(context: ClientContext, logger, *, slug: str, port: int = 4000)
         port=port,
         container_name=container_name,
         wait_on_exit=False,
-        redact_logs=getattr(context, "redact_logs", False),
+        redact_logs=getattr(context, "redact_logs", False),  # ← PROPAGAZIONE REDACTION
     )
     return container_name
 
@@ -332,14 +332,14 @@ def _stop_preview(logger, *, container_name: Optional[str]) -> None:
 def _git_push(context: ClientContext, logger, message: str) -> None:
     if push_output_to_github is not None:
         try:
-            token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # ✅ obbligatorio
+            token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # ✅ obbligatorio (redatto in log)
             push_output_to_github(
                 context,
                 github_token=token,
                 do_push=True,
                 force_push=False,
                 force_ack=None,
-                redact_logs=getattr(context, "redact_logs", False),
+                redact_logs=getattr(context, "redact_logs", False),  # ← PROPAGAZIONE REDACTION
             )
             logger.info("Git push completato (repo util)")
             return

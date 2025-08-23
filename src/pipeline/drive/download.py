@@ -31,6 +31,7 @@ from ..logging_utils import get_structured_logger
 from ..path_utils import sanitize_filename, is_safe_subpath
 from .client import list_drive_files, get_file_metadata, _retry
 
+# Logger di modulo (fallback). In presenza di `context` useremo un logger contestualizzato locale.
 logger = get_structured_logger("pipeline.drive.download")
 
 # MIME type cartella e PDF in Google Drive
@@ -97,6 +98,7 @@ def _download_file_with_retry(
     redact_logs: bool = False,
     chunk_size: int = 1024 * 1024,
     op_name: str = "files.get_media",
+    log=None,
 ) -> None:
     """
     Scarica un singolo file da Drive con retry sull’intera operazione.
@@ -104,6 +106,8 @@ def _download_file_with_retry(
     Nota: in caso di errore transiente durante `next_chunk()`, il retry riparte
     dall’inizio del download del singolo file (approccio conservativo e semplice).
     """
+    _log = log or logger
+
     def _op():
         _ensure_dir(out_path.parent)
         with out_path.open("wb") as fh:
@@ -115,7 +119,7 @@ def _download_file_with_retry(
                 if progress and status:
                     try:
                         perc = int(status.progress() * 100)
-                        logger.info(
+                        _log.info(
                             "drive.download.chunk",
                             extra={"file_id": _maybe_redact(file_id, redact_logs), "progress_pct": perc},
                         )
@@ -157,6 +161,11 @@ def download_drive_pdfs_to_local(
     if not local_root_dir:
         raise DriveDownloadError("Percorso locale mancante.")
 
+    # Logger contestualizzato (se abbiamo il contesto), altrimenti fallback al logger di modulo
+    local_logger = get_structured_logger("pipeline.drive.download", context=context) if context else logger
+    # Redazione: ON se richiesto esplicitamente o se abilitata nel contesto
+    redact_logs = bool(redact_logs or (getattr(context, "redact_logs", False) if context is not None else False))
+
     local_root = Path(local_root_dir)
     _ensure_dir(local_root)
 
@@ -167,7 +176,7 @@ def download_drive_pdfs_to_local(
     queue: Deque[Tuple[str, Path]] = deque()
     queue.append((remote_root_folder_id, local_root))
 
-    logger.info(
+    local_logger.info(
         "drive.download.start",
         extra={
             "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
@@ -188,7 +197,7 @@ def download_drive_pdfs_to_local(
             except Exception:
                 rel = current_local_dir.as_posix()
 
-            logger.info("drive.download.folder", extra={"folder_path": rel})
+            local_logger.info("drive.download.folder", extra={"folder_path": rel})
 
             # 1) Sottocartelle del livello corrente (BFS)
             subfolders = list_drive_files(
@@ -215,7 +224,7 @@ def download_drive_pdfs_to_local(
 
                 # Path-safety: l'output deve rimanere dentro la root locale
                 if not is_safe_subpath(out_path, local_root):
-                    logger.warning(
+                    local_logger.warning(
                         "drive.download.skip_unsafe_path",
                         extra={"file_id": _maybe_redact(file_id, redact_logs), "file_path": str(out_path)},
                     )
@@ -238,7 +247,7 @@ def download_drive_pdfs_to_local(
                 if _same_file(out_path, remote_md5, remote_size):
                     skipped += 1
                     if progress and (skipped % 50 == 0):
-                        logger.info(
+                        local_logger.info(
                             "drive.download.progress",
                             extra={"downloaded": downloaded, "skipped": skipped, "last": safe_name},
                         )
@@ -251,6 +260,7 @@ def download_drive_pdfs_to_local(
                     out_path,
                     progress=progress,
                     redact_logs=redact_logs,
+                    log=local_logger,
                 )
 
                 # Verifica integrità post-download (se md5 remoto disponibile)
@@ -268,14 +278,14 @@ def download_drive_pdfs_to_local(
 
                 downloaded += 1
                 if progress and (downloaded % 25 == 0):
-                    logger.info(
+                    local_logger.info(
                         "drive.download.progress",
                         extra={"downloaded": downloaded, "skipped": skipped, "last": safe_name},
                     )
 
     except DriveDownloadError:
         # Errori specifici: li logghiamo e rilanciamo
-        logger.error(
+        local_logger.error(
             "drive.download.error",
             extra={
                 "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
@@ -286,7 +296,7 @@ def download_drive_pdfs_to_local(
         raise
     except Exception as e:  # noqa: BLE001
         # Qualsiasi altro errore → mappiamo a DriveDownloadError
-        logger.exception(
+        local_logger.exception(
             "drive.download.unexpected_error",
             extra={
                 "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
@@ -298,7 +308,7 @@ def download_drive_pdfs_to_local(
         )
         raise DriveDownloadError(f"Errore durante il download da Drive: {e}") from e
 
-    logger.info("drive.download.done", extra={"downloaded": downloaded, "skipped": skipped})
+    local_logger.info("drive.download.done", extra={"downloaded": downloaded, "skipped": skipped})
 
     # Compatibilità con orchestratori che annotano lo stato step nel contesto
     try:

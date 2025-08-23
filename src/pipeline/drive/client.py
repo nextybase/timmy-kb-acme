@@ -27,6 +27,7 @@ from typing import Any, Dict, Generator, List, Optional
 from collections import defaultdict
 from contextvars import ContextVar
 from contextlib import contextmanager
+from pathlib import Path
 
 from googleapiclient.discovery import build  # type: ignore
 from googleapiclient.errors import HttpError  # type: ignore
@@ -280,6 +281,9 @@ def get_drive_service(context: Any) -> Any:
     Eccezioni:
     - ConfigError se il file credenziali manca o non è leggibile.
     """
+    # Logger contestualizzato: eredita slug/run_id e filtri di redazione
+    local_logger = get_structured_logger("pipeline.drive.client", context=context)
+
     sa_path = _resolve_service_account_file(context)
     try:
         creds = Credentials.from_service_account_file(
@@ -294,9 +298,10 @@ def get_drive_service(context: Any) -> Any:
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Creazione client Google Drive fallita: {e}") from e
 
-    logger.debug(
+    # NB: non logghiamo il path completo delle credenziali (solo basename)
+    local_logger.debug(
         "drive.client.built",
-        extra={"sa_path": sa_path, "scopes": "drive", "impersonation": False},
+        extra={"sa_file": Path(sa_path).name, "scopes": "drive", "impersonation": False},
     )
     return service
 

@@ -18,16 +18,22 @@ if ENV_PATH.exists():
     load_dotenv(dotenv_path=ENV_PATH)
 
 __all__ = [
+    # Canoniche
     "get_env_var",
     "require_env",
     "get_bool",
     "get_int",
     "redact_secrets",
     "is_log_redaction_enabled",
-    # policy canoniche:
     "compute_redact_flag",
     "get_force_allowed_branches",
     "is_branch_allowed_for_force",
+    # Alias legacy/armonizzazione
+    "get_env",
+    "get_env_flag",
+    "get_env_int",
+    "must_env",
+    "redact_text",
 ]
 
 # -----------------------------
@@ -45,7 +51,7 @@ def get_env_var(
     redact: bool | str = False,  # parametro compatibile con le chiamate a valle (non logga qui)
 ) -> Optional[str]:
     """
-    Recupera una variabile d'ambiente con comportamento retro‑compatibile.
+    Recupera una variabile d'ambiente con comportamento retro-compatibile.
 
     Args:
         key: nome della variabile.
@@ -79,8 +85,8 @@ def require_env(key: str) -> str:
 def get_bool(key: str, default: bool = False) -> bool:
     """Lettura booleana tollerante.
 
-    Valori considerati truthy: {1,true,yes,on,y,t} (case‑insensitive).
-    Valori considerati falsy:  {0,false,no,off,n,f} (case‑insensitive).
+    Valori considerati truthy: {1,true,yes,on,y,t} (case-insensitive).
+    Valori considerati falsy:  {0,false,no,off,n,f} (case-insensitive).
     """
     v = os.getenv(key)
     if v is None:
@@ -131,7 +137,7 @@ def get_int(
     return val
 
 
-# Elenco chiavi comunemente sensibili: estendibile senza side‑effect
+# Elenco chiavi comunemente sensibili: estendibile senza side-effect
 _SECRET_KEYS = (
     "GITHUB_TOKEN",
     "GH_TOKEN",
@@ -164,7 +170,7 @@ def is_log_redaction_enabled(context=None) -> bool:
     [LEGACY] Determina se la redazione dei log deve essere attiva.
 
     Precedenza: `context.env` > `os.environ`.
-    Nota: mantenuta per retro‑compat. La logica *canonica* è in `compute_redact_flag`.
+    Nota: mantenuta per retro-compat. La logica *canonica* è in `compute_redact_flag`.
     """
     def _from_ctx(key: str, default: Optional[str] = None) -> Optional[str]:
         try:
@@ -254,7 +260,7 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
 
 def get_force_allowed_branches(context=None) -> list[str]:
     """
-    Legge l'allow‑list dei branch per il force push dalla variabile:
+    Legge l'allow-list dei branch per il force push dalla variabile:
       GIT_FORCE_ALLOWED_BRANCHES=main,release/*
 
     - Supporta lista separata da virgole e/o newline.
@@ -263,7 +269,7 @@ def get_force_allowed_branches(context=None) -> list[str]:
     - Se non impostata o vuota → [] (nessun vincolo lato helper).
 
     Nota: l’orchestratore può interpretare [] come “nessun filtro” e decidere
-    se consentire tutto o bloccare by‑policy.
+    se consentire tutto o bloccare by-policy.
     """
     raw = None
     try:
@@ -290,10 +296,42 @@ def is_branch_allowed_for_force(branch: str, context=None, *, allow_if_unset: bo
         allow_if_unset: se True e la lista non è configurata/è vuota → consenti.
 
     Returns:
-        True se almeno un pattern della allow‑list combacia (fnmatch), altrimenti False.
-        Se la allow‑list non è impostata/è vuota → `allow_if_unset`.
+        True se almeno un pattern della allow-list combacia (fnmatch), altrimenti False.
+        Se la allow-list non è impostata/è vuota → `allow_if_unset`.
     """
     patterns = get_force_allowed_branches(context)
     if not patterns:
         return allow_if_unset
     return any(fnmatch.fnmatch(branch, pat) for pat in patterns)
+
+
+# ==========================================
+# Alias legacy (armonizzazione chiamate)
+# ==========================================
+
+def get_env(key: str, default: Optional[str] = None, *, required: bool = False, redact: bool | str = False) -> Optional[str]:
+    """Alias compatibile di get_env_var()."""
+    return get_env_var(key, default=default, required=required, redact=redact)
+
+def get_env_flag(key: str, default: bool = False) -> bool:
+    """Alias compatibile di get_bool()."""
+    return get_bool(key, default=default)
+
+def get_env_int(
+    key: str,
+    default: Optional[int] = None,
+    *,
+    required: bool = False,
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None,
+) -> Optional[int]:
+    """Alias compatibile di get_int()."""
+    return get_int(key, default=default, required=required, min_value=min_value, max_value=max_value)
+
+def must_env(key: str) -> str:
+    """Alias compatibile di require_env()."""
+    return require_env(key)
+
+def redact_text(text: str) -> str:
+    """Alias compatibile di redact_secrets()."""
+    return redact_secrets(text)

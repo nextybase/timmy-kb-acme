@@ -2,22 +2,25 @@
 # src/pipeline/proc_utils.py
 """
 Utility robuste e riutilizzabili per l'esecuzione di subprocess con timeout, retry e logging.
-Pensato per sostituire le chiamate dirette a `subprocess.run` in moduli come:
+Pensato per sostituire chiamate dirette a `subprocess.run` in moduli come:
 - gitbook_preview.py (Docker build/run)
 - github_utils.py (git add/commit/push)
 - tools/cleanup_repo.py (facoltativo)
 
 API principali:
-- run_cmd(...): esegue un comando con timeout, retry con backoff e redazione sicura nei log
-- wait_for_port(...): attende che una porta TCP risponda entro una finestra temporale
+- run_cmd(...): esecuzione con timeout, retry/backoff e redazione sicura nei log
+- wait_for_port(...): attende che una porta TCP risponda
 - docker_available(...): verifica disponibilità di Docker
-- run_docker_preview(...): build + serve HonKit in container (detached) con retry e readiness check
-- stop_docker_preview(...): stop/cleanup container di preview in modo sicuro
+- run_docker_preview(...): build + serve HonKit in container (detached) con readiness check
+- stop_docker_preview(...): stop/cleanup container di preview
+
+Note:
+- Nessuna retro-compatibilità: rimosse le fallback function legacy.
 """
 
 from __future__ import annotations
 
-from typing import Sequence, Mapping, Optional, Callable, Any
+from typing import Sequence, Mapping, Optional, Callable
 import os
 import time
 import shlex
@@ -26,20 +29,7 @@ import subprocess
 import logging
 from pathlib import Path
 
-try:
-    # Preferiamo gli helper esistenti per coerenza con la pipeline
-    from .env_utils import get_int, redact_secrets  # type: ignore
-except Exception:  # pragma: no cover
-    # Fallback conservativo per ambienti minimi (test stand-alone)
-    def get_int(key: str, default: Optional[int] = None, *, required: bool = False) -> Optional[int]:
-        val = os.getenv(key, None)
-        try:
-            return int(str(val).strip()) if val not in (None, "") else default
-        except Exception:
-            return default
-
-    def redact_secrets(text: str) -> str:
-        return text
+from .env_utils import get_int, redact_secrets  # coerenza con la pipeline
 
 __all__ = [
     "CmdError",
@@ -90,7 +80,7 @@ def _now_ms() -> int:
 
 def _to_argv(cmd: Sequence[str] | str) -> Sequence[str]:
     if isinstance(cmd, str):
-        # Nota: shlex.split è sufficiente nel nostro contesto; i call-site possono passare già la lista
+        # shlex.split è sufficiente nel nostro contesto; i call-site possono passare già la lista
         return shlex.split(cmd)
     return list(cmd)
 
@@ -104,10 +94,7 @@ def _render_cmd_for_log(argv: Sequence[str], redactor: Callable[[str], str]) -> 
 def _tail(text: Optional[str], *, limit: int = 2000) -> Optional[str]:
     if text is None:
         return None
-    # Limite in caratteri (non byte) per semplicità; sufficiente per log diagnostici
-    if len(text) <= limit:
-        return text
-    return text[-limit:]
+    return text if len(text) <= limit else text[-limit:]
 
 
 def _merge_env(base: Mapping[str, str], extra: Optional[Mapping[str, str]]) -> Mapping[str, str]:
@@ -120,7 +107,7 @@ def _merge_env(base: Mapping[str, str], extra: Optional[Mapping[str, str]]) -> M
 
 def _default_timeout_for(op: Optional[str]) -> int:
     """
-    Ritorna un timeout di default (secondi) in base all'operazione.
+    Timeout di default (secondi) basato sull'operazione.
     - Docker: DOCKER_CMD_TIMEOUT (default 90)
     - Git:    GIT_CMD_TIMEOUT    (default 120)
     - Altro:  PROC_CMD_TIMEOUT   (default 60)
@@ -178,6 +165,14 @@ def run_cmd(
     delay_s: float = 0.0
     last_err: Optional[CmdError] = None
 
+    # cwd normalizzato per i log (se fornito)
+    cwd_log = ""
+    if cwd:
+        try:
+            cwd_log = str(Path(cwd).resolve())
+        except Exception:
+            cwd_log = str(cwd)
+
     for attempt in range(1, attempts + 1):
         if delay_s > 0:
             time.sleep(delay_s)
@@ -191,7 +186,7 @@ def run_cmd(
                         "op": op_label,
                         "attempt": attempt,
                         "attempts": attempts,
-                        "cwd": cwd or "",
+                        "cwd": cwd_log,
                         "timeout_s": eff_timeout,
                         "cmd": _render_cmd_for_log(argv, redactor),
                     },
@@ -202,7 +197,7 @@ def run_cmd(
                 cwd=cwd,
                 env=merged_env,
                 capture_output=capture,
-                text=True,
+                text=capture,
                 timeout=eff_timeout,
                 check=False,
             )
@@ -247,6 +242,7 @@ def run_cmd(
                         "duration_ms": duration,
                         "returncode": cp.returncode,
                         "stderr_tail": redactor(_tail(cp.stderr) or ""),
+                        "stdout_tail": redactor(_tail(cp.stdout) or ""),
                     },
                 )
 
@@ -276,6 +272,7 @@ def run_cmd(
                         "duration_ms": duration,
                         "timeout_s": eff_timeout,
                         "cmd": _render_cmd_for_log(argv, redactor),
+                        "cwd": cwd_log,
                     },
                 )
 
@@ -310,15 +307,13 @@ def wait_for_port(host: str, port: int, timeout: float = 30.0, interval: float =
     # timeout
     if logger:
         logger.error("wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout})
-    raise TimeoutError(f"Porta non raggiungibile: {host}:{port} entro {timeout}s")
+    raise TimeoutError(f"Porta non raggiungibile: {host}:{port} entro {timeout}s; last={last_exc!r}")
 
 
-# ----------------------------- Docker helpers (Fase 3) ------------------------------
+# ----------------------------- Docker helpers --------------------------------------
 
 def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None) -> bool:
-    """
-    Ritorna True se `docker` è invocabile e risponde a `docker --version`.
-    """
+    """Ritorna True se `docker` è invocabile e risponde a `docker --version`."""
     try:
         run_cmd(
             ["docker", "--version"],
@@ -339,7 +334,7 @@ def _docker_rm_force(name: str, *, logger: Optional[logging.Logger] = None) -> N
     try:
         run_cmd(["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f")
     except CmdError:
-        # Best-effort: non propaghiamo
+        # Best-effort
         if logger:
             logger.debug("docker.rm_force.fail", extra={"container": name})
 
@@ -371,7 +366,7 @@ def run_docker_preview(
     container_name: str = "honkit_preview",
     retries: int = 1,
     logger: Optional[logging.Logger] = None,
-    redact_logs: bool = False,
+    redact_logs: bool = False,  # mantenuto per firma coerente con call-site; non logghiamo segreti qui
 ) -> None:
     """
     Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
@@ -388,7 +383,6 @@ def run_docker_preview(
         logger.info("preview.start", extra={"md_dir": str(md_path), "container": container_name, "port": port})
 
     if not docker_available(logger=logger):
-        # Qui non solleviamo: lasciamo al chiamante la semantica (skipped vs error)
         raise CmdError("Docker non disponibile", cmd=["docker", "--version"], op="docker version")
 
     # Build statica (idempotente lato contenuti)
@@ -449,7 +443,6 @@ def run_docker_preview(
         if logger:
             logger.info("preview.ready", extra={"container": container_name, "port": port})
     except TimeoutError as e:
-        # Proviamo a loggare lo stato container per diagnosi
         running = _docker_inspect_running(container_name, logger=logger)
         if logger:
             logger.error("preview.ready.timeout", extra={"container": container_name, "port": port, "running": running})
@@ -463,13 +456,10 @@ def stop_docker_preview(container_name: str = "honkit_preview", *, logger: Optio
     Tenta lo stop + remove del container di preview. Best-effort (non solleva).
     """
     try:
-        # Prova stop soft
         run_cmd(["docker", "stop", container_name], retries=0, capture=True, logger=logger, op="docker stop")
     except CmdError:
-        # Ignora errori (container non esistente o già stoppato)
         pass
     finally:
-        # Forza rm per cleanup
         _docker_rm_force(container_name, logger=logger)
         if logger:
             logger.info("preview.container.cleaned", extra={"container": container_name})

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# src/tag_onboarding.py
 """
 Orchestratore: Tag Onboarding (HiTL)
 Step intermedio tra pre_onboarding e onboarding_full.
@@ -64,6 +65,22 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
+def _mask(s: Optional[str]) -> str:
+    """Maschera parziale di ID/percorsi per log non sensibili."""
+    if not s:
+        return ""
+    s = str(s)
+    if len(s) <= 7:
+        return "***"
+    return f"{s[:3]}***{s[-3:]}"
+
+
+def _tail_path(p: Path, max_len: int = 120) -> str:
+    """Ritorna la coda del path per leggibilità nei log (non segreto)."""
+    s = str(p)
+    return s if len(s) <= max_len else s[-max_len:]
+
+
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
     # sostituisce normalize_path con Path.resolve()
@@ -88,19 +105,31 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
 
         # corretto: verifica che 'dst' sia dentro 'raw_dir'
         if not is_safe_subpath(dst, raw_dir):
-            logger.warning("Skip per path non sicuro", extra={"file_path": str(dst)})
+            logger.warning(
+                "Skip per path non sicuro",
+                extra={"file_path": str(dst), "file_path_tail": _tail_path(dst)},
+            )
             continue
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         try:
             if dst.exists() and dst.stat().st_size == src.stat().st_size:
-                logger.debug("Skip copia (stessa dimensione)", extra={"file_path": str(dst)})
+                logger.debug(
+                    "Skip copia (stessa dimensione)",
+                    extra={"file_path": str(dst), "file_path_tail": _tail_path(dst)},
+                )
             else:
                 shutil.copy2(src, dst)
-                logger.info("PDF copiato", extra={"file_path": str(dst)})
+                logger.info(
+                    "PDF copiato",
+                    extra={"file_path": str(dst), "file_path_tail": _tail_path(dst)},
+                )
                 count += 1
         except Exception as e:
-            logger.warning("Copia fallita", extra={"file_path": str(dst), "error": str(e)})
+            logger.warning(
+                "Copia fallita",
+                extra={"file_path": str(dst), "file_path_tail": _tail_path(dst), "error": str(e)},
+            )
 
     return count
 
@@ -129,7 +158,10 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
         w.writerow(["relative_path", "suggested_tags"])
         w.writerows(rows)
 
-    logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
+    logger.info(
+        "Tag grezzi generati",
+        extra={"file_path": str(csv_path), "file_path_tail": _tail_path(csv_path), "count": len(rows)},
+    )
     return len(rows)
 
 
@@ -144,7 +176,10 @@ def _write_tagging_readme(semantic_dir: Path, logger) -> Path:
         "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n",
         encoding="utf-8",
     )
-    logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
+    logger.info(
+        "README_TAGGING scritto",
+        extra={"file_path": str(out), "file_path_tail": _tail_path(out)},
+    )
     return out
 
 
@@ -174,7 +209,10 @@ def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger)
             "    notes: \"\"",
         ]
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    logger.info("tags_reviewed stub scritto", extra={"file_path": str(out), "suggested": len(suggested)})
+    logger.info(
+        "tags_reviewed stub scritto",
+        extra={"file_path": str(out), "file_path_tail": _tail_path(out), "suggested": len(suggested)},
+    )
     return out
 
 
@@ -264,7 +302,10 @@ def _write_validation_report(report_path: Path, result: dict, logger):
         **result,
     }
     report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("Report validazione scritto", extra={"file_path": str(report_path)})
+    logger.info(
+        "Report validazione scritto",
+        extra={"file_path": str(report_path), "file_path_tail": _tail_path(report_path)},
+    )
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
@@ -274,7 +315,10 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
 
     if not yaml_path.exists():
-        logger.error("File tags_reviewed.yaml non trovato", extra={"file_path": str(yaml_path)})
+        logger.error(
+            "File tags_reviewed.yaml non trovato",
+            extra={"file_path": str(yaml_path), "file_path_tail": _tail_path(yaml_path)},
+        )
         return 1
 
     try:
@@ -347,7 +391,7 @@ def tag_onboarding_main(
             context=context,
             redact_logs=context.redact_logs,
         )
-        logger.info("✅ Download da Drive completato", extra={"folder_id": drive_raw_folder_id})
+        logger.info("✅ Download da Drive completato", extra={"folder_id": _mask(drive_raw_folder_id)})
 
     # B) LOCALE
     elif source == "local":
@@ -356,7 +400,7 @@ def tag_onboarding_main(
                 raise ConfigError("In modalità non-interattiva è richiesto --local-path per source=local.")
             local_path = _prompt("Percorso cartella PDF: ").strip()
         copied = _copy_local_pdfs_to_raw(Path(local_path), raw_dir, logger)
-        logger.info("✅ Copia locale completata", extra={"count": copied})
+        logger.info("✅ Copia locale completata", extra={"count": copied, "raw_tail": _tail_path(raw_dir)})
     else:
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
@@ -364,7 +408,7 @@ def tag_onboarding_main(
     csv_path = semantic_dir / "tags_raw.csv"
     _emit_tags_csv(raw_dir, csv_path, logger)
     # 👇 Sostituisce il vecchio print con un log “user-friendly”
-    logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path)})
+    logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path), "file_path_tail": _tail_path(csv_path)})
 
     # Checkpoint HiTL
     if non_interactive:
@@ -380,7 +424,7 @@ def tag_onboarding_main(
     # Fase 2: stub in semantic/
     _write_tagging_readme(semantic_dir, logger)
     _write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
-    logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir)})
+    logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir), "semantic_tail": _tail_path(semantic_dir)})
 
 
 # ─────────────────────────────────── CLI ─────────────────────────────────────
