@@ -37,7 +37,6 @@ from pipeline.constants import (
 from pipeline.path_utils import (
     ensure_valid_slug,  # ← helper centralizzato
     sorted_paths,
-    sanitize_filename,
 )
 from pipeline.env_utils import get_env_var  # ✅ centralizzazione ENV
 

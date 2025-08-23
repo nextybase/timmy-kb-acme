@@ -36,7 +36,7 @@ from github.GithubException import GithubException
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, ForcePushError, PushError
-from pipeline.path_utils import is_safe_subpath  # sicurezza path
+from pipeline.path_utils import is_safe_subpath, sorted_paths  # sicurezza path + ordinamento deterministico
 from pipeline.env_utils import (
     redact_secrets,
     get_env_var,                       # 🔐 redazione + env resolver
@@ -154,11 +154,10 @@ def push_output_to_github(
             file_path=book_dir,
         )
 
-    # Seleziona file .md validi (path-safety) ricorsivamente
-    md_files = sorted(
-        f
-        for f in book_dir.rglob("*.md")
-        if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)
+    # Seleziona file .md validi (path-safety) ricorsivamente — ordinamento deterministico
+    md_files = sorted_paths(
+        (f for f in book_dir.rglob("*.md") if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)),
+        base=book_dir,
     )
     if not md_files:
         msg = "⚠️ Nessun file .md valido trovato nella cartella book. Push annullato."
@@ -228,7 +227,7 @@ def push_output_to_github(
     # Preparo env con header http basic per autenticazione su clone/pull/push
     header = base64.b64encode(f"x-access-token:{github_token}".encode()).decode()
     env: dict[str, str] = dict(getattr(context, "env", {}) or {})
-    env.setdefault("PATH", os.getenv("PATH", ""))
+    env.setdefault("PATH", get_env_var("PATH", default="") or "")
     env["GIT_HTTP_EXTRAHEADER"] = f"Authorization: Basic {header}"
 
     try:

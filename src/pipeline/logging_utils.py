@@ -12,6 +12,8 @@ Caratteristiche:
 - **Redazione centralizzata**: se `context.redact_logs` è True, applica mascheratura
   ai messaggi/argomenti tramite `env_utils.redact_secrets(...)` e ai campi `extra`
   considerati sensibili (es. token, secret, key, password, service_account, authorization, path).
+- **Mascheratura riusabile**: helper pubblici `mask_partial`, `tail_path`,
+  `mask_id_map`, `mask_updates` per eliminare duplicazioni negli orchestratori.
 
 Note architetturali:
 - Nessun I/O non necessario oltre alla creazione opzionale del file di log.
@@ -50,6 +52,53 @@ _SENSITIVE_EXTRA_SUBSTRS = (
     "authorization",
     "path",
 )
+
+# -----------------------------
+#  Helpers di mascheratura (NEW)
+# -----------------------------
+def mask_partial(s: Optional[str]) -> str:
+    """
+    Maschera parzialmente stringhe sensibili per i log.
+    Regola: se <= 7 caratteri → '***', altrimenti primi 3 + '***' + ultimi 3.
+    """
+    if not s:
+        return ""
+    s = str(s)
+    if len(s) <= 7:
+        return "***"
+    return f"{s[:3]}***{s[-3:]}"
+
+
+def tail_path(p: Path, max_len: int = 120) -> str:
+    """
+    Restituisce solo la coda del path per leggibilità nei log (non segreto).
+    """
+    s = str(p)
+    return s if len(s) <= max_len else s[-max_len:]
+
+
+def mask_id_map(d: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Maschera i valori tipo ID in un mapping (es. mappa cartelle Drive).
+    """
+    out: Dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        out[k] = mask_partial(v) if isinstance(v, str) else v
+    return out
+
+
+def mask_updates(d: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Maschera campi potenzialmente sensibili in un dizionario di aggiornamenti.
+    Regola: se la chiave contiene 'id' o 'drive' (case-insensitive) e il valore è stringa → maschera.
+    """
+    out: Dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        if isinstance(v, str) and ("id" in k.lower() or "drive" in k.lower()):
+            out[k] = mask_partial(v)
+        else:
+            out[k] = v
+    return out
 
 
 @runtime_checkable
@@ -129,11 +178,8 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
             record.args = _redact_obj(record.args)
 
             # NEW: redazione sugli extra sensibili nel record.__dict__
-            # Evitiamo di toccare i campi core del LogRecord; operiamo solo per chiavi che
-            # contengono le substring sensibili (_SENSITIVE_EXTRA_SUBSTRS).
             rec_dict = getattr(record, "__dict__", {})
             for k in list(rec_dict.keys()):
-                # salta i campi standard già gestiti sopra
                 if k in ("msg", "args"):
                     continue
                 k_low = k.lower()
@@ -142,7 +188,6 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
                         v = rec_dict[k]
                         rec_dict[k] = _redact_obj(v)
                     except Exception:
-                        # non deve mai bloccare il logging
                         pass
 
         except Exception:
@@ -243,7 +288,6 @@ def get_structured_logger(
             logger.addHandler(fh)
         except Exception as e:
             # Se il file non è creabile, degrada a console-only
-            # (NB: questo warning passerà comunque dai filtri e quindi sarà redatto se necessario)
             try:
                 logger.warning(
                     f"Impossibile creare file di log {log_file_path}: {e}. "
@@ -334,4 +378,14 @@ def log_with_metrics(logger: logging.Logger, level: int, msg: str, **kv: Any) ->
         pass
 
 
-__all__ = ["get_structured_logger", "SupportsSlug", "metrics_scope", "log_with_metrics"]
+__all__ = [
+    "get_structured_logger",
+    "SupportsSlug",
+    "metrics_scope",
+    "log_with_metrics",
+    # helpers di mascheratura riusabili
+    "mask_partial",
+    "tail_path",
+    "mask_id_map",
+    "mask_updates",
+]

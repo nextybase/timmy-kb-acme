@@ -15,6 +15,7 @@ import unicodedata
 import re
 import yaml
 import os
+import logging
 from typing import Optional, Iterable, List, Tuple, Callable
 from functools import lru_cache  # ← caching per slug regex
 from .exceptions import ConfigError, InvalidSlug
@@ -204,7 +205,7 @@ def ensure_valid_slug(
     *,
     interactive: bool,
     prompt: Callable[[str], str],
-    logger
+    logger: logging.Logger
 ) -> str:
     """
     Richiede/valida uno slug secondo le regole configurate (usa validate_slug).
