@@ -1,61 +1,72 @@
-# Versioning Policy — Timmy-KB (v1.2.0)
+# docs/versioning_policy.md
+# Policy di Versioning — Timmy-KB (v1.2.1)
 
-Questa policy definisce le regole di versioning per la pipeline Timmy-KB. L’obiettivo è garantire stabilità, compatibilità e chiarezza evolutiva per sviluppatori e utenti.
+Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilità.
 
----
+## 1) Schema: SemVer
 
-## 1) Schema di versioning (SemVer)
+Usiamo **SemVer** `MAJOR.MINOR.PATCH`:
 
-La pipeline adotta **Semantic Versioning (SemVer 2.0.0)**:
+- **PATCH**: bugfix/refactor **compatibili** (es. 1.2.0 → 1.2.1)
+- **MINOR**: nuove feature **retro-compatibili** (es. 1.2.1 → 1.3.0)
+- **MAJOR**: cambi API o comportamenti **non compatibili** (es. 1.3.0 → 2.0.0)
 
-- **MAJOR (X.0.0)** → cambi incompatibili con versioni precedenti (breaking changes).
-- **MINOR (0.Y.0)** → nuove funzionalità retro-compatibili.
-- **PATCH (0.0.Z)** → fix e refactor senza modifiche API/CLI.
+### Regole pratiche
+- In **PATCH** non cambiare default, firme pubbliche o comportamento di CLI compatibile.
+- In **MINOR** puoi aggiungere opzioni e moduli, mantenendo i vecchi percorsi.
+- In **MAJOR** è consentita la rimozione di opzioni/percorsi e la modifica dei contratti.
 
----
+## 2) Tagging Git
 
-## 2) Regole pratiche
+- Ogni release viene taggata come: `vMAJOR.MINOR.PATCH` (es. `v1.2.1`).
+- Il tag referenzia una commit in `main` (o `GIT_DEFAULT_BRANCH`).
+- Il changelog (`docs/CHANGELOG.md`) deve essere aggiornato contestualmente al tag.
 
-- Ogni orchestratore ha API/CLI stabili all’interno della stessa **MINOR**.
-- I moduli interni possono cambiare senza bump **MAJOR**, se non rompono orchestratori/API pubbliche.
-- Gli helper privati non hanno garanzia di stabilità.
+## 3) Branching
 
----
+- **main**: stabile, sempre rilasciabile (protetto).
+- **feat/***: feature branch
+- **fix/***: bugfix
+- **docs/***: aggiornamenti documentazione
+- **hotfix/***: patch urgenti su `main`
 
-## 3) Tag e release
+PR obbligatorie verso `main`. Protezioni:
+- `Require status checks` (lint/test base)
+- `Require linear history` (no merge commit, preferisci squash)
 
-- Ogni rilascio è taggato in Git (`vX.Y.Z`).
-- Il changelog descrive:
-  - **Added** (nuove feature)
-  - **Changed** (modifiche retro-compatibili)
-  - **Fixed** (bugfix)
-  - **Removed** (solo in MAJOR)
-- Ogni PR che impatta API/CLI deve aggiornare `CHANGELOG.md`.
+## 4) Compatibilità & Deprecazioni
 
----
+- Ogni breaking change richiede:
+  - incremento **MAJOR**
+  - nota in CHANGELOG
+  - piano di migrazione (se rilevante)
+- Deprecazioni:
+  - annuncio in MINOR `N`
+  - rimozione in MAJOR `N+1`
 
-## 4) Compatibilità CLI
+## 5) Versioni dei documenti
 
-- Nessun breaking in PATCH.
-- Le opzioni CLI rimosse/deprecate richiedono un ciclo di almeno una MINOR prima della rimozione effettiva.
-- Default invariati salvo bump MAJOR.
+I documenti in `docs/` riportano la versione in testata. Allineare sempre:
+- `architecture.md`
+- `user_guide.md`
+- `developer_guide.md`
+- `coding_rules.md`
+- `policy_push.md`
+- `versioning_policy.md`
+- `CHANGELOG.md`
 
----
+## 6) Rilascio tipico
 
-## 5) Policy di documentazione
+1. Verifica lint/test e guide aggiornate.
+2. Aggiorna `CHANGELOG.md`.
+3. Bump versione nei doc.
+4. Merge in `main`.
+5. `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
-- Ogni release MINOR/MAJOR deve aggiornare:  
-  - `docs/architecture.md`  
-  - `docs/developer_guide.md`  
-  - `docs/coding_rules.md`  
-  - `docs/user_guide.md`  
-  - `docs/policy_push.md`  
-  - `docs/versioning_policy.md`
-- PATCH: aggiornamento documentazione solo se impatta comportamenti visibili.
+## 7) Allineamento orchestratori per v1.2.1
 
----
+- **Nuovo**: `semantic_onboarding.py` (conversione/enrichment/preview).
+- **Ridotto**: `onboarding_full.py` (solo push, in futuro GitBook).
+- **SSoT**: `ensure_within` in `pipeline.path_utils`.
 
-## 6) Roadmap stabilità
-
-- **v1.x** → fase stabile, garantita compatibilità CLI.  
-- **v2.0.0** → eventuale revisione architetturale e nuove API pubbliche.
+Queste modifiche sono **retro-compatibili** a livello di CLI (MINOR → 1.2.x), con breaking nullo lato utente.

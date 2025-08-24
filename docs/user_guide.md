@@ -1,6 +1,6 @@
-# User Guide — Timmy‑KB (v1.2.0)
+# User Guide — Timmy‑KB (v1.2.1)
 
-Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se vuoi, push su GitHub.
+Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se desiderato, push su GitHub.
 
 ---
 
@@ -34,7 +34,7 @@ output/timmy-kb-<slug>/
   ├─ book/       # Markdown + SUMMARY.md + README.md
   ├─ semantic/   # tags.yaml e altri enrichment
   ├─ config/     # config.yaml (aggiornato con eventuali ID Drive)
-  └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
+  └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
 ```
 
 > Lo **slug** deve rispettare la regex definita in `config/config.yaml`. In interattivo, se non valido ti verrà chiesto di correggerlo.
@@ -46,10 +46,10 @@ output/timmy-kb-<slug>/
 ### Modalità interattiva vs CLI
 
 - **Interattiva**: l’utente viene guidato passo passo. Nel pre‑onboarding deve inserire *slug* e nome cliente; in onboarding può confermare/negare l’avvio della preview Docker e del push GitHub. In questa modalità i comandi si lanciano "secchi" (senza parametri), e lo script chiede via prompt i dati mancanti.  
-  - Esempi: `py src/pre_onboarding.py` oppure `py src/onboarding_full.py`.
+  - Esempi: `py src/pre_onboarding.py` oppure `py src/semantic_onboarding.py`.
 
 - **CLI (batch)**: tutti i parametri vanno passati via opzioni (`--slug`, `--name`, `--no-preview`, `--no-push`, ecc.). Non ci sono prompt ed è pensata per CI/CD o automazioni.  
-  - Esempi: `py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive` oppure `py src/onboarding_full.py --slug acme --no-preview --no-push`.
+  - Esempi: `py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive` oppure `py src/semantic_onboarding.py --slug acme --no-preview --non-interactive`.
 
 ---
 
@@ -86,7 +86,24 @@ py src/tag_onboarding.py --slug <id>
 
 ---
 
-### C) Onboarding completo
+### C) Semantic Onboarding (conversione + preview)
+
+```bash
+py src/semantic_onboarding.py [--slug <id>] [opzioni]
+```
+
+**Sequenza tipica**
+
+1. **Conversione PDF → Markdown** → genera `.md` in `book/`.
+2. **Arricchimento frontmatter** → integra tags/areas dal `tags.yaml`.
+3. **README e SUMMARY** → generati da utility repo o fallback adapter.
+4. **Anteprima HonKit (Docker)**
+   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»* (default **Sì**). Lancia la preview e poi chiede *«Chiudere ORA la preview e terminare?»* (default **Sì**).
+   - Se Docker assente: chiede *«Proseguire senza anteprima?»* (default **No**).
+
+---
+
+### D) Onboarding Full (push)
 
 ```bash
 py src/onboarding_full.py [--slug <id>] [opzioni]
@@ -94,22 +111,13 @@ py src/onboarding_full.py [--slug <id>] [opzioni]
 
 **Sequenza tipica**
 
-1. **Conversione PDF → Markdown** → avvio automatico; genera `SUMMARY.md` e `README.md` in `book/`.
-2. **Arricchimento frontmatter** → integra tags/areas dal `tags.yaml`.
-3. **Anteprima HonKit (Docker)**
-   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»* (default **Sì**). Parte *detached* e non blocca la pipeline.
-   - Se Docker assente: chiede *«Proseguire senza anteprima?»* (default **No**).
-4. **Pubblicazione su GitHub (opzionale)**
-   - Chiede *«Eseguire il push su GitHub?»* (default **No**). Richiede `GITHUB_TOKEN`.
-   - In CLI puoi saltare con `--no-push` o forzare con `--force-push` + `--force-ack`.
-5. **Stop preview (se attiva)** → opzionale a fine pipeline.
+1. **Push GitHub** → pubblica i contenuti della cartella `book/` (commit + push).
+2. **Integrazioni future** → collegamento automatico con GitBook.
 
 **Opzioni CLI principali**
 
-- `--no-preview` → salta la preview Docker.
 - `--no-push` → salta il push GitHub.
-- `--preview-port <N>` → porta della preview (default 4000).
-- `--stop-preview` → ferma la preview al termine.
+- `--force-push` + `--force-ack` → forza il push anche in caso di conflitto.
 
 ---
 
@@ -124,7 +132,10 @@ py src/pre_onboarding.py
 # Tagging semantico
 py src/tag_onboarding.py
 
-# Onboarding completo
+# Conversione + preview
+py src/semantic_onboarding.py
+
+# Push finale
 py src/onboarding_full.py
 ```
 
@@ -137,9 +148,11 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive --d
 # Tagging
 py src/tag_onboarding.py --slug acme --non-interactive
 
-# Generazione book + enrichment, skip preview/push
-echo $GITHUB_TOKEN
-py src/onboarding_full.py --slug acme --no-preview --no-push --non-interactive
+# Generazione book + enrichment, skip preview
+py src/semantic_onboarding.py --slug acme --no-preview --non-interactive
+
+# Push GitHub
+py src/onboarding_full.py --slug acme --no-push --non-interactive
 ```
 
 ---

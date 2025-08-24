@@ -10,13 +10,12 @@ if str(_SRC_DIR) not in _sys.path:
 # --------------------------------------------------------------------------------------
 
 import os
-import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import is_safe_subpath
-from pipeline.file_utils import ensure_within, safe_write_text  # ✅ PR-3: path guard + atomic write
+from pipeline.path_utils import is_safe_subpath, ensure_within  # ensure_within -> SSoT in path_utils
+from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.exceptions import ConfigError, EXIT_CODES
 
 logger = get_structured_logger("tools.gen_dummy_kb")
@@ -26,6 +25,7 @@ try:
     from fpdf import FPDF  # type: ignore
 except Exception:
     FPDF = None  # fallback: generiamo .txt
+
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv()
@@ -71,7 +71,7 @@ def _make_pdf(out_path: Path, titolo: str, paragrafi: List[str]) -> None:
     if FPDF is None:
         placeholder = out_path.with_suffix(".txt")
         text = f"# {titolo}\n\n" + "\n\n".join(paragrafi) + "\n"
-        safe_write_text(placeholder, text, encoding="utf-8", atomic=True)  # ✅ atomico
+        safe_write_text(placeholder, text, encoding="utf-8", atomic=True)
         logger.warning("FPDF non disponibile: creato placeholder .txt", extra={"file_path": str(placeholder)})
         return
     pdf = FPDF()
@@ -83,6 +83,7 @@ def _make_pdf(out_path: Path, titolo: str, paragrafi: List[str]) -> None:
     for par in paragrafi:
         pdf.multi_cell(0, 8, par)
         pdf.ln(2)
+    # Nota: FPDF gestisce la scrittura; il path è già validato a monte
     pdf.output(str(out_path))
     logger.info("📄 PDF di test generato", extra={"file_path": str(out_path)})
 
@@ -104,18 +105,38 @@ def genera_raw_structure(raw_dir: Path, raw_yaml: Path, pdf_yaml: Path) -> None:
     raw_dir = Path(raw_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
 
+    raw_dir_resolved = raw_dir.resolve()
+
     for cat in cartelle:
-        cat_folder = raw_dir / cat
-        # ✅ PR-3: path guard forte – deve stare sotto raw_dir
+        # Evita categorie “riservate” o che mappano alla root stessa (es. "raw", ".", vuote)
+        if not isinstance(cat, str) or not cat.strip():
+            continue
+        cat_norm = cat.strip().lstrip("./\\")
+        if cat_norm.lower() in ("raw", ".", ""):
+            logger.debug("Skip categoria riservata", extra={"category": cat})
+            continue
+
+        cat_folder = raw_dir / cat_norm
+
+        # Path guard forte – deve stare sotto raw_dir
         try:
             ensure_within(raw_dir, cat_folder)
         except ConfigError:
             logger.debug("Skip (path non sicuro)", extra={"file_path": str(cat_folder)})
             continue
 
+        # Ulteriore difesa: evita di creare una cartella che risolva alla root raw/
+        try:
+            if cat_folder.resolve() == raw_dir_resolved:
+                logger.debug("Skip (cartella coincide con raw/)", extra={"category": cat})
+                continue
+        except Exception:
+            # Se non si può risolvere, proseguiamo comunque: ensure_within ha già validato
+            pass
+
         cat_folder.mkdir(parents=True, exist_ok=True)
         info = pdf_dummy.get(cat, {})
-        titolo = info.get("titolo", f"Sezione: {cat.title()}")
+        titolo = info.get("titolo", f"Sezione: {cat_norm.title()}")
         paragrafi = info.get(
             "paragrafi",
             [
@@ -124,7 +145,7 @@ def genera_raw_structure(raw_dir: Path, raw_yaml: Path, pdf_yaml: Path) -> None:
                 "Sezione tematica generica.",
             ],
         )
-        pdf_path = cat_folder / f"{cat}_dummy.pdf"
+        pdf_path = cat_folder / f"{cat_norm}_dummy.pdf"
         _make_pdf(pdf_path, titolo, paragrafi)
 
     logger.info("✅ PDF dummy generati", extra={"dest": str(raw_dir)})
@@ -136,9 +157,8 @@ def main() -> int:
     book = base / "book"
     config_dir = base / "config"
     raw = base / "raw"
-    dummy_repo = base / "repo"
 
-    # ✅ PR-3: path-safety (base deve vivere sotto il repo)
+    # Path-safety: base deve vivere sotto il repo
     try:
         ensure_within(project_root, base)
     except ConfigError:
@@ -146,7 +166,7 @@ def main() -> int:
         return EXIT_CODES.get("ConfigError", 2)
 
     # 1) Crea cartelle principali
-    for folder in (book, config_dir, raw, dummy_repo):
+    for folder in (book, config_dir, raw):
         folder.mkdir(parents=True, exist_ok=True)
 
     # 2) Crea README/SUMMARY/test nel book (scritture atomiche)
@@ -215,29 +235,7 @@ def main() -> int:
             return EXIT_CODES.get("ConfigError", 2)
     genera_raw_structure(raw, raw_yaml, pdf_yaml)
 
-    # 5) Opzionale: crea cartella repo di test (interattivo, default NO)
-    resp_repo = input("\nVuoi creare anche la cartella output/timmy-kb-dummy/repo per i test GitHub? [y/N]: ").strip().lower()
-    if resp_repo == "y":
-        if dummy_repo.exists():
-            shutil.rmtree(dummy_repo)
-        dummy_repo.mkdir(parents=True, exist_ok=True)
-        try:
-            ensure_within(dummy_repo, dummy_repo / "README.md")
-            ensure_within(dummy_repo, dummy_repo / "test.txt")
-        except ConfigError as e:
-            logger.error(str(e))
-            return EXIT_CODES.get("ConfigError", 2)
-
-        safe_write_text(
-            dummy_repo / "README.md",
-            "# Dummy Repo per test GitHub\n\nQuesta cartella viene usata per test automatici.",
-            encoding="utf-8",
-            atomic=True,
-        )
-        safe_write_text(dummy_repo / "test.txt", "File di test\n", encoding="utf-8", atomic=True)
-        logger.info("✅ Cartella dummy_repo creata", extra={"file_path": str(dummy_repo)})
-    else:
-        logger.info("⏭️  Salto creazione cartella dummy_repo.")
+    # Nota: rimosso il blocco interattivo che chiedeva/creava la cartella "repo" di test.
 
     return 0
 

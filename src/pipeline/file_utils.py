@@ -4,11 +4,9 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Prevenire path traversal con guardie semplici e riutilizzabili.
 - Centralizzare la logica di fsync best-effort (evita file troncati).
 
 API principali:
-- ensure_within(base: Path, target: Path) -> None
 - safe_write_text(path: Path, data: str, *, encoding="utf-8", atomic=True) -> None
 - safe_write_bytes(path: Path, data: bytes, *, atomic=True) -> None
 
@@ -16,6 +14,10 @@ Note:
 - `atomic=True` esegue la scrittura su file temporaneo + `os.replace()` atomico.
 - Viene creata la directory padre se assente (mkdir(parents=True, exist_ok=True)).
 - `fsync` è best-effort: si prova a sincronizzare sia il file che la directory.
+
+Path-safety:
+- La **guardia STRONG** vive in `pipeline.path_utils.ensure_within` (SSoT).
+- Questo modulo non espone più `ensure_within`.
 """
 
 from __future__ import annotations
@@ -31,31 +33,6 @@ from .logging_utils import get_structured_logger
 _logger = get_structured_logger("pipeline.file_utils")
 
 
-def ensure_within(base: Path, target: Path) -> None:
-    """
-    Garantisce che `target` risieda sotto `base` una volta risolti i path.
-    Solleva ConfigError in caso contrario.
-
-    Args:
-        base: directory radice consentita.
-        target: path del file da validare.
-    """
-    try:
-        base_r = Path(base).resolve()
-        tgt_r = Path(target).resolve()
-    except Exception as e:
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
-
-    try:
-        # Fallisce con ValueError se tgt_r non è sotto base_r (gestisce anche prefissi simili)
-        tgt_r.relative_to(base_r)
-    except Exception:
-        raise ConfigError(
-            f"Path traversal rilevato: {tgt_r} non è sotto {base_r}",
-            file_path=str(target),
-        )
-
-
 def _fsync_best_effort(fd: int, path: Optional[Path] = None) -> None:
     """Sincronizza il file descriptor in modo best-effort."""
     try:
@@ -68,7 +45,7 @@ def _fsync_best_effort(fd: int, path: Optional[Path] = None) -> None:
 def _fsync_dir_best_effort(dir_path: Path) -> None:
     """Sincronizza la directory contenitore in modo best-effort."""
     try:
-        # Su Windows O_DIRECTORY non esiste; il blocco è già best-effort.
+        # Su Windows O_DIRECTORY non esiste; l'intero blocco è già best-effort.
         dfd = os.open(str(dir_path), os.O_DIRECTORY)
         try:
             os.fsync(dfd)
@@ -171,7 +148,6 @@ def safe_write_bytes(path: Path, data: bytes, *, atomic: bool = True) -> None:
 
 
 __all__ = [
-    "ensure_within",
     "safe_write_text",
     "safe_write_bytes",
 ]

@@ -5,7 +5,9 @@ Utility di gestione path e slug per la pipeline Timmy-KB.
 ✅ Principi:
 - Niente side-effect (no I/O esterni, salvo lettura facoltativa di config locale).
 - Logging strutturato solo in caso di errore (silenzioso quando tutto va bene).
-- Le guardie STRONG sui path vivono in `pipeline.file_utils.ensure_within`.
+- Guardie SOFT e STRONG sui path:
+  - SOFT:  is_safe_subpath(path, base) -> bool
+  - STRONG: ensure_within(base, target) -> None  (SSoT vive QUI)
 """
 
 from __future__ import annotations
@@ -45,6 +47,31 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
             extra={"error": str(e), "path": str(path), "base": str(base)},
         )
         return False
+
+
+def ensure_within(base: Path, target: Path) -> None:
+    """
+    Guardia STRONG: garantisce che `target` risieda sotto `base` una volta risolti i path.
+    Solleva ConfigError se la condizione non è rispettata o se la risoluzione fallisce.
+
+    Args:
+        base: directory radice consentita.
+        target: path del file/dir da validare.
+    """
+    try:
+        base_r = Path(base).resolve()
+        tgt_r = Path(target).resolve()
+    except Exception as e:
+        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
+
+    try:
+        # Fallisce con ValueError se tgt_r non è sotto base_r (gestisce anche prefissi simili)
+        tgt_r.relative_to(base_r)
+    except Exception:
+        raise ConfigError(
+            f"Path traversal rilevato: {tgt_r} non è sotto {base_r}",
+            file_path=str(target),
+        )
 
 
 @lru_cache(maxsize=1)
@@ -224,11 +251,12 @@ def ensure_valid_slug(
 
 __all__ = [
     "is_safe_subpath",
-    "clear_slug_regex_cache",  # reset cache regex
+    "ensure_within",          # SSoT guardia STRONG
+    "clear_slug_regex_cache", # reset cache regex
     "is_valid_slug",
-    "validate_slug",           # helper dominio
+    "validate_slug",          # helper dominio
     "normalize_path",
     "sanitize_filename",
-    "sorted_paths",            # ordinamento deterministico
-    "ensure_valid_slug",       # wrapper interattivo
+    "sorted_paths",           # ordinamento deterministico
+    "ensure_valid_slug",      # wrapper interattivo
 ]

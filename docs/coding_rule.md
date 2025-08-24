@@ -1,74 +1,76 @@
-# Coding Rules — Timmy-KB (v1.2.0)
+# Coding Rules — Timmy-KB (v1.2.1)
 
-Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
+Regole operative per scrivere e manutenere il codice della pipeline Timmy‑KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
 ---
 
 ## 1) Linguaggio, stile, tipizzazione
 
-- **Python ≥ 3.10** – usare le feature del linguaggio (type hints, match-case) mantenendo compatibilità.
+- **Python ≥ 3.10** – usare le feature del linguaggio (type hints, pattern matching) mantenendo compatibilità.
 - **Type hints** – annotazioni obbligatorie per tutte le funzioni pubbliche e strutture dati complesse.
 - **Docstring** – brevi e chiare, stile Google. Solo esempi se chiariscono casi non ovvi.
 - **Naming** – snake\_case per variabili/funzioni, PascalCase per classi, MACRO\_CASE per costanti. Nomi esplicativi.
 - **Import** – ordine: standard, terze parti, locali. Preferire import assoluti.
-- **Formattazione** – PEP 8, Black, Ruff. I commit devono superare pre-commit hooks.
+- **Formattazione** – PEP 8, Black, Ruff. I commit devono superare i pre‑commit hooks.
 - **Commenti** – spiegare *perché*, non il *cosa*. Evitare superflui.
 
 ---
 
 ## 2) Orchestratori vs Moduli
 
-- **Orchestratori** – UX e flussi: parsing CLI, prompt (solo interattivo), gestione flag (--non-interactive, --dry-run, --no-drive, --push, etc.), anteprima Docker, gestione eccezioni → exit code. Solo qui `sys.exit()`.
-- **Moduli** – operazioni tecniche: Drive, conversione file, push GitHub. Nessun input utente né `sys.exit()`. Sollevano eccezioni.
-- **Output utente** – solo orchestratori, via logger. Moduli restituiscono valori o eccezioni.
-- **Batch-safe** – i moduli devono girare senza interazione. Orchestratori gestiscono batch vs interattivo.
+- **Orchestratori** – UX e flussi: parsing CLI, prompt (solo interattivo), gestione flag (`--non-interactive`, `--dry-run`, ecc.), anteprima Docker, gestione eccezioni → exit code. Solo qui `sys.exit()`.
+- **Moduli** – operazioni tecniche (Drive, conversione file, push GitHub). Nessun input utente né `sys.exit()`. Sollevano eccezioni tipizzate.
+- **Output utente** – solo orchestratori, via logger. I moduli restituiscono valori o eccezioni.
+- **Batch‑safe** – i moduli devono girare senza interazione. Orchestratori gestiscono batch vs interattivo.
 
 ---
 
 ## 3) Logging ed errori
 
-- **No print()** – tutto via logger strutturato (`get_structured_logger`). Livelli: DEBUG, INFO, WARNING, ERROR.
+- **No **`` – tutto via logger strutturato (`get_structured_logger`). Livelli: DEBUG, INFO, WARNING, ERROR.
 - **Metadati nei log** – usare `extra={}` con slug, path, ecc.
-- **Niente segreti nei log** – usare redazione centralizzata (`compute_redact_flag`, `_mask`).
-- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, ecc.). Orchestratori mappano su EXIT\_CODES.
-- **Gestione deterministica** – niente catch-all generici nei moduli. Lasciar propagare se imprevisti.
-- **Messaggi chiari** – spiegare il problema, non messaggi generici.
+- **Niente segreti nei log** – usare redazione centralizzata (`compute_redact_flag`, helper di mask). Mai loggare token in chiaro.
+- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, `PushError`, ecc.). Gli orchestratori mappano su `EXIT_CODES`.
+- **Determinismo** – niente catch‑all generici nei moduli. Lasciar propagare se imprevisti.
+- **Messaggi chiari** – spiegare il problema e il contesto; evitare testi generici.
 
 ---
 
 ## 4) I/O, sicurezza e atomicità
 
 - **Pathlib & encoding** – sempre `Path`, `encoding="utf-8"`, context manager.
-- **Path traversal** – usare `is_safe_subpath`.
-- **Scritture atomiche** – usare `safe_write_text`/`safe_write_bytes` con `atomic=True`. Backup `.bak` per config critici.
-- **No segreti su disco** – non salvare token, credenziali. Solo PDF originali ammessi.
-- **Chiusura risorse** – sempre context manager.
+- **Path traversal (SSoT)** – usare `pipeline.path_utils.ensure_within` come guardia *STRONG* prima di scrivere/leggere fuori sandbox. `is_safe_subpath` è ammesso solo come check *soft* pre‑lettura o per shortlist, **non** per autorizzare scritture.
+- **Scritture atomiche** – usare `safe_write_text`/`safe_write_bytes` con `atomic=True`. Per file critici, prevedere backup `.bak`.
+- **No segreti su disco** – non salvare token/credenziali. Solo PDF originali e artefatti pubblicabili.
+- **Chiusura risorse** – sempre context manager; nessun file descriptor “appeso”.
 
 ---
 
 ## 5) Configurazioni e cache
 
-- **YAML config** – sempre `yaml.safe_load`. Default sensati o `ConfigError`.
-- **Regex slug** – definita in config/config.yaml, cache in path\_utils. Invalidate con `clear_slug_regex_cache()`.
-- **Env centralizzate** – usare `env_utils.get_env_var`. Vietato os.environ sparsi.
-- **Cache runtime** – isolate al modulo, invalidabili con funzioni dedicate.
+- **YAML config** – sempre `yaml.safe_load`. Default sensati o `ConfigError` esplicito.
+- **Regex slug** – definita in `config/config.yaml`, cache in `path_utils`. Invalidate con `clear_slug_regex_cache()` quando la config cambia.
+- **Env centralizzate** – usare `env_utils.get_env_var`. Evitare `os.environ[...]` sparsi.
+- **Cache runtime** – isolate al modulo, invalidabili con funzioni dedicate; nessuna cache globale non controllata.
 
 ---
 
 ## 6) Subprocess, Docker, GitHub
 
-- **Comandi esterni** – sempre `proc_utils.run_cmd(...)` con timeout, retry/backoff, cattura `stdout/stderr`. Vietato `shell=True` se non indispensabile.
-- **Docker** – preview via `adapters.preview` (API uniforme). Stop via orchestratore.
-- **Git/GitHub** – gestiti in `github_utils.py`. Validare precondizioni (es. `GITHUB_TOKEN`). Push incrementale, forzato solo con `--force-push` + `--force-ack`. Sempre `--force-with-lease`.
-- **Token** – mai nell’URL, solo header. Mascherare nei log.
+- **Comandi esterni** – usare wrapper (es. `proc_utils.run_cmd(...)`) con timeout, retry/backoff, cattura `stdout/stderr`. Evitare `shell=True`.
+- **Docker** – preview via `adapters.preview` (API uniforme). Lo stop è orchestrato dagli orchestratori.
+- **Split orchestratori** – `semantic_onboarding.py` fa conversione/enrichment/preview; `onboarding_full.py` gestisce **solo il push**.
+- **Git/GitHub** – push via `pipeline.github_utils`. Validare precondizioni (es. `GITHUB_TOKEN`). Push incrementale; force solo con consenso esplicito (`--force-push` + `--force-ack`) e `--force-with-lease`.
+- **Token** – mai nell’URL; solo header. Mascherare sempre nei log.
 
 ---
 
 ## 7) Drive e rete
 
-- **Retry con backoff** – implementare exponential backoff + jitter (vedi `drive/client.py`). Loggare tentativi.
-- **Idempotenza download** – saltare file invariati (MD5 + size).
-- **Gerarchia** – RAW locale deve rispecchiare Drive. BOOK rispecchia RAW.
+- **Uso limitato a pre‑onboarding** – Drive è usato solo per creare struttura remota e caricare `config.yaml`.
+- **Retry con backoff** – exponential backoff + jitter (vedi `drive/client.py`). Loggare tentativi.
+- **Idempotenza download** – saltare file invariati (MD5 + size) nei moduli di download.
+- **Gerarchia** – RAW locale rispecchia Drive; BOOK rispecchia RAW.
 - **Metriche** – loggare numero file scaricati, retry, skip.
 - **Redazione dati** – loggare ID parziali (inizio/fine) se `redact_logs=True`.
 
@@ -78,7 +80,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 
 - **SemVer** – PATCH = bugfix/refactor compatibile. MINOR = nuove feature. MAJOR = cambi di API.
 - **No breaking in PATCH** – vietato cambiare default o rimuovere opzioni.
-- **Test di compatibilità** – provare comandi base dopo ogni modifica.
+- **Smoke test** – provare comandi base dopo ogni modifica. Aggiungere test script/manuali quando serve.
 
 ---
 
@@ -86,28 +88,37 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 
 Prima di una PR, eseguire:
 
-1. **Pre-onboarding (locale)**
+1. **Pre‑onboarding (locale)**
    ```bash
    py src/pre_onboarding.py --slug demo --non-interactive --dry-run
    ```
-2. **Onboarding base (no Drive, no push)**
+2. **Tag onboarding (CSV + stub)**
    ```bash
-   py src/onboarding_full.py --slug demo --no-drive --non-interactive
+   py src/tag_onboarding.py --slug demo --source local --local-path ./some-pdfs --non-interactive --proceed
    ```
-3. **Onboarding con Docker** (interattivo, conferma preview, push No, cleanup Yes).
-4. **Push batch** (con `GITHUB_TOKEN`, `GIT_DEFAULT_BRANCH=main`). Verificare commit + push senza force.
+3. **Semantic onboarding (conversione + preview)**
+   ```bash
+   py src/semantic_onboarding.py --slug demo --non-interactive --no-preview
+   # oppure interattivo con preview Docker
+   py src/semantic_onboarding.py --slug demo
+   ```
+4. **Push (solo GitHub)**
+   ```bash
+   set GITHUB_TOKEN=...  # o esportare in .env
+   py src/onboarding_full.py --slug demo --non-interactive
+   ```
 
 ---
 
 ## 10) Qualità del codice
 
 - **Funzioni piccole** – ogni funzione fa una cosa precisa.
-- **Chiarezza > performance** – ottimizzare solo con evidenza, commentare trick.
+- **Chiarezza > performance** – ottimizzare solo con evidenza, commentare i trick.
 - **No duplicazione** – DRY, estrarre in util quando sensato.
 - **Testabilità** – funzioni pure, dipendenze iniettate (logger, context).
-- **TODO chiari** – annotare solo con breve spiegazione. Rimuovere codice morto.
+- **TODO chiari** – annotare con breve spiegazione; rimuovere codice morto.
 - **Consistenza** – nomi, log e emoji coerenti (✅ successo, ⚠️ warning, ⏭️ skip).
-- **API coerenti** – tutte le funzioni esposte dagli adapter hanno firma `(context, logger, **opts)` o variante coerente (PR-4).
+- **API coerenti** – gli adapter espongono `(context, logger, **opts)` o variante coerente.
 
 ---
 
@@ -148,6 +159,4 @@ except PreviewError as e:
 ```
 
 *(Gli esempi mostrano come loggare correttamente con contesto e propagare errori tipizzati all’orchestratore.)*
-
----
 

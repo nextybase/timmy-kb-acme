@@ -7,7 +7,8 @@ import csv
 from pathlib import Path
 
 from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
-from pipeline.file_utils import ensure_within, safe_write_text
+from pipeline.path_utils import ensure_within
+from pipeline.file_utils import safe_write_text
 
 
 def write_tagging_readme(semantic_dir: Path, logger) -> Path:

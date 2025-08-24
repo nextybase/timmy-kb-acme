@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import List
 
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_text, ensure_within
-from pipeline.path_utils import sorted_paths
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import sorted_paths, ensure_within
 
 __all__ = [
     "ensure_readme_summary",

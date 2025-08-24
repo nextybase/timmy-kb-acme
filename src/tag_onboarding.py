@@ -55,8 +55,9 @@ from pipeline.path_utils import (
     is_safe_subpath,
     sanitize_filename,
     sorted_paths,
+    ensure_within,  # ← guardia STRONG ora qui (SSoT)
 )
-from pipeline.file_utils import ensure_within, safe_write_text  # path guard + scritture atomiche
+from pipeline.file_utils import safe_write_text  # ← scritture atomiche
 from pipeline.env_utils import compute_redact_flag
 
 # Stub/README tagging centralizzati

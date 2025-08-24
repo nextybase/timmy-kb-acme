@@ -1,60 +1,75 @@
-# Policy di Push — Timmy-KB (v1.2.0)
+# Policy di Push — Timmy-KB (v1.2.1)
 
-Questa policy stabilisce le regole per pubblicare in GitHub i contenuti generati dalla pipeline di onboarding. L’obiettivo è garantire sicurezza, tracciabilità e allineamento con la strategia di versioning.
+Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
----
+## 1) Responsabilità e orchestratori
 
-## 1) Regola base: push incrementale
+- **`semantic_onboarding.py`**: conversione RAW→BOOK, enrichment, README/SUMMARY, preview Docker. **Non fa push.**
+- **`onboarding_full.py`**: esegue **solo** il push GitHub (e in futuro l’integrazione GitBook). Richiede che `book/` sia già pronto.
 
-- **Default**: il push è **incrementale**, senza sovrascrivere la storia remota.
-- La pipeline effettua:
-  - `git pull --rebase` → aggiorna il branch remoto.
-  - Commit solo se ci sono differenze.
-  - `git push` senza `--force`.
-- In caso di conflitto non risolvibile: l’orchestratore solleva `PushError` con messaggi chiari.
+## 2) Prerequisiti
 
----
+- `GITHUB_TOKEN` valido (permessi `repo`).
+- Repo e branch configurati nel contesto/`config.yaml per cliente`.
+- Rete accessibile (CI o locale).
 
-## 2) Force push (governance)
+## 3) Regole operative
 
-Il force push è **vietato di default**. È consentito solo se:
+- **Branch protetti**: push su `main` solo via PR. In CI → merge protetto.
+- **Force push**: vietato di default. Consentito solo con:
+  - flag espliciti (es. `--force-push` + `--force-ack`) quando previsti dall’orchestratore
+  - strategia `--force-with-lease`
+  - autorizzazione esplicita in PR/policy team
 
-- Lanciato con **due fattori**:
-  - Flag CLI `--force-push`
-  - Flag CLI `--force-ack <TAG>`
-- Il branch target è incluso in `GIT_FORCE_ALLOWED_BRANCHES` (es. `main`, `release/*`).
-- In questo caso, viene usato `--force-with-lease` per prevenire sovrascritture non intenzionali.
-- Il commit riceve un trailer `Force-Ack: <TAG>` per auditabilità.
+- **Scope dei contenuti**: versionare solo `book/` e file di progetto necessari. Escludere asset temporanei e `.bak`.
+- **Messaggi di commit**: chiari, includere slug cliente e run_id se disponibile (es. `onboarding_full(acme): build book v1.2.1`).
 
-Se uno dei requisiti manca, l’orchestratore esce con `ForcePushError`.
+## 4) Sicurezza
 
----
+- **Token**: non in chiaro nei log; mai in URL. Usare header.
+- **Redazione log**: abilitata se `compute_redact_flag(...)` restituisce `True`. Dati sensibili mascherati.
+- **Path-safety & atomicità**: garantita a monte in fase di generazione contenuti (`ensure_within`, `safe_write_*`).
 
-## 3) Variabili d’ambiente
+## 5) Sequenza tipica (CLI)
 
-- `GITHUB_TOKEN` → token obbligatorio per il push.
-- `GIT_DEFAULT_BRANCH` → branch di default (fallback `main`).
-- `GIT_FORCE_ALLOWED_BRANCHES` → lista (separata da virgola) di branch su cui è permesso il force.
+```bash
+# 1) Prepara contenuti
+py src/semantic_onboarding.py --slug acme --non-interactive --no-preview
 
----
+# 2) Push (solo push)
+py src/onboarding_full.py --slug acme --non-interactive
+```
 
-## 4) Redazione log
+Opzioni comuni:
+- `--no-preview` (non usato in `onboarding_full.py`, resta per compatibilità in v1.2.x se previsto)
+- `--no-push` (non applicabile: l’orchestratore è “solo push”)
+- `--force-with-lease` / `--force-push` (se/quando supportati: usare con cautela)
 
-- Tutti i comandi Git e gli header HTTP vengono loggati **senza segreti**.
-- Token e ack sono mascherati (`***`).
-- Abilitazione redazione tramite `LOG_REDACTION` (`auto`/`on`/`off`).
+## 6) Error handling
 
----
+- Errori di autenticazione → `PushError` con exit code dedicato (40).
+- Errori di rete/permessi → log strutturati con contesto (`slug`, branch, repo).
+- Nessun fallback locale: se il push fallisce, la pipeline non tenta ritenti non guidati.
 
-## 5) Note operative
+## 7) CI / CD
 
-- **CI/CD**: in ambienti automatizzati il force richiede entrambi i flag; in assenza, la pipeline fallisce.
-- **Auditabilità**: i log includono `local_sha`, `remote_sha` e trailer di commit.
-- **Raccomandazione**: evitare force push su `main`, preferire branch dedicati e PR.
+- Pipeline CI deve:
+  - validare build/lint/test
+  - eseguire `semantic_onboarding.py` (senza preview) su branch di lavoro
+  - creare PR verso `main`
+  - dopo approvazione, eseguire `onboarding_full.py` (solo push) sul merge in `main`.
 
----
+## 8) Tracciabilità
 
-## 6) Compatibilità
+- Ogni esecuzione ha `run_id` nei log.
+- I commit devono contenere riferimenti minimi (slug, step, versione).
+- Conservare i log in `output/timmy-kb-<slug>/logs/`.
 
-- Nessun breaking change: i flussi di push storici restano validi.
-- Le regole di governance rendono il comportamento **safe by default**.
+## 9) Roadmap integrazione GitBook
+
+- Pubblicazione automatica su GitBook a valle del push (`onboarding_full.py`).
+- Gestione token GitBook con redazione log.
+- Allineamento contenuti `book/` ↔ spazio GitBook.
+
+> **Nota:** fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.
+

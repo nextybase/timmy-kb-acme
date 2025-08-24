@@ -6,6 +6,46 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ---
 
+## [1.2.1] — 2025-08-24
+
+> Release focalizzata su refactor, documentazione e split chiaro degli orchestratori.  
+> PR correlate: **PR-5** (Semantic Onboarding), **PR-6** (Docs v1.2.1).
+
+### Added
+- **Nuovo orchestratore**
+  - `src/semantic_onboarding.py`: gestisce conversione RAW→BOOK, arricchimento frontmatter e preview Docker; nessun push GitHub.
+- **Docs**
+  - Aggiunta guida aggiornata per `semantic_onboarding` nei manuali (User/Developer/Architecture).
+
+### Changed
+- **Orchestratori**
+  - `onboarding_full.py`: ridotto a gestire solo il **push GitHub** (in futuro anche GitBook).
+  - Precedente logica di conversione/enrichment/preview spostata in `semantic_onboarding.py`.
+- **Adapter**
+  - Uso uniforme di `ensure_within` da `pipeline.path_utils` come SSoT per path-safety.
+- **Tool**
+  - `gen_dummy_kb.py`: refactor secondo le nuove regole di atomicità e path-safety.
+
+### Fixed
+- Spostato l’import `from __future__ import annotations` all’inizio dei file per evitare `SyntaxError`.
+- Allineamento docstring e logica di gestione dei file tra moduli e orchestratori.
+
+### Documentation
+- Aggiornati a v1.2.1:
+  - `docs/architecture.md`: riflesso lo split orchestratori (`semantic_onboarding` vs `onboarding_full`).
+  - `docs/developer_guide.md`: bootstrap `ClientContext`, policy redazione, responsabilità orchestratori.
+  - `docs/user_guide.md`: nuovo flusso operativo con `semantic_onboarding`.
+  - `docs/coding_rules.md`: chiariti punti su atomicità e adapter.
+  - `docs/policy_push.md`: rivista policy di pubblicazione.
+  - `README.md` e `docs/index.md`: aggiornati esempi CLI e versioni.
+
+### Migration notes
+- Usare ora `semantic_onboarding.py` per conversione/enrichment/preview.
+- `onboarding_full.py` va utilizzato solo per il push.
+- Nei moduli, sostituire eventuali riferimenti a `file_utils.ensure_within` con `path_utils.ensure_within`.
+
+---
+
 ## [1.2.0] — 2025-08-24
 
 > Release di stabilizzazione e hardening della pipeline. Introduce fallback uniformi, preview adapter, scritture atomiche e aggiornamento completo della documentazione.
