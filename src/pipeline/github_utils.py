@@ -29,7 +29,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, Mapping, Iterable, Any, Optional
 
 from github import Github
 from github.GithubException import GithubException
@@ -81,6 +81,38 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
         return br
     # 3) fallback sicuro
     return "main"
+
+
+# ----------------------------
+# Env sanitization
+# ----------------------------
+
+def _sanitize_env(
+    *envs: Mapping[str, Any],
+    allow: Optional[Iterable[str]] = None,
+) -> dict[str, str]:
+    """
+    Costruisce un env sicuro per subprocess:
+      - parte da os.environ (str->str),
+      - merge dei dizionari passati,
+      - scarta chiavi con valore None,
+      - converte SEMPRE chiavi e valori in str,
+      - se 'allow' è specificato, dai dizionari aggiuntivi include SOLO quelle chiavi.
+    """
+    out: dict[str, str] = dict(os.environ)  # baseline sicura
+    allow_set = set(allow or [])
+
+    for env in envs:
+        if not env:
+            continue
+        for k, v in env.items():
+            if v is None:
+                continue
+            sk = str(k)
+            if allow and sk not in allow_set:
+                continue
+            out[sk] = str(v)
+    return out
 
 
 # ----------------------------
@@ -226,19 +258,36 @@ def push_output_to_github(
 
     # Preparo env con header http basic per autenticazione su clone/pull/push
     header = base64.b64encode(f"x-access-token:{github_token}".encode()).decode()
-    env: dict[str, str] = dict(getattr(context, "env", {}) or {})
-    env.setdefault("PATH", get_env_var("PATH", default="") or "")
-    env["GIT_HTTP_EXTRAHEADER"] = f"Authorization: Basic {header}"
+    extra_env = {
+        "GIT_HTTP_EXTRAHEADER": f"Authorization: Basic {header}",
+    }
+    # ✅ includi solo chiavi strettamente necessarie da context.env
+    allowed_from_context = {"GIT_SSH_COMMAND"}
+    env = _sanitize_env(
+        getattr(context, "env", {}) or {},
+        extra_env,
+        allow=allowed_from_context.union({"GIT_HTTP_EXTRAHEADER"})
+    )
 
     try:
         # Clone e checkout/creazione branch
-        local_logger.info("⬇️  Clonazione repo remoto in working dir temporanea", extra={"slug": context.slug, "file_path": tmp_dir})
+        local_logger.info(
+            "⬇️  Clonazione repo remoto in working dir temporanea",
+            extra={"slug": context.slug, "file_path": str(tmp_dir)},
+        )
         _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
         exists_remote_branch = False
         try:
-            run_cmd(["git", "rev-parse", f"origin/{default_branch}"], cwd=str(tmp_dir), env=env, capture=True, logger=local_logger, op="git rev-parse")
+            run_cmd(
+                ["git", "rev-parse", f"origin/{default_branch}"],
+                cwd=str(tmp_dir),
+                env=env,
+                capture=True,
+                logger=local_logger,
+                op="git rev-parse",
+            )
             exists_remote_branch = True
         except CmdError:
             exists_remote_branch = False
@@ -337,9 +386,9 @@ def push_output_to_github(
                 _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
             try:
-                local_logger.info("📤 Push su origin/%s", default_branch, extra={"slug": context.slug, "branch": default_branch})
+                local_logger.info(f"📤 Push su origin/{default_branch}", extra={"slug": context.slug, "branch": default_branch})
                 _attempt_push()
-            except CmdError as e1:
+            except CmdError:
                 # Ritenta una volta con rebase (conflitti -> fallisce)
                 local_logger.warning(
                     "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...",
@@ -359,9 +408,7 @@ def push_output_to_github(
                     raise PushError(safe, slug=context.slug) from e2
 
         local_logger.info(
-            "✅ Push completato su %s (%s)",
-            repo.full_name,
-            default_branch,
+            f"✅ Push completato su {repo.full_name} ({default_branch})",
             extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
         )
     except CmdError as e:
