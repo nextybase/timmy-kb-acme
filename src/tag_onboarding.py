@@ -20,11 +20,14 @@ Validazione standalone:
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import re
 import sys
 import time
 import uuid
+import shutil
 from pathlib import Path
 from typing import Optional, List
 
@@ -53,8 +56,11 @@ from pipeline.path_utils import (
     sanitize_filename,
     sorted_paths,
 )
-from pipeline.file_utils import ensure_within, safe_write_text  # ✅ path guard + scritture atomiche
+from pipeline.file_utils import ensure_within, safe_write_text  # path guard + scritture atomiche
 from pipeline.env_utils import compute_redact_flag
+
+# Stub/README tagging centralizzati
+from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 
 # opzionale: PyYAML per validazione
 try:
@@ -79,7 +85,6 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
     count = 0
     pdfs: List[Path] = sorted_paths(src_dir.rglob("*.pdf"), base=src_dir)
 
-    import shutil
     for src in pdfs:
         try:
             rel = src.relative_to(src_dir)
@@ -124,66 +129,16 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
     ensure_within(csv_path.parent, csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Serializza manualmente CSV (niente dipendenza su csv.writer)
-    lines = ["relative_path,suggested_tags"]
+    # Scrittura robusta via csv.writer su buffer + commit atomico
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(["relative_path", "suggested_tags"])
     for rel, tags in rows:
-        # Nota: i rel derivano da percorsi → qui non inseriamo ulteriori quote
-        lines.append(f"{rel},{tags}")
-    safe_write_text(csv_path, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
+        writer.writerow([rel, tags])
+    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
 
     logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)
-
-
-# ────────────────────────────── Stub Fase 2 ──────────────────────────────────
-def _write_tagging_readme(semantic_dir: Path, logger) -> Path:
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    out = semantic_dir / "README_TAGGING.md"
-    ensure_within(semantic_dir, out)
-    text = (
-        "# Tag Onboarding (HiTL) – Guida rapida\n\n"
-        "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
-        "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
-        "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n"
-    )
-    safe_write_text(out, text, encoding="utf-8", atomic=True)
-    logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
-    return out
-
-
-def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger) -> Path:
-    if not csv_path.exists():
-        raise ConfigError(f"File CSV dei tag non trovato: {csv_path}", file_path=str(csv_path))
-
-    rows = (csv_path.read_text(encoding="utf-8").splitlines())[1:]
-    suggested = []
-    for r in rows[:100]:
-        try:
-            _, suggested_str = r.split(",", 1)
-            first = (suggested_str or "").split(",")[0].strip()
-            if first:
-                suggested.append(first)
-        except Exception:
-            continue
-
-    out = semantic_dir / "tags_reviewed.yaml"
-    ensure_within(semantic_dir, out)
-    lines = [
-        "version: 1",
-        f"reviewed_at: \"{time.strftime('%Y-%m-%d')}\"",
-        "keep_only_listed: true",
-        "tags:",
-    ]
-    for t in dict.fromkeys(suggested):
-        lines += [
-            f"  - name: \"{t}\"",
-            "    action: keep   # keep | drop | merge_into:<canonical>",
-            "    synonyms: []",
-            "    notes: \"\"",
-        ]
-    safe_write_text(out, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
-    logger.info("tags_reviewed stub scritto", extra={"file_path": str(out), "suggested": len(suggested)})
-    return out
 
 
 # ───────────────────────────── Validatore YAML ───────────────────────────────
@@ -396,8 +351,8 @@ def tag_onboarding_main(
             return
 
     # Fase 2: stub in semantic/
-    _write_tagging_readme(semantic_dir, logger)
-    _write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
+    write_tagging_readme(semantic_dir, logger)
+    write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
     logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)})
 
 

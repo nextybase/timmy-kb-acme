@@ -2,19 +2,7 @@
 # src/pre_onboarding.py
 """
 Orchestratore della fase di **pre-onboarding** per Timmy-KB.
-
-Responsabilità:
-- Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
-- Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
-- Creare struttura locale e, se non in `--dry-run`, la struttura remota su Google Drive.
-- Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
-
-Nota architetturale:
-- Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
-  (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** devono chiamare
-  `sys.exit()` o `input()`. Questo file rispetta tali regole.
-
-Questo modulo **non** stampa segreti nei log (maschera ID e percorsi sensibili).
+[omissis: docstring invariata]
 """
 from __future__ import annotations
 
@@ -26,10 +14,10 @@ from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import (
     get_structured_logger,
-    mask_partial,   # ← centralizzato
-    tail_path,      # ← centralizzato
-    mask_id_map,    # ← centralizzato
-    mask_updates,   # ← centralizzato
+    mask_partial,
+    tail_path,
+    mask_id_map,
+    mask_updates,
 )
 from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 from pipeline.context import ClientContext
@@ -48,6 +36,7 @@ from pipeline.drive_utils import (
 from pipeline.env_utils import get_env_var, compute_redact_flag
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug, is_safe_subpath
+from pipeline.file_utils import ensure_within  # ← guardia STRONG per override path
 
 
 def _prompt(msg: str) -> str:
@@ -60,9 +49,9 @@ def _resolve_yaml_structure_file() -> Path:
     Risolve in modo robusto il percorso dello YAML della struttura cartelle.
 
     Ordine di ricerca:
-      1) Env `YAML_STRUCTURE_FILE` (se definita).
-      2) `<repo_root>/config/cartelle_raw.yaml`  (../config dal file corrente).
-      3) `<repo_root>/src/config/cartelle_raw.yaml` (./src/config).
+      1) Env `YAML_STRUCTURE_FILE` (se definita) — DEVE stare dentro il repo.
+      2) `<repo_root>/config/cartelle_raw.yaml`
+      3) `<repo_root>/src/config/cartelle_raw.yaml`
     """
     here = Path(__file__).resolve()
     repo_root = here.parents[1]  # …/<repo>
@@ -71,8 +60,15 @@ def _resolve_yaml_structure_file() -> Path:
     env_path = get_env_var("YAML_STRUCTURE_FILE", required=False, redact=False)
     if env_path:
         p = Path(env_path).expanduser().resolve()
-        # ✅ Path-safety: consenti solo file all'interno del repo
-        if p.is_file() and is_safe_subpath(p, repo_root):
+        # ✅ Path-safety forte: l'override DEVE vivere dentro al repo
+        try:
+            ensure_within(repo_root, p)
+        except ConfigError:
+            raise ConfigError(
+                f"YAML_STRUCTURE_FILE punta fuori dal repository: {p}",
+                file_path=str(p),
+            )
+        if p.is_file():
             return p
 
     candidates = [
@@ -247,7 +243,7 @@ def pre_onboarding_main(
     logger.info(f"✅ Pre-onboarding completato per cliente: {slug}")
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args() -> argparse.ArgumentParser:
     """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding."""
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
@@ -259,19 +255,15 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Esegue solo la parte locale, salta Google Drive",
     )
-    return p.parse_args()
+    return p
 
 
 if __name__ == "__main__":
-    args = _parse_args()
+    args = _parse_args().parse_args()
 
-    # run_id univoco per correlazione log dell’esecuzione
     run_id = uuid.uuid4().hex
-
-    # Logger console “early” (prima di avere lo slug) per messaggi iniziali
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
-    # Risoluzione slug: posizionale > --slug > prompt (validazione inclusa)
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")

@@ -2,7 +2,7 @@
 """
 Adapter: fallback uniformi per contenuti GitBook/HonKit (README.md, SUMMARY.md).
 
-Obiettivo (PR-2/PR-4):
+Obiettivo:
 - Centralizzare la logica di ripiego fuori dagli orchestratori.
 - API pulita: ensure_readme_summary(context, logger, *, force=False).
 - Niente side-effect oltre a scritture atomiche dei file target.
@@ -16,30 +16,14 @@ Comportamento:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional, Iterable, List
 import time
 import re
+from pathlib import Path
+from typing import List
 
-# Ordinamento deterministico dei path (soft import con fallback)
-try:
-    from pipeline.path_utils import sorted_paths  # type: ignore
-except Exception:  # fallback ultra-minimo se non disponibile
-    def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
-        return sorted([Path(p) for p in paths], key=lambda p: p.name.lower())
-
-# Scritture atomiche & path-safety (PR-3)
-try:
-    from pipeline.file_utils import safe_write_text, ensure_within  # type: ignore
-except Exception:
-    # Fallback di compatibilità (non atomico): usato solo se il modulo non è disponibile.
-    def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: bool = True) -> None:  # type: ignore
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(data, encoding=encoding)
-    def ensure_within(base: Path, target: Path) -> None:  # type: ignore
-        base_r, tgt_r = Path(base).resolve(), Path(target).resolve()
-        if not str(tgt_r).startswith(str(base_r)):
-            raise RuntimeError(f"Path traversal rilevato: {tgt_r} non è sotto {base_r}")
+from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text, ensure_within
+from pipeline.path_utils import sorted_paths
 
 __all__ = [
     "ensure_readme_summary",
@@ -92,13 +76,11 @@ def ensure_readme_summary(context, logger, *, force: bool = False) -> None:
     - Se i file esistono e non sono vuoti: non fa nulla (a meno di force=True).
     - Se mancano o sono vuoti: genera contenuti minimi standardizzati (scrittura atomica).
     """
-    # Single source of truth per la root del repo
     repo_root = getattr(context, "repo_root_dir", None)
     if not isinstance(repo_root, Path):
-        # Fallback compat: prova a derivare da attributi legacy, altrimenti cwd
-        repo_root = Path(getattr(context, "base_dir", "."))
+        raise ConfigError("context.repo_root_dir non impostato o non è un Path.")
 
-    slug = getattr(context, "slug", "kb")
+    slug = getattr(context, "slug", None) or "kb"
     book_dir = Path(repo_root) / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
 

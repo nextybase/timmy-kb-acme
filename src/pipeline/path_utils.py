@@ -4,8 +4,8 @@ Utility di gestione path e slug per la pipeline Timmy-KB.
 
 ✅ Principi:
 - Niente side-effect (no I/O esterni, salvo lettura facoltativa di config locale).
-- Firme e comportamento invariati rispetto alla versione stabile.
 - Logging strutturato solo in caso di errore (silenzioso quando tutto va bene).
+- Le guardie STRONG sui path vivono in `pipeline.file_utils.ensure_within`.
 """
 
 from __future__ import annotations
@@ -17,9 +17,10 @@ import yaml
 import os
 import logging
 from typing import Optional, Iterable, List, Tuple, Callable
-from functools import lru_cache  # ← caching per slug regex
+from functools import lru_cache  # caching per slug regex
+
 from .exceptions import ConfigError, InvalidSlug
-from pipeline.logging_utils import get_structured_logger
+from .logging_utils import get_structured_logger
 
 # Punto di verità per messaggi di errore di questo modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -29,46 +30,21 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
     """
     Verifica in modo sicuro se `path` è contenuto all'interno di `base`.
 
-    Usa i percorsi **risolti** (realpath) per prevenire path traversal e link simbolici
+    Usa i percorsi risolti (realpath) per prevenire path traversal e link simbolici
     indesiderati. In caso di eccezioni durante la risoluzione, ritorna `False`
     e registra un errore sul logger di modulo.
     """
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        # Implementazione robusta sugli edge-case
+        # Implementazione robusta sugli edge-case (Python ≥ 3.10)
         return path_resolved.is_relative_to(base_resolved)
     except Exception as e:
         _logger.error(
-            f"Errore nella validazione path: {e}",
-            extra={"path": str(path), "base": str(base)},
+            "Errore nella validazione path",
+            extra={"error": str(e), "path": str(path), "base": str(base)},
         )
         return False
-
-
-def ensure_within(base: Path, target: Path) -> None:
-    """
-    Variante "forte" di is_safe_subpath: solleva ConfigError se `target`
-    non è contenuto in `base`.
-
-    Utile per validare scritture atomiche o generazione di file, garantendo
-    che l’output non esca dalla sandbox prevista.
-    """
-    try:
-        base_resolved = Path(base).resolve()
-        target_resolved = Path(target).resolve()
-        if not target_resolved.is_relative_to(base_resolved):
-            raise ConfigError(
-                f"Path traversal rilevato: {target_resolved} non è sotto {base_resolved}",
-                file_path=str(target_resolved),
-            )
-    except Exception as e:
-        if isinstance(e, ConfigError):
-            raise
-        raise ConfigError(
-            f"Errore nella validazione path: {e}",
-            file_path=str(target),
-        ) from e
 
 
 @lru_cache(maxsize=1)
@@ -77,7 +53,7 @@ def _load_slug_regex() -> str:
     Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
 
     Se il file non esiste o la chiave è assente/non valida, usa un default sicuro.
-    Non si usa `ClientContext` per evitare dipendenze circolari.
+    Non si usa ClientContext per evitare dipendenze circolari.
     """
     config_path = os.path.join("config", "config.yaml")
     default_regex = r"^[a-z0-9-]+$"
@@ -87,8 +63,8 @@ def _load_slug_regex() -> str:
                 cfg = yaml.safe_load(f) or {}
             pattern = cfg.get("slug_regex", default_regex)
             return pattern if isinstance(pattern, str) and pattern else default_regex
-        except Exception:
-            # in caso di parsing/lettura problematica, fallback silenzioso
+        except Exception as e:
+            _logger.error("Errore caricamento config slug_regex", extra={"error": str(e)})
             return default_regex
     return default_regex
 
@@ -98,7 +74,7 @@ def clear_slug_regex_cache() -> None:
     try:
         _load_slug_regex.cache_clear()  # type: ignore[attr-defined]
     except Exception as e:
-        _logger.error(f"Errore nel reset della cache slug_regex: {e}")
+        _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -112,7 +88,7 @@ def is_valid_slug(slug: str) -> bool:
         return bool(re.fullmatch(pattern, slug))
     except re.error as e:
         # Regex malformata in config → fallback sicuro
-        _logger.error(f"Regex slug non valida in config: {e}")
+        _logger.error("Regex slug non valida in config", extra={"error": str(e)})
         return bool(re.fullmatch(r"^[a-z0-9-]+$", slug))
 
 
@@ -138,7 +114,7 @@ def normalize_path(path: Path) -> Path:
     try:
         return Path(path).resolve()
     except Exception as e:
-        _logger.error(f"Errore nella normalizzazione path: {e}")
+        _logger.error("Errore nella normalizzazione path", extra={"error": str(e)})
         return Path(path)
 
 
@@ -173,7 +149,7 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
 
         return safe_name
     except Exception as e:
-        _logger.error(f"Errore nella sanitizzazione nome file '{name}': {e}")
+        _logger.error("Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name})
         return "file"
 
 
@@ -184,7 +160,7 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
     """
     Restituisce i path ordinati in modo deterministico.
 
-    Criterio: confronto case-insensitive sul path **relativo** a `base` (se fornita),
+    Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
     altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
     con fallback non-eccezionale e inclusi comunque nell’ordinamento.
     """
@@ -198,7 +174,6 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
 
     for p in paths:
         q = Path(p)
-        key: str
         try:
             q_res = q.resolve()
         except Exception:
@@ -238,7 +213,7 @@ def ensure_valid_slug(
             slug = (prompt("Inserisci slug cliente: ") or "").strip()
             continue
         try:
-            validate_slug(slug)   # già esistente nel file
+            validate_slug(slug)
             return slug
         except InvalidSlug:
             logger.error("Slug non valido secondo le regole configurate.")
@@ -249,12 +224,11 @@ def ensure_valid_slug(
 
 __all__ = [
     "is_safe_subpath",
-    "ensure_within",          # ← nuovo export
-    "clear_slug_regex_cache", # reset cache regex
+    "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",
-    "validate_slug",          # helper dominio
+    "validate_slug",           # helper dominio
     "normalize_path",
     "sanitize_filename",
-    "sorted_paths",           # ordinamento deterministico
-    "ensure_valid_slug",      # wrapper interattivo
+    "sorted_paths",            # ordinamento deterministico
+    "ensure_valid_slug",       # wrapper interattivo
 ]

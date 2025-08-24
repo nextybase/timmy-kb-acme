@@ -1,6 +1,6 @@
 # src/pipeline/file_utils.py
 """
-File utilities (PR-3): scritture atomiche e path-safety per la pipeline Timmy-KB.
+File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
@@ -14,16 +14,13 @@ API principali:
 
 Note:
 - `atomic=True` esegue la scrittura su file temporaneo + `os.replace()` atomico.
-- Forziamo la creazione della directory padre (mkdir(parents=True, exist_ok=True)).
-- `fsync` è best-effort: proviamo a sincronizzare sia il file che la directory.
-- La validazione path va fatta a monte con `ensure_within(...)` o `is_safe_subpath(...)`
-  (quest’ultima è in `pipeline.path_utils`), a seconda dello stile preferito.
+- Viene creata la directory padre se assente (mkdir(parents=True, exist_ok=True)).
+- `fsync` è best-effort: si prova a sincronizzare sia il file che la directory.
 """
 
 from __future__ import annotations
 
 import os
-import io
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -49,9 +46,14 @@ def ensure_within(base: Path, target: Path) -> None:
     except Exception as e:
         raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
 
-    # Evitiamo dipendenze da versioni specifiche di Python (no is_relative_to)
-    if not str(tgt_r).startswith(str(base_r)):
-        raise ConfigError(f"Path traversal rilevato: {tgt_r} non è sotto {base_r}", file_path=str(target))
+    try:
+        # Fallisce con ValueError se tgt_r non è sotto base_r (gestisce anche prefissi simili)
+        tgt_r.relative_to(base_r)
+    except Exception:
+        raise ConfigError(
+            f"Path traversal rilevato: {tgt_r} non è sotto {base_r}",
+            file_path=str(target),
+        )
 
 
 def _fsync_best_effort(fd: int, path: Optional[Path] = None) -> None:
@@ -64,8 +66,9 @@ def _fsync_best_effort(fd: int, path: Optional[Path] = None) -> None:
 
 
 def _fsync_dir_best_effort(dir_path: Path) -> None:
-    """Sincronizza la directory contenitore in modo best-effort (Linux/Unix)."""
+    """Sincronizza la directory contenitore in modo best-effort."""
     try:
+        # Su Windows O_DIRECTORY non esiste; il blocco è già best-effort.
         dfd = os.open(str(dir_path), os.O_DIRECTORY)
         try:
             os.fsync(dfd)
@@ -120,7 +123,7 @@ def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: b
         # Proviamo a rimuovere il temp se esiste
         try:
             if "tmp_path" in locals() and tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)  # py3.8+: emulate with try/except se serve
+                tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
         raise ConfigError(f"Scrittura atomica fallita: {e}", file_path=str(path)) from e

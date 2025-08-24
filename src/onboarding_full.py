@@ -92,6 +92,14 @@ def get_paths(slug: str) -> Dict[str, Path]:
 def _load_tags_vocab(base_dir: Path, logger) -> Dict[str, Dict]:
     vocab: Dict[str, Dict] = {}
     tags_path = base_dir / "semantic" / "tags.yaml"
+
+    # Patch 1: guardia path forte prima della lettura
+    try:
+        ensure_within(base_dir / "semantic", tags_path)
+    except ConfigError:
+        logger.warning("tags.yaml fuori dalla sandbox semantic/: skip lettura", extra={"file_path": str(tags_path)})
+        return vocab
+
     if not tags_path.exists():
         logger.info("tags.yaml assente: frontmatter con tags vuoti")
         return vocab
@@ -138,16 +146,22 @@ def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict]) -> Tuple[L
 
 # ─────────────── Frontmatter helpers ───────────────
 def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
-    if not md_text.startswith("---\n"):
+    """
+    Patch 3: parser frontmatter più robusto.
+    - Richiede un blocco iniziale delimitato da linee '---' (supporta LF o CRLF).
+    - Se parsing fallisce o non presente, restituisce meta vuoto + testo originale.
+    """
+    if not md_text.startswith("---"):
         return {}, md_text
     if yaml is None:
         return {}, md_text
     try:
-        end = md_text.find("\n---", 4)
-        if end == -1:
+        # Cattura tutto tra le prime due linee '---' all'inizio file (LF o CRLF)
+        m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", md_text, flags=re.DOTALL)
+        if not m:
             return {}, md_text
-        header = md_text[4:end]
-        body = md_text[end + 4 + 1:]
+        header = m.group(1)
+        body = md_text[m.end():]
         meta = yaml.safe_load(header) or {}
         if not isinstance(meta, dict):
             return {}, md_text
@@ -213,7 +227,11 @@ def _convert_raw_to_book(context: ClientContext, logger, *, slug: str) -> List[P
 
     if convert_files_to_structured_markdown is None:
         logger.warning("convert_files_to_structured_markdown non disponibile: skip conversione (fallback)")
-        return sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+        # Patch 2: log esplicito se la dir è vuota
+        if not mds:
+            logger.warning("Nessun .md in book/: conversione non disponibile e directory vuota")
+        return mds
 
     convert_files_to_structured_markdown(context, skip_if_unchanged=None, max_workers=None)
     return sorted_paths(book_dir.glob("*.md"), base=book_dir)
