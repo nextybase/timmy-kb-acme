@@ -20,7 +20,6 @@ Validazione standalone:
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import re
 import sys
@@ -32,8 +31,8 @@ from typing import Optional, List
 # ── Pipeline infra (coerente con gli orchestratori) ──────────────────────────
 from pipeline.logging_utils import (
     get_structured_logger,
-    mask_partial,  # ← centralizzato
-    tail_path,     # ← centralizzato
+    mask_partial,
+    tail_path,
 )
 from pipeline.exceptions import (
     PipelineError,
@@ -44,18 +43,18 @@ from pipeline.context import ClientContext
 from pipeline.config_utils import get_client_config
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from pipeline.constants import (
-    OUTPUT_DIR_NAME,
     LOGS_DIR_NAME,
     LOG_FILE_NAME,
     RAW_DIR_NAME,
-    REPO_NAME_PREFIX,
 )
 from pipeline.path_utils import (
-    ensure_valid_slug,   # ← helper centralizzato
+    ensure_valid_slug,
     is_safe_subpath,
     sanitize_filename,
     sorted_paths,
 )
+from pipeline.file_utils import ensure_within, safe_write_text  # ✅ path guard + scritture atomiche
+from pipeline.env_utils import compute_redact_flag
 
 # opzionale: PyYAML per validazione
 try:
@@ -64,14 +63,13 @@ except Exception:
     yaml = None
 
 
-# ─────────────────────────── Helpers UX / Validazione ────────────────────────
+# ─────────────────────────── Helpers UX ───────────────────────────
 def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
-    # sostituisce normalize_path con Path.resolve()
     src_dir = src_dir.expanduser().resolve()
     raw_dir = raw_dir.expanduser().resolve()
 
@@ -91,43 +89,26 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
-        # corretto: verifica che 'dst' sia dentro 'raw_dir'
         if not is_safe_subpath(dst, raw_dir):
-            logger.warning(
-                "Skip per path non sicuro",
-                extra={"file_path": str(dst), "file_path_tail": tail_path(dst)},
-            )
+            logger.warning("Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)})
             continue
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         try:
             if dst.exists() and dst.stat().st_size == src.stat().st_size:
-                logger.debug(
-                    "Skip copia (stessa dimensione)",
-                    extra={"file_path": str(dst), "file_path_tail": tail_path(dst)},
-                )
+                logger.debug("Skip copia (stessa dimensione)", extra={"file_path": str(dst)})
             else:
                 shutil.copy2(src, dst)
-                logger.info(
-                    "PDF copiato",
-                    extra={"file_path": str(dst), "file_path_tail": tail_path(dst)},
-                )
+                logger.info("PDF copiato", extra={"file_path": str(dst)})
                 count += 1
         except Exception as e:
-            logger.warning(
-                "Copia fallita",
-                extra={"file_path": str(dst), "file_path_tail": tail_path(dst), "error": str(e)},
-            )
+            logger.warning("Copia fallita", extra={"file_path": str(dst), "error": str(e)})
 
     return count
 
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
 def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
-    """
-    Heuristica conservativa: per ogni PDF propone keyword grezze
-    da nomi cartelle e filename. HiTL arricchirà in seguito.
-    """
     rows: List[List[str]] = []
     for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
         try:
@@ -140,16 +121,17 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
         candidates.update(tok for tok in base_no_ext.replace("_", " ").replace("-", " ").split() if tok)
         rows.append([rel, ", ".join(sorted(candidates))])
 
+    ensure_within(csv_path.parent, csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["relative_path", "suggested_tags"])
-        w.writerows(rows)
 
-    logger.info(
-        "Tag grezzi generati",
-        extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path), "count": len(rows)},
-    )
+    # Serializza manualmente CSV (niente dipendenza su csv.writer)
+    lines = ["relative_path,suggested_tags"]
+    for rel, tags in rows:
+        # Nota: i rel derivano da percorsi → qui non inseriamo ulteriori quote
+        lines.append(f"{rel},{tags}")
+    safe_write_text(csv_path, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
+
+    logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)
 
 
@@ -157,26 +139,23 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
 def _write_tagging_readme(semantic_dir: Path, logger) -> Path:
     semantic_dir.mkdir(parents=True, exist_ok=True)
     out = semantic_dir / "README_TAGGING.md"
-    out.write_text(
+    ensure_within(semantic_dir, out)
+    text = (
         "# Tag Onboarding (HiTL) – Guida rapida\n\n"
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
         "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
-        "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n",
-        encoding="utf-8",
+        "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n"
     )
-    logger.info(
-        "README_TAGGING scritto",
-        extra={"file_path": str(out), "file_path_tail": tail_path(out)},
-    )
+    safe_write_text(out, text, encoding="utf-8", atomic=True)
+    logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
     return out
 
 
 def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger) -> Path:
-    # ✅ Verifica esistenza CSV prima della lettura
     if not csv_path.exists():
         raise ConfigError(f"File CSV dei tag non trovato: {csv_path}", file_path=str(csv_path))
 
-    rows = (csv_path.read_text(encoding="utf-8").splitlines())[1:]  # salta header
+    rows = (csv_path.read_text(encoding="utf-8").splitlines())[1:]
     suggested = []
     for r in rows[:100]:
         try:
@@ -186,25 +165,24 @@ def _write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger)
                 suggested.append(first)
         except Exception:
             continue
+
     out = semantic_dir / "tags_reviewed.yaml"
+    ensure_within(semantic_dir, out)
     lines = [
         "version: 1",
         f"reviewed_at: \"{time.strftime('%Y-%m-%d')}\"",
         "keep_only_listed: true",
         "tags:",
     ]
-    for t in dict.fromkeys(suggested):  # dedup preservando ordine
+    for t in dict.fromkeys(suggested):
         lines += [
             f"  - name: \"{t}\"",
             "    action: keep   # keep | drop | merge_into:<canonical>",
             "    synonyms: []",
             "    notes: \"\"",
         ]
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    logger.info(
-        "tags_reviewed stub scritto",
-        extra={"file_path": str(out), "file_path_tail": tail_path(out), "suggested": len(suggested)},
-    )
+    safe_write_text(out, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
+    logger.info("tags_reviewed stub scritto", extra={"file_path": str(out), "suggested": len(suggested)})
     return out
 
 
@@ -288,29 +266,25 @@ def _validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 def _write_validation_report(report_path: Path, result: dict, logger):
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         **result,
     }
-    report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info(
-        "Report validazione scritto",
-        extra={"file_path": str(report_path), "file_path_tail": tail_path(report_path)},
-    )
+    safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    logger.info("Report validazione scritto", extra={"file_path": str(report_path)})
+
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
+    # Fallback robusto: calcoliamo la base anche se il contesto non è disponibile
+    base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
     semantic_dir = base_dir / "semantic"
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
 
     if not yaml_path.exists():
-        logger.error(
-            "File tags_reviewed.yaml non trovato",
-            extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)},
-        )
+        logger.error("File tags_reviewed.yaml non trovato", extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)})
         return 1
 
     try:
@@ -349,18 +323,27 @@ def tag_onboarding_main(
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
     # Context + logger coerenti con orchestratori
-    log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
         require_env=(source == "drive"),
         run_id=run_id,
     )
+    # Guardia di uniformità redaction (se un orchestratore legacy non l'avesse impostata)
+    if not hasattr(context, "redact_logs"):
+        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
+
+    # Log file sotto la root cliente
+    repo_root = getattr(context, "repo_root_dir", None)
+    if repo_root is None:
+        # Fallback se il campo non fosse ancora presente nel contesto
+        repo_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+    log_file = repo_root / LOGS_DIR_NAME / LOG_FILE_NAME
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     # Path base
-    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
+    base_dir = repo_root
     raw_dir = base_dir / RAW_DIR_NAME
     semantic_dir = base_dir / "semantic"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -399,7 +382,6 @@ def tag_onboarding_main(
     # Fase 1: CSV in semantic/
     csv_path = semantic_dir / "tags_raw.csv"
     _emit_tags_csv(raw_dir, csv_path, logger)
-    # 👇 Sostituisce il vecchio print con un log “user-friendly”
     logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)})
 
     # Checkpoint HiTL

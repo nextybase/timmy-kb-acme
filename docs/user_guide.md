@@ -1,4 +1,4 @@
-# User Guide — Timmy‑KB (v1.1.0)
+# User Guide — Timmy‑KB (v1.2.0)
 
 Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se vuoi, push su GitHub.
 
@@ -171,7 +171,7 @@ py src/onboarding_full.py --slug acme --no-preview --no-push --non-interactive
 
 - **Orchestratori** → UX/CLI, prompt e mapping deterministico errori.
 - **Moduli** → azioni tecniche, no prompt.
-- **Sicurezza I/O** → `is_safe_subpath`, scritture atomiche, no segreti nei log.
+- **Sicurezza I/O** → `is_safe_subpath`, `ensure_within`, scritture atomiche via `safe_write_text`/`safe_write_bytes`.
 - **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.
 
 ---

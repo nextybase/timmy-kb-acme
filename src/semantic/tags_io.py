@@ -3,9 +3,24 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from pipeline.exceptions import ConfigError  # ✅ per segnalare path traversal
+
+
+def _ensure_within(base: Path, target: Path) -> None:
+    """
+    Garantisce che 'target' risieda sotto 'base' una volta risolti i path.
+    Solleva ConfigError in caso contrario.
+    """
+    base_r = base.resolve()
+    tgt_r = target.resolve()
+    if not str(tgt_r).startswith(str(base_r)):
+        raise ConfigError(f"Path traversal rilevato: {tgt_r} non è sotto {base_r}")
+
+
 def write_tagging_readme(semantic_dir: Path, logger) -> Path:
     semantic_dir.mkdir(parents=True, exist_ok=True)
     out = semantic_dir / "README_TAGGING.md"
+    _ensure_within(semantic_dir, out)  # ✅ guardia anti path traversal
     out.write_text(
         "# Tag Onboarding (HiTL) – Guida rapida\n\n"
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
@@ -29,6 +44,7 @@ def write_tags_review_stub_from_csv(semantic_dir: Path, csv_path: Path, logger, 
         except Exception:
             continue
     out = semantic_dir / "tags_reviewed.yaml"
+    _ensure_within(semantic_dir, out)  # ✅ guardia anti path traversal
     lines = [
         "version: 1",
         f"reviewed_at: \"{time.strftime('%Y-%m-%d')}\"",

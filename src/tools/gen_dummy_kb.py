@@ -16,6 +16,7 @@ from typing import Dict, Any, List, Optional
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import is_safe_subpath
+from pipeline.file_utils import ensure_within, safe_write_text  # ✅ PR-3: path guard + atomic write
 from pipeline.exceptions import ConfigError, EXIT_CODES
 
 logger = get_structured_logger("tools.gen_dummy_kb")
@@ -65,10 +66,12 @@ def _extract_cartelle(cartelle_yaml: Dict[str, Any]) -> List[str]:
 
 def _make_pdf(out_path: Path, titolo: str, paragrafi: List[str]) -> None:
     """Genera un PDF semplice; se FPDF non c'è, crea un .txt come placeholder."""
+    out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if FPDF is None:
         placeholder = out_path.with_suffix(".txt")
-        placeholder.write_text(f"# {titolo}\n\n" + "\n\n".join(paragrafi) + "\n", encoding="utf-8")
+        text = f"# {titolo}\n\n" + "\n\n".join(paragrafi) + "\n"
+        safe_write_text(placeholder, text, encoding="utf-8", atomic=True)  # ✅ atomico
         logger.warning("FPDF non disponibile: creato placeholder .txt", extra={"file_path": str(placeholder)})
         return
     pdf = FPDF()
@@ -98,19 +101,29 @@ def genera_raw_structure(raw_dir: Path, raw_yaml: Path, pdf_yaml: Path) -> None:
     cartelle = _extract_cartelle(cartelle_struct)
 
     logger.info("🗂️  Genero struttura RAW con PDF dummy", extra={"dest": str(raw_dir), "cartelle": len(cartelle)})
+    raw_dir = Path(raw_dir)
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
     for cat in cartelle:
         cat_folder = raw_dir / cat
-        if not is_safe_subpath(cat_folder, raw_dir.parent):
-            logger.debug(f"Skip (path non sicuro): {cat_folder}", extra={"file_path": str(cat_folder)})
+        # ✅ PR-3: path guard forte – deve stare sotto raw_dir
+        try:
+            ensure_within(raw_dir, cat_folder)
+        except ConfigError:
+            logger.debug("Skip (path non sicuro)", extra={"file_path": str(cat_folder)})
             continue
+
         cat_folder.mkdir(parents=True, exist_ok=True)
         info = pdf_dummy.get(cat, {})
         titolo = info.get("titolo", f"Sezione: {cat.title()}")
-        paragrafi = info.get("paragrafi", [
-            "Questo è un paragrafo di esempio.",
-            "Puoi personalizzare il contenuto dei PDF modificando pdf_dummy.yaml.",
-            "Sezione tematica generica.",
-        ])
+        paragrafi = info.get(
+            "paragrafi",
+            [
+                "Questo è un paragrafo di esempio.",
+                "Puoi personalizzare il contenuto dei PDF modificando pdf_dummy.yaml.",
+                "Sezione tematica generica.",
+            ],
+        )
         pdf_path = cat_folder / f"{cat}_dummy.pdf"
         _make_pdf(pdf_path, titolo, paragrafi)
 
@@ -125,8 +138,10 @@ def main() -> int:
     raw = base / "raw"
     dummy_repo = base / "repo"
 
-    # Path sicurezza
-    if not is_safe_subpath(base, project_root):
+    # ✅ PR-3: path-safety (base deve vivere sotto il repo)
+    try:
+        ensure_within(project_root, base)
+    except ConfigError:
         logger.error("Base path non sicuro", extra={"file_path": str(base)})
         return EXIT_CODES.get("ConfigError", 2)
 
@@ -134,21 +149,35 @@ def main() -> int:
     for folder in (book, config_dir, raw, dummy_repo):
         folder.mkdir(parents=True, exist_ok=True)
 
-    # 2) Crea README/SUMMARY/test nel book
-    (book / "README.md").write_text(
+    # 2) Crea README/SUMMARY/test nel book (scritture atomiche)
+    try:
+        ensure_within(book, book / "README.md")
+        ensure_within(book, book / "SUMMARY.md")
+        ensure_within(book, book / "test.md")
+    except ConfigError as e:
+        logger.error(str(e))
+        return EXIT_CODES.get("ConfigError", 2)
+
+    safe_write_text(
+        book / "README.md",
         "# Dummy KB – Test\n\nQuesta è una knowledge base di test generata automaticamente.\n",
         encoding="utf-8",
+        atomic=True,
     )
-    (book / "SUMMARY.md").write_text(
+    safe_write_text(
+        book / "SUMMARY.md",
         "# Sommario\n\n* [Introduzione](README.md)\n* [Test Markdown](test.md)\n",
         encoding="utf-8",
+        atomic=True,
     )
-    (book / "test.md").write_text(
+    safe_write_text(
+        book / "test.md",
         "# Test Markdown\n\nQuesto è un file markdown di esempio per testare la pipeline Honkit.\n- Punto uno\n- Punto due\n",
         encoding="utf-8",
+        atomic=True,
     )
 
-    # 3) Crea config.yaml minimale
+    # 3) Crea config.yaml minimale (atomico)
     cfg = {
         "slug": DUMMY_SLUG,
         "client_name": "Dummy KB",
@@ -164,15 +193,26 @@ def main() -> int:
         "github_token": os.environ.get("GITHUB_TOKEN", ""),
         "gitbook_token": os.environ.get("GITBOOK_TOKEN", ""),
     }
+    try:
+        ensure_within(config_dir, config_dir / "config.yaml")
+    except ConfigError as e:
+        logger.error(str(e))
+        return EXIT_CODES.get("ConfigError", 2)
+
     import yaml
-    with open(config_dir / "config.yaml", "w", encoding="utf-8") as f:
-        yaml.dump(cfg, f, allow_unicode=True)
+    yaml_text = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
+    safe_write_text(config_dir / "config.yaml", yaml_text, encoding="utf-8", atomic=True)
 
     logger.info("✅ Cartella base KB generata", extra={"base": str(base)})
 
     # 4) Genera RAW da YAML + PDF
     raw_yaml = project_root / RAW_YAML_REL
     pdf_yaml = project_root / PDF_YAML_REL
+    # path-safety per gli YAML di input (devono stare nel repo)
+    for p in (raw_yaml, pdf_yaml):
+        if not is_safe_subpath(p, project_root):
+            logger.error("YAML fuori dal repo: abort", extra={"file_path": str(p)})
+            return EXIT_CODES.get("ConfigError", 2)
     genera_raw_structure(raw, raw_yaml, pdf_yaml)
 
     # 5) Opzionale: crea cartella repo di test (interattivo, default NO)
@@ -181,8 +221,20 @@ def main() -> int:
         if dummy_repo.exists():
             shutil.rmtree(dummy_repo)
         dummy_repo.mkdir(parents=True, exist_ok=True)
-        (dummy_repo / "README.md").write_text("# Dummy Repo per test GitHub\n\nQuesta cartella viene usata per test automatici.", encoding="utf-8")
-        (dummy_repo / "test.txt").write_text("File di test\n", encoding="utf-8")
+        try:
+            ensure_within(dummy_repo, dummy_repo / "README.md")
+            ensure_within(dummy_repo, dummy_repo / "test.txt")
+        except ConfigError as e:
+            logger.error(str(e))
+            return EXIT_CODES.get("ConfigError", 2)
+
+        safe_write_text(
+            dummy_repo / "README.md",
+            "# Dummy Repo per test GitHub\n\nQuesta cartella viene usata per test automatici.",
+            encoding="utf-8",
+            atomic=True,
+        )
+        safe_write_text(dummy_repo / "test.txt", "File di test\n", encoding="utf-8", atomic=True)
         logger.info("✅ Cartella dummy_repo creata", extra={"file_path": str(dummy_repo)})
     else:
         logger.info("⏭️  Salto creazione cartella dummy_repo.")

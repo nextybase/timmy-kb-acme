@@ -1,4 +1,4 @@
-# Developer Guide — Timmy-KB (v1.1.0)
+# Developer Guide — Timmy-KB (v1.2.0)
 
 Questa guida è rivolta agli sviluppatori e documenta le scelte architetturali e i principi di base adottati per garantire **coerenza, testabilità e robustezza** della pipeline.  
 È il documento di riferimento per chi sviluppa nuovo codice: ogni implementazione deve rifarsi a questa guida, alla descrizione dell’architettura e mantenere sempre compatibilità locale e riuso delle funzioni già presenti, proponendone l’eventuale aggiornamento solo se necessario.
@@ -76,6 +76,7 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 - La creazione cartelle Drive è gestita unicamente in `src/pipeline/drive/` con idempotenza garantita.
 - Conversione RAW → BOOK avviene solo in locale; Drive è usato solo in fase di pre-onboarding.
 - La validazione dello **slug** è disponibile come helper dedicato in `path_utils.ensure_valid_slug`, da usare in caso di necessità per evitare duplicazioni.
+- **Adapter coerenti (PR-4)**: tutti gli adapter esposti hanno firma `(context, logger, **opts)` o variante coerente.
 
 ---
 
@@ -91,6 +92,8 @@ Assicurare che la pipeline rimanga stabile, robusta e prevedibile anche dopo mod
 - **Drive idempotente**: ricreazione della stessa struttura non deve duplicare cartelle.
 - **Conversione RAW → BOOK**: verifica che solo i PDF in `raw/` generino Markdown.
 - **Frontmatter enrichment**: test con `tags.yaml` vuoto, parziale, completo.
+- **Fallback README/SUMMARY**: verificare che `adapters.content_fallbacks.ensure_readme_summary` scriva in modo idempotente.
+- **Preview Docker**: test su `adapters.preview.start_preview/stop_preview`, verifica coerenza parametri e log.
 
 ---
 
@@ -102,6 +105,7 @@ Mantenere sincronizzati codice e documentazione in ogni rilascio.
 ### Regole
 - Aggiornamento README e User Guide (per UX/CLI).
 - Aggiornamento Developer Guide (per refactor e scelte interne).
+- Aggiornamento Architecture e Coding Rules (per invarianti e regole operative).
 - Allineamento CHANGELOG.
 
 ---
@@ -116,8 +120,10 @@ Fornire linee guida generali per garantire robustezza e coerenza dello sviluppo.
 - **Idempotenza**: operazioni ripetibili senza effetti collaterali (Drive, conversione RAW → BOOK).
 - **Separazione UX/Logica**: orchestratori = interazione/uscita; moduli = logica tecnica.
 - **Centralizzazione ENV e log**: variabili critiche in `env_utils`, redazione log uniforme.
+- **Scritture sicure**: usare sempre `safe_write_text`/`safe_write_bytes` con `ensure_within`.
 - **Testabilità**: funzioni pure e helper interni per ridurre complessità.
 - **Trasparenza**: log strutturati e tracciabilità completa.
+- **Consistenza API**: firme uniformi per orchestratori e adapter; nessun side-effect fuori da scritture atomiche.
 
 ---
 

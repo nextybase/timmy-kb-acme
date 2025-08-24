@@ -1,3 +1,24 @@
+# src/pipeline/context.py
+"""
+Definizione del `ClientContext`, il contenitore unificato di stato e configurazione
+per le pipeline Timmy-KB.
+
+Funzioni principali:
+- Gestione delle identità cliente (`slug`, `client_name`) e dei percorsi canonici locali.
+- Introduzione di `repo_root_dir` come single source of truth per i path (compatibile
+  con i campi storici `base_dir`, `output_dir`, ecc.).
+- Caricamento e validazione della configurazione YAML del cliente.
+- Risoluzione delle variabili d’ambiente e propagazione del flag di redazione log
+  tramite `compute_redact_flag`.
+- Tracking dello stato di esecuzione (errori, warning, step completati) con logger
+  strutturato.
+
+Aggiornamenti:
+- (NEW) `repo_root_dir` permette override via variabile d’ambiente `REPO_ROOT_DIR`.
+- (NEW) `stage` opzionale per etichettare la fase corrente di pipeline.
+- I fallback di path restano per retro-compatibilità, ma tutti derivano da `repo_root_dir`.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
@@ -37,27 +58,33 @@ class ClientContext:
 
     Contiene:
     - Identità cliente (`slug`, `client_name`);
-    - Percorsi locali canonici (`output_dir`, `raw_dir`, `md_dir`, `log_dir`, `config_dir`);
+    - Percorso radice del repo cliente **canonico** (`repo_root_dir`) e derivati locali (`raw_dir`, `md_dir`, `log_dir`, ...);
     - Configurazione YAML caricata (in `settings`) e path di riferimento (`config_path`, `mapping_path`);
     - Variabili d’ambiente risolte da `.env`/processo (`env`);
     - Flag runtime e strutture di tracking (`error_list`, `warning_list`, `step_status`);
     - Logger strutturato **iniettato** e riutilizzato (niente print).
 
-    Nota di architettura:
+    Note di architettura:
     - Il modulo **non** interagisce con l’utente. Eventuali input/loop sono responsabilità degli orchestratori.
     - La **policy di redazione log** è centralizzata e calcolata via `compute_redact_flag(...)` in `env_utils.py`.
-    - (NEW, non-breaking) `stage`: etichetta opzionale per la fase corrente (es. "scan_raw", "build_md").
+    - (NEW, non-breaking) `repo_root_dir` è il punto di verità dei path; i campi storici (`base_dir`, `output_dir`, ...) restano per compatibilità.
+    - (NEW, opzionale) `stage`: etichetta per la fase corrente (es. "scan_raw", "build_md").
     """
 
     # Identità cliente
     slug: str
     client_name: Optional[str] = None
 
+    # === Path canonici ===
+    repo_root_dir: Path | None = None  # NEW: single source of truth
+
     # Configurazione e path
     settings: Dict[str, Any] = field(default_factory=dict)
     config_path: Optional[Path] = None
     config_dir: Optional[Path] = None
     mapping_path: Optional[Path] = None
+
+    # Campi storici (compat) – derivati da repo_root_dir
     base_dir: Optional[Path] = None
     output_dir: Optional[Path] = None
     raw_dir: Optional[Path] = None
@@ -108,7 +135,7 @@ class ClientContext:
         """Carica (o inizializza) il contesto cliente e valida la configurazione.
 
         Comportamento:
-        - Se la struttura cliente non esiste, viene creata e viene copiato un `config.yaml` di template.
+        - Se la struttura cliente non esiste, viene creata e bootstrap del `config.yaml` da template.
         - Raccoglie variabili critiche dall’ambiente e costruisce i path canonici.
         - Calcola il flag `redact_logs` tramite `compute_redact_flag(...)`.
         """
@@ -125,34 +152,39 @@ class ClientContext:
         # 1) Validazione slug (triggera anche cache regex in path_utils, se applicabile)
         validate_slug(slug)
 
-        # 2) Path & bootstrap minima (crea config se non presente)
-        base_dir, config_path = cls._init_paths(slug, _logger)
-
-        # 3) Carica config cliente (yaml)
-        settings = cls._load_yaml_config(config_path, _logger)
-
-        # 4) Carica env risolto (richiesto/opzionale)
+        # 2) Carica env risolto (richiesto/opzionale) – PRIMA dei path per poter applicare override
         env_vars = cls._load_env(require_env=require_env)
 
-        # 5) Livello log (default INFO; se passato via kwargs mantiene retro-compatibilità)
+        # 3) Calcola repo_root_dir (SST) con possibile override da ENV; fallback deterministico
+        repo_root = cls._compute_repo_root_dir(slug, env_vars, _logger)
+
+        # 4) Path & bootstrap minima (crea config se non presente) sotto repo_root_dir
+        config_path = cls._ensure_config(repo_root, slug, _logger)
+
+        # 5) Carica config cliente (yaml)
+        settings = cls._load_yaml_config(config_path, _logger)
+
+        # 6) Livello log (default INFO; se passato via kwargs mantiene retro-compatibilità)
         log_level = str(kwargs.get("log_level", "INFO")).upper()
 
-        # 6) Calcola redazione log (policy centralizzata) – NO side effects
+        # 7) Calcola redazione log (policy centralizzata) – NO side effects
         redact = compute_redact_flag(env_vars, log_level)
 
         return cls(
             slug=slug,
             client_name=(settings or {}).get("client_name"),
+            repo_root_dir=repo_root,
             settings=settings or {},
             env=env_vars,
             config_path=config_path,
             config_dir=config_path.parent,
             mapping_path=(config_path.parent / "semantic_mapping.yaml"),
-            base_dir=base_dir,
-            output_dir=base_dir,
-            raw_dir=base_dir / "raw",
-            md_dir=base_dir / "book",
-            log_dir=base_dir / "logs",
+            # Campi storici (compat) – derivati dal root canonico
+            base_dir=repo_root,
+            output_dir=repo_root,
+            raw_dir=repo_root / "raw",
+            md_dir=repo_root / "book",
+            log_dir=repo_root / "logs",
             logger=_logger,
             run_id=run_id,
             stage=stage,
@@ -171,11 +203,29 @@ class ClientContext:
         return get_structured_logger(__name__, run_id=run_id)
 
     @staticmethod
-    def _init_paths(slug: str, logger: logging.Logger) -> Tuple[Path, Path]:
-        """Calcola i path base e assicura la presenza di `config.yaml` (bootstrap da template)."""
-        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        config_path = base_dir / "config" / "config.yaml"
+    def _compute_repo_root_dir(slug: str, env_vars: Dict[str, Any], logger: logging.Logger) -> Path:
+        """Determina il repo_root_dir:
+        - Se `REPO_ROOT_DIR` è definita nell'ambiente → usa quella (espansa/risolta);
+        - Altrimenti fallback deterministico alla struttura locale `output/timmy-kb-<slug>` sotto il progetto."""
+        # ENV override (può puntare direttamente alla root del cliente)
+        env_root = env_vars.get("REPO_ROOT_DIR")
+        if env_root:
+            try:
+                root = Path(str(env_root)).expanduser().resolve()
+                logger.info("repo_root_dir impostato da ENV", extra={"repo_root_dir": str(root)})
+                return root
+            except Exception as e:
+                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root} ({e})")
 
+        # Fallback deterministico (vecchio comportamento)
+        # NOTE: __file__/parents[2] → radice progetto; mantenuto per compatibilità
+        default_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+        return default_root
+
+    @staticmethod
+    def _ensure_config(repo_root_dir: Path, slug: str, logger: logging.Logger) -> Path:
+        """Assicura la presenza di `config/config.yaml` sotto `repo_root_dir`, creando struttura da template se assente."""
+        config_path = repo_root_dir / "config" / "config.yaml"
         if not config_path.exists():
             logger.info(
                 "Cliente '%s' non trovato: creazione struttura base.", slug,
@@ -190,7 +240,7 @@ class ClientContext:
                     file_path=template_config,
                 )
             shutil.copy(template_config, config_path)
-        return base_dir, config_path
+        return config_path
 
     @staticmethod
     def _load_yaml_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
@@ -226,6 +276,8 @@ class ClientContext:
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)
+        # NEW: override del root repo (se serve spostare output altrove)
+        env_vars["REPO_ROOT_DIR"] = get_env_var("REPO_ROOT_DIR", default=None)
 
         # Conserviamo anche una versione booleana di CI per possibili chiamanti legacy
         env_vars["_CI_BOOL"] = get_bool("CI", default=False)
@@ -270,6 +322,7 @@ class ClientContext:
             "warning_count": len(self.warning_list),
             "steps": self.step_status,
             "redact_logs": self.redact_logs,
+            "repo_root_dir": str(self.repo_root_dir) if self.repo_root_dir else None,
         }
 
     # -- Utility non-invasive per run_id/stage (NEW) --

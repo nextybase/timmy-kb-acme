@@ -45,8 +45,8 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
-from pipeline.env_utils import get_env_var
-from pipeline.constants import OUTPUT_DIR_NAME, LOGS_DIR_NAME, LOG_FILE_NAME
+from pipeline.env_utils import get_env_var, compute_redact_flag
+from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug, is_safe_subpath
 
 
@@ -112,11 +112,6 @@ def pre_onboarding_main(
         logger=early_logger,
     )
 
-    # === Logger unificato: file unico per cliente ===
-    log_file = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("pre_onboarding", log_file=log_file, run_id=run_id)
-
     # Validazioni base input (senza cambiare UX)
     if client_name is None and interactive:
         client_name = _prompt("Inserisci nome cliente: ").strip()
@@ -131,6 +126,14 @@ def pre_onboarding_main(
         require_env=require_env,
         run_id=run_id,
     )
+
+    # ✅ PR-2: Single source of truth per log path (derivato dal contesto)
+    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # ✅ PR-2: Propagazione uniforme del flag di redazione (guardia difensiva)
+    if not hasattr(context, "redact_logs"):
+        context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
 
     # 🔁 Rebind logger con il contesto
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)

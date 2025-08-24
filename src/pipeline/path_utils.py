@@ -46,6 +46,31 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
+def ensure_within(base: Path, target: Path) -> None:
+    """
+    Variante "forte" di is_safe_subpath: solleva ConfigError se `target`
+    non è contenuto in `base`.
+
+    Utile per validare scritture atomiche o generazione di file, garantendo
+    che l’output non esca dalla sandbox prevista.
+    """
+    try:
+        base_resolved = Path(base).resolve()
+        target_resolved = Path(target).resolve()
+        if not target_resolved.is_relative_to(base_resolved):
+            raise ConfigError(
+                f"Path traversal rilevato: {target_resolved} non è sotto {base_resolved}",
+                file_path=str(target_resolved),
+            )
+    except Exception as e:
+        if isinstance(e, ConfigError):
+            raise
+        raise ConfigError(
+            f"Errore nella validazione path: {e}",
+            file_path=str(target),
+        ) from e
+
+
 @lru_cache(maxsize=1)
 def _load_slug_regex() -> str:
     """
@@ -162,13 +187,6 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
     Criterio: confronto case-insensitive sul path **relativo** a `base` (se fornita),
     altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
     con fallback non-eccezionale e inclusi comunque nell’ordinamento.
-
-    Args:
-        paths: Iterable di Path (o compatibili) da ordinare.
-        base: Base opzionale per calcolare il relativo (migliora la stabilità).
-
-    Returns:
-        Lista di Path ordinati stabilmente.
     """
     items: List[Tuple[str, Path]] = []
     base_resolved: Optional[Path] = None
@@ -231,11 +249,12 @@ def ensure_valid_slug(
 
 __all__ = [
     "is_safe_subpath",
-    "clear_slug_regex_cache",  # reset cache regex
+    "ensure_within",          # ← nuovo export
+    "clear_slug_regex_cache", # reset cache regex
     "is_valid_slug",
-    "validate_slug",           # helper dominio
+    "validate_slug",          # helper dominio
     "normalize_path",
     "sanitize_filename",
-    "sorted_paths",            # ← nuovo export
-    "ensure_valid_slug",       # ← export mancante aggiunto
+    "sorted_paths",           # ordinamento deterministico
+    "ensure_valid_slug",      # wrapper interattivo
 ]

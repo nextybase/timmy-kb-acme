@@ -1,4 +1,4 @@
-# Coding Rules — Timmy‑KB (v1.1.0)
+# Coding Rules — Timmy-KB (v1.2.0)
 
 Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
@@ -9,7 +9,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 - **Python ≥ 3.10** – usare le feature del linguaggio (type hints, match-case) mantenendo compatibilità.
 - **Type hints** – annotazioni obbligatorie per tutte le funzioni pubbliche e strutture dati complesse.
 - **Docstring** – brevi e chiare, stile Google. Solo esempi se chiariscono casi non ovvi.
-- **Naming** – snake_case per variabili/funzioni, PascalCase per classi, MACRO_CASE per costanti. Nomi esplicativi.
+- **Naming** – snake\_case per variabili/funzioni, PascalCase per classi, MACRO\_CASE per costanti. Nomi esplicativi.
 - **Import** – ordine: standard, terze parti, locali. Preferire import assoluti.
 - **Formattazione** – PEP 8, Black, Ruff. I commit devono superare pre-commit hooks.
 - **Commenti** – spiegare *perché*, non il *cosa*. Evitare superflui.
@@ -30,7 +30,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 - **No print()** – tutto via logger strutturato (`get_structured_logger`). Livelli: DEBUG, INFO, WARNING, ERROR.
 - **Metadati nei log** – usare `extra={}` con slug, path, ecc.
 - **Niente segreti nei log** – usare redazione centralizzata (`compute_redact_flag`, `_mask`).
-- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, ecc.). Orchestratori mappano su EXIT_CODES.
+- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, ecc.). Orchestratori mappano su EXIT\_CODES.
 - **Gestione deterministica** – niente catch-all generici nei moduli. Lasciar propagare se imprevisti.
 - **Messaggi chiari** – spiegare il problema, non messaggi generici.
 
@@ -40,7 +40,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 
 - **Pathlib & encoding** – sempre `Path`, `encoding="utf-8"`, context manager.
 - **Path traversal** – usare `is_safe_subpath`.
-- **Scritture atomiche** – scrivere su file temporaneo, poi sostituire. Backup `.bak` per config critici.
+- **Scritture atomiche** – usare `safe_write_text`/`safe_write_bytes` con `atomic=True`. Backup `.bak` per config critici.
 - **No segreti su disco** – non salvare token, credenziali. Solo PDF originali ammessi.
 - **Chiusura risorse** – sempre context manager.
 
@@ -49,8 +49,8 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 ## 5) Configurazioni e cache
 
 - **YAML config** – sempre `yaml.safe_load`. Default sensati o `ConfigError`.
-- **Regex slug** – definita in config/config.yaml, cache in path_utils. Invalidate con `clear_slug_regex_cache()`.
-- **Env centralizzate** – usare `env_utils.get_env_var`, `get_bool`, `get_int`. Vietato os.environ sparsi.
+- **Regex slug** – definita in config/config.yaml, cache in path\_utils. Invalidate con `clear_slug_regex_cache()`.
+- **Env centralizzate** – usare `env_utils.get_env_var`. Vietato os.environ sparsi.
 - **Cache runtime** – isolate al modulo, invalidabili con funzioni dedicate.
 
 ---
@@ -58,7 +58,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 ## 6) Subprocess, Docker, GitHub
 
 - **Comandi esterni** – sempre `proc_utils.run_cmd(...)` con timeout, retry/backoff, cattura `stdout/stderr`. Vietato `shell=True` se non indispensabile.
-- **Docker** – preview via `gitbook_preview.py`, container detached. Stop via orchestratore.
+- **Docker** – preview via `adapters.preview` (API uniforme). Stop via orchestratore.
 - **Git/GitHub** – gestiti in `github_utils.py`. Validare precondizioni (es. `GITHUB_TOKEN`). Push incrementale, forzato solo con `--force-push` + `--force-ack`. Sempre `--force-with-lease`.
 - **Token** – mai nell’URL, solo header. Mascherare nei log.
 
@@ -86,7 +86,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 
 Prima di una PR, eseguire:
 
-1. **Pre‑onboarding (locale)**
+1. **Pre-onboarding (locale)**
    ```bash
    py src/pre_onboarding.py --slug demo --non-interactive --dry-run
    ```
@@ -107,6 +107,7 @@ Prima di una PR, eseguire:
 - **Testabilità** – funzioni pure, dipendenze iniettate (logger, context).
 - **TODO chiari** – annotare solo con breve spiegazione. Rimuovere codice morto.
 - **Consistenza** – nomi, log e emoji coerenti (✅ successo, ⚠️ warning, ⏭️ skip).
+- **API coerenti** – tutte le funzioni esposte dagli adapter hanno firma `(context, logger, **opts)` o variante coerente (PR-4).
 
 ---
 

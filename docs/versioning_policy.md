@@ -1,62 +1,61 @@
-# Versioning Policy — Timmy-KB (v1.1.0)
+# Versioning Policy — Timmy-KB (v1.2.0)
 
-Questa policy definisce come versionare il progetto Timmy-KB, seguendo lo schema **Semantic Versioning (SemVer)** adattato al contesto della pipeline. L’obiettivo è garantire chiarezza, prevedibilità e compatibilità retroattiva ove possibile.
-
----
-
-## 1) Regole di versionamento
-
-- **MAJOR (X.0.0)** — Cambiamenti incompatibili (breaking changes).
-- **MINOR (0.Y.0)** — Nuove funzionalità mantenendo la compatibilità.
-- **PATCH (0.0.Z)** — Correzioni di bug e refactor interni senza modifiche di UX o API pubbliche.
-
-### Estensioni locali
-
-- La pipeline può adottare un SemVer **leggero**: per refactor/documentazione si aggiorna comunque il numero di PATCH.
-- I suffissi `-beta`, `-rc`, ecc. indicano versioni pre-release.
+Questa policy definisce le regole di versioning per la pipeline Timmy-KB. L’obiettivo è garantire stabilità, compatibilità e chiarezza evolutiva per sviluppatori e utenti.
 
 ---
 
-## 2) CHANGELOG
+## 1) Schema di versioning (SemVer)
 
-- Ogni modifica **rilevante** deve essere documentata in `CHANGELOG.md`.
-- Formato di riferimento: [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
-- Sezioni standard: **Added, Changed, Fixed, Security, Deprecated, Removed, Notes**.
-- Le modifiche interne di refactor vanno comunque tracciate.
+La pipeline adotta **Semantic Versioning (SemVer 2.0.0)**:
 
----
-
-## 3) Allineamento documentazione
-
-- Ogni nuova release deve aggiornare:
-  - `README.md` → quickstart e note utente.
-  - `docs/user_guide.md` → UX e CLI.
-  - `docs/developer_guide.md` → scelte architetturali/refactor.
-  - `docs/architecture.md` → struttura e API interne.
-  - `docs/coding_rule.md` → regole operative.
-- Il **CHANGELOG** rappresenta la fonte unica di verità temporale delle modifiche.
+- **MAJOR (X.0.0)** → cambi incompatibili con versioni precedenti (breaking changes).
+- **MINOR (0.Y.0)** → nuove funzionalità retro-compatibili.
+- **PATCH (0.0.Z)** → fix e refactor senza modifiche API/CLI.
 
 ---
 
-## 4) Note operative
+## 2) Regole pratiche
 
-- In caso di rilascio **incompleto**, aggiungere suffisso `-dev` o `-draft`.
-- La data di rilascio va sempre riportata accanto alla versione.
-- I tag Git devono coincidere con la versione (es. `v1.1.0`).
-- In CI/CD le release stabili sono marcate su branch `main`.
-
----
-
-## 5) Compatibilità retroattiva
-
-- Nessuna rimozione immediata di CLI o flag: introdurre **avvisi di deprecazione** e rimuovere solo in release MAJOR.
-- Gli orchestratori mantengono la compatibilità verso CLI storiche, con warning.
+- Ogni orchestratore ha API/CLI stabili all’interno della stessa **MINOR**.
+- I moduli interni possono cambiare senza bump **MAJOR**, se non rompono orchestratori/API pubbliche.
+- Gli helper privati non hanno garanzia di stabilità.
 
 ---
 
-## 6) Versione corrente
+## 3) Tag e release
 
-- **Versione:** 1.1.0 (Stable)
-- **Data:** 23 Agosto 2025
-- **Note:** prima base stabile.
+- Ogni rilascio è taggato in Git (`vX.Y.Z`).
+- Il changelog descrive:
+  - **Added** (nuove feature)
+  - **Changed** (modifiche retro-compatibili)
+  - **Fixed** (bugfix)
+  - **Removed** (solo in MAJOR)
+- Ogni PR che impatta API/CLI deve aggiornare `CHANGELOG.md`.
 
+---
+
+## 4) Compatibilità CLI
+
+- Nessun breaking in PATCH.
+- Le opzioni CLI rimosse/deprecate richiedono un ciclo di almeno una MINOR prima della rimozione effettiva.
+- Default invariati salvo bump MAJOR.
+
+---
+
+## 5) Policy di documentazione
+
+- Ogni release MINOR/MAJOR deve aggiornare:  
+  - `docs/architecture.md`  
+  - `docs/developer_guide.md`  
+  - `docs/coding_rules.md`  
+  - `docs/user_guide.md`  
+  - `docs/policy_push.md`  
+  - `docs/versioning_policy.md`
+- PATCH: aggiornamento documentazione solo se impatta comportamenti visibili.
+
+---
+
+## 6) Roadmap stabilità
+
+- **v1.x** → fase stabile, garantita compatibilità CLI.  
+- **v2.0.0** → eventuale revisione architetturale e nuove API pubbliche.

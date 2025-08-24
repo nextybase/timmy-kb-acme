@@ -1,4 +1,4 @@
-# Policy di Push — Timmy-KB (v1.1.0)
+# Policy di Push — Timmy-KB (v1.2.0)
 
 Questa policy stabilisce le regole per pubblicare in GitHub i contenuti generati dalla pipeline di onboarding. L’obiettivo è garantire sicurezza, tracciabilità e allineamento con la strategia di versioning.
 
@@ -58,4 +58,3 @@ Se uno dei requisiti manca, l’orchestratore esce con `ForcePushError`.
 
 - Nessun breaking change: i flussi di push storici restano validi.
 - Le regole di governance rendono il comportamento **safe by default**.
-
