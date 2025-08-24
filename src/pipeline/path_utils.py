@@ -6,8 +6,8 @@ Utility di gestione path e slug per la pipeline Timmy-KB.
 - Niente side-effect (no I/O esterni, salvo lettura facoltativa di config locale).
 - Logging strutturato solo in caso di errore (silenzioso quando tutto va bene).
 - Guardie SOFT e STRONG sui path:
-  - SOFT:  is_safe_subpath(path, base) -> bool
-  - STRONG: ensure_within(base, target) -> None  (SSoT vive QUI)
+  - SOFT:  is_safe_subpath(path, base) -> bool  (solo pre-check booleani)
+  - STRONG: ensure_within(base, target) -> None  (SSoT per write/delete vive QUI)
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ _logger = get_structured_logger("pipeline.path_utils")
 def is_safe_subpath(path: Path, base: Path) -> bool:
     """
     Verifica in modo sicuro se `path` è contenuto all'interno di `base`.
+    SOFT guard: usare SOLO come pre-check booleano (mai per autorizzare write/delete).
 
     Usa i percorsi risolti (realpath) per prevenire path traversal e link simbolici
     indesiderati. In caso di eccezioni durante la risoluzione, ritorna `False`
@@ -43,7 +44,7 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return path_resolved.is_relative_to(base_resolved)
     except Exception as e:
         _logger.error(
-            "Errore nella validazione path",
+            "Errore nella validazione path (is_safe_subpath)",
             extra={"error": str(e), "path": str(path), "base": str(base)},
         )
         return False
@@ -57,6 +58,10 @@ def ensure_within(base: Path, target: Path) -> None:
     Args:
         base: directory radice consentita.
         target: path del file/dir da validare.
+
+    Note:
+        - Questa è la SSoT per la sicurezza delle operazioni di scrittura/copia/rimozione.
+        - Non restituire boolean: solleva eccezioni su casi non conformi.
     """
     try:
         base_r = Path(base).resolve()
@@ -123,9 +128,7 @@ def is_valid_slug(slug: str) -> bool:
 # Helper dominio (quick win)
 # -------------------------
 def validate_slug(slug: str) -> str:
-    """
-    Valida lo slug e alza un'eccezione di dominio in caso di non conformità.
-    """
+    """Valida lo slug e alza un'eccezione di dominio in caso di non conformità."""
     if not is_valid_slug(slug):
         raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
     return slug

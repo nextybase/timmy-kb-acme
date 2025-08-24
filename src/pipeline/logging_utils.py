@@ -9,26 +9,26 @@ Caratteristiche:
 - Possibilità di iniettare campi extra di base (`extra_base`) su ogni record.
 - Comportamento “safe”: nessun crash se il file di log non è scrivibile
   (degrada a console-only con avviso).
-- **Redazione centralizzata**: se `context.redact_logs` è True, applica mascheratura
-  ai messaggi/argomenti tramite `env_utils.redact_secrets(...)` e ai campi `extra`
-  considerati sensibili (es. token, secret, key, password, service_account, authorization, path).
+- **Redazione centralizzata**: decisione basata su compute_redact_flag(env, level) e
+  applicazione in un filtro che maschera msg/args/extra sensibili.
 - **Mascheratura riusabile**: helper pubblici `mask_partial`, `tail_path`,
-  `mask_id_map`, `mask_updates` per eliminare duplicazioni negli orchestratori.
+  `mask_id_map`, `mask_updates`, `redact_secrets`.
 
 Note architetturali:
 - Nessun I/O non necessario oltre alla creazione opzionale del file di log.
-- Nessuna dipendenza dai moduli di orchestrazione; può essere usato ovunque.
-- Design decision: handler sempre “puliti” (reset) per evitare duplicazioni.
+- Nessuna dipendenza dagli orchestratori; può essere usato ovunque.
+- Handler sempre “puliti” (reset) per evitare duplicazioni.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Union, Protocol, runtime_checkable, Dict, Any
+from typing import Optional, Union, Protocol, runtime_checkable, Dict, Any, Iterable
 from logging.handlers import RotatingFileHandler
 
-from .env_utils import redact_secrets  # 🔐 mascheratura token/segreti
+from .env_utils import compute_redact_flag  # SSoT del flag
 
 # --- Nuovi import non vincolanti per metriche (safe fallback) ---
 import time
@@ -53,8 +53,19 @@ _SENSITIVE_EXTRA_SUBSTRS = (
     "path",
 )
 
+# Variabili d'ambiente i cui valori, se presenti, vanno mascherati nel testo
+_SECRET_ENV_KEYS: tuple[str, ...] = (
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "PAT",
+    "OPENAI_API_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+    "SERVICE_ACCOUNT_FILE",
+)
+
+
 # -----------------------------
-#  Helpers di mascheratura (NEW)
+#  Helpers di mascheratura
 # -----------------------------
 def mask_partial(s: Optional[str]) -> str:
     """
@@ -70,17 +81,13 @@ def mask_partial(s: Optional[str]) -> str:
 
 
 def tail_path(p: Path, max_len: int = 120) -> str:
-    """
-    Restituisce solo la coda del path per leggibilità nei log (non segreto).
-    """
+    """Ritorna solo la coda del path per leggibilità nei log (non segreto)."""
     s = str(p)
     return s if len(s) <= max_len else s[-max_len:]
 
 
 def mask_id_map(d: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Maschera i valori tipo ID in un mapping (es. mappa cartelle Drive).
-    """
+    """Maschera i valori tipo ID in un mapping (es. mappa cartelle Drive)."""
     out: Dict[str, Any] = {}
     for k, v in (d or {}).items():
         out[k] = mask_partial(v) if isinstance(v, str) else v
@@ -101,10 +108,32 @@ def mask_updates(d: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def redact_secrets(text: str, extra_keys: Iterable[str] | None = None) -> str:
+    """
+    Maschera nei testi eventuali valori di segreti presenti nell'ambiente.
+    Sostituisce i match esatti con '****'. Accetta chiavi extra opzionali.
+    """
+    if not text:
+        return text
+    redacted = str(text)
+    keys = list(_SECRET_ENV_KEYS) + list(extra_keys or [])
+    for k in keys:
+        v = os.getenv(k)
+        if v:
+            try:
+                redacted = redacted.replace(v, "****")
+            except Exception:
+                pass
+    return redacted
+
+
 @runtime_checkable
 class SupportsSlug(Protocol):
-    """Protocol di typing per oggetti che espongono l'attributo `slug`."""
-    slug: str
+    """Protocol di typing per oggetti che espongono l'attributo `slug` e opzionalmente `env`, `redact_logs`."""
+    slug: str  # obbligatorio
+    # opzionali:
+    # env: dict
+    # redact_logs: bool
 
 
 def _make_context_filter(
@@ -129,7 +158,6 @@ def _make_context_filter(
         # extra_base
         if extra_base:
             for k, v in extra_base.items():
-                # non sovrascrivere se già presente
                 if not hasattr(record, k):
                     try:
                         setattr(record, k, v)
@@ -139,20 +167,25 @@ def _make_context_filter(
     return _filter
 
 
-def _make_redaction_filter(context: Optional[SupportsSlug]):
+def _make_redaction_filter(context: Optional[SupportsSlug], level: int):
     """
-    Crea un filtro che applica la redazione ai record se `context.redact_logs` è True.
-
-    La redazione viene applicata a:
-      - `record.msg` (stringhe o contenenti token sensibili)
-      - `record.args` (tuple/list/dict con stringhe potenzialmente sensibili)
-      - campi `extra` (solo per chiavi considerate sensibili: token/secret/key/password/service_account/authorization/path)
-
-    Note:
-    - Non modifica `exc_info`.
-    - Qualsiasi eccezione nel processo di redazione viene silenziata:
-      il logging non deve mai andare in errore.
+    Crea un filtro che applica la redazione ai record (se attiva).
+    La decisione usa, in quest’ordine:
+      1) context.redact_logs (se presente),
+      2) compute_redact_flag(context.env, level), altrimenti OFF.
     """
+    # Calcolo del flag (una volta alla creazione del logger)
+    redact_flag = False
+    try:
+        if context is not None and hasattr(context, "redact_logs"):
+            redact_flag = bool(getattr(context, "redact_logs"))
+        elif context is not None and hasattr(context, "env") and isinstance(getattr(context, "env"), dict):
+            redact_flag = bool(compute_redact_flag(getattr(context, "env"), logging.getLevelName(level)))
+        else:
+            redact_flag = False
+    except Exception:
+        redact_flag = False
+
     def _redact_obj(obj):
         try:
             if isinstance(obj, str):
@@ -168,16 +201,14 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
             return obj
 
     def _filter(record: logging.LogRecord) -> bool:
+        if not redact_flag:
+            return True
         try:
-            redact = bool(getattr(context, "redact_logs", False)) if context is not None else False
-            if not redact:
-                return True
-
-            # Applica redazione a msg/args
+            # msg/args
             record.msg = _redact_obj(record.msg)
             record.args = _redact_obj(record.args)
 
-            # NEW: redazione sugli extra sensibili nel record.__dict__
+            # extra sensibili
             rec_dict = getattr(record, "__dict__", {})
             for k in list(rec_dict.keys()):
                 if k in ("msg", "args"):
@@ -185,13 +216,10 @@ def _make_redaction_filter(context: Optional[SupportsSlug]):
                 k_low = k.lower()
                 if any(sub in k_low for sub in _SENSITIVE_EXTRA_SUBSTRS):
                     try:
-                        v = rec_dict[k]
-                        rec_dict[k] = _redact_obj(v)
+                        rec_dict[k] = _redact_obj(rec_dict[k])
                     except Exception:
                         pass
-
         except Exception:
-            # mai bloccare il logging per errori di filtro
             pass
         return True
 
@@ -211,43 +239,22 @@ def get_structured_logger(
     extra_base: Optional[Dict[str, Any]] = None,
 ) -> logging.Logger:
     """
-    Crea un logger strutturato con supporto per console e file, opzionalmente
-    legato a un contesto che espone `.slug` (es. `ClientContext`).
+    Crea un logger strutturato (console + opzionale file) con redazione centralizzata.
 
-    Args:
-        name: Nome del logger (namespace).
-        log_file: Percorso del file di log; se `None` scrive solo su console.
-        level: Livello di logging (default: `logging.INFO`).
-        rotate: Se `True`, abilita rotazione con `RotatingFileHandler`.
-        max_bytes: Dimensione massima del file prima della rotazione.
-        backup_count: Numero massimo di file di backup per la rotazione.
-        context: Oggetto opzionale con attributo `.slug` da riportare nei record.
-        run_id: Identificativo opzionale per correlare i log di una singola esecuzione.
-        extra_base: Dizionario di campi extra da iniettare in ogni record.
-
-    Returns:
-        logging.Logger: Logger configurato e pronto all'uso.
-
-    Side Effects:
-        - Se `log_file` è indicato, crea la cartella padre e il file (se possibile).
-        - Reset degli handler esistenti sul logger nominato per coerenza.
-        - Non propaga al root logger (evita doppie emissioni).
+    Side effects:
+    - Reset handler esistenti sul logger con lo stesso nome.
+    - Non propaga al root logger.
     """
     logger = logging.getLogger(name)
 
-    # Evita handler duplicati
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # Livello di default
     if level is None:
         level = logging.INFO
     logger.setLevel(level)
-
-    # Importante: non propagare al root logger
     logger.propagate = False
 
-    # Formatter uniforme; include slug/run_id solo se forniti
     fmt = "%(asctime)s | %(levelname)s | %(name)s"
     if context is not None:
         fmt += " | slug=%(slug)s"
@@ -257,18 +264,17 @@ def get_structured_logger(
 
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # Filtri: contesto + redazione
     ctx_filter = _make_context_filter(context, run_id, extra_base)
-    redact_filter = _make_redaction_filter(context)
+    redact_filter = _make_redaction_filter(context, level)
 
-    # Handler console
+    # Console
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
     ch.addFilter(ctx_filter)
     ch.addFilter(redact_filter)
     logger.addHandler(ch)
 
-    # Handler file, se richiesto
+    # File (opzionale)
     if log_file:
         log_file_path = Path(log_file)
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,11 +293,9 @@ def get_structured_logger(
             fh.addFilter(redact_filter)
             logger.addHandler(fh)
         except Exception as e:
-            # Se il file non è creabile, degrada a console-only
             try:
                 logger.warning(
-                    f"Impossibile creare file di log {log_file_path}: {e}. "
-                    "Logging solo su console."
+                    f"Impossibile creare file di log {log_file_path}: {e}. Logging solo su console."
                 )
             except Exception:
                 pass
@@ -313,10 +317,8 @@ def _get_rss_mb() -> Optional[float]:
         pass
     try:
         if resource is not None:
-            # ru_maxrss: kilobytes su Linux, bytes su macOS; normalizziamo a MB
             usage = resource.getrusage(resource.RUSAGE_SELF)
             ru = float(getattr(usage, "ru_maxrss", 0.0))
-            # Heuristica piattaforma: se troppo grande assumiamo bytes→MB, altrimenti KB→MB
             return (ru / (1024 * 1024)) if ru > 10**9 else (ru / 1024.0)
     except Exception:
         pass
@@ -325,17 +327,10 @@ def _get_rss_mb() -> Optional[float]:
 
 class metrics_scope:
     """
-    Context manager per registrare metriche di performance a fine blocco senza
-    modificare il formato dei log.
+    Context manager per registrare metriche di performance a fine blocco.
 
-    Uso:
-        with metrics_scope(logger, stage="build_md", category="contratti"):
-            ... # codice da misurare
-
-    Effetto:
-        - misura elapsed_ms
-        - prova a misurare rss_mb (se possibile, con fallback safe)
-        - emette un log INFO alla chiusura con extra standardizzati (stage, elapsed_ms, rss_mb, **kv)
+    with metrics_scope(logger, stage="build_md", category="contratti"):
+        ...
     """
     def __init__(self, logger: logging.Logger, *, stage: str, level: int = logging.INFO, **kv: Any) -> None:
         self._logger = logger
@@ -354,24 +349,18 @@ class metrics_scope:
         extra = {"stage": self._stage, "elapsed_ms": elapsed_ms}
         if rss_mb is not None:
             extra["rss_mb"] = round(rss_mb, 2)
-        # merge dei kv custom, senza sovrascrivere quelli già presenti
         for k, v in self._kv.items():
             if k not in extra:
                 extra[k] = v
         try:
             self._logger.log(self._level, f"metrics: {self._stage}", extra=extra)
         except Exception:
-            # i log non devono mai rompere il flusso
             pass
-        # Non sopprime eventuali eccezioni nel blocco
         return False
 
 
 def log_with_metrics(logger: logging.Logger, level: int, msg: str, **kv: Any) -> None:
-    """
-    Utility one-shot per loggare un messaggio aggiungendo campi extra standardizzati.
-    Non altera il formatter né la pipeline di redazione.
-    """
+    """Logga un messaggio aggiungendo campi extra standardizzati (best-effort)."""
     try:
         logger.log(level, msg, extra=kv or None)
     except Exception:
@@ -388,4 +377,5 @@ __all__ = [
     "tail_path",
     "mask_id_map",
     "mask_updates",
+    "redact_secrets",
 ]

@@ -29,7 +29,8 @@ import subprocess
 import logging
 from pathlib import Path
 
-from .env_utils import get_int, redact_secrets  # coerenza con la pipeline
+from .env_utils import get_int
+from .logging_utils import redact_secrets
 
 __all__ = [
     "CmdError",

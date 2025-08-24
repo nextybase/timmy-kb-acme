@@ -18,26 +18,18 @@ if ENV_PATH.exists():
     load_dotenv(dotenv_path=ENV_PATH)
 
 __all__ = [
-    # Canoniche
+    # API pure e canoniche
     "get_env_var",
     "require_env",
     "get_bool",
     "get_int",
-    "redact_secrets",
-    "is_log_redaction_enabled",
     "compute_redact_flag",
     "get_force_allowed_branches",
     "is_branch_allowed_for_force",
-    # Alias legacy/armonizzazione
-    "get_env",
-    "get_env_flag",
-    "get_env_int",
-    "must_env",
-    "redact_text",
 ]
 
 # -----------------------------
-#  Utility base non-breaking
+#  Utility base (PURE)
 # -----------------------------
 
 _TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
@@ -48,34 +40,28 @@ def get_env_var(
     default: Optional[str] = None,
     required: bool = False,
     *,
-    redact: bool | str = False,  # parametro compatibile con le chiamate a valle (non logga qui)
+    # parametro accettato in passato: non ha effetti qui e non viene usato
+    redact: bool | str = False,
 ) -> Optional[str]:
     """
-    Recupera una variabile d'ambiente con comportamento retro-compatibile.
+    Recupera una variabile d'ambiente.
 
     Args:
         key: nome della variabile.
         default: valore di default se assente/vuota.
         required: se True, solleva ConfigError quando la variabile è assente o vuota.
-        redact: accettato per compatibilità (non effettua log qui). La redazione avviene
-                nei logger tramite `redact_secrets(...)` o tramite flag di contesto.
 
     Returns:
         Il valore (stringa) o `None`.
     """
     value = os.getenv(key, default)
     if required and (value is None or str(value).strip() == ""):
-        # Coerenza con l’error handling della pipeline e con require_env()
         raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
     return value
 
 
 def require_env(key: str) -> str:
-    """Versione "required" esplicita: restituisce sempre una stringa o solleva.
-
-    Solleva:
-        ConfigError: se la variabile è assente o vuota.
-    """
+    """Versione obbligatoria: restituisce sempre una stringa o solleva ConfigError."""
     val = os.getenv(key)
     if val is None or str(val).strip() == "":
         raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
@@ -83,11 +69,7 @@ def require_env(key: str) -> str:
 
 
 def get_bool(key: str, default: bool = False) -> bool:
-    """Lettura booleana tollerante.
-
-    Valori considerati truthy: {1,true,yes,on,y,t} (case-insensitive).
-    Valori considerati falsy:  {0,false,no,off,n,f} (case-insensitive).
-    """
+    """Lettura booleana tollerante."""
     v = os.getenv(key)
     if v is None:
         return default
@@ -102,18 +84,7 @@ def get_int(
     min_value: Optional[int] = None,
     max_value: Optional[int] = None,
 ) -> Optional[int]:
-    """Lettura intera con validazione minima e bounds opzionali.
-
-    Args:
-        key: nome della variabile.
-        default: valore di default se assente/illeggibile.
-        required: se True, solleva ConfigError se assente/non numerica/fuori range.
-        min_value: se impostato, richiede che il valore >= min_value.
-        max_value: se impostato, richiede che il valore <= max_value.
-
-    Returns:
-        int o `None`.
-    """
+    """Lettura intera con validazione minima e bounds opzionali."""
     v = os.getenv(key, None)
     if v is None or str(v).strip() == "":
         if required:
@@ -137,65 +108,8 @@ def get_int(
     return val
 
 
-# Elenco chiavi comunemente sensibili: estendibile senza side-effect
-_SECRET_KEYS = (
-    "GITHUB_TOKEN",
-    "GH_TOKEN",
-    "PAT",
-    "OPENAI_API_KEY",
-    "AWS_SECRET_ACCESS_KEY",
-    "SERVICE_ACCOUNT_FILE",
-)
-
-def redact_secrets(text: str) -> str:
-    """
-    Maschera nei messaggi eventuali token/segreti presenti nell'ambiente.
-    Utile per logging di errori/traceback senza rischi di leakage.
-
-    Nota: la redazione sostituisce i valori *correnti* delle variabili note
-    con "****" nel testo fornito.
-    """
-    if not text:
-        return text
-    redacted = str(text)
-    for k in _SECRET_KEYS:
-        v = os.getenv(k)
-        if v:
-            redacted = redacted.replace(v, "****")
-    return redacted
-
-
-def is_log_redaction_enabled(context=None) -> bool:
-    """
-    [LEGACY] Determina se la redazione dei log deve essere attiva.
-
-    Precedenza: `context.env` > `os.environ`.
-    Nota: mantenuta per retro-compat. La logica *canonica* è in `compute_redact_flag`.
-    """
-    def _from_ctx(key: str, default: Optional[str] = None) -> Optional[str]:
-        try:
-            if context is not None and hasattr(context, "env") and isinstance(context.env, dict):
-                return context.env.get(key, default)
-        except Exception:
-            pass
-        return default
-
-    mode = _from_ctx("LOG_REDACTION") or os.getenv("LOG_REDACTION", "auto")
-    mode_l = str(mode or "auto").strip().lower()
-
-    if mode_l in ("always",) or mode_l in _TRUE_SET:
-        return True
-    if mode_l in ("never",) or mode_l in _FALSE_SET:
-        return False
-
-    # auto (legacy, conservativa)
-    envv = _from_ctx("ENV") or os.getenv("ENV", "dev")
-    ci = _from_ctx("CI") or os.getenv("CI", "0")
-    return (str(envv).strip().lower() in ("prod", "production")) or (str(ci).strip().lower() in _TRUE_SET)
-
-
 # ================================
-# Policy redazione canonica
+# Policy redazione (SSoT del flag)
 # ================================
 
 def _truthy(val: Any) -> bool:
@@ -204,7 +118,7 @@ def _truthy(val: Any) -> bool:
 
 def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool:
     """
-    Calcola il flag di redazione log in modo deterministico.
+    Calcola il flag di redazione log in modo deterministico (nessun masking qui).
 
     Regole:
     - LOG_REDACTION=on/always/true  → redazione ON
@@ -215,7 +129,7 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
           * CI=true                       OR
           * sono presenti credenziali sensibili (GITHUB_TOKEN o SERVICE_ACCOUNT_FILE)
         OFF altrimenti
-    - log_level=DEBUG forza OFF (debug locale).
+    - log_level=DEBUG forza OFF.
 
     Args:
         env: mappa chiave→valore (tipicamente `context.env`).
@@ -224,11 +138,9 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
     Returns:
         True se la redazione va attivata, False altrimenti.
     """
-    # 1) Letture robuste dalla mappa `env` con fallback a os.environ
     mode = (env.get("LOG_REDACTION") if env is not None else None) or os.getenv("LOG_REDACTION", "auto")
     mode_l = str(mode or "auto").strip().lower()
 
-    # 2) Gestione esplicita on/off
     if mode_l in ("always", "on") or mode_l in _TRUE_SET:
         explicit = True
     elif mode_l in ("never", "off") or mode_l in _FALSE_SET:
@@ -236,7 +148,6 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
     else:
         explicit = None  # auto
 
-    # 3) Se auto: valuta contesto
     env_name = (env.get("ENV") if env is not None else None) or os.getenv("ENV", "dev")
     ci_val = (env.get("CI") if env is not None else None) or os.getenv("CI", "0")
     has_credentials = bool(
@@ -245,10 +156,8 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
     )
 
     auto_on = (str(env_name).strip().lower() in {"prod", "production", "ci"}) or _truthy(ci_val) or has_credentials
-
     redact = explicit if explicit is not None else auto_on
 
-    # 4) In DEBUG la redazione è sempre OFF (favor debug locale)
     if str(log_level or "").upper() == "DEBUG":
         return False
     return bool(redact)
@@ -267,9 +176,6 @@ def get_force_allowed_branches(context=None) -> list[str]:
     - Precedenza: `context.env` (se presente), poi `os.environ`.
     - Ritorna una lista di pattern glob (es. ["main", "release/*"]).
     - Se non impostata o vuota → [] (nessun vincolo lato helper).
-
-    Nota: l’orchestratore può interpretare [] come “nessun filtro” e decidere
-    se consentire tutto o bloccare by-policy.
     """
     raw = None
     try:
@@ -280,7 +186,6 @@ def get_force_allowed_branches(context=None) -> list[str]:
     if raw is None:
         raw = os.getenv("GIT_FORCE_ALLOWED_BRANCHES", "")
 
-    # Normalizzazione: separatori = virgola o newline
     tokens = str(raw or "").replace("\n", ",").split(",")
     patterns = [t.strip() for t in tokens if t and t.strip()]
     return patterns
@@ -290,48 +195,11 @@ def is_branch_allowed_for_force(branch: str, context=None, *, allow_if_unset: bo
     """
     Verifica se `branch` è consentito per il force push.
 
-    Args:
-        branch: nome del branch (es. "main", "release/1.2.x").
-        context: opzionale; se presente può fornire `context.env`.
-        allow_if_unset: se True e la lista non è configurata/è vuota → consenti.
-
     Returns:
-        True se almeno un pattern della allow-list combacia (fnmatch), altrimenti False.
+        True se almeno un pattern combacia (fnmatch), altrimenti False.
         Se la allow-list non è impostata/è vuota → `allow_if_unset`.
     """
     patterns = get_force_allowed_branches(context)
     if not patterns:
         return allow_if_unset
     return any(fnmatch.fnmatch(branch, pat) for pat in patterns)
-
-
-# ==========================================
-# Alias legacy (armonizzazione chiamate)
-# ==========================================
-
-def get_env(key: str, default: Optional[str] = None, *, required: bool = False, redact: bool | str = False) -> Optional[str]:
-    """Alias compatibile di get_env_var()."""
-    return get_env_var(key, default=default, required=required, redact=redact)
-
-def get_env_flag(key: str, default: bool = False) -> bool:
-    """Alias compatibile di get_bool()."""
-    return get_bool(key, default=default)
-
-def get_env_int(
-    key: str,
-    default: Optional[int] = None,
-    *,
-    required: bool = False,
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None,
-) -> Optional[int]:
-    """Alias compatibile di get_int()."""
-    return get_int(key, default=default, required=required, min_value=min_value, max_value=max_value)
-
-def must_env(key: str) -> str:
-    """Alias compatibile di require_env()."""
-    return require_env(key)
-
-def redact_text(text: str) -> str:
-    """Alias compatibile di redact_secrets()."""
-    return redact_secrets(text)

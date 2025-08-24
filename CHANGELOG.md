@@ -4,6 +4,56 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.2.2] — 2025-08-24
+
+> Hardening trasversale: SSoT per path-safety, redazione log centralizzata e orchestratori resi più coesi.
+
+### Added
+- **logging_utils**
+  - Filtro di redazione centralizzato (mascheratura su `msg/args/extra`).
+  - Helper riusabili: `mask_partial`, `tail_path`, `mask_id_map`, `mask_updates`.
+  - Metriche leggere: `metrics_scope`, `log_with_metrics`.
+
+### Changed
+- **env_utils**
+  - Reso *puro*: nessuna mascheratura; introdotta `compute_redact_flag(env, log_level)` come fonte unica del flag.
+  - Utilities per governance del force-push: `get_force_allowed_branches`, `is_branch_allowed_for_force`.
+- **path_utils**
+  - `ensure_within(base, target)` promosso a **Single Source of Truth** per path-safety; `is_safe_subpath` resta SOFT.
+  - Aggiunti `ensure_valid_slug`, `sanitize_filename`, `sorted_paths`; cache regex slug + fallback robusto.
+- **cleanup_utils**
+  - Rimozioni protette: uso di `ensure_within` prima di delete; log strutturati coerenti.
+- **github_utils**
+  - Hardening push: selezione deterministica file, working dir temporanea sotto base cliente, retry con `pull --rebase`, lease per force-push e allow-list branch.
+  - Env sanificato per subprocess; redazione opzionale lato logger.
+- **gitbook_preview**
+  - Build/serve via `proc_utils.run_cmd`; scritture atomiche (`safe_write_file`); `ensure_within` sulle destinazioni; `wait_until_ready` e stop best-effort.
+- **content_utils**
+  - Conversione RAW→BOOK con gerarchie annidate; fingerprint per skip idempotente; nomi file sanificati; scritture atomiche e path-safety; generatori `SUMMARY.md`/`README.md`.
+- **drive/download**
+  - Scansione BFS, idempotenza (MD5/size), verifica integrità post-download, path-safety forte e log redatti.
+- **Orchestratori**
+  - `pre_onboarding.py`: estratto `_sync_env()`, validazione slug centralizzata, redazione propagata.
+  - `tag_onboarding.py`: CSV + stub semantico con scritture atomiche e guardie `ensure_within`.
+  - `semantic_onboarding.py`: conversione/enrichment/README+SUMMARY/preview (nessun push).
+  - `onboarding_full.py`: solo **push GitHub** (con conferma solo in interattivo).
+
+### Fixed
+- Import uniformati: **spostata la mascheratura** da `env_utils` a `logging_utils` (aggiornati i call-sites).
+- Robustezza frontmatter/preview: gestione assenza PyYAML e correzioni su path relativi/assoluti.
+
+### Security / Hardening
+- **Path-safety** consolidata con `ensure_within` su tutte le scritture/copie/rimozioni sensibili.
+- **Scritture atomiche** come default per file generati dalla pipeline.
+
+### Migration notes
+- Importare ora `redact_secrets` da `pipeline.logging_utils`.
+- Inizializzare il flag di redazione negli orchestratori appena caricato il contesto:
+  ```python
+  from pipeline.env_utils import compute_redact_flag
+  if not hasattr(context, "redact_logs"):
+      context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
+
 ---
 
 ## [1.2.1] — 2025-08-24

@@ -18,7 +18,7 @@ Note architetturali (v1.1+):
   Gli errori di `git` sono mappati su `PushError` con messaggi compatti (stderr tail).
 
 Sicurezza:
-- Path-safety: convalida dei percorsi con `is_safe_subpath`.
+- Path-safety: `ensure_within` (STRONG) per write/delete; `is_safe_subpath` (SOFT) solo per pre-filtri di lettura.
 - Token: header HTTP Basic passato via env `GIT_HTTP_EXTRAHEADER` (non compare nel comando).
 """
 
@@ -34,12 +34,11 @@ from typing import Protocol, runtime_checkable, Mapping, Iterable, Any, Optional
 from github import Github
 from github.GithubException import GithubException
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import redact_secrets, get_structured_logger
 from pipeline.exceptions import PipelineError, ForcePushError, PushError
-from pipeline.path_utils import is_safe_subpath, sorted_paths  # sicurezza path + ordinamento deterministico
+from pipeline.path_utils import is_safe_subpath, ensure_within, sorted_paths  # sicurezza path + ordinamento deterministico
 from pipeline.env_utils import (
-    redact_secrets,
-    get_env_var,                       # 🔐 redazione + env resolver
+    get_env_var,                       # 🔐 env resolver (no masking qui)
     is_branch_allowed_for_force,       # ✅ allow-list branch per force push
     get_force_allowed_branches,        # ✅ per log/errore esplicativo
 )
@@ -174,12 +173,13 @@ def push_output_to_github(
             file_path=book_dir,
         )
 
-    # Guard-rail: directory dentro la base del cliente
+    # Guard-rail: directory dentro la base del cliente (STRONG)
     base_dir = getattr(context, "base_dir", None)
     if not base_dir:
         raise PipelineError("Context.base_dir assente: impossibile determinare la working area.", slug=context.slug)
-
-    if not is_safe_subpath(book_dir, base_dir):
+    try:
+        ensure_within(base_dir, book_dir)
+    except Exception:
         raise PipelineError(
             f"Percorso book non sicuro: {book_dir} (fuori da {base_dir})",
             slug=context.slug,
@@ -247,9 +247,11 @@ def push_output_to_github(
 
     remote_url = repo.clone_url  # https://github.com/<org>/<repo>.git
 
-    # Cartella temporanea **dentro** output/timmy-kb-<slug>
+    # Cartella temporanea **dentro** output/timmy-kb-<slug> (STRONG)
     tmp_dir = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
-    if not is_safe_subpath(tmp_dir, base_dir):
+    try:
+        ensure_within(base_dir, tmp_dir)
+    except Exception:
         raise PipelineError(
             f"Working dir temporanea fuori dalla base consentita: {tmp_dir}",
             slug=context.slug,
@@ -302,10 +304,12 @@ def push_output_to_github(
             local_logger.info("↕️  Pull --rebase per sincronizzazione iniziale", extra={"slug": context.slug, "branch": default_branch})
             _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
 
-        # Copia contenuti .md da book/ nella working dir clonata
+        # Copia contenuti .md da book/ nella working dir clonata (STRONG sui dst)
         local_logger.info("🧩 Preparazione contenuti da book/", extra={"slug": context.slug, "file_path": str(book_dir)})
         for f in md_files:
             dst = tmp_dir / f.relative_to(book_dir)
+            # validazione strong della destinazione prima di mkdir/copy
+            ensure_within(tmp_dir, dst)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
 
@@ -419,9 +423,10 @@ def push_output_to_github(
         safe = redact_secrets(raw) if redact_logs else raw
         raise PushError(safe, slug=context.slug) from e
     finally:
-        # Cleanup working dir temporanea
+        # Cleanup working dir temporanea (STRONG + best-effort)
         try:
-            if tmp_dir.exists() and is_safe_subpath(tmp_dir, base_dir):
+            if 'tmp_dir' in locals() and isinstance(tmp_dir, Path) and tmp_dir.exists():
+                ensure_within(base_dir, tmp_dir)
                 shutil.rmtree(tmp_dir, ignore_errors=True)
         except Exception:
             # Non bloccare l'esecuzione in caso di errore di cleanup

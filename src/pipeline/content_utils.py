@@ -19,7 +19,7 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.config_utils import safe_write_file  # ✅ Standard v1.0 stable
 from pipeline.exceptions import PipelineError
 from pipeline.context import ClientContext
-from pipeline.path_utils import is_safe_subpath  # ✅ Controllo sicurezza path
+from pipeline.path_utils import ensure_within  # ✅ STRONG guard per write/delete e gate di accesso
 from pipeline.path_utils import sanitize_filename  # ✅ Sanitizzazione nomi file
 
 # ✅ quick win: usa eccezioni dominio per input directory mancanti/non valide
@@ -172,34 +172,39 @@ def convert_files_to_structured_markdown(
             skip_if_unchanged = DEFAULT_SKIP_IF_UNCHANGED if skip_if_unchanged is None else skip_if_unchanged
             max_workers = DEFAULT_MAX_WORKERS if max_workers is None else max_workers
 
-    # 🔒 Guard-rail anche su RAW (coerente con md_dir)
-    if not is_safe_subpath(raw_dir, Path(context.base_dir)):
+    # 🔒 Guard-rail STRONG su RAW e MD rispetto alla base cliente
+    try:
+        ensure_within(context.base_dir, raw_dir)
+    except Exception as e:
         raise PipelineError(
-            f"Tentativo di leggere da un path non sicuro: {raw_dir}",
+            f"Tentativo di leggere da un path non sicuro: {raw_dir} ({e})",
             slug=context.slug,
             file_path=raw_dir,
         )
+    try:
+        ensure_within(context.base_dir, md_dir)
+    except Exception as e:
+        raise PipelineError(
+            f"Tentativo di scrivere file in path non sicuro: {md_dir} ({e})",
+            slug=context.slug,
+            file_path=md_dir,
+        )
+
     if not raw_dir.exists():
         local_logger.error(
             f"La cartella raw non esiste: {raw_dir}",
-            extra={"slug": context.slug, "file_path": raw_dir},
+            extra={"slug": context.slug, "file_path": str(raw_dir)},
         )
         # ✅ dominio: directory mancante
         raise InputDirectoryMissing(f"La cartella raw non esiste: {raw_dir}", slug=context.slug, file_path=raw_dir)
     if not raw_dir.is_dir():
         local_logger.error(
             f"Il path raw non è una directory: {raw_dir}",
-            extra={"slug": context.slug, "file_path": raw_dir},
+            extra={"slug": context.slug, "file_path": str(raw_dir)},
         )
         # ✅ dominio: path non directory
         raise InputDirectoryMissing(f"Il path raw non è una directory: {raw_dir}", slug=context.slug, file_path=raw_dir)
 
-    if not is_safe_subpath(md_dir, Path(context.base_dir)):
-        raise PipelineError(
-            f"Tentativo di scrivere file in path non sicuro: {md_dir}",
-            slug=context.slug,
-            file_path=md_dir,
-        )
     md_dir.mkdir(parents=True, exist_ok=True)
 
     # Ogni sottocartella immediata di raw/ è una "categoria" che genera un .md
@@ -216,6 +221,7 @@ def convert_files_to_structured_markdown(
 
     # Concorrenza a grana grossa (per categoria), ma scrittura in ordine deterministico
     if (max_workers or 0) > 1:
+        from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             for out in ex.map(_process, categories):
                 results.append(out)
@@ -229,11 +235,14 @@ def convert_files_to_structured_markdown(
         md_path = md_dir / f"{safe_name}.md"
         fp_path = md_path.with_suffix(md_path.suffix + ".fp")
 
-        # 🔒 path-safety su ogni file di output
-        if not is_safe_subpath(md_path, md_dir) or not is_safe_subpath(fp_path, md_dir):
+        # 🔒 STRONG: validare gli output specifici prima di scrivere
+        try:
+            ensure_within(md_dir, md_path)
+            ensure_within(md_dir, fp_path)
+        except Exception as e:
             local_logger.error(
                 "Path di output non sicuro (fuori dal book dir).",
-                extra={"slug": context.slug, "file_path": md_path},
+                extra={"slug": context.slug, "file_path": str(md_path), "error": str(e)},
             )
             raise PipelineError(
                 f"Path di output non sicuro per {md_path}",
@@ -251,26 +260,26 @@ def convert_files_to_structured_markdown(
                 if old_fp == fp:
                     local_logger.info(
                         f"Skip generazione: nessuna modifica per {md_path}",
-                        extra={"slug": context.slug, "file_path": md_path},
+                        extra={"slug": context.slug, "file_path": str(md_path)},
                     )
                     continue
 
             # Header principale del file per la categoria (titolo leggibile → dall'originale)
             local_logger.info(
                 f"Creazione file markdown aggregato: {md_path}",
-                extra={"slug": context.slug, "file_path": md_path},
+                extra={"slug": context.slug, "file_path": str(md_path)},
             )
             safe_write_file(md_path, content)
             # Aggiorna fingerprint sidecar (scrittura atomica)
             safe_write_file(fp_path, fp + "\n")
             local_logger.info(
                 "File markdown scritto correttamente",
-                extra={"slug": context.slug, "file_path": md_path},
+                extra={"slug": context.slug, "file_path": str(md_path)},
             )
         except (OSError, ValueError) as e:
             local_logger.error(
                 f"Errore nella creazione markdown {md_path}: {e}",
-                extra={"slug": context.slug, "file_path": md_path},
+                extra={"slug": context.slug, "file_path": str(md_path)},
             )
             raise PipelineError(str(e), slug=context.slug, file_path=md_path)
 
@@ -289,18 +298,23 @@ def generate_summary_markdown(
     # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
     local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
-    if not is_safe_subpath(md_dir, Path(context.base_dir)):
+    # STRONG: md_dir deve essere sotto la base del cliente
+    try:
+        ensure_within(context.base_dir, md_dir)
+    except Exception as e:
         raise PipelineError(
-            f"Tentativo di scrivere file in path non sicuro: {md_dir}",
+            f"Tentativo di scrivere file in path non sicuro: {md_dir} ({e})",
             slug=context.slug,
             file_path=md_dir,
         )
 
     summary_path = md_dir / "SUMMARY.md"
-    # 🔒 path-safety sull’output specifico
-    if not is_safe_subpath(summary_path, md_dir):
+    # 🔒 STRONG sull’output specifico
+    try:
+        ensure_within(md_dir, summary_path)
+    except Exception as e:
         raise PipelineError(
-            f"Path di output non sicuro per SUMMARY.md: {summary_path}",
+            f"Path di output non sicuro per SUMMARY.md: {summary_path} ({e})",
             slug=context.slug,
             file_path=summary_path,
         )
@@ -313,17 +327,17 @@ def generate_summary_markdown(
 
         local_logger.info(
             f"Generazione SUMMARY.md in {summary_path}",
-            extra={"slug": context.slug, "file_path": summary_path},
+            extra={"slug": context.slug, "file_path": str(summary_path)},
         )
         safe_write_file(summary_path, content)
         local_logger.info(
             "SUMMARY.md generato con successo.",
-            extra={"slug": context.slug, "file_path": summary_path},
+            extra={"slug": context.slug, "file_path": str(summary_path)},
         )
     except OSError as e:
         local_logger.error(
             f"Errore generazione SUMMARY.md: {e}",
-            extra={"slug": context.slug, "file_path": summary_path},
+            extra={"slug": context.slug, "file_path": str(summary_path)},
         )
         raise PipelineError(str(e), slug=context.slug, file_path=summary_path)
 
@@ -338,18 +352,23 @@ def generate_readme_markdown(
     # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
     local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
-    if not is_safe_subpath(md_dir, Path(context.base_dir)):
+    # STRONG: md_dir deve essere sotto la base del cliente
+    try:
+        ensure_within(context.base_dir, md_dir)
+    except Exception as e:
         raise PipelineError(
-            f"Tentativo di scrivere file in path non sicuro: {md_dir}",
+            f"Tentativo di scrivere file in path non sicuro: {md_dir} ({e})",
             slug=context.slug,
             file_path=md_dir,
         )
 
     readme_path = md_dir / "README.md"
-    # 🔒 path-safety sull’output specifico
-    if not is_safe_subpath(readme_path, md_dir):
+    # 🔒 STRONG sull’output specifico
+    try:
+        ensure_within(md_dir, readme_path)
+    except Exception as e:
         raise PipelineError(
-            f"Path di output non sicuro per README.md: {readme_path}",
+            f"Path di output non sicuro per README.md: {readme_path} ({e})",
             slug=context.slug,
             file_path=readme_path,
         )
@@ -358,17 +377,17 @@ def generate_readme_markdown(
         content = "# Documentazione Timmy-KB\n"
         local_logger.info(
             f"Generazione README.md in {readme_path}",
-            extra={"slug": context.slug, "file_path": readme_path},
+            extra={"slug": context.slug, "file_path": str(readme_path)},
         )
         safe_write_file(readme_path, content)
         local_logger.info(
             "README.md generato con successo.",
-            extra={"slug": context.slug, "file_path": readme_path},
+            extra={"slug": context.slug, "file_path": str(readme_path)},
         )
     except OSError as e:
         local_logger.error(
             f"Errore generazione README.md: {e}",
-            extra={"slug": context.slug, "file_path": readme_path},
+            extra={"slug": context.slug, "file_path": str(readme_path)},
         )
         raise PipelineError(str(e), slug=context.slug, file_path=readme_path)
 
@@ -388,9 +407,12 @@ def validate_markdown_dir(
     # DEFAULT aggiornato: preferisci un logger contestualizzato (eredita redact_logs)
     local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
-    if not is_safe_subpath(md_dir, Path(context.base_dir)):
+    # STRONG: md_dir deve essere sotto la base del cliente
+    try:
+        ensure_within(context.base_dir, md_dir)
+    except Exception as e:
         raise PipelineError(
-            f"Tentativo di accedere a un path non sicuro: {md_dir}",
+            f"Tentativo di accedere a un path non sicuro: {md_dir} ({e})",
             slug=context.slug,
             file_path=md_dir,
         )
@@ -398,14 +420,14 @@ def validate_markdown_dir(
     if not md_dir.exists():
         local_logger.error(
             f"La cartella markdown non esiste: {md_dir}",
-            extra={"slug": context.slug, "file_path": md_dir},
+            extra={"slug": context.slug, "file_path": str(md_dir)},
         )
         # ✅ dominio: directory mancante
         raise InputDirectoryMissing(f"La cartella markdown non esiste: {md_dir}", slug=context.slug, file_path=md_dir)
     if not md_dir.is_dir():
         local_logger.error(
             f"Il path non è una directory: {md_dir}",
-            extra={"slug": context.slug, "file_path": md_dir},
+            extra={"slug": context.slug, "file_path": str(md_dir)},
         )
         # ✅ dominio: path non directory
         raise InputDirectoryMissing(f"Il path non è una directory: {md_dir}", slug=context.slug, file_path=md_dir)

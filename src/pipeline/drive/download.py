@@ -28,7 +28,7 @@ from googleapiclient.http import MediaIoBaseDownload  # type: ignore
 
 from ..exceptions import DriveDownloadError
 from ..logging_utils import get_structured_logger
-from ..path_utils import sanitize_filename, is_safe_subpath
+from ..path_utils import sanitize_filename, ensure_within  # STRONG guard per write/delete
 from .client import list_drive_files, get_file_metadata, _retry
 
 # Logger di modulo (fallback). In presenza di `context` useremo un logger contestualizzato locale.
@@ -188,6 +188,16 @@ def download_drive_pdfs_to_local(
         while queue:
             current_remote_id, current_local_dir = queue.popleft()
 
+            # STRONG guard: la dir corrente deve essere sotto la root locale
+            try:
+                ensure_within(local_root, current_local_dir)
+            except Exception:
+                local_logger.warning(
+                    "drive.download.skip_unsafe_dir",
+                    extra={"folder_path": str(current_local_dir)},
+                )
+                continue
+
             # Garantisce la presenza della cartella locale del livello corrente
             _ensure_dir(current_local_dir)
 
@@ -208,7 +218,16 @@ def download_drive_pdfs_to_local(
             for folder in subfolders:
                 fid = folder.get("id")
                 fname = sanitize_filename(folder.get("name") or "senza_nome")
-                queue.append((fid, current_local_dir / fname))
+                next_dir = current_local_dir / fname
+                # validazione STRONG anche sugli enqueued path
+                try:
+                    ensure_within(local_root, next_dir)
+                    queue.append((fid, next_dir))
+                except Exception:
+                    local_logger.warning(
+                        "drive.download.skip_unsafe_dir",
+                        extra={"folder_path": str(next_dir)},
+                    )
 
             # 2) PDF nel livello corrente
             pdfs = list_drive_files(
@@ -219,11 +238,15 @@ def download_drive_pdfs_to_local(
             for f in pdfs:
                 file_id = f.get("id")
                 remote_name = f.get("name") or "download.pdf"
-                safe_name = sanitize_filename(remote_name if remote_name.lower().endswith(".pdf") else f"{remote_name}.pdf")
+                safe_name = sanitize_filename(
+                    remote_name if remote_name.lower().endswith(".pdf") else f"{remote_name}.pdf"
+                )
                 out_path = current_local_dir / safe_name
 
-                # Path-safety: l'output deve rimanere dentro la root locale
-                if not is_safe_subpath(out_path, local_root):
+                # STRONG guard: l'output deve rimanere dentro la root locale
+                try:
+                    ensure_within(local_root, out_path)
+                except Exception:
                     local_logger.warning(
                         "drive.download.skip_unsafe_path",
                         extra={"file_id": _maybe_redact(file_id, redact_logs), "file_path": str(out_path)},
@@ -269,6 +292,7 @@ def download_drive_pdfs_to_local(
                     if not local_md5 or local_md5 != remote_md5:
                         # Rimozione best-effort del file corrotto per idempotenza retry futuri
                         try:
+                            ensure_within(local_root, out_path)
                             out_path.unlink(missing_ok=True)  # type: ignore[arg-type]
                         except Exception:
                             pass

@@ -14,11 +14,11 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import redact_secrets, get_structured_logger
 from pipeline.exceptions import PipelineError, PreviewError
-from pipeline.path_utils import is_safe_subpath
+from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
 from pipeline.config_utils import safe_write_file  # ✅ scritture atomiche
-from pipeline.env_utils import redact_secrets, get_int  # 🔐 redazione opzionale nei log
+from pipeline.env_utils import get_int  # 🔐 redazione opzionale nei log
 from pipeline.proc_utils import run_cmd, CmdError, wait_for_port
 
 logger = get_structured_logger("pipeline.gitbook_preview")
@@ -35,6 +35,16 @@ def _maybe_redact(text: str, redact: bool) -> str:
 def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un book.json minimo se mancante (idempotente)."""
     book_json_path = Path(md_dir) / "book.json"
+    try:
+        # STRONG guard: validare sia la dir sia il file target prima di scrivere
+        ensure_within(md_dir, book_json_path)
+    except Exception as e:
+        raise PreviewError(
+            f"Percorso book.json non sicuro: {book_json_path} ({e})",
+            slug=slug,
+            file_path=book_json_path,
+        )
+
     if not book_json_path.exists():
         data = {
             "title": "preview",
@@ -63,6 +73,16 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
 def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un package.json minimo se mancante (idempotente)."""
     package_json_path = Path(md_dir) / "package.json"
+    try:
+        # STRONG guard: validare sia la dir sia il file target prima di scrivere
+        ensure_within(md_dir, package_json_path)
+    except Exception as e:
+        raise PreviewError(
+            f"Percorso package.json non sicuro: {package_json_path} ({e})",
+            slug=slug,
+            file_path=package_json_path,
+        )
+
     if not package_json_path.exists():
         data = {
             "name": "honkit-preview",
@@ -100,6 +120,12 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs
 # ----------------------------
 def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
     """Esegue `honkit build` dentro il container ufficiale (idempotente lato output)."""
+    # STRONG guard sulla directory di lavoro
+    try:
+        ensure_within(md_dir, md_dir / "README.md")  # validazione che vincola a md_dir
+    except Exception as e:
+        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+
     md_output_path = Path(md_dir).resolve()
     cmd = [
         "docker", "run", "--rm",
@@ -116,6 +142,12 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
 
 def run_container_detached(md_dir: Path, *, slug: Optional[str], container_name: str, port: int, redact_logs: bool) -> str:
     """Avvia `honkit serve` in modalità detached e ritorna l'ID del container."""
+    # STRONG guard sulla directory di lavoro
+    try:
+        ensure_within(md_dir, md_dir / "README.md")
+    except Exception as e:
+        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+
     md_output_path = Path(md_dir).resolve()
     cmd = [
         "docker", "run", "-d",
@@ -202,10 +234,12 @@ def run_gitbook_docker_preview(
     if not getattr(context, "slug", None):
         raise PipelineError("Slug cliente mancante nel contesto per preview", slug=None)
 
-    # Path-safety
-    if not is_safe_subpath(context.md_dir, context.base_dir):
+    # Path-safety STRONG: md_dir deve essere sotto base_dir
+    try:
+        ensure_within(context.base_dir, context.md_dir)
+    except Exception as e:
         raise PreviewError(
-            f"Percorso markdown non sicuro: {context.md_dir}",
+            f"Percorso markdown non sicuro: {context.md_dir} ({e})",
             slug=context.slug,
             file_path=context.md_dir,
         )
@@ -261,3 +295,4 @@ def run_gitbook_docker_preview(
         except PreviewError:
             # Non fermiamo il container qui (lasciamo la scelta all'orchestratore), ma segnaliamo l'errore
             raise
+        

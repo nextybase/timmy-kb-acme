@@ -36,6 +36,7 @@ from pipeline.logging_utils import (
     get_structured_logger,
     mask_partial,
     tail_path,
+    metrics_scope,
 )
 from pipeline.exceptions import (
     PipelineError,
@@ -48,16 +49,14 @@ from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from pipeline.constants import (
     LOGS_DIR_NAME,
     LOG_FILE_NAME,
-    RAW_DIR_NAME,
 )
 from pipeline.path_utils import (
     ensure_valid_slug,
-    is_safe_subpath,
     sanitize_filename,
     sorted_paths,
-    ensure_within,  # ← guardia STRONG ora qui (SSoT)
+    ensure_within,  # STRONG guard SSoT
 )
-from pipeline.file_utils import safe_write_text  # ← scritture atomiche
+from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.env_utils import compute_redact_flag
 
 # Stub/README tagging centralizzati
@@ -95,11 +94,17 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
-        if not is_safe_subpath(dst, raw_dir):
+        # STRONG path-safety: l'output deve rimanere sotto raw_dir
+        try:
+            ensure_within(raw_dir, dst)
+        except ConfigError:
             logger.warning("Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)})
             continue
 
-        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst_parent = dst.parent
+        ensure_within(raw_dir, dst_parent)
+        dst_parent.mkdir(parents=True, exist_ok=True)
+
         try:
             if dst.exists() and dst.stat().st_size == src.stat().st_size:
                 logger.debug("Skip copia (stessa dimensione)", extra={"file_path": str(dst)})
@@ -232,11 +237,16 @@ def _write_validation_report(report_path: Path, result: dict, logger):
 
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    # Fallback robusto: calcoliamo la base anche se il contesto non è disponibile
+    # Fallback robusto per esecuzione standalone
     base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
     semantic_dir = base_dir / "semantic"
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    # log file nel perimetro del repo
+    try:
+        ensure_within(base_dir.parent, log_file)  # perimetro più ampio: output/
+    except Exception:
+        pass
     logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
 
     if not yaml_path.exists():
@@ -285,23 +295,22 @@ def tag_onboarding_main(
         require_env=(source == "drive"),
         run_id=run_id,
     )
-    # Guardia di uniformità redaction (se un orchestratore legacy non l'avesse impostata)
     if not hasattr(context, "redact_logs"):
         context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
 
-    # Log file sotto la root cliente
-    repo_root = getattr(context, "repo_root_dir", None)
-    if repo_root is None:
-        # Fallback se il campo non fosse ancora presente nel contesto
-        repo_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-    log_file = repo_root / LOGS_DIR_NAME / LOG_FILE_NAME
+    # Log file sotto la root del repo
+    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    ensure_within(context.repo_root_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
-    # Path base
-    base_dir = repo_root
-    raw_dir = base_dir / RAW_DIR_NAME
+    # Path base per il cliente
+    base_dir = getattr(context, "base_dir", None) or (Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}")
+    ensure_within(base_dir.parent, base_dir)  # base_dir dentro output/
+    raw_dir = getattr(context, "raw_dir", None) or (base_dir / "raw")
     semantic_dir = base_dir / "semantic"
+    ensure_within(base_dir, raw_dir)
+    ensure_within(base_dir, semantic_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
@@ -314,14 +323,15 @@ def tag_onboarding_main(
         if not drive_raw_folder_id:
             raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
         service = get_drive_service(context)
-        download_drive_pdfs_to_local(
-            service=service,
-            remote_root_folder_id=drive_raw_folder_id,
-            local_root_dir=raw_dir,
-            progress=not non_interactive,
-            context=context,
-            redact_logs=context.redact_logs,
-        )
+        with metrics_scope(logger, stage="drive_download", customer=context.slug):
+            download_drive_pdfs_to_local(
+                service=service,
+                remote_root_folder_id=drive_raw_folder_id,
+                local_root_dir=raw_dir,
+                progress=not non_interactive,
+                context=context,
+                redact_logs=context.redact_logs,
+            )
         logger.info("✅ Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
 
     # B) LOCALE
@@ -330,14 +340,16 @@ def tag_onboarding_main(
             if non_interactive:
                 raise ConfigError("In modalità non-interattiva è richiesto --local-path per source=local.")
             local_path = _prompt("Percorso cartella PDF: ").strip()
-        copied = _copy_local_pdfs_to_raw(Path(local_path), raw_dir, logger)
+        with metrics_scope(logger, stage="local_copy", customer=context.slug):
+            copied = _copy_local_pdfs_to_raw(Path(local_path), raw_dir, logger)
         logger.info("✅ Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
     else:
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
     # Fase 1: CSV in semantic/
     csv_path = semantic_dir / "tags_raw.csv"
-    _emit_tags_csv(raw_dir, csv_path, logger)
+    with metrics_scope(logger, stage="emit_csv", customer=context.slug):
+        _emit_tags_csv(raw_dir, csv_path, logger)
     logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)})
 
     # Checkpoint HiTL
@@ -352,8 +364,9 @@ def tag_onboarding_main(
             return
 
     # Fase 2: stub in semantic/
-    write_tagging_readme(semantic_dir, logger)
-    write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
+    with metrics_scope(logger, stage="semantic_stub", customer=context.slug):
+        write_tagging_readme(semantic_dir, logger)
+        write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
     logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)})
 
 
@@ -404,6 +417,7 @@ if __name__ == "__main__":
             proceed_after_csv=bool(args.proceed),
             run_id=run_id,
         )
+        sys.exit(0)
     except (ConfigError, PipelineError) as e:
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
         logger.error(str(e))

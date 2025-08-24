@@ -9,12 +9,13 @@ Responsabilità:
 - Creare struttura locale e, se non in `--dry-run`, la struttura remota su Google Drive.
 - Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
 
-Nota architetturale:
+Note architetturali:
 - Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
-  (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** devono chiamare
-  `sys.exit()` o `input()`. Questo file rispetta tali regole.
+  (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** chiamano `sys.exit()` o `input()`.
+- **Redazione centralizzata** via `logging_utils` (nessun masking in env).
+- **Path-safety STRONG**: `ensure_within()` prima di ogni write/copy/delete.
 
-Questo modulo **non** stampa segreti nei log (maschera ID e percorsi sensibili).
+Questo modulo **non** stampa segreti nei log (usa mascheratura parziale per ID e percorsi).
 """
 from __future__ import annotations
 
@@ -26,10 +27,11 @@ from typing import Optional, Dict, Any
 
 from pipeline.logging_utils import (
     get_structured_logger,
-    mask_partial,   # ← centralizzato
-    tail_path,      # ← centralizzato
-    mask_id_map,    # ← centralizzato
-    mask_updates,   # ← centralizzato
+    mask_partial,
+    tail_path,
+    mask_id_map,
+    mask_updates,
+    metrics_scope,
 )
 from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 from pipeline.context import ClientContext
@@ -47,7 +49,7 @@ from pipeline.drive_utils import (
 )
 from pipeline.env_utils import get_env_var, compute_redact_flag
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
-from pipeline.path_utils import ensure_valid_slug, is_safe_subpath, ensure_within  # ← guardia STRONG (SSoT)
+from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
 
 
 def _prompt(msg: str) -> str:
@@ -67,11 +69,11 @@ def _resolve_yaml_structure_file() -> Path:
     here = Path(__file__).resolve()
     repo_root = here.parents[1]  # …/<repo>
 
-    # 1) Override via env (centralizzato; non redigiamo il path in clear nei log qui)
-    env_path = get_env_var("YAML_STRUCTURE_FILE", required=False, redact=False)
+    # 1) Override via env
+    env_path = get_env_var("YAML_STRUCTURE_FILE", required=False)
     if env_path:
         p = Path(env_path).expanduser().resolve()
-        # ✅ Path-safety forte: l'override DEVE vivere dentro al repo
+        # Path-safety forte: l'override DEVE vivere dentro al repo
         try:
             ensure_within(repo_root, p)
         except ConfigError:
@@ -97,6 +99,19 @@ def _resolve_yaml_structure_file() -> Path:
     )
 
 
+def _sync_env(context: ClientContext, *, require_env: bool) -> None:
+    """
+    Allinea nel `context.env` le variabili critiche lette da os.environ.
+    SSoT: `env_utils.get_env_var` (puro, nessun masking).
+    Solleva ConfigError se `require_env=True` e una chiave non è disponibile.
+    """
+    for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_ID"):
+        if not context.env.get(key):
+            val = get_env_var(key, required=require_env)
+            if val:
+                context.env[key] = val
+
+
 def pre_onboarding_main(
     slug: str,
     client_name: Optional[str] = None,
@@ -105,9 +120,7 @@ def pre_onboarding_main(
     dry_run: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
-    """
-    Esegue la fase di pre-onboarding per il cliente indicato.
-    """
+    """Esegue la fase di pre-onboarding per il cliente indicato."""
     # === Logger console “early” (prima dei path cliente) ===
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
@@ -134,13 +147,15 @@ def pre_onboarding_main(
         run_id=run_id,
     )
 
-    # ✅ PR-2: Single source of truth per log path (derivato dal contesto)
-    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # ✅ PR-2: Propagazione uniforme del flag di redazione (guardia difensiva)
+    # ✅ Flag redazione una sola volta (SSoT) e attaccalo al contesto
     if not hasattr(context, "redact_logs"):
         context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
+
+    # === Log file path derivato dal repo ===
+    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    # STRONG: scriviamo log solo sotto repo_root
+    ensure_within(context.repo_root_dir, log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     # 🔁 Rebind logger con il contesto
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
@@ -151,6 +166,9 @@ def pre_onboarding_main(
     logger.info("🚀 Avvio pre-onboarding")
 
     # === Config iniziale: assicurati che esista un file config.yaml coerente ===
+    # STRONG: il config deve vivere sotto la base cliente
+    ensure_within(context.base_dir, context.config_path)
+
     cfg: Dict[str, Any] = {}
     try:
         cfg = get_client_config(context) or {}
@@ -167,7 +185,11 @@ def pre_onboarding_main(
             "pre_onboarding.yaml.resolved",
             extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
         )
-        create_local_base_structure(context, yaml_structure_file)
+        # STRONG: le directory di lavoro del cliente devono essere sotto base_dir
+        ensure_within(context.base_dir, context.raw_dir)
+        ensure_within(context.base_dir, context.md_dir)
+        with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
+            create_local_base_structure(context, yaml_structure_file)
     except ConfigError as e:
         logger.error("❌ Impossibile creare la struttura locale: " + str(e))
         raise
@@ -177,12 +199,8 @@ def pre_onboarding_main(
         logger.info("✅ Pre-onboarding locale completato (dry-run).")
         return
 
-    # === Allineamento env: integra chiavi critiche in context.env (conservativo) ===
-    for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_ID"):
-        if not context.env.get(key):
-            val = get_env_var(key, required=require_env, redact=True)
-            if val:
-                context.env[key] = val
+    # === Sincronizzazione ENV (estratta) ===
+    _sync_env(context, require_env=require_env)
 
     # Preflight (log non sensibili, mascherati)
     logger.info(
@@ -207,15 +225,17 @@ def pre_onboarding_main(
     logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
 
     # === Crea cartella cliente sul Drive condiviso (idempotente) ===
-    client_folder_id = create_drive_folder(
-        service, context.slug, parent_id=drive_parent_id, redact_logs=redact
-    )
+    with metrics_scope(logger, stage="drive_create_client_folder", customer=context.slug):
+        client_folder_id = create_drive_folder(
+            service, context.slug, parent_id=drive_parent_id, redact_logs=redact
+        )
     logger.info("📄 Cartella cliente creata su Drive", extra={"client_folder_id": mask_partial(client_folder_id)})
 
     # === Crea struttura remota da YAML (idempotente) ===
-    created_map = create_drive_structure_from_yaml(
-        service, yaml_structure_file, client_folder_id, redact_logs=redact
-    )
+    with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
+        created_map = create_drive_structure_from_yaml(
+            service, yaml_structure_file, client_folder_id, redact_logs=redact
+        )
     logger.info(
         "📄 Struttura Drive creata",
         extra={
@@ -236,9 +256,10 @@ def pre_onboarding_main(
         )
 
     # === Carica config.yaml su Drive (sostituisce se esiste) ===
-    uploaded_cfg_id = upload_config_to_drive_folder(
-        service, context, parent_id=client_folder_id, redact_logs=redact
-    )
+    with metrics_scope(logger, stage="drive_upload_config", customer=context.slug):
+        uploaded_cfg_id = upload_config_to_drive_folder(
+            service, context, parent_id=client_folder_id, redact_logs=redact
+        )
     logger.info("📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
 
     # === Aggiorna config locale con gli ID Drive ===

@@ -39,6 +39,7 @@ from pipeline.path_utils import (
     ensure_within,       # guardia STRONG (SSoT)
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
+from pipeline.env_utils import compute_redact_flag  # fonte unica flag redaction
 
 # Content utils ufficiali (se presenti)
 try:
@@ -309,20 +310,26 @@ def semantic_onboarding_main(
     if not (1 <= int(preview_port) <= 65535):
         raise ConfigError(f"Porta non valida per preview: {preview_port}")
 
-    log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-
+    # Context
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
         require_env=False,
         run_id=run_id,
     )
-    logger = get_structured_logger("semantic_onboarding", log_file=log_file, context=context, run_id=run_id)
-    logger.info("🚀 Avvio semantic_onboarding (RAW → BOOK + arricchimento + preview)")
+    # Sorgente unica del flag di redazione
+    if not hasattr(context, "redact_logs"):
+        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
 
+    # Log path sotto la base cliente con guardia STRONG
     paths = get_paths(slug)
     base_dir = paths["base"]
+    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    ensure_within(base_dir / LOGS_DIR_NAME, log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    logger = get_structured_logger("semantic_onboarding", log_file=log_file, context=context, run_id=run_id)
+    logger.info("🚀 Avvio semantic_onboarding (RAW → BOOK + arricchimento + preview)")
 
     # 1) RAW → BOOK
     _convert_raw_to_book(context, logger, slug=slug)

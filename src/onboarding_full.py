@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Onboarding FULL (fase 2): Push GitHub (e, in futuro, collegamento GitBook).
+Onboarding FULL (fase 2): Push GitHub.
 - Presuppone che la fase di semantic onboarding sia già stata eseguita
   (conversione RAW→BOOK, arricchimento frontmatter, README/SUMMARY, eventuale preview).
 - Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
+
+Principi PR1:
+- Masking centralizzato nel logger; env_utils resta “puro”.
+- Path-safety STRONG per le scritture (log) via ensure_within.
+- Orchestratore gestisce I/O utente e codici di uscita; moduli sottostanti non fanno prompt/exit.
 """
 from __future__ import annotations
 
@@ -27,12 +32,13 @@ from pipeline.constants import (
     LOG_FILE_NAME,
     REPO_NAME_PREFIX,
 )
-from pipeline.path_utils import ensure_valid_slug
-from pipeline.env_utils import get_env_var  # usato indirettamente per il token in github_utils
+from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
+from pipeline.env_utils import get_env_var, compute_redact_flag   # env “puro”; flag redazione canonico
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
-    from pipeline.github_utils import push_output_to_github  # (context, *, github_token:str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
+    # (context, *, github_token:str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
+    from pipeline.github_utils import push_output_to_github
 except Exception:
     push_output_to_github = None  # verrà gestito in _git_push
 
@@ -43,11 +49,13 @@ def _prompt(msg: str) -> str:
 
 
 # ─────────────── Push GitHub (util repo, no fallback) ──────────
-def _git_push(context: ClientContext, logger, message: str) -> None:
+def _git_push(context: ClientContext, logger) -> None:
     if push_output_to_github is None:
         raise ConfigError("push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils")
 
-    token = get_env_var("GITHUB_TOKEN", required=True, redact=True)  # obbligatorio (redatto nei log)
+    # Token letto da env (nessun masking qui; la redazione è gestita dal logger)
+    token = get_env_var("GITHUB_TOKEN", required=True)
+
     try:
         push_output_to_github(
             context,
@@ -72,19 +80,29 @@ def onboarding_full_main(
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
-    log_file = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}" / LOGS_DIR_NAME / LOG_FILE_NAME
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    # Path log sotto la sandbox cliente con guardia STRONG
+    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
+    log_dir = base_dir / LOGS_DIR_NAME
+    log_file = log_dir / LOG_FILE_NAME
+    ensure_within(base_dir, log_dir)
+    ensure_within(log_dir, log_file)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
+    # Context + logger coerenti con orchestratori
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
         require_env=False,
         run_id=run_id,
     )
+    # Propagazione uniforme del flag di redazione se mancante
+    if not hasattr(context, "redact_logs"):
+        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
+
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("🚀 Avvio onboarding_full (PUSH GitHub)")
 
-    # (facoltativo) conferma in interattivo
+    # Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
     if not non_interactive:
         ans = (_prompt("Eseguo push su GitHub? (Y/n): ") or "y").lower()
@@ -92,9 +110,10 @@ def onboarding_full_main(
             do_push = False
 
     if do_push:
-        _git_push(context, logger, message=f"onboarding_full({slug}): push output")
+        _git_push(context, logger)
 
     logger.info("✅ Completato (fase push)")
+
 
 # ─────────────── CLI ───────────────
 def _parse_args() -> argparse.ArgumentParser:
@@ -103,6 +122,7 @@ def _parse_args() -> argparse.ArgumentParser:
     p.add_argument("--slug", type=str, help="Slug cliente")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     return p
+
 
 if __name__ == "__main__":
     args = _parse_args().parse_args()
