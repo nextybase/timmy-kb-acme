@@ -35,13 +35,11 @@ __all__ = [
 _TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_SET = {"0", "false", "no", "off", "n", "f"}
 
+
 def get_env_var(
     key: str,
     default: Optional[str] = None,
     required: bool = False,
-    *,
-    # parametro accettato in passato: non ha effetti qui e non viene usato
-    redact: bool | str = False,
 ) -> Optional[str]:
     """
     Recupera una variabile d'ambiente.

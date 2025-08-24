@@ -4,7 +4,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
-## [1.2.2] — 2025-08-24
+## [1.2.1] — 2025-08-24
 
 > Hardening trasversale: SSoT per path-safety, redazione log centralizzata e orchestratori resi più coesi.
 
