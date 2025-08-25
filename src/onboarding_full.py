@@ -21,6 +21,7 @@ from pipeline.exceptions import (
     PipelineError,
     ConfigError,
     EXIT_CODES,
+    PushError,
 )
 from pipeline.context import ClientContext
 from pipeline.constants import (
@@ -32,47 +33,12 @@ from pipeline.constants import (
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
 from pipeline.env_utils import get_env_var, compute_redact_flag   # env “puro”; flag redazione canonico
 
-# --- Fallback contenuti BOOK (README/SUMMARY) ------------------
-# Preferenza: usare l’adapter dedicato se presente nel repo
+# --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
-except Exception:
-    # Fallback minimale e idempotente (nessuna semantica, solo file base)
-    def _ensure_readme_summary(context: ClientContext, logger) -> None:
-        md_dir = getattr(context, "md_dir", None)
-        if md_dir is None:
-            raise ConfigError("context.md_dir mancante: impossibile garantire README/SUMMARY")
-        base_dir = getattr(context, "base_dir", None)
-        if base_dir is None:
-            # best effort: se non presente, deduciamo dalla struttura standard output/timmy-kb-<slug>/
-            base_dir = md_dir.parent.parent if md_dir else None
-        if base_dir is None:
-            raise ConfigError("context.base_dir mancante: impossibile validare i percorsi")
-
-        readme = md_dir / "README.md"
-        summary = md_dir / "SUMMARY.md"
-
-        # STRONG: validazione destinazioni prima di scrivere
-        ensure_within(base_dir, readme)
-        ensure_within(base_dir, summary)
-
-        readme.parent.mkdir(parents=True, exist_ok=True)
-
-        if not readme.exists():
-            readme.write_text(
-                "# Knowledge Base\n\n"
-                "Questa è la base minima della KB. I contenuti Markdown saranno pubblicati da `book/`.\n",
-                encoding="utf-8",
-            )
-            logger.info("Creato README.md minimale in book/")
-
-        if not summary.exists():
-            summary.write_text(
-                "# Summary\n\n"
-                "* [Introduzione](README.md)\n",
-                encoding="utf-8",
-            )
-            logger.info("Creato SUMMARY.md minimale in book/")
+except Exception as e:
+    # Niente fallback locale: l'adapter è richiesto esplicitamente
+    raise ConfigError(f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})")
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
@@ -106,7 +72,8 @@ def _git_push(context: ClientContext, logger) -> None:
         )
         logger.info("Git push completato (github_utils)")
     except Exception as e:
-        raise ConfigError(f"Git push fallito tramite github_utils: {e}")
+        # Errore corretto e mappato su EXIT_CODES["PushError"]=40
+        raise PushError(f"Git push fallito tramite github_utils: {e}")
 
 
 # ─────────────── MAIN orchestrator (solo push) ───────────────
@@ -134,7 +101,7 @@ def onboarding_full_main(
         require_env=False,
         run_id=run_id,
     )
-    # Propagazione uniforme del flag di redazione se mancante
+    # Propagazione uniforme del flag di redazione se mancante (safety-belt)
     if not hasattr(context, "redact_logs"):
         context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
 

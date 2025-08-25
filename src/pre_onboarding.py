@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
-import os
 import shutil
 import datetime as _dt
 from pathlib import Path
@@ -114,7 +113,8 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
     cfg_dir = repo_root / "config"
-    struct_src = Path(os.getenv("YAML_STRUCTURE_FILE") or (cfg_dir / "cartelle_raw.yaml"))
+    # Usa la risoluzione robusta (SSoT) per la struttura cartelle:
+    struct_src = _resolve_yaml_structure_file()
     mapping_src = cfg_dir / "default_semantic_mapping.yaml"
 
     struct_dst = semantic_dir / "cartelle_raw.yaml"
