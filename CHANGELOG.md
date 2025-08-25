@@ -4,6 +4,35 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.2.1] Intermedio — 2025-08-25
+
+> Release intermedia di consolidamento, applicata dopo le indicazioni di Codex e completata con refactor/test end-to-end sugli orchestratori. Focus su **pipeline core**; l’area semantica resta placeholder per la fase successiva.
+
+### Changed
+- **github_utils**
+  - Estratto `_collect_md_files`, `_ensure_or_create_repo`, `_push_with_retry` e helper correlati per ridurre complessità di `push_output_to_github` (~400→ <150 righe).
+  - Migliorata leggibilità e testabilità mantenendo lo stesso comportamento.
+- **onboarding_full.py**
+  - Orchestratore snellito: usa `_git_push` dedicato con error handling coerente.
+  - Conferme interattive più chiare, non-interactive totalmente silente.
+- **logging_utils**
+  - Refactor completo: `get_structured_logger` ora unica entrypoint.
+  - Filtri di contesto e redazione applicati a tutti i call-sites.
+  - Formatter coerente console/file con extra (`slug`, `run_id`, `branch`, `repo`).
+- **Orchestratori (pre_onboarding, tag_onboarding, semantic_onboarding)**
+  - Allineati a nuovo logging strutturato.
+  - Path-safety rafforzata su tutti i call-site I/O di pipeline core.
+
+### Fixed
+- Nessun uso residuo di `FileNotFoundError`/`NotADirectoryError` in pipeline core (`src/pipeline`, `src/adapters`).
+- Eliminati logger fallback o duplicati: tutti i moduli passano da `logging_utils`.
+
+### Migration notes
+- Usare sempre `get_structured_logger(...)` per creare logger.
+- Gestire la redazione solo via `context.redact_logs` (inizializzato da `compute_redact_flag`).
+- L’area semantica (`semantic_extractor`, ecc.) resta ancora con built-in exceptions: da aggiornare in release successiva.
+
+
 ## [1.2.1] — 2025-08-24
 
 > Hardening trasversale: SSoT per path-safety, redazione log centralizzata e orchestratori resi più coesi.
