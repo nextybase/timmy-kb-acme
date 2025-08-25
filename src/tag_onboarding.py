@@ -57,7 +57,6 @@ from pipeline.path_utils import (
     ensure_within,  # STRONG guard SSoT
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.env_utils import compute_redact_flag
 
 # Stub/README tagging centralizzati
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
@@ -88,7 +87,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
     for src in pdfs:
         try:
             rel = src.relative_to(src_dir)
-        except Exception:
+        except ValueError:
             rel = Path(sanitize_filename(src.name))
 
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
@@ -112,7 +111,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
                 shutil.copy2(src, dst)
                 logger.info("PDF copiato", extra={"file_path": str(dst)})
                 count += 1
-        except Exception as e:
+        except OSError as e:
             logger.warning("Copia fallita", extra={"file_path": str(dst), "error": str(e)})
 
     return count
@@ -135,7 +134,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
         # rel rispetto a raw/, poi prefissiamo 'raw/'
         try:
             rel_raw = pdf.relative_to(raw_dir).as_posix()
-        except Exception:
+        except ValueError:
             rel_raw = Path(pdf.name).as_posix()
 
         rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
@@ -183,6 +182,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
     logger.info("Tag grezzi generati (base-relative)", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)
 
+
 # ───────────────────────────── Validatore YAML ───────────────────────────────
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
@@ -191,8 +191,10 @@ def _load_yaml(path: Path):
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as e:
-        raise ConfigError(f"Impossibile leggere/parsing YAML: {path} ({e})")
+    except (OSError,) as e:
+        raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path))
+    except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
+        raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
 
 def _validate_tags_reviewed(data: dict) -> dict:
     errors, warnings = [], []
@@ -273,20 +275,22 @@ def _write_validation_report(report_path: Path, result: dict, logger):
 
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    # Fallback robusto per esecuzione standalone
+    # Validazione standalone, logging per-cliente
     base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
     semantic_dir = base_dir / "semantic"
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    # log file nel perimetro del repo
     try:
-        ensure_within(base_dir.parent, log_file)  # perimetro più ampio: output/
-    except Exception:
+        ensure_within(base_dir, log_file)
+    except ConfigError:
         pass
     logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
 
     if not yaml_path.exists():
-        logger.error("File tags_reviewed.yaml non trovato", extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)})
+        logger.error(
+            "File tags_reviewed.yaml non trovato",
+            extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)},
+        )
         return 1
 
     try:
@@ -331,14 +335,6 @@ def tag_onboarding_main(
         require_env=(source == "drive"),
         run_id=run_id,
     )
-    if not hasattr(context, "redact_logs"):
-        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
-
-    # Log file sotto la root del repo
-    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    ensure_within(context.repo_root_dir, log_file)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     # Path base per il cliente
     base_dir = getattr(context, "base_dir", None) or (Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}")
@@ -349,6 +345,12 @@ def tag_onboarding_main(
     ensure_within(base_dir, semantic_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    # Log file sotto la sandbox cliente
+    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    ensure_within(base_dir, log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     logger.info("🚀 Avvio tag_onboarding", extra={"source": source})
 
@@ -366,7 +368,7 @@ def tag_onboarding_main(
                 local_root_dir=raw_dir,
                 progress=not non_interactive,
                 context=context,
-                redact_logs=context.redact_logs,
+                redact_logs=getattr(context, "redact_logs", False),
             )
         logger.info("✅ Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 import csv
 from pathlib import Path
+from typing import List
 
 from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
 from pipeline.path_utils import ensure_within
@@ -16,6 +17,7 @@ def write_tagging_readme(semantic_dir: Path, logger) -> Path:
     Crea/aggiorna il README rapido per il flusso di tagging nel folder `semantic_dir`.
     Scrittura atomica + guardia path.
     """
+    semantic_dir = Path(semantic_dir).resolve()
     semantic_dir.mkdir(parents=True, exist_ok=True)
     out = semantic_dir / "README_TAGGING.md"
     ensure_within(semantic_dir, out)  # guardia anti path traversal
@@ -25,6 +27,9 @@ def write_tagging_readme(semantic_dir: Path, logger) -> Path:
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
         "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
         "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n"
+        "\n"
+        "_Nota_: `tags_raw.csv` usa lo schema esteso "
+        "`relative_path | suggested_tags | entities | keyphrases | score | sources`.\n"
     )
     safe_write_text(out, content, encoding="utf-8", atomic=True)
     logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
@@ -40,31 +45,59 @@ def write_tags_review_stub_from_csv(
     """
     Genera uno stub `tags_reviewed.yaml` a partire dai suggerimenti in `tags_raw.csv`.
 
-    Il CSV è letto con `csv.reader` per evitare rotture su virgole/quote.
-    Si assume che la seconda colonna contenga i suggerimenti (lista separata da virgole);
-    viene preso il primo suggerimento non vuoto per ciascuna riga (max `top_n` righe utili).
+    Compatibilità:
+    - Preferisce lo schema esteso con header `suggested_tags`.
+    - Se assente, degrada a formato legacy a 2 colonne: [relative_path, suggested_tags].
+
+    Regole:
+    - Usa tutti i suggerimenti (split su ',') normalizzati in lowercase e deduplicati preservando l'ordine.
+    - Si ferma quando ha raccolto `top_n` tag unici.
+    - Path-safety: garantita su file di output; lettura CSV consentita solo se sotto `semantic_dir`.
     """
-    suggested: list[str] = []
+    semantic_dir = Path(semantic_dir).resolve()
+    csv_path = Path(csv_path).resolve()
+
+    # Consenti la lettura solo di CSV dentro semantic/: harden per evitare scan errati
+    ensure_within(semantic_dir, csv_path)
+
+    suggested: List[str] = []
+    seen = set()
 
     try:
         with open(csv_path, "r", encoding="utf-8", newline="") as f:
             reader = csv.reader(f)
-            # salta header se presente
             header = next(reader, None)
-            for i, row in enumerate(reader):
-                if len(row) < 2:
+
+            # Individua l'indice della colonna suggerimenti
+            idx_suggestions = 1  # fallback legacy
+            if header and isinstance(header, list):
+                try:
+                    idx_suggestions = header.index("suggested_tags")
+                except ValueError:
+                    # header diverso o assente -> mantieni fallback
+                    pass
+
+            for row in reader:
+                if idx_suggestions >= len(row):
                     continue
-                suggested_str = row[1] or ""
-                first = (suggested_str.split(",")[0] or "").strip()
-                if first:
-                    suggested.append(first)
-                if len(suggested) >= top_n:
+                raw_field = row[idx_suggestions] or ""
+                # split su virgola, trim e normalizza lowercase
+                tokens = [t.strip().lower() for t in raw_field.split(",") if t.strip()]
+                for tok in tokens:
+                    if tok not in seen:
+                        seen.add(tok)
+                        suggested.append(tok)
+                        if len(seen) >= int(top_n):
+                            break
+                if len(seen) >= int(top_n):
                     break
+
     except FileNotFoundError as e:
         raise ConfigError(f"CSV dei tag non trovato: {e}", file_path=str(csv_path)) from e
     except Exception as e:
         raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
 
+    # Preparazione output YAML (stub di review)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     out = semantic_dir / "tags_reviewed.yaml"
     ensure_within(semantic_dir, out)  # guardia anti path traversal
@@ -75,8 +108,8 @@ def write_tags_review_stub_from_csv(
         "keep_only_listed: true",
         "tags:",
     ]
-    # dedup preservando ordine
-    for t in dict.fromkeys(suggested):
+    # `suggested` è già deduplicato preservando l'ordine
+    for t in suggested:
         lines += [
             f'  - name: "{t}"',
             "    action: keep   # keep | drop | merge_into:<canonical>",

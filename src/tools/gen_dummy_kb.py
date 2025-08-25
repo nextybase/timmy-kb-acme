@@ -17,19 +17,11 @@ Crea sotto output/timmy-kb-<slug>/ :
 - PDF per ogni sezione di pdf_dummy.yaml che appartiene a RAW (contrattualistica viene ignorata)
 - semantic/tags_raw.csv generato da: config.load_semantic_config → auto_tagger.extract_semantic_candidates →
   normalizer.normalize_tags → auto_tagger.render_tags_csv
-
-Uso:
-  py src/tools/gen_dummy_kb.py [--slug dummy] [--name "Cliente Dummy"] [--overwrite]
-
-Dipendenze:
-  - PyYAML
-  - I moduli locali: src/semantic/{config,auto_tagger,normalizer}
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import datetime as _dt
 import sys
 from pathlib import Path
@@ -40,11 +32,11 @@ try:
 except Exception as e:  # pragma: no cover
     raise RuntimeError("PyYAML è richiesta per questo tool. Installa con: pip install pyyaml") from e
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # Percorsi repository
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
 CONFIG_DIR = REPO_ROOT / "config"
 OUTPUT_ROOT = REPO_ROOT / "output"
 
@@ -55,31 +47,26 @@ TEMPLATE_PDF_DUMMY = CONFIG_DIR / "pdf_dummy.yaml"
 DEFAULT_SLUG = "dummy"
 DEFAULT_CLIENT_NAME = "Cliente Dummy"
 
-# Assicura import moduli "src.semantic.*"
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# Assicura import moduli "semantic.*" e "pipeline.*"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 try:
-    from src.semantic.config import load_semantic_config
-    from src.semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
-    from src.semantic.normalizer import normalize_tags
+    # semantic
+    from semantic.config import load_semantic_config
+    from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
+    from semantic.normalizer import normalize_tags
+    # pipeline (path-safety + atomic I/O)
+    from pipeline.path_utils import ensure_within
+    from pipeline.file_utils import safe_write_text, safe_write_bytes
 except Exception as e:
     raise RuntimeError(
-        "Impossibile importare i moduli semantic. Verifica che il repo contenga 'src/semantic' "
+        "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e 'src/pipeline' "
         "e che tu stia eseguendo lo script dalla root del progetto."
     ) from e
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # Utilità base
-# ----------------------------------------------------------------------------- #
-
-def _ensure_within(base: Path, target: Path) -> None:
-    base = base.resolve()
-    target = target.resolve()
-    if target == base:
-        return
-    if not str(target).startswith(str(base) + os.sep):
-        raise ValueError(f"Path non consentito: {target} non è sotto {base}")
-
+# -----------------------------------------------------------------------------
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
     if not p.exists():
         raise RuntimeError(f"File YAML mancante: {p}")
@@ -88,25 +75,30 @@ def _read_yaml_required(p: Path) -> Dict[str, Any]:
         raise RuntimeError(f"Formato YAML non valido (atteso mapping/dict): {p}")
     return data
 
-def _write_text(path: Path, content: str, *, overwrite: bool) -> None:
+def _write_text_in_base(base: Path, path: Path, content: str, *, overwrite: bool) -> None:
+    """Scrittura atomica testo, con guardia STRONG sul perimetro base."""
+    path = path.resolve(); base = base.resolve()
+    ensure_within(base, path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and not overwrite:
         return
-    path.write_text(content, encoding="utf-8")
+    safe_write_text(path, content, encoding="utf-8", atomic=True)
 
-def _copy_file(src: Path, dst: Path, *, overwrite: bool) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if dst.exists() and not overwrite:
+def _write_bytes_in_base(base: Path, path: Path, data: bytes, *, overwrite: bool) -> None:
+    """Scrittura atomica bytes, con guardia STRONG sul perimetro base."""
+    path = path.resolve(); base = base.resolve()
+    ensure_within(base, path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not overwrite:
         return
-    dst.write_bytes(src.read_bytes())
+    safe_write_bytes(path, data, atomic=True)
 
 def _now_date() -> str:
     return _dt.datetime.utcnow().strftime("%Y-%m-%d")
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # PDF minimale (una pagina, titolo + paragrafi)
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 def _wrap_lines(text: str, max_len: int = 90) -> List[str]:
     lines: List[str] = []
     for raw in (text or "").splitlines() or [""]:
@@ -115,25 +107,19 @@ def _wrap_lines(text: str, max_len: int = 90) -> List[str]:
             lines.append("")
             continue
         while len(raw) > max_len:
-            lines.append(raw[:max_len])
-            raw = raw[max_len:]
+            lines.append(raw[:max_len]); raw = raw[max_len:]
         lines.append(raw)
     return lines or [""]
 
 def _make_minimal_pdf_bytes(title: str, paragraphs: List[str]) -> bytes:
     y = 780
-    def esc(s: str) -> str:
-        return s.replace("(", "[").replace(")", "]")
-    cmds = [f"BT /F1 14 Tf 40 {y} Td ({esc(title)}) Tj ET"]
-    y -= 22
+    def esc(s: str) -> str: return s.replace("(", "[").replace(")", "]")
+    cmds = [f"BT /F1 14 Tf 40 {y} Td ({esc(title)}) Tj ET"]; y -= 22
     for par in paragraphs:
         for ln in _wrap_lines(par, 90):
-            cmds.append(f"BT /F1 10 Tf 40 {y} Td ({esc(ln)}) Tj ET")
-            y -= 14
-            if y < 40:
-                break
-        if y < 40:
-            break
+            cmds.append(f"BT /F1 10 Tf 40 {y} Td ({esc(ln)}) Tj ET"); y -= 14
+            if y < 40: break
+        if y < 40: break
         y -= 6
     stream = "\n".join(cmds)
     stream_len = len(stream.encode("latin-1", errors="ignore"))
@@ -161,10 +147,9 @@ startxref
 """
     return pdf.encode("latin-1", errors="ignore")
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # Builders mapping/config
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 def _yaml_dump_context(slug: str, client_name: str) -> Dict[str, Any]:
     return {"context": {"slug": slug, "client_name": client_name, "created_at": _now_date()}}
 
@@ -194,14 +179,12 @@ def _build_semantic_mapping_yaml(slug: str, client_name: str, template_mapping: 
 def _min_config_yaml(client_name: str) -> str:
     return yaml.safe_dump({"client_name": client_name, "semantic_defaults": {"lang": "it"}}, allow_unicode=True, sort_keys=False)
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # Costruzione SOLO dell’albero raw/ da cartelle_raw.yaml
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
     name = str(node.get("name") or "").strip()
-    if not name:
-        return
+    if not name: return
     base = root_base / name
     base.mkdir(parents=True, exist_ok=True)
     subs = node.get("subfolders") or []
@@ -211,23 +194,18 @@ def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
                 _create_tree_from_spec(base, child)
 
 def _build_only_raw(base_dir: Path, spec: Dict[str, Any]) -> None:
-    """
-    Crea solo la root 'raw' e le sue sotto-cartelle (ignora altre root come 'contrattualistica').
-    """
+    """Crea solo la root 'raw' e le sue sotto-cartelle (ignora 'contrattualistica')."""
     roots = spec.get("root_folders")
     if not isinstance(roots, list):
         raise RuntimeError("cartelle_raw.yaml: atteso campo 'root_folders: [...]' con nodi {name, subfolders}.")
     raw_node = next((n for n in roots if isinstance(n, dict) and str(n.get("name") or "").strip().lower() == "raw"), None)
-    # garantiamo comunque raw/ anche senza specifica
-    (base_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (base_dir / "raw").mkdir(parents=True, exist_ok=True)  # garantiamo raw/
     if raw_node:
-        # crea SOLO l’albero sotto raw/
         _create_tree_from_spec(base_dir, raw_node)
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # PDF da pdf_dummy.yaml (RAW soltanto)
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 _RAW_SECTIONS = {
     "identity": "identity",
     "organizzazione": "organizzazione",
@@ -241,12 +219,7 @@ _RAW_SECTIONS = {
 }
 
 def _emit_pdfs_from_pdf_dummy(base: Path, raw_dir: Path, pdf_dummy: Dict[str, Any], slug: str, overwrite: bool) -> List[Path]:
-    """
-    Genera PDF SOLO per le sezioni RAW.
-      - sezioni RAW note -> raw/<sezione>/<sezione>_intro_<slug>.pdf
-      - 'raw'            -> raw/_readme_<slug>.pdf
-      - 'contrattualistica' (e altre non RAW) -> IGNORATE (gestite su Drive)
-    """
+    """Genera PDF SOLO per le sezioni RAW."""
     created: List[Path] = []
     for section, payload in pdf_dummy.items():
         if not isinstance(payload, dict):
@@ -257,30 +230,26 @@ def _emit_pdfs_from_pdf_dummy(base: Path, raw_dir: Path, pdf_dummy: Dict[str, An
             raise RuntimeError(f"pdf_dummy.yaml: sezione '{section}' richiede 'paragrafi: [ ... ]' non vuoto.")
 
         if section == "raw":
-            dst_dir = raw_dir
-            file_name = f"_readme_{slug}.pdf"
+            dst_dir = raw_dir; file_name = f"_readme_{slug}.pdf"
         else:
             sub = _RAW_SECTIONS.get(section)
             if not sub:
-                # sezione NON RAW (es. contrattualistica) -> salta
-                continue
-            dst_dir = raw_dir / sub
-            file_name = f"{sub}_intro_{slug}.pdf"
+                continue  # NON RAW (es. contrattualistica) -> skip
+            dst_dir = raw_dir / sub; file_name = f"{sub}_intro_{slug}.pdf"
 
         dst_dir.mkdir(parents=True, exist_ok=True)
-        out = dst_dir / file_name
-        _ensure_within(base, out)
+        out = (dst_dir / file_name).resolve()
+        ensure_within(base.resolve(), out)
         pdf_bytes = _make_minimal_pdf_bytes(titolo, [str(p) for p in paragrafi])
         if out.exists() and not overwrite:
             continue
-        out.write_bytes(pdf_bytes)
+        safe_write_bytes(out, pdf_bytes, atomic=True)
         created.append(out)
     return created
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # Builder principale
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool) -> Path:
     # 1) leggi template contrattuali
     cartelle = _read_yaml_required(TEMPLATE_CARTELLE_RAW)
@@ -290,7 +259,7 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool) -> Path:
     # 2) destinazione sandbox
     base = (OUTPUT_ROOT / f"timmy-kb-{slug}").resolve()
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    _ensure_within(OUTPUT_ROOT, base)
+    ensure_within(OUTPUT_ROOT.resolve(), base)
 
     # 3) crea cartelle standard + SOLO l’albero raw/
     book_dir = base / "book"
@@ -302,31 +271,30 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool) -> Path:
 
     _build_only_raw(base, cartelle)
     raw_dir = base / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)  # garantiamo comunque raw/
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
-    # 4) copia template in semantic + mapping con context/tagger defaults
-    _copy_file(TEMPLATE_CARTELLE_RAW, semantic_dir / "cartelle_raw.yaml", overwrite=overwrite)
+    # 4) template in semantic + mapping con context/tagger defaults
+    _write_bytes_in_base(base, semantic_dir / "cartelle_raw.yaml", TEMPLATE_CARTELLE_RAW.read_bytes(), overwrite=overwrite)
     mapping_text = _build_semantic_mapping_yaml(slug, client_name, mapping_template)
-    _write_text(semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite)
+    _write_text_in_base(base, semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite)
 
     # 5) config/config.yaml minimale
-    _write_text(config_dir / "config.yaml", _min_config_yaml(client_name), overwrite=overwrite)
+    _write_text_in_base(base, config_dir / "config.yaml", _min_config_yaml(client_name), overwrite=overwrite)
 
-    # 6) genera PDF SOLO per RAW da pdf_dummy.yaml
+    # 6) genera PDF SOLO per RAW
     _ = _emit_pdfs_from_pdf_dummy(base, raw_dir, pdf_dummy, slug, overwrite=overwrite)
 
-    # 7) >>> GENERAZIONE DINAMICA DEL CSV via moduli semantic (scansione RAW) <<<
-    cfg = load_semantic_config(base)                         # carica defaults + mapping
-    candidates = extract_semantic_candidates(cfg.raw_dir, cfg)   # euristiche path/filename (RAW)
-    candidates_norm = normalize_tags(candidates, cfg.mapping)    # canonical/synonyms/rules
+    # 7) CSV via moduli semantic (RAW → tags_raw.csv)
+    cfg = load_semantic_config(base)
+    candidates = extract_semantic_candidates(cfg.raw_dir, cfg)
+    candidates_norm = normalize_tags(candidates, cfg.mapping)
     render_tags_csv(candidates_norm, cfg.semantic_dir / "tags_raw.csv")
 
     return base
 
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
 # CLI
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Genera sandbox cliente dummy (RAW-only) + tags_raw.csv via moduli semantic")
     p.add_argument("--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)")

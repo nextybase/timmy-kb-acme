@@ -31,7 +31,7 @@ from pipeline.constants import (
     REPO_NAME_PREFIX,
 )
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
-from pipeline.env_utils import get_env_var, compute_redact_flag   # env “puro”; flag redazione canonico
+from pipeline.env_utils import get_env_var  # env “puro”
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
@@ -101,9 +101,6 @@ def onboarding_full_main(
         require_env=False,
         run_id=run_id,
     )
-    # Propagazione uniforme del flag di redazione se mancante (safety-belt)
-    if not hasattr(context, "redact_logs"):
-        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
 
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("🚀 Avvio onboarding_full (PUSH GitHub)")

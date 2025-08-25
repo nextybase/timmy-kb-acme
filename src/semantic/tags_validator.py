@@ -1,24 +1,54 @@
+# src/semantic/tags_review_validator.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+
 import json
 import re
 import time
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
+
+from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 
 try:
     import yaml  # PyYAML
-except Exception:
+except Exception:  # pragma: no cover
     yaml = None
+
+__all__ = ["load_yaml", "validate_tags_reviewed", "write_validation_report"]
 
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
-def load_yaml(path: Path) -> Dict:
+
+def load_yaml(path: Path) -> Dict[str, Any]:
+    """
+    Carica un file YAML e restituisce un dict ({} su file vuoto).
+
+    Solleva:
+        ConfigError: se PyYAML non è disponibile, se il file non esiste
+                     o se il parsing fallisce.
+    """
     if yaml is None:
-        raise RuntimeError("PyYAML non disponibile: installa 'pyyaml'.")
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path))
+    path = Path(path).resolve()
+    if not path.exists():
+        raise ConfigError("File YAML non trovato.", file_path=str(path))
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)) from e
+
 
 def validate_tags_reviewed(data: dict) -> dict:
+    """
+    Valida la struttura di `tags_reviewed.yaml`.
+
+    Ritorna:
+        dict con chiavi: errors (list[str]), warnings (list[str]), count (int, opzionale)
+    """
     errors, warnings = [], []
 
     if not isinstance(data, dict):
@@ -29,7 +59,7 @@ def validate_tags_reviewed(data: dict) -> dict:
         if k not in data:
             errors.append(f"Campo mancante: '{k}'.")
 
-    if "tags" in data and not isinstance(data["tags"], list):
+    if "tags" in data and not isinstance(data.get("tags"), list):
         errors.append("Il campo 'tags' deve essere una lista.")
 
     if errors:
@@ -86,11 +116,22 @@ def validate_tags_reviewed(data: dict) -> dict:
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
+
 def write_validation_report(report_path: Path, result: dict, logger) -> None:
+    """
+    Scrive il report JSON della validazione in modo atomico con path-safety.
+
+    Solleva:
+        ConfigError: su problemi di path-safety o I/O bloccanti.
+    """
+    report_path = Path(report_path).resolve()
+    # Path-safety forte: il file deve stare sotto la sua stessa directory (anti path traversal)
+    ensure_within(report_path.parent, report_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
+
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        **result,
+        **(result or {}),
     }
-    report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
     logger.info("Report validazione scritto", extra={"file_path": str(report_path)})

@@ -5,7 +5,7 @@ Adapter: fallback uniformi per contenuti GitBook/HonKit (README.md, SUMMARY.md).
 Obiettivo:
 - Centralizzare la logica di ripiego fuori dagli orchestratori.
 - API pulita: ensure_readme_summary(context, logger, *, force=False).
-- Niente side-effect oltre a scritture atomiche dei file target.
+- Nessun side-effect oltre a scritture atomiche dei file target.
 
 Comportamento:
 - ensure_readme_summary(context, logger, force=False)
@@ -13,13 +13,12 @@ Comportamento:
   - Se mancano o sono vuoti (o force=True), genera versioni minime ma utili.
   - Non sovrascrive file non vuoti (a meno di force=True).
 """
-
 from __future__ import annotations
 
-import time
 import re
+import time
 from pathlib import Path
-from typing import List
+from typing import Any
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -69,19 +68,33 @@ def build_summary_index(book_dir: Path) -> str:
 # ------------------------------
 # API principale per orchestratori
 # ------------------------------
-def ensure_readme_summary(context, logger, *, force: bool = False) -> None:
+def ensure_readme_summary(context: Any, logger, *, force: bool = False) -> None:
     """
     Garantisce la presenza di README.md e SUMMARY.md in `book/` con fallback uniformi.
 
     - Se i file esistono e non sono vuoti: non fa nulla (a meno di force=True).
     - Se mancano o sono vuoti: genera contenuti minimi standardizzati (scrittura atomica).
     """
+    # Risoluzione directory book/ (priorità: context.md_dir → context.base_dir/'book' → repo_root_dir/'book')
+    md_dir = getattr(context, "md_dir", None)
+    base_dir = getattr(context, "base_dir", None)
     repo_root = getattr(context, "repo_root_dir", None)
-    if not isinstance(repo_root, Path):
-        raise ConfigError("context.repo_root_dir non impostato o non è un Path.")
+
+    if isinstance(md_dir, Path):
+        book_dir = md_dir
+        # se abbiamo la base, vincoliamo il perimetro di sicurezza alla sandbox cliente
+        if isinstance(base_dir, Path):
+            ensure_within(base_dir, book_dir)
+    elif isinstance(base_dir, Path):
+        book_dir = base_dir / "book"
+        ensure_within(base_dir, book_dir)
+    elif isinstance(repo_root, Path):
+        book_dir = repo_root / "book"
+        ensure_within(repo_root, book_dir)
+    else:
+        raise ConfigError("Contesto privo di percorsi utili: servono md_dir o base_dir o repo_root_dir.")
 
     slug = getattr(context, "slug", None) or "kb"
-    book_dir = Path(repo_root) / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
 
     readme_path = book_dir / "README.md"

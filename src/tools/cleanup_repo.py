@@ -1,4 +1,5 @@
-# src/tools/cleanup_repo.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 # --- PYTHONPATH bootstrap (consente import "pipeline.*" quando esegui da src/tools) ---
@@ -14,11 +15,10 @@ from typing import Iterable, List, Optional
 import uuid  # per run_id
 import logging
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, redact_secrets
 from pipeline.path_utils import is_safe_subpath, is_valid_slug
 from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry/log
-from pipeline.env_utils import redact_secrets
 
 # Logger inizializzato in main() con run_id; qui solo la dichiarazione
 logger: Optional[logging.Logger] = None  # verrà assegnato in main()
@@ -84,20 +84,13 @@ def _ensure_safe(paths: Iterable[Path], base: Path) -> List[Path]:
     return safe
 
 
-def cleanup_local(project_root: Path, slug: str, include_global: bool) -> None:
-    """Pulisce artefatti locali per lo slug indicato; opzionalmente rimuove anche artefatti globali."""
+def cleanup_local_only_output(project_root: Path, slug: str) -> None:
+    """
+    Pulisce **solo** la cartella locale output/timmy-kb-<slug>.
+    """
     assert logger is not None
-    targets: List[Path] = [
-        project_root / "output" / f"timmy-kb-{slug}",
-        project_root / "clienti" / slug,
-    ]
-    if include_global:
-        targets += [
-            project_root / "_book",
-            project_root / "book.json",
-            project_root / "package.json",
-        ]
-    targets = _ensure_safe(targets, project_root.resolve())
+    target = project_root / "output" / f"timmy-kb-{slug}"
+    targets = _ensure_safe([target], project_root.resolve())
     for t in targets:
         if t.exists():
             _rm_path(t)
@@ -147,24 +140,29 @@ def main() -> int:
         logger.info("Operazione annullata: slug non fornito")
         return 0
 
-    # 2) Opzioni interattive
-    include_global = _prompt_bool("Includere anche artefatti globali (_book, book.json, package.json)?", default_no=True)
-    do_remote = _prompt_bool("Eliminare anche il repository GitHub remoto timmy-kb-<slug>?", default_no=True)
-    namespace = ""
-    if do_remote:
-        namespace = input("Namespace GitHub (org o user) [invio per usare quello corrente]: ").strip()
+    # 2) Conferma distruttiva per la cancellazione locale (irreversibile)
+    msg = (
+        f"⚠️  Confermi la CANCELLAZIONE DEFINITIVA della cartella "
+        f"'output/timmy-kb-{slug}'? L'operazione è distruttiva e NON è reversibile."
+    )
+    if _prompt_bool(msg, default_no=True):
+        try:
+            cleanup_local_only_output(project_root, slug)
+        except Exception:
+            if logger is not None:
+                logger.exception("Errore durante la pulizia locale", extra={"slug": slug})
+            return EXIT_CODES.get("PipelineError", 1)
+    else:
+        logger.info("Pulizia locale annullata dall'utente")
+        return 0  # ⬅️ exit immediato: non chiedere del repo remoto
 
-    # 3) Riepilogo + conferma
-    summary = f"Pulizia per slug={slug} | global={'yes' if include_global else 'no'} | remote={'yes' if do_remote else 'no'}"
-    ans = input(f"{summary}\nConfermi? [y/N]: ").strip().lower()
-    if ans not in ("y", "yes", "s", "si", "sí"):
-        logger.info("Operazione annullata dall'utente")
-        return 0
-
-    # 4) Esecuzione
+    # 3) (solo se sopra è stato confermato) opzione per cancellare il repo remoto
     try:
-        cleanup_local(project_root, slug, include_global=include_global)
+        do_remote = _prompt_bool(
+            f"Eliminare anche il repository GitHub remoto 'timmy-kb-{slug}'?", default_no=True
+        )
         if do_remote:
+            namespace = input("Namespace GitHub (org o user) [invio per usare quello corrente]: ").strip()
             cleanup_remote(slug, github_namespace=(namespace or None))
         logger.info("✅ Cleanup completato", extra={"slug": slug})
         return 0
@@ -173,7 +171,6 @@ def main() -> int:
     except PipelineError:
         return EXIT_CODES.get("PipelineError", 1)
     except Exception:
-        # Tracciamo stacktrace e mappiamo a EXIT_CODES
         if logger is not None:
             logger.exception("Errore imprevisto durante il cleanup", extra={"slug": slug})
         return EXIT_CODES.get("PipelineError", 1)

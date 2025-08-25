@@ -4,8 +4,10 @@ from __future__ import annotations
 import os
 import sys
 import shutil
+import stat
 import subprocess
 from pathlib import Path
+from typing import Optional
 import pytest
 
 # Root repo e output
@@ -19,6 +21,27 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 GEN_TOOL = REPO_ROOT / "src" / "tools" / "gen_dummy_kb.py"
+
+
+def _rmtree_safe(path: Path) -> None:
+    """Rimozione robusta di una directory (gestisce permessi/lock su Windows)."""
+    if not path.exists():
+        return
+
+    def _onerror(func, p, exc_info):
+        # Prova a forzare i permessi e ritenta
+        try:
+            os.chmod(p, stat.S_IWRITE)
+        except Exception:
+            pass
+        try:
+            func(p)
+        except Exception:
+            # ultimo tentativo: ignora l’errore per non bloccare l’ambiente di test
+            pass
+
+    shutil.rmtree(path, onerror=_onerror)
+
 
 def _run_gen_dummy_kb() -> None:
     """Genera la KB dummy usando lo strumento ufficiale. Fallisce hard se c'è un errore."""
@@ -38,27 +61,33 @@ def _run_gen_dummy_kb() -> None:
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
 
-    result = subprocess.run(
-        cmd,
-        cwd=str(REPO_ROOT),
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    if result.returncode != 0:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            check=True,               # solleva CalledProcessError su exit!=0
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    except subprocess.CalledProcessError as e:
+        stdout_tail = (e.stdout or "")[-4000:]
+        stderr_tail = (e.stderr or "")[-4000:]
         print(">>> gen_dummy_kb.py FAILED")
-        print("STDOUT:\n", (result.stdout or "")[-4000:])
-        print("STDERR:\n", (result.stderr or "")[-4000:])
-        raise AssertionError(f"gen_dummy_kb.py è fallito con exit code {result.returncode}")
+        print("STDOUT:\n", stdout_tail)
+        print("STDERR:\n", stderr_tail)
+        raise AssertionError(f"gen_dummy_kb.py è fallito con exit code {e.returncode}") from e
+
 
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
     return REPO_ROOT
 
+
 @pytest.fixture(scope="session")
 def base_dir() -> Path:
     return DUMMY_BASE
+
 
 @pytest.fixture(scope="session")
 def dummy_kb(repo_root: Path, base_dir: Path):
@@ -68,8 +97,7 @@ def dummy_kb(repo_root: Path, base_dir: Path):
     Imposta KEEP_DUMMY_KB=1 per NON fare cleanup finale.
     """
     # cleanup iniziale per run pulito
-    if base_dir.exists():
-        shutil.rmtree(base_dir)
+    _rmtree_safe(base_dir)
 
     # genera
     _run_gen_dummy_kb()
@@ -98,8 +126,8 @@ def dummy_kb(repo_root: Path, base_dir: Path):
 
     # teardown (a meno che si voglia ispezionare i risultati)
     if os.getenv("KEEP_DUMMY_KB") not in ("1", "true", "True"):
-        if base_dir.exists():
-            shutil.rmtree(base_dir)
+        _rmtree_safe(base_dir)
+
 
 @pytest.fixture
 def chdir_repo(monkeypatch):

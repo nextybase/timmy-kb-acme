@@ -4,6 +4,40 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.2.2] fix generici e armonizzazione funzioni - 2025-08-26
+
+### Added
+- **Test suite di configurazione (pytest + Pydantic)**
+  - `tests/test_config_utils.py`: copertura completa dei moduli `pipeline.config_utils` (Settings, client config, pre-onboarding, scritture atomiche, aggiornamento Drive IDs).
+  - Fixture `conftest.py` consolidata: genera sempre una sandbox dummy pulita (`--overwrite`), forza ambiente UTF-8 e gestisce teardown automatico salvo `KEEP_DUMMY_KB=1`.
+- **Refactor tool interattivo**
+  - `src/tools/refactor_tool.py`: menu interattivo grafico (box ASCII) con 3 voci:
+    1. 🔎 Trova (solo ricerca)  
+    2. ✏️ Trova & Sostituisci  
+    3. 📌 Cerca TODO/FIXME  
+  - Logging strutturato, dry-run con diff unificato leggibile, estendibile per futuri strumenti di refactor.
+
+### Changed
+- **`src/semantic/normalizer.py`**
+  - Bug fix: `normalize_tags` ora ritorna correttamente `normed` (prima restituiva `""`).
+  - Robustezza mapping: canonical/merge normalizzati a lowercase; coercizione prudente delle liste `synonyms`.
+- **`src/tools/cleanup_repo.py`**
+  - Flusso interattivo semplificato:
+    - Conferma obbligatoria per la cancellazione locale di `output/timmy-kb-<slug>`, evidenziando che è irreversibile.
+    - Solo se confermata, viene chiesto se eliminare anche il repo GitHub remoto (`gh repo delete`).
+  - Uso coerente di `pipeline.logging_utils.redact_secrets` al posto di `env_utils`.
+
+### Fixed
+- Import path per `pipeline.*` nei tool (`gen_dummy_kb.py`, `cleanup_repo.py`, `refactor_tool.py`) resi consistenti con il bootstrap della cartella `src/`.
+- Errori di compatibilità Windows (`ModuleNotFoundError: pipeline`) gestiti allineando sys.path a livello di progetto.
+
+### Migration notes
+- Per avviare i test singoli:
+  ```bash
+  pytest tests/test_config_utils.py -v
+  pytest tests/test_dummy_pipeline.py -v
+
+
 ## [1.2.2] - 2025-08-25
 
 ### Added

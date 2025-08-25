@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import re
 import shutil
 import logging
 from pathlib import Path
@@ -97,10 +99,17 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return copied
 
 
+# split su non-alfanumerici (coerente con altri moduli)
+_SPLIT_RE = re.compile(r"[^\w]+", flags=re.UNICODE)
+
+
 def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     """
     Heuristica conservativa: per ogni PDF propone keyword grezze
     da nomi cartelle e filename. HiTL arricchirà in seguito.
+
+    Schema CSV (esteso, coerente con Blocco B / tag_onboarding):
+      relative_path | suggested_tags | entities | keyphrases | score | sources
 
     Regole:
     - STRONG (SSoT): ensure_within(base_dir, csv_path[.parent]) prima di scrivere.
@@ -111,33 +120,56 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     base_dir = raw_dir.parent  # output/timmy-kb-<slug>
 
     rows: List[List[str]] = []
+    raw_prefix = "raw"  # percorso base-relativo nel CSV (coerente con altri moduli)
+
     for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
         try:
-            rel = pdf.relative_to(raw_dir).as_posix()
+            rel_raw = pdf.relative_to(raw_dir).as_posix()
         except ValueError:
-            rel = pdf.name
-        parts = [p for p in Path(rel).parts if p]
-        base_no_ext = Path(parts[-1]).stem if parts else Path(rel).stem
+            rel_raw = pdf.name
 
-        # Costruzione candidati: cartelle (lower) + token del filename senza estensione
-        candidates = {p.lower() for p in parts[:-1]}
-        candidates.update(tok for tok in base_no_ext.replace("_", " ").replace("-", " ").split() if tok)
-        rows.append([rel, ", ".join(sorted(candidates))])
+        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
+
+        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
+        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
+
+        # Tag candidati:
+        path_tags = {p.lower() for p in parts[:-1]}
+        file_tokens = {
+            tok.lower()
+            for tok in _SPLIT_RE.split(base_no_ext)
+            if tok
+        }
+        candidates = sorted(path_tags.union(file_tokens))
+
+        # colonne “larghe” (compat future-proof)
+        entities = "[]"
+        keyphrases = "[]"
+        score = "{}"
+        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
+
+        rows.append([
+            rel_base_posix,
+            ", ".join(candidates),
+            entities,
+            keyphrases,
+            score,
+            sources,
+        ])
 
     # STRONG (SSoT): autorizza la scrittura nella sandbox cliente
     ensure_within(base_dir, csv_path.parent)
     ensure_within(base_dir, csv_path)
-
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Prepara il contenuto CSV in memoria e scrive in modo atomico
     sio = io.StringIO()
     w = csv.writer(sio, lineterminator="\n")
-    w.writerow(["relative_path", "suggested_tags"])
+    w.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
     w.writerows(rows)
     data = sio.getvalue()
 
     safe_write_text(csv_path, data, encoding="utf-8", atomic=True)
 
-    logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
+    logger.info("Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)

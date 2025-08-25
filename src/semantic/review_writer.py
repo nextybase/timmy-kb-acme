@@ -41,6 +41,9 @@ import datetime as _dt
 from pathlib import Path
 from typing import Dict, Any, List, Set
 
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
+
 try:
     import yaml
 except Exception:  # pragma: no cover
@@ -86,7 +89,9 @@ def write_review_stub(
     if yaml is None:
         raise RuntimeError("PyYAML non disponibile: impossibile scrivere lo YAML di review.")
 
-    yaml_path = yaml_path.resolve()
+    yaml_path = Path(yaml_path).resolve()
+    # Path-safety forte: yaml_path deve stare sotto la propria directory madre
+    ensure_within(yaml_path.parent, yaml_path)
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
 
     if yaml_path.exists() and not overwrite:
@@ -111,7 +116,7 @@ def write_review_stub(
         )
 
     # 3) sezione documents (utile per audit e per creare filtri during-review)
-    documents = {}
+    documents: Dict[str, Dict[str, List[str]]] = {}
     for rel_path, meta in sorted(candidates_norm.items()):
         tags = [str(t).strip().lower() for t in (meta.get("tags") or []) if str(t).strip()]
         documents[rel_path] = {"tags": tags}
@@ -126,5 +131,6 @@ def write_review_stub(
         "documents": documents,
     }
 
-    with yaml_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+    # Dump su buffer e commit atomico
+    payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)

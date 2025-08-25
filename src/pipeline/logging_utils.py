@@ -1,5 +1,33 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/logging_utils.py
+"""
+Logging strutturato per Timmy-KB.
+
+Obiettivi:
+- Offrire un logger **idempotente**, con filtri di **contesto** (slug, run_id) e di **redazione** attivabili da `context.redact_logs`.
+- Evitare `print`: tutti i moduli usano logging strutturato (console + opzionale file).
+- Fornire utilità di **masking** per ID e percorsi in modo coerente.
+
+Formato di output (console/file):
+    %(asctime)s %(levelname)s %(name)s: %(message)s | slug=<slug> run_id=<run> file_path=<p> [event=<evt> branch=<b> repo=<r>]
+
+Esempio d'uso negli orchestratori:
+    logger = get_structured_logger(
+        "pre_onboarding",
+        context=context,                 # espone .slug, .redact_logs, .run_id (opzionale)
+        log_file=base_dir / "logs/log.jsonl",
+        run_id=run_id,                   # usato se context.run_id assente
+    )
+    logger.info("pre_onboarding.yaml.resolved",
+                extra={"event": "yaml_resolved", "file_path": str(yaml_path)})
+
+Redazione:
+- Se `context.redact_logs = True`, il filtro applica `redact_secrets` al messaggio e azzera campi sensibili noti
+  (es. `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `Authorization`, `GIT_HTTP_EXTRAHEADER`).
+- Le funzioni `mask_partial`, `mask_id_map`, `mask_updates` sono utilità **esplicite** per mascherare valori
+  nei campi `extra` prima del logging (best practice consigliata).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +68,7 @@ def mask_id_map(d: Mapping[str, Any]) -> Mapping[str, Any]:
 
 def mask_updates(d: Mapping[str, Any]) -> Mapping[str, Any]:
     """Maschera in modo prudente alcuni campi noti durante il log degli update di config."""
-    out = {}
+    out: dict[str, Any] = {}
     for k, v in (d or {}).items():
         if k.upper().endswith("_ID") or k in _SENSITIVE_KEYS:
             out[k] = mask_partial(str(v))
@@ -59,6 +87,7 @@ class _CtxView:
     redact_logs: bool = False
 
 def _ctx_view_from(context: Any = None, run_id: Optional[str] = None) -> _CtxView:
+    """Estrae una vista minima del contesto per i filtri di logging."""
     cv = _CtxView()
     if context is not None:
         cv.slug = getattr(context, "slug", None)
@@ -114,7 +143,7 @@ class _KVFormatter(logging.Formatter):
         base = super().format(record)
         kv = []
         # includi subset di extra utili se presenti
-        for k in ("slug", "run_id", "file_path", "branch", "repo"):
+        for k in ("slug", "run_id", "file_path", "event", "branch", "repo"):
             v = getattr(record, k, None)
             if v:
                 kv.append(f"{k}={v}")
@@ -152,13 +181,27 @@ def get_structured_logger(
     level: int = logging.INFO,
 ) -> logging.Logger:
     """
-    Restituisce un logger configurato:
-      - propagation=False, handler console sempre presente,
-      - file handler opzionale se `log_file` è fornito (si assume che i path siano già validati a monte),
+    Restituisce un logger configurato e idempotente.
+
+    Parametri:
+        name:     nome del logger (es. 'pre_onboarding').
+        context:  oggetto con attributi opzionali `.slug`, `.redact_logs`, `.run_id`.
+        log_file: path file log; se presente, aggiunge file handler (dir già creata a monte).
+        run_id:   identificativo run usato se `context.run_id` assente.
+        level:    livello logging (default: INFO).
+
+    Comportamento:
+      - `propagation=False`, handler console sempre presente,
+      - file handler opzionale se `log_file` è fornito (si assume path già validato/creato),
       - filtri: contesto + redazione (se `context.redact_logs` True),
       - formatter coerente console/file.
 
-    ATTENZIONE: non crea directory; chi invoca deve aver fatto path-safety + mkdir.
+    Nota:
+      - Questo modulo **non** crea directory: farlo a monte con path-safety (ensure_within) + mkdir.
+      - Per mascherare valori in `extra`, usare `mask_partial`/`mask_id_map`/`mask_updates`.
+
+    Ritorna:
+        logging.Logger pronto all'uso.
     """
     lg = logging.getLogger(name)
     lg.setLevel(level)
@@ -199,7 +242,18 @@ def get_structured_logger(
 # Metriche leggere (helper opzionale)
 # ---------------------------------------------
 class metrics_scope:
-    """Context manager leggero per misurare micro-fasi e loggare in modo uniforme."""
+    """
+    Context manager leggero per misurare micro-fasi e loggare in modo uniforme.
+
+    Esempio:
+        with metrics_scope(logger, stage="drive_upload", customer=context.slug):
+            upload_config_to_drive_folder(...)
+
+    Log prodotti:
+        INFO ▶️  start:<stage> | slug=<customer>
+        INFO ✅ end:<stage>   | slug=<customer>
+        ERROR ⛔ fail:<stage>: <exc> | slug=<customer>
+    """
     def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
         self.logger = logger
         self.stage = stage

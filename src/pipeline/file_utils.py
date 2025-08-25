@@ -4,22 +4,22 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Centralizzare la logica di fsync best-effort (evita file troncati).
+- Centralizzare la logica di fsync (best-effort di default; opzionale più “forte”).
 
 API principali:
-- safe_write_text(path: Path, data: str, *, encoding="utf-8", atomic=True) -> None
-- safe_write_bytes(path: Path, data: bytes, *, atomic=True) -> None
+- safe_write_text(path: Path, data: str, *, encoding="utf-8", atomic=True, fsync=False) -> None
+- safe_write_bytes(path: Path, data: bytes, *, atomic=True, fsync=False) -> None
 
 Note:
 - `atomic=True` esegue la scrittura su file temporaneo + `os.replace()` atomico.
 - Viene creata la directory padre se assente (mkdir(parents=True, exist_ok=True)).
-- `fsync` è best-effort: si prova a sincronizzare sia il file che la directory.
+- Se `fsync=True`, il contenuto del file viene `flush()`ato e `fsync()`ato prima della `replace`.
+- La sincronizzazione della directory parent è sempre **best-effort** (per limiti OS/FS).
 
 Path-safety:
 - La **guardia STRONG** vive in `pipeline.path_utils.ensure_within` (SSoT).
-- Questo modulo non espone più `ensure_within`.
+- Questo modulo non espone `ensure_within`.
 """
-
 from __future__ import annotations
 
 import os
@@ -33,20 +33,27 @@ from .logging_utils import get_structured_logger
 _logger = get_structured_logger("pipeline.file_utils")
 
 
-def _fsync_best_effort(fd: int, path: Optional[Path] = None) -> None:
-    """Sincronizza il file descriptor in modo best-effort."""
+def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -> None:
+    """
+    Sincronizza il file descriptor. Se `strict=True`, su errore solleva ConfigError,
+    altrimenti logga in debug e continua (best-effort).
+    """
     try:
         os.fsync(fd)
-    except Exception:
-        # Non alziamo: preferiamo non interrompere la pipeline per limiti FS
+    except Exception as e:
+        if strict:
+            raise ConfigError(f"fsync(file) fallito: {e}", file_path=str(path) if path else None) from e
         _logger.debug("fsync(file) best-effort fallito", extra={"file_path": str(path) if path else None})
 
 
 def _fsync_dir_best_effort(dir_path: Path) -> None:
-    """Sincronizza la directory contenitore in modo best-effort."""
+    """
+    Sincronizza la directory contenitore in modo best-effort.
+    Su Windows o FS remoti potrebbe non essere disponibile: non solleva.
+    """
     try:
-        # Su Windows O_DIRECTORY non esiste; l'intero blocco è già best-effort.
-        dfd = os.open(str(dir_path), os.O_DIRECTORY)
+        flags = getattr(os, "O_DIRECTORY", 0)
+        dfd = os.open(str(dir_path), flags)
         try:
             os.fsync(dfd)
         finally:
@@ -55,15 +62,24 @@ def _fsync_dir_best_effort(dir_path: Path) -> None:
         _logger.debug("fsync(dir) best-effort fallito", extra={"dir_path": str(dir_path)})
 
 
-def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: bool = True) -> None:
+def safe_write_text(
+    path: Path,
+    data: str,
+    *,
+    encoding: str = "utf-8",
+    atomic: bool = True,
+    fsync: bool = False,
+) -> None:
     """
     Scrive testo su file in modo sicuro.
+
     - Se `atomic=True`, scrive su file temporaneo e poi sostituisce atomically con `os.replace`.
-    - Crea le directory padre se mancano.
-    - Esegue fsync best-effort sul file e sulla directory.
+    - Crea la directory padre se mancante.
+    - Se `fsync=True`, esegue `flush()` + `fsync()` sul file temporaneo (o diretto se `atomic=False`).
+    - Esegue `fsync` della directory parent in best-effort.
 
     Solleva:
-        ConfigError: su errori di I/O bloccanti (es. directory non scrivibile).
+        ConfigError: su errori di I/O bloccanti (es. directory non scrivibile, fsync strict fallito).
     """
     path = Path(path)
     try:
@@ -75,7 +91,15 @@ def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: b
         try:
             with open(path, "w", encoding=encoding, newline="") as f:
                 f.write(data)
-                _fsync_best_effort(f.fileno(), path)
+                if fsync:
+                    try:
+                        f.flush()
+                    except Exception:
+                        # flush è best-effort: l'eventuale fallimento sarà intercettato dall'fsync strict
+                        pass
+                    _fsync_file(f.fileno(), path=path, strict=True)
+                else:
+                    _fsync_file(f.fileno(), path=path, strict=False)
             _fsync_dir_best_effort(path.parent)
             return
         except Exception as e:
@@ -93,7 +117,15 @@ def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: b
         ) as tmp:
             tmp_path = Path(tmp.name)
             tmp.write(data)
-            _fsync_best_effort(tmp.fileno(), tmp_path)
+            if fsync:
+                try:
+                    tmp.flush()
+                except Exception:
+                    pass
+                _fsync_file(tmp.fileno(), path=tmp_path, strict=True)
+            else:
+                _fsync_file(tmp.fileno(), path=tmp_path, strict=False)
+
         os.replace(str(tmp_path), str(path))  # atomic move
         _fsync_dir_best_effort(path.parent)
     except Exception as e:
@@ -106,7 +138,13 @@ def safe_write_text(path: Path, data: str, *, encoding: str = "utf-8", atomic: b
         raise ConfigError(f"Scrittura atomica fallita: {e}", file_path=str(path)) from e
 
 
-def safe_write_bytes(path: Path, data: bytes, *, atomic: bool = True) -> None:
+def safe_write_bytes(
+    path: Path,
+    data: bytes,
+    *,
+    atomic: bool = True,
+    fsync: bool = False,
+) -> None:
     """
     Scrive bytes su file in modo sicuro (stesse garanzie di safe_write_text).
     """
@@ -120,7 +158,10 @@ def safe_write_bytes(path: Path, data: bytes, *, atomic: bool = True) -> None:
         try:
             with open(path, "wb") as f:
                 f.write(data)
-                _fsync_best_effort(f.fileno(), path)
+                if fsync:
+                    _fsync_file(f.fileno(), path=path, strict=True)
+                else:
+                    _fsync_file(f.fileno(), path=path, strict=False)
             _fsync_dir_best_effort(path.parent)
             return
         except Exception as e:
@@ -135,7 +176,11 @@ def safe_write_bytes(path: Path, data: bytes, *, atomic: bool = True) -> None:
         ) as tmp:
             tmp_path = Path(tmp.name)
             tmp.write(data)
-            _fsync_best_effort(tmp.fileno(), tmp_path)
+            if fsync:
+                _fsync_file(tmp.fileno(), path=tmp_path, strict=True)
+            else:
+                _fsync_file(tmp.fileno(), path=tmp_path, strict=False)
+
         os.replace(str(tmp_path), str(path))
         _fsync_dir_best_effort(path.parent)
     except Exception as e:

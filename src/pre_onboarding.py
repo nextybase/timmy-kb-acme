@@ -49,7 +49,7 @@ from pipeline.drive_utils import (
     upload_config_to_drive_folder,
     create_local_base_structure,
 )
-from pipeline.env_utils import get_env_var, compute_redact_flag
+from pipeline.env_utils import get_env_var
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
 
@@ -171,9 +171,6 @@ def pre_onboarding_main(
         slug=slug, interactive=interactive, require_env=require_env, run_id=run_id,
     )
 
-    if not hasattr(context, "redact_logs"):
-        context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
-
     log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -198,8 +195,10 @@ def pre_onboarding_main(
 
     try:
         yaml_structure_file = _resolve_yaml_structure_file()
-        logger.info("pre_onboarding.yaml.resolved",
-                    extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)})
+        logger.info(
+            "pre_onboarding.yaml.resolved",
+            extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
+        )
         ensure_within(context.base_dir, context.raw_dir)
         ensure_within(context.base_dir, context.md_dir)
         with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
@@ -218,9 +217,13 @@ def pre_onboarding_main(
         return
 
     _sync_env(context, require_env=require_env)
-    logger.info("pre_onboarding.drive.preflight",
-                extra={"SERVICE_ACCOUNT_FILE": mask_partial(context.env.get("SERVICE_ACCOUNT_FILE")),
-                       "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID"))})
+    logger.info(
+        "pre_onboarding.drive.preflight",
+        extra={
+            "SERVICE_ACCOUNT_FILE": mask_partial(context.env.get("SERVICE_ACCOUNT_FILE")),
+            "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID")),
+        },
+    )
     service = get_drive_service(context)
 
     drive_parent_id = context.env.get("DRIVE_ID")
@@ -236,25 +239,33 @@ def pre_onboarding_main(
 
     with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
         created_map = create_drive_structure_from_yaml(service, yaml_structure_file, client_folder_id, redact_logs=redact)
-    logger.info("📄 Struttura Drive creata",
-                extra={"yaml_tail": tail_path(yaml_structure_file), "created_map_masked": mask_id_map(created_map)})
+    logger.info(
+        "📄 Struttura Drive creata",
+        extra={"yaml_tail": tail_path(yaml_structure_file), "created_map_masked": mask_id_map(created_map)},
+    )
 
     drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
             f"Verifica lo YAML di struttura: {yaml_structure_file}",
-            drive_id=client_folder_id, slug=context.slug, file_path=str(yaml_structure_file),
+            drive_id=client_folder_id,
+            slug=context.slug,
+            file_path=str(yaml_structure_file),
         )
 
     with metrics_scope(logger, stage="drive_upload_config", customer=context.slug):
-        uploaded_cfg_id = upload_config_to_drive_folder(service, context, parent_id=client_folder_id, redact_logs=redact)
+        uploaded_cfg_id = upload_config_to_drive_folder(
+            service, context, parent_id=client_folder_id, redact_logs=redact
+        )
     logger.info("📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
 
-    updates = {"drive_folder_id": client_folder_id,
-               "drive_raw_folder_id": drive_raw_folder_id,
-               "drive_config_folder_id": client_folder_id,
-               "client_name": client_name}
+    updates = {
+        "drive_folder_id": client_folder_id,
+        "drive_raw_folder_id": drive_raw_folder_id,
+        "drive_config_folder_id": client_folder_id,
+        "client_name": client_name,
+    }
     update_config_with_drive_ids(context, updates=updates, logger=logger)
     logger.info("🔑 Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
 

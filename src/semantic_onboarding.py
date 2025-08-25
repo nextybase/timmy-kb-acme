@@ -39,7 +39,6 @@ from pipeline.path_utils import (
     ensure_within,       # guardia STRONG (SSoT)
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.env_utils import compute_redact_flag  # fonte unica flag redaction
 
 # Content utils ufficiali (se presenti)
 try:
@@ -111,8 +110,10 @@ def _load_tags_vocab(base_dir: Path, logger) -> Dict[str, Dict]:
                 "areas_hint": [a for a in (item.get("areas_hint") or []) if isinstance(a, str)],
             }
         logger.info("Vocabolario tag caricato", extra={"count": len(vocab)})
-    except Exception as e:
-        logger.warning("Impossibile caricare tags.yaml", extra={"error": str(e)})
+    except (OSError, AttributeError) as e:
+        logger.warning("Impossibile leggere tags.yaml", extra={"file_path": str(tags_path), "error": str(e)})
+    except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
+        logger.warning("Impossibile parsare tags.yaml", extra={"file_path": str(tags_path), "error": str(e)})
     return vocab
 
 
@@ -159,7 +160,7 @@ def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
         if not isinstance(meta, dict):
             return {}, md_text
         return meta, body
-    except Exception:
+    except (ValueError, TypeError, yaml.YAMLError):  # type: ignore[attr-defined]
         return {}, md_text
 
 
@@ -178,7 +179,7 @@ def _dump_frontmatter(meta: Dict) -> str:
         return "\n".join(lines)
     try:
         return "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
-    except Exception:
+    except (ValueError, TypeError, yaml.YAMLError):  # type: ignore[attr-defined]
         lines = ["---"]
         if "title" in meta:
             lines.append(f'title: "{meta["title"]}"')
@@ -242,7 +243,7 @@ def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], 
 
         try:
             text = md.read_text(encoding="utf-8")
-        except Exception as e:
+        except OSError as e:
             logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
             continue
 
@@ -257,16 +258,13 @@ def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], 
             safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
             touched.append(md)
             logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags, "areas": areas})
-        except Exception as e:
+        except OSError as e:
             logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
 
     return touched
 
 
 def _write_summary_and_readme(context: ClientContext, logger, *, slug: str) -> None:
-    paths = get_paths(slug)
-    book_dir = paths["book"]
-
     # 1) Tenta utility ufficiali
     if generate_summary_markdown is not None:
         try:
@@ -317,9 +315,6 @@ def semantic_onboarding_main(
         require_env=False,
         run_id=run_id,
     )
-    # Sorgente unica del flag di redazione
-    if not hasattr(context, "redact_logs"):
-        context.redact_logs = compute_redact_flag(getattr(context, "env", {}), getattr(context, "log_level", "INFO"))
 
     # Log path sotto la base cliente con guardia STRONG
     paths = get_paths(slug)
@@ -365,7 +360,10 @@ def semantic_onboarding_main(
                 logger.info("Preview lasciata ATTIVA su richiesta utente", extra={"container_name": container_name})
 
     book_dir = paths["book"]
-    logger.info("✅ semantic_onboarding completato", extra={"md_files": len(list(book_dir.glob('*.md'))), "preview_container": container_name})
+    logger.info(
+        "✅ semantic_onboarding completato",
+        extra={"md_files": len(list(book_dir.glob('*.md'))), "preview_container": container_name},
+    )
 
 
 # ─────────────── CLI ───────────────

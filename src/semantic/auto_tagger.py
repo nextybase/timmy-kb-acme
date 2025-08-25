@@ -21,20 +21,27 @@ Dove:
 - score: somma pesata per tag (semplice)
 - sources: JSON con evidenze {"path":[...], "filename":[...]}
 
-Nota: modulo "puro" (niente input()/sys.exit()). La scrittura CSV è side-effect
-trasparente e confinata alla path fornita dal chiamante (che deve essere path-safe).
+Nota: modulo “puro” (niente input()/sys.exit()). La scrittura CSV è **atomica**
+(`safe_write_text`) e path-safe (guardie `ensure_within`).
 """
 
 from __future__ import annotations
 
 import csv
+import io
 import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 from .config import SemanticConfig
 
+__all__ = [
+    "extract_semantic_candidates",
+    "render_tags_csv",
+]
 
 # ------------------------------ helpers base --------------------------------- #
 
@@ -77,7 +84,7 @@ def _score_and_rank(
     Combina tag da path e filename con uno scoring semplicissimo (path > filename).
     - path: peso 1.0
     - filename: peso 0.6
-    Deduplica preservando l'ordine di "forza" (path prima).
+    Deduplica preservando l'ordine di “forza” (path prima).
     """
     stopset = set(s.strip().lower() for s in (stop or []) if s)
     weights: Dict[str, float] = {}
@@ -97,8 +104,7 @@ def _score_and_rank(
     add_tokens(path_tags, 1.0)
     add_tokens(file_tags, 0.6)
 
-    # Ordina per peso desc, poi per ordine di comparsa
-    # (manteniamo "ordered" come tie-break)
+    # Ordina per peso desc, poi per ordine di comparsa (tie-break deterministico)
     order_index = {t: i for i, (t, _) in enumerate(ordered)}
     ranked = sorted(weights.items(), key=lambda kv: (-kv[1], order_index[kv[0]]))
 
@@ -107,10 +113,10 @@ def _score_and_rank(
 
 
 def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
-    """Itera tutti i PDF sotto la RAW, ricorsivamente."""
+    """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
     if not raw_dir.exists():
         return []
-    yield from raw_dir.rglob("*.pdf")
+    yield from sorted(raw_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
 
 
 # ------------------------------ API principali ------------------------------- #
@@ -131,8 +137,11 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str,
         ...
       }
     """
-    raw_dir = raw_dir.resolve()
-    base_dir = cfg.base_dir.resolve()
+    raw_dir = Path(raw_dir).resolve()
+    base_dir = Path(cfg.base_dir).resolve()
+
+    # STRONG guard: RAW deve essere sotto la sandbox del cliente
+    ensure_within(base_dir, raw_dir)
 
     candidates: Dict[str, Dict[str, Any]] = {}
 
@@ -148,10 +157,14 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str,
         path_tags = _path_segments(pdf_path.relative_to(raw_dir))
         file_tags = _tokenize_filename(pdf_path.name)
 
-        suggested, weights = _score_and_rank(path_tags, file_tags, stop=cfg.stop_tags, top_k=cfg.top_k)
+        suggested, weights = _score_and_rank(
+            path_tags,
+            file_tags,
+            stop=cfg.stop_tags,
+            top_k=cfg.top_k,
+        )
 
-        # In MVP non calcoliamo score_min per ogni singolo tag (lo useremo per tagger avanzato).
-        # Manteniamo comunque i pesi grezzi per trasparenza.
+        # In MVP non calcoliamo score_min per singolo tag; manteniamo i pesi grezzi.
         candidates[rel_str] = {
             "tags": suggested,
             "entities": [],
@@ -167,26 +180,34 @@ def render_tags_csv(candidates: Dict[str, Dict[str, Any]], csv_path: Path) -> No
     """
     Scrive `tags_raw.csv` (esteso) con colonne:
       relative_path | suggested_tags | entities | keyphrases | score | sources
+
+    Note:
+    - Scrittura **atomica** tramite buffer + `safe_write_text(..., atomic=True)`.
+    - Ordine deterministico per riga (`sorted(candidates.items())`).
+    - JSON serializzati con `sort_keys=True` per stabilizzare il diff.
     """
-    csv_path = csv_path.resolve()
+    csv_path = Path(csv_path).resolve()
     csv_path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_within(csv_path.parent, csv_path)
 
-    with csv_path.open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
 
-        for rel_path, meta in sorted(candidates.items()):
-            tags = [str(t).strip().lower() for t in (meta.get("tags") or []) if str(t).strip()]
-            ents = meta.get("entities") or []
-            keys = meta.get("keyphrases") or []
-            score = meta.get("score") or {}
-            sources = meta.get("sources") or {}
+    for rel_path, meta in sorted(candidates.items()):
+        tags = [str(t).strip().lower() for t in (meta.get("tags") or []) if str(t).strip()]
+        ents = meta.get("entities") or []
+        keys = meta.get("keyphrases") or []
+        score = meta.get("score") or {}
+        sources = meta.get("sources") or {}
 
-            w.writerow([
-                rel_path,
-                ", ".join(tags),
-                json.dumps(ents, ensure_ascii=False),
-                json.dumps(keys, ensure_ascii=False),
-                json.dumps(score, ensure_ascii=False),
-                json.dumps(sources, ensure_ascii=False),
-            ])
+        writer.writerow([
+            rel_path,
+            ", ".join(tags),
+            json.dumps(ents, ensure_ascii=False),
+            json.dumps(keys, ensure_ascii=False),
+            json.dumps(score, ensure_ascii=False, sort_keys=True),
+            json.dumps(sources, ensure_ascii=False, sort_keys=True),
+        ])
+
+    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)

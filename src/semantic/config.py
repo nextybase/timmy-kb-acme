@@ -29,6 +29,9 @@ except Exception:  # pragma: no cover
     yaml = None  # degradiamo: se manca, useremo solo i default e gli overrides
 
 
+__all__ = ["SemanticConfig", "load_semantic_config"]
+
+
 # ----------------------------- Defaults hardcoded ----------------------------- #
 
 _DEFAULTS = {
@@ -43,7 +46,7 @@ _DEFAULTS = {
 }
 
 # Chiavi accettate nella sezione semantic_tagger / semantic_defaults
-_ALLOWED_KEYS = set(_DEFAULTS.keys())
+_ALLOWED_KEYS: Set[str] = set(_DEFAULTS.keys())
 
 
 @dataclass(frozen=True)
@@ -59,9 +62,9 @@ class SemanticConfig:
     stop_tags: Set[str] = field(default_factory=set)
 
     # Riferimenti utili per l'orchestrazione
-    base_dir: Path = Path(".")               # output/timmy-kb-<slug>
-    semantic_dir: Path = Path("semantic")    # base_dir / "semantic"
-    raw_dir: Path = Path("raw")              # base_dir / "raw"
+    base_dir: Path = Path(".")               # output/timmy-kb-<slug> (resolve in load)
+    semantic_dir: Path = Path("semantic")    # base_dir / "semantic" (resolve in load)
+    raw_dir: Path = Path("raw")              # base_dir / "raw" (resolve in load)
 
     # Mapping completo (cliente-specifico) caricato da semantic_mapping.yaml
     mapping: Dict[str, Any] = field(default_factory=dict)
@@ -150,7 +153,7 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[Dict[str, Any]] 
     Ritorna:
       - SemanticConfig con parametri finali e mapping completo (da semantic_mapping.yaml)
     """
-    base_dir = base_dir.resolve()
+    base_dir = Path(base_dir).resolve()
     semantic_dir = (base_dir / "semantic").resolve()
     raw_dir = (base_dir / "raw").resolve()
 
@@ -160,7 +163,9 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[Dict[str, Any]] 
     # 2) config.yaml → semantic_defaults
     config_yaml = (base_dir / "config" / "config.yaml").resolve()
     cfg_all = _safe_load_yaml(config_yaml)
-    defaults_from_cfg = _normalize_tagger_section((cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {})
+    defaults_from_cfg = _normalize_tagger_section(
+        (cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {}
+    )
     acc = _merge(acc, defaults_from_cfg)
 
     # 3) semantic_mapping.yaml → semantic_tagger
@@ -176,7 +181,7 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[Dict[str, Any]] 
     # Normalizza stop_tags in set lowercase
     stop_tags = set(s.lower().strip() for s in (acc.get("stop_tags") or []) if str(s).strip())
 
-    # Costruisci l’oggetto finale
+    # Costruisci l’oggetto finale (percorsi risolti con .resolve())
     cfg = SemanticConfig(
         lang=acc.get("lang", _DEFAULTS["lang"]),
         max_pages=int(acc.get("max_pages", _DEFAULTS["max_pages"])),

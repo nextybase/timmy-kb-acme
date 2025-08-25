@@ -3,11 +3,18 @@
 Modulo per l'estrazione e l'arricchimento semantico dei documenti markdown
 nella pipeline Timmy-KB.
 
-Refactor v1.0.4 (chirurgico):
-- Nessun cambio di contratto pubblico.
-- Si assume mapping **canonico** {concept: [keywords...]} (normalizzato da semantic_mapping).
-- Logging coerente e nessun side-effect.
+Refactor v1.0.5 (Blocco B):
+- Coerenza guardie: se il mapping è vuoto → warning e short-circuit (no I/O inutile).
+- Lettura file: soglia opzionale `max_scan_bytes` per evitare scan costosi; se superata,
+  logghiamo una micro-nota e saltiamo il file.
+- Nessun cambio di contratto per i call-site esistenti (nuovo parametro solo keyword).
+
+Assunzioni:
+- Il mapping è **canonico** {concept: [keywords...]} (normalizzato da semantic_mapping).
+- Modulo puro, senza I/O interattivo.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -31,15 +38,43 @@ def _list_markdown_files(context: ClientContext, logger=None) -> List[Path]:
         raise NotADirectoryError(f"Il path non è una directory: {context.md_dir}")
 
     files = sorted(context.md_dir.glob("*.md"))
-    logger.info(f"📄 Trovati {len(files)} file markdown in {context.md_dir}", extra={"slug": context.slug})
+    logger.info(
+        f"📄 Trovati {len(files)} file markdown in {context.md_dir}",
+        extra={"slug": context.slug, "file_path": str(context.md_dir)},
+    )
     return files
 
 
-def extract_semantic_concepts(context: ClientContext, logger=None) -> Dict[str, List[Dict[str, str]]]:
-    """Estrae i concetti semantici dai file markdown basandosi sul mapping canonico in config/."""
+def extract_semantic_concepts(
+    context: ClientContext,
+    logger=None,
+    *,
+    max_scan_bytes: Optional[int] = None,
+) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Estrae i concetti semantici dai file markdown basandosi sul mapping canonico in config/.
+
+    Args:
+        context: contesto cliente.
+        logger: logger strutturato (opzionale).
+        max_scan_bytes: se impostato, i file .md con dimensione > soglia vengono **saltati**
+                        (loggando una micro-nota) per evitare scan troppo costosi.
+
+    Returns:
+        dict: {concept: [{"file": <name>, "keyword": <kw>}, ...], ...}
+    """
     logger = logger or get_structured_logger("semantic.extract", context=context)
 
     mapping = load_semantic_mapping(context, logger=logger)  # {concept: [keywords...]}
+
+    # Short-circuit: mapping vuoto → niente scan, meno noise/log I/O
+    if not mapping:
+        logger.warning(
+            "⚠️ Mapping semantico vuoto: salto l'estrazione concetti.",
+            extra={"slug": context.slug},
+        )
+        return {}
+
     markdown_files = _list_markdown_files(context, logger=logger)
 
     extracted_data: Dict[str, List[Dict[str, str]]] = {}
@@ -51,6 +86,20 @@ def extract_semantic_concepts(context: ClientContext, logger=None) -> Dict[str, 
         matches: List[Dict[str, str]] = []
         for file in markdown_files:
             try:
+                # Soglia dimensione opzionale per evitare scan costosi
+                if max_scan_bytes is not None:
+                    try:
+                        size = file.stat().st_size
+                        if size > max_scan_bytes:
+                            logger.info(
+                                "⏭️  Skip MD troppo grande per la scansione",
+                                extra={"slug": context.slug, "file_path": str(file), "bytes": size, "limit": max_scan_bytes},
+                            )
+                            continue
+                    except Exception:
+                        # best-effort: se stat fallisce, si procede alla lettura
+                        pass
+
                 content = file.read_text(encoding="utf-8")
                 content_l = content.lower()
                 for kw in keywords:
@@ -62,12 +111,12 @@ def extract_semantic_concepts(context: ClientContext, logger=None) -> Dict[str, 
             except Exception as e:
                 logger.warning(
                     f"⚠️ Impossibile leggere {file}: {e}",
-                    extra={"slug": context.slug, "file_path": file},
+                    extra={"slug": context.slug, "file_path": str(file)},
                 )
                 continue
         extracted_data[concept] = matches
 
-    logger.info(f"🔍 Estrazione concetti completata per {context.slug}", extra={"slug": context.slug})
+    logger.info("🔍 Estrazione concetti completata", extra={"slug": context.slug})
     return extracted_data
 
 
@@ -82,19 +131,22 @@ def enrich_markdown_folder(context: ClientContext, logger=None) -> None:
         raise FileNotFoundError(f"Directory markdown non trovata: {context.md_dir}")
 
     markdown_files = _list_markdown_files(context, logger=logger)
-    logger.info(f"📂 Avvio arricchimento semantico su {len(markdown_files)} file", extra={"slug": context.slug})
+    logger.info(
+        f"📂 Avvio arricchimento semantico su {len(markdown_files)} file",
+        extra={"slug": context.slug, "file_path": str(context.md_dir)},
+    )
 
     for file in markdown_files:
         try:
             logger.debug(
                 f"✏️ Elaborazione semantica per {file.name}",
-                extra={"slug": context.slug, "file_path": file},
+                extra={"slug": context.slug, "file_path": str(file)},
             )
             # TODO: step di arricchimento effettivo
         except Exception as e:
             logger.warning(
                 f"⚠️ Errore durante arricchimento {file}: {e}",
-                extra={"slug": context.slug, "file_path": file},
+                extra={"slug": context.slug, "file_path": str(file)},
             )
             continue
 
