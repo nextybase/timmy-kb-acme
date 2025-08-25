@@ -1,4 +1,4 @@
-# Timmy-KB — README (v1.2.1)
+# Timmy-KB — README (v1.2.2)
 
 Pipeline per la generazione di una **Knowledge Base Markdown AI-ready** a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
@@ -17,7 +17,7 @@ Pipeline per la generazione di una **Knowledge Base Markdown AI-ready** a partir
 - `DRIVE_ID` → radice/parent dello spazio Drive (solo per Drive)  
 - `GITHUB_TOKEN` → richiesto per il push GitHub  
 - `GIT_DEFAULT_BRANCH` → branch di default (fallback `main`)  
-- `YAML_STRUCTURE_FILE` → override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)  
+- `YAML_STRUCTURE_FILE` → override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)  
 - `LOG_REDACTION` → `auto` (default), `on`, `off`  
 - `ENV` → `dev`, `prod`, `ci`, ...  
 - `CI` → `true`/`false`  
@@ -30,8 +30,8 @@ Pipeline per la generazione di una **Knowledge Base Markdown AI-ready** a partir
 output/timmy-kb-<slug>/
   ├─ raw/        # PDF caricati/scaricati
   ├─ book/       # Markdown + SUMMARY.md + README.md
-  ├─ semantic/   # tags.yaml e altri enrichment
-  ├─ config/     # config.yaml aggiornato con ID Drive
+  ├─ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml
+  ├─ config/     # config.yaml aggiornato con ID Drive e blocchi client-specific
   └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
 ```
 
@@ -70,9 +70,10 @@ py src/pre_onboarding.py [--slug <id>] [--name <nome descrittivo>] [--non-intera
 ```
 
 1. Richiede *slug* (e, se interattivo, nome cliente).  
-2. Crea struttura locale (`raw/`, `book/`, `config/`, `logs/` e `config.yaml`).  
-3. Drive opzionale: se configurato crea/aggiorna la struttura remota e carica `config.yaml`.  
-4. Aggiorna `config.yaml` locale con gli ID Drive.  
+2. Crea struttura locale (`raw/`, `book/`, `config/`, `logs/`, `semantic/`).  
+3. Copia i template in `semantic/` (`cartelle_raw.yaml`, `semantic_mapping.yaml`) con valori di default `semantic_tagger`.  
+4. Drive opzionale: se configurato crea/aggiorna la struttura remota e carica `config.yaml`.  
+5. Aggiorna `config.yaml` locale con gli ID Drive.  
 
 > In `--dry-run` lavora solo in locale, senza Drive.
 
@@ -85,8 +86,9 @@ py src/tag_onboarding.py --slug <id>
 ```
 
 1. Legge i PDF in `raw/`.  
-2. Genera o aggiorna `semantic/tags.yaml` con i tag riconosciuti.  
-3. Prepara i dati per l’arricchimento frontmatter.  
+2. Genera `semantic/tags_raw.csv` con path base-relative (`raw/...`) e colonne standard (relative_path, suggested_tags, entities, keyphrases, score, sources).  
+3. Checkpoint HiTL: l’utente può fermarsi dopo il CSV o proseguire con lo stub.  
+4. Se confermato (o `--proceed`), crea `README_TAGGING.md` e `tags_reviewed.yaml` (stub) in `semantic/`.  
 
 ---
 
@@ -97,7 +99,7 @@ py src/semantic_onboarding.py [--slug <id>] [opzioni]
 ```
 
 1. Conversione PDF → Markdown in `book/`.  
-2. Arricchimento frontmatter dei `.md` usando `semantic/tags.yaml`.  
+2. Arricchimento frontmatter dei `.md` usando `semantic/tags_reviewed.yaml`.  
 3. Generazione `README.md` e `SUMMARY.md`.  
 4. Avvio preview HonKit (Docker) opzionale, con chiusura esplicita richiesta.  
 
@@ -142,6 +144,7 @@ py src/onboarding_full.py --slug <id>
 - La preview funziona solo se Docker è disponibile; in batch viene saltata.  
 - In interattivo puoi decidere se avviare/fermare preview e push.  
 - Pubblicazione su GitHub: vengono inclusi solo i `.md` in `book/`.  
+- La sandbox dummy (`timmy-kb-dummy`) è usata nei test automatici per validare coerenza e idempotenza della pipeline.  
 
 ---
 

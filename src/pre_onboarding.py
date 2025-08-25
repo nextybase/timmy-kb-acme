@@ -8,20 +8,23 @@ Responsabilità:
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e, se non in `--dry-run`, la struttura remota su Google Drive.
 - Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
+- Copiare i template semantici di base nella cartella `semantic/` cliente.
 
 Note architetturali:
 - Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
   (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** chiamano `sys.exit()` o `input()`.
 - **Redazione centralizzata** via `logging_utils` (nessun masking in env).
 - **Path-safety STRONG**: `ensure_within()` prima di ogni write/copy/delete.
-
-Questo modulo **non** stampa segreti nei log (usa mascheratura parziale per ID e percorsi).
+- Non stampa segreti nei log (usa mascheratura parziale per ID e percorsi).
 """
 from __future__ import annotations
 
 import argparse
 import sys
 import uuid
+import os
+import shutil
+import datetime as _dt
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -60,20 +63,13 @@ def _prompt(msg: str) -> str:
 def _resolve_yaml_structure_file() -> Path:
     """
     Risolve in modo robusto il percorso dello YAML della struttura cartelle.
-
-    Ordine di ricerca:
-      1) Env `YAML_STRUCTURE_FILE` (se definita) — DEVE stare dentro il repo.
-      2) `<repo_root>/config/cartelle_raw.yaml`
-      3) `<repo_root>/src/config/cartelle_raw.yaml`
     """
     here = Path(__file__).resolve()
-    repo_root = here.parents[1]  # …/<repo>
+    repo_root = here.parents[1]
 
-    # 1) Override via env
     env_path = get_env_var("YAML_STRUCTURE_FILE", required=False)
     if env_path:
         p = Path(env_path).expanduser().resolve()
-        # Path-safety forte: l'override DEVE vivere dentro al repo
         try:
             ensure_within(repo_root, p)
         except ConfigError:
@@ -100,16 +96,56 @@ def _resolve_yaml_structure_file() -> Path:
 
 
 def _sync_env(context: ClientContext, *, require_env: bool) -> None:
-    """
-    Allinea nel `context.env` le variabili critiche lette da os.environ.
-    SSoT: `env_utils.get_env_var` (puro, nessun masking).
-    Solleva ConfigError se `require_env=True` e una chiave non è disponibile.
-    """
+    """Allinea nel `context.env` le variabili critiche lette da os.environ."""
     for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_ID"):
         if not context.env.get(key):
             val = get_env_var(key, required=require_env)
             if val:
                 context.env[key] = val
+
+
+def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client_name: str, logger):
+    """
+    Copia i template semantici globali nella cartella cliente:
+    - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
+    - default_semantic_mapping.yaml -> semantic/semantic_mapping.yaml (+ blocco context)
+    """
+    semantic_dir = context.base_dir / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg_dir = repo_root / "config"
+    struct_src = Path(os.getenv("YAML_STRUCTURE_FILE") or (cfg_dir / "cartelle_raw.yaml"))
+    mapping_src = cfg_dir / "default_semantic_mapping.yaml"
+
+    struct_dst = semantic_dir / "cartelle_raw.yaml"
+    mapping_dst = semantic_dir / "semantic_mapping.yaml"
+
+    ensure_within(semantic_dir, struct_dst)
+    ensure_within(semantic_dir, mapping_dst)
+
+    if not struct_dst.exists() and struct_src.exists():
+        shutil.copy2(struct_src, struct_dst)
+        logger.info({"event": "semantic_template_copied", "file": str(struct_dst)})
+
+    if not mapping_dst.exists() and mapping_src.exists():
+        shutil.copy2(mapping_src, mapping_dst)
+        logger.info({"event": "semantic_template_copied", "file": str(mapping_dst)})
+        try:
+            import yaml
+            with mapping_dst.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            ctx = {
+                "slug": context.slug,
+                "client_name": client_name or context.slug,
+                "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
+            }
+            if "context" not in data:
+                data = {"context": ctx, **(data if isinstance(data, dict) else {})}
+                with mapping_dst.open("w", encoding="utf-8") as f:
+                    yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+                logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
+        except Exception as e:
+            logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
 
 
 def pre_onboarding_main(
@@ -121,44 +157,27 @@ def pre_onboarding_main(
     run_id: Optional[str] = None,
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato."""
-    # === Logger console “early” (prima dei path cliente) ===
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
-    # ✅ Validazione slug PRIMA di costruire i path/log di cliente (helper centralizzato)
-    slug = ensure_valid_slug(
-        slug,
-        interactive=interactive,
-        prompt=_prompt,
-        logger=early_logger,
-    )
+    slug = ensure_valid_slug(slug, interactive=interactive, prompt=_prompt, logger=early_logger)
 
-    # Validazioni base input (senza cambiare UX)
     if client_name is None and interactive:
         client_name = _prompt("Inserisci nome cliente: ").strip()
     if not client_name:
-        client_name = slug  # fallback innocuo
+        client_name = slug
 
-    # === Caricamento/creazione contesto cliente ===
     require_env = not (dry_run or (not interactive))
     context: ClientContext = ClientContext.load(
-        slug=slug,
-        interactive=interactive,
-        require_env=require_env,
-        run_id=run_id,
+        slug=slug, interactive=interactive, require_env=require_env, run_id=run_id,
     )
 
-    # ✅ Flag redazione una sola volta (SSoT) e attaccalo al contesto
     if not hasattr(context, "redact_logs"):
         context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
 
-    # === Log file path dentro la sandbox cliente (come da README) ===
-    # output/timmy-kb-<slug>/logs/onboarding.log
     log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    # STRONG: scriviamo log solo sotto la base cliente
     ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # 🔁 Rebind logger con il contesto
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     if not require_env:
@@ -166,8 +185,6 @@ def pre_onboarding_main(
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("🚀 Avvio pre-onboarding")
 
-    # === Config iniziale: assicurati che esista un file config.yaml coerente ===
-    # STRONG: il config deve vivere sotto la base cliente
     ensure_within(context.base_dir, context.config_path)
 
     cfg: Dict[str, Any] = {}
@@ -177,16 +194,12 @@ def pre_onboarding_main(
         cfg = {}
     if client_name:
         cfg["client_name"] = client_name
-    write_client_config_file(context, cfg)  # crea/aggiorna con backup .bak
+    write_client_config_file(context, cfg)
 
-    # === Risoluzione YAML + Struttura locale convenzionale ===
     try:
         yaml_structure_file = _resolve_yaml_structure_file()
-        logger.info(
-            "pre_onboarding.yaml.resolved",
-            extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
-        )
-        # STRONG: le directory di lavoro del cliente devono essere sotto base_dir
+        logger.info("pre_onboarding.yaml.resolved",
+                    extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)})
         ensure_within(context.base_dir, context.raw_dir)
         ensure_within(context.base_dir, context.md_dir)
         with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
@@ -195,81 +208,53 @@ def pre_onboarding_main(
         logger.error("❌ Impossibile creare la struttura locale: " + str(e))
         raise
 
+    # 🚀 NEW: bootstrap semantic templates
+    repo_root = Path(__file__).resolve().parents[1]
+    bootstrap_semantic_templates(repo_root, context, client_name, logger)
+
     if dry_run:
         logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
         logger.info("✅ Pre-onboarding locale completato (dry-run).")
         return
 
-    # === Sincronizzazione ENV (estratta) ===
     _sync_env(context, require_env=require_env)
-
-    # Preflight (log non sensibili, mascherati)
-    logger.info(
-        "pre_onboarding.drive.preflight",
-        extra={
-            "SERVICE_ACCOUNT_FILE": mask_partial(context.env.get("SERVICE_ACCOUNT_FILE")),
-            "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID")),
-        },
-    )
-
-    # === Inizializza client Google Drive (Service Account) ===
+    logger.info("pre_onboarding.drive.preflight",
+                extra={"SERVICE_ACCOUNT_FILE": mask_partial(context.env.get("SERVICE_ACCOUNT_FILE")),
+                       "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID"))})
     service = get_drive_service(context)
 
-    # Determina parent della cartella cliente (Shared Drive o cartella specifica)
     drive_parent_id = context.env.get("DRIVE_ID")
     if not drive_parent_id:
         raise ConfigError("DRIVE_ID non impostato nell'ambiente (.env).")
 
-    # Toggle redazione: usa la fonte di verità del contesto
     redact = bool(getattr(context, "redact_logs", False))
-
     logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
 
-    # === Crea cartella cliente sul Drive condiviso (idempotente) ===
     with metrics_scope(logger, stage="drive_create_client_folder", customer=context.slug):
-        client_folder_id = create_drive_folder(
-            service, context.slug, parent_id=drive_parent_id, redact_logs=redact
-        )
+        client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
     logger.info("📄 Cartella cliente creata su Drive", extra={"client_folder_id": mask_partial(client_folder_id)})
 
-    # === Crea struttura remota da YAML (idempotente) ===
     with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
-        created_map = create_drive_structure_from_yaml(
-            service, yaml_structure_file, client_folder_id, redact_logs=redact
-        )
-    logger.info(
-        "📄 Struttura Drive creata",
-        extra={
-            "yaml_tail": tail_path(yaml_structure_file),
-            "created_map_masked": mask_id_map(created_map),
-        },
-    )
+        created_map = create_drive_structure_from_yaml(service, yaml_structure_file, client_folder_id, redact_logs=redact)
+    logger.info("📄 Struttura Drive creata",
+                extra={"yaml_tail": tail_path(yaml_structure_file), "created_map_masked": mask_id_map(created_map)})
 
-    # Individua RAW (accetta alias RAW/raw dal mapping ritornato)
     drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
             f"Verifica lo YAML di struttura: {yaml_structure_file}",
-            drive_id=client_folder_id,
-            slug=context.slug,
-            file_path=str(yaml_structure_file),
+            drive_id=client_folder_id, slug=context.slug, file_path=str(yaml_structure_file),
         )
 
-    # === Carica config.yaml su Drive (sostituisce se esiste) ===
     with metrics_scope(logger, stage="drive_upload_config", customer=context.slug):
-        uploaded_cfg_id = upload_config_to_drive_folder(
-            service, context, parent_id=client_folder_id, redact_logs=redact
-        )
+        uploaded_cfg_id = upload_config_to_drive_folder(service, context, parent_id=client_folder_id, redact_logs=redact)
     logger.info("📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
 
-    # === Aggiorna config locale con gli ID Drive ===
-    updates = {
-        "drive_folder_id": client_folder_id,
-        "drive_raw_folder_id": drive_raw_folder_id,
-        "drive_config_folder_id": client_folder_id,
-        "client_name": client_name,
-    }
+    updates = {"drive_folder_id": client_folder_id,
+               "drive_raw_folder_id": drive_raw_folder_id,
+               "drive_config_folder_id": client_folder_id,
+               "client_name": client_name}
     update_config_with_drive_ids(context, updates=updates, logger=logger)
     logger.info("🔑 Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
 
@@ -277,30 +262,20 @@ def pre_onboarding_main(
 
 
 def _parse_args() -> argparse.ArgumentParser:
-    """Parsa gli argomenti CLI dell’orchestratore di pre-onboarding."""
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
     p.add_argument("--name", type=str, help="Nome cliente (es. ACME Srl)")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Esegue solo la parte locale, salta Google Drive",
-    )
+    p.add_argument("--dry-run", action="store_true", help="Esegue solo la parte locale, salta Google Drive")
     return p
 
 
 if __name__ == "__main__":
     args = _parse_args().parse_args()
-
-    # run_id univoco per correlazione log dell’esecuzione
     run_id = uuid.uuid4().hex
-
-    # Logger console “early” (prima di avere lo slug) per messaggi iniziali
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
-    # Risoluzione slug: posizionale > --slug > prompt (validazione inclusa)
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")

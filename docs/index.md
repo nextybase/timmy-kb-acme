@@ -17,11 +17,5 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
 - **Changelog**
   - [CHANGELOG](CHANGELOG.md) – novità e fix per ogni release.
 
-## Novità v1.2.1 (estratto)
-
-- **Split orchestratori**: `semantic_onboarding.py` (conversione + enrichment + preview) e `onboarding_full.py` (solo push).
-- **SSoT path-safety**: `ensure_within` spostato in `pipeline.path_utils`.
-- **Adapter contenuti**: fallback README/SUMMARY uniformi e atomici.
-- **Doc aggiornata**: Architecture, User e Developer Guide, Policy.
 
 > La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.

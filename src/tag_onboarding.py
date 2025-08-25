@@ -120,32 +120,68 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
 def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
+    """
+    Emette un CSV compatibile con la pipeline nuova:
+      - relative_path: path POSIX relativo alla BASE, quindi prefissato con 'raw/...'
+      - suggested_tags: euristica da path + filename
+      - entities,keyphrases,score,sources: colonne presenti (vuote/{}), per compatibilità futura
+    """
     rows: List[List[str]] = []
+
+    # radice logica da scrivere nel CSV
+    raw_prefix = "raw"
+
     for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
+        # rel rispetto a raw/, poi prefissiamo 'raw/'
         try:
-            rel = pdf.relative_to(raw_dir).as_posix()
+            rel_raw = pdf.relative_to(raw_dir).as_posix()
         except Exception:
-            rel = pdf.name
-        parts = [p for p in Path(rel).parts if p]
-        base_no_ext = Path(parts[-1]).stem if parts else Path(rel).stem
-        candidates = {p.lower() for p in parts[:-1]}
-        candidates.update(tok for tok in base_no_ext.replace("_", " ").replace("-", " ").split() if tok)
-        rows.append([rel, ", ".join(sorted(candidates))])
+            rel_raw = Path(pdf.name).as_posix()
+
+        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
+
+        # tag candidati: cartelle (senza 'raw') + token da filename
+        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
+        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
+        path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
+        file_tokens = {
+            tok.lower()
+            for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
+            if tok
+        }
+        candidates = sorted(path_tags.union(file_tokens))
+
+        # colonne "larghe" vuote/di default per compatibilità
+        entities = "[]"
+        keyphrases = "[]"
+        score = "{}"
+        sources = json.dumps(
+            {"path": list(path_tags), "filename": list(file_tokens)},
+            ensure_ascii=False,
+        )
+
+        rows.append([
+            rel_base_posix,
+            ", ".join(candidates),
+            entities,
+            keyphrases,
+            score,
+            sources,
+        ])
 
     ensure_within(csv_path.parent, csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Scrittura robusta via csv.writer su buffer + commit atomico
+    # Scrittura robusta via buffer + commit atomico
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(["relative_path", "suggested_tags"])
-    for rel, tags in rows:
-        writer.writerow([rel, tags])
+    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
+    for r in rows:
+        writer.writerow(r)
+
     safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
-
-    logger.info("Tag grezzi generati", extra={"file_path": str(csv_path), "count": len(rows)})
+    logger.info("Tag grezzi generati (base-relative)", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)
-
 
 # ───────────────────────────── Validatore YAML ───────────────────────────────
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
@@ -358,7 +394,7 @@ def tag_onboarding_main(
             logger.info("Stop dopo CSV (non-interattivo, no --proceed).")
             return
     else:
-        cont = _prompt("Vuoi proseguire con arricchimento semantico? (y/n): ").lower()
+        cont = _prompt("Controlla e approva i tag generati. Sei pronto per proseguire con l'arricchimento semantico? (y/n): ").lower()
         if cont != "y":
             logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
             return

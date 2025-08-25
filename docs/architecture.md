@@ -1,4 +1,4 @@
-# Architettura — Timmy-KB (v1.2.1)
+# Architettura — Timmy-KB (v1.2.2)
 
 Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, flussi end‑to‑end, struttura del repository e le API interne su cui si fonda la pipeline. Gli sviluppatori devono sempre riferirsi anche a [Developer Guide](developer_guide.md) e alle regole di codifica per estendere o modificare il codice, privilegiando il riuso di funzioni esistenti e proponendo aggiornamenti se necessario.
 
@@ -12,33 +12,34 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 - **Struttura e Security**: path‑safety, scritture atomiche, adapter uniformi per contenuti/preview, allineamento firme API.
 - **SSoT path‑safety**: `ensure_within` è **single source of truth** in `pipeline.path_utils`.
 - **Split orchestratori**: conversione/enrichment/preview in `semantic_onboarding.py`; push in `onboarding_full.py`.
+- **Testing**: la KB dummy viene generata da `tools/gen_dummy_kb.py` ed è validata tramite i test in `tests/`, che verificano coerenza PDF↔CSV ed enrichment semantico.
 
 ---
 
 ## Flusso end‑to‑end (pipeline)
 
-**1) pre\_onboarding → setup locale + (opz.) struttura Drive**
+**1) pre_onboarding → setup locale + (opz.) struttura Drive**
 
 - Input: `slug` (e nome cliente, se interattivo); opz.: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `YAML_STRUCTURE_FILE`.
 - Azioni: crea struttura locale; risolve YAML struttura; (se configurato) crea struttura su Drive; carica `config.yaml` nella root cliente su Drive; aggiorna `config.yaml` locale con gli ID remoti.
 - Output: `output/timmy-kb-<slug>/{raw,book,semantic,config,logs}` + `config.yaml` aggiornato; opz.: mappa cartelle Drive.
 
-**2) tag\_onboarding → scoperta tag e vocabolario**
+**2) tag_onboarding → tagging semantico (HiTL)**
 
 - Input: PDF in `raw/`.
-- Azioni: analisi nominale/euristica; produce/aggiorna `semantic/tags.yaml`; include validatore `tags_reviewed.yaml`.
-- Output: `semantic/tags.yaml` (tag canonicali, sinonimi, aree) e CSV/README di supporto.
+- Azioni: genera `semantic/tags_raw.csv` (euristiche su path/filename), checkpoint HiTL con stub `tags_reviewed.yaml` e `README_TAGGING.md`.
+- Output: `semantic/tags_raw.csv` + stub revisione.
 
-**3) semantic\_onboarding → conversione + enrichment + preview**
+**3) semantic_onboarding → conversione + enrichment + preview**
 
-- Input: `raw/` + (opz.) `semantic/tags.yaml`.
+- Input: `raw/` + (opz.) `semantic/tags_reviewed.yaml`.
 - Azioni: PDF→MD in `book/`; arricchimento frontmatter (tags/areas); generazione `README.md` e `SUMMARY.md` (repo util → adapter fallback atomico); avvio preview HonKit in Docker con chiusura esplicita.
 - Output: Markdown pronti in `book/`; anteprima su `localhost:<port>`.
 
-**4) onboarding\_full → push (e integrazioni)**
+**4) onboarding_full → push (e integrazioni)**
 
 - Input: `book/` pronto.
-- Azioni: push GitHub via `github_utils` (nessun fallback). In roadmap: collegamento GitBook.
+- Azioni: push GitHub via `github_utils`. In roadmap: collegamento GitBook.
 - Output: commit/push su repo remoto.
 
 ---
@@ -47,6 +48,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 
 ```
 repo/
+├─ README.md                           # documentazione principale
 ├─ config/
 │  ├─ config.yaml                      # bootstrap globale (defaults iniziali)
 │  ├─ .env.example                     # template variabili d'ambiente
@@ -54,10 +56,11 @@ repo/
 │  ├─ pdf_dummy.yaml                   # fixture per tools/gen_dummy_kb.py
 │  └─ tags_template.yaml               # template vocabolario tag (facoltativo)
 ├─ docs/
-│  ├─ README.md
+│  ├─ index.md                         # indice generale della documentazione
 │  ├─ user_guide.md
 │  ├─ developer_guide.md
 │  ├─ architecture.md                  # questa pagina
+│  ├─ coding_rules.md
 │  ├─ policy_push.md
 │  └─ versioning_policy.md
 ├─ src/
@@ -66,10 +69,20 @@ repo/
 │  ├─ semantic_onboarding.py           # conversione/enrichment/preview (NO push)
 │  ├─ onboarding_full.py               # solo push GitHub (e futuri collegamenti)
 │  ├─ tools/
-│  │  └─ gen_dummy_kb.py               # generatore KB di test (RAW+BOOK)
+│  │  └─ gen_dummy_kb.py               # generatore KB di test (RAW+BOOK+semantic)
 │  ├─ adapters/
 │  │  ├─ content_fallbacks.py          # README/SUMMARY fallback atomici
 │  │  └─ preview.py                    # gestione preview Docker/HonKit
+│  ├─ semantic/                        # moduli di tagging e enrichment semantico
+│  │  ├─ auto_tagger.py
+│  │  ├─ config.py
+│  │  ├─ normalizer.py
+│  │  ├─ review_writer.py
+│  │  ├─ semantic_extractor.py
+│  │  ├─ semantic_mapping.py
+│  │  ├─ tags_extractor.py
+│  │  ├─ tags_io.py
+│  │  └─ tags_validator.py
 │  └─ pipeline/
 │     ├─ constants.py                  # OUTPUT_DIR_NAME, LOGS_DIR_NAME, ...
 │     ├─ context.py                    # ClientContext (+ load helpers)
@@ -83,16 +96,17 @@ repo/
 │     ├─ content_utils.py              # convert & generate markdown utilities
 │     ├─ github_utils.py               # push_output_to_github
 │     └─ drive_utils.py                # API di alto livello per Drive
+├─ tests/
+│  ├─ conftest.py                      # fixture comuni (dummy_kb, slug, repo_root)
+│  └─ test_dummy_pipeline.py           # test end-to-end sandbox dummy
 └─ output/                              # (GENERATO) per‑cliente: timmy-kb-<slug>/{raw,book,semantic,config,logs}
 ```
-
-> Nota 1: la cartella `output/` è generata a runtime e non va versionata. Nota 2: `config/config.yaml` è il **bootstrap** globale; la config per‑cliente è in `output/timmy-kb-<slug>/config/config.yaml`.
 
 ---
 
 ## Funzioni principali (API interne)
 
-### pipeline.logging\_utils
+### pipeline.logging_utils
 
 - `get_structured_logger(name, log_file=None, context=None, run_id=None)` → logger strutturato (console/file), safe per segreti.
 
@@ -106,54 +120,61 @@ repo/
 - `ClientContext.load(slug, *, interactive, require_env, run_id)` → inizializza contesto cliente.
   - Campi: `slug`, `base_dir`, `raw_dir`, `book_dir`, `semantic_dir`, `config_dir`, `logs_dir`, `config_path`, `env`, `settings`, `redact_logs`, `repo_root_dir`.
 
-### pipeline.config\_utils
+### pipeline.config_utils
 
 - `get_client_config`, `write_client_config_file`, `update_config_with_drive_ids`
 
-### pipeline.env\_utils
+### pipeline.env_utils
 
 - `get_env_var`, `compute_redact_flag`
 
-### pipeline.path\_utils
+### pipeline.path_utils
 
 - `validate_slug`, `sorted_paths`, `sanitize_filename`, `is_safe_subpath`, `ensure_within` *(SSoT: guardia STRONG basata su **`Path.resolve()`** + **`relative_to()`**)*.
 
-### pipeline.file\_utils (PR‑3)
+### pipeline.file_utils
 
 - `safe_write_text`, `safe_write_bytes`
   - Scritture atomiche con temp file + `os.replace`, fsync best‑effort.
-  - **Nota:** la guardia STRONG `ensure_within` vive ora in `pipeline.path_utils` (SSoT).
 
-### pipeline.drive\_utils (solo pre‑onboarding)
+### pipeline.drive_utils (solo pre‑onboarding)
 
 - `get_drive_service`, `create_drive_folder`, `create_drive_structure_from_yaml`, `upload_config_to_drive_folder`, `create_local_base_structure`
 
-### pipeline.content\_utils (conversione)
+### pipeline.content_utils (conversione)
 
 - `convert_files_to_structured_markdown`, `generate_summary_markdown`, `generate_readme_markdown`, `validate_markdown_dir`
 
-### adapters.content\_fallbacks (PR‑2/PR‑3)
+### adapters.content_fallbacks
 
 - `ensure_readme_summary(context, logger, *, force=False)`
 
-### adapters.preview (PR‑2/PR‑4)
+### adapters.preview
 
 - `start_preview(context, logger, *, port=4000, container_name=None, wait_on_exit=False)`
 - `stop_preview(logger, *, container_name)`
 
-### semantic\_onboarding (nuovo orchestratore)
+### semantic (moduli)
+
+- `auto_tagger.py` → tagging automatico dei PDF.
+- `config.py` → configurazioni e costanti per l’arricchimento.
+- `normalizer.py` → normalizzazione dei tag.
+- `review_writer.py` → generazione file di revisione.
+- `semantic_extractor.py` → estrazione concetti dai Markdown【577†source】.
+- `semantic_mapping.py` → gestione e normalizzazione mapping semantico【578†source】.
+- `tags_extractor.py` → estrazione dei tag dai PDF.
+- `tags_io.py` → I/O su CSV, YAML e README tagging.
+- `tags_validator.py` → validazione dei file di tagging.
+
+### semantic_onboarding
 
 - Converte RAW→BOOK, arricchisce frontmatter, genera README/SUMMARY, avvia preview Docker e chiede se fermarla prima di uscire. **Nessun push.**
 
-### pipeline.gitbook\_preview (low‑level)
-
-- `run_gitbook_docker_preview`, `stop_container_safely`
-
-### pipeline.github\_utils (opz.)
+### pipeline.github_utils
 
 - `push_output_to_github`
 
-### onboarding\_full (ridotto)
+### onboarding_full
 
 - Esegue esclusivamente il **push GitHub** (e in futuro l'integrazione GitBook). Accetta un `book/` già pronto da `semantic_onboarding`.
 
@@ -201,6 +222,5 @@ Errore esplicito se nessun candidato esiste.
 - **Sicurezza**: redazione log uniforme; path‑safety; scritture atomiche.
 - **Trasparenza**: log strutturati con `run_id` per correlazione.
 - **API coerenti**: tutte le funzioni esposte hanno firma `(context, logger, **opts)` o variante coerente.
-
----
+- **Compatibilità**: tool e orchestratori devono funzionare anche su Windows (gestione encoding/log emoji).
 

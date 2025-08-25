@@ -1,3 +1,35 @@
+context:
+  slug: "<SLUG>"
+  client_name: "<CLIENT_NAME>"
+  created_at: "2025-08-25"
+
+# -----------------------------------------------------------------------------
+# STRUTTURA CARTELLE RAW
+# -----------------------------------------------------------------------------
+# Nota:
+# - Mantiene la struttura del tuo file di partenza.
+# - Questo YAML viene usato per mappare/validare la struttura dei PDF RAW cliente.
+# - Puoi adattare le voci ai tuoi domini (es. identity/organizzazione/glossario...).
+# -----------------------------------------------------------------------------
+
+# ⬇️ Contenuto originale, preservato e reso AI-ready (ordinamento stabile, unicode)
+#    Esempio tipico (sostituisci/integra con la tua struttura reale):
+#
+# raw_folders:
+#   identity:
+#     description: "Brand, logo, payoff, linee guida"
+#   organizzazione:
+#     description: "Organigrammi, policy interne, ruoli"
+#   artefatti-operativi:
+#     description: "Procedure, template, modulistica"
+#   glossario:
+#     description: "Terminologia e definizioni"
+#   contratti:
+#     description: "Contratti e accordi"
+#
+# NOTE: La sezione sopra è un esempio; qui sotto trovi i tuoi dati reali.
+# -----------------------------------------------------------------------------
+
 root_folders:
   - name: raw
     subfolders:

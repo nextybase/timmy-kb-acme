@@ -4,6 +4,36 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.2.2] - 2025-08-25
+
+### Added
+- **Test suite dummy (pytest + Pydantic)**:
+  - `tests/conftest.py`: fixture `dummy_kb` che rigenera la sandbox con `--overwrite` e valida i file chiave.
+  - `tests/test_dummy_pipeline.py`: 4 test (struttura, coerenza CSV↔PDF, idempotenza semantic, assenza `contrattualistica/`).
+- **Robustezza Windows nei test**: forzato `PYTHONIOENCODING=utf-8` / `PYTHONUTF8=1` al lancio di `gen_dummy_kb.py`.
+
+### Changed
+- **`src/tools/gen_dummy_kb.py`** riscritto:
+  - Genera la sandbox dummy completa da `config/*.yaml`.
+  - Produce PDF dummy coerenti con `pdf_dummy.yaml`.
+  - Copia `cartelle_raw.yaml` in `semantic/` e crea `semantic_mapping.yaml` con blocco `semantic_tagger` default.
+  - Genera `tags_raw.csv` tramite i moduli semantic (`extract_semantic_candidates → normalize_tags → render_tags_csv`).
+- **`src/tag_onboarding.py`**:
+  - `_emit_tags_csv` ora produce path base-relative (`raw/...`) e colonne extra (`entities`, `keyphrases`, `score`, `sources`) per compatibilità futura.
+
+### Fixed
+- Crash su Windows (`UnicodeEncodeError` da emoji ✅, `NameError: json`).
+- Path incoerenti tra CSV generati da strumenti diversi (ora formato unificato).
+- Errore `relative_to` su `contrattualistica/` (cartella rimossa per design).
+
+### Removed
+- Generazione locale della cartella `contrattualistica/` nel dummy.
+
+### Migration notes
+- Rigenera la sandbox dummy:
+  ```bash
+  py src/tools/gen_dummy_kb.py --slug dummy --name "Cliente Dummy" --overwrite
+
 ## [1.2.1] Intermedio — 2025-08-25
 
 > Release intermedia di consolidamento, applicata dopo le indicazioni di Codex e completata con refactor/test end-to-end sugli orchestratori. Focus su **pipeline core**; l’area semantica resta placeholder per la fase successiva.

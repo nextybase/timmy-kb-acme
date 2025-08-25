@@ -1,119 +1,117 @@
-# Coding Rules — Timmy-KB (v1.2.1)
+## Coding Rules — Timmy-KB (v1.2.2)
 
-Regole operative per scrivere e manutenere il codice della pipeline Timmy‑KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
+Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
 ---
 
 ## 1) Linguaggio, stile, tipizzazione
 
-- **Python ≥ 3.10** – usare le feature del linguaggio (type hints, pattern matching) mantenendo compatibilità.
-- **Type hints** – annotazioni obbligatorie per tutte le funzioni pubbliche e strutture dati complesse.
-- **Docstring** – brevi e chiare, stile Google. Solo esempi se chiariscono casi non ovvi.
-- **Naming** – snake\_case per variabili/funzioni, PascalCase per classi, MACRO\_CASE per costanti. Nomi esplicativi.
+- **Python ≥ 3.10** – usare le feature moderne (type hints, pattern matching) mantenendo compatibilità.
+- **Type hints** – obbligatorie per tutte le funzioni pubbliche e strutture dati complesse.
+- **Docstring** – brevi e chiare, stile Google; esempi solo se chiariscono casi non ovvi.
+- **Naming** – snake_case per variabili/funzioni, PascalCase per classi, MACRO_CASE per costanti. Nomi esplicativi.
 - **Import** – ordine: standard, terze parti, locali. Preferire import assoluti.
-- **Formattazione** – PEP 8, Black, Ruff. I commit devono superare i pre‑commit hooks.
-- **Commenti** – spiegare *perché*, non il *cosa*. Evitare superflui.
+- **Formattazione** – PEP 8, Black, Ruff. I commit devono superare i pre-commit hooks.
+- **Commenti** – spiegare *perché*, non *cosa*. Evitare superflui.
 
 ---
 
 ## 2) Orchestratori vs Moduli
 
-- **Orchestratori** – UX e flussi: parsing CLI, prompt (solo interattivo), gestione flag (`--non-interactive`, `--dry-run`, ecc.), anteprima Docker, gestione eccezioni → exit code. Solo qui `sys.exit()`.
-- **Moduli** – operazioni tecniche (Drive, conversione file, push GitHub). Nessun input utente né `sys.exit()`. Sollevano eccezioni tipizzate.
+- **Orchestratori** – UX e flussi: parsing CLI, prompt (solo interattivo), gestione flag (`--non-interactive`, `--dry-run`…), preview Docker, gestione eccezioni → exit code. Solo qui `sys.exit()`.
+- **Moduli** – operazioni tecniche (Drive, conversione, push). Nessun input utente né `sys.exit()`. Sollevano eccezioni tipizzate.
 - **Output utente** – solo orchestratori, via logger. I moduli restituiscono valori o eccezioni.
-- **Batch‑safe** – i moduli devono girare senza interazione. Orchestratori gestiscono batch vs interattivo.
+- **Batch-safe** – i moduli devono funzionare senza interazione; orchestratori gestiscono batch vs interattivo.
+- **Test e strumenti dummy** – `gen_dummy_kb.py` produce sandbox completa con PDF sintetici e CSV iniziali; usato come base per i test automatizzati in `tests/`.
 
 ---
 
 ## 3) Logging ed errori
 
-- **No **`` – tutto via logger strutturato (`get_structured_logger`). Livelli: DEBUG, INFO, WARNING, ERROR.
+- **No `print()`** – tutto via logger strutturato (`get_structured_logger`). Livelli: DEBUG, INFO, WARNING, ERROR.
 - **Metadati nei log** – usare `extra={}` con slug, path, ecc.
-- **Niente segreti nei log** – usare redazione centralizzata (`compute_redact_flag`, helper di mask). Mai loggare token in chiaro.
-- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, `PushError`, ecc.). Gli orchestratori mappano su `EXIT_CODES`.
-- **Determinismo** – niente catch‑all generici nei moduli. Lasciar propagare se imprevisti.
-- **Messaggi chiari** – spiegare il problema e il contesto; evitare testi generici.
+- **Niente segreti nei log** – usare redazione centralizzata (`compute_redact_flag`). Mai loggare token in chiaro.
+- **Eccezioni tipizzate** – usare classi specifiche (`ConfigError`, `PreviewError`, `PushError`, …). Gli orchestratori mappano su `EXIT_CODES`.
+- **Determinismo** – niente catch-all generici nei moduli. Lasciar propagare se imprevisti.
+- **Messaggi chiari** – spiegare il problema e il contesto.
 
 ---
 
 ## 4) I/O, sicurezza e atomicità
 
-- **Pathlib & encoding** – sempre `Path`, `encoding="utf-8"`, context manager.
-- **Path traversal (SSoT)** – usare `pipeline.path_utils.ensure_within` come guardia *STRONG* prima di scrivere/leggere fuori sandbox. `is_safe_subpath` è ammesso solo come check *soft* pre‑lettura o per shortlist, **non** per autorizzare scritture.
-- **Scritture atomiche** – usare `safe_write_text`/`safe_write_bytes` con `atomic=True`. Per file critici, prevedere backup `.bak`.
-- **No segreti su disco** – non salvare token/credenziali. Solo PDF originali e artefatti pubblicabili.
-- **Chiusura risorse** – sempre context manager; nessun file descriptor “appeso”.
+- **Pathlib & encoding** – sempre `Path`, `encoding="utf-8"`.
+- **Path traversal (SSoT)** – `pipeline.path_utils.ensure_within` come guardia forte. `is_safe_subpath` solo per check soft.
+- **Scritture atomiche** – usare `safe_write_text/bytes` con `atomic=True`. Per file critici, backup `.bak`.
+- **No segreti su disco** – non salvare token/credenziali.
+- **Chiusura risorse** – sempre context manager; nessun fd appeso.
+- **Compatibilità Windows** – evitare caratteri Unicode non supportati nei log stdout; usare emoji/testo solo se compatibili con `cp1252`.
 
 ---
 
 ## 5) Configurazioni e cache
 
-- **YAML config** – sempre `yaml.safe_load`. Default sensati o `ConfigError` esplicito.
-- **Regex slug** – definita in `config/config.yaml`, cache in `path_utils`. Invalidate con `clear_slug_regex_cache()` quando la config cambia.
-- **Env centralizzate** – usare `env_utils.get_env_var`. Evitare `os.environ[...]` sparsi.
-- **Cache runtime** – isolate al modulo, invalidabili con funzioni dedicate; nessuna cache globale non controllata.
+- **YAML config** – sempre `yaml.safe_load`. Default sensati o `ConfigError`.
+- **Regex slug** – definita in `config/config.yaml`, cache in `path_utils`. Invalidate con `clear_slug_regex_cache()`.
+- **Env centralizzate** – usare `env_utils.get_env_var`.
+- **Cache runtime** – isolate al modulo, invalidabili.
 
 ---
 
 ## 6) Subprocess, Docker, GitHub
 
-- **Comandi esterni** – usare wrapper (es. `proc_utils.run_cmd(...)`) con timeout, retry/backoff, cattura `stdout/stderr`. Evitare `shell=True`.
-- **Docker** – preview via `adapters.preview` (API uniforme). Lo stop è orchestrato dagli orchestratori.
-- **Split orchestratori** – `semantic_onboarding.py` fa conversione/enrichment/preview; `onboarding_full.py` gestisce **solo il push**.
-- **Git/GitHub** – push via `pipeline.github_utils`. Validare precondizioni (es. `GITHUB_TOKEN`). Push incrementale; force solo con consenso esplicito (`--force-push` + `--force-ack`) e `--force-with-lease`.
-- **Token** – mai nell’URL; solo header. Mascherare sempre nei log.
+- **Comandi esterni** – wrapper (`proc_utils.run_cmd(...)`) con timeout, retry/backoff. Evitare `shell=True`.
+- **Docker** – preview via `adapters.preview`. Lo stop è orchestrato dagli orchestratori.
+- **Split orchestratori** – `semantic_onboarding.py` → conversione/enrichment/preview. `onboarding_full.py` → push.
+- **GitHub** – push via `pipeline.github_utils`. Precondizioni valide (`GITHUB_TOKEN`). Force solo con consenso (`--force-push` + `--force-ack`) e `--force-with-lease`.
+- **Token** – mai in URL; solo header. Mascherare sempre nei log.
 
 ---
 
 ## 7) Drive e rete
 
-- **Uso limitato a pre‑onboarding** – Drive è usato solo per creare struttura remota e caricare `config.yaml`.
-- **Retry con backoff** – exponential backoff + jitter (vedi `drive/client.py`). Loggare tentativi.
-- **Idempotenza download** – saltare file invariati (MD5 + size) nei moduli di download.
+- **Uso limitato a pre-onboarding** – Drive solo per creare struttura remota e caricare `config.yaml`.
+- **Retry con backoff** – exponential + jitter (vedi `drive/client.py`).
+- **Idempotenza download** – saltare file invariati (MD5 + size).
 - **Gerarchia** – RAW locale rispecchia Drive; BOOK rispecchia RAW.
 - **Metriche** – loggare numero file scaricati, retry, skip.
-- **Redazione dati** – loggare ID parziali (inizio/fine) se `redact_logs=True`.
+- **Redazione dati** – loggare ID parziali se `redact_logs=True`.
 
 ---
 
 ## 8) Compatibilità e versioning
 
-- **SemVer** – PATCH = bugfix/refactor compatibile. MINOR = nuove feature. MAJOR = cambi di API.
+- **SemVer** – PATCH = bugfix compatibili. MINOR = nuove feature. MAJOR = cambi API.
 - **No breaking in PATCH** – vietato cambiare default o rimuovere opzioni.
-- **Smoke test** – provare comandi base dopo ogni modifica. Aggiungere test script/manuali quando serve.
+- **Smoke test** – eseguire i comandi base dopo ogni modifica. Aggiungere test quando serve.
+- **Tests Pytest** – test principali sotto `tests/`, es. `test_dummy_pipeline.py` che valida coerenza PDF/CSV e generazione sandbox.
 
 ---
 
-## 9) Test minimi (manuali)
+## 9) Test minimi
 
 Prima di una PR, eseguire:
 
-1. **Pre‑onboarding (locale)**
-   ```bash
-   py src/pre_onboarding.py --slug demo --non-interactive --dry-run
-   ```
-2. **Tag onboarding (CSV + stub)**
-   ```bash
-   py src/tag_onboarding.py --slug demo --source local --local-path ./some-pdfs --non-interactive --proceed
-   ```
-3. **Semantic onboarding (conversione + preview)**
-   ```bash
-   py src/semantic_onboarding.py --slug demo --non-interactive --no-preview
-   # oppure interattivo con preview Docker
-   py src/semantic_onboarding.py --slug demo
-   ```
-4. **Push (solo GitHub)**
-   ```bash
-   set GITHUB_TOKEN=...  # o esportare in .env
-   py src/onboarding_full.py --slug demo --non-interactive
-   ```
+```bash
+# Pre-onboarding (locale)
+py src/pre_onboarding.py --slug demo --non-interactive --dry-run
+
+# Tag onboarding (CSV + stub)
+py src/tag_onboarding.py --slug demo --source local --local-path ./some-pdfs --non-interactive --proceed
+
+# Semantic onboarding (conversione + preview)
+py src/semantic_onboarding.py --slug demo --non-interactive --no-preview
+
+# Push (solo GitHub)
+set GITHUB_TOKEN=...  # o esportare in .env
+py src/onboarding_full.py --slug demo --non-interactive
+```
 
 ---
 
 ## 10) Qualità del codice
 
 - **Funzioni piccole** – ogni funzione fa una cosa precisa.
-- **Chiarezza > performance** – ottimizzare solo con evidenza, commentare i trick.
+- **Chiarezza > performance** – ottimizzare solo se necessario, commentare i trick.
 - **No duplicazione** – DRY, estrarre in util quando sensato.
 - **Testabilità** – funzioni pure, dipendenze iniettate (logger, context).
 - **TODO chiari** – annotare con breve spiegazione; rimuovere codice morto.

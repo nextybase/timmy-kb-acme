@@ -1,4 +1,4 @@
-# User Guide — Timmy‑KB (v1.2.1)
+# User Guide — Timmy‑KB (v1.2.2)
 
 Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se desiderato, push su GitHub.
 
@@ -19,7 +19,7 @@ Imposta le variabili (via `.env` o ambiente di sistema):
 - `DRIVE_ID` → radice/parent dello spazio Drive (solo per Drive)
 - `GITHUB_TOKEN` → necessario solo se vuoi pubblicare su GitHub
 - `GIT_DEFAULT_BRANCH` → branch di default per il push (fallback `main`)
-- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`; fallback `src/config/cartelle_raw.yaml`)
+- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION` → `auto` (default), `on`, `off`
 - `ENV` → `dev`, `prod`, `ci`, ...
 - `CI` → `true`/`false`
@@ -32,8 +32,8 @@ Imposta le variabili (via `.env` o ambiente di sistema):
 output/timmy-kb-<slug>/
   ├─ raw/        # PDF locali (fonte unica)
   ├─ book/       # Markdown + SUMMARY.md + README.md
-  ├─ semantic/   # tags.yaml e altri enrichment
-  ├─ config/     # config.yaml (aggiornato con eventuali ID Drive)
+  ├─ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml
+  ├─ config/     # config.yaml (aggiornato con eventuali ID Drive e blocco semantic_tagger)
   └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
 ```
 
@@ -62,17 +62,17 @@ py src/pre_onboarding.py [--slug <id>] [--name <nome descrittivo>] [--non-intera
 **Sequenza tipica**
 
 1. **Slug cliente** → richiesto lo *slug* (es. `acme`). In interattivo, se non valido il sistema chiede un nuovo valore. In CLI puoi fornirlo con `--slug acme` e, opzionalmente, `--name "Cliente ACME"`.
-2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml` (con backup `.bak` se già presente).
-3. **Google Drive (opzionale)**
+2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml`.
+3. **Configurazioni semantiche** → copia `cartelle_raw.yaml` e `default_semantic_mapping.yaml` in `semantic/`, generando `semantic_mapping.yaml` con blocco `semantic_tagger` (valori di default modificabili).
+4. **Google Drive (opzionale)**
    - Se configurato: crea/aggiorna la struttura remota e carica `config.yaml`.
    - Se mancano credenziali: in interattivo puoi usare `--dry-run` per restare in locale; in batch l’esecuzione fallisce senza il flag.
-4. **Riepilogo finale** → mostra azioni eseguite e dove trovare i file.
 
 > In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente.
 
 ---
 
-### B) Tagging semantico
+### B) Tagging semantico (HiTL)
 
 ```bash
 py src/tag_onboarding.py --slug <id>
@@ -80,9 +80,10 @@ py src/tag_onboarding.py --slug <id>
 
 **Sequenza tipica**
 
-1. Legge i PDF in `raw/`.
-2. Genera/aggiorna `semantic/tags.yaml` con i tag riconosciuti.
-3. Prepara i dati per l’arricchimento frontmatter che avverrà in onboarding.
+1. Copia i PDF da Drive o locale in `raw/`.
+2. Genera `semantic/tags_raw.csv` con i candidati tag derivati dai path e dai nomi file.
+3. Checkpoint HiTL: in interattivo chiede se proseguire con l’arricchimento semantico; in CLI puoi usare `--proceed`.
+4. Se confermato, genera `README_TAGGING.md` e stub `tags_reviewed.yaml`.
 
 ---
 
@@ -95,24 +96,29 @@ py src/semantic_onboarding.py [--slug <id>] [opzioni]
 **Sequenza tipica**
 
 1. **Conversione PDF → Markdown** → genera `.md` in `book/`.
-2. **Arricchimento frontmatter** → integra tags/areas dal `tags.yaml`.
-3. **README e SUMMARY** → generati da utility repo o fallback adapter.
+2. **Arricchimento frontmatter** → integra tags/areas da `tags_reviewed.yaml` e mapping semantico.
+3. **README e SUMMARY** → generati in `book/`.
 4. **Anteprima HonKit (Docker)**
-   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»* (default **Sì**). Lancia la preview e poi chiede *«Chiudere ORA la preview e terminare?»* (default **Sì**).
-   - Se Docker assente: chiede *«Proseguire senza anteprima?»* (default **No**).
+   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»*. Lancia la preview e poi chiede *«Chiudere ORA la preview e terminare?»*.
+   - Se Docker assente: chiede *«Proseguire senza anteprima?»*.
+
+**Opzioni CLI aggiuntive:**
+- `--no-preview` → salta la preview Docker.
+- `--preview-port <N>` → porta per la preview (default 4000).
 
 ---
 
 ### D) Onboarding Full (push)
 
 ```bash
-py src/onboarding_full.py [--slug <id>] [opzioni]
+py src/onboarding_full.py --slug <id> [opzioni]
 ```
 
 **Sequenza tipica**
 
 1. **Push GitHub** → pubblica i contenuti della cartella `book/` (commit + push).
-2. **Integrazioni future** → collegamento automatico con GitBook.
+2. Richiede `GITHUB_TOKEN` valido.
+3. Integrazioni future: collegamento automatico con GitBook.
 
 **Opzioni CLI principali**
 
@@ -160,7 +166,8 @@ py src/onboarding_full.py --slug acme --no-push --non-interactive
 ## 5) Log ed Exit Codes
 
 - Log centralizzati in `output/timmy-kb-<slug>/logs/`.
-- Nessun `print()` nei moduli; prompt solo negli orchestratori.
+- Mascheramento segreti automatico (`LOG_REDACTION`).
+- Scritture atomiche e path-safety enforced (`ensure_within`).
 
 **Exit codes (estratto)**
 
@@ -177,14 +184,15 @@ py src/onboarding_full.py --slug acme --no-push --non-interactive
 - **Anteprima non raggiungibile** → verifica porta `4000`, stop con `docker rm -f gitbook-<slug>`.
 - **Push fallito** → controlla `GITHUB_TOKEN` e branch.
 - **Slug non valido** → richiesto reinserimento.
+- **Tags incoerenti** → assicurati che `tags_raw.csv` e `tags_reviewed.yaml` siano allineati.
 
 ---
 
 ## 7) Policy operative (estratto)
 
-- **Orchestratori** → UX/CLI, prompt e mapping deterministico errori.
+- **Orchestratori** → UX/CLI, prompt e checkpoint HiTL.
 - **Moduli** → azioni tecniche, no prompt.
-- **Sicurezza I/O** → `is_safe_subpath`, `ensure_within`, scritture atomiche via `safe_write_text`/`safe_write_bytes`.
+- **Sicurezza I/O** → `ensure_within`, scritture atomiche via `safe_write_text`/`safe_write_bytes`.
 - **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.
 
 ---
@@ -208,6 +216,9 @@ Passa `--force-push` e, se richiesto, `--force-ack`.
 
 **Posso lanciare senza variabili di ambiente?**  
 Sì, se usi `--non-interactive` e resti in locale (`--dry-run`).
+
+**Devo modificare a mano il mapping semantico?**  
+No: in `pre_onboarding` viene già generato con valori di default. Puoi però personalizzare `semantic_mapping.yaml` per cliente.
 
 ---
 

@@ -1,4 +1,4 @@
-# Developer Guide — Timmy-KB (v1.2.1)
+# Developer Guide — Timmy-KB (v1.2.2)
 
 Questa guida è rivolta agli sviluppatori e documenta le scelte architetturali e i principi di base adottati per garantire **coerenza, testabilità e robustezza** della pipeline.  
 È il documento di riferimento per chi sviluppa nuovo codice: ogni implementazione deve rifarsi a questa guida, alla descrizione dell’architettura e mantenere sempre compatibilità locale e riuso delle funzioni già presenti, proponendone l’eventuale aggiornamento solo se necessario.
@@ -54,7 +54,7 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 
 ### Linee guida
 - Orchestratori (`pre_onboarding.py`, `tag_onboarding.py`, `semantic_onboarding.py`, `onboarding_full.py`) = UX (CLI, prompt, exit codes).
-- Moduli (`pipeline/*`, `adapters/*`) = logica tecnica. Niente `sys.exit()`, niente `input()`.
+- Moduli (`pipeline/*`, `semantic/*`, `adapters/*`) = logica tecnica. Niente `sys.exit()`, niente `input()`.
 - Variabili d’ambiente critiche centralizzate in `env_utils.py`.
 - Conversione RAW→BOOK solo in locale; Drive usato solo in pre-onboarding.
 - Validazione slug tramite `path_utils.ensure_valid_slug` (SSoT).
@@ -82,10 +82,11 @@ Assicurare stabilità e robustezza dopo modifiche.
 - **Safe-load YAML**: file vuoto/non valido → `ConfigError` coerente.
 - **Drive idempotente**: stessa struttura non deve duplicare cartelle.
 - **Conversione RAW→BOOK**: solo PDF in `raw/` generano Markdown.
-- **Frontmatter enrichment**: test con `tags.yaml` vuoto/parziale/completo.
+- **Frontmatter enrichment**: test con `tags_raw.csv` vuoto/parziale/completo.
 - **Fallback README/SUMMARY**: testare idempotenza di `ensure_readme_summary`.
 - **Preview Docker**: `start_preview/stop_preview` loggano correttamente.
 - **Push GitHub**: richiede `GITHUB_TOKEN`; testare errore se assente.
+- **Dummy pipeline**: `gen_dummy_kb.py` + `tests/test_dummy_pipeline.py` validano coerenza CSV↔PDF e stub semantici.
 
 ---
 
@@ -107,6 +108,7 @@ Assicurare stabilità e robustezza dopo modifiche.
 - **Testabilità**: funzioni pure, dipendenze iniettate.
 - **Trasparenza**: log strutturati con `run_id`.
 - **Consistenza API**: firme uniformi per orchestratori e adapter.
+- **Compatibilità cross-platform**: garantire che path e encoding funzionino anche su Windows.
 
 ---
 

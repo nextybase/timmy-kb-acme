@@ -1,4 +1,6 @@
 # tests/conftest.py
+from __future__ import annotations
+
 import os
 import sys
 import shutil
@@ -6,103 +8,101 @@ import subprocess
 from pathlib import Path
 import pytest
 
-# Assicura che il codice sotto src/ sia importabile come "pipeline.*"
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
+# Root repo e output
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = REPO_ROOT / "output"
 DUMMY_SLUG = "dummy"
 DUMMY_BASE = OUTPUT_ROOT / f"timmy-kb-{DUMMY_SLUG}"
 
+# Import dei moduli come "src.semantic.*": aggiungo la ROOT del repo al sys.path
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def _run_gen_dummy_kb() -> bool:
-    """
-    Prova a generare la KB dummy usando il tool ufficiale.
-    Ritorna True se ha generato, False se il tool non esiste o fallisce.
-    Nessun accesso a servizi esterni: solo FS locale.
-    """
-    tool = REPO_ROOT / "src" / "tools" / "gen_dummy_kb.py"
-    if not tool.exists():
-        return False
+GEN_TOOL = REPO_ROOT / "src" / "tools" / "gen_dummy_kb.py"
 
-    # Garantisce che la radice output esista
+def _run_gen_dummy_kb() -> None:
+    """Genera la KB dummy usando lo strumento ufficiale. Fallisce hard se c'è un errore."""
+    assert GEN_TOOL.exists(), f"Tool mancante: {GEN_TOOL}"
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
-    try:
-        # Usa l'interprete corrente; niente shell.
-        subprocess.run(
-            [sys.executable, str(tool), "--slug", DUMMY_SLUG, "--reset"],
-            cwd=str(REPO_ROOT),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        # Non propaghiamo: i test hanno un fallback minimale
-        return False
+    cmd = [
+        sys.executable,
+        str(GEN_TOOL),
+        "--slug", DUMMY_SLUG,
+        "--name", "Cliente Dummy",
+        "--overwrite",
+    ]
 
+    env = os.environ.copy()
+    # Forza UTF-8 per evitare UnicodeEncodeError su stdout/stderr (emoji, simboli)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
 
-def _ensure_minimal_structure() -> None:
-    """
-    Fallback: crea struttura minima se il tool non è disponibile o fallisce.
-    output/timmy-kb-dummy/{raw,book,config,logs} + config.yaml e README segnaposto.
-    """
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    (DUMMY_BASE / "raw").mkdir(parents=True, exist_ok=True)
-    (DUMMY_BASE / "book").mkdir(parents=True, exist_ok=True)
-    (DUMMY_BASE / "config").mkdir(parents=True, exist_ok=True)
-    (DUMMY_BASE / "logs").mkdir(parents=True, exist_ok=True)
-
-    # config base (utile per slug/regex ecc.)
-    cfg = DUMMY_BASE / "config" / "config.yaml"
-    if not cfg.exists():
-        cfg.write_text("slug_regex: '^[a-z0-9-]{3,}$'\n", encoding="utf-8")
-
-    # README segnaposto in book/
-    readme = DUMMY_BASE / "book" / "README.md"
-    if not readme.exists():
-        readme.write_text("# Documentazione Timmy-KB (dummy)\n", encoding="utf-8")
-
+    result = subprocess.run(
+        cmd,
+        cwd=str(REPO_ROOT),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        print(">>> gen_dummy_kb.py FAILED")
+        print("STDOUT:\n", (result.stdout or "")[-4000:])
+        print("STDERR:\n", (result.stderr or "")[-4000:])
+        raise AssertionError(f"gen_dummy_kb.py è fallito con exit code {result.returncode}")
 
 @pytest.fixture(scope="session")
-def slug() -> str:
-    """Slug fisso per tutti i test che toccano output/."""
-    return DUMMY_SLUG
-
+def repo_root() -> Path:
+    return REPO_ROOT
 
 @pytest.fixture(scope="session")
-def dummy_kb(slug: str):
-    """
-    Garantisce la presenza di output/timmy-kb-dummy/ con struttura regolare.
-    Per default pulisce prima e (opzionalmente) dopo. Disattiva cleanup finale
-    impostando KEEP_DUMMY_KB=1 nell'ambiente.
-    """
-    # Cleanup iniziale “soft” per evitare residui da run precedenti
-    if DUMMY_BASE.exists():
-        shutil.rmtree(DUMMY_BASE)
+def base_dir() -> Path:
+    return DUMMY_BASE
 
-    generated = _run_gen_dummy_kb()
-    if not generated:
-        _ensure_minimal_structure()
+@pytest.fixture(scope="session")
+def dummy_kb(repo_root: Path, base_dir: Path):
+    """
+    Genera SEMPRE una sandbox pulita per il dummy prima dei test.
+    Verifica i file chiave della pipeline (PDF in raw/ e semantic/tags_raw.csv).
+    Imposta KEEP_DUMMY_KB=1 per NON fare cleanup finale.
+    """
+    # cleanup iniziale per run pulito
+    if base_dir.exists():
+        shutil.rmtree(base_dir)
 
-    # Espone i path utili ai test
+    # genera
+    _run_gen_dummy_kb()
+
+    # validazioni dure
+    assert base_dir.exists(), f"Sandbox non creata: {base_dir}"
+    assert (base_dir / "raw").exists(), "Cartella raw mancante"
+    assert (base_dir / "semantic").exists(), "Cartella semantic mancante"
+
+    csv_path = base_dir / "semantic" / "tags_raw.csv"
+    assert csv_path.exists(), f"CSV mancante: {csv_path}"
+
+    pdfs = list((base_dir / "raw").rglob("*.pdf"))
+    assert pdfs, "Attesi PDF sotto raw/, ma non ne sono stati trovati"
+
     yield {
-        "base": DUMMY_BASE,
-        "raw": DUMMY_BASE / "raw",
-        "book": DUMMY_BASE / "book",
-        "config": DUMMY_BASE / "config",
-        "logs": DUMMY_BASE / "logs",
+        "base": base_dir,
+        "raw": base_dir / "raw",
+        "semantic": base_dir / "semantic",
+        "config": base_dir / "config",
+        "book": base_dir / "book",
+        "logs": base_dir / "logs",
+        "csv": csv_path,
+        "pdfs": pdfs,
     }
 
-    # Teardown: rimuovi la struttura, a meno che si voglia ispezionarla
+    # teardown (a meno che si voglia ispezionare i risultati)
     if os.getenv("KEEP_DUMMY_KB") not in ("1", "true", "True"):
-        if DUMMY_BASE.exists():
-            shutil.rmtree(DUMMY_BASE)
-
+        if base_dir.exists():
+            shutil.rmtree(base_dir)
 
 @pytest.fixture
 def chdir_repo(monkeypatch):
-    """Utility: imposta la CWD al root repo per test che assumono path relativi."""
+    """Imposta la CWD alla root del repo (alcuni moduli assumono path relativi)."""
     monkeypatch.chdir(REPO_ROOT)
     return REPO_ROOT
