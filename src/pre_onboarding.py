@@ -151,10 +151,11 @@ def pre_onboarding_main(
     if not hasattr(context, "redact_logs"):
         context.redact_logs = compute_redact_flag(context.env, getattr(context, "log_level", "INFO"))
 
-    # === Log file path derivato dal repo ===
-    log_file = context.repo_root_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    # STRONG: scriviamo log solo sotto repo_root
-    ensure_within(context.repo_root_dir, log_file)
+    # === Log file path dentro la sandbox cliente (come da README) ===
+    # output/timmy-kb-<slug>/logs/onboarding.log
+    log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    # STRONG: scriviamo log solo sotto la base cliente
+    ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
     # 🔁 Rebind logger con il contesto

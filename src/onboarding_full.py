@@ -2,11 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Onboarding FULL (fase 2): Push GitHub.
-- Presuppone che la fase di semantic onboarding sia già stata eseguita
-  (conversione RAW→BOOK, arricchimento frontmatter, README/SUMMARY, eventuale preview).
+- Presuppone che la fase di semantic onboarding sia già stata eseguita.
 - Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
-
-Principi PR1:
 - Masking centralizzato nel logger; env_utils resta “puro”.
 - Path-safety STRONG per le scritture (log) via ensure_within.
 - Orchestratore gestisce I/O utente e codici di uscita; moduli sottostanti non fanno prompt/exit.
@@ -34,6 +31,48 @@ from pipeline.constants import (
 )
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
 from pipeline.env_utils import get_env_var, compute_redact_flag   # env “puro”; flag redazione canonico
+
+# --- Fallback contenuti BOOK (README/SUMMARY) ------------------
+# Preferenza: usare l’adapter dedicato se presente nel repo
+try:
+    from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
+except Exception:
+    # Fallback minimale e idempotente (nessuna semantica, solo file base)
+    def _ensure_readme_summary(context: ClientContext, logger) -> None:
+        md_dir = getattr(context, "md_dir", None)
+        if md_dir is None:
+            raise ConfigError("context.md_dir mancante: impossibile garantire README/SUMMARY")
+        base_dir = getattr(context, "base_dir", None)
+        if base_dir is None:
+            # best effort: se non presente, deduciamo dalla struttura standard output/timmy-kb-<slug>/
+            base_dir = md_dir.parent.parent if md_dir else None
+        if base_dir is None:
+            raise ConfigError("context.base_dir mancante: impossibile validare i percorsi")
+
+        readme = md_dir / "README.md"
+        summary = md_dir / "SUMMARY.md"
+
+        # STRONG: validazione destinazioni prima di scrivere
+        ensure_within(base_dir, readme)
+        ensure_within(base_dir, summary)
+
+        readme.parent.mkdir(parents=True, exist_ok=True)
+
+        if not readme.exists():
+            readme.write_text(
+                "# Knowledge Base\n\n"
+                "Questa è la base minima della KB. I contenuti Markdown saranno pubblicati da `book/`.\n",
+                encoding="utf-8",
+            )
+            logger.info("Creato README.md minimale in book/")
+
+        if not summary.exists():
+            summary.write_text(
+                "# Summary\n\n"
+                "* [Introduzione](README.md)\n",
+                encoding="utf-8",
+            )
+            logger.info("Creato SUMMARY.md minimale in book/")
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
@@ -101,6 +140,12 @@ def onboarding_full_main(
 
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("🚀 Avvio onboarding_full (PUSH GitHub)")
+
+    # 1) Garantire README.md/SUMMARY.md minimi in book/ (idempotente, nessuna semantica)
+    try:
+        _ensure_readme_summary(context, logger)
+    except Exception as e:
+        raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}")
 
     # Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
