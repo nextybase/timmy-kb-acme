@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
 
@@ -116,6 +116,36 @@ def _build_category_markdown(category: Path) -> str:
     return "".join(content_parts)
 
 
+# --------------------------------------------------------------------
+# Helpers estratti per ridurre la funzione orchestratrice (refactor)
+# --------------------------------------------------------------------
+def _collect_categories(raw_dir: Path) -> List[Path]:
+    """Ritorna le sottocartelle immediate di raw/ in ordine deterministico."""
+    return sorted([p for p in raw_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
+
+
+def _process_category(category: Path) -> Tuple[str, str]:
+    """Costruisce (content, fingerprint) per una singola categoria (no I/O)."""
+    content = _build_category_markdown(category)
+    fp = _fingerprint_category(category)
+    return content, fp
+
+
+def _write_outputs(md_dir: Path, safe_name: str, content: str, fp: str, logger: logging.Logger) -> None:
+    """Scrive `<safe_name>.md` e sidecar `.fp` con guardie STRONG e scrittura atomica."""
+    md_path = md_dir / f"{safe_name}.md"
+    fp_path = md_path.with_suffix(md_path.suffix + ".fp")
+    ensure_within(md_dir, md_path)
+    ensure_within(md_dir, fp_path)
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_write_text(md_path, content, encoding="utf-8", atomic=True)
+    safe_write_text(fp_path, fp + "\n", encoding="utf-8", atomic=True)
+    logger.info("File markdown scritto correttamente", extra={"file_path": str(md_path)})
+
+
+# --------------------------------------------------------------------
+# Orchestratore: conversione PDF → Markdown per categoria top-level
+# --------------------------------------------------------------------
 def convert_files_to_structured_markdown(
     context: ClientContext,
     raw_dir: Optional[Path] = None,
@@ -139,12 +169,19 @@ def convert_files_to_structured_markdown(
     # STRONG guard: RAW e MD devono stare nella base cliente
     try:
         ensure_within(context.base_dir, raw_dir)
+    except Exception as e:
+        raise PipelineError(
+            f"Path non sicuro per la sorgente RAW: {raw_dir} ({e})",
+            slug=context.slug,
+            file_path=raw_dir,
+        )
+    try:
         ensure_within(context.base_dir, md_dir)
     except Exception as e:
         raise PipelineError(
-            f"Path non sicuro per conversione: {e}",
+            f"Path non sicuro per la destinazione MD: {md_dir} ({e})",
             slug=context.slug,
-            file_path=str(raw_dir if not raw_dir.is_relative_to(context.base_dir) else md_dir),  # best-effort
+            file_path=md_dir,
         )
 
     if not raw_dir.exists():
@@ -157,21 +194,19 @@ def convert_files_to_structured_markdown(
     md_dir.mkdir(parents=True, exist_ok=True)
 
     # Ogni sottocartella immediata di raw/ è una categoria che genera un .md
-    categories = sorted([p for p in raw_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
+    categories = _collect_categories(raw_dir)
 
-    def _process(category: Path) -> tuple[Path, str, str]:
-        content = _build_category_markdown(category)
-        fp = _fingerprint_category(category)
-        return (category, content, fp)
-
-    results: list[tuple[Path, str, str]] = []
+    # Costruzione contenuti per categoria (concorrenza opzionale)
+    results: List[Tuple[Path, str, str]] = []
     if (max_workers or 0) > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            for out in ex.map(_process, categories):
-                results.append(out)
+            for cat in categories:
+                content, fp = ex.submit(_process_category, cat).result()
+                results.append((cat, content, fp))
     else:
-        for c in categories:
-            results.append(_process(c))
+        for cat in categories:
+            content, fp = _process_category(cat)
+            results.append((cat, content, fp))
 
     # Scrittura risultati in ordine deterministico, con skip opzionale
     for category, content, fp in sorted(results, key=lambda x: x[0].name.lower()):
@@ -209,13 +244,8 @@ def convert_files_to_structured_markdown(
                 extra={"slug": context.slug, "file_path": str(md_path)},
             )
             # ✅ scritture atomiche (SSoT)
-            safe_write_text(md_path, content, encoding="utf-8", atomic=True)
-            safe_write_text(fp_path, fp + "\n", encoding="utf-8", atomic=True)
+            _write_outputs(md_dir, safe_name, content, fp, local_logger)
 
-            local_logger.info(
-                "File markdown scritto correttamente",
-                extra={"slug": context.slug, "file_path": str(md_path)},
-            )
         except Exception as e:
             local_logger.error(
                 "Errore nella creazione markdown",
