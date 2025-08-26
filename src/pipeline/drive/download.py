@@ -1,380 +1,280 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive/download.py
 """
-Download da Google Drive (PDF) con scansione gerarchica e idempotenza.
+Download da Google Drive → sandbox locale (RAW) con commit **atomico**.
 
-Superficie pubblica (esposta tramite il facade `pipeline.drive_utils`):
-- download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, *,
-  progress=True, context=None, redact_logs=False) -> tuple[int, int]
+Cosa fa
+-------
+- Esplora ricorsivamente una cartella di Drive (`remote_root_folder_id`) e
+  scarica **solo i PDF** mantenendo la stessa gerarchia locale sotto
+  `local_root_dir` (tipicamente: `output/timmy-kb-<slug>/raw`).
+- Ogni file è scritto in modo **atomico**: stream su file temporaneo nello
+  stesso folder, `flush` + `fsync`, quindi `os.replace()` sul path finale.
+- **Path-safety STRONG**: prima di creare directory o scrivere file, verifica che
+  il path di destinazione sia *dentro* la sandbox del cliente (`ensure_within`).
+- **Idempotenza**: se il file esiste e la dimensione corrisponde, salta la copia.
+- **Logging strutturato**: usa `get_structured_logger`; mai `print()`.
 
-Panoramica & ruoli delle funzioni
----------------------------------
-- _maybe_redact(text, redact) -> str
-    Maschera parzialmente identificativi (ID Drive) nei log quando la redazione è attiva.
+API pubblica
+------------
+download_drive_pdfs_to_local(
+    service,
+    remote_root_folder_id: str,
+    local_root_dir: Path,
+    *,
+    progress: bool = False,
+    context=None,
+    redact_logs: bool = False,
+) -> int
+    Ritorna il numero di PDF scaricati (nuovi/aggiornati).
 
-- _ensure_dir(path) -> None
-    Crea in modo idempotente la directory `path` e le sue parent.
-
-- _local_md5(path, chunk_size=...) -> Optional[str]
-    Calcola l’MD5 (hex) del file locale; restituisce `None` se inesistente/non leggibile.
-
-- _same_file(local_path, remote_md5, remote_size) -> bool
-    Determina l’identità locale/remota:
-      * preferisce il confronto MD5 (se disponibile),
-      * altrimenti confronta la dimensione in byte,
-      * altrimenti non può garantire identità → False.
-
-- _download_file_with_retry(service, file_id, out_path, *, progress=True, ...) -> None
-    Scarica un singolo file con retry (backoff + jitter via `_retry`). Se `progress=True`,
-    emette log periodici di avanzamento per chunk.
-
-- download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, *, ...) -> (int, int)
-    Funzione **pubblica**: esegue una BFS sulle sottocartelle di `remote_root_folder_id`,
-    scaricando solo i PDF (mimeType `application/pdf`) e replicando la gerarchia su disco.
-    Idempotente: salta i file già identici e valida l’integrità (MD5) post-download quando disponibile.
-
-Comportamento chiave
---------------------
-- Scansione BFS di cartelle (`mimeType=application/vnd.google-apps.folder`).
-- Download di soli PDF (filtro per `mimeType=application/pdf`).
-- Replica su disco con nomi sanificati (`sanitize_filename`).
-- **Guardia STRONG** sui path con `ensure_within(local_root, target)` prima di scrivere.
-- Idempotenza tramite MD5/size; verifica MD5 post-scaricamento e cleanup best-effort in caso di mismatch.
-- Logging strutturato (nessun `print()`), con supporto alla redazione (`redact_logs`).
-
-Note
-----
-- Il retry è applicato all’operazione di download del singolo file: in caso di errore durante `next_chunk()`
-  il tentativo riparte **da capo** per semplicità/robustezza.
-- La scansione elenca PDF e cartelle separatamente per chiarezza; l’ordine non è garantito.
+Dipendenze
+----------
+- google-api-python-client (MediaIoBaseDownload)
+- pipeline.logging_utils, pipeline.path_utils, pipeline.exceptions
 """
 
 from __future__ import annotations
 
-import hashlib
+import io
+import os
+import tempfile
 from pathlib import Path
-from typing import Any, Deque, Dict, Optional, Tuple, List
-from collections import deque
+from typing import Dict, Iterable, List, Optional, Tuple
 
-from googleapiclient.errors import HttpError  # type: ignore
 from googleapiclient.http import MediaIoBaseDownload  # type: ignore
 
-from ..exceptions import DriveDownloadError
-from ..logging_utils import get_structured_logger
-from ..path_utils import sanitize_filename, ensure_within  # STRONG guard per write/delete
-from .client import list_drive_files, get_file_metadata, _retry
-
-# Logger di modulo (fallback). In presenza di `context` useremo un logger contestualizzato locale.
-logger = get_structured_logger("pipeline.drive.download")
-
-# MIME type cartella e PDF in Google Drive
-_FOLDER_MIME = "application/vnd.google-apps.folder"
-_PDF_MIME = "application/pdf"
+from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
+from pipeline.path_utils import ensure_within, sanitize_filename
+from pipeline.exceptions import PipelineError, ConfigError
 
 
-def _maybe_redact(text: str, redact: bool) -> str:
-    """Minimizza informazioni sensibili nei log se `redact` è attivo."""
-    if not redact or not text:
-        return text
-    t = str(text)
-    if len(t) <= 7:
-        return "***"
-    return f"{t[:3]}***{t[-3:]}"
+# MIME costanti basilari (allineate alla facciata)
+MIME_FOLDER = "application/vnd.google-apps.folder"
+MIME_PDF = "application/pdf"
+
+# Chunk di download (8 MiB bilanciato per throughput/ram)
+_DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
 
 
-def _ensure_dir(path: Path) -> None:
-    """Crea la directory se non esiste (idempotente)."""
-    path.mkdir(parents=True, exist_ok=True)
+def _q_parent(parent_id: str) -> str:
+    # Query Drive V3: figli non cestinati
+    return f"'{parent_id}' in parents and trashed = false"
 
 
-def _local_md5(path: Path, chunk_size: int = 1024 * 1024) -> Optional[str]:
-    """Calcola l’MD5 di un file locale (hex). Ritorna None se il file non esiste/leggibile."""
-    try:
-        if not path.is_file():
-            return None
-        md5 = hashlib.md5()
-        with path.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(chunk_size), b""):
-                md5.update(chunk)
-        return md5.hexdigest()
-    except Exception:
-        return None
+def _list_children(service, parent_id: str, *, fields: str) -> List[Dict]:
+    """Lista i children di un folder (una pagina alla volta)."""
+    items: List[Dict] = []
+    page_token: Optional[str] = None
+    while True:
+        req = (
+            service.files()
+            .list(
+                q=_q_parent(parent_id),
+                fields=f"nextPageToken, files({fields})",
+                pageSize=1000,
+                pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+        )
+        resp = req.execute()
+        items.extend(resp.get("files", []) or [])
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return items
 
 
-def _same_file(local_path: Path, remote_md5: Optional[str], remote_size: Optional[int]) -> bool:
+def _walk_drive_tree(service, root_id: str) -> Iterable[Tuple[List[str], Dict]]:
     """
-    Determina se un file locale coincide con quello remoto.
-    Regole:
-    - Se presente MD5 remoto → confronta MD5 (preferito).
-    - Altrimenti, se presente `size` remoto → confronta dimensione.
-    - Se mancano entrambi → non può garantire identità → False.
+    DFS: restituisce tuple (path_parts, item) per ogni file/cartella sotto root.
+    path_parts = lista di nomi cartella dal root ai figli (sanificati).
     """
-    if not local_path.exists():
-        return False
-    if remote_md5:
-        local_md5 = _local_md5(local_path)
-        return local_md5 == remote_md5 if local_md5 else False
-    if remote_size is not None:
-        try:
-            return local_path.stat().st_size == int(remote_size)
-        except Exception:
-            return False
-    return False
+    stack: List[Tuple[str, List[str]]] = [(root_id, [])]
+    while stack:
+        folder_id, parts = stack.pop()
+        children = _list_children(
+            service,
+            folder_id,
+            fields="id, name, mimeType, size",
+        )
+        for it in children:
+            name = sanitize_filename(it.get("name") or "")
+            if not name:
+                # Fallback generico, utile in casi estremi di nomi vuoti
+                name = f"item-{it.get('id','unknown')[:8]}"
+            mime = it.get("mimeType")
+            if mime == MIME_FOLDER:
+                stack.append((it["id"], parts + [name]))
+                yield (parts, it)  # opzionale: superficie per chi vuole “vedere” anche le cartelle
+            else:
+                yield (parts, it)
 
 
-def _download_file_with_retry(
-    service: Any,
+def _ensure_dest(base_dir: Path, local_root_dir: Path, rel_parts: List[str], filename: str) -> Path:
+    """
+    Prepara il path di destinazione garantendo path-safety STRONG e creazione directory.
+    """
+    # Cartella destinazione = local_root_dir / rel_parts...
+    dest_dir = (local_root_dir.joinpath(*rel_parts)).resolve()
+    ensure_within(base_dir, dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    dest_path = (dest_dir / filename).resolve()
+    ensure_within(base_dir, dest_path)
+    return dest_path
+
+
+def _download_one_pdf_atomic(
+    service,
     file_id: str,
-    out_path: Path,
+    dest_path: Path,
     *,
-    progress: bool = True,
-    redact_logs: bool = False,
-    chunk_size: int = 1024 * 1024,
-    op_name: str = "files.get_media",
-    log=None,
+    chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    logger,
+    progress: bool = False,
 ) -> None:
     """
-    Scarica un singolo file da Drive con retry sull’intera operazione.
-
-    Nota: in caso di errore transiente durante `next_chunk()`, il retry riparte
-    dall’inizio del download del singolo file (approccio conservativo e semplice).
+    Scarica un singolo PDF in maniera **atomica**:
+      - scrive su file temporaneo nello stesso folder
+      - flush + fsync
+      - os.replace() sul path finale
     """
-    _log = log or logger
+    # Request media
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
 
-    def _op():
-        _ensure_dir(out_path.parent)
-        with out_path.open("wb") as fh:
-            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-            downloader = MediaIoBaseDownload(fh, request, chunksize=chunk_size)
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                if progress and status:
-                    try:
-                        perc = int(status.progress() * 100)
-                        _log.info(
-                            "drive.download.chunk",
-                            extra={"file_id": _maybe_redact(file_id, redact_logs), "progress_pct": perc},
-                        )
-                    except Exception:
-                        pass
-        return True
+    # Temp nello stesso folder (così os.replace è atomico sullo stesso FS)
+    dest_dir = dest_path.parent
+    with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=str(dest_dir)) as tmp:
+        tmp_name = tmp.name
+        downloader = MediaIoBaseDownload(tmp, request, chunksize=int(chunk_size))
 
-    _retry(_op, op_name=f"{op_name}:{file_id}")
+        last_pct = -1
+        while True:
+            status, done = downloader.next_chunk()
+            if status and progress:
+                pct = int((status.progress() or 0.0) * 100)
+                # Logga a soglie intere (evita flood)
+                if pct != last_pct and pct % 10 == 0:
+                    logger.info("download.progress", extra={"file_path": str(dest_path), "progress_pct": pct})
+                    last_pct = pct
+            if done:
+                break
+
+        # Commit atomico
+        tmp.flush()
+        os.fsync(tmp.fileno())
+    os.replace(tmp_name, dest_path)
 
 
 def download_drive_pdfs_to_local(
-    service: Any,
+    service,
     remote_root_folder_id: str,
-    local_root_dir: str | Path,
+    local_root_dir: Path,
     *,
-    progress: bool = True,
-    context: Any | None = None,
+    progress: bool = False,
+    context=None,
     redact_logs: bool = False,
-) -> Tuple[int, int]:
+    chunk_size: int = _DEFAULT_CHUNK_SIZE,
+) -> int:
     """
-    Scarica ricorsivamente i PDF dalla cartella remota in una root locale.
+    Scarica ricorsivamente **solo i PDF** da una cartella Drive verso `local_root_dir`.
 
-    Parametri:
-    - service: client Drive v3.
-    - remote_root_folder_id: ID della cartella remota da cui iniziare (tipicamente RAW).
-    - local_root_dir: path locale in cui replicare la gerarchia.
-    - progress: se True, emette log periodici di avanzamento (inclusi chunk).
-    - context: opzionale, per telemetria/metriche (best-effort).
-    - redact_logs: se True, minimizza informazioni sensibili nei log.
+    Args:
+        service: client Drive v3 già autenticato (googleapiclient).
+        remote_root_folder_id: ID della cartella radice su Drive.
+        local_root_dir: cartella locale “raw/” dentro la sandbox cliente.
+        progress: se True, logga avanzamento al 10/20/.../100%.
+        context: ClientContext opzionale per log arricchiti (slug, base_dir, redact).
+        redact_logs: se True, redige ID sensibili nei log.
+        chunk_size: dimensione chunk per MediaIoBaseDownload (byte).
 
-    Ritorna:
-    - (num_scaricati, num_skippati)
-
-    Solleva:
-    - DriveDownloadError per errori persistenti/non recuperabili.
+    Returns:
+        Numero di PDF scaricati (nuovi/aggiornati).
     """
-    if not remote_root_folder_id:
-        raise DriveDownloadError("ID cartella remota mancante.")
-    if not local_root_dir:
-        raise DriveDownloadError("Percorso locale mancante.")
+    logger = get_structured_logger("pipeline.drive.download", context=context)
+    local_root_dir = Path(local_root_dir).resolve()
 
-    # Logger contestualizzato (se abbiamo il contesto), altrimenti fallback al logger di modulo
-    local_logger = get_structured_logger("pipeline.drive.download", context=context) if context else logger
-    # Redazione: ON se richiesto esplicitamente o se abilitata nel contesto
-    redact_logs = bool(redact_logs or (getattr(context, "redact_logs", False) if context is not None else False))
+    # Base sandbox: preferisci context.base_dir; fallback al genitore di local_root_dir
+    base_dir = Path(getattr(context, "base_dir", local_root_dir.parent)).resolve()
 
-    local_root = Path(local_root_dir)
-    _ensure_dir(local_root)
+    # STRONG: local_root_dir deve essere *dentro* base_dir
+    try:
+        ensure_within(base_dir, local_root_dir)
+        local_root_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise ConfigError(
+            f"Path di destinazione non sicuro: {local_root_dir} ({e})",
+            file_path=str(local_root_dir),
+        ) from e
 
-    downloaded = 0
-    skipped = 0
-
-    # Coda per BFS: tuple (remote_folder_id, local_dir_path)
-    queue: Deque[Tuple[str, Path]] = deque()
-    queue.append((remote_root_folder_id, local_root))
-
-    local_logger.info(
+    rid_masked = redact_secrets(remote_root_folder_id) if redact_logs else remote_root_folder_id
+    logger.info(
         "drive.download.start",
-        extra={
-            "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
-            "local_root": str(local_root),
-        },
+        extra={"remote_root": rid_masked, "local_root": str(local_root_dir), "local_tail": tail_path(local_root_dir)},
     )
 
-    try:
-        while queue:
-            current_remote_id, current_local_dir = queue.popleft()
+    downloaded = 0
+    errors: List[Tuple[str, str]] = []
 
-            # STRONG guard: la dir corrente deve essere sotto la root locale
+    # DFS sul tree Drive
+    for rel_parts, item in _walk_drive_tree(service, remote_root_folder_id):
+        mime = item.get("mimeType")
+        if mime == MIME_FOLDER:
+            # opzionale: crea i folder locali in anticipo (non strettamente necessario)
             try:
-                ensure_within(local_root, current_local_dir)
-            except Exception:
-                local_logger.warning(
-                    "drive.download.skip_unsafe_dir",
-                    extra={"folder_path": str(current_local_dir)},
-                )
-                continue
+                _ = _ensure_dest(base_dir, local_root_dir, rel_parts, "__keep__").parent
+            except Exception as e:
+                logger.warning("folder.ensure.fail", extra={"parts": rel_parts, "error": str(e)})
+            continue
 
-            # Garantisce la presenza della cartella locale del livello corrente
-            _ensure_dir(current_local_dir)
+        if mime != MIME_PDF:
+            continue  # scarichiamo solo PDF
 
-            # Percorso relativo per logging (solo diagnostica)
+        file_id = item["id"]
+        name = sanitize_filename(item.get("name") or f"{file_id}.pdf")
+        if not name.lower().endswith(".pdf"):
+            name = f"{name}.pdf"
+
+        # Prepara destinazione con guard-rail STRONG
+        try:
+            dest_path = _ensure_dest(base_dir, local_root_dir, rel_parts, name)
+        except Exception as e:
+            logger.warning("dest.ensure.fail", extra={"file": name, "error": str(e)})
+            continue
+
+        # Idempotenza semplice: skip se size invariata
+        remote_size = int(item.get("size") or 0)
+        if dest_path.exists() and remote_size > 0:
             try:
-                rel = current_local_dir.relative_to(local_root).as_posix() or "."
-            except Exception:
-                rel = current_local_dir.as_posix()
-
-            local_logger.info("drive.download.folder", extra={"folder_path": rel})
-
-            # 1) Sottocartelle del livello corrente (BFS)
-            subfolders = list_drive_files(
-                service,
-                current_remote_id,
-                query=f"mimeType = '{_FOLDER_MIME}'",
-            )
-            for folder in subfolders:
-                fid = folder.get("id")
-                fname = sanitize_filename(folder.get("name") or "senza_nome")
-                next_dir = current_local_dir / fname
-                # validazione STRONG anche sugli enqueued path
-                try:
-                    ensure_within(local_root, next_dir)
-                    queue.append((fid, next_dir))
-                except Exception:
-                    local_logger.warning(
-                        "drive.download.skip_unsafe_dir",
-                        extra={"folder_path": str(next_dir)},
-                    )
-
-            # 2) PDF nel livello corrente
-            pdfs = list_drive_files(
-                service,
-                current_remote_id,
-                query=f"mimeType = '{_PDF_MIME}'",
-            )
-            for f in pdfs:
-                file_id = f.get("id")
-                remote_name = f.get("name") or "download.pdf"
-                safe_name = sanitize_filename(
-                    remote_name if remote_name.lower().endswith(".pdf") else f"{remote_name}.pdf"
-                )
-                out_path = current_local_dir / safe_name
-
-                # STRONG guard: l'output deve rimanere dentro la root locale
-                try:
-                    ensure_within(local_root, out_path)
-                except Exception:
-                    local_logger.warning(
-                        "drive.download.skip_unsafe_path",
-                        extra={"file_id": _maybe_redact(file_id, redact_logs), "file_path": str(out_path)},
-                    )
+                if dest_path.stat().st_size == remote_size:
+                    logger.debug("download.skip.same_size", extra={"file_path": str(dest_path), "size": remote_size})
                     continue
+            except OSError:
+                pass
 
-                # Metadati per idempotenza/integrità (con retry lato client)
-                try:
-                    meta = get_file_metadata(
-                        service,
-                        file_id,
-                        fields="id, name, mimeType, size, md5Checksum",
-                    )
-                except Exception:
-                    meta = {}
+        # Download atomico
+        try:
+            _download_one_pdf_atomic(
+                service,
+                file_id=file_id,
+                dest_path=dest_path,
+                chunk_size=chunk_size,
+                logger=logger,
+                progress=progress,
+            )
+            downloaded += 1
+            logger.info("download.ok", extra={"file_path": str(dest_path), "size": remote_size})
+        except Exception as e:
+            fid = redact_secrets(file_id) if redact_logs else file_id
+            errors.append((fid, str(e)))
+            logger.warning("download.fail", extra={"file_id": fid, "error": str(e), "file_path": str(dest_path)})
 
-                remote_md5 = meta.get("md5Checksum")
-                remote_size = int(meta["size"]) if meta.get("size") is not None else None
+    if errors:
+        # Non interrompiamo il flusso, ma segnaliamo in maniera aggregata
+        msg = f"Download completato con errori: {len(errors)} elementi falliti."
+        raise PipelineError(msg, slug=getattr(context, "slug", None))
 
-                # Idempotenza
-                if _same_file(out_path, remote_md5, remote_size):
-                    skipped += 1
-                    if progress and (skipped % 50 == 0):
-                        local_logger.info(
-                            "drive.download.progress",
-                            extra={"downloaded": downloaded, "skipped": skipped, "last": safe_name},
-                        )
-                    continue
-
-                # Download con retry e progress chunk
-                _download_file_with_retry(
-                    service,
-                    file_id,
-                    out_path,
-                    progress=progress,
-                    redact_logs=redact_logs,
-                    log=local_logger,
-                )
-
-                # Verifica integrità post-download (se md5 remoto disponibile)
-                if remote_md5:
-                    local_md5 = _local_md5(out_path)
-                    if not local_md5 or local_md5 != remote_md5:
-                        # Rimozione best-effort del file corrotto per idempotenza retry futuri
-                        try:
-                            ensure_within(local_root, out_path)
-                            out_path.unlink(missing_ok=True)  # type: ignore[arg-type]
-                        except Exception:
-                            pass
-                        raise DriveDownloadError(
-                            f"MD5 mismatch dopo download per file '{remote_name}' (id={file_id})"
-                        )
-
-                downloaded += 1
-                if progress and (downloaded % 25 == 0):
-                    local_logger.info(
-                        "drive.download.progress",
-                        extra={"downloaded": downloaded, "skipped": skipped, "last": safe_name},
-                    )
-
-    except DriveDownloadError:
-        # Errori specifici: li logghiamo e rilanciamo
-        local_logger.error(
-            "drive.download.error",
-            extra={
-                "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
-                "downloaded": downloaded,
-                "skipped": skipped,
-            },
-        )
-        raise
-    except Exception as e:  # noqa: BLE001
-        # Qualsiasi altro errore → mappiamo a DriveDownloadError
-        local_logger.exception(
-            "drive.download.unexpected_error",
-            extra={
-                "remote_root": _maybe_redact(remote_root_folder_id, redact_logs),
-                "exc_type": type(e).__name__,
-                "message": str(e)[:300],
-                "downloaded": downloaded,
-                "skipped": skipped,
-            },
-        )
-        raise DriveDownloadError(f"Errore durante il download da Drive: {e}") from e
-
-    local_logger.info("drive.download.done", extra={"downloaded": downloaded, "skipped": skipped})
-
-    # Compatibilità con orchestratori che annotano lo stato step nel contesto
-    try:
-        if context is not None and hasattr(context, "set_step_status"):
-            context.set_step_status("drive_retries", "0")  # best-effort
-    except Exception:
-        pass
-
-    return downloaded, skipped
-
-
-__all__ = ["download_drive_pdfs_to_local"]
+    logger.info("drive.download.end", extra={"downloaded": downloaded})
+    return downloaded
