@@ -4,7 +4,7 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 
 ---
 
-## 1) Workflow
+## 1) Workflow 
 
 - **Branch model**: sviluppo su branch dedicati, PR verso `main`.
 - **Naming branch**: `feature/<slug>`, `fix/<slug>`, `docs/<slug>`.

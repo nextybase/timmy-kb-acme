@@ -1,6 +1,6 @@
 # src/semantic/auto_tagger.py
 """
-MVP: generatore di candidati semantici basato su euristiche (path/filename).
+MVP: generatore di candidati semantici basato su euristiche (path/filename). 
 
 Caratteristiche
 ---------------

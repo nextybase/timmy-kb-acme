@@ -1,22 +1,39 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/github_utils.py
 """
-Utility per interagire con GitHub:
-- Creazione/rilevamento repo cliente
-- Push incrementale del contenuto della cartella 'book' (solo file .md, esclusi .bak)
-- Branch di default configurabile via (in ordine di priorità):
-    1) context.env["GIT_DEFAULT_BRANCH"] o context.env["GITHUB_BRANCH"]
-    2) variabili lette tramite resolver centralizzato (env_utils.get_env_var)
-    3) fallback "main"
+Utility GitHub per la pipeline Timmy-KB.
 
-Sicurezza:
-- Path-safety: `ensure_within` (STRONG) per write/delete; `is_safe_subpath` (SOFT) solo per pre-filtri di lettura.
-- Token: header HTTP Basic passato via env `GIT_HTTP_EXTRAHEADER` (non compare nel comando).
+Cosa fa
+-------
+- **Rileva o crea** il repository remoto del cliente (`timmy-kb-<slug>`).
+- **Pubblica** i soli file Markdown presenti in `book/` (escludendo `.bak`), preservando l’albero.
+- **Gestisce il branch di default** con una SSoT di chiavi d’ambiente (`DEFAULT_GIT_BRANCH_ENV_KEYS`).
+- **Esegue push incrementale** con retry (pull --rebase → nuovo push) oppure
+  **force push governato** (`--force-with-lease`) con allow-list di branch e `force_ack`.
+- **Sicurezza path**: STRONG guard con `ensure_within` per tutte le scritture/cancellezioni.
+- **Credenziali via env**: header HTTP Basic in `GIT_HTTP_EXTRAHEADER` (il token non compare nei comandi).
+- **Working dir temporanea sicura** sotto la base cliente:
+  il clone avviene in una sottocartella **non esistente** (evita il classico errore di `git clone` in dir già presente).
 
-Architettura (refactor Patch 5):
-- API pubblica invariata: `push_output_to_github(context, *, github_token, do_push=True, force_push=False, force_ack=None, redact_logs=False)`
-- Estrazione helper interni coesi per ridurre complessità e aumentare testabilità.
+API principale (stabile)
+------------------------
+push_output_to_github(
+    context,
+    *,
+    github_token: str,
+    do_push: bool = True,
+    force_push: bool = False,
+    force_ack: str | None = None,
+    redact_logs: bool = False,
+) -> None
+
+Dove `context` espone almeno:
+  - `slug: str`
+  - `md_dir: Path`
+  - `env: dict` (opzionale)
+  - `base_dir: Path`
 """
+
 from __future__ import annotations
 
 import base64
@@ -37,10 +54,11 @@ from pipeline.env_utils import (
     is_branch_allowed_for_force,       # ✅ allow-list branch per force push
     get_force_allowed_branches,        # ✅ per log/errore esplicativo
 )
+from pipeline.constants import DEFAULT_GIT_BRANCH_ENV_KEYS
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
 
-# Logger di modulo (fallback); nei flussi reali usiamo quello contestualizzato
+# Logger di modulo (fallback); nei flussi reali useremo quello contestualizzato
 logger = get_structured_logger("pipeline.github_utils")
 
 
@@ -65,18 +83,18 @@ class _SupportsContext(Protocol):
 # Helpers generali (env/cmd)
 # ----------------------------
 def _resolve_default_branch(context: _SupportsContext) -> str:
-    """Risoluzione branch di default con fallback a 'main'."""
+    """Risoluzione branch di default con fallback a 'main' (SSoT: DEFAULT_GIT_BRANCH_ENV_KEYS)."""
     # 1) variabili nel contesto (preferite)
     if getattr(context, "env", None):
-        br = context.env.get("GIT_DEFAULT_BRANCH") or context.env.get("GITHUB_BRANCH")
+        for key in DEFAULT_GIT_BRANCH_ENV_KEYS:
+            br = context.env.get(key)
+            if br:
+                return br
+    # 2) variabili d'ambiente tramite resolver centralizzato
+    for key in DEFAULT_GIT_BRANCH_ENV_KEYS:
+        br = get_env_var(key, default=None, required=False)
         if br:
             return br
-    # 2) variabili d'ambiente tramite resolver centralizzato
-    br = get_env_var("GIT_DEFAULT_BRANCH", default=None, required=False) or get_env_var(
-        "GITHUB_BRANCH", default=None, required=False
-    )
-    if br:
-        return br
     # 3) fallback sicuro
     return "main"
 
@@ -133,7 +151,7 @@ def _mask_ack(tag: str) -> str:
 
 
 # ----------------------------
-# Helpers estratti (Patch 5)
+# Helpers estratti (Patch 5+)
 # ----------------------------
 def _collect_md_files(book_dir: Path) -> list[Path]:
     """Seleziona file .md validi (no .bak), ricorsivamente, con ordinamento deterministico."""
@@ -166,10 +184,16 @@ def _ensure_or_create_repo(gh: Github, user, repo_name: str, *, logger, redact_l
 
 
 def _prepare_tmp_dir(base_dir: Path) -> Path:
-    """Crea una working dir temporanea **dentro** la base cliente (STRONG)."""
-    tmp_dir = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
-    ensure_within(base_dir, tmp_dir)
-    return tmp_dir
+    """
+    Prepara una working dir per il clone **dentro** la base cliente.
+
+    Ritorna un percorso di *clone* (non ancora esistente). Il parent viene creato
+    con `mkdtemp`, così `git clone <url> <dir>` non fallisce per directory già esistente.
+    """
+    temp_parent = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
+    ensure_within(base_dir, temp_parent)
+    clone_dir = temp_parent / "repo"  # non deve esistere al momento del clone
+    return clone_dir
 
 
 def _copy_md_tree(md_files: Sequence[Path], book_dir: Path, dst_root: Path) -> None:
@@ -250,11 +274,22 @@ def _force_push_with_lease(tmp_dir: Path, env: dict | None, default_branch: str,
 
 
 def _cleanup_tmp_dir(tmp_dir: Path, base_dir: Path) -> None:
-    """Cleanup working dir temporanea (STRONG + best-effort)."""
+    """
+    Cleanup working dir temporanea:
+    - rimuove la dir di clone,
+    - prova a rimuovere anche il genitore temporaneo se creato da `_prepare_tmp_dir`.
+    """
     try:
-        if isinstance(tmp_dir, Path) and tmp_dir.exists():
-            ensure_within(base_dir, tmp_dir)
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        if isinstance(tmp_dir, Path):
+            # rimuovi la dir di clone se esiste
+            if tmp_dir.exists():
+                ensure_within(base_dir, tmp_dir)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            # prova a rimuovere anche il parent
+            parent = tmp_dir.parent
+            if parent and parent != base_dir and parent.exists():
+                ensure_within(base_dir, parent)
+                shutil.rmtree(parent, ignore_errors=True)
     except Exception:
         # Non bloccare l'esecuzione in caso di errore di cleanup
         pass
@@ -333,7 +368,7 @@ def push_output_to_github(
     repo = _ensure_or_create_repo(gh, user, repo_name, logger=local_logger, redact_logs=redact_logs)
     remote_url = repo.clone_url  # https://github.com/<org>/<repo>.git
 
-    # Working dir temporanea **dentro** la base del cliente
+    # Working dir temporanea **dentro** la base del cliente (clone in dir non esistente)
     tmp_dir = _prepare_tmp_dir(base_dir)
 
     # Preparo env con header http basic per autenticazione su clone/pull/push
@@ -401,7 +436,10 @@ def push_output_to_github(
         else:
             _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
 
-        local_logger.info(f"✅ Push completato su {repo.full_name} ({default_branch})", extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch})
+        local_logger.info(
+            f"✅ Push completato su {repo.full_name} ({default_branch})",
+            extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
+        )
 
     except CmdError as e:
         # Fallimenti generici di git → PushError con messaggio compattato

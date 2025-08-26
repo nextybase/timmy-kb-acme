@@ -5,21 +5,27 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
 - Centralizzare la logica di fsync (best-effort di default; opzionale più “forte”).
+- Non imporre policy di perimetro: la guardia STRONG dei path resta in
+  `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
-API principali:
-- safe_write_text(path: Path, data: str, *, encoding="utf-8", atomic=True, fsync=False) -> None
-- safe_write_bytes(path: Path, data: bytes, *, atomic=True, fsync=False) -> None
+Indice (ruolo funzioni):
+- `_fsync_file(fd, *, path=None, strict=False)`: sincronizza il file descriptor.
+    - `strict=True` → solleva `ConfigError` su fallimento; altrimenti logga in debug (best-effort).
+- `_fsync_dir_best_effort(dir_path)`: tenta la sincronizzazione della *directory* padre (best-effort).
+    - Non solleva eccezioni (compatibile con Windows/FS remoti).
+- `safe_write_text(path, data, *, encoding="utf-8", atomic=True, fsync=False)`: scrittura **testo** sicura.
+    - Crea le directory mancanti.
+    - `atomic=True`: usa temp file + `os.replace()` atomico; `fsync=True` forza flush+fsync sul temp.
+    - `atomic=False`: scrive direttamente e può fare fsync sul file.
+    - Sempre prova a fsync-are la directory (best-effort).
+- `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- `atomic=True` esegue la scrittura su file temporaneo + `os.replace()` atomico.
-- Viene creata la directory padre se assente (mkdir(parents=True, exist_ok=True)).
-- Se `fsync=True`, il contenuto del file viene `flush()`ato e `fsync()`ato prima della `replace`.
-- La sincronizzazione della directory parent è sempre **best-effort** (per limiti OS/FS).
-
-Path-safety:
-- La **guardia STRONG** vive in `pipeline.path_utils.ensure_within` (SSoT).
-- Questo modulo non espone `ensure_within`.
+- Di default eseguiamo un fsync “soft” (best-effort) anche quando `fsync=False`, per massimizzare
+  la durabilità senza penalizzare i casi che non richiedono garanzie forti.
+- Questo modulo **non** valida che `path` sia “dentro” un perimetro: tale controllo va fatto a monte.
 """
+
 from __future__ import annotations
 
 import os

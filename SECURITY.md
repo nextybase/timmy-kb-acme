@@ -1,6 +1,6 @@
 # Sicurezza – Timmy-KB
 
-## 📌 Segnalazione vulnerabilità
+## 📌 Segnalazione vulnerabilità 
 Se scopri una vulnerabilità di sicurezza in **Timmy-KB**, ti chiediamo di **non** aprire una issue pubblica.
 
 Invece, invia una segnalazione **privata** al team di manutenzione tramite:

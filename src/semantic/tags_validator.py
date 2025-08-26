@@ -1,6 +1,33 @@
-# src/semantic/tags_review_validator.py
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/semantic/tags_validator.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+
+"""
+Validatore per `tags_reviewed.yaml` – Timmy-KB
+
+Cosa fa il modulo
+-----------------
+- `load_yaml(path) -> dict`
+  Carica in modo sicuro un file YAML e restituisce un dict ({} se vuoto). Solleva
+  `ConfigError` se PyYAML non è disponibile, il file non esiste o il parsing fallisce.
+
+- `validate_tags_reviewed(data: dict) -> dict`
+  Valida la struttura logica di `tags_reviewed.yaml` (campi obbligatori, tipi,
+  vincoli su nomi/tag/azioni). Ritorna un dizionario con `errors`, `warnings`
+  e `count`.
+
+- `write_validation_report(report_path, result, logger) -> None`
+  Scrive in modo **atomico** il report JSON della validazione a `report_path`,
+  applicando guard-rail **STRONG** con `ensure_within` e propagando un
+  `ConfigError` in caso di I/O o path non sicuro.
+
+Sicurezza & I/O
+---------------
+- Nessuna interazione utente (niente `print()`/`input()`).
+- Path-safety: `ensure_within` prima di scritture su disco.
+- Scritture atomiche con `safe_write_text`.
+"""
 
 import json
 import re
@@ -125,13 +152,20 @@ def write_validation_report(report_path: Path, result: dict, logger) -> None:
         ConfigError: su problemi di path-safety o I/O bloccanti.
     """
     report_path = Path(report_path).resolve()
-    # Path-safety forte: il file deve stare sotto la sua stessa directory (anti path traversal)
-    ensure_within(report_path.parent, report_path)
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    # Path-safety forte: il file deve stare sotto la sua directory (anti path traversal)
+    try:
+        ensure_within(report_path.parent, report_path)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise ConfigError(f"Percorso output non sicuro: {report_path} ({e})", file_path=str(report_path)) from e
 
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         **(result or {}),
     }
-    safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    try:
+        safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    except Exception as e:
+        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(report_path)) from e
+
     logger.info("Report validazione scritto", extra={"file_path": str(report_path)})

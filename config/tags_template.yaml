@@ -9,7 +9,6 @@ governance:
   - audit_trail
   - compliance_normativa
   - C-Board
-  - escalation
 
 AI:
   - intelligenza_artificiale

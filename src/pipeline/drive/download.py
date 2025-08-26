@@ -5,15 +5,48 @@ Download da Google Drive (PDF) con scansione gerarchica e idempotenza.
 
 Superficie pubblica (esposta tramite il facade `pipeline.drive_utils`):
 - download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, *,
-  progress=True, context=None, redact_logs=False) -> (scaricati:int, skippati:int)
+  progress=True, context=None, redact_logs=False) -> tuple[int, int]
 
-Comportamento:
-- Scansiona in ampiezza (BFS) le sottocartelle sotto `remote_root_folder_id`.
-- Scarica soltanto PDF (mimeType application/pdf o estensione .pdf), replicando
-  la gerarchia su disco.
-- Idempotenza: se un file locale esiste ed è identico (md5Checksum e/o size) → skip.
-- Integrità: dopo il download, verifica l’MD5 locale se disponibile quello remoto.
-- Logging strutturato; niente `print()`. Nessuna interazione con l’utente.
+Panoramica & ruoli delle funzioni
+---------------------------------
+- _maybe_redact(text, redact) -> str
+    Maschera parzialmente identificativi (ID Drive) nei log quando la redazione è attiva.
+
+- _ensure_dir(path) -> None
+    Crea in modo idempotente la directory `path` e le sue parent.
+
+- _local_md5(path, chunk_size=...) -> Optional[str]
+    Calcola l’MD5 (hex) del file locale; restituisce `None` se inesistente/non leggibile.
+
+- _same_file(local_path, remote_md5, remote_size) -> bool
+    Determina l’identità locale/remota:
+      * preferisce il confronto MD5 (se disponibile),
+      * altrimenti confronta la dimensione in byte,
+      * altrimenti non può garantire identità → False.
+
+- _download_file_with_retry(service, file_id, out_path, *, progress=True, ...) -> None
+    Scarica un singolo file con retry (backoff + jitter via `_retry`). Se `progress=True`,
+    emette log periodici di avanzamento per chunk.
+
+- download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, *, ...) -> (int, int)
+    Funzione **pubblica**: esegue una BFS sulle sottocartelle di `remote_root_folder_id`,
+    scaricando solo i PDF (mimeType `application/pdf`) e replicando la gerarchia su disco.
+    Idempotente: salta i file già identici e valida l’integrità (MD5) post-download quando disponibile.
+
+Comportamento chiave
+--------------------
+- Scansione BFS di cartelle (`mimeType=application/vnd.google-apps.folder`).
+- Download di soli PDF (filtro per `mimeType=application/pdf`).
+- Replica su disco con nomi sanificati (`sanitize_filename`).
+- **Guardia STRONG** sui path con `ensure_within(local_root, target)` prima di scrivere.
+- Idempotenza tramite MD5/size; verifica MD5 post-scaricamento e cleanup best-effort in caso di mismatch.
+- Logging strutturato (nessun `print()`), con supporto alla redazione (`redact_logs`).
+
+Note
+----
+- Il retry è applicato all’operazione di download del singolo file: in caso di errore durante `next_chunk()`
+  il tentativo riparte **da capo** per semplicità/robustezza.
+- La scansione elenca PDF e cartelle separatamente per chiarezza; l’ordine non è garantito.
 """
 
 from __future__ import annotations

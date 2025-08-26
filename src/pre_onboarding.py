@@ -6,14 +6,14 @@ Orchestratore della fase di **pre-onboarding** per Timmy-KB.
 Responsabilità:
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
-- Creare struttura locale e, se non in `--dry-run`, la struttura remota su Google Drive.
+- Creare struttura locale e la struttura remota su Google Drive.
 - Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
 - Copiare i template semantici di base nella cartella `semantic/` cliente.
 
 Note architetturali:
 - Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
   (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** chiamano `sys.exit()` o `input()`.
-- **Redazione centralizzata** via `logging_utils` (nessun masking in env).
+- **Redazione centralizzata** via `logging_utils`.
 - **Path-safety STRONG**: `ensure_within()` prima di ogni write/copy/delete.
 - Non stampa segreti nei log (usa mascheratura parziale per ID e percorsi).
 """
@@ -52,6 +52,7 @@ from pipeline.drive_utils import (
 from pipeline.env_utils import get_env_var
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
+from pipeline.file_utils import safe_write_text  # SSoT per scritture atomiche
 
 
 def _prompt(msg: str) -> str:
@@ -129,22 +130,32 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
     if not mapping_dst.exists() and mapping_src.exists():
         shutil.copy2(mapping_src, mapping_dst)
         logger.info({"event": "semantic_template_copied", "file": str(mapping_dst)})
-        try:
-            import yaml
+
+    # Iniezione del blocco `context` in modo atomico e SSoT
+    try:
+        import yaml
+
+        data: Dict[str, Any] = {}
+        if mapping_dst.exists():
             with mapping_dst.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            ctx = {
-                "slug": context.slug,
-                "client_name": client_name or context.slug,
-                "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
-            }
-            if "context" not in data and isinstance(data, dict):
-                data = {"context": ctx, **data}
-                with mapping_dst.open("w", encoding="utf-8") as f:
-                    yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
-                logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
-        except Exception as e:
-            logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    data = loaded
+
+        ctx = {
+            "slug": context.slug,
+            "client_name": client_name or context.slug,
+            "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
+        }
+        if "context" not in data and isinstance(data, dict):
+            # Prepend `context` preservando l'ordine delle chiavi
+            data = {"context": ctx, **data}
+            payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+            ensure_within(semantic_dir, mapping_dst)
+            safe_write_text(mapping_dst, payload, atomic=True)
+            logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
+    except Exception as e:  # noqa: BLE001 - log e continua: è uno stub non bloccante
+        logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
 
 
 # ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni oltre I/O necessario -------
@@ -357,6 +368,6 @@ if __name__ == "__main__":
         code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
         early_logger.error(f"Uscita per PipelineError: {e}")
         sys.exit(code)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - hardening finale
         early_logger.error(f"Uscita per errore non gestito: {e}")
         sys.exit(EXIT_CODES.get("PipelineError", 1))

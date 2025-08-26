@@ -5,35 +5,29 @@ from typing import Optional, Any
 from pathlib import Path
 
 """
-Definizione delle eccezioni custom per la pipeline NeXT/Timmy.
+Eccezioni di dominio per la pipeline NeXT/Timmy.
+
+Cosa trovi qui (ruoli principali):
+- `PipelineError`: base class di tutte le eccezioni di dominio (no I/O, no exit).
+- Sottoclassi tipizzate per aree funzionali: Drive*, ConversionError, PushError,
+  ForcePushError (governance), ConfigError, PreviewError, EnrichmentError,
+  SemanticMappingError, PreOnboardingValidationError.
+- Quick win per input/slug: InputDirectoryMissing, InputFileMissing, InvalidSlug.
+- `EXIT_CODES`: tabella centralizzata per la mappatura orchestratori → sys.exit.
+- (Opz.) `exit_code_for(exc)`: helper di comodo per ottenere il codice.
 
 Linee guida:
-- Tutte le eccezioni core derivano da `PipelineError`.
-- NESSUNA di queste classi deve eseguire I/O (file/network) o terminare il processo.
-- Gli orchestratori mappano le eccezioni in `EXIT_CODES` per produrre `sys.exit(<code>)`.
-- Ogni eccezione ha una docstring specifica per l'auto-documentazione.
-- Evitare `raise Exception`: se non esiste una tipizzata, usare `PipelineError`.
+- Nessuna classe esegue I/O o termina il processo.
+- I messaggi includono contesto “safe” in `__str__` (slug, tail(file), mask id).
+- Se non esiste una tipizzata adatta → usa `PipelineError`.
 """
 
 
 class PipelineError(Exception):
     """Eccezione generica per errori bloccanti nella pipeline NeXT/Timmy.
 
-    Questa è la base di tutte le eccezioni di dominio. Accetta un messaggio e
-    un payload contestuale opzionale (slug, percorso file, id Drive, run_id) utile per
-    il logging strutturato e la diagnosi.
-
-    Args:
-        message: Messaggio descrittivo dell'errore.
-        slug: Slug del cliente coinvolto (se rilevante).
-        file_path: Percorso del file coinvolto (Path o stringa).
-        drive_id: ID di risorsa su Google Drive (cartella/file).
-        run_id: Identificativo univoco dell'esecuzione (per correlazione nei log).
-
-    Note:
-        - Le sottoclassi non devono alterare la semantica del costruttore
-          salvo aggiungere campi contestuali non funzionali.
-        - Il metodo `__str__` include automaticamente un contesto *sicuro* se presente.
+    Accetta un messaggio e un payload contestuale opzionale (slug, file_path, drive_id, run_id)
+    utile per logging strutturato e diagnosi.
     """
 
     def __init__(
@@ -106,7 +100,6 @@ class PushError(PipelineError):
     pass
 
 
-# ✅ NUOVO: eccezione specifica per governance del force push (gate a due fattori)
 class ForcePushError(PipelineError):
     """Violazioni della policy di force push (richiede flag + ACK)."""
     pass
@@ -155,14 +148,14 @@ class InputFileMissing(PipelineError):
 
 
 class InvalidSlug(PipelineError):
-    """Slug non valido secondo il pattern configurato."""
+    """Slug non valido secondo il pattern configurato (vedi `path_utils.validate_slug`)."""
     pass
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Mappa centralizzata dei codici di uscita (nessun I/O, no side effects)
 # Gli orchestratori useranno questa tabella per sys.exit() coerenti.
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 EXIT_CODES = {
     "PipelineError": 1,
     "ConfigError": 2,
@@ -172,11 +165,16 @@ EXIT_CODES = {
     "DriveUploadError": 22,
     "PreviewError": 30,
     "PushError": 40,
-    "ForcePushError": 41,  # ✅ nuovo codice per force push governance
+    "ForcePushError": 41,
     "CleanupError": 50,
     "EnrichmentError": 60,
     "SemanticMappingError": 61,
 }
+
+def exit_code_for(exc: BaseException) -> int:
+    """Restituisce il codice di uscita per un'eccezione (fallback a PipelineError=1)."""
+    return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["PipelineError"])
+
 
 __all__ = [
     "PipelineError",
@@ -184,16 +182,16 @@ __all__ = [
     "DriveUploadError",
     "ConversionError",
     "PushError",
-    "ForcePushError",  # ✅ export
+    "ForcePushError",
     "ConfigError",
     "CleanupError",
     "PreviewError",
     "EnrichmentError",
     "SemanticMappingError",
     "PreOnboardingValidationError",
-    # Quick win
     "InputDirectoryMissing",
     "InputFileMissing",
     "InvalidSlug",
     "EXIT_CODES",
+    "exit_code_for",
 ]

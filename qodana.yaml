@@ -1,6 +1,43 @@
 version: "1.0"
-linter: jetbrains/qodana-jvm:2025.1
+
+linter: jetbrains/qodana-python:2024.2
+
 profile:
   name: qodana.recommended
+
+failThreshold: 0
+
+bootstrap: |
+  python -m pip install --upgrade pip
+  python -m pip install -r requirements.txt
+  # opzionali/dev:
+  python -m pip install -r requirements-dev.txt || true
+  # modelli spaCy usati nel repo:
+  python -m spacy download it_core_news_sm || true
+  # (opzionale) vulnerability scan — rendilo strict se vuoi far fallire la CI:
+  python -m pip install pip-audit || true
+  pip-audit -r requirements.txt || true
+
 include:
-  - name: CheckDependencyLicenses
+  - name: PyPep8Inspection
+  - name: PyUnresolvedReferencesInspection
+  - name: PyPackageRequirementsInspection
+  - name: PyShadowingBuiltinsInspection
+  - name: SpellCheckingInspection
+  - name: DuplicatedCode
+
+exclude:
+  - name: All
+    paths:
+      - .venv/**
+      - venv/**
+      - .mypy_cache/**
+      - .pytest_cache/**
+      - .idea/**
+      - .vscode/**
+      - node_modules/**
+      - dist/**
+      - build/**
+      - output/**
+      - **/__pycache__/**
+# baseline: .qodana/baseline.sarif.json

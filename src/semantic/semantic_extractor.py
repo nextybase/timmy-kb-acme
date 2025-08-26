@@ -11,7 +11,7 @@ Refactor v1.0.5 (Blocco B):
 
 Assunzioni:
 - Il mapping è **canonico** {concept: [keywords...]} (normalizzato da semantic_mapping).
-- Modulo puro, senza I/O interattivo.
+- Modulo puro, senza I/O interattivo. 
 """
 
 from __future__ import annotations

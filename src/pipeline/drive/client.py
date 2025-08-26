@@ -3,18 +3,24 @@
 """
 Client e primitive di lettura per Google Drive (v3).
 
-Superficie pubblica (interna al pacchetto `pipeline.drive`, esposta al resto del
-progetto tramite il facade `pipeline.drive_utils`):
-- get_drive_service(context)  → costruisce un client Drive v3 da service account
-- list_drive_files(service, parent_id, query=None)  → elenca elementi sotto una cartella (paging, Shared Drives)
-- get_file_metadata(service, file_id)  → recupera metadati minimi (name, mimeType, size, md5Checksum)
-- drive_metrics_scope()  → context manager per tracciare metriche di retry in un blocco logico
-- get_retry_metrics()    → snapshot dict delle metriche correnti (vuoto se non attive)
+Superficie pubblica (usata tramite il facade `pipeline.drive_utils`):
+- get_drive_service(context)
+    Costruisce un client Drive v3 autenticato con Service Account (scope: Drive).
+    Applica il logging strutturato con slug/run_id e redazione delegata ai filtri globali.
+- list_drive_files(service, parent_id, query=None, *, fields=..., page_size=1000)
+    Elenca in modo paginato i file/cartelle sotto una directory, includendo Shared Drives.
+    Usa retry con backoff esponenziale + jitter su errori transienti (5xx/429/network).
+- get_file_metadata(service, file_id, *, fields=...)
+    Restituisce metadati essenziali (id, name, mimeType, size, md5Checksum).
+- drive_metrics_scope()
+    Context manager che attiva la raccolta di metriche per i retry (_DriveRetryMetrics).
+    Utile per misurare retries, backoff cumulato e ultimo status/error.
+- get_retry_metrics()
+    Ritorna uno snapshot dict delle metriche correnti (vuoto se non attive).
 
-Note:
-- Gli orchestratori e i moduli `upload`/`download` **non** devono chiamare `print()`.
-- La policy di retry e le metriche sono centralizzate qui e riutilizzate dai moduli
-  `download` e `upload` tramite `_retry(...)`.
+Note d’uso:
+- Nessun `print()`; tutta la diagnostica passa dal logging strutturato del repo.
+- La policy di retry/metriche è centralizzata qui ed è riutilizzata anche da upload/download via `_retry(...)`.
 """
 
 from __future__ import annotations
@@ -23,11 +29,12 @@ import os
 import time
 import random
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, List, Optional
 from collections import defaultdict
 from contextvars import ContextVar
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable, Generator
 
 from googleapiclient.discovery import build  # type: ignore
 from googleapiclient.errors import HttpError  # type: ignore
@@ -79,7 +86,7 @@ def drive_metrics_scope():
     """
     Context manager per attivare la raccolta metriche dei retry Drive in un blocco.
 
-    Esempio d’uso:
+    Esempio:
         with drive_metrics_scope():
             ... chiamate che usano _retry(...) ...
         snapshot = get_retry_metrics()
@@ -93,9 +100,7 @@ def drive_metrics_scope():
 
 
 def get_retry_metrics() -> Dict[str, Any]:
-    """
-    Ritorna uno snapshot (dict) delle metriche correnti. Se non attive, dict vuoto.
-    """
+    """Ritorna uno snapshot (dict) delle metriche correnti. Se non attive, dict vuoto."""
     m = _METRICS_CTX.get()
     return m.as_dict() if m is not None else {}
 
@@ -137,9 +142,9 @@ def _is_retryable_error(err: Exception) -> bool:
 
 
 def _retry(
-    op: callable,
+    op: Callable[[], Any],
     *,
-    is_retryable: callable | None = None,
+    is_retryable: Optional[Callable[[Exception], bool]] = None,
     max_attempts: int = 6,
     base_delay_s: float = 0.5,
     max_total_sleep_s: float = 20.0,
@@ -155,8 +160,8 @@ def _retry(
     - Se il sonno cumulato supera `max_total_sleep_s` → interrompe con `_RetryBudgetExceeded`.
 
     Parametri:
-    - is_retryable: funzione di classificazione alternativa; se None usa `_is_retryable_error`.
-    - max_attempts: massimo numero di tentativi (incluso il primo).
+    - is_retryable: classificatore alternativo; se None usa `_is_retryable_error`.
+    - max_attempts: numero massimo di tentativi (incluso il primo).
     - base_delay_s: base del backoff esponenziale.
     - max_total_sleep_s: tetto massimo al sonno cumulato (budget).
     - op_name: nome logico dell’operazione per i log.
@@ -235,14 +240,14 @@ def _resolve_service_account_file(context: Any) -> str:
     """
     Risolve il percorso assoluto del file JSON del service account.
 
-    Ordine di ricerca (per non rompere i chiamanti esistenti):
-    1) `context.service_account_file`
-    2) `context.SERVICE_ACCOUNT_FILE`
-    3) `context.env['SERVICE_ACCOUNT_FILE']` se presente
-    4) variabile d’ambiente `SERVICE_ACCOUNT_FILE` (🆕 via env_utils.get_env_var)
+    Ordine di ricerca:
+      1) `context.service_account_file`
+      2) `context.SERVICE_ACCOUNT_FILE`
+      3) `context.env['SERVICE_ACCOUNT_FILE']`
+      4) env `SERVICE_ACCOUNT_FILE` via `get_env_var`
 
     Solleva:
-    - ConfigError se non trovato o non leggibile.
+      ConfigError se non trovato o non leggibile.
     """
     candidates: List[Optional[str]] = []
     # Attributi sul contesto (via proprietà o campi)
@@ -252,7 +257,7 @@ def _resolve_service_account_file(context: Any) -> str:
     # Mappa env nel contesto (se esiste)
     if hasattr(context, "env") and isinstance(getattr(context, "env"), dict):
         candidates.append(context.env.get("SERVICE_ACCOUNT_FILE"))  # type: ignore[assignment]
-    # 🆕 Variabile d'ambiente letta tramite resolver centralizzato
+    # Variabile d'ambiente letta tramite resolver centralizzato
     candidates.append(get_env_var("SERVICE_ACCOUNT_FILE", default=None, required=False))
 
     for cand in candidates:
@@ -272,14 +277,15 @@ def get_drive_service(context: Any) -> Any:
     """
     Costruisce e restituisce un client Google Drive v3 usando un service account.
 
-    Parametri:
-    - context: oggetto tipo ClientContext. Deve fornire info sul file di credenziali.
+    Args:
+        context: oggetto tipo ClientContext. Deve fornire info sul file di credenziali.
 
-    Ritorna:
-    - istanza di `googleapiclient.discovery.Resource` per Drive v3.
+    Returns:
+        googleapiclient.discovery.Resource per Drive v3.
 
-    Eccezioni:
-    - ConfigError se il file credenziali manca o non è leggibile.
+    Raises:
+        ConfigError: se il file credenziali manca o non è leggibile,
+                     o se la creazione del client fallisce.
     """
     # Logger contestualizzato: eredita slug/run_id e filtri di redazione
     local_logger = get_structured_logger("pipeline.drive.client", context=context)
@@ -319,15 +325,15 @@ def list_drive_files(
     """
     Elenca file/cartelle sotto una cartella Drive (gestisce Shared Drives, paging, retry).
 
-    Parametri:
-    - service: client Drive v3.
-    - parent_id: ID della cartella da elencare.
-    - query: filtro addizionale da AND-are con "parents in <parent_id>".
-    - fields: campi richiesti (minimi per performance).
-    - page_size: dimensione pagina (pratico massimo 1000).
+    Args:
+        service: client Drive v3.
+        parent_id: ID della cartella da elencare.
+        query: filtro addizionale da AND-are con "parents in <parent_id>".
+        fields: campi richiesti (minimi per performance).
+        page_size: dimensione pagina (max raccomandato 1000).
 
-    Yield:
-    - dizionari file con almeno id, name, mimeType (ed md5Checksum/size quando disponibili).
+    Yields:
+        dict con almeno id, name, mimeType (ed md5Checksum/size quando disponibili).
     """
     if not parent_id:
         raise ValueError("parent_id è obbligatorio")
@@ -372,16 +378,16 @@ def get_file_metadata(
     """
     Recupera metadati minimi per un file su Drive.
 
-    Parametri:
-    - service: client Drive v3.
-    - file_id: ID del file.
-    - fields: campi richiesti.
+    Args:
+        service: client Drive v3.
+        file_id: ID del file.
+        fields: campi richiesti.
 
-    Ritorna:
-    - dizionario con i campi specificati.
+    Returns:
+        dict con i campi specificati.
 
-    Solleva:
-    - ValueError se `file_id` è vuoto.
+    Raises:
+        ValueError: se `file_id` è vuoto.
     """
     if not file_id:
         raise ValueError("file_id è obbligatorio")

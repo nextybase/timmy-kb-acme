@@ -1,21 +1,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/proc_utils.py
 """
-Utility robuste e riutilizzabili per l'esecuzione di subprocess con timeout, retry e logging.
-Pensato per sostituire chiamate dirette a `subprocess.run` in moduli come:
-- gitbook_preview.py (Docker build/run)
-- github_utils.py (git add/commit/push)
-- tools/cleanup_repo.py (facoltativo)
+Utility robuste e riutilizzabili per eseguire comandi di sistema con timeout, retry,
+backoff ed eventi di logging strutturato. Sostituisce l'uso diretto di `subprocess.run`
+nei moduli della pipeline (es. preview HonKit via Docker, git push, ecc.).
 
-API principali:
-- run_cmd(...): esecuzione con timeout, retry/backoff e redazione sicura nei log
-- wait_for_port(...): attende che una porta TCP risponda
-- docker_available(...): verifica disponibilità di Docker
-- run_docker_preview(...): build + serve HonKit in container (detached) con readiness check
-- stop_docker_preview(...): stop/cleanup container di preview
+Funzionalità principali
+-----------------------
+- run_cmd(...): wrapper con timeout (derivabile per tipo operazione), retry con backoff,
+  cattura di stdout/stderr, redazione sicura dei log e contesto ricco in caso di errore.
+- wait_for_port(...): attende la raggiungibilità di una porta TCP con polling e timebox.
+- docker_available(...): rileva se Docker è disponibile ed eseguibile.
+- run_docker_preview(...): esegue build + serve HonKit in un container Docker in modalità
+  detached e attende la readiness (porta up); gestisce cleanup best-effort su failure.
+- stop_docker_preview(...): prova a fermare/rimuovere il container di preview (best-effort).
 
 Note:
-- Nessuna retro-compatibilità: rimosse le fallback function legacy.
+- Nessuna retro-compatibilità con vecchie funzioni legacy.
+- Il redattore di default per i log è `pipeline.logging_utils.redact_secrets`.
 """
 
 from __future__ import annotations
@@ -45,7 +47,7 @@ __all__ = [
 # --------------------------------------- Error ---------------------------------------
 
 class CmdError(RuntimeError):
-    """Errore di comando con contesto ricco per diagnosi."""
+    """Errore di comando con contesto ricco per diagnosi (stdout/stderr tail, durata, tentativi)."""
 
     def __init__(
         self,
@@ -81,13 +83,12 @@ def _now_ms() -> int:
 
 def _to_argv(cmd: Sequence[str] | str) -> Sequence[str]:
     if isinstance(cmd, str):
-        # shlex.split è sufficiente nel nostro contesto; i call-site possono passare già la lista
+        # i call-site possono passare già una lista; altrimenti shlex.split è sufficiente
         return shlex.split(cmd)
     return list(cmd)
 
 
 def _render_cmd_for_log(argv: Sequence[str], redactor: Callable[[str], str]) -> str:
-    # Rappresentiamo il comando come stringa shell-quoted, poi redigiamo eventuali segreti
     rendered = " ".join(shlex.quote(a) for a in argv)
     return redactor(rendered)
 
@@ -99,10 +100,13 @@ def _tail(text: Optional[str], *, limit: int = 2000) -> Optional[str]:
 
 
 def _merge_env(base: Mapping[str, str], extra: Optional[Mapping[str, str]]) -> Mapping[str, str]:
-    if not extra:
-        return dict(base)
-    merged = dict(base)
-    merged.update(extra)
+    """Merge di env, garantendo sempre chiavi/valori `str` come richiesto da subprocess."""
+    merged: dict[str, str] = {str(k): str(v) for k, v in dict(base).items()}
+    if extra:
+        for k, v in extra.items():
+            if v is None:
+                continue
+            merged[str(k)] = str(v)
     return merged
 
 
@@ -144,9 +148,9 @@ def run_cmd(
         retries: numero di retry su errore/timeout (totale tentativi = retries + 1).
         backoff: moltiplicatore del delay tra i tentativi (es. 1.5).
         cwd: working directory.
-        env: variabili di ambiente addizionali da unire a `os.environ`.
+        env: variabili di ambiente addizionali (unite a `os.environ`, casting a str garantito).
         capture: se True, cattura stdout/stderr (text mode).
-        redactor: funzione per redigere segreti nei log (default: env_utils.redact_secrets).
+        redactor: funzione per redigere segreti nei log (default: `logging_utils.redact_secrets`).
         logger: logger strutturato per log diagnostici (opzionale).
         op: etichetta operativa (es. "docker build", "git push") per log e default timeout.
 
@@ -367,7 +371,7 @@ def run_docker_preview(
     container_name: str = "honkit_preview",
     retries: int = 1,
     logger: Optional[logging.Logger] = None,
-    redact_logs: bool = False,  # mantenuto per firma coerente con call-site; non logghiamo segreti qui
+    redact_logs: bool = False,  # mantenuto per firma coerente con i call-site; non logghiamo segreti qui
 ) -> None:
     """
     Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
@@ -377,7 +381,7 @@ def run_docker_preview(
     - Attende che la porta sia pronta (localhost:port) entro PREVIEW_READY_TIMEOUT.
 
     Raises:
-        CmdError in caso di fallimento non recuperabile.
+        CmdError: in caso di fallimento non recuperabile.
     """
     md_path = Path(md_dir).resolve()
     if logger:
@@ -453,9 +457,7 @@ def run_docker_preview(
 
 
 def stop_docker_preview(container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None) -> None:
-    """
-    Tenta lo stop + remove del container di preview. Best-effort (non solleva).
-    """
+    """Tenta lo stop + remove del container di preview. Best-effort (non solleva)."""
     try:
         run_cmd(["docker", "stop", container_name], retries=0, capture=True, logger=logger, op="docker stop")
     except CmdError:

@@ -1,6 +1,30 @@
 # src/pipeline/env_utils.py
 from __future__ import annotations
 
+"""
+Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
+
+Cosa fa questo modulo (ruoli e funzioni principali):
+- Caricamento .env dalla root del progetto (se presente).
+- API PURE e prevedibili per leggere variabili:
+  - `get_env_var(key, default=None, required=False)` → str|None
+  - `require_env(key)` → str (obbligatoria)
+  - `get_bool(key, default=False)` → bool (truthy robusto)
+  - `get_int(key, default=None, *, required=False, min_value=None, max_value=None)` → int|None
+- Flag di redazione log (SSoT):
+  - `compute_redact_flag(env, log_level="INFO")` → bool
+    Modalità: LOG_REDACTION in {on/off/always/never/auto}; auto abilita se ENV∈{prod,production,ci} o CI=true o presenti credenziali.
+    In DEBUG la redazione è forzata OFF.
+- Governance force-push:
+  - `get_force_allowed_branches(context=None)` → list[str]
+  - `is_branch_allowed_for_force(branch, context=None, *, allow_if_unset=True)` → bool
+
+Linee guida:
+- Nessun I/O distruttivo (solo lettura .env + os.environ).
+- Nessun logging qui: gli orchestratori/adapter gestiscono il reporting.
+- Coerenza con il domain error handling: alza `ConfigError` per variabili obbligatorie.
+"""
+
 import os
 import fnmatch  # per matching glob dei branch
 from pathlib import Path

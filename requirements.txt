@@ -1,32 +1,45 @@
-# === Librerie principali per la pipeline NeXT Timmy-KB ===
+# requirements.txt
+# =============================================================================
+# Pin statici per la pipeline NeXT Timmy-KB
+#
+# Obiettivo: build ripetibili e sicure. Le versioni qui sotto sono **pinnate**
+# (==) in linea con le annotazioni: niente “drift” dovuto a aggiornamenti a
+# sorpresa delle dipendenze.
+#
+# Note:
+# - Se aggiorni una versione, aggiorna e committa l’intero file.
+# - Alcune componenti (es. spaCy) richiedono risorse extra post-install.
+#   Vedi il blocco in fondo.
+# =============================================================================
 
-PyMuPDF>=1.22.5
-pydantic>=2.7.1
-pydantic-settings>=2.0
-python-dotenv>=1.0.1
-python-slugify>=8.0.4
-pyyaml>=6.0.1
-requests>=2.32.2
-google-api-python-client>=2.127.0
-google-auth-httplib2>=0.2.0
-google-auth-oauthlib>=1.2.0
-spacy>=3.7.4
-docker>=7.0.0
-fpdf>=1.7.2
-GitPython>=3.1.43
-PyGithub>=2.3.0
+# === Librerie principali per la pipeline NeXT Timmy-KB ===
+PyMuPDF==1.22.5
+pydantic==2.7.1
+pydantic-settings==2.0.0
+python-dotenv==1.0.1
+python-slugify==8.0.4
+PyYAML==6.0.1
+requests==2.32.2
+google-api-python-client==2.127.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+spacy==3.7.4
+docker==7.0.0
+fpdf==1.7.2
+GitPython==3.1.43
+PyGithub==2.3.0
 
 # === Test & Dev tools ===
-pytest>=8.0.0
+pytest==8.0.0
 
 # === Utility e compatibilità ===
-typing-extensions>=4.12.2
-typing-inspection>=0.4.0
-annotated-types>=0.7.0
+typing-extensions==4.12.2
+typing-inspection==0.4.0
+annotated-types==0.7.0
 
 # Libreria opzionale per l'interfaccia utente (Streamlit)
-streamlit>=1.35.0
+streamlit==1.35.0
 
-# === Note aggiuntive ===
-# Dopo l’installazione eseguire anche:
-# python -m spacy download it_core_news_sm
+# === Post-install raccomandato ===
+# Scarica il modello italiano piccolo per spaCy:
+#   python -m spacy download it_core_news_sm

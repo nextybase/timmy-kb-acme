@@ -1,4 +1,4 @@
-## Coding Rules — Timmy-KB (v1.3.0)
+## Coding Rules — Timmy-KB (v1.4.0)
 
 Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
@@ -118,6 +118,60 @@ py src/onboarding_full.py --slug demo --non-interactive
 - **TODO chiari** – annotare con breve spiegazione; rimuovere codice morto.
 - **Consistenza** – nomi, log e emoji coerenti (✅ successo, ⚠️ warning, ⏭️ skip).
 - **API coerenti** – gli adapter espongono `(context, logger, **opts)` o variante coerente.
+
+---
+
+# SSoT scritture → `safe_write_text` (versione breve)
+
+> **Dove**: `docs/ENGINEERING.md` → sezione *I/O & Path-safety*  
+> **Perché**: scritture *atomiche*, sicure (no path traversal), logging coerente.
+
+## Regole d’oro
+1. **Niente** `open(..., "w").write(...)` nei moduli di produzione.  
+   Usa sempre `safe_write_text(..., atomic=True)` o `safe_write_bytes(..., atomic=True)`.
+2. **Prima di scrivere**: `ensure_within(base_dir, path)` + `path.parent.mkdir(...)`.  
+   Se arriva input esterno per i nomi: `sanitize_filename(...)`.
+3. **Config**: fai backup `<file>.bak` **oppure** usa helper:  
+   `write_client_config_file(...)`, `update_config_with_drive_ids(...)`.
+4. **CSV grandi**: temporaneo + `fsync` + `os.replace` (commit atomico).  
+   Per CSV piccoli/medi: `safe_write_text`.
+5. **Logging**: usa `get_structured_logger(...)`; niente `print()`.
+
+## Pattern minimi
+### Testo (atomico)
+```py
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
+
+def write_atomic(base_dir, path, text, logger):
+    ensure_within(base_dir, path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    safe_write_text(path, text, encoding="utf-8", atomic=True)
+    logger.info("File scritto", extra={"file_path": str(path)})
+```
+
+### CSV (streaming atomico)
+```py
+import os, tempfile, csv
+from pipeline.path_utils import ensure_within
+
+def write_csv_streaming(base_dir, csv_path, rows, logger):
+    ensure_within(base_dir, csv_path.parent); ensure_within(base_dir, csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", delete=False, dir=str(csv_path.parent))
+    try:
+        w = csv.writer(tmp, lineterminator="\n"); w.writerow(["col1","col2"])
+        for r in rows: w.writerow(r)
+        tmp.flush(); os.fsync(tmp.fileno())
+    finally:
+        tmp.close()
+    os.replace(tmp.name, csv_path)
+    logger.info("CSV scritto", extra={"file_path": str(csv_path)})
+```
+
+### Eccezioni ammesse
+- **Test/fixtures**.
+- **Tool interattivi** (solo UX), ma scritture sempre via `safe_write_*`.
 
 ---
 

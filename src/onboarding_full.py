@@ -6,7 +6,7 @@ Onboarding FULL (fase 2): Push GitHub.
 - Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
 - Masking centralizzato nel logger; env_utils resta “puro”.
 - Path-safety STRONG per le scritture (log) via ensure_within.
-- Orchestratore gestisce I/O utente e codici di uscita; moduli sottostanti non fanno prompt/exit.
+- Orchestratore gestisce I/O utente e codici di uscita; i moduli sottostanti non fanno prompt/exit.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from pipeline.env_utils import get_env_var  # env “puro”
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
 except Exception as e:
-    # Niente fallback locale: l'adapter è richiesto esplicitamente
+    # Adapter richiesto esplicitamente
     raise ConfigError(f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})")
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
@@ -73,7 +73,7 @@ def _git_push(context: ClientContext, logger) -> None:
         logger.info("Git push completato (github_utils)")
     except Exception as e:
         # Errore corretto e mappato su EXIT_CODES["PushError"]=40
-        raise PushError(f"Git push fallito tramite github_utils: {e}")
+        raise PushError(f"Git push fallito tramite github_utils: {e}") from e
 
 
 # ─────────────── MAIN orchestrator (solo push) ───────────────
@@ -109,7 +109,7 @@ def onboarding_full_main(
     try:
         _ensure_readme_summary(context, logger)
     except Exception as e:
-        raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}")
+        raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}") from e
 
     # Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True

@@ -4,6 +4,58 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.4.0] - 2025-08-26
+
+### Added
+- **Proc utils**: nuovo modulo `src/pipeline/proc_utils.py` con `run_cmd` (timeout/retry/backoff, logging strutturato), `wait_for_port`, helper Docker (`run_docker_preview`, `stop_docker_preview`).
+- **Preview HonKit/GitBook**:
+  - `src/pipeline/gitbook_preview.py`: build/serve in Docker, readiness check, stop best-effort.
+  - `src/adapters/preview.py`: adapter semplice `start_preview/stop_preview`, default `gitbook-<slug>`, propagazione `redact_logs`.
+- **Semantica**:
+  - `src/semantic/tags_extractor.py`: copia PDF sicura + `emit_tags_csv` (schema esteso: `relative_path|suggested_tags|entities|keyphrases|score|sources`).
+  - `src/semantic/tags_io.py`: `write_tagging_readme`, `write_tags_review_stub_from_csv` (dedup/normalize, path-safety, scrittura atomica).
+  - `src/semantic/tags_review_validator.py`: validazione YAML + `write_validation_report`.
+- **Documentazione interna**: sezione “SSoT scritture → `safe_write_text`” (I/O & Path-safety) con pattern minimi.
+- **CI/QA**:
+  - **Qodana**: configurazione consigliata (incluso controllo licenze/dependenze).
+  - **GitHub Actions**: workflow CI con step separati **flake8**, **mypy**, **pytest**, cache pip e artifact dei log.
+
+### Changed
+- **SSoT scritture**: rimpiazzati `open(...).write(...)` con `safe_write_text` / `safe_write_bytes` e **guard-rail STRONG** `ensure_within` prima di ogni scrittura/eliminazione.
+- **GitHub push** (`src/pipeline/github_utils.py`, refactor Patch 5):
+  - Risoluzione branch via env (`GIT_DEFAULT_BRANCH`/`GITHUB_BRANCH`) con fallback `main`.
+  - Creazione/ensure repo via PyGithub; clone in **working dir temporanea dentro la sandbox**; commit deterministico; push con retry.
+  - **Force push governato**: `--force-with-lease` + allow-list branch e `force_ack` obbligatorio.
+  - Autenticazione HTTP via `GIT_HTTP_EXTRAHEADER` (token non nei comandi); cleanup tmp idempotente; logging strutturato e redazione segreti.
+- **Contenuti Markdown** (`src/pipeline/content_utils.py`):
+  - Conversione annidata per categorie, fingerprint `.fp` per *skip if unchanged*, concorrenza per categoria.
+  - `SUMMARY.md` e `README.md` generati in modo atomico e sicuro.
+- **Orchestratore tagging** (`src/tag_onboarding.py`):
+  - Download/copia PDF con path-safety; **CSV streaming atomico**; checkpoint HiTL; validazione YAML con report JSON.
+- **Tool dummy** (`src/tools/gen_dummy_kb.py`): rimosso `print()`, logging strutturato, log sugli step PDF/CSV, scritture atomiche centralizzate.
+- **Cleanup**:
+  - `src/pipeline/cleanup_utils.py`: rimozione sicura di artefatti legacy (`book/.git`) con `ensure_within`.
+  - `src/tools/cleanup_repo.py`: cancellazione repo remoto via **API (PyGithub)** con fallback automatico a **CLI `gh`**, owner auto-detected; messaggistica migliorata.
+- **Consistenza YAML**: uniformato su estensione `.yaml` anche per configurazioni CI/Qodana.
+- **Dipendenze**: versioni aggiornate/pinnate per ripetibilità build (PyGithub, google-api-python-client, PyYAML, docker, spaCy, ecc.).
+
+### Fixed
+- Eliminato rischio di **path traversal** su write/delete grazie a `ensure_within` su tutti i punti critici.
+- Affidabilità preview HonKit: readiness check sulla porta e gestione container duplicati.
+- Coerenza logging: rimosse stampe dirette; solo **logging strutturato**.
+
+### Security
+- Scritture **atomiche** ed **idempotenti**; backup `.bak` dove opportuno.
+- Redazione automatica dei segreti nei log; autenticazione GitHub via header HTTP (niente token in argv).
+
+### Known Issues
+- La cancellazione del repo via API/CLI richiede permessi **admin** sul repository; in assenza di permessi si riceve 401/403 dalla API o errore dalla CLI. Lo strumento gestisce e logga il fallback, ma non può bypassare i permessi.
+
+### Migration Notes
+- Se presenti vecchi file `.yml`, rinominarli in `.yaml` per allineamento e per i riferimenti nei workflow/strumenti.
+
+---
+
 ## 1.3.0 - 2025-08-26
 
 ### Changed

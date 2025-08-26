@@ -1,0 +1,32 @@
+name: Qodana
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Qodana (Python)
+        uses: JetBrains/qodana-action@v2024.2
+        with:
+          args: --save-report
+          use-caches: true
+          project-dir: ./
+          results-dir: ./.qodana
+          # usa il qodana.yaml in root
+
+  license-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Qodana (License Audit)
+        uses: JetBrains/qodana-action@v2024.2
+        with:
+          args: --save-report
+          use-caches: true
+          project-dir: ./
+          results-dir: ./.qodana-licenses
+          qodana-yaml-path: qodana.licenses.yaml

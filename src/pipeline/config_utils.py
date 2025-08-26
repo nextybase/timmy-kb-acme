@@ -1,8 +1,31 @@
 # src/pipeline/config_utils.py
+"""
+Configurazione cliente – utilities (SSoT + path-safety).
+
+Cosa fa questo file
+-------------------
+Centralizza le utilità di configurazione per la pipeline Timmy-KB:
+
+- `Settings`: modello Pydantic per le variabili d’ambiente critiche (Drive, GitHub, ecc.),
+  con validazione dei campi essenziali e presenza dello `slug`.
+- `write_client_config_file(context, config) -> Path`: serializza e salva **atomicamente**
+  `config.yaml` nella sandbox del cliente usando `safe_write_text` (backup `.bak` incluso).
+- `get_client_config(context) -> dict`: legge e deserializza `config.yaml` dal contesto (errore se assente/malformato).
+- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di ambiente (config valido e cartelle chiave come `logs/`).
+- `safe_write_file(file_path, content)`: **wrapper legacy** che scrive testo in modo atomico
+  passando da `safe_write_text`. Per nuovo codice, usare direttamente `safe_write_text`.
+- `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale su `config.yaml`
+  con backup `.bak` e scrittura atomica.
+
+Linee guida implementative
+--------------------------
+- **SSoT scritture**: tutte le write passano da `pipeline.file_utils.safe_write_text`.
+- **Path-safety STRONG**: prima di scrivere all’interno della sandbox, validiamo con `ensure_within(...)`.
+- **Niente prompt/exit**: l’orchestrazione (I/O utente e gestione exit code) è demandata ai caller.
+"""
 
 from __future__ import annotations
 
-import os
 import shutil
 import yaml
 import logging
@@ -14,12 +37,14 @@ from pydantic import Field, model_validator
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.constants import (
-    OUTPUT_DIR_NAME, LOGS_DIR_NAME, CONFIG_FILE_NAME,
-    BACKUP_SUFFIX, TMP_SUFFIX,
-    RAW_DIR_NAME, BOOK_DIR_NAME, CONFIG_DIR_NAME,
+    CONFIG_FILE_NAME,
+    BACKUP_SUFFIX,
+    CONFIG_DIR_NAME,
 )
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.context import ClientContext
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 
 logger = get_structured_logger("pipeline.config_utils")
 
@@ -88,48 +113,48 @@ class Settings(PydanticBaseSettings):
 #  Scrittura configurazione cliente su file YAML
 # ----------------------------------------------------------
 def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> Path:
-    """Scrive il file `config.yaml` nella cartella cliente, con backup e scrittura atomica.
+    """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT).
 
     Strategia:
-      - Crea la cartella `config/` se assente.
-      - Se esiste già un config, ne crea un backup con suffisso `.bak`.
-      - Scrive su file temporaneo `.tmp` e poi fa `replace()` atomico sul file finale.
+      - Crea `config/` se assente.
+      - Se esiste già un config, crea backup `<config.yaml>.bak`.
+      - Serializza YAML e scrive con `safe_write_text(..., atomic=True)`.
 
     Args:
-        context: Contesto del cliente (fornisce `output_dir` e percorsi canonici).
-        config: Dizionario di configurazione da serializzare in YAML.
+        context: Contesto del cliente (fornisce perimetro sandbox).
+        config: Dizionario di configurazione.
 
     Returns:
-        Il percorso completo del file `config.yaml` scritto.
+        Path al file `config.yaml` scritto.
 
     Raises:
-        ConfigError: in caso di errore di scrittura su disco.
+        ConfigError: in caso di errore I/O.
     """
     config_dir = context.output_dir / CONFIG_DIR_NAME
-    config_dir.mkdir(parents=True, exist_ok=True)
     config_path = config_dir / CONFIG_FILE_NAME
+
+    # path-safety
+    config_dir.mkdir(parents=True, exist_ok=True)
+    ensure_within(context.base_dir, config_dir)
+    ensure_within(context.base_dir, config_path)
 
     # Backup eventuale file esistente
     if config_path.exists():
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
         shutil.copy(config_path, backup_path)
-        # ➕ metadati di contesto nei log
         logger.info(
-            f"📝 Backup config esistente in {backup_path}",
+            "📝 Backup config esistente",
             extra={"slug": context.slug, "file_path": str(backup_path)},
         )
 
-    tmp_path = config_path.with_suffix(config_path.suffix + TMP_SUFFIX)
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
-        tmp_path.replace(config_path)
+        payload = yaml.safe_dump(config or {}, allow_unicode=True, sort_keys=False)
+        safe_write_text(config_path, payload, encoding="utf-8", atomic=True)
     except Exception as e:
-        raise ConfigError(f"Errore scrittura config {config_path}: {e}")
+        raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
 
-    # ➕ metadati di contesto nei log
     logger.info(
-        f"📄 Config cliente salvato in {config_path}",
+        "📄 Config cliente salvato",
         extra={"slug": context.slug, "file_path": str(config_path)},
     )
     return config_path
@@ -153,10 +178,10 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
-        with open(context.config_path, "r", encoding="utf-8") as f:
+        with context.config_path.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
-        raise ConfigError(f"Errore lettura config {context.config_path}: {e}")
+        raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
 
 
 # ----------------------------------------------------------
@@ -165,29 +190,24 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
 def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None) -> None:
     """Verifica la coerenza minima dell'ambiente prima del pre-onboarding.
 
-    STEP 1: verifica la presenza e la validità della config principale (`config.yaml`).
-    STEP 2: verifica (e crea se mancante) le directory critiche (es. `logs/`).
-
-    Args:
-        context: Contesto cliente.
-        base_dir: Radice delle directory del cliente. Se `None`, usa `context.base_dir`.
+    STEP 1: presenza/validità di `config.yaml`.
+    STEP 2: verifica/creazione directory critiche (es. `logs/`).
 
     Raises:
         PreOnboardingValidationError: per config mancante/non valida o YAML malformato.
     """
     base_dir = base_dir or context.base_dir
 
-    # Verifica config file
     if not context.config_path.exists():
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
         raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
     try:
-        with open(context.config_path, "r", encoding="utf-8") as f:
+        with context.config_path.open("r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
-        raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}")
+        raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
 
     if not isinstance(cfg, dict):
         logger.error("❗ Config YAML non valido o vuoto.")
@@ -201,36 +221,30 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
-    required_dirs = ["logs"]
-    for dir_name in required_dirs:
-        dir_path = (base_dir / dir_name) if not Path(dir_name).is_absolute() else Path(dir_name)
-        dir_path = dir_path.resolve()
-        if not dir_path.exists():
-            logger.warning(f"⚠️ Directory mancante: {dir_path}, creazione automatica...")
-            dir_path.mkdir(parents=True, exist_ok=True)
+    logs_dir = (base_dir / "logs").resolve()
+    if not logs_dir.exists():
+        logger.warning(f"⚠️ Directory mancante: {logs_dir}, creazione automatica...")
+        logs_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"✅ Ambiente pre-onboarding valido per cliente {context.slug}")
 
 
 # ----------------------------------------------------------
-#  Scrittura sicura di file generici (STANDARD v1.0 stable) – ATOMICA
+#  Scrittura sicura di file generici (wrapper legacy) – ATOMICA
 # ----------------------------------------------------------
 def safe_write_file(file_path: Path, content: str) -> None:
-    """Scrive un file in modalità sicura con backup e replace atomico.
+    """Scrive testo in modo sicuro e atomico usando `safe_write_text`.
 
-    Procedura:
-      - Crea le cartelle necessarie.
-      - Se esiste già un file, crea un backup con suffisso `.bak`.
-      - Scrive su file temporaneo `.tmp`; poi `replace()` atomico sul target.
+    - Crea le cartelle necessarie.
+    - Se esiste già un file, crea backup `<nome>.bak`.
+    - Usa `safe_write_text(..., atomic=True)` per la sostituzione.
 
-    Args:
-        file_path: Percorso del file di destinazione.
-        content: Contenuto da scrivere (testo UTF-8).
-
-    Raises:
-        PipelineError: se la scrittura fallisce.
+    Nota: funzione mantenuta per retrocompatibilità; preferire `safe_write_text`.
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Path-safety minimale (perimetro = directory padre)
+    ensure_within(file_path.parent, file_path)
 
     # Backup se già esiste
     if file_path.exists():
@@ -238,15 +252,11 @@ def safe_write_file(file_path: Path, content: str) -> None:
         shutil.copy(file_path, backup_path)
         logger.info(f"Backup creato: {backup_path}")
 
-    # Scrittura atomica: tmp + replace
-    tmp_path = file_path.with_suffix(file_path.suffix + TMP_SUFFIX)
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        tmp_path.replace(file_path)
+        safe_write_text(file_path, content, encoding="utf-8", atomic=True)
     except Exception as e:
         logger.error(f"Errore scrittura file {file_path}: {e}")
-        raise PipelineError(f"Errore scrittura file {file_path}: {e}")
+        raise PipelineError(f"Errore scrittura file {file_path}: {e}") from e
 
 
 # ----------------------------------------------------------
@@ -262,12 +272,7 @@ def update_config_with_drive_ids(
     Comportamento:
       - Esegue backup `.bak` del config esistente.
       - Aggiorna **solo** le chiavi presenti in `updates`.
-      - Schre via `safe_write_file` in modo atomico.
-
-    Args:
-        context: Contesto cliente con `config_path` valido.
-        updates: Mappa chiave→valore da fondere nel config.
-        logger: Logger opzionale per messaggi di esito.
+      - Scrive via `safe_write_text` in modo atomico.
 
     Raises:
         ConfigError: se la lettura/scrittura del config fallisce o se il file è assente.
@@ -285,22 +290,23 @@ def update_config_with_drive_ids(
 
     # Carica config esistente
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with config_path.open("r", encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
     except Exception as e:
-        raise ConfigError(f"Errore lettura config {config_path}: {e}")
+        raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
 
     # Aggiorna solo le chiavi passate
-    config_data.update(updates)
+    config_data.update(updates or {})
 
-    # Scrittura sicura (atomica)
+    # Scrittura sicura (atomica) + path-safety
+    ensure_within(context.base_dir, config_path)
     try:
         yaml_dump = yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True)
-        safe_write_file(config_path, yaml_dump)
+        safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
         if logger:
             logger.info(f"✅ Config aggiornato in {config_path}")
     except Exception as e:
-        raise ConfigError(f"Errore scrittura config {config_path}: {e}")
+        raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
 
 
 __all__ = [

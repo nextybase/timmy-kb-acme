@@ -2,6 +2,28 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+"""
+I/O utility per il flusso di tagging (cartella `semantic/`) – Timmy-KB
+
+Cosa fa il modulo
+-----------------
+- `write_tagging_readme(semantic_dir, logger) -> Path`
+  Crea/aggiorna un README rapido per il processo HiTL di tagging.
+  Scrittura **atomica** e guard-rail **STRONG** sull’output.
+
+- `write_tags_review_stub_from_csv(semantic_dir, csv_path, logger, top_n=100) -> Path`
+  Genera uno stub `tags_reviewed.yaml` partendo da `tags_raw.csv`:
+  deduplica e normalizza i suggerimenti (lowercase) fino a `top_n`.
+  Lettura consentita **solo** se il CSV è sotto `semantic_dir`
+  (validazione con `ensure_within`). Scrittura **atomica**.
+
+Sicurezza & I/O
+---------------
+- Nessun `print()`/`input()` o terminazioni del processo.
+- Path-safety: `ensure_within` per output e per vincolare il CSV alla sandbox.
+- Scritture atomiche con `safe_write_text`.
+"""
+
 import time
 import csv
 from pathlib import Path
@@ -10,6 +32,8 @@ from typing import List
 from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
 from pipeline.path_utils import ensure_within
 from pipeline.file_utils import safe_write_text
+
+__all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
 
 
 def write_tagging_readme(semantic_dir: Path, logger) -> Path:

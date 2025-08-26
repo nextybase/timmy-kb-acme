@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Semantic Onboarding: RAW → BOOK con arricchimento semantico e preview Docker.
-- NON usa Google Drive (i PDF sono già in output/timmy-kb-<slug>/raw/).
-- Converte i PDF in Markdown in output/timmy-kb-<slug>/book/ tramite le content utils.
+- NON usa Google Drive (i PDF sono già ).
+- Converte i PDF in output/timmy-kb-<slug>/raw/ in Markdown in output/timmy-kb-<slug>/book/ tramite le content utils.
 - Arricchisce i frontmatter dei .md usando (se presente) output/timmy-kb-<slug>/semantic/tags.yaml.
 - Genera README.md e SUMMARY.md tramite adapters/content_fallbacks (fallback standard centralizzato).
 - Avvia la preview Docker (HonKit) e chiede esplicitamente se fermarla prima di uscire.

@@ -4,28 +4,29 @@
 Logging strutturato per Timmy-KB.
 
 Obiettivi:
-- Offrire un logger **idempotente**, con filtri di **contesto** (slug, run_id) e di **redazione** attivabili da `context.redact_logs`.
-- Evitare `print`: tutti i moduli usano logging strutturato (console + opzionale file).
-- Fornire utilità di **masking** per ID e percorsi in modo coerente.
+- Logger **idempotente**, con filtri di **contesto** (slug, run_id) e **redazione** attivabili da `context.redact_logs`.
+- Niente `print`: tutti i moduli usano logging strutturato (console + opzionale file).
+- Utilità di **masking** coerenti per ID, percorsi e aggiornamenti di config.
 
 Formato di output (console/file):
     %(asctime)s %(levelname)s %(name)s: %(message)s | slug=<slug> run_id=<run> file_path=<p> [event=<evt> branch=<b> repo=<r>]
 
-Esempio d'uso negli orchestratori:
-    logger = get_structured_logger(
-        "pre_onboarding",
-        context=context,                 # espone .slug, .redact_logs, .run_id (opzionale)
-        log_file=base_dir / "logs/log.jsonl",
-        run_id=run_id,                   # usato se context.run_id assente
-    )
-    logger.info("pre_onboarding.yaml.resolved",
-                extra={"event": "yaml_resolved", "file_path": str(yaml_path)})
+Indice funzioni principali (ruolo):
+- `get_structured_logger(name, *, context=None, log_file=None, run_id=None, level=INFO)`:
+    istanzia un logger con handler console (sempre) e file (opzionale), aggiunge i filtri di contesto e redazione.
+- `metrics_scope(logger, *, stage, customer=None)`:
+    context manager leggero che logga start/end/fail di una microfase.
+- `redact_secrets(msg)`:
+    redige pattern comuni di segreti in testo libero.
+- `mask_partial(value, keep=3)`, `mask_id_map(d)`, `mask_updates(d)`:
+    utilità per mascherare valori da includere in `extra`.
+- `tail_path(p, keep_segments=2)`:
+    coda compatta di un path per log.
 
-Redazione:
-- Se `context.redact_logs = True`, il filtro applica `redact_secrets` al messaggio e azzera campi sensibili noti
-  (es. `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `Authorization`, `GIT_HTTP_EXTRAHEADER`).
-- Le funzioni `mask_partial`, `mask_id_map`, `mask_updates` sono utilità **esplicite** per mascherare valori
-  nei campi `extra` prima del logging (best practice consigliata).
+Linee guida implementative:
+- **Redazione centralizzata**: se `context.redact_logs` è True, il filtro applica la redazione ai messaggi
+  e a campi extra sensibili (`GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, ecc.).
+- **Idempotenza**: chiamate ripetute a `get_structured_logger` non creano handler duplicati.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Mapping
+from typing import Any, Optional, Mapping, Union
 
 # ---------------------------------------------
 # Redazione (API semplice usata dai moduli)
@@ -42,13 +43,14 @@ from typing import Any, Optional, Mapping
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
 
 def redact_secrets(msg: str) -> str:
-    """Redige token/credenziali se accidentalmente presenti in un testo."""
+    """Redige token/credenziali se accidentalmente presenti in un testo libero."""
     if not msg:
         return msg
     out = msg
-    # mascherature semplici; per casi complessi si demanda ai moduli chiamanti
+    # Mascherature semplici; per casi complessi si demanda ai moduli chiamanti
     out = out.replace("x-access-token:", "x-access-token:***")
     out = out.replace("Authorization: Basic ", "Authorization: Basic ***")
+    out = out.replace("Authorization: Bearer ", "Authorization: Bearer ***")
     return out
 
 def mask_partial(value: Optional[str], keep: int = 3) -> str:
@@ -57,9 +59,9 @@ def mask_partial(value: Optional[str], keep: int = 3) -> str:
         return ""
     return value[:keep] + "…" if len(value) > keep else value
 
-def tail_path(p: Path, keep_segments: int = 2) -> str:
-    """Restituisce la coda del path per logging compatto."""
-    parts = list(p.parts)
+def tail_path(p: Union[Path, str], keep_segments: int = 2) -> str:
+    """Restituisce la coda del path per logging compatto (accetta `Path` o `str`)."""
+    parts = list(Path(p).parts)
     return "/".join(parts[-keep_segments:]) if parts else str(p)
 
 def mask_id_map(d: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -70,7 +72,8 @@ def mask_updates(d: Mapping[str, Any]) -> Mapping[str, Any]:
     """Maschera in modo prudente alcuni campi noti durante il log degli update di config."""
     out: dict[str, Any] = {}
     for k, v in (d or {}).items():
-        if k.upper().endswith("_ID") or k in _SENSITIVE_KEYS:
+        ku = k.upper()
+        if ku.endswith("_ID") or ku in _SENSITIVE_KEYS or "TOKEN" in ku:
             out[k] = mask_partial(str(v))
         else:
             out[k] = v
@@ -197,7 +200,7 @@ def get_structured_logger(
       - formatter coerente console/file.
 
     Nota:
-      - Questo modulo **non** crea directory: farlo a monte con path-safety (ensure_within) + mkdir.
+      - Questo modulo **non** crea directory: farlo a monte con path-safety e mkdir.
       - Per mascherare valori in `extra`, usare `mask_partial`/`mask_id_map`/`mask_updates`.
 
     Ritorna:
@@ -270,3 +273,14 @@ class metrics_scope:
             self.logger.info(f"✅ end:{self.stage}", extra={"slug": self.customer})
         # non sopprimere eccezioni
         return False
+
+
+__all__ = [
+    "get_structured_logger",
+    "metrics_scope",
+    "redact_secrets",
+    "mask_partial",
+    "tail_path",
+    "mask_id_map",
+    "mask_updates",
+]

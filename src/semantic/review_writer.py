@@ -21,7 +21,7 @@ review:
     action: "keep"           # keep | drop | merge_into:<canonical>
     synonyms: []             # eventuali sinonimi che vuoi mantenere
     notes: ""                # spazio per chiarimenti
-    examples:                # dove l'abbiamo trovato (subset)
+    examples:                # dove l'abbiamo trovato (subset) 
       - "raw/organizzazione/piano_ai.pdf"
       - "raw/glossario/ai_definizioni.pdf"
 

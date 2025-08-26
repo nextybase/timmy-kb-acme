@@ -2,12 +2,28 @@
 """
 Utility di gestione path e slug per la pipeline Timmy-KB.
 
-✅ Principi:
-- Niente side-effect (no I/O esterni, salvo lettura facoltativa di config locale).
-- Logging strutturato solo in caso di errore (silenzioso quando tutto va bene).
-- Guardie SOFT e STRONG sui path:
-  - SOFT:  is_safe_subpath(path, base) -> bool  (solo pre-check booleani)
-  - STRONG: ensure_within(base, target) -> None  (SSoT per write/delete vive QUI)
+Ruolo del modulo (SSoT path-safety + regole slug):
+- is_safe_subpath(path, base) -> bool
+  Guardia **SOFT**: verifica boolean che un path stia sotto una base (solo pre-check).
+- ensure_within(base, target) -> None
+  Guardia **STRONG**: solleva `ConfigError` se `target` non ricade sotto `base` (usare prima di write/copy/delete).
+- _load_slug_regex() / clear_slug_regex_cache()
+  Carica/azzera la regex di validazione slug da `config/config.yaml` (chiave `slug_regex`) con fallback sicuro.
+- is_valid_slug(slug) / validate_slug(slug)
+  Verifica slug contro la regex di progetto; `validate_slug` alza `InvalidSlug` se non conforme.
+- normalize_path(path) -> Path
+  Normalizzazione/risoluzione sicura; in errore ritorna il path originale e logga.
+- sanitize_filename(name, max_length=100) -> str
+  Pulizia nomi file (Unicode NFKC, rimozione caratteri vietati/controllo, truncation).
+- sorted_paths(paths, base=None) -> List[Path]
+  Ordinamento deterministico case-insensitive, relativo a `base` se fornita.
+- ensure_valid_slug(initial_slug, *, interactive, prompt, logger) -> str
+  Wrapper interattivo/non-interattivo che richiede/valida uno slug.
+
+Principi:
+- Nessun I/O distruttivo; solo letture facoltative (es. `config/config.yaml`).
+- Logging strutturato solo su errori (silenzioso quando tutto ok).
+- Portabilità: niente dipendenze da `ClientContext`; fallback a `Path.relative_to` se `is_relative_to` non è disponibile.
 """
 
 from __future__ import annotations
@@ -16,7 +32,6 @@ from pathlib import Path
 import unicodedata
 import re
 import yaml
-import os
 import logging
 from typing import Optional, Iterable, List, Tuple, Callable
 from functools import lru_cache  # caching per slug regex
@@ -24,7 +39,7 @@ from functools import lru_cache  # caching per slug regex
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger
 
-# Punto di verità per messaggi di errore di questo modulo
+# Logger di modulo
 _logger = get_structured_logger("pipeline.path_utils")
 
 
@@ -33,15 +48,18 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
     Verifica in modo sicuro se `path` è contenuto all'interno di `base`.
     SOFT guard: usare SOLO come pre-check booleano (mai per autorizzare write/delete).
 
-    Usa i percorsi risolti (realpath) per prevenire path traversal e link simbolici
-    indesiderati. In caso di eccezioni durante la risoluzione, ritorna `False`
-    e registra un errore sul logger di modulo.
+    Usa i percorsi risolti (realpath) per prevenire path traversal e link simbolici.
+    In caso di eccezioni durante la risoluzione, ritorna `False` e registra un errore.
     """
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        # Implementazione robusta sugli edge-case (Python ≥ 3.10)
-        return path_resolved.is_relative_to(base_resolved)
+        # Portabile: tenta relative_to (evita dipendenza da Path.is_relative_to)
+        try:
+            path_resolved.relative_to(base_resolved)
+            return True
+        except Exception:
+            return False
     except Exception as e:
         _logger.error(
             "Errore nella validazione path (is_safe_subpath)",
@@ -60,7 +78,7 @@ def ensure_within(base: Path, target: Path) -> None:
         target: path del file/dir da validare.
 
     Note:
-        - Questa è la SSoT per la sicurezza delle operazioni di scrittura/copia/rimozione.
+        - SSoT per sicurezza write/copy/delete.
         - Non restituire boolean: solleva eccezioni su casi non conformi.
     """
     try:
@@ -70,7 +88,6 @@ def ensure_within(base: Path, target: Path) -> None:
         raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
 
     try:
-        # Fallisce con ValueError se tgt_r non è sotto base_r (gestisce anche prefissi simili)
         tgt_r.relative_to(base_r)
     except Exception:
         raise ConfigError(
@@ -84,20 +101,25 @@ def _load_slug_regex() -> str:
     """
     Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
 
-    Se il file non esiste o la chiave è assente/non valida, usa un default sicuro.
-    Non si usa ClientContext per evitare dipendenze circolari.
+    Strategia:
+    - Cerca prima `./config/config.yaml` (working dir),
+      poi `<project_root>/config/config.yaml` risalendo da questo file.
+    - Fallback: `^[a-z0-9-]+$`.
     """
-    config_path = os.path.join("config", "config.yaml")
     default_regex = r"^[a-z0-9-]+$"
-    if os.path.exists(config_path):
+    candidates = [
+        Path("config") / "config.yaml",
+        Path(__file__).resolve().parents[2] / "config" / "config.yaml",
+    ]
+    for cfg_path in candidates:
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-            pattern = cfg.get("slug_regex", default_regex)
-            return pattern if isinstance(pattern, str) and pattern else default_regex
+            if cfg_path.exists():
+                with cfg_path.open("r", encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                pattern = cfg.get("slug_regex", default_regex)
+                return pattern if isinstance(pattern, str) and pattern else default_regex
         except Exception as e:
-            _logger.error("Errore caricamento config slug_regex", extra={"error": str(e)})
-            return default_regex
+            _logger.error("Errore caricamento config slug_regex", extra={"error": str(e), "file_path": str(cfg_path)})
     return default_regex
 
 

@@ -2,12 +2,20 @@
 from __future__ import annotations
 
 """
-Preview GitBook/HonKit tramite Docker, senza interattività nel modulo.
+Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
 
-Modifiche Fase 2:
-- Uso di `proc_utils.run_cmd` con timeout/retry e logging strutturato.
-- Funzioni chiare per i passi operativi: build statica, run detached, attesa porta, stop sicuro.
-- Nessun cambiamento di UX: il modulo non fa prompt; in modalità detached non ferma il container.
+Cosa fa:
+- Garantisce la presenza di `book.json` e `package.json` minimi (idempotente).
+- Esegue la build statica (`honkit build`) in container Docker.
+- Avvia la preview (`honkit serve`) in foreground o detached.
+- Attende opzionalmente la disponibilità della porta (best-effort).
+- Fornisce uno stop sicuro del container.
+
+Linee guida applicate:
+- Niente `print()` → solo logging strutturato (`get_structured_logger`).
+- Scritture **atomiche** con `safe_write_text` (SSoT).
+- **Path-safety STRONG** con `ensure_within(...)` prima di scrivere o montare.
+- Comandi esterni con `proc_utils.run_cmd` (timeout/retry/capture).
 """
 
 import json
@@ -17,9 +25,14 @@ from typing import Optional
 from pipeline.logging_utils import redact_secrets, get_structured_logger
 from pipeline.exceptions import PipelineError, PreviewError
 from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
-from pipeline.config_utils import safe_write_file  # ✅ scritture atomiche
-from pipeline.env_utils import get_int  # 🔐 redazione opzionale nei log
+from pipeline.file_utils import safe_write_text  # ✅ scritture atomiche (SSoT)
+from pipeline.env_utils import get_int
 from pipeline.proc_utils import run_cmd, CmdError, wait_for_port
+from pipeline.constants import (
+    BOOK_JSON_NAME,
+    PACKAGE_JSON_NAME,
+    HONKIT_DOCKER_IMAGE,
+)
 
 logger = get_structured_logger("pipeline.gitbook_preview")
 
@@ -34,7 +47,7 @@ def _maybe_redact(text: str, redact: bool) -> str:
 # ----------------------------
 def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un book.json minimo se mancante (idempotente)."""
-    book_json_path = Path(md_dir) / "book.json"
+    book_json_path = Path(md_dir) / BOOK_JSON_NAME
     try:
         # STRONG guard: validare sia la dir sia il file target prima di scrivere
         ensure_within(md_dir, book_json_path)
@@ -46,13 +59,10 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
         )
 
     if not book_json_path.exists():
-        data = {
-            "title": "preview",
-            "plugins": [],
-        }
+        data = {"title": "preview", "plugins": []}
         try:
             # ✅ scrittura atomica
-            safe_write_file(book_json_path, json.dumps(data, indent=2))
+            safe_write_text(book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
             logger.info(
                 _maybe_redact("📖 book.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(book_json_path)},
@@ -72,7 +82,7 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
 
 def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un package.json minimo se mancante (idempotente)."""
-    package_json_path = Path(md_dir) / "package.json"
+    package_json_path = Path(md_dir) / PACKAGE_JSON_NAME
     try:
         # STRONG guard: validare sia la dir sia il file target prima di scrivere
         ensure_within(md_dir, package_json_path)
@@ -90,14 +100,11 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs
             "description": "HonKit preview",
             "main": "README.md",
             "license": "MIT",
-            "scripts": {
-                "build": "honkit build",
-                "serve": "honkit serve",
-            },
+            "scripts": {"build": "honkit build", "serve": "honkit serve"},
         }
         try:
             # ✅ scrittura atomica
-            safe_write_file(package_json_path, json.dumps(data, indent=2))
+            safe_write_text(package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
             logger.info(
                 _maybe_redact("📦 package.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(package_json_path)},
@@ -128,10 +135,17 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
-        "docker", "run", "--rm",
-        "--workdir", "/app",
-        "-v", f"{md_output_path}:/app",
-        "honkit/honkit", "npm", "run", "build",
+        "docker",
+        "run",
+        "--rm",
+        "--workdir",
+        "/app",
+        "-v",
+        f"{md_output_path}:/app",
+        HONKIT_DOCKER_IMAGE,
+        "npm",
+        "run",
+        "build",
     ]
     try:
         run_cmd(cmd, op="docker run build", logger=logger)
@@ -140,7 +154,9 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
 
 
-def run_container_detached(md_dir: Path, *, slug: Optional[str], container_name: str, port: int, redact_logs: bool) -> str:
+def run_container_detached(
+    md_dir: Path, *, slug: Optional[str], container_name: str, port: int, redact_logs: bool
+) -> str:
     """Avvia `honkit serve` in modalità detached e ritorna l'ID del container."""
     # STRONG guard sulla directory di lavoro
     try:
@@ -150,12 +166,21 @@ def run_container_detached(md_dir: Path, *, slug: Optional[str], container_name:
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
-        "docker", "run", "-d",
-        "--name", container_name,
-        "-p", f"{port}:4000",
-        "--workdir", "/app",
-        "-v", f"{md_output_path}:/app",
-        "honkit/honkit", "npm", "run", "serve",
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "-p",
+        f"{port}:4000",
+        "--workdir",
+        "/app",
+        "-v",
+        f"{md_output_path}:/app",
+        HONKIT_DOCKER_IMAGE,
+        "npm",
+        "run",
+        "serve",
     ]
     try:
         # Docker stampa l'ID del container su stdout
@@ -209,7 +234,7 @@ def run_gitbook_docker_preview(
     container_name: str = "honkit_preview",
     wait_on_exit: bool = False,  # default non-interattivo
     *,
-    redact_logs: bool = False,   # redazione opt-in dei messaggi di log
+    redact_logs: bool = False,  # redazione opt-in dei messaggi di log
 ) -> None:
     """
     Avvia la preview GitBook/HonKit in Docker.
@@ -261,12 +286,20 @@ def run_gitbook_docker_preview(
     if wait_on_exit:
         # Foreground (senza -d): blocca finché il processo 'serve' non termina.
         cmd = [
-            "docker", "run",
-            "--name", container_name,
-            "-p", f"{port}:4000",
-            "--workdir", "/app",
-            "-v", f"{md_output_path}:/app",
-            "honkit/honkit", "npm", "run", "serve",
+            "docker",
+            "run",
+            "--name",
+            container_name,
+            "-p",
+            f"{port}:4000",
+            "--workdir",
+            "/app",
+            "-v",
+            f"{md_output_path}:/app",
+            HONKIT_DOCKER_IMAGE,
+            "npm",
+            "run",
+            "serve",
         ]
         try:
             run_cmd(cmd, op="docker run serve (fg)", logger=logger)
@@ -290,9 +323,4 @@ def run_gitbook_docker_preview(
         )
 
         # 3) Attendi che la preview sia raggiungibile (best-effort, ma utile per early feedback)
-        try:
-            wait_until_ready("127.0.0.1", port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)
-        except PreviewError:
-            # Non fermiamo il container qui (lasciamo la scelta all'orchestratore), ma segnaliamo l'errore
-            raise
-        
+        wait_until_ready("127.0.0.1", port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)

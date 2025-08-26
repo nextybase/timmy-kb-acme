@@ -4,7 +4,7 @@
 # =============================================
 
 # === GitHub settings (NON token) ===
-github_org: nextybase              # Organizzazione o user GitHub
+github_org: nextybase              # Organizzazione/user GitHub
 repo_visibility: private           # 'private' o 'public' (default: private)
 
 # === Pipeline structure / templates ===

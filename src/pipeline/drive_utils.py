@@ -19,10 +19,27 @@ Note
   compatibilità con i test che monkeypatchano questi simboli a livello di facciata.
 - Gli orchestratori e il resto del codice continuano a importare da qui.
 
-- 🔎 FYI (tracking modifiche redazione/log):
-  Il logger contestualizzato e la mascheratura di `sa_path` vengono applicati a valle,
-  nei moduli implementativi (es. `pipeline/drive/client.py`). Qui non si introduce
-  alcuna logica di logging per restare una pura facciata.
+Funzioni/Costanti riesportate (ruolo sintetico)
+-----------------------------------------------
+Client/Lettura:
+- `get_drive_service(context)` → istanzia client Drive v3 (Service Account), con redazione log a valle.
+- `list_drive_files(service, **query)` → elenca file/cartelle (paginato).
+- `get_file_metadata(service, file_id)` → metadata di un file (mimeType, name, parents, ecc.).
+- `_retry(fn, *args, **kwargs)` → helper interno (ri-esportato per test avanzati).
+
+Upload/Strutture:
+- `create_drive_folder(service, name, parent_id, ...)` → crea una cartella.
+- `create_drive_structure_from_yaml(service, yaml_path, client_folder_id, ...)` → albero Drive da YAML.
+- `upload_config_to_drive_folder(service, context, parent_id, ...)` → carica `config.yaml`.
+- `delete_drive_file(service, file_id)` → rimozione file/cartella.
+- `create_local_base_structure(context, yaml_structure_file)` → struttura locale (mirror parziale).
+
+Download:
+- `download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, ...)` → scarica PDF su sandbox locale.
+
+Redazione/Logging:
+- La redazione dei log (token, ID) e i dettagli di auditing sono gestiti **nei moduli implementativi**.
+  Questa facciata resta volutamente “thin” e priva di side effect.
 """
 
 from __future__ import annotations
@@ -69,7 +86,9 @@ try:
         _retry,  # export interno per test avanzati
     )
 except Exception as e:  # pragma: no cover
-    raise ImportError(f"Impossibile importare 'pipeline.drive.client'. Verifica dipendenze e path.") from e
+    raise ImportError(
+        "Impossibile importare 'pipeline.drive.client'. Verifica dipendenze e path."
+    ) from e
 
 # Creazione/albero/upload/struttura locale
 try:

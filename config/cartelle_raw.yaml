@@ -7,7 +7,7 @@ context:
 # STRUTTURA CARTELLE RAW
 # -----------------------------------------------------------------------------
 # Nota:
-# - Mantiene la struttura del tuo file di partenza.
+# - Mantiene la struttura del file di partenza.
 # - Questo YAML viene usato per mappare/validare la struttura dei PDF RAW cliente.
 # - Puoi adattare le voci ai tuoi domini (es. identity/organizzazione/glossario...).
 # -----------------------------------------------------------------------------

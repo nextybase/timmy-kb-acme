@@ -9,7 +9,7 @@ Refactor v1.0.5 (Blocco B):
 - Logger: nessun logger a livello di modulo; viene creato dentro le funzioni.
 - Normalizzazione mapping robusta (compat con varianti legacy).
 
-Formato normalizzato: dict[str, list[str]]
+Formato normalizzato: dict[str, list[str]] 
   Accetta varianti:
     - concept: [keywords...]
     - concept: { keywords: [...]}            # preferito

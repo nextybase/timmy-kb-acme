@@ -2,23 +2,40 @@
 """
 Adapter: fallback uniformi per contenuti GitBook/HonKit (README.md, SUMMARY.md).
 
-Obiettivo:
-- Centralizzare la logica di ripiego fuori dagli orchestratori.
-- API pulita: ensure_readme_summary(context, logger, *, force=False).
-- Nessun side-effect oltre a scritture atomiche dei file target.
+Scopo del modulo
+----------------
+Centralizza la generazione dei file minimi necessari alla navigazione della
+knowledge base quando gli orchestratori non hanno (o non vogliono avere) logica
+di presentazione. Le operazioni sono **idempotenti** e **atomiche**.
 
-Comportamento:
-- ensure_readme_summary(context, logger, force=False)
-  - Verifica l'esistenza/leggibilità di README.md e SUMMARY.md in book/.
-  - Se mancano o sono vuoti (o force=True), genera versioni minime ma utili.
-  - Non sovrascrive file non vuoti (a meno di force=True).
+Funzioni esposte
+----------------
+- `build_default_readme(slug) -> str`  
+  Restituisce un README.md minimale, informativo e timestamped.
+
+- `build_summary_index(book_dir: Path) -> str`  
+  Crea un SUMMARY.md che elenca i file Markdown nella cartella `book/`
+  (escludendo README/SUMMARY), con titoli “umanizzati” a partire dai filename.
+
+- `ensure_readme_summary(context, logger, *, force=False) -> None`  
+  Verifica/garantisce la presenza di README.md e SUMMARY.md in `book/`.
+  Se mancano o sono vuoti (o `force=True`), li (ri)genera con scrittura atomica.
+  Esegue **path-safety STRONG** via `ensure_within(...)` prima delle scritture.
+
+Note
+----
+- Nessuna I/O “lato utente” (niente `print()`); il chiamante passa un `logger`.
+- I path del contesto possono essere `Path` **o** `str` (alcuni adapter li impostano
+  come stringhe): questo modulo li accetta e li normalizza.
 """
+
 from __future__ import annotations
 
+import logging
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -35,7 +52,7 @@ __all__ = [
 # Helpers di costruzione contenuti
 # ------------------------------
 def build_default_readme(slug: str) -> str:
-    """Ritorna un README minimale ma informativo."""
+    """Genera il contenuto di un README.md minimale per la KB di `slug`."""
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     return (
         f"# Knowledge Base – {slug}\n\n"
@@ -46,14 +63,17 @@ def build_default_readme(slug: str) -> str:
 
 
 def _title_from_filename(name: str) -> str:
-    """Ricava un titolo umano dal filename, senza estensione."""
+    """Ricava un titolo leggibile dal nome file (senza estensione)."""
     base = Path(name).stem
     pretty = re.sub(r"[_\\/-]+", " ", base).strip()
     return pretty[:1].upper() + pretty[1:] if pretty else (base or "Documento")
 
 
 def build_summary_index(book_dir: Path) -> str:
-    """Costruisce un SOMMARIO minimale elencando i .md (esclusi README/SUMMARY)."""
+    """
+    Costruisce un indice minimale (SUMMARY.md) elencando i .md presenti in `book_dir`,
+    esclusi README.md e SUMMARY.md. L’ordine è deterministico tramite `sorted_paths`.
+    """
     md_files = [
         p for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
         if p.name.lower() not in ("readme.md", "summary.md")
@@ -66,29 +86,49 @@ def build_summary_index(book_dir: Path) -> str:
 
 
 # ------------------------------
+# Normalizzazione path dal contesto
+# ------------------------------
+def _as_path(value: Any) -> Optional[Path]:
+    """Converte `value` in Path se è un Path o una stringa non vuota; altrimenti None."""
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, str) and value.strip():
+        return Path(value)
+    return None
+
+
+# ------------------------------
 # API principale per orchestratori
 # ------------------------------
-def ensure_readme_summary(context: Any, logger, *, force: bool = False) -> None:
+def ensure_readme_summary(context: Any, logger: logging.Logger, *, force: bool = False) -> None:
     """
     Garantisce la presenza di README.md e SUMMARY.md in `book/` con fallback uniformi.
 
-    - Se i file esistono e non sono vuoti: non fa nulla (a meno di force=True).
-    - Se mancano o sono vuoti: genera contenuti minimi standardizzati (scrittura atomica).
-    """
-    # Risoluzione directory book/ (priorità: context.md_dir → context.base_dir/'book' → repo_root_dir/'book')
-    md_dir = getattr(context, "md_dir", None)
-    base_dir = getattr(context, "base_dir", None)
-    repo_root = getattr(context, "repo_root_dir", None)
+    Comportamento:
+      - Se i file esistono e non sono vuoti → non fa nulla (a meno di `force=True`).
+      - Se mancano o sono vuoti → genera contenuti minimi standardizzati (scrittura atomica).
+      - Effettua **guardie STRONG** sui path prima di scrivere (via `ensure_within`).
 
-    if isinstance(md_dir, Path):
+    Args:
+        context: oggetto che preferibilmente espone `md_dir`, `base_dir` o `repo_root_dir`
+                 (accettati sia come `Path` che come `str`), e opzionalmente `slug`.
+        logger:  logger strutturato per i messaggi di esito.
+        force:   rigenera sempre i file, anche se presenti e non vuoti.
+    """
+    # Risoluzione directory book/ con tolleranza a Path/str
+    md_dir = _as_path(getattr(context, "md_dir", None))
+    base_dir = _as_path(getattr(context, "base_dir", None))
+    repo_root = _as_path(getattr(context, "repo_root_dir", None))
+
+    if md_dir is not None:
         book_dir = md_dir
         # se abbiamo la base, vincoliamo il perimetro di sicurezza alla sandbox cliente
-        if isinstance(base_dir, Path):
+        if base_dir is not None:
             ensure_within(base_dir, book_dir)
-    elif isinstance(base_dir, Path):
+    elif base_dir is not None:
         book_dir = base_dir / "book"
         ensure_within(base_dir, book_dir)
-    elif isinstance(repo_root, Path):
+    elif repo_root is not None:
         book_dir = repo_root / "book"
         ensure_within(repo_root, book_dir)
     else:

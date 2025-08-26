@@ -1,4 +1,4 @@
-# User Guide — Timmy‑KB (v1.3.0)
+# User Guide — Timmy‑KB (v1.4.0)
 
 Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se desiderato, push su GitHub.
 

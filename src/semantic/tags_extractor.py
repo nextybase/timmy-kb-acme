@@ -2,6 +2,33 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+"""
+Estrattore tag per PDF "raw" + utilità di ingest locale (Timmy-KB).
+
+Cosa fa il modulo
+-----------------
+- `copy_local_pdfs_to_raw(src_dir, raw_dir, logger) -> int`
+  Copia in modo sicuro i PDF da una sorgente locale dentro `raw/`, con:
+  * path-safety (SOFT: `is_safe_subpath` per shortlist/letture; STRONG: `ensure_within` prima di ogni write),
+  * idempotenza semplice (skip se esiste ed ha stessa dimensione),
+  * logging strutturato e propagazione di errori aggregati tramite `PipelineError`.
+
+- `emit_tags_csv(raw_dir, csv_path, logger) -> int`
+  Scansiona ricorsivamente `raw/` e genera un CSV di tag “grezzi” (euristica conservativa)
+  a partire da nomi cartelle/filename. Scrive **atomicamente** il file via `safe_write_text`
+  dopo validazione STRONG del percorso (`ensure_within`).
+
+Schema CSV (compat con orchestratori/tag_onboarding)
+----------------------------------------------------
+relative_path | suggested_tags | entities | keyphrases | score | sources
+
+Sicurezza & I/O
+---------------
+- Nessun `print()`/`input()`/uscita del processo.
+- Scritture: commit atomiche (`safe_write_text`) e guard-rail STRONG (`ensure_within`).
+- Letture: pre-filtro SOFT (`is_safe_subpath`) per evitare path sospetti.
+"""
+
 import csv
 import io
 import json
@@ -20,6 +47,9 @@ from pipeline.path_utils import (
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.exceptions import PipelineError     # eccezione tipizzata per la pipeline
+
+
+__all__ = ["copy_local_pdfs_to_raw", "emit_tags_csv"]
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:

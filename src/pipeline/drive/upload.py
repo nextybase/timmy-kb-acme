@@ -3,18 +3,41 @@
 """
 Operazioni di creazione/aggiornamento su Google Drive e struttura locale.
 
-Superficie pubblica (richiamata via `pipeline.drive_utils`):
-- create_drive_folder(service, name, parent_id=None, *, redact_logs=False) -> str
-- create_drive_structure_from_yaml(service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
-- upload_config_to_drive_folder(service, context, parent_id, *, redact_logs=False) -> str
-- delete_drive_file(service, file_id) -> None
-- create_local_base_structure(context, yaml_path) -> None
+# Panoramica & ruoli delle funzioni
 
-Obiettivi:
-- Mantenere firme/contratti esistenti (UX invariata).
-- Idempotenza su creazione cartelle e upload config.
+Questa unità fornisce la superficie pubblica per le operazioni "write" lato Drive
+e per il bootstrap della struttura locale. È richiamata tramite `pipeline.drive_utils`
+e mantiene la compatibilità con il monolite precedente.
+
+## API principali
+
+- create_drive_folder(service, name, parent_id=None, *, redact_logs=False) -> str
+  Idempotente: se la cartella esiste sotto `parent_id` riusa l'ID, altrimenti la crea.
+
+- create_drive_structure_from_yaml(service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
+  Costruisce ricorsivamente l’albero di cartelle remoto partendo da uno YAML:
+  supporta sia il formato legacy (`root_folders`) sia un mapping moderno {nome: sottoalbero}.
+  Ritorna una mappa nome→id; per compat aggiunge alias "RAW"/"raw" e "YAML"/"yaml" **solo** nel risultato.
+
+- upload_config_to_drive_folder(service, context, parent_id, *, redact_logs=False) -> str
+  Carica (sostituzione sicura) `config.yaml` nella cartella cliente su Drive. Se presente
+  elimina la versione precedente. Redige gli ID nei log se richiesto.
+
+- delete_drive_file(service, file_id) -> None
+  Elimina un file da Drive; ignora 404 per idempotenza.
+
+- create_local_base_structure(context, yaml_path) -> None
+  Crea la struttura **locale** minima (raw/, book/, config/) e popola raw/ secondo
+  la sezione RAW dello YAML. Se il `context` non espone `raw_dir`/`book_dir`/`config_dir`,
+  li inizializza come `Path` assoluti.
+
+## Convenzioni & sicurezza
+
 - Compatibilità Shared Drives (supportsAllDrives=True).
-- Logging strutturato con redazione opzionale.
+- Idempotenza su creazione cartelle e upload config.
+- Logging strutturato (nessun print) con supporto alla redazione (`redact_logs`).
+- La guardia STRONG sui path (SSoT) resta in `pipeline.path_utils.ensure_within`;
+  qui si assume che gli orchestratori abbiano validato i perimetri di scrittura.
 """
 
 from __future__ import annotations
@@ -463,7 +486,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
         * altrimenti fallback: `output/timmy-kb-<slug>`
     - Garantisce l'esistenza di `raw/`, `book/`, `config/`.
     - Crea le sottocartelle sotto `raw/` secondo la sezione RAW dello YAML (se presente).
-    - Se `context` non espone `raw_dir/book_dir/config_dir`, li imposta (stringhe assolute).
+    - Se `context` non espone `raw_dir`/`book_dir`/`config_dir`, li imposta come `Path` assoluti.
     - Idempotente.
     """
     # Logger contestualizzato per uniformità con gli orchestratori
@@ -491,17 +514,17 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
 
     if not hasattr(context, "raw_dir"):
         try:
-            setattr(context, "raw_dir", str(raw_dir))
+            setattr(context, "raw_dir", raw_dir)
         except Exception:
             pass
     if not hasattr(context, "book_dir"):
         try:
-            setattr(context, "book_dir", str(book_dir))
+            setattr(context, "book_dir", book_dir)
         except Exception:
             pass
     if not hasattr(context, "config_dir"):
         try:
-            setattr(context, "config_dir", str(cfg_dir))
+            setattr(context, "config_dir", cfg_dir)
         except Exception:
             pass
 

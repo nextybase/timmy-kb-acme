@@ -12,7 +12,7 @@ Scopo
 Ordine di applicazione
 ----------------------
 1. drop → elimina i tag presenti in stoplist/mapping.rules.drop
-2. merge_into → rimappa sinonimi/alias verso un target
+2. merge_into → rimappa sinonimi/alias verso un target 
 3. synonyms → se il tag corrisponde a un sinonimo, sostituisce con il canonico
 4. canonical → forza alias verso canonical definito
 

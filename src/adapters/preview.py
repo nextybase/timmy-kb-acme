@@ -3,7 +3,7 @@
 Adapter: gestione preview GitBook/HonKit.
 
 Obiettivo:
-- API semplice e uniforme per avviare/fermare la preview,
+- API semplice ed uniforme per avviare/fermare la preview,
   incapsulando le call di basso livello al modulo pipeline.
 - Firma coerente: (context, logger, *, port=4000, container_name=None).
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/cleanup_utils.py
 """
 Utility di pulizia per la pipeline Timmy-KB.
@@ -14,29 +15,32 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within  # SSoT guardia STRONG
 from pipeline.context import ClientContext
 
+# Logger di modulo (fallback).
 logger = get_structured_logger("pipeline.cleanup_utils")
 
 
-def _rmtree_safe(target: Path) -> bool:
+def _rmtree_safe(target: Path, *, log) -> bool:
     """
     Rimozione directory con log e senza eccezioni verso l'alto.
     Ritorna True se la directory è stata rimossa o non esisteva.
+
+    Nota: usa il logger passato (contestualizzato) così i log portano slug/run_id.
     """
     try:
         if target.exists():
             shutil.rmtree(target, ignore_errors=False)
-            logger.info("🧹 Rimossa directory", extra={"file_path": str(target)})
+            log.info("🧹 Rimossa directory", extra={"file_path": str(target)})
         else:
-            logger.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)})
+            log.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)})
         return True
     except Exception as e:
-        logger.warning(
+        log.warning(
             "⚠️  Impossibile rimuovere directory",
             extra={"file_path": str(target), "error": str(e)},
         )
@@ -91,7 +95,7 @@ def clean_push_leftovers(
 
     results: Dict[str, bool] = {}
     for t in targets:
-        results[str(t)] = _rmtree_safe(t)
+        results[str(t)] = _rmtree_safe(t, log=_logger)
 
     summary = {
         "ok": all(results.values()) if results else True,

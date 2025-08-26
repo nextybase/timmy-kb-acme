@@ -3,18 +3,31 @@
 # src/tag_onboarding.py
 """
 Orchestratore: Tag Onboarding (HiTL)
-Step intermedio tra pre_onboarding e onboarding_full.
+
+Cosa fa questo file
+-------------------
+Step intermedio tra `pre_onboarding` e `onboarding_full`. A partire dai PDF grezzi
+in `raw/`, produce un CSV con i tag suggeriti e (dopo conferma) genera gli stub
+per la revisione semantica.
+
+Punti chiave implementativi (coerenti con le linee guida della pipeline):
+- **Niente `print()`**: solo logging strutturato con `get_structured_logger`.
+- **Path-safety STRONG**: tutti i path di output passano da `ensure_within(...)`.
+- **Scritture atomiche centralizzate**: dove il file viene scritto da questo
+  orchestratore (YAML/JSON/CSV), si usa `pipeline.file_utils.safe_write_text`.
+- Integrazione con Google Drive per il download dei PDF (opzione `--source=drive`).
+- Checkpoint HiTL tra la generazione del CSV e la creazione degli stub semantici.
 
 Fase 1:
-- Scarica/copia PDF in output/timmy-kb-<slug>/raw/
-- Genera output/timmy-kb-<slug>/semantic/tags_raw.csv (STREAMING, commit atomica)
-- Checkpoint HiTL: chiedi se proseguire
+- Scarica/copia PDF in `output/timmy-kb-<slug>/raw/`
+- Genera `output/timmy-kb-<slug>/semantic/tags_raw.csv` (commit atomica via `safe_write_text`)
+- Checkpoint HiTL: chiedi se proseguire per consentire l'editing dei tag generati
 
-Fase 2 (se confermato o --proceed):
-- Genera README_TAGGING.md e tags_reviewed.yaml (stub) in semantic/
+Fase 2 (se confermato o `--proceed`):
+- Genera `README_TAGGING.md` e `tags_reviewed.yaml` (stub) in `semantic/`
 
 Validazione standalone:
-- --validate-only valida tags_reviewed.yaml e scrive tags_review_validation.json
+- `--validate-only` valida `tags_reviewed.yaml` e scrive `tags_review_validation.json`
 """
 
 from __future__ import annotations
@@ -28,10 +41,8 @@ import sys
 import time
 import uuid
 import shutil
-import os
-import tempfile
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 # ── Pipeline infra (coerente con gli orchestratori) ──────────────────────────
 from pipeline.logging_utils import (
@@ -127,10 +138,10 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
       - suggested_tags: euristica da path + filename
       - entities,keyphrases,score,sources: colonne presenti (vuote/{}), per compatibilità futura
 
-    Implementazione STREAMING:
-      - Scrittura riga-per-riga su file temporaneo
-      - fsync + os.replace per commit atomica
-      - Niente buffer in memoria proporzionale al dataset
+    Scrittura:
+      - Costruiamo il CSV in memoria (StringIO) e lo persistiamo con
+        `safe_write_text(..., atomic=True)` per centralizzare la logica di commit atomico.
+      - Tutti i path sono validati con `ensure_within`.
     """
     # radice logica da scrivere nel CSV
     raw_prefix = "raw"
@@ -139,77 +150,57 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     written = 0
-    tmp_file = None
-    try:
-        # newline="" è fondamentale per il writer CSV cross-platform
-        tmp_file = tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="", delete=False, dir=str(csv_path.parent)
+    buf = io.StringIO(newline="")
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
+
+    # Iteriamo sui PDF e scriviamo riga-per-riga nel buffer
+    for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
+        # rel rispetto a raw/, poi prefissiamo 'raw/'
+        try:
+            rel_raw = pdf.relative_to(raw_dir).as_posix()
+        except ValueError:
+            rel_raw = Path(pdf.name).as_posix()
+
+        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
+
+        # tag candidati: cartelle (senza 'raw') + token da filename
+        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
+        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
+        path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
+        file_tokens = {
+            tok.lower()
+            for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
+            if tok
+        }
+        candidates = sorted(path_tags.union(file_tokens))
+
+        # colonne "larghe" vuote/di default per compatibilità
+        entities = "[]"
+        keyphrases = "[]"
+        score = "{}"
+        sources = json.dumps(
+            {"path": list(path_tags), "filename": list(file_tokens)},
+            ensure_ascii=False,
         )
-        writer = csv.writer(tmp_file, lineterminator="\n")
-        writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
 
-        # Iteriamo direttamente sui PDF e scriviamo riga-per-riga
-        for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
-            # rel rispetto a raw/, poi prefissiamo 'raw/'
-            try:
-                rel_raw = pdf.relative_to(raw_dir).as_posix()
-            except ValueError:
-                rel_raw = Path(pdf.name).as_posix()
-
-            rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
-
-            # tag candidati: cartelle (senza 'raw') + token da filename
-            parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
-            base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
-            path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
-            file_tokens = {
-                tok.lower()
-                for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
-                if tok
-            }
-            candidates = sorted(path_tags.union(file_tokens))
-
-            # colonne "larghe" vuote/di default per compatibilità
-            entities = "[]"
-            keyphrases = "[]"
-            score = "{}"
-            sources = json.dumps(
-                {"path": list(path_tags), "filename": list(file_tokens)},
-                ensure_ascii=False,
-            )
-
-            writer.writerow([
+        writer.writerow(
+            [
                 rel_base_posix,
                 ", ".join(candidates),
                 entities,
                 keyphrases,
                 score,
                 sources,
-            ])
-            written += 1
+            ]
+        )
+        written += 1
 
-        # Assicuriamo la flush + fsync prima della sostituzione atomica
-        tmp_file.flush()
-        os.fsync(tmp_file.fileno())
-    except Exception as e:
-        # In caso di errore, proviamo a ripulire il temporaneo
-        if tmp_file and not tmp_file.closed:
-            try:
-                tmp_path = Path(tmp_file.name)
-                tmp_file.close()
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-        raise
-    else:
-        # Chiudiamo e sostituiamo in modo atomico
-        tmp_path = Path(tmp_file.name)
-        tmp_file.close()
-        os.replace(tmp_path, csv_path)
+    # Persistenza atomica centralizzata
+    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
 
     logger.info(
-        "Tag grezzi generati (base-relative, streaming)",
+        "Tag grezzi generati (base-relative, atomic write)",
         extra={"file_path": str(csv_path), "count": written, "file_path_tail": tail_path(csv_path)},
     )
     return written
@@ -218,7 +209,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
 # ───────────────────────────── Validatore YAML ───────────────────────────────
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
-def _load_yaml(path: Path):
+def _load_yaml(path: Path) -> Dict[str, Any]:
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
     try:
@@ -296,7 +287,7 @@ def _validate_tags_reviewed(data: dict) -> dict:
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
-def _write_validation_report(report_path: Path, result: dict, logger):
+def _write_validation_report(report_path: Path, result: dict, logger) -> None:
     ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
