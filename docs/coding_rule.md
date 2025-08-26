@@ -1,4 +1,4 @@
-## Coding Rules — Timmy-KB (v1.2.2)
+## Coding Rules — Timmy-KB (v1.3.0)
 
 Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
@@ -45,6 +45,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 - **No segreti su disco** – non salvare token/credenziali.
 - **Chiusura risorse** – sempre context manager; nessun fd appeso.
 - **Compatibilità Windows** – evitare caratteri Unicode non supportati nei log stdout; usare emoji/testo solo se compatibili con `cp1252`.
+- **CSV** – generati con **scrittura streaming riga-per-riga** + commit atomico.
 
 ---
 

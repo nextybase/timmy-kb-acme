@@ -1,5 +1,5 @@
 # docs/versioning_policy.md
-# Policy di Versioning — Timmy-KB (v1.2.2)
+# Policy di Versioning — Timmy-KB (v1.3.0)
 
 Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilità.
 

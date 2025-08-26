@@ -25,7 +25,7 @@ import uuid
 import shutil
 import datetime as _dt
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 from pipeline.logging_utils import (
     get_structured_logger,
@@ -103,7 +103,7 @@ def _sync_env(context: ClientContext, *, require_env: bool) -> None:
                 context.env[key] = val
 
 
-def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client_name: str, logger):
+def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client_name: str, logger) -> None:
     """
     Copia i template semantici globali nella cartella cliente:
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
@@ -113,7 +113,6 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
     cfg_dir = repo_root / "config"
-    # Usa la risoluzione robusta (SSoT) per la struttura cartelle:
     struct_src = _resolve_yaml_structure_file()
     mapping_src = cfg_dir / "default_semantic_mapping.yaml"
 
@@ -139,8 +138,8 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
                 "client_name": client_name or context.slug,
                 "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
             }
-            if "context" not in data:
-                data = {"context": ctx, **(data if isinstance(data, dict) else {})}
+            if "context" not in data and isinstance(data, dict):
+                data = {"context": ctx, **data}
                 with mapping_dst.open("w", encoding="utf-8") as f:
                     yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
                 logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
@@ -148,17 +147,17 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
             logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
 
 
-def pre_onboarding_main(
-    slug: str,
-    client_name: Optional[str] = None,
-    *,
-    interactive: bool = True,
-    dry_run: bool = False,
-    run_id: Optional[str] = None,
-) -> None:
-    """Esegue la fase di pre-onboarding per il cliente indicato."""
-    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
+# ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni oltre I/O necessario -------
 
+def _prepare_context_and_logger(
+    slug: str,
+    *,
+    interactive: bool,
+    require_env: bool,
+    run_id: Optional[str],
+    client_name: Optional[str],
+) -> Tuple[ClientContext, Any, str]:
+    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=interactive, prompt=_prompt, logger=early_logger)
 
     if client_name is None and interactive:
@@ -166,9 +165,8 @@ def pre_onboarding_main(
     if not client_name:
         client_name = slug
 
-    require_env = not (dry_run or (not interactive))
     context: ClientContext = ClientContext.load(
-        slug=slug, interactive=interactive, require_env=require_env, run_id=run_id,
+        slug=slug, interactive=interactive, require_env=require_env, run_id=run_id
     )
 
     log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
@@ -176,12 +174,15 @@ def pre_onboarding_main(
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
-
     if not require_env:
         logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("🚀 Avvio pre-onboarding")
+    return context, logger, client_name
 
+
+def _create_local_structure(context: ClientContext, logger, *, client_name: str) -> Path:
+    """Crea struttura locale, scrive config, copia template semantici; restituisce il path allo YAML struttura."""
     ensure_within(context.base_dir, context.config_path)
 
     cfg: Dict[str, Any] = {}
@@ -193,29 +194,31 @@ def pre_onboarding_main(
         cfg["client_name"] = client_name
     write_client_config_file(context, cfg)
 
-    try:
-        yaml_structure_file = _resolve_yaml_structure_file()
-        logger.info(
-            "pre_onboarding.yaml.resolved",
-            extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
-        )
-        ensure_within(context.base_dir, context.raw_dir)
-        ensure_within(context.base_dir, context.md_dir)
-        with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
-            create_local_base_structure(context, yaml_structure_file)
-    except ConfigError as e:
-        logger.error("❌ Impossibile creare la struttura locale: " + str(e))
-        raise
+    yaml_structure_file = _resolve_yaml_structure_file()
+    logger.info(
+        "pre_onboarding.yaml.resolved",
+        extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
+    )
 
-    # 🚀 NEW: bootstrap semantic templates
+    ensure_within(context.base_dir, context.raw_dir)
+    ensure_within(context.base_dir, context.md_dir)
+    with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
+        create_local_base_structure(context, yaml_structure_file)
+
     repo_root = Path(__file__).resolve().parents[1]
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
+    return yaml_structure_file
 
-    if dry_run:
-        logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
-        logger.info("✅ Pre-onboarding locale completato (dry-run).")
-        return
 
+def _drive_phase(
+    context: ClientContext,
+    logger,
+    *,
+    yaml_structure_file: Path,
+    client_name: str,
+    require_env: bool,
+) -> None:
+    """Crea struttura remota su Drive, carica config, aggiorna config locale con ID remoti."""
     _sync_env(context, require_env=require_env)
     logger.info(
         "pre_onboarding.drive.preflight",
@@ -238,7 +241,9 @@ def pre_onboarding_main(
     logger.info("📄 Cartella cliente creata su Drive", extra={"client_folder_id": mask_partial(client_folder_id)})
 
     with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
-        created_map = create_drive_structure_from_yaml(service, yaml_structure_file, client_folder_id, redact_logs=redact)
+        created_map = create_drive_structure_from_yaml(
+            service, yaml_structure_file, client_folder_id, redact_logs=redact
+        )
     logger.info(
         "📄 Struttura Drive creata",
         extra={"yaml_tail": tail_path(yaml_structure_file), "created_map_masked": mask_id_map(created_map)},
@@ -269,8 +274,41 @@ def pre_onboarding_main(
     update_config_with_drive_ids(context, updates=updates, logger=logger)
     logger.info("🔑 Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
 
-    logger.info(f"✅ Pre-onboarding completato per cliente: {slug}")
 
+# --------------------------------- ORCHESTRATORE SNELLITO ---------------------------------
+
+def pre_onboarding_main(
+    slug: str,
+    client_name: Optional[str] = None,
+    *,
+    interactive: bool = True,
+    dry_run: bool = False,
+    run_id: Optional[str] = None,
+) -> None:
+    """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
+    require_env = not (dry_run or (not interactive))
+    context, logger, client_name = _prepare_context_and_logger(
+        slug, interactive=interactive, require_env=require_env, run_id=run_id, client_name=client_name
+    )
+
+    yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
+
+    if dry_run:
+        logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
+        logger.info("✅ Pre-onboarding locale completato (dry-run).")
+        return
+
+    _drive_phase(
+        context,
+        logger,
+        yaml_structure_file=yaml_structure_file,
+        client_name=client_name,
+        require_env=require_env,
+    )
+    logger.info(f"✅ Pre-onboarding completato per cliente: {context.slug}")
+
+
+# ------------------------------------ CLI ENTRYPOINT ------------------------------------
 
 def _parse_args() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")

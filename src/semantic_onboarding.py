@@ -117,22 +117,42 @@ def _load_tags_vocab(base_dir: Path, logger) -> Dict[str, Dict]:
     return vocab
 
 
-def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict]) -> Tuple[List[str], List[str]]:
+def _build_inverse_index(vocab: Dict[str, Dict]) -> Dict[str, set]:
+    """
+    Crea un indice inverso {termine_lower: set(canonical)} includendo canonical e sinonimi.
+    Evita l'O(n×m) dei doppi loop su canonical×sinonimi nelle fasi di enrichment.
+    """
+    inv: Dict[str, set] = {}
+    for canon, meta in (vocab or {}).items():
+        c = str(canon).strip().lower()
+        if c:
+            inv.setdefault(c, set()).add(canon)
+        for syn in meta.get("synonyms", []) or []:
+            s = str(syn).strip().lower()
+            if s:
+                inv.setdefault(s, set()).add(canon)
+    return inv
+
+
+def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict], *, inv: Optional[Dict[str, set]] = None) -> Tuple[List[str], List[str]]:
+    """
+    Restituisce (tags_canonical, areas_hint) per un nome file/percorso.
+    Usa indice inverso per match in O(k) (k = #termini nell'indice), mantenendo semantica "substring".
+    """
     if not vocab:
         return [], []
+    if inv is None:
+        inv = _build_inverse_index(vocab)
+
     s = name_like_path.lower()
     s = re.sub(r"[_\\/\-\s]+", " ", s)
+
     found = set()
+    for term, canon_set in inv.items():
+        if term and term in s:
+            found.update(canon_set)
+
     areas = set()
-    for canon, meta in vocab.items():
-        if canon and canon.lower() in s:
-            found.add(canon)
-        else:
-            for syn in meta.get("synonyms", []):
-                syn_l = str(syn).lower().strip()
-                if syn_l and syn_l in s:
-                    found.add(canon)
-                    break
     for t in found:
         areas.update(vocab.get(t, {}).get("areas_hint", []))
     return sorted(found), sorted(areas) if areas else []
@@ -182,7 +202,7 @@ def _dump_frontmatter(meta: Dict) -> str:
     except (ValueError, TypeError, yaml.YAMLError):  # type: ignore[attr-defined]
         lines = ["---"]
         if "title" in meta:
-            lines.append(f'title: "{meta["title"]}"')
+            lines.append(f'title: "{meta['"'"'title'"'"']}"')  # keep safe if YAML fails
         if "tags" in meta and isinstance(meta["tags"], list):
             lines.append("tags:")
             lines.extend([f"  - {t}" for t in meta["tags"]])
@@ -236,10 +256,13 @@ def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], 
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
     touched: List[Path] = []
 
+    # Costruisci una volta l'indice inverso (performance su dataset grandi)
+    inv = _build_inverse_index(vocab)
+
     for md in mds:
         name = md.name
         title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
-        tags, areas = _guess_tags_for_name(name, vocab)
+        tags, areas = _guess_tags_for_name(name, vocab, inv=inv)
 
         try:
             text = md.read_text(encoding="utf-8")

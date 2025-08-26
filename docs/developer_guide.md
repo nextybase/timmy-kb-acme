@@ -1,4 +1,4 @@
-# Developer Guide — Timmy-KB (v1.2.2)
+# Developer Guide — Timmy-KB (v1.3.0)
 
 Questa guida è rivolta agli sviluppatori e documenta le scelte architetturali e i principi di base adottati per garantire **coerenza, testabilità e robustezza** della pipeline.  
 È il documento di riferimento per chi sviluppa nuovo codice: ogni implementazione deve rifarsi a questa guida, alla descrizione dell’architettura e mantenere sempre compatibilità locale e riuso delle funzioni già presenti, proponendone l’eventuale aggiornamento solo se necessario.
@@ -68,10 +68,21 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 - Ogni scrittura deve usare `safe_write_text/bytes` con `atomic=True`.
 - Config critici (`config.yaml`) salvati con backup `.bak`.
 - Vietato salvare segreti su disco.
+- Per i CSV generati (es. `tags_raw.csv`) usare **scrittura streaming + commit atomico**.
 
 ---
 
-## 5) Policy di coerenza doc/codice
+## 5) Enrichment semantico
+
+- Vocabolario caricato una sola volta tramite `_load_tags_vocab`.
+- Utilizzo di un **indice inverso** dei sinonimi per ridurre la complessità O(n×m).
+- Aree (`areas_hint`) calcolate a partire dai tag canonici trovati.
+- Frontmatter aggiornati con merge non distruttivo (`_merge_frontmatter`).
+- Scritture sempre atomiche su file `.md`.
+
+---
+
+## 6) Policy di coerenza doc/codice
 
 - Aggiornare **README** e **User Guide** (UX/CLI).
 - Aggiornare **Developer Guide**, **Architecture**, **Coding Rules**.
@@ -79,13 +90,14 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 
 ---
 
-## 6) Principi fondanti
+## 7) Principi fondanti
 
 - **Modularità**: orchestratori separati dalla logica.
 - **Idempotenza**: operazioni ripetibili senza effetti collaterali.
 - **Separazione UX/Logica**: CLI/exit negli orchestratori, logica nei moduli.
 - **Centralizzazione ENV e log**: gestione in `env_utils`, redazione uniforme.
 - **Scritture sicure**: `ensure_within` + `safe_write_*`.
+- **Performance**: CSV streaming e enrichment indicizzato.
 - **Testabilità**: funzioni pure, dipendenze iniettate.
 - **Trasparenza**: log strutturati con `run_id`.
 - **Consistenza API**: firme uniformi per orchestratori e adapter.

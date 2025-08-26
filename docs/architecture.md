@@ -1,4 +1,4 @@
-# Architettura — Timmy-KB (v1.2.2)
+# Architettura — Timmy-KB (v1.3.0)
 
 Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, flussi end‑to‑end, struttura del repository e le API interne su cui si fonda la pipeline. Gli sviluppatori devono sempre riferirsi anche a [Developer Guide](developer_guide.md) e alle regole di codifica per estendere o modificare il codice, privilegiando il riuso di funzioni esistenti e proponendo aggiornamenti se necessario.
 
@@ -13,6 +13,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 - **SSoT path‑safety**: `ensure_within` è **single source of truth** in `pipeline.path_utils`.
 - **Split orchestratori**: conversione/enrichment/preview in `semantic_onboarding.py`; push in `onboarding_full.py`.
 - **Testing**: la KB dummy viene generata da `tools/gen_dummy_kb.py` ed è validata tramite i test in `tests/`, che verificano coerenza PDF↔CSV ed enrichment semantico.
+- **Performance**: CSV generati con scrittura streaming + commit atomico; enrichment ottimizzato tramite indice inverso dei sinonimi per evitare O(n×m).
 
 ---
 
@@ -27,13 +28,13 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 **2) tag_onboarding → tagging semantico (HiTL)**
 
 - Input: PDF in `raw/`.
-- Azioni: genera `semantic/tags_raw.csv` (euristiche su path/filename), checkpoint HiTL con stub `tags_reviewed.yaml` e `README_TAGGING.md`.
+- Azioni: genera `semantic/tags_raw.csv` con **scrittura streaming** (euristiche su path/filename), checkpoint HiTL con stub `tags_reviewed.yaml` e `README_TAGGING.md`.
 - Output: `semantic/tags_raw.csv` + stub revisione.
 
 **3) semantic_onboarding → conversione + enrichment + preview**
 
 - Input: `raw/` + (opz.) `semantic/tags_reviewed.yaml`.
-- Azioni: PDF→MD in `book/`; arricchimento frontmatter (tags/areas); generazione `README.md` e `SUMMARY.md` (repo util → adapter fallback atomico); avvio preview HonKit in Docker con chiusura esplicita.
+- Azioni: PDF→MD in `book/`; arricchimento frontmatter (tags/areas) tramite **indice inverso** dei sinonimi; generazione `README.md` e `SUMMARY.md` (repo util → adapter fallback atomico); avvio preview HonKit in Docker con chiusura esplicita.
 - Output: Markdown pronti in `book/`; anteprima su `localhost:<port>`.
 
 **4) onboarding_full → push (e integrazioni)**
@@ -65,7 +66,7 @@ repo/
 │  └─ versioning_policy.md
 ├─ src/
 │  ├─ pre_onboarding.py                # setup locale + (opz.) Drive
-│  ├─ tag_onboarding.py                # tagging semantico (CSV/review/validator)
+│  ├─ tag_onboarding.py                # tagging semantico (CSV streaming/review/validator)
 │  ├─ semantic_onboarding.py           # conversione/enrichment/preview (NO push)
 │  ├─ onboarding_full.py               # solo push GitHub (e futuri collegamenti)
 │  ├─ tools/
@@ -157,8 +158,8 @@ repo/
 - `config.py` → configurazioni e costanti per l’arricchimento.
 - `normalizer.py` → normalizzazione dei tag.
 - `review_writer.py` → generazione file di revisione.
-- `semantic_extractor.py` → estrazione concetti dai Markdown【577†source】.
-- `semantic_mapping.py` → gestione e normalizzazione mapping semantico【578†source】.
+- `semantic_extractor.py` → estrazione concetti dai Markdown.
+- `semantic_mapping.py` → gestione e normalizzazione mapping semantico.
 - `tags_extractor.py` → estrazione dei tag dai PDF.
 - `tags_io.py` → I/O su CSV, YAML e README tagging.
 - `tags_validator.py` → validazione dei file di tagging.
@@ -220,4 +221,5 @@ Errore esplicito se nessun candidato esiste.
 - **Trasparenza**: log strutturati con `run_id` per correlazione.
 - **API coerenti**: tutte le funzioni esposte hanno firma `(context, logger, **opts)` o variante coerente.
 - **Compatibilità**: tool e orchestratori devono funzionare anche su Windows (gestione encoding/log emoji).
+- **Scalabilità**: CSV con streaming atomico; enrichment con indice inverso dei sinonimi.
 

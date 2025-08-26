@@ -4,6 +4,26 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## 1.3.0 - 2025-08-26
+
+### Changed
+- Refactor orchestratori (`pre_onboarding.py`, `tag_onboarding.py`, `semantic_onboarding.py`) per rispettare le linee guida Codex:
+  - Estrazione sottoprocedure in funzioni pure, unit-testabili (<80 righe).
+  - Uniformata la gestione di fallback/adapters → ora tutte le funzioni usano `(context, logger, **opts)`.
+- Migliorata la pipeline di tagging (`tag_onboarding.py`):
+  - Passaggio a scrittura **CSV streaming riga-per-riga** con commit atomico.
+  - Validazione YAML più robusta e reporting strutturato.
+- Aggiornato `semantic_onboarding.py`:
+  - Arricchimento frontmatter ottimizzato tramite dizionario inverso dei sinonimi (O(1) lookup).
+  - Consolidato l’uso di `ensure_readme_summary` come fallback centralizzato per README/SUMMARY.
+
+### Documentation
+- Aggiornati **Architecture.md**, **Developer Guide** e **Coding Rules** (v1.3.0):
+  - Documentati i nuovi invarianti (funzioni pure negli orchestratori, streaming CSV, enrichment indicizzato).
+  - Allineati esempi di logging ed error handling.
+  - Esplicitato l’uso centralizzato degli adapter e delle firme coerenti.
+
+
 ## [1.2.2] fix generici e armonizzazione funzioni - 2025-08-26
 
 ### Added

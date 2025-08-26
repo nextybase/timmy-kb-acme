@@ -1,5 +1,5 @@
 # docs/index.md
-# Timmy-KB — Documentazione (v1.2.1)
+# Timmy-KB — Documentazione (v1.3.0)
 
 Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida utente, guida sviluppatore, policy operative e regole di versioning.
 

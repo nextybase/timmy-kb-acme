@@ -1,4 +1,4 @@
-# Policy di Push — Timmy-KB (v1.2.2)
+# Policy di Push — Timmy-KB (v1.3.0)
 
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 

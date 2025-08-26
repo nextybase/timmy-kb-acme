@@ -7,7 +7,7 @@ Step intermedio tra pre_onboarding e onboarding_full.
 
 Fase 1:
 - Scarica/copia PDF in output/timmy-kb-<slug>/raw/
-- Genera output/timmy-kb-<slug>/semantic/tags_raw.csv
+- Genera output/timmy-kb-<slug>/semantic/tags_raw.csv (STREAMING, commit atomica)
 - Checkpoint HiTL: chiedi se proseguire
 
 Fase 2 (se confermato o --proceed):
@@ -28,6 +28,8 @@ import sys
 import time
 import uuid
 import shutil
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, List
 
@@ -124,63 +126,93 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
       - relative_path: path POSIX relativo alla BASE, quindi prefissato con 'raw/...'
       - suggested_tags: euristica da path + filename
       - entities,keyphrases,score,sources: colonne presenti (vuote/{}), per compatibilità futura
-    """
-    rows: List[List[str]] = []
 
+    Implementazione STREAMING:
+      - Scrittura riga-per-riga su file temporaneo
+      - fsync + os.replace per commit atomica
+      - Niente buffer in memoria proporzionale al dataset
+    """
     # radice logica da scrivere nel CSV
     raw_prefix = "raw"
-
-    for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
-        # rel rispetto a raw/, poi prefissiamo 'raw/'
-        try:
-            rel_raw = pdf.relative_to(raw_dir).as_posix()
-        except ValueError:
-            rel_raw = Path(pdf.name).as_posix()
-
-        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
-
-        # tag candidati: cartelle (senza 'raw') + token da filename
-        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
-        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
-        path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
-        file_tokens = {
-            tok.lower()
-            for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
-            if tok
-        }
-        candidates = sorted(path_tags.union(file_tokens))
-
-        # colonne "larghe" vuote/di default per compatibilità
-        entities = "[]"
-        keyphrases = "[]"
-        score = "{}"
-        sources = json.dumps(
-            {"path": list(path_tags), "filename": list(file_tokens)},
-            ensure_ascii=False,
-        )
-
-        rows.append([
-            rel_base_posix,
-            ", ".join(candidates),
-            entities,
-            keyphrases,
-            score,
-            sources,
-        ])
 
     ensure_within(csv_path.parent, csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Scrittura robusta via buffer + commit atomico
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
-    for r in rows:
-        writer.writerow(r)
+    written = 0
+    tmp_file = None
+    try:
+        # newline="" è fondamentale per il writer CSV cross-platform
+        tmp_file = tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="", delete=False, dir=str(csv_path.parent)
+        )
+        writer = csv.writer(tmp_file, lineterminator="\n")
+        writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
 
-    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
-    logger.info("Tag grezzi generati (base-relative)", extra={"file_path": str(csv_path), "count": len(rows)})
-    return len(rows)
+        # Iteriamo direttamente sui PDF e scriviamo riga-per-riga
+        for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
+            # rel rispetto a raw/, poi prefissiamo 'raw/'
+            try:
+                rel_raw = pdf.relative_to(raw_dir).as_posix()
+            except ValueError:
+                rel_raw = Path(pdf.name).as_posix()
+
+            rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
+
+            # tag candidati: cartelle (senza 'raw') + token da filename
+            parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
+            base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
+            path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
+            file_tokens = {
+                tok.lower()
+                for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
+                if tok
+            }
+            candidates = sorted(path_tags.union(file_tokens))
+
+            # colonne "larghe" vuote/di default per compatibilità
+            entities = "[]"
+            keyphrases = "[]"
+            score = "{}"
+            sources = json.dumps(
+                {"path": list(path_tags), "filename": list(file_tokens)},
+                ensure_ascii=False,
+            )
+
+            writer.writerow([
+                rel_base_posix,
+                ", ".join(candidates),
+                entities,
+                keyphrases,
+                score,
+                sources,
+            ])
+            written += 1
+
+        # Assicuriamo la flush + fsync prima della sostituzione atomica
+        tmp_file.flush()
+        os.fsync(tmp_file.fileno())
+    except Exception as e:
+        # In caso di errore, proviamo a ripulire il temporaneo
+        if tmp_file and not tmp_file.closed:
+            try:
+                tmp_path = Path(tmp_file.name)
+                tmp_file.close()
+                if tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        raise
+    else:
+        # Chiudiamo e sostituiamo in modo atomico
+        tmp_path = Path(tmp_file.name)
+        tmp_file.close()
+        os.replace(tmp_path, csv_path)
+
+    logger.info(
+        "Tag grezzi generati (base-relative, streaming)",
+        extra={"file_path": str(csv_path), "count": written, "file_path_tail": tail_path(csv_path)},
+    )
+    return written
 
 
 # ───────────────────────────── Validatore YAML ───────────────────────────────
