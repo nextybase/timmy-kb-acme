@@ -143,6 +143,90 @@ def _write_outputs(md_dir: Path, safe_name: str, content: str, fp: str, logger: 
     logger.info("File markdown scritto correttamente", extra={"file_path": str(md_path)})
 
 
+def _resolve_options(skip_if_unchanged: Optional[bool], max_workers: Optional[int]) -> Tuple[bool, int]:
+    """Legge i default da constants e restituisce (skip_if_unchanged, max_workers)."""
+    if skip_if_unchanged is None:
+        skip_if_unchanged = bool(getattr(_C, "SKIP_IF_UNCHANGED", DEFAULT_SKIP_IF_UNCHANGED))
+    if max_workers is None:
+        max_workers = int(getattr(_C, "MAX_CONCURRENCY", DEFAULT_MAX_WORKERS))
+    return skip_if_unchanged, max_workers
+
+
+def _guard_paths(context: ClientContext, raw_dir: Path, md_dir: Path) -> None:
+    """Applica guard-rail STRONG e validazioni di esistenza/formato per RAW/MD."""
+    try:
+        ensure_within(context.base_dir, raw_dir)
+    except Exception as e:
+        raise PipelineError(
+            f"Path non sicuro per la sorgente RAW: {raw_dir} ({e})",
+            slug=context.slug,
+            file_path=raw_dir,
+        )
+    try:
+        ensure_within(context.base_dir, md_dir)
+    except Exception as e:
+        raise PipelineError(
+            f"Path non sicuro per la destinazione MD: {md_dir} ({e})",
+            slug=context.slug,
+            file_path=md_dir,
+        )
+    if not raw_dir.exists():
+        raise InputDirectoryMissing(f"La cartella raw non esiste: {raw_dir}", slug=context.slug, file_path=raw_dir)
+    if not raw_dir.is_dir():
+        raise InputDirectoryMissing(f"Il path raw non è una directory: {raw_dir}", slug=context.slug, file_path=raw_dir)
+
+
+def _iter_results(categories: List[Path], max_workers: int) -> List[Tuple[Path, str, str]]:
+    """Elabora le categorie (eventualmente in parallelo) e ritorna [(cat, content, fp)]."""
+    results: List[Tuple[Path, str, str]] = []
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            mapped = list(ex.map(_process_category, categories))
+        results = [(cat, content, fp) for cat, (content, fp) in zip(categories, mapped)]
+    else:
+        for cat in categories:
+            content, fp = _process_category(cat)
+            results.append((cat, content, fp))
+    return results
+
+
+def _should_skip(fp_path: Path, fp: str) -> bool:
+    """True se esiste il sidecar .fp ed è invariato."""
+    if not fp_path.exists():
+        return False
+    try:
+        old_fp = fp_path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return False
+    return old_fp == fp
+
+
+def _emit_category(
+    md_dir: Path,
+    category: Path,
+    content: str,
+    fp: str,
+    logger: logging.Logger,
+    *,
+    skip_if_unchanged: bool,
+) -> None:
+    """Prepara nomi/percorsi, valuta lo skip e scrive output atomici per una categoria."""
+    safe_name = sanitize_filename(category.name)
+    md_path = md_dir / f"{safe_name}.md"
+    fp_path = md_path.with_suffix(md_path.suffix + ".fp")
+
+    # STRONG path-safety
+    ensure_within(md_dir, md_path)
+    ensure_within(md_dir, fp_path)
+
+    if skip_if_unchanged and _should_skip(fp_path, fp):
+        logger.info("Skip generazione: nessuna modifica", extra={"file_path": str(md_path)})
+        return
+
+    logger.info("Creazione file markdown aggregato", extra={"file_path": str(md_path)})
+    _write_outputs(md_dir, safe_name, content, fp, logger)
+
+
 # --------------------------------------------------------------------
 # Orchestratore: conversione PDF → Markdown per categoria top-level
 # --------------------------------------------------------------------
@@ -160,98 +244,26 @@ def convert_files_to_structured_markdown(
     md_dir = Path(md_dir or context.md_dir)
     local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
 
-    # Parametri: prova a leggere da constants, altrimenti fallback
-    if skip_if_unchanged is None:
-        skip_if_unchanged = bool(getattr(_C, "SKIP_IF_UNCHANGED", DEFAULT_SKIP_IF_UNCHANGED))
-    if max_workers is None:
-        max_workers = int(getattr(_C, "MAX_CONCURRENCY", DEFAULT_MAX_WORKERS))
-
-    # STRONG guard: RAW e MD devono stare nella base cliente
-    try:
-        ensure_within(context.base_dir, raw_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Path non sicuro per la sorgente RAW: {raw_dir} ({e})",
-            slug=context.slug,
-            file_path=raw_dir,
-        )
-    try:
-        ensure_within(context.base_dir, md_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Path non sicuro per la destinazione MD: {md_dir} ({e})",
-            slug=context.slug,
-            file_path=md_dir,
-        )
-
-    if not raw_dir.exists():
-        local_logger.error("La cartella raw non esiste", extra={"slug": context.slug, "file_path": str(raw_dir)})
-        raise InputDirectoryMissing(f"La cartella raw non esiste: {raw_dir}", slug=context.slug, file_path=raw_dir)
-    if not raw_dir.is_dir():
-        local_logger.error("Il path raw non è una directory", extra={"slug": context.slug, "file_path": str(raw_dir)})
-        raise InputDirectoryMissing(f"Il path raw non è una directory: {raw_dir}", slug=context.slug, file_path=raw_dir)
-
+    # Opzioni e guard-rail
+    skip_if_unchanged, max_workers = _resolve_options(skip_if_unchanged, max_workers)
+    _guard_paths(context, raw_dir, md_dir)
     md_dir.mkdir(parents=True, exist_ok=True)
 
-    # Ogni sottocartella immediata di raw/ è una categoria che genera un .md
+    # Raccolta → Process → Write
     categories = _collect_categories(raw_dir)
+    results = _iter_results(categories, max_workers)
 
-    # Costruzione contenuti per categoria (concorrenza opzionale)
-    results: List[Tuple[Path, str, str]] = []
-    if (max_workers or 0) > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            for cat in categories:
-                content, fp = ex.submit(_process_category, cat).result()
-                results.append((cat, content, fp))
-    else:
-        for cat in categories:
-            content, fp = _process_category(cat)
-            results.append((cat, content, fp))
-
-    # Scrittura risultati in ordine deterministico, con skip opzionale
     for category, content, fp in sorted(results, key=lambda x: x[0].name.lower()):
-        safe_name = sanitize_filename(category.name)
-        md_path = md_dir / f"{safe_name}.md"
-        fp_path = md_path.with_suffix(md_path.suffix + ".fp")
-
-        # STRONG: validare gli output prima di scrivere
         try:
-            ensure_within(md_dir, md_path)
-            ensure_within(md_dir, fp_path)
+            _emit_category(md_dir, category, content, fp, local_logger, skip_if_unchanged=skip_if_unchanged)
         except Exception as e:
-            local_logger.error(
-                "Path di output non sicuro (fuori dal book dir)",
-                extra={"slug": context.slug, "file_path": str(md_path), "error": str(e)},
-            )
-            raise PipelineError(f"Path di output non sicuro per {md_path}", slug=context.slug, file_path=md_path)
-
-        try:
-            # Skip se fingerprint invariato
-            if skip_if_unchanged and fp_path.exists():
-                try:
-                    old_fp = fp_path.read_text(encoding="utf-8").strip()
-                except Exception:
-                    old_fp = ""
-                if old_fp == fp:
-                    local_logger.info(
-                        "Skip generazione: nessuna modifica",
-                        extra={"slug": context.slug, "file_path": str(md_path)},
-                    )
-                    continue
-
-            local_logger.info(
-                "Creazione file markdown aggregato",
-                extra={"slug": context.slug, "file_path": str(md_path)},
-            )
-            # ✅ scritture atomiche (SSoT)
-            _write_outputs(md_dir, safe_name, content, fp, local_logger)
-
-        except Exception as e:
+            # Nota: in caso di errore, segnaliamo il path previsto del file md
+            err_md = md_dir / f"{sanitize_filename(category.name)}.md"
             local_logger.error(
                 "Errore nella creazione markdown",
-                extra={"slug": context.slug, "file_path": str(md_path), "error": str(e)},
+                extra={"slug": context.slug, "file_path": str(err_md), "error": str(e)},
             )
-            raise PipelineError(str(e), slug=context.slug, file_path=md_path)
+            raise PipelineError(str(e), slug=context.slug, file_path=err_md)
 
 
 def generate_summary_markdown(

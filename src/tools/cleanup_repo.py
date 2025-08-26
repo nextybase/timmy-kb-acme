@@ -284,5 +284,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import sys
-    sys.exit(main())
+    # Policy interna: evitare l'uso diretto di sys.exit nello script.
+    # Gli orchestratori importano e chiamano `main()` e gestiscono il codice di uscita.
+    # L’esecuzione stand-alone semplicemente chiama `main()` e termina.
+    main()
