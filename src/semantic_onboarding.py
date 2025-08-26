@@ -188,7 +188,8 @@ def _dump_frontmatter(meta: Dict) -> str:
     if yaml is None:
         lines = ["---"]
         if "title" in meta:
-            lines.append(f'title: "{meta["title"]}"')
+            title_val = str(meta["title"]).replace('"', '\\"')
+            lines.append(f'title: "{title_val}"')
         if "tags" in meta and isinstance(meta["tags"], list):
             lines.append("tags:")
             lines.extend([f"  - {t}" for t in meta["tags"]])
@@ -202,7 +203,8 @@ def _dump_frontmatter(meta: Dict) -> str:
     except (ValueError, TypeError, yaml.YAMLError):  # type: ignore[attr-defined]
         lines = ["---"]
         if "title" in meta:
-            lines.append(f'title: "{meta['"'"'title'"'"']}"')  # keep safe if YAML fails
+            title_val = str(meta["title"]).replace('"', '\\"')
+            lines.append(f'title: "{title_val}"')  # fallback sicuro se YAML fallisce
         if "tags" in meta and isinstance(meta["tags"], list):
             lines.append("tags:")
             lines.extend([f"  - {t}" for t in meta["tags"]])
