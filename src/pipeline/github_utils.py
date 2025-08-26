@@ -312,6 +312,11 @@ def push_output_to_github(
     # === Logger contestualizzato (slug/run_id/redaction filter) ===
     local_logger = get_structured_logger("pipeline.github_utils", context=context)
 
+    # (NUOVO) Allinea il logger di modulo a quello contestualizzato
+    # per far sì che anche gli helper (_run/_git_*) logghino con lo stesso contesto.
+    global logger
+    logger = local_logger
+
     # Validazione basilare prerequisiti
     if not github_token:
         raise PipelineError("GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.", slug=getattr(context, "slug", None))
@@ -366,7 +371,7 @@ def push_output_to_github(
 
     repo_name = f"timmy-kb-{context.slug}"
     repo = _ensure_or_create_repo(gh, user, repo_name, logger=local_logger, redact_logs=redact_logs)
-    remote_url = repo.clone_url  # https://github.com/<org>/<repo>.git
+    remote_url = repo.clone_url  # https://github.com/<owner>/<repo>.git
 
     # Working dir temporanea **dentro** la base del cliente (clone in dir non esistente)
     tmp_dir = _prepare_tmp_dir(base_dir)

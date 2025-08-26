@@ -5,7 +5,7 @@ from __future__ import annotations
 Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
 
 Cosa fa questo modulo (ruoli e funzioni principali):
-- Caricamento .env dalla root del progetto (se presente).
+- Caricamento `.env` dalla root del progetto (se presente).
 - API PURE e prevedibili per leggere variabili:
   - `get_env_var(key, default=None, required=False)` → str|None
   - `require_env(key)` → str (obbligatoria)
@@ -13,14 +13,14 @@ Cosa fa questo modulo (ruoli e funzioni principali):
   - `get_int(key, default=None, *, required=False, min_value=None, max_value=None)` → int|None
 - Flag di redazione log (SSoT):
   - `compute_redact_flag(env, log_level="INFO")` → bool
-    Modalità: LOG_REDACTION in {on/off/always/never/auto}; auto abilita se ENV∈{prod,production,ci} o CI=true o presenti credenziali.
-    In DEBUG la redazione è forzata OFF.
+    Modalità: LOG_REDACTION in {on/off/always/never/auto}; auto abilita se ENV∈{prod,production,ci}
+    oppure CI=true oppure sono presenti credenziali sensibili. In DEBUG la redazione è forzata OFF.
 - Governance force-push:
   - `get_force_allowed_branches(context=None)` → list[str]
   - `is_branch_allowed_for_force(branch, context=None, *, allow_if_unset=True)` → bool
 
 Linee guida:
-- Nessun I/O distruttivo (solo lettura .env + os.environ).
+- Nessun I/O distruttivo (solo lettura `.env` + `os.environ`).
 - Nessun logging qui: gli orchestratori/adapter gestiscono il reporting.
 - Coerenza con il domain error handling: alza `ConfigError` per variabili obbligatorie.
 """
@@ -131,14 +131,41 @@ def get_int(
 
 
 # ================================
-# Policy redazione (SSoT del flag)
+#  Helpers interni non esportati
 # ================================
+
+def _val_from(env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None) -> Optional[str]:
+    """Legge prima da `env` (se dict-like), poi da `os.environ`."""
+    if env is not None and isinstance(env, Mapping) and key in env:
+        v = env.get(key)
+        return None if v is None else str(v)
+    return os.getenv(key, fallback)
+
+
+def _has_sensitive_credentials(env: Mapping[str, Any] | None) -> bool:
+    """
+    True se sono presenti credenziali/percorsi sensibili che suggeriscono redazione log.
+    """
+    keys = (
+        "GITHUB_TOKEN",
+        "SERVICE_ACCOUNT_FILE",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+    )
+    for k in keys:
+        if (_val_from(env, k) or "").strip():
+            return True
+    return False
+
 
 def _truthy(val: Any) -> bool:
     return str(val).strip().lower() in _TRUE_SET if val is not None else False
 
 
-def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool:
+# ================================
+# Policy redazione (SSoT del flag)
+# ================================
+
+def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") -> bool:
     """
     Calcola il flag di redazione log in modo deterministico (nessun masking qui).
 
@@ -149,35 +176,24 @@ def compute_redact_flag(env: Mapping[str, Any], log_level: str = "INFO") -> bool
         ON se
           * ENV ∈ {prod, production, ci}  OR
           * CI=true                       OR
-          * sono presenti credenziali sensibili (GITHUB_TOKEN o SERVICE_ACCOUNT_FILE)
+          * sono presenti credenziali sensibili (es. token/credenziali GCP/GitHub)
         OFF altrimenti
     - log_level=DEBUG forza OFF.
-
-    Args:
-        env: mappa chiave→valore (tipicamente `context.env`).
-        log_level: stringa livello log (es. "INFO", "DEBUG").
-
-    Returns:
-        True se la redazione va attivata, False altrimenti.
     """
-    mode = (env.get("LOG_REDACTION") if env is not None else None) or os.getenv("LOG_REDACTION", "auto")
-    mode_l = str(mode or "auto").strip().lower()
+    mode = (_val_from(env, "LOG_REDACTION", "auto") or "auto").strip().lower()
 
-    if mode_l in ("always", "on") or mode_l in _TRUE_SET:
+    explicit: Optional[bool]
+    if mode in ("always", "on") or mode in _TRUE_SET:
         explicit = True
-    elif mode_l in ("never", "off") or mode_l in _FALSE_SET:
+    elif mode in ("never", "off") or mode in _FALSE_SET:
         explicit = False
     else:
         explicit = None  # auto
 
-    env_name = (env.get("ENV") if env is not None else None) or os.getenv("ENV", "dev")
-    ci_val = (env.get("CI") if env is not None else None) or os.getenv("CI", "0")
-    has_credentials = bool(
-        (env.get("GITHUB_TOKEN") if env is not None else None) or os.getenv("GITHUB_TOKEN") or
-        (env.get("SERVICE_ACCOUNT_FILE") if env is not None else None) or os.getenv("SERVICE_ACCOUNT_FILE")
-    )
+    env_name = (_val_from(env, "ENV", "dev") or "dev").strip().lower()
+    ci_val = _val_from(env, "CI", "0")
+    auto_on = (env_name in {"prod", "production", "ci"}) or _truthy(ci_val) or _has_sensitive_credentials(env)
 
-    auto_on = (str(env_name).strip().lower() in {"prod", "production", "ci"}) or _truthy(ci_val) or has_credentials
     redact = explicit if explicit is not None else auto_on
 
     if str(log_level or "").upper() == "DEBUG":

@@ -2,28 +2,28 @@
 """
 Utility di gestione path e slug per la pipeline Timmy-KB.
 
-Ruolo del modulo (SSoT path-safety + regole slug):
-- is_safe_subpath(path, base) -> bool
-  Guardia **SOFT**: verifica boolean che un path stia sotto una base (solo pre-check).
-- ensure_within(base, target) -> None
-  Guardia **STRONG**: solleva `ConfigError` se `target` non ricade sotto `base` (usare prima di write/copy/delete).
-- _load_slug_regex() / clear_slug_regex_cache()
+Ruolo del modulo (path-safety SSoT + regole di normalizzazione):
+- `is_safe_subpath(path, base) -> bool`
+  Guardia **SOFT**: ritorna True/False se `path` ricade sotto `base`. Usare solo come pre-check.
+- `ensure_within(base, target) -> None`
+  Guardia **STRONG**: solleva `ConfigError` se `target` NON ricade sotto `base`. Da usare prima di write/copy/delete.
+- `_load_slug_regex()` / `clear_slug_regex_cache()`
   Carica/azzera la regex di validazione slug da `config/config.yaml` (chiave `slug_regex`) con fallback sicuro.
-- is_valid_slug(slug) / validate_slug(slug)
-  Verifica slug contro la regex di progetto; `validate_slug` alza `InvalidSlug` se non conforme.
-- normalize_path(path) -> Path
-  Normalizzazione/risoluzione sicura; in errore ritorna il path originale e logga.
-- sanitize_filename(name, max_length=100) -> str
-  Pulizia nomi file (Unicode NFKC, rimozione caratteri vietati/controllo, truncation).
-- sorted_paths(paths, base=None) -> List[Path]
+- `is_valid_slug(slug)` / `validate_slug(slug)`
+  Valida lo slug; `validate_slug` alza `InvalidSlug` se non conforme.
+- `normalize_path(path) -> Path`
+  Normalizza/risolve un path con gestione errori non-critica (log + fallback al path originale).
+- `sanitize_filename(name, max_length=100) -> str`
+  **Ottimizzata**: usa regex precompilata; ammette solo `[A-Za-z0-9_.-]`, compatta separatori, NFKC, tronca a `max_length`.
+- `sorted_paths(paths, base=None) -> List[Path]`
   Ordinamento deterministico case-insensitive, relativo a `base` se fornita.
-- ensure_valid_slug(initial_slug, *, interactive, prompt, logger) -> str
+- `ensure_valid_slug(initial_slug, *, interactive, prompt, logger) -> str`
   Wrapper interattivo/non-interattivo che richiede/valida uno slug.
 
 Principi:
 - Nessun I/O distruttivo; solo letture facoltative (es. `config/config.yaml`).
 - Logging strutturato solo su errori (silenzioso quando tutto ok).
-- Portabilità: niente dipendenze da `ClientContext`; fallback a `Path.relative_to` se `is_relative_to` non è disponibile.
+- Portabilità: niente dipendenze da `ClientContext`; fallback a `Path.relative_to` dove serve.
 """
 
 from __future__ import annotations
@@ -42,6 +42,18 @@ from .logging_utils import get_structured_logger
 # Logger di modulo
 _logger = get_structured_logger("pipeline.path_utils")
 
+# -----------------------------------------------------------------------------
+# Regex precompilate (micro-ottimizzazioni e chiarezza)
+# -----------------------------------------------------------------------------
+# Consenti lettere/numeri/underscore/punto/trattino; sostituisci il resto.
+_SANITIZE_DISALLOWED_RE = re.compile(r"[^\w.\-]+", flags=re.UNICODE)
+# Comprimi ripetizioni del carattere di rimpiazzo (iniettata dinamicamente)
+def _compress_replacement(s: str, replacement: str) -> str:
+    if not replacement:
+        return s
+    rep_re = re.compile(re.escape(replacement) + r"{2,}")
+    return rep_re.sub(replacement, s)
+
 
 def is_safe_subpath(path: Path, base: Path) -> bool:
     """
@@ -54,7 +66,6 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        # Portabile: tenta relative_to (evita dipendenza da Path.is_relative_to)
         try:
             path_resolved.relative_to(base_resolved)
             return True
@@ -170,43 +181,49 @@ def normalize_path(path: Path) -> Path:
         return Path(path)
 
 
-def sanitize_filename(name: str, max_length: int = 100) -> str:
+def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
     """
     Pulisce un nome file per l’uso su filesystem.
 
     Operazioni:
-    - normalizza Unicode (NFKC)
-    - sostituisce i caratteri vietati con underscore
-    - rimuove controlli ASCII
+    - normalizzazione Unicode (NFKC)
+    - consente solo `[A-Za-z0-9_.-]`; gli altri caratteri diventano `replacement`
+    - comprime ripetizioni contigue di `replacement` e trimma ai lati
+    - rimuove caratteri di controllo
     - tronca a `max_length`
     - garantisce un fallback non vuoto
+
+    Args:
+        name: nome originale.
+        max_length: lunghezza massima del risultato (default 100).
+        replacement: carattere con cui sostituire i caratteri non permessi (default "_").
     """
     try:
         # Normalizzazione unicode
-        safe_name = unicodedata.normalize("NFKC", name)
+        s = unicodedata.normalize("NFKC", str(name or ""))
 
-        # Rimozione caratteri vietati
-        safe_name = re.sub(r'[<>:"/\\|?*]', "_", safe_name)
+        # Sostituisci tutto ciò che non è [\w.-] con replacement
+        s = _SANITIZE_DISALLOWED_RE.sub(replacement, s)
 
-        # Rimozione caratteri di controllo e trim
-        safe_name = re.sub(r'[\x00-\x1f\x7f]', "", safe_name).strip()
+        # Rimuovi caratteri di controllo residui
+        s = re.sub(r"[\x00-\x1f\x7f]", "", s)
 
-        # Troncamento
-        if len(safe_name) > max_length:
-            safe_name = safe_name[:max_length].rstrip()
+        # Comprimi e ripulisci i separatori
+        s = _compress_replacement(s, replacement).strip(replacement)
+
+        # Troncamento “morbido”
+        if max_length and len(s) > int(max_length):
+            s = s[: int(max_length)].rstrip(replacement)
 
         # Fallback
-        if not safe_name:
-            safe_name = "file"
-
-        return safe_name
+        return s or "file"
     except Exception as e:
         _logger.error("Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name})
         return "file"
 
 
 # ----------------------------------------
-# Nuovo helper: ordinamento deterministico
+# Ordinamento deterministico
 # ----------------------------------------
 def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
     """
@@ -250,11 +267,11 @@ def ensure_valid_slug(
     *,
     interactive: bool,
     prompt: Callable[[str], str],
-    logger: logging.Logger
+    logger: logging.Logger,
 ) -> str:
     """
     Richiede/valida uno slug secondo le regole configurate (usa validate_slug).
-    - In non-interactive: solleva ConfigError se slug mancante/ invalido.
+    - In non-interactive: solleva ConfigError se slug mancante/invalido.
     - In interactive: ripete il prompt finché non è valido.
     """
     slug = (initial_slug or "").strip()
