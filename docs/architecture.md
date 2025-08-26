@@ -48,7 +48,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 
 ```
 repo/
-├─ README.md                           # documentazione principale
+├─ README.md                  # documentazione principale
 ├─ config/
 │  ├─ config.yaml                      # bootstrap globale (defaults iniziali)
 │  ├─ .env.example                     # template variabili d'ambiente
@@ -96,10 +96,7 @@ repo/
 │     ├─ content_utils.py              # convert & generate markdown utilities
 │     ├─ github_utils.py               # push_output_to_github
 │     └─ drive_utils.py                # API di alto livello per Drive
-├─ tests/
-│  ├─ conftest.py                      # fixture comuni (dummy_kb, slug, repo_root)
-│  └─ test_dummy_pipeline.py           # test end-to-end sandbox dummy
-└─ output/                              # (GENERATO) per‑cliente: timmy-kb-<slug>/{raw,book,semantic,config,logs}
+└─ output/                       # (GENERATO) per‑cliente: timmy-kb-<slug>/{raw,book,semantic,config,logs}
 ```
 
 ---

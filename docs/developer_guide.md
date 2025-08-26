@@ -71,26 +71,7 @@ Stabilire responsabilità chiare e ridurre ambiguità tra orchestratori e moduli
 
 ---
 
-## 5) Test suggeriti
-
-### Obiettivo
-Assicurare stabilità e robustezza dopo modifiche.
-
-### Casi consigliati
-- **Matrix redazione**: `{LOG_REDACTION ∈ [auto,on,off]} × {ENV ∈ [dev,prod,ci]} × {CI ∈ [0,1]} × {log_level ∈ [DEBUG,INFO]}`.
-- **Bootstrap paths**: assenza di `config/config.yaml` → creazione da template.
-- **Safe-load YAML**: file vuoto/non valido → `ConfigError` coerente.
-- **Drive idempotente**: stessa struttura non deve duplicare cartelle.
-- **Conversione RAW→BOOK**: solo PDF in `raw/` generano Markdown.
-- **Frontmatter enrichment**: test con `tags_raw.csv` vuoto/parziale/completo.
-- **Fallback README/SUMMARY**: testare idempotenza di `ensure_readme_summary`.
-- **Preview Docker**: `start_preview/stop_preview` loggano correttamente.
-- **Push GitHub**: richiede `GITHUB_TOKEN`; testare errore se assente.
-- **Dummy pipeline**: `gen_dummy_kb.py` + `tests/test_dummy_pipeline.py` validano coerenza CSV↔PDF e stub semantici.
-
----
-
-## 6) Policy di coerenza doc/codice
+## 5) Policy di coerenza doc/codice
 
 - Aggiornare **README** e **User Guide** (UX/CLI).
 - Aggiornare **Developer Guide**, **Architecture**, **Coding Rules**.
@@ -98,7 +79,7 @@ Assicurare stabilità e robustezza dopo modifiche.
 
 ---
 
-## 7) Principi fondanti
+## 6) Principi fondanti
 
 - **Modularità**: orchestratori separati dalla logica.
 - **Idempotenza**: operazioni ripetibili senza effetti collaterali.

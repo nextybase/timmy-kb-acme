@@ -22,7 +22,7 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 - **Moduli** – operazioni tecniche (Drive, conversione, push). Nessun input utente né `sys.exit()`. Sollevano eccezioni tipizzate.
 - **Output utente** – solo orchestratori, via logger. I moduli restituiscono valori o eccezioni.
 - **Batch-safe** – i moduli devono funzionare senza interazione; orchestratori gestiscono batch vs interattivo.
-- **Test e strumenti dummy** – `gen_dummy_kb.py` produce sandbox completa con PDF sintetici e CSV iniziali; usato come base per i test automatizzati in `tests/`.
+- **Test e strumenti dummy** – `gen_dummy_kb.py` produce sandbox completa con PDF sintetici e CSV iniziali; usato come base per i test automatizzati.
 
 ---
 
