@@ -4,33 +4,16 @@
 """
 Orchestratore: Tag Onboarding (HiTL)
 
-Cosa fa questo file
--------------------
-Step intermedio tra `pre_onboarding` e `onboarding_full`. A partire dai PDF grezzi
-in `raw/`, produce un CSV con i tag suggeriti e (dopo conferma) genera gli stub
-per la revisione semantica.
+Step intermedio tra `pre_onboarding` e `onboarding_full`.
+A partire dai PDF grezzi in `raw/`, produce un CSV con i tag suggeriti e
+(dopo conferma) genera gli stub per la revisione semantica.
 
-Punti chiave implementativi (coerenti con le linee guida della pipeline):
-- **Niente `print()`**: solo logging strutturato con `get_structured_logger`.
-- **Path-safety STRONG**: tutti i path di output passano da `ensure_within(...)`.
-- **Scritture atomiche centralizzate**: dove il file viene scritto da questo
-  orchestratore (YAML/JSON/CSV), si usa `pipeline.file_utils.safe_write_text`.
-- Integrazione con Google Drive **di default** per il download dei PDF (`--source=drive`);
-  il locale è **opt-out** esplicito con `--source local`.
-- Checkpoint HiTL tra la generazione del CSV e la creazione degli stub semantici.
-
-Fase 1:
-- Scarica/copia PDF in `output/timmy-kb-<slug>/raw/`
-  - **Default**: scarica da Drive (usa gli ID presenti in `config.yaml`).
-  - Opzione locale: usa i PDF già presenti in `raw/` o copia da `--local-path`.
-- Genera `output/timmy-kb-<slug>/semantic/tags_raw.csv` (commit atomica via `safe_write_text`)
-- Checkpoint HiTL: chiedi se proseguire per consentire l'editing dei tag generati
-
-Fase 2 (se confermato o `--proceed`):
-- Genera `README_TAGGING.md` e `tags_reviewed.yaml` (stub) in `semantic/`
-
-Validazione standalone:
-- `--validate-only` valida `tags_reviewed.yaml` e scrive `tags_review_validation.json`
+Punti chiave:
+- Niente `print()` → logging strutturato.
+- Path-safety STRONG con `ensure_within`.
+- Scritture atomiche centralizzate con `safe_write_text`.
+- Integrazione Google Drive supportata (default: Drive).
+- Checkpoint HiTL tra CSV e generazione stub semantici.
 """
 
 from __future__ import annotations
@@ -48,7 +31,7 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# ── Pipeline infra (coerente con gli orchestratori) ──────────────────────────
+# ── Pipeline infra ────────────────────────────────────────────────────────────
 from pipeline.logging_utils import (
     get_structured_logger,
     mask_partial,
@@ -63,10 +46,7 @@ from pipeline.exceptions import (
 from pipeline.context import ClientContext
 from pipeline.config_utils import get_client_config
 from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
-from pipeline.constants import (
-    LOGS_DIR_NAME,
-    LOG_FILE_NAME,
-)
+from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import (
     ensure_valid_slug,
     sanitize_filename,
@@ -85,6 +65,13 @@ except Exception:
     yaml = None
 
 
+__all__ = [
+    "tag_onboarding_main",
+    "validate_tags_reviewed",
+    "_validate_tags_reviewed",  # esposto per i test unitari
+]
+
+
 # ─────────────────────────── Helpers UX ───────────────────────────
 def _prompt(msg: str) -> str:
     return input(msg).strip()
@@ -93,25 +80,22 @@ def _prompt(msg: str) -> str:
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
     """
-    Copia ricorsivamente i file PDF da `src_dir` a `raw_dir`, preservando la struttura
-    delle sottocartelle e applicando le guardie di sicurezza sui path.
+    Copia ricorsivamente i PDF da `src_dir` in `raw_dir`, mantenendo la struttura
+    delle sottocartelle e sanitizzando i nomi dei file. Se `src_dir == raw_dir`, non fa nulla.
+
+    Sicurezza:
+      - Path-safety STRONG: ogni destinazione è validata con `ensure_within(raw_dir, ...)`.
 
     Args:
-        src_dir (Path): directory sorgente che contiene i PDF da importare.
-        raw_dir (Path): directory di destinazione nella sandbox del cliente (output/.../raw).
-        logger (logging.Logger): logger strutturato della pipeline.
+        src_dir: Cartella sorgente dei PDF.
+        raw_dir: Cartella RAW del cliente (destinazione).
+        logger: Logger strutturato.
 
     Returns:
-        int: numero di PDF effettivamente copiati. Se `src_dir == raw_dir`, ritorna 0.
+        int: Numero di PDF effettivamente copiati.
 
     Raises:
-        ConfigError: se `src_dir` non esiste o non è una directory valida.
-
-    Note:
-        - Path-safety: per ogni destinazione viene chiamato `ensure_within(raw_dir, dst)`.
-        - Sanificazione: i nomi vengono normalizzati con `sanitize_filename` su ogni segmento.
-        - Idempotenza: se il file di destinazione esiste ed ha la stessa dimensione, la copia viene saltata.
-        - Se `src_dir` coincide con `raw_dir`, la fase di copia viene omessa (no-op) e si prosegue allo step successivo.
+        ConfigError: se `src_dir` non esiste o non è una directory.
     """
     src_dir = src_dir.expanduser().resolve()
     raw_dir = raw_dir.expanduser().resolve()
@@ -135,10 +119,13 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
+        # STRONG path-safety: l'output deve rimanere sotto raw_dir
         try:
-            ensure_within(raw_dir, dst)  # path-safety forte
+            ensure_within(raw_dir, dst)
         except ConfigError:
-            logger.warning("Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)})
+            logger.warning(
+                "Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)}
+            )
             continue
 
         dst_parent = dst.parent
@@ -157,20 +144,25 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
 
     return count
 
+
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
 def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     """
-    Emette un CSV compatibile con la pipeline nuova:
-      - relative_path: path POSIX relativo alla BASE, quindi prefissato con 'raw/...'
+    Emette un CSV compatibile con la pipeline:
+      - relative_path: path POSIX relativo alla BASE, prefissato con 'raw/...'
       - suggested_tags: euristica da path + filename
-      - entities,keyphrases,score,sources: colonne presenti (vuote/{}), per compatibilità futura
+      - entities, keyphrases, score, sources: colonne placeholder per compatibilità
 
-    Scrittura:
-      - Costruiamo il CSV in memoria (StringIO) e lo persistiamo con
-        `safe_write_text(..., atomic=True)` per centralizzare la logica di commit atomico.
-      - Tutti i path sono validati con `ensure_within`.
+    Scrittura atomica tramite `safe_write_text`.
+
+    Args:
+        raw_dir: Cartella RAW da cui leggere i PDF.
+        csv_path: Percorso completo del CSV di output.
+        logger: Logger strutturato.
+
+    Returns:
+        int: Numero di righe (PDF) scritte nel CSV (escluso header).
     """
-    # radice logica da scrivere nel CSV
     raw_prefix = "raw"
 
     ensure_within(csv_path.parent, csv_path)
@@ -181,9 +173,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
 
-    # Iteriamo sui PDF e scriviamo riga-per-riga nel buffer
     for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
-        # rel rispetto a raw/, poi prefissiamo 'raw/'
         try:
             rel_raw = pdf.relative_to(raw_dir).as_posix()
         except ValueError:
@@ -191,8 +181,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
 
         rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
 
-        # tag candidati: cartelle (senza 'raw') + token da filename
-        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
+        parts = [p for p in Path(rel_raw).parts if p]
         base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
         path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
         file_tokens = {
@@ -202,28 +191,14 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
         }
         candidates = sorted(path_tags.union(file_tokens))
 
-        # colonne "larghe" vuote/di default per compatibilità
         entities = "[]"
         keyphrases = "[]"
         score = "{}"
-        sources = json.dumps(
-            {"path": list(path_tags), "filename": list(file_tokens)},
-            ensure_ascii=False,
-        )
+        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
 
-        writer.writerow(
-            [
-                rel_base_posix,
-                ", ".join(candidates),
-                entities,
-                keyphrases,
-                score,
-                sources,
-            ]
-        )
+        writer.writerow([rel_base_posix, ", ".join(candidates), entities, keyphrases, score, sources])
         written += 1
 
-    # Persistenza atomica centralizzata
     safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
 
     logger.info(
@@ -236,6 +211,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
 # ───────────────────────────── Validatore YAML ───────────────────────────────
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
+
 def _load_yaml(path: Path) -> Dict[str, Any]:
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
@@ -246,85 +222,84 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
         raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
 
-def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
+
+def _validate_tags_reviewed(data: dict) -> dict:
     """
-    Valida il file `semantic/tags_reviewed.yaml` per il cliente indicato e
-    scrive un report JSON (`tags_review_validation.json`) nella stessa cartella.
+    Valida una struttura già caricata da `tags_reviewed.yaml`.
 
-    Operazioni:
-      1) Carica la sandbox: `output/timmy-kb-<slug>/semantic/`.
-      2) Legge e parse-a `tags_reviewed.yaml` (richiede PyYAML).
-      3) Applica le regole di validazione (_validate_tags_reviewed).
-      4) Persiste un report JSON con timestamp e dettagli (errori/warning).
-      5) Emette log strutturati su file cliente.
-
-    Parametri:
-      slug (str): identificativo cliente (es. "acme").
-      run_id (Optional[str]): correlazione log opzionale.
-
-    Ritorna (exit code convenzione CLI):
-      0 → validazione OK (nessun errore né warning bloccante).
-      2 → validazione con AVVISI (warning presenti, nessun errore).
-      1 → validazione FALLITA (errori presenti) oppure file assente/parsing fallito.
-
-    Side effects:
-      - Scrive `output/timmy-kb-<slug>/semantic/tags_review_validation.json`
-        con struttura:
-        {
-          "validated_at": "<UTC ISO8601>",
-          "errors": [...],
-          "warnings": [...],
-          "count": <num_tag>
-        }
-
-    Note:
-      - Path-safety: i path di output sono verificati con `ensure_within`.
-      - Logging: usa `get_structured_logger("tag_onboarding.validate", ...)`.
-      - In caso di `tags_reviewed.yaml` mancante o PyYAML non disponibile,
-        viene loggato l’errore e la funzione ritorna 1.
-
-    Uso:
-      CLI:    py src/tag_onboarding.py --slug <id> --validate-only
-      Python: from src.tag_onboarding import validate_tags_reviewed; rc = validate_tags_reviewed("demo")
+    Returns:
+        dict: con chiavi:
+            - errors (List[str])
+            - warnings (List[str])
+            - count (int) — numero di tag esaminati
     """
-    # Validazione standalone, logging per-cliente
-    base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-    semantic_dir = base_dir / "semantic"
-    yaml_path = semantic_dir / "tags_reviewed.yaml"
-    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    try:
-        ensure_within(base_dir, log_file)
-    except ConfigError:
-        pass
-    logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
+    errors, warnings = [], []
 
-    if not yaml_path.exists():
-        logger.error(
-            "File tags_reviewed.yaml non trovato",
-            extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)},
-        )
-        return 1
+    if not isinstance(data, dict):
+        errors.append("Il file YAML non è una mappa (dict) alla radice.")
+        return {"errors": errors, "warnings": warnings}
 
-    try:
-        data = _load_yaml(yaml_path)
-        result = _validate_tags_reviewed(data)
-        report_path = semantic_dir / "tags_review_validation.json"
-        _write_validation_report(report_path, result, logger)
-    except ConfigError as e:
-        logger.error(str(e))
-        return 1
+    for k in ("version", "reviewed_at", "keep_only_listed", "tags"):
+        if k not in data:
+            errors.append(f"Campo mancante: '{k}'.")
 
-    errs = len(result.get("errors", []))
-    warns = len(result.get("warnings", []))
+    if "tags" in data and not isinstance(data["tags"], list):
+        errors.append("Il campo 'tags' deve essere una lista.")
 
-    if errs:
-        logger.error("Validazione FALLITA", extra={"errors": errs, "warnings": warns})
-        return 1
-    if warns:
-        logger.warning("Validazione con AVVISI", extra={"warnings": warns})
-        return 2
-    logger.info("Validazione OK", extra={"tags_count": result.get("count", 0)})
-    return 0
+    if errors:
+        return {"errors": errors, "warnings": warnings}
+
+    names_seen_ci = set()
+    for idx, item in enumerate(data.get("tags", []), start=1):
+        ctx = f"tags[{idx}]"
+        if not isinstance(item, dict):
+            errors.append(f"{ctx}: elemento non è dict.")
+            continue
+
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{ctx}: 'name' mancante o vuoto.")
+            continue
+        name_stripped = name.strip()
+        if len(name_stripped) > 80:
+            warnings.append(f"{ctx}: 'name' troppo lungo (>80).")
+        if _INVALID_CHARS_RE.search(name_stripped):
+            errors.append(f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |).")
+
+        name_ci = name_stripped.lower()
+        if name_ci in names_seen_ci:
+            errors.append(f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'.")
+        names_seen_ci.add(name_ci)
+
+        action = item.get("action")
+        if not isinstance(action, str) or not action:
+            errors.append(f"{ctx}: 'action' mancante.")
+        else:
+            act = action.strip().lower()
+            if act not in ("keep", "drop") and not act.startswith("merge_into:"):
+                errors.append(f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>.")
+            if act.startswith("merge_into:"):
+                target = act.split(":", 1)[1].strip()
+                if not target:
+                    errors.append(f"{ctx}: merge_into senza target.")
+
+        syn = item.get("synonyms", [])
+        if syn is not None and not isinstance(syn, list):
+            errors.append(f"{ctx}: 'synonyms' deve essere lista di stringhe.")
+        else:
+            for si, s in enumerate(syn or [], start=1):
+                if not isinstance(s, str) or not s.strip():
+                    errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
+
+        notes = item.get("notes", "")
+        if notes is not None and not isinstance(notes, str):
+            errors.append(f"{ctx}: 'notes' deve essere una stringa.")
+
+    if data.get("keep_only_listed") and not data.get("tags"):
+        warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
+
+    return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
+
 
 def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     ensure_within(report_path.parent, report_path)
@@ -337,7 +312,25 @@ def _write_validation_report(report_path: Path, result: dict, logger: logging.Lo
 
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    # Validazione standalone, logging per-cliente
+    """
+    Valida `semantic/tags_reviewed.yaml` per un dato cliente.
+
+    Effetti:
+      - Scrive `semantic/tags_review_validation.json` con esito, errori e avvisi.
+      - Logga il risultato in `logs/<...>/pipeline.log`.
+
+    Exit codes:
+      - 0 → validazione OK
+      - 1 → errori
+      - 2 → solo avvisi
+
+    Args:
+        slug: Identificatore cliente (slug).
+        run_id: ID di correlazione opzionale per i log.
+
+    Returns:
+        int: exit code secondo la semantica sopra.
+    """
     base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
     semantic_dir = base_dir / "semantic"
     yaml_path = semantic_dir / "tags_reviewed.yaml"
@@ -381,7 +374,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 def tag_onboarding_main(
     slug: str,
     *,
-    source: str = "drive",          # 'drive' (default) | 'local'
+    source: str = "drive",          # default Drive (puoi passare --source=local)
     local_path: Optional[str] = None,
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
@@ -434,10 +427,10 @@ def tag_onboarding_main(
             )
         logger.info("✅ Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
 
-    # B) LOCALE (opt-out)
+    # B) LOCALE
     elif source == "local":
-        # Se non fornisci --local-path, usa direttamente la sandbox RAW del cliente.
         if not local_path:
+            # UX di default: usa direttamente la sandbox RAW del cliente
             local_path = str(raw_dir)
             logger.info(
                 "Nessun --local-path fornito: uso RAW del cliente come sorgente",
@@ -445,7 +438,6 @@ def tag_onboarding_main(
             )
         src_dir = Path(local_path).expanduser().resolve()
         if src_dir == raw_dir.expanduser().resolve():
-            # Sorgente == destinazione → nessuna copia, procediamo al CSV
             logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
         else:
             with metrics_scope(logger, stage="local_copy", customer=context.slug):
@@ -496,8 +488,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--source",
         choices=("drive", "local"),
-        default="drive",  # default drive; locale è opt-out
-        help="Sorgente PDF (default: drive). Usa --source=local per lavorare solo su disco.",
+        default="drive",  # default Drive
+        help="Sorgente PDF (default: drive). Usa --source=local per lavorare da una cartella locale.",
     )
     p.add_argument(
         "--local-path",

@@ -117,20 +117,13 @@ pytest -ra -m "drive"
    pytest tests	est_unit_tags_validator.py::test_validate_ok_minimal -ra
    ```
 
-3. `tests/test_unit_book_guard.py`  
-   Copre il preflight di pubblicazione (`_book_md_only_guard` in `src/onboarding_full.py`): accetta solo `.md`, ignora `.md.fp`, errore sugli altri formati.
-   ```powershell
-   pytest tests	est_unit_book_guard.py -ra
-   pytest tests	est_unit_book_guard.py::test_book_guard_raises_on_non_md -ra
-   ```
-
-4. `tests/test_unit_emit_tags_csv.py`  
+3. `tests/test_unit_emit_tags_csv.py`  
    Copre l’emissione CSV (`_emit_tags_csv`): header corretto, percorsi **POSIX** prefissati `raw/`, scrittura atomica.
    ```powershell
    pytest tests	est_unit_emit_tags_csv.py -ra
    ```
 
-5. `tests/test_smoke_dummy_e2e.py` *(slow)*  
+4. `tests/test_smoke_dummy_e2e.py` *(slow)*  
    Smoke end‑to‑end: `pre → dummy → tag (local) → semantic (no preview)` con assert minimi sui file generati.
    - **Prerequisito:** genera prima l’utente dummy (`py src/tools/gen_dummy_kb.py --slug <slug>`).
    - Marcato `@pytest.mark.slow`: va incluso esplicitamente.
@@ -141,7 +134,7 @@ pytest -ra -m "drive"
    pytest -ra -k "dummy_e2e"
    ```
 
-6. *(Opzionale)* `tests/test_contract_defaults.py`  
+5. *(Opzionale)* `tests/test_contract_defaults.py`  
    Verifica che `tag_onboarding_main` abbia `source` **default = "drive"**.
    ```powershell
    pytest tests	est_contract_defaults.py -ra
