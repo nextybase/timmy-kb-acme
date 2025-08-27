@@ -246,73 +246,85 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
         raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
 
-def _validate_tags_reviewed(data: dict) -> dict:
-    errors, warnings = [], []
+def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
+    """
+    Valida il file `semantic/tags_reviewed.yaml` per il cliente indicato e
+    scrive un report JSON (`tags_review_validation.json`) nella stessa cartella.
 
-    if not isinstance(data, dict):
-        errors.append("Il file YAML non è una mappa (dict) alla radice.")
-        return {"errors": errors, "warnings": warnings}
+    Operazioni:
+      1) Carica la sandbox: `output/timmy-kb-<slug>/semantic/`.
+      2) Legge e parse-a `tags_reviewed.yaml` (richiede PyYAML).
+      3) Applica le regole di validazione (_validate_tags_reviewed).
+      4) Persiste un report JSON con timestamp e dettagli (errori/warning).
+      5) Emette log strutturati su file cliente.
 
-    for k in ("version", "reviewed_at", "keep_only_listed", "tags"):
-        if k not in data:
-            errors.append(f"Campo mancante: '{k}'.")
+    Parametri:
+      slug (str): identificativo cliente (es. "acme").
+      run_id (Optional[str]): correlazione log opzionale.
 
-    if "tags" in data and not isinstance(data["tags"], list):
-        errors.append("Il campo 'tags' deve essere una lista.")
+    Ritorna (exit code convenzione CLI):
+      0 → validazione OK (nessun errore né warning bloccante).
+      2 → validazione con AVVISI (warning presenti, nessun errore).
+      1 → validazione FALLITA (errori presenti) oppure file assente/parsing fallito.
 
-    if errors:
-        return {"errors": errors, "warnings": warnings}
+    Side effects:
+      - Scrive `output/timmy-kb-<slug>/semantic/tags_review_validation.json`
+        con struttura:
+        {
+          "validated_at": "<UTC ISO8601>",
+          "errors": [...],
+          "warnings": [...],
+          "count": <num_tag>
+        }
 
-    names_seen_ci = set()
-    for idx, item in enumerate(data.get("tags", []), start=1):
-        ctx = f"tags[{idx}]"
-        if not isinstance(item, dict):
-            errors.append(f"{ctx}: elemento non è dict.")
-            continue
+    Note:
+      - Path-safety: i path di output sono verificati con `ensure_within`.
+      - Logging: usa `get_structured_logger("tag_onboarding.validate", ...)`.
+      - In caso di `tags_reviewed.yaml` mancante o PyYAML non disponibile,
+        viene loggato l’errore e la funzione ritorna 1.
 
-        name = item.get("name")
-        if not isinstance(name, str) or not name.strip():
-            errors.append(f"{ctx}: 'name' mancante o vuoto.")
-            continue
-        name_stripped = name.strip()
-        if len(name_stripped) > 80:
-            warnings.append(f"{ctx}: 'name' troppo lungo (>80).")
-        if _INVALID_CHARS_RE.search(name_stripped):
-            errors.append(f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |).")
+    Uso:
+      CLI:    py src/tag_onboarding.py --slug <id> --validate-only
+      Python: from src.tag_onboarding import validate_tags_reviewed; rc = validate_tags_reviewed("demo")
+    """
+    # Validazione standalone, logging per-cliente
+    base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+    semantic_dir = base_dir / "semantic"
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
+    try:
+        ensure_within(base_dir, log_file)
+    except ConfigError:
+        pass
+    logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
 
-        name_ci = name_stripped.lower()
-        if name_ci in names_seen_ci:
-            errors.append(f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'.")
-        names_seen_ci.add(name_ci)
+    if not yaml_path.exists():
+        logger.error(
+            "File tags_reviewed.yaml non trovato",
+            extra={"file_path": str(yaml_path), "file_path_tail": tail_path(yaml_path)},
+        )
+        return 1
 
-        action = item.get("action")
-        if not isinstance(action, str) or not action:
-            errors.append(f"{ctx}: 'action' mancante.")
-        else:
-            act = action.strip().lower()
-            if act not in ("keep", "drop") and not act.startswith("merge_into:"):
-                errors.append(f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>.")
-            if act.startswith("merge_into:"):
-                target = act.split(":", 1)[1].strip()
-                if not target:
-                    errors.append(f"{ctx}: merge_into senza target.")
+    try:
+        data = _load_yaml(yaml_path)
+        result = _validate_tags_reviewed(data)
+        report_path = semantic_dir / "tags_review_validation.json"
+        _write_validation_report(report_path, result, logger)
+    except ConfigError as e:
+        logger.error(str(e))
+        return 1
 
-        syn = item.get("synonyms", [])
-        if syn is not None and not isinstance(syn, list):
-            errors.append(f"{ctx}: 'synonyms' deve essere lista di stringhe.")
-        else:
-            for si, s in enumerate(syn or [], start=1):
-                if not isinstance(s, str) or not s.strip():
-                    errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
+    errs = len(result.get("errors", []))
+    warns = len(result.get("warnings", []))
 
-        notes = item.get("notes", "")
-        if notes is not None and not isinstance(notes, str):
-            errors.append(f"{ctx}: 'notes' deve essere una stringa.")
-
-    if data.get("keep_only_listed") and not data.get("tags"):
-        warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
-
-    return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
+    if errs:
+        logger.error("Validazione FALLITA", extra={"errors": errs, "warnings": warns})
+        return 1
+    if warns:
+        logger.warning("Validazione con AVVISI", extra={"warnings": warns})
+        return 2
+    logger.info("Validazione OK", extra={"tags_count": result.get("count", 0)})
+    return 0
 
 def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     ensure_within(report_path.parent, report_path)
