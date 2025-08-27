@@ -173,6 +173,19 @@ def _prepare_context_and_logger(
     run_id: Optional[str],
     client_name: Optional[str],
 ) -> Tuple[ClientContext, logging.Logger, str]:
+    """Prepara `ClientContext` e logger strutturato per il pre-onboarding.
+
+    Args:
+        slug: Identificatore del cliente (slug) da validare.
+        interactive: Se True abilita i prompt CLI (es. richiesta `client_name`).
+        require_env: Se True richiede variabili d'ambiente esterne (no dry-run).
+        run_id: Correlazione opzionale per i log.
+        client_name: Nome cliente; se assente e `interactive=True` viene richiesto via prompt.
+
+    Returns:
+        Tuple[ClientContext, logging.Logger, str]: contesto caricato, logger configurato,
+        e `client_name` risolto (mai vuoto).
+    """
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=interactive, prompt=_prompt, logger=early_logger)
 
@@ -329,6 +342,18 @@ def pre_onboarding_main(
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
 
 def _parse_args() -> argparse.ArgumentParser:
+    """Costruisce e restituisce il parser CLI per l’orchestratore di pre-onboarding.
+
+    Opzioni:
+        slug_pos: Argomento posizionale per lo slug cliente.
+        --slug: Slug cliente (alternativa al posizionale).
+        --name: Nome cliente (es. “ACME Srl”).
+        --non-interactive: Esecuzione senza prompt.
+        --dry-run: Esegue solo la parte locale e salta Google Drive.
+
+    Returns:
+        argparse.ArgumentParser: parser configurato (non ancora “parsed”).
+    """
     p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")

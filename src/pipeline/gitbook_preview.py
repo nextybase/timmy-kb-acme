@@ -18,9 +18,10 @@ Linee guida applicate:
 - Comandi esterni con `proc_utils.run_cmd` (timeout/retry/capture).
 """
 
+import os
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from pipeline.logging_utils import redact_secrets, get_structured_logger
 from pipeline.exceptions import PipelineError, PreviewError
@@ -34,12 +35,69 @@ from pipeline.constants import (
     HONKIT_DOCKER_IMAGE,
 )
 
+# Default consolidati (evitiamo hard-code sparsi)
+_DEFAULT_HOST_PREVIEW_PORT = 4000
+_DEFAULT_HONKIT_INTERNAL_PORT = 4000
+
 logger = get_structured_logger("pipeline.gitbook_preview")
 
 
 def _maybe_redact(text: str, redact: bool) -> str:
     """Applica redazione ai messaggi di log solo se richiesto."""
     return redact_secrets(text) if (redact and text) else text
+
+
+def _resolve_ports(context, explicit_host_port: Optional[int]) -> Tuple[int, int]:
+    """Risoluzione porte (host e container) con precedenza:
+    host: 1) parametro → 2) env PREVIEW_PORT → 3) context.config.preview_port → 4) default
+    container: 1) env HONKIT_PORT → 2) context.config.honkit_port → 3) default
+    """
+    # Host port
+    host_port = explicit_host_port
+    if host_port is None:
+        env_val = os.getenv("PREVIEW_PORT")
+        if env_val:
+            try:
+                host_port = int(env_val)
+            except ValueError:
+                logger.warning(f"PREVIEW_PORT non valida: {env_val!r} (ignoro)")
+    if host_port is None:
+        cfg = getattr(context, "config", {}) or {}
+        cfg_val = cfg.get("preview_port")
+        if cfg_val is not None:
+            try:
+                host_port = int(cfg_val)
+            except Exception:
+                logger.warning(f"config.preview_port non valido: {cfg_val!r} (ignoro)")
+    if host_port is None:
+        host_port = _DEFAULT_HOST_PREVIEW_PORT
+
+    # Container (HonKit) port
+    container_port = None
+    env_c = os.getenv("HONKIT_PORT")
+    if env_c:
+        try:
+            container_port = int(env_c)
+        except ValueError:
+            logger.warning(f"HONKIT_PORT non valida: {env_c!r} (ignoro)")
+    if container_port is None:
+        cfg = getattr(context, "config", {}) or {}
+        cfg_val = cfg.get("honkit_port")
+        if cfg_val is not None:
+            try:
+                container_port = int(cfg_val)
+            except Exception:
+                logger.warning(f"config.honkit_port non valido: {cfg_val!r} (ignoro)")
+    if container_port is None:
+        container_port = _DEFAULT_HONKIT_INTERNAL_PORT
+
+    # Validazioni
+    if not (1 <= int(host_port) <= 65535):
+        raise PreviewError(f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None))
+    if not (1 <= int(container_port) <= 65535):
+        raise PreviewError(f"Porta container non valida per preview: {container_port}", slug=getattr(context, "slug", None))
+
+    return int(host_port), int(container_port)
 
 
 # ----------------------------
@@ -155,7 +213,7 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
 
 
 def run_container_detached(
-    md_dir: Path, *, slug: Optional[str], container_name: str, port: int, redact_logs: bool
+    md_dir: Path, *, slug: Optional[str], container_name: str, host_port: int, container_port: int, redact_logs: bool
 ) -> str:
     """Avvia `honkit serve` in modalità detached e ritorna l'ID del container."""
     # STRONG guard sulla directory di lavoro
@@ -172,7 +230,7 @@ def run_container_detached(
         "--name",
         container_name,
         "-p",
-        f"{port}:4000",
+        f"{host_port}:{container_port}",
         "--workdir",
         "/app",
         "-v",
@@ -181,6 +239,8 @@ def run_container_detached(
         "npm",
         "run",
         "serve",
+        "--",
+        f"--port={container_port}",
     ]
     try:
         # Docker stampa l'ID del container su stdout
@@ -188,7 +248,11 @@ def run_container_detached(
         container_id = (cp.stdout or "").strip()
         logger.info(
             _maybe_redact("▶️ HonKit serve avviato (detached).", redact_logs),
-            extra={"slug": slug, "file_path": f"{container_name}@{port}", "container_id": container_id},
+            extra={
+                "slug": slug,
+                "file_path": f"{container_name}@{host_port}->{container_port}",
+                "container_id": container_id,
+            },
         )
         return container_id
     except CmdError:
@@ -199,7 +263,11 @@ def run_container_detached(
             container_id = (cp.stdout or "").strip()
             logger.info(
                 _maybe_redact("▶️ HonKit serve avviato (detached) dopo retry.", redact_logs),
-                extra={"slug": slug, "file_path": f"{container_name}@{port}", "container_id": container_id},
+                extra={
+                    "slug": slug,
+                    "file_path": f"{container_name}@{host_port}->{container_port}",
+                    "container_id": container_id,
+                },
             )
             return container_id
         except CmdError as e2:
@@ -230,7 +298,7 @@ def stop_container_safely(container_name: str) -> None:
 # ----------------------------
 def run_gitbook_docker_preview(
     context,
-    port: int = 4000,
+    port: Optional[int] = None,
     container_name: str = "honkit_preview",
     wait_on_exit: bool = False,  # default non-interattivo
     *,
@@ -239,15 +307,19 @@ def run_gitbook_docker_preview(
     """
     Avvia la preview GitBook/HonKit in Docker.
 
+    Precedenza porte:
+      - Host: parametro `port` → env `PREVIEW_PORT` → `context.config.preview_port` → default 4000.
+      - Container: env `HONKIT_PORT` → `context.config.honkit_port` → default 4000.
+
     Comportamento:
       - Genera `book.json` e `package.json` minimi se mancanti.
       - Esegue `honkit build` in container.
-      - Avvia `honkit serve` mappando la porta locale.
+      - Avvia `honkit serve` mappando la porta locale (con passaggio di `--port` al processo nel container).
       - Nessun prompt: interazione/decisione è responsabilità degli orchestratori.
 
     Args:
-        context: Contesto con `slug`, `md_dir`, `base_dir`.
-        port: Porta locale da esporre (default 4000).
+        context: Contesto con `slug`, `md_dir`, `base_dir` e opzionalmente `config`.
+        port: Porta locale da esporre (se None, viene risolta come da precedenza sopra).
         container_name: Nome del container Docker.
         wait_on_exit: Se True, esegue `serve` in foreground (senza -d).
         redact_logs: Se True, applica redazione ai messaggi di log (non alle eccezioni).
@@ -269,10 +341,12 @@ def run_gitbook_docker_preview(
             file_path=context.md_dir,
         )
 
+    host_port, container_port = _resolve_ports(context, port)
+
     md_output_path = Path(context.md_dir).resolve()
     logger.info(
         _maybe_redact("📂 Directory per anteprima", redact_logs),
-        extra={"slug": context.slug, "file_path": str(md_output_path)},
+        extra={"slug": context.slug, "file_path": str(md_output_path), "host_port": host_port, "container_port": container_port},
     )
 
     # File necessari (idempotente)
@@ -291,7 +365,7 @@ def run_gitbook_docker_preview(
             "--name",
             container_name,
             "-p",
-            f"{port}:4000",
+            f"{host_port}:{container_port}",
             "--workdir",
             "/app",
             "-v",
@@ -300,6 +374,8 @@ def run_gitbook_docker_preview(
             "npm",
             "run",
             "serve",
+            "--",
+            f"--port={container_port}",
         ]
         try:
             run_cmd(cmd, op="docker run serve (fg)", logger=logger)
@@ -318,9 +394,10 @@ def run_gitbook_docker_preview(
             md_output_path,
             slug=context.slug,
             container_name=container_name,
-            port=port,
+            host_port=host_port,
+            container_port=container_port,
             redact_logs=redact_logs,
         )
 
         # 3) Attendi che la preview sia raggiungibile (best-effort, ma utile per early feedback)
-        wait_until_ready("127.0.0.1", port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)
+        wait_until_ready("127.0.0.1", host_port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)

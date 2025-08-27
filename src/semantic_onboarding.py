@@ -23,6 +23,7 @@ import uuid
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
+from pipeline.env_utils import get_env_var
 
 # --- Infra coerente con orchestratori esistenti ---
 from pipeline.logging_utils import get_structured_logger
@@ -36,6 +37,7 @@ from pipeline.constants import (
     OUTPUT_DIR_NAME,
     LOGS_DIR_NAME,
     LOG_FILE_NAME,
+    DEFAULT_PREVIEW_PORT,
     REPO_NAME_PREFIX,
 )
 from pipeline.path_utils import (
@@ -73,11 +75,27 @@ except Exception:
 
 # ─────────────── Helpers UX ───────────────
 def _prompt(msg: str) -> str:
+    """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori).
+
+    Args:
+        msg: Messaggio da visualizzare all’utente.
+
+    Returns:
+        Risposta dell’utente ripulita con ``strip()``.
+    """
     return input(msg).strip()
 
 
 # ─────────────── Path helpers ───────────────
 def get_paths(slug: str) -> Dict[str, Path]:
+    """Calcola i percorsi base per la sandbox cliente.
+
+    Args:
+        slug: Identificatore cliente (slug).
+
+    Returns:
+        Dizionario con chiavi: `base`, `raw`, `book`, `semantic`.
+    """
     base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
     raw_dir = base_dir / "raw"
     book_dir = base_dir / "book"
@@ -180,8 +198,13 @@ def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Di
 
 
 def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
-    """
-    Crea un indice inverso {termine_lower: set(canonical)} includendo canonical e alias/sinonimi.
+    """Crea un indice inverso {termine_lower: set(canonical)} includendo canonical e alias/sinonimi.
+
+    Args:
+        vocab: Mappa dei tag canonici con set di alias.
+
+    Returns:
+        Indice inverso dal termine (lowercased) all’insieme di tag canonici che lo contengono.
     """
     inv: Dict[str, Set[str]] = {}
     for canon, meta in (vocab or {}).items():
@@ -194,8 +217,15 @@ def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set
 
 
 def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict[str, Set[str]]], *, inv: Optional[Dict[str, Set[str]]] = None) -> List[str]:
-    """
-    Restituisce la lista di **tag canonici** (reviewed) trovati nel nome/percorso.
+    """Estrae la lista di **tag canonici** (reviewed) individuati nel nome/percorso del file.
+
+    Args:
+        name_like_path: Nome file o percorso “name-like” da analizzare.
+        vocab: Vocabolario canonico generato da `_load_reviewed_vocab`.
+        inv: (opz.) indice inverso precomputato; se assente verrà generato al volo.
+
+    Returns:
+        Lista ordinata di tag canonici rilevati nel nome/percorso.
     """
     if not vocab:
         return []
@@ -214,10 +244,17 @@ def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict[str, Set[str
 
 # ─────────────── Frontmatter helpers ───────────────
 def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
-    """
-    Parser frontmatter robusto.
+    """Parsa un frontmatter YAML iniziale restituendo metadati e corpo.
+
+    Regole:
     - Richiede un blocco iniziale delimitato da linee '---' (supporta LF o CRLF).
     - Se parsing fallisce o non presente, restituisce meta vuoto + testo originale.
+
+    Args:
+        md_text: Testo Markdown completo da analizzare.
+
+    Returns:
+        Tuple `(meta, body)`: dizionario dei metadati e corpo del documento.
     """
     if not md_text.startswith("---"):
         return {}, md_text
@@ -239,6 +276,14 @@ def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
 
 
 def _dump_frontmatter(meta: Dict) -> str:
+    """Serializza un dizionario frontmatter in YAML “header” (con fallback robusti).
+
+    Args:
+        meta: Dizionario dei metadati (es. `title`, `tags`).
+
+    Returns:
+        Stringa YAML delimitata da `---` pronta da premettere al corpo Markdown.
+    """
     if yaml is None:
         lines = ["---"]
         if "title" in meta:
@@ -264,6 +309,16 @@ def _dump_frontmatter(meta: Dict) -> str:
 
 
 def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str]) -> Dict:
+    """Unisce metadati esistenti con `title` (se mancante) e un set di `tags` consolidati.
+
+    Args:
+        existing: Frontmatter già presente (può essere vuoto).
+        title: Titolo proposto (usato solo se `existing` non contiene `title`).
+        tags: Lista di tag canonici da integrare.
+
+    Returns:
+        Dizionario frontmatter risultante, con `tags` deduplicati e ordinati.
+    """
     meta = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title
@@ -274,6 +329,23 @@ def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str])
 
 # ─────────────── RAW → BOOK ───────────────
 def _convert_raw_to_book(context: ClientContext, logger: logging.Logger, *, slug: str) -> List[Path]:
+    """Converte i PDF presenti in `raw/` in file Markdown sotto `book/`.
+
+    Note:
+        Se `convert_files_to_structured_markdown` non è disponibile, effettua un fallback
+        che lascia invariata la directory `book/` (solo warning).
+
+    Args:
+        context: Contesto cliente.
+        logger: Logger strutturato.
+        slug: Identificatore cliente (slug).
+
+    Returns:
+        Lista di percorsi `.md` in `book/` dopo la conversione (o stato attuale in fallback).
+
+    Raises:
+        ConfigError: Se `raw/` non esiste o non contiene PDF quando l’utility di conversione è disponibile.
+    """
     paths = get_paths(slug)
     raw_dir = paths["raw"]
     book_dir = paths["book"]
@@ -299,6 +371,17 @@ def _convert_raw_to_book(context: ClientContext, logger: logging.Logger, *, slug
 
 
 def _enrich_frontmatter(context: ClientContext, logger: logging.Logger, vocab: Dict[str, Dict[str, Set[str]]], *, slug: str) -> List[Path]:
+    """Arricchisce i frontmatter dei `.md` in `book/` con `title` e `tags` canonici (se disponibili).
+
+    Args:
+        context: Contesto cliente.
+        logger: Logger strutturato.
+        vocab: Vocabolario canonico caricato da `_load_reviewed_vocab`.
+        slug: Identificatore cliente (slug).
+
+    Returns:
+        Lista dei file `.md` modificati durante l’arricchimento.
+    """
     paths = get_paths(slug)
     book_dir = paths["book"]
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
@@ -335,6 +418,18 @@ def _enrich_frontmatter(context: ClientContext, logger: logging.Logger, vocab: D
 
 
 def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *, slug: str) -> None:
+    """Genera/valida `SUMMARY.md` e `README.md` in `book/` usando util ufficiali o fallback centralizzati.
+
+    Strategia:
+      1) Tenta `generate_summary_markdown` e `generate_readme_markdown` se disponibili.
+      2) Applica sempre `ensure_readme_summary` come fallback idempotente.
+      3) Esegue `validate_markdown_dir` se presente (best-effort).
+
+    Args:
+        context: Contesto cliente.
+        logger: Logger strutturato.
+        slug: Identificatore cliente (slug).
+    """
     # 1) Tenta utility ufficiali
     if generate_summary_markdown is not None:
         try:
@@ -368,15 +463,31 @@ def semantic_onboarding_main(
     *,
     non_interactive: bool = False,
     with_preview: bool = True,
-    preview_port: int = 4000,
+    preview_port: Optional[int] = None,
     run_id: Optional[str] = None,
 ) -> None:
+    """Esegue l’onboarding semantico: conversione RAW→BOOK, arricchimento frontmatter, README/SUMMARY, preview.
+
+    Precedence porta preview:
+      1) Argomento CLI `preview_port` (se passato)
+      2) Variabile d’ambiente `PREVIEW_PORT`
+      3) Config cliente (`config.yaml` → chiave `preview_port`, se presente in `context.config`)
+      4) Default 4000
+
+    Args:
+        slug: Identificatore cliente (slug) della sandbox `output/`.
+        non_interactive: Se True, esecuzione batch senza prompt interattivi.
+        with_preview: Se True, prova ad avviare la preview Docker (HonKit).
+        preview_port: Porta TCP per la preview (1..65535); se None, verrà risolta come da precedenza.
+        run_id: ID di correlazione per i log strutturati.
+
+    Raises:
+        ConfigError: Parametri non validi o precondizioni mancanti (es. RAW vuota con util conversione disponibile).
+        PipelineError: Errori di pipeline propagati dai moduli/adapter.
+    """
+    import os  # import locale per evitare modifiche globali
     early_logger = get_structured_logger("semantic_onboarding", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
-
-    # validazione porta preview
-    if not (1 <= int(preview_port) <= 65535):
-        raise ConfigError(f"Porta non valida per preview: {preview_port}")
 
     # Context
     context: ClientContext = ClientContext.load(
@@ -386,6 +497,31 @@ def semantic_onboarding_main(
         run_id=run_id,
     )
 
+    # Risoluzione porta preview (CLI > ENV > config > default)
+    resolved_port: Optional[int] = preview_port
+    if resolved_port is None:
+        env_val = os.getenv("PREVIEW_PORT")
+        if env_val:
+            try:
+                resolved_port = int(env_val)
+            except ValueError:
+                early_logger.warning(f"PREVIEW_PORT non valida: {env_val!r} (ignoro)")
+    if resolved_port is None:
+        try:
+            cfg = getattr(context, "config", {}) or {}
+            cfg_val = cfg.get("preview_port")
+            if cfg_val is not None:
+                resolved_port = int(cfg_val)
+        except Exception:
+            pass
+    if resolved_port is None:
+        resolved_port = 4000
+
+    # validazione porta preview
+    if not (1 <= int(resolved_port) <= 65535):
+        raise ConfigError(f"Porta non valida per preview: {resolved_port}")
+    preview_port = int(resolved_port)
+
     # Log path sotto la base cliente con guardia STRONG
     paths = get_paths(slug)
     base_dir = paths["base"]
@@ -394,7 +530,10 @@ def semantic_onboarding_main(
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger = get_structured_logger("semantic_onboarding", log_file=log_file, context=context, run_id=run_id)
-    logger.info("🚀 Avvio semantic_onboarding (RAW → BOOK + arricchimento + preview)")
+    logger.info(
+        "🚀 Avvio semantic_onboarding (RAW → BOOK + arricchimento + preview)",
+        extra={"preview_port": preview_port},
+    )
 
     # 1) RAW → BOOK
     _convert_raw_to_book(context, logger, slug=slug)
@@ -435,9 +574,20 @@ def semantic_onboarding_main(
         extra={"md_files": len(list(book_dir.glob('*.md'))), "preview_container": container_name},
     )
 
-
 # ─────────────── CLI ───────────────
 def _parse_args() -> argparse.Namespace:
+    """Parser CLI per semantic_onboarding.
+
+    Opzioni:
+        slug_pos: Argomento posizionale per lo slug cliente.
+        --slug: Slug cliente (alternativa al posizionale).
+        --non-interactive: Esecuzione senza prompt.
+        --no-preview: Disabilita l’avvio della preview Docker.
+        --preview-port: Porta per la preview (default: 4000).
+
+    Returns:
+        argparse.Namespace con i parametri parsati.
+    """
     p = argparse.ArgumentParser(description="Semantic Onboarding (RAW → BOOK, arricchimento, preview)")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente")
@@ -448,6 +598,19 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    """Entrypoint CLI di `semantic_onboarding`.
+
+    Flusso:
+      - Parsing della CLI con `_parse_args()`.
+      - Creazione `run_id` per i log strutturati.
+      - Validazione dello `slug` (interattiva o batch).
+      - Invocazione di `semantic_onboarding_main` con le opzioni selezionate.
+
+    Exit codes:
+      - 0 → OK.
+      - Da `EXIT_CODES` per eccezioni note.
+      - 1 per errori non mappati.
+    """
     args = _parse_args()
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("semantic_onboarding", run_id=run_id)

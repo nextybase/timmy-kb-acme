@@ -54,6 +54,7 @@ GIT_COMMIT_USER_NAME = "Timmy KB"
 GIT_COMMIT_USER_EMAIL = "kb+noreply@local"
 # Chiavi d'ambiente da cui risolvere il branch di default (in ordine di priorità)
 DEFAULT_GIT_BRANCH_ENV_KEYS = ("GIT_DEFAULT_BRANCH", "GITHUB_BRANCH")
+DEFAULT_PREVIEW_PORT = 4000
 
 # 📚 HonKit/GitBook Preview
 HONKIT_DOCKER_IMAGE = "honkit/honkit"

@@ -74,7 +74,16 @@ __all__ = [
 
 # ─────────────────────────── Helpers UX ───────────────────────────
 def _prompt(msg: str) -> str:
+    """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori).
+
+    Args:
+        msg: Messaggio da visualizzare all’utente.
+
+    Returns:
+        La risposta inserita dall’utente, già normalizzata con ``strip()``.
+    """
     return input(msg).strip()
+
 
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────
@@ -213,6 +222,17 @@ _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
+    """Carica e parse un file YAML in modo sicuro.
+
+    Args:
+        path: Percorso del file YAML da leggere.
+
+    Returns:
+        Dizionario Python ottenuto dal contenuto del file, oppure {} se vuoto.
+
+    Raises:
+        ConfigError: se il file non esiste, non è leggibile o contiene errori di parsing.
+    """
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
     try:
@@ -222,16 +242,29 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
         raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
 
-
 def _validate_tags_reviewed(data: dict) -> dict:
     """
-    Valida una struttura già caricata da `tags_reviewed.yaml`.
+    Valida la struttura già caricata da `tags_reviewed.yaml`.
+
+    La funzione applica regole sintattiche e semantiche minime:
+    - Presenza dei campi di intestazione: `version`, `reviewed_at`, `keep_only_listed`, `tags`.
+    - `tags` deve essere una lista di dizionari.
+    - Per ogni elemento di `tags`:
+        * `name`: stringa non vuota, lunga ≤ 80 caratteri (oltre → warning), senza caratteri proibiti
+          (/ \\ : * ? " < > |), e non duplicata in modalità case-insensitive.
+        * `action`: una tra `keep`, `drop`, oppure `merge_into:<canonical>` con `<canonical>` non vuoto.
+        * `synonyms`: lista (se presente), con soli elementi stringa non vuoti.
+        * `notes`: stringa (se presente).
+    - Se `keep_only_listed=True` e la lista `tags` è vuota, viene emesso un warning.
+
+    Args:
+        data: Dizionario Python ottenuto dal parsing di `tags_reviewed.yaml`.
 
     Returns:
-        dict: con chiavi:
-            - errors (List[str])
-            - warnings (List[str])
-            - count (int) — numero di tag esaminati
+        dict: Un dizionario con:
+            - `errors` (List[str]): elenco degli errori bloccanti rilevati.
+            - `warnings` (List[str]): elenco degli avvisi non bloccanti.
+            - `count` (int): numero di voci `tags` esaminate.
     """
     errors, warnings = [], []
 
@@ -299,7 +332,6 @@ def _validate_tags_reviewed(data: dict) -> dict:
         warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
-
 
 def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     ensure_within(report_path.parent, report_path)
@@ -380,6 +412,36 @@ def tag_onboarding_main(
     proceed_after_csv: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
+    """
+    Orchestratore della fase di *Tag Onboarding*.
+
+    Flusso:
+      1) Recupera i PDF in `raw/` da Google Drive (default) oppure da una cartella locale.
+      2) Genera `semantic/tags_raw.csv` con i tag suggeriti (euristica path+filename).
+      3) Checkpoint HiTL: in modalità interattiva chiede conferma per procedere.
+      4) Genera gli stub per la revisione semantica e un README operativo in `semantic/`.
+
+    Parametri:
+        slug: Identificatore cliente (slug) per la sandbox `output/timmy-kb-<slug>`.
+        source: Sorgente PDF. `"drive"` (default) scarica da Drive; `"local"` legge da percorso locale.
+        local_path: Percorso locale dei PDF quando `source="local"`. Se omesso, usa direttamente `raw/` della sandbox.
+        non_interactive: Se `True` disabilita i prompt CLI (batch mode).
+        proceed_after_csv: In non-interattivo, se `True` prosegue automaticamente anche dopo la generazione del CSV.
+        run_id: ID di correlazione per i log (se non fornito, ne viene creato uno all’entrypoint).
+
+    Eccezioni:
+        ConfigError: configurazione mancante/invalidata (es. `drive_raw_folder_id` non presente).
+        PipelineError: errori generici di pipeline emersi dai moduli invocati.
+
+    Effetti:
+        - Scrive log strutturati in `logs/`.
+        - Produce `semantic/tags_raw.csv` e, se confermato, i file stub/README per la revisione semantica.
+
+    Note:
+        - L’accesso a Google Drive richiede che il contesto cliente sia stato creato in `pre_onboarding`
+          e che `drive_raw_folder_id` sia presente in `config.yaml`.
+        - Nessuna `sys.exit()` viene chiamata qui: la gestione degli exit code è demandata all’entrypoint CLI.
+    """
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
@@ -477,9 +539,22 @@ def tag_onboarding_main(
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
     )
 
-
 # ─────────────────────────────────── CLI ─────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
+    """Costruisce e restituisce il parser CLI per `tag_onboarding`.
+
+    Opzioni:
+        slug_pos: Argomento posizionale per lo slug cliente.
+        --slug: Slug cliente (es. acme-srl).
+        --source: Sorgente dei PDF, 'drive' (default) o 'local'.
+        --local-path: Percorso locale dei PDF quando `--source=local`.
+        --non-interactive: Esecuzione batch senza prompt.
+        --proceed: In non-interattivo, prosegue oltre la generazione del CSV.
+        --validate-only: Esegue solo la validazione di `tags_reviewed.yaml`.
+
+    Returns:
+        argparse.Namespace: lo spazio dei parametri ottenuto dal parsing della CLI.
+    """
     p = argparse.ArgumentParser(
         description="Tag onboarding (copertura PDF + CSV + checkpoint HiTL + stub semantico)"
     )

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Onboarding FULL (fase 2): Push GitHub.
+Onboarding FULL (fase 2): push GitHub e preflight su `book/`.
+
+Questo orchestratore:
 - Presuppone che la fase di semantic onboarding sia già stata eseguita.
-- Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
-- Preflight su book/: accetta solo .md (i placeholder .md.fp sono tollerati).
-- Tollerati in book/: builder files (book.json/package.json/lockfile) e sottodirectory _book/, node_modules/, .cache/, .tmp/, .git (ignorate).
-- Path-safety STRONG per le scritture (log) via ensure_within.
-- Orchestratore gestisce I/O utente e codici di uscita; i moduli sottostanti non fanno prompt/exit.
+- Esegue **esclusivamente** il push su GitHub tramite `pipeline.github_utils`.
+- Esegue un preflight su `book/`: accetta solo `.md` (i placeholder `.md.fp` sono tollerati).
+- Tollerati in `book/`: builder files (book.json/package.json/lockfile) e sottodirectory
+  `_book/`, `node_modules/`, `.cache/`, `.tmp/`, `.git` (ignorate).
+- Adotta path-safety STRONG tramite `ensure_within`.
+- Gestisce I/O utente e codici di uscita a livello orchestratore; i moduli sottostanti
+  non fanno prompt/exit.
 """
 from __future__ import annotations
 
@@ -38,7 +42,9 @@ from pipeline.env_utils import get_env_var  # env “puro”
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
 except Exception as e:
-    raise ConfigError(f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})")
+    raise ConfigError(
+        f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})"
+    )
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
@@ -50,6 +56,14 @@ except Exception:
 
 # ─────────────── Helpers UX ───────────────
 def _prompt(msg: str) -> str:
+    """Raccoglie input da CLI (abilitato **solo** negli orchestratori).
+
+    Args:
+        msg: Messaggio mostrato all’utente.
+
+    Returns:
+        La risposta dell’utente, normalizzata con ``strip()``.
+    """
     return input(msg).strip()
 
 
@@ -68,8 +82,17 @@ _ALLOWED_BUILDER_FILES = {
 # Sottodirectory SOTTO book/ da ignorare completamente (preview/build cache)
 _IGNORED_SUBDIRS_UNDER_BOOK = {"_book", "node_modules", ".cache", ".tmp", ".git"}
 
+
 def _is_under_ignored_subdir(book_dir: Path, p: Path) -> bool:
-    """True se p è sotto una delle sottodirectory ignorate di book/."""
+    """Ritorna True se `p` si trova sotto una delle sottodirectory ignorate di `book/`.
+
+    Args:
+        book_dir: Cartella `book/` di riferimento.
+        p: Percorso da verificare.
+
+    Returns:
+        True se `p` è sotto `_book/`, `node_modules/`, `.cache/`, `.tmp/` o `.git`, altrimenti False.
+    """
     try:
         rel = p.relative_to(book_dir)
     except ValueError:
@@ -77,7 +100,20 @@ def _is_under_ignored_subdir(book_dir: Path, p: Path) -> bool:
     parts = rel.parts
     return bool(parts) and parts[0].lower() in _IGNORED_SUBDIRS_UNDER_BOOK
 
+
 def _violations_in_book(book_dir: Path) -> List[Path]:
+    """Individua i file **non consentiti** presenti in `book/`.
+
+    Regole:
+      - Consentiti: `.md`, `.md.fp`, `_ALLOWED_SPECIAL`, `_ALLOWED_BUILDER_FILES`.
+      - Ignorate: sottodirectory elencate in `_IGNORED_SUBDIRS_UNDER_BOOK`.
+
+    Args:
+        book_dir: Cartella `book/` da ispezionare.
+
+    Returns:
+        Lista di percorsi che violano le regole (vuota se nessuna violazione).
+    """
     bad: List[Path] = []
     for p in book_dir.rglob("*"):
         if not p.is_file():
@@ -97,7 +133,22 @@ def _violations_in_book(book_dir: Path) -> List[Path]:
         bad.append(p)
     return bad
 
+
 def _preflight_book_dir(base_dir: Path, logger) -> None:
+    """Esegue il preflight della cartella `book/` per garantire il contratto “solo .md”.
+
+    Controlli:
+      - Esistenza della cartella `book/`.
+      - Assenza di file non Markdown (tollerati `.md.fp`, builder files e cache di build).
+      - Log informativo per eventuali directory ignorate presenti.
+
+    Args:
+        base_dir: Base della sandbox cliente (es. `output/timmy-kb-<slug>`).
+        logger: Logger strutturato per audit.
+
+    Raises:
+        PipelineError: se vengono trovate violazioni (file non consentiti).
+    """
     book_dir = base_dir / "book"
     ensure_within(base_dir, book_dir)
     if not book_dir.exists():
@@ -130,10 +181,26 @@ def _preflight_book_dir(base_dir: Path, logger) -> None:
             )
 
 
-# ─────────────── Push GitHub (util repo, no fallback) ──────────
+# ─────────────── Push GitHub (util repo, no fallback) ───────────────
 def _git_push(context: ClientContext, logger) -> None:
+    """Esegue il push su GitHub usando `pipeline.github_utils.push_output_to_github`.
+
+    Precondizioni:
+        - Modulo `pipeline.github_utils` disponibile.
+        - Variabile d'ambiente `GITHUB_TOKEN` impostata.
+
+    Args:
+        context: Contesto cliente (con metadati, percorsi e logger).
+        logger: Logger strutturato per tracking.
+
+    Raises:
+        ConfigError: se la funzione di push non è disponibile o manca il token.
+        PushError: se il push fallisce.
+    """
     if push_output_to_github is None:
-        raise ConfigError("push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils")
+        raise ConfigError(
+            "push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils"
+        )
 
     token = get_env_var("GITHUB_TOKEN", required=True)
 
@@ -158,6 +225,17 @@ def onboarding_full_main(
     non_interactive: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
+    """Orchestratore della fase **Full**: preflight `book/` e push GitHub.
+
+    Args:
+        slug: Identificatore cliente (slug) della sandbox `output/`.
+        non_interactive: Se `True`, esecuzione batch senza prompt (push non confermato).
+        run_id: ID di correlazione per i log.
+
+    Raises:
+        ConfigError: per problemi di configurazione/adapter.
+        PipelineError: per violazioni del preflight o altri errori di pipeline.
+    """
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
@@ -202,6 +280,16 @@ def onboarding_full_main(
 
 # ─────────────── CLI ───────────────
 def _parse_args() -> argparse.ArgumentParser:
+    """Costruisce il parser CLI per `onboarding_full`.
+
+    Opzioni:
+        slug_pos: Argomento posizionale per lo slug cliente.
+        --slug: Slug cliente (alternativa al posizionale).
+        --non-interactive: Esecuzione senza prompt.
+
+    Returns:
+        argparse.ArgumentParser già configurato (il parsing avviene più avanti).
+    """
     p = argparse.ArgumentParser(description="Onboarding FULL (solo push GitHub)")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente")
@@ -210,6 +298,15 @@ def _parse_args() -> argparse.ArgumentParser:
 
 
 if __name__ == "__main__":
+    """Entrypoint CLI dell’orchestratore `onboarding_full`.
+
+    Flusso:
+      - Parsing degli argomenti con `_parse_args()`.
+      - Generazione `run_id` per i log strutturati.
+      - Validazione iniziale dello `slug`.
+      - Invocazione di `onboarding_full_main` con le opzioni selezionate.
+      - Gestione degli exit code coerente con `EXIT_CODES`.
+    """
     args = _parse_args().parse_args()
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
