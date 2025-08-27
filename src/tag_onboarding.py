@@ -578,6 +578,20 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    """Entrypoint CLI dell’orchestratore `tag_onboarding`.
+
+    Flusso:
+      - Parsing degli argomenti da CLI tramite `_parse_args()`.
+      - Generazione `run_id` univoco per i log strutturati.
+      - Validazione iniziale dello `slug` (interattiva o batch).
+      - Branch speciale: `--validate-only` → chiama direttamente `validate_tags_reviewed`.
+      - Altrimenti esegue `tag_onboarding_main` con i parametri scelti.
+
+    Exit codes:
+      - 0 → esecuzione completata senza errori.
+      - Da `EXIT_CODES` in caso di eccezioni note (`ConfigError`, `PipelineError`).
+      - 1 (default) per eccezioni non mappate.
+    """
     args = _parse_args()
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
