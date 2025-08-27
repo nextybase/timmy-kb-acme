@@ -92,6 +92,27 @@ def _prompt(msg: str) -> str:
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
+    """
+    Copia ricorsivamente i file PDF da `src_dir` a `raw_dir`, preservando la struttura
+    delle sottocartelle e applicando le guardie di sicurezza sui path.
+
+    Args:
+        src_dir (Path): directory sorgente che contiene i PDF da importare.
+        raw_dir (Path): directory di destinazione nella sandbox del cliente (output/.../raw).
+        logger (logging.Logger): logger strutturato della pipeline.
+
+    Returns:
+        int: numero di PDF effettivamente copiati. Se `src_dir == raw_dir`, ritorna 0.
+
+    Raises:
+        ConfigError: se `src_dir` non esiste o non è una directory valida.
+
+    Note:
+        - Path-safety: per ogni destinazione viene chiamato `ensure_within(raw_dir, dst)`.
+        - Sanificazione: i nomi vengono normalizzati con `sanitize_filename` su ogni segmento.
+        - Idempotenza: se il file di destinazione esiste ed ha la stessa dimensione, la copia viene saltata.
+        - Se `src_dir` coincide con `raw_dir`, la fase di copia viene omessa (no-op) e si prosegue allo step successivo.
+    """
     src_dir = src_dir.expanduser().resolve()
     raw_dir = raw_dir.expanduser().resolve()
 
@@ -114,13 +135,10 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
         rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
-        # STRONG path-safety: l'output deve rimanere sotto raw_dir
         try:
-            ensure_within(raw_dir, dst)
+            ensure_within(raw_dir, dst)  # path-safety forte
         except ConfigError:
-            logger.warning(
-                "Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)}
-            )
+            logger.warning("Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)})
             continue
 
         dst_parent = dst.parent
@@ -138,7 +156,6 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
             logger.warning("Copia fallita", extra={"file_path": str(dst), "error": str(e)})
 
     return count
-
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
 def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:

@@ -8,8 +8,8 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 
 - **Obiettivo**: trasformare PDF in una **KB Markdown AI‑ready**, arricchita semanticamente e pronta per anteprima (HonKit/Docker) e push GitHub.
 - **Scope RAW**: i PDF risiedono localmente in `output/timmy-kb-<slug>/raw/`. **Google Drive** è usato in:
-  - **pre_onboarding** per creare la struttura remota e caricare `config.yaml`;
-  - **tag_onboarding** per **scaricare i PDF (default)** nella sandbox locale (`raw/`).
+  - **pre_onboarding** per creare la struttura remota e caricare il `config.yaml` di base. La struttura di cartelle su Drive è predisposta per consentire il caricamento dei pdf da parte del cliente;
+  - Un altro accesso a Google Drive è effettuata da **tag_onboarding** per **scaricare i PDF (default)** nella sandbox locale (`raw/`).
 - **Separazione ruoli**: orchestratori (UX/CLI, prompt, exit codes) vs moduli tecnici (logica pura, niente prompt/exit).
 - **Sicurezza & coerenza**: `ensure_within` come **SSoT** per path‑safety; scritture atomiche via `safe_write_*`; redazione log centralizzata.
 - **Split orchestratori**: conversione/enrichment/preview in `semantic_onboarding.py`; push in `onboarding_full.py`.
@@ -40,7 +40,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 **Azioni:** preflight su `book/` (accetta solo `.md`, ignora `.md.fp`), push su GitHub via `github_utils`.
 **Output:** commit/push su repo remoto.
 
-> **Nota sul vocabolario:** `tags_reviewed.yaml` è il file di **revisione umana** (HiTL). Da esso si ottiene/aggiorna il vocabolario **canonico** `tags.yaml`, che è quello consumato in runtime da `semantic_onboarding` per l’arricchimento dei frontmatter.
+> **Nota sul vocabolario:** `tags_reviewed.yaml` è il file di **revisione umana** (HiTL). Da esso si ottiene/aggiorna il vocabolario **canonico** `tags_reviewed.yaml`, che è quello consumato in runtime da `semantic_onboarding` per l’arricchimento dei frontmatter.
 
 ---
 
@@ -170,6 +170,5 @@ repo/
 Questa pagina documenta la **release 1.5.0**. Cambi chiave rispetto alla 1.4.0:
 - `tag_onboarding` usa **Drive come default** per il download dei PDF (opzione `--source local` disponibile).
 - Introdotta e documentata l’**area `tests/`** con suite PyTest e utente dummy.
-- Allineata la catena semantica: `tags_reviewed.yaml` (revisione HiTL) → `tags.yaml` (vocabolario canonico consumato in runtime).
 - Rafforzate le regole di preflight su `book/` in `onboarding_full` (accetta solo `.md`, ignora `.md.fp`).
 

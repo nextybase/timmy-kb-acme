@@ -50,7 +50,7 @@ def write_tagging_readme(semantic_dir: Path, logger) -> Path:
         "# Tag Onboarding (HiTL) – Guida rapida\n\n"
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
         "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
-        "3. Quando pronto, crea/aggiorna `tags.yaml` con i tag canonici + sinonimi.\n"
+        "3. Quando pronto, crea/aggiorna `tags_reviewed.yaml` con i tag canonici + sinonimi.\n"
         "\n"
         "_Nota_: `tags_raw.csv` usa lo schema esteso "
         "`relative_path | suggested_tags | entities | keyphrases | score | sources`.\n"
