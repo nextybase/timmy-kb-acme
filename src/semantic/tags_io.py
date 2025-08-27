@@ -24,6 +24,7 @@ Sicurezza & I/O
 - Scritture atomiche con `safe_write_text`.
 """
 
+import logging
 import time
 import csv
 from pathlib import Path
@@ -36,10 +37,17 @@ from pipeline.file_utils import safe_write_text
 __all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
 
 
-def write_tagging_readme(semantic_dir: Path, logger) -> Path:
+def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
     """
     Crea/aggiorna il README rapido per il flusso di tagging nel folder `semantic_dir`.
     Scrittura atomica + guardia path.
+
+    Args:
+        semantic_dir: Directory in cui generare il README_TAGGING.
+        logger: Logger strutturato.
+
+    Returns:
+        Path del file README_TAGGING generato.
     """
     semantic_dir = Path(semantic_dir).resolve()
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +71,7 @@ def write_tagging_readme(semantic_dir: Path, logger) -> Path:
 def write_tags_review_stub_from_csv(
     semantic_dir: Path,
     csv_path: Path,
-    logger,
+    logger: logging.Logger,
     top_n: int = 100,
 ) -> Path:
     """
@@ -77,6 +85,15 @@ def write_tags_review_stub_from_csv(
     - Usa tutti i suggerimenti (split su ',') normalizzati in lowercase e deduplicati preservando l'ordine.
     - Si ferma quando ha raccolto `top_n` tag unici.
     - Path-safety: garantita su file di output; lettura CSV consentita solo se sotto `semantic_dir`.
+
+    Args:
+        semantic_dir: Directory `semantic/` in cui scrivere lo YAML.
+        csv_path: Percorso al CSV dei tag grezzi.
+        logger: Logger strutturato.
+        top_n: Numero massimo di tag unici da includere.
+
+    Returns:
+        Path del file `tags_reviewed.yaml` generato.
     """
     semantic_dir = Path(semantic_dir).resolve()
     csv_path = Path(csv_path).resolve()

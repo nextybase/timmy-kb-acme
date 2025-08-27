@@ -17,6 +17,7 @@ Note:
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Optional, Any
 
@@ -48,7 +49,7 @@ def _validate_container_name(name: str) -> None:
 
 def start_preview(
     context: Any,
-    logger,
+    logger: logging.Logger,
     *,
     port: int = 4000,
     container_name: Optional[str] = None,
@@ -88,7 +89,7 @@ def start_preview(
         raise ConfigError(f"Avvio preview fallito: {e}")
 
 
-def stop_preview(logger, *, container_name: Optional[str]) -> None:
+def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> None:
     """
     Ferma la preview in modo sicuro (best-effort). Non solleva se il container non esiste.
 

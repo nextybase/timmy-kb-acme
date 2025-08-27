@@ -21,7 +21,7 @@ review:
     action: "keep"           # keep | drop | merge_into:<canonical>
     synonyms: []             # eventuali sinonimi che vuoi mantenere
     notes: ""                # spazio per chiarimenti
-    examples:                # dove l'abbiamo trovato (subset) 
+    examples:                # dove l'abbiamo trovato (subset)
       - "raw/organizzazione/piano_ai.pdf"
       - "raw/glossario/ai_definizioni.pdf"
 
@@ -39,10 +39,11 @@ from __future__ import annotations
 
 import datetime as _dt
 from pathlib import Path
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
+from pipeline.exceptions import ConfigError  # <- coerenza contract errori
 
 try:
     import yaml
@@ -54,7 +55,7 @@ def _now_utc_iso() -> str:
     return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def _unique_tags_with_examples(candidates: Dict[str, Dict[str, Any]], max_examples: int = 5):
+def _unique_tags_with_examples(candidates: Dict[str, Dict[str, Any]], max_examples: int = 5) -> Dict[str, List[str]]:
     """
     Estrae l'insieme dei tag unici dal corpus e un piccolo campione di documenti
     in cui ciascun tag compare (per aiutare la revisione).
@@ -87,7 +88,8 @@ def write_review_stub(
       - overwrite: se False e il file esiste, non fa nulla
     """
     if yaml is None:
-        raise RuntimeError("PyYAML non disponibile: impossibile scrivere lo YAML di review.")
+        # Cambio: ConfigError al posto di RuntimeError per coerenza con orchestratori/EXIT_CODES
+        raise ConfigError("PyYAML non disponibile: impossibile scrivere lo YAML di review.", file_path=str(yaml_path))
 
     yaml_path = Path(yaml_path).resolve()
     # Path-safety forte: yaml_path deve stare sotto la propria directory madre

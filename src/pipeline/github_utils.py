@@ -37,6 +37,7 @@ Dove `context` espone almeno:
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import shutil
 import tempfile
@@ -59,7 +60,7 @@ from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
 
 
 # Logger di modulo (fallback); nei flussi reali useremo quello contestualizzato
-logger = get_structured_logger("pipeline.github_utils")
+logger: logging.Logger = get_structured_logger("pipeline.github_utils")
 
 
 @runtime_checkable
@@ -162,8 +163,12 @@ def _collect_md_files(book_dir: Path) -> list[Path]:
     return md_files
 
 
-def _ensure_or_create_repo(gh: Github, user, repo_name: str, *, logger, redact_logs: bool):
-    """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente."""
+def _ensure_or_create_repo(gh: Github, user, repo_name: str, *, logger: logging.Logger, redact_logs: bool) -> Any:
+    """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente.
+
+    Returns:
+        Oggetto repository (PyGithub), tipizzato come `Any` per compatibilità runtime.
+    """
     try:
         repo = user.get_repo(repo_name)
         msg = f"🔄 Repository remoto trovato: {repo.full_name}"
@@ -229,7 +234,7 @@ def _stage_and_commit(tmp_dir: Path, env: dict | None, *, commit_msg: str) -> bo
     return True
 
 
-def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, logger, redact_logs: bool) -> None:
+def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, logger: logging.Logger, redact_logs: bool) -> None:
     """Push senza force, con retry singolo dopo `pull --rebase` in caso di rifiuto."""
     def _attempt_push() -> None:
         _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
@@ -253,7 +258,7 @@ def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, lo
             raise PushError(safe) from e2
 
 
-def _force_push_with_lease(tmp_dir: Path, env: dict | None, default_branch: str, force_ack: str, *, logger, redact_logs: bool) -> None:
+def _force_push_with_lease(tmp_dir: Path, env: dict | None, default_branch: str, force_ack: str, *, logger: logging.Logger, redact_logs: bool) -> None:
     """Force push governato con `--force-with-lease` sul ref remoto."""
     # Fetch e calcolo SHA locali/remoti per il lease
     _run(["git", "fetch", "origin", default_branch], cwd=tmp_dir, env=env, op="git fetch")

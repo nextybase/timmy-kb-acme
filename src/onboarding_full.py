@@ -16,6 +16,7 @@ Questo orchestratore:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -134,7 +135,7 @@ def _violations_in_book(book_dir: Path) -> List[Path]:
     return bad
 
 
-def _preflight_book_dir(base_dir: Path, logger) -> None:
+def _preflight_book_dir(base_dir: Path, logger: logging.Logger) -> None:
     """Esegue il preflight della cartella `book/` per garantire il contratto “solo .md”.
 
     Controlli:
@@ -182,7 +183,7 @@ def _preflight_book_dir(base_dir: Path, logger) -> None:
 
 
 # ─────────────── Push GitHub (util repo, no fallback) ───────────────
-def _git_push(context: ClientContext, logger) -> None:
+def _git_push(context: ClientContext, logger: logging.Logger) -> None:
     """Esegue il push su GitHub usando `pipeline.github_utils.push_output_to_github`.
 
     Precondizioni:

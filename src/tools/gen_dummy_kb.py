@@ -20,27 +20,13 @@ Cosa fa
 - **Niente print**: usa solo logging strutturato (`get_structured_logger`).
   Il main crea un *early logger* e poi, a sandbox creata, logga su file
   `logs/log.json` sotto la sandbox (se disponibile).
-
-Uso CLI
--------
-    python -m src.tools.gen_dummy_kb --slug <slug> --name "<Cliente>" [--overwrite]
-
-Exit codes
-----------
-- 0  → ok
-- 1  → errore generico
-- 130 → interrotto (Ctrl+C)
-
-Requisiti
----------
-- `config/cartelle_raw.yaml`, `config/default_semantic_mapping.yaml`, `config/pdf_dummy.yaml`
-- Moduli `src/semantic` e `src/pipeline` presenti nel repo
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -241,7 +227,7 @@ def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
 
 
 def _build_only_raw(base_dir: Path, spec: Dict[str, Any]) -> None:
-    """Crea solo la root 'raw' e le sue sotto-cartelle (ignora 'contrattualistica')."""
+    """Crea solo la root 'raw' e le sue sotto-cartelle (ignora altre sezioni)."""
     roots = spec.get("root_folders")
     if not isinstance(roots, list):
         raise RuntimeError("cartelle_raw.yaml: atteso campo 'root_folders: [...]' con nodi {name, subfolders}.")
@@ -300,7 +286,20 @@ def _emit_pdfs_from_pdf_dummy(base: Path, raw_dir: Path, pdf_dummy: Dict[str, An
 # ---------------------------------------------------------------------
 # Builder principale
 # ---------------------------------------------------------------------
-def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger=None) -> Path:
+def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logging.Logger | None = None) -> Path:
+    """
+    Costruisce la sandbox *dummy* per un cliente, generando cartelle,
+    file YAML minimi, PDF di test e CSV dei tag.
+
+    Args:
+        slug: identificatore cliente.
+        client_name: nome cliente.
+        overwrite: se True, sovrascrive file già presenti.
+        logger: logger strutturato per audit (opzionale).
+
+    Returns:
+        Path della sandbox cliente generata.
+    """
     # Log iniziale
     if logger:
         logger.info("▶️  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name})

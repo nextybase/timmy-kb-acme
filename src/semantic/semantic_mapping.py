@@ -9,7 +9,7 @@ Refactor v1.0.5 (Blocco B):
 - Logger: nessun logger a livello di modulo; viene creato dentro le funzioni.
 - Normalizzazione mapping robusta (compat con varianti legacy).
 
-Formato normalizzato: dict[str, list[str]] 
+Formato normalizzato: dict[str, list[str]]
   Accetta varianti:
     - concept: [keywords...]
     - concept: { keywords: [...]}            # preferito
@@ -19,16 +19,17 @@ Formato normalizzato: dict[str, list[str]]
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Any
+
 import yaml
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
-from pipeline.exceptions import PipelineError, FileNotFoundError, ConfigError
+from pipeline.exceptions import PipelineError, ConfigError
 from pipeline.constants import SEMANTIC_MAPPING_FILE
 from pipeline.context import ClientContext
-
 
 __all__ = ["load_semantic_mapping"]
 
@@ -79,7 +80,7 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
     return norm
 
 
-def load_semantic_mapping(context: ClientContext, logger=None) -> Dict[str, List[str]]:
+def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
     """
     Carica e normalizza il mapping semantico per il cliente corrente.
 
@@ -104,7 +105,8 @@ def load_semantic_mapping(context: ClientContext, logger=None) -> Dict[str, List
             "📄 File di mapping semantico non trovato",
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
-        raise FileNotFoundError(f"File mapping semantico non trovato: {mapping_path}")
+        # Coerenza contract errori: usare ConfigError (no built-in)
+        raise ConfigError(f"File mapping semantico non trovato: {mapping_path}", slug=context.slug, file_path=str(mapping_path))
 
     # 2) leggi mapping del cliente
     try:

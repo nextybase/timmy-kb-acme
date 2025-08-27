@@ -13,6 +13,7 @@ Ruolo:
 
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
 from typing import Dict, Any
@@ -25,7 +26,7 @@ from pipeline.context import ClientContext
 logger = get_structured_logger("pipeline.cleanup_utils")
 
 
-def _rmtree_safe(target: Path, *, log) -> bool:
+def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
     """
     Rimozione directory con log e senza eccezioni verso l'alto.
     Ritorna True se la directory è stata rimossa o non esisteva.

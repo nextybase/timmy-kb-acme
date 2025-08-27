@@ -3,6 +3,48 @@
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
+---
+
+## [1.5.0] Fixing e allineamenti - 2025-08-27
+
+### Added
+- Docstring coerenti su funzioni chiave degli orchestratori (es. `tag_onboarding`, `onboarding_full`, CLI `_parse_args`).
+- Supporto a `pytest-cov` per report di coverage (opzionale in dev).
+
+### Changed
+- **Logging unificato e strutturato**:
+  - Uso sistematico di `get_structured_logger` con `slug`/`run_id` in extra.
+  - Rimozione di `print()` a favore di log strutturati.
+- **Path-safety STRONG**: validazioni con `ensure_within(...)` prima di scrivere/copiare/rimuovere file e nel mount Docker.
+- **Scritture atomiche**: adozione di `safe_write_text`/`safe_write_bytes` nei moduli che generano file (es. preview, review writer, tags I/O).
+- **Preview porta configurabile**: `preview_port` ora può essere impostata via config/env (fallback a 4000).
+- **Adapter Preview** (`src/adapters/preview.py`):
+  - Firma coerente: `start_preview(context, logger, *, port, container_name) -> str` e `stop_preview(logger, *, container_name)`.
+  - Propagazione `context.redact_logs`.
+  - Validazioni conservative su `port` e `container_name`.
+- **Tipizzazione logger**: parametri `logger` annotati come `logging.Logger` nei moduli:
+  - `semantic_*`, `adapters/preview`, `onboarding_full`, `pipeline/github_utils`, `pipeline/cleanup_utils` ( `_rmtree_safe` ).
+- **Coerenza errori dominio**:
+  - Sostituiti errori generici/di filesystem con eccezioni di dominio (`ConfigError`, `PipelineError`, `PushError`, `PreviewError`, ecc.).
+  - `review_writer`: usa `ConfigError` quando manca PyYAML.
+  - `semantic_mapping`/`semantic_extractor`: `FileNotFoundError`/`NotADirectoryError` rimpiazzati con errori di pipeline coerenti e messaggi migliorati.
+- **github_utils**:
+  - Refactor push con `_push_with_retry` e `_force_push_with_lease` (governati), env sicuro con `GIT_HTTP_EXTRAHEADER`.
+  - Raccolta deterministica dei `.md` (no `.bak`) e cleanup temporanei più robusto.
+
+### Fixed
+- `gen_dummy_kb`: definizioni mancanti e ordine funzioni; ora build sandbox dummy completa senza `NameError`.
+- Vari log message normalizzati (emoji opzionali, chiavi `extra` consistenti).
+
+### Internal
+- Orchestratori: separazione netta tra log “early” e log su file per sandbox.
+- Maggiore adesione al contratto “solo `.md`” in `book/` con preflight e messaggi di errore esplicativi.
+- Best-effort cleanup di container Docker in preview.
+
+> **Note di migrazione**
+> - Se usavi la preview con porta fissa, verifica `PREVIEW_PORT` (o config equivalente).
+> - Per il push “force”, assicurati che `GIT_FORCE_ALLOWED_BRANCHES` includa il branch desiderato e passa `force_ack`.
+
 
 ---
 ## [1.5.0] — 2025-08-27 — Test & Documentazione

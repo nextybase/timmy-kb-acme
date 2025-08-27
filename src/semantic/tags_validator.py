@@ -30,6 +30,7 @@ Sicurezza & I/O
 """
 
 import json
+import logging
 import re
 import time
 from pathlib import Path
@@ -144,11 +145,16 @@ def validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def write_validation_report(report_path: Path, result: dict, logger) -> None:
+def write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     """
     Scrive il report JSON della validazione in modo atomico con path-safety.
 
-    Solleva:
+    Args:
+        report_path: percorso del file JSON da generare.
+        result: dizionario con il risultato della validazione.
+        logger: logger strutturato.
+
+    Raises:
         ConfigError: su problemi di path-safety o I/O bloccanti.
     """
     report_path = Path(report_path).resolve()

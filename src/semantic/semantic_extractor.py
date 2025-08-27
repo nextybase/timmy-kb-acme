@@ -16,26 +16,30 @@ Assunzioni:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, FileNotFoundError, NotADirectoryError
+from pipeline.exceptions import PipelineError, InputDirectoryMissing
 from pipeline.context import ClientContext
 from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
 
 
-def _list_markdown_files(context: ClientContext, logger=None) -> List[Path]:
-    """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto."""
+def _list_markdown_files(context: ClientContext, logger: Optional[logging.Logger] = None) -> List[Path]:
+    """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto.
+
+    Raises:
+        PipelineError: se il path non è sicuro.
+        InputDirectoryMissing: se la directory markdown non esiste o non è una cartella valida.
+    """
     logger = logger or get_structured_logger("semantic.files", context=context)
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir)
 
-    if not context.md_dir.exists():
-        raise FileNotFoundError(f"Directory markdown non trovata: {context.md_dir}")
-    if not context.md_dir.is_dir():
-        raise NotADirectoryError(f"Il path non è una directory: {context.md_dir}")
+    if not context.md_dir.exists() or not context.md_dir.is_dir():
+        raise InputDirectoryMissing(f"Directory markdown non valida: {context.md_dir}", slug=context.slug)
 
     files = sorted(context.md_dir.glob("*.md"))
     logger.info(
@@ -47,7 +51,7 @@ def _list_markdown_files(context: ClientContext, logger=None) -> List[Path]:
 
 def extract_semantic_concepts(
     context: ClientContext,
-    logger=None,
+    logger: Optional[logging.Logger] = None,
     *,
     max_scan_bytes: Optional[int] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
@@ -55,8 +59,8 @@ def extract_semantic_concepts(
     Estrae i concetti semantici dai file markdown basandosi sul mapping canonico in config/.
 
     Args:
-        context: contesto cliente.
-        logger: logger strutturato (opzionale).
+        context: Contesto cliente.
+        logger: Logger strutturato (opzionale).
         max_scan_bytes: se impostato, i file .md con dimensione > soglia vengono **saltati**
                         (loggando una micro-nota) per evitare scan troppo costosi.
 
@@ -93,7 +97,12 @@ def extract_semantic_concepts(
                         if size > max_scan_bytes:
                             logger.info(
                                 "⏭️  Skip MD troppo grande per la scansione",
-                                extra={"slug": context.slug, "file_path": str(file), "bytes": size, "limit": max_scan_bytes},
+                                extra={
+                                    "slug": context.slug,
+                                    "file_path": str(file),
+                                    "bytes": size,
+                                    "limit": max_scan_bytes,
+                                },
                             )
                             continue
                     except Exception:
@@ -120,15 +129,20 @@ def extract_semantic_concepts(
     return extracted_data
 
 
-def enrich_markdown_folder(context: ClientContext, logger=None) -> None:
-    """Orchestratore dell'arricchimento semantico (placeholder per step futuri)."""
+def enrich_markdown_folder(context: ClientContext, logger: Optional[logging.Logger] = None) -> None:
+    """Orchestratore dell'arricchimento semantico (placeholder per step futuri).
+
+    Raises:
+        PipelineError: se il path non è sicuro.
+        InputDirectoryMissing: se la directory markdown non esiste.
+    """
     logger = logger or get_structured_logger("semantic.enrich", context=context)
 
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir)
 
     if not context.md_dir.exists():
-        raise FileNotFoundError(f"Directory markdown non trovata: {context.md_dir}")
+        raise InputDirectoryMissing(f"Directory markdown non trovata: {context.md_dir}", slug=context.slug)
 
     markdown_files = _list_markdown_files(context, logger=logger)
     logger.info(
