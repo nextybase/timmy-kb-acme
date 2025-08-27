@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# src/onboarding_full.py
 """
 Onboarding FULL (fase 2): Push GitHub.
-
-Cosa fa
--------
 - Presuppone che la fase di semantic onboarding sia già stata eseguita.
-- Esegue **solo** il push su GitHub tramite `pipeline.github_utils.push_output_to_github`.
-- Garantisce che in `book/` siano presenti file pubblicabili:
-  * per default SOLO `.md`
-  * i placeholder/artefatti con suffisso **`.md.fp` vengono IGNORATI di default**
-- Masking centralizzato nel logger; `env_utils` resta “puro”.
-- Path-safety STRONG per i log via `ensure_within`.
+- Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
+- Preflight su book/: accetta solo .md (i placeholder .md.fp sono tollerati).
+- Tollerati in book/: builder files (book.json/package.json/lockfile) e sottodirectory _book/, node_modules/, .cache/, .tmp/, .git (ignorate).
+- Path-safety STRONG per le scritture (log) via ensure_within.
 - Orchestratore gestisce I/O utente e codici di uscita; i moduli sottostanti non fanno prompt/exit.
 """
 from __future__ import annotations
@@ -20,7 +14,6 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
-import logging
 from pathlib import Path
 from typing import Optional, List
 
@@ -45,9 +38,7 @@ from pipeline.env_utils import get_env_var  # env “puro”
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
 except Exception as e:
-    raise ConfigError(
-        f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})"
-    )
+    raise ConfigError(f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})")
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
@@ -62,81 +53,87 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-# ─────────────── Book scope checks ──────────
-def _book_md_only_guard(
-    base_dir: Path,
-    logger: logging.Logger,
-    *,
-    allow_md_fp: bool = True,  # default: ignora .md.fp senza bisogno di flag
-) -> List[Path]:
-    """
-    Verifica che `book/` contenga solo file ammessi.
-    - Modalità default: SOLO .md; i file con suffisso `.md.fp` sono ignorati (placeholder).
-    Ritorna la lista dei `.md` trovati.
-    """
-    book_dir = base_dir / "book"
-    if not book_dir.exists():
-        raise PushError(f"Directory book/ non trovata: {book_dir}")
+# ─────────────── Preflight book/ (senza cancellazioni) ───────────────
+_ALLOWED_SPECIAL = {".ds_store"}  # piccoli artefatti innocui
 
-    md_files = [p for p in book_dir.rglob("*.md") if p.is_file()]
-    all_files = [p for p in book_dir.rglob("*") if p.is_file()]
+# File di builder che tolleriamo in book/ per supportare la preview (non vengono rimossi)
+_ALLOWED_BUILDER_FILES = {
+    "book.json",
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+}
 
-    ignored: List[Path] = []
-    non_md: List[Path] = []
-    for p in all_files:
-        if p.suffix.lower() == ".md":
+# Sottodirectory SOTTO book/ da ignorare completamente (preview/build cache)
+_IGNORED_SUBDIRS_UNDER_BOOK = {"_book", "node_modules", ".cache", ".tmp", ".git"}
+
+def _is_under_ignored_subdir(book_dir: Path, p: Path) -> bool:
+    """True se p è sotto una delle sottodirectory ignorate di book/."""
+    try:
+        rel = p.relative_to(book_dir)
+    except ValueError:
+        return False
+    parts = rel.parts
+    return bool(parts) and parts[0].lower() in _IGNORED_SUBDIRS_UNDER_BOOK
+
+def _violations_in_book(book_dir: Path) -> List[Path]:
+    bad: List[Path] = []
+    for p in book_dir.rglob("*"):
+        if not p.is_file():
             continue
+        # ignora build/preview cache sotto book/
+        if _is_under_ignored_subdir(book_dir, p):
+            continue
+
         name = p.name.lower()
-        if allow_md_fp and name.endswith(".md.fp"):
-            ignored.append(p)
+        # consenti markdown e placeholder
+        if name.endswith(".md") or name.endswith(".md.fp"):
             continue
-        # ignora file di sistema noti
-        if name in (".ds_store", "thumbs.db"):
-            ignored.append(p)
+        # consenti file speciali innocui e builder artifacts
+        if name in _ALLOWED_SPECIAL or name in _ALLOWED_BUILDER_FILES:
             continue
-        non_md.append(p)
 
-    logger.info(
-        "Preflight book/",
-        extra={
-            "book": str(book_dir),
-            "md_files": len(md_files),
-            "ignored_files": len(ignored),
-            "non_md_files": len(non_md),
-        },
-    )
+        bad.append(p)
+    return bad
 
-    if non_md:
-        examples = [tail_path(p) for p in non_md[:5]]
-        raise PushError(
-            "Violazione contratto: in book/ devono esserci solo file .md "
-            "(i placeholder .md.fp sono tollerati). "
-            f"Trovati {len(non_md)} non-md, es: {examples}. "
+def _preflight_book_dir(base_dir: Path, logger) -> None:
+    book_dir = base_dir / "book"
+    ensure_within(base_dir, book_dir)
+    if not book_dir.exists():
+        raise PipelineError(f"Cartella book/ non trovata: {book_dir}")
+
+    logger.info("Preflight book/", extra={"book": str(book_dir)})
+
+    bad = _violations_in_book(book_dir)
+    if bad:
+        examples = []
+        for p in bad[:5]:
+            try:
+                rel = p.relative_to(base_dir).as_posix()
+            except Exception:
+                rel = str(p)
+            examples.append(rel)
+        raise PipelineError(
+            "Violazione contratto: in book/ devono esserci solo file .md (i placeholder .md.fp sono tollerati). "
+            f"Trovati {len(bad)} non-md, es: {examples}. "
             "Sposta risorse non-md altrove (es. assets/) o convertile."
         )
 
-    if not md_files:
-        raise PushError("Nessun file .md in book/: niente da pubblicare.")
-
-    # Path-safety preventiva
-    for p in md_files:
-        ensure_within(book_dir, p)
-
-    if ignored:
-        logger.warning(
-            "File ignorati durante il preflight",
-            extra={"samples": [tail_path(p) for p in ignored[:5]]},
-        )
-
-    return md_files
+    # log informativo se esistono directory ignorate
+    for sub in sorted(_IGNORED_SUBDIRS_UNDER_BOOK):
+        d = book_dir / sub
+        if d.exists():
+            logger.info(
+                f"Directory {sub}/ presente in book/: ignorata nel preflight/push.",
+                extra={"dir_tail": tail_path(d)},
+            )
 
 
 # ─────────────── Push GitHub (util repo, no fallback) ──────────
-def _git_push(context: ClientContext, logger: logging.Logger) -> None:
+def _git_push(context: ClientContext, logger) -> None:
     if push_output_to_github is None:
-        raise ConfigError(
-            "push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils"
-        )
+        raise ConfigError("push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils")
 
     token = get_env_var("GITHUB_TOKEN", required=True)
 
@@ -164,7 +161,6 @@ def onboarding_full_main(
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
-    # Path log sotto la sandbox cliente con guardia STRONG
     base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
     log_dir = base_dir / LOGS_DIR_NAME
     log_file = log_dir / LOG_FILE_NAME
@@ -172,7 +168,6 @@ def onboarding_full_main(
     ensure_within(log_dir, log_file)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Context + logger coerenti con orchestratori
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
@@ -183,15 +178,14 @@ def onboarding_full_main(
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("🚀 Avvio onboarding_full (PUSH GitHub)")
 
-    # 1) Garantire README.md/SUMMARY.md minimi in book/ (idempotente, nessuna semantica)
+    # 1) README/SUMMARY minimi in book/ (idempotente)
     try:
         _ensure_readme_summary(context, logger)
     except Exception as e:
         raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}") from e
 
-    # 2) Contratto di pubblicazione: .md (+ .md.fp ignorati di default)
-    md_files = _book_md_only_guard(base_dir, logger, allow_md_fp=True)
-    logger.info("Contratto book/ OK", extra={"samples": [tail_path(p) for p in md_files[:5]]})
+    # 2) Preflight book/ (solo .md; ignora .md.fp, builder files e sottodirectory di build)
+    _preflight_book_dir(base_dir, logger)
 
     # 3) Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
@@ -200,7 +194,6 @@ def onboarding_full_main(
         if ans.startswith("n"):
             do_push = False
 
-    # 4) Push
     if do_push:
         _git_push(context, logger)
 
