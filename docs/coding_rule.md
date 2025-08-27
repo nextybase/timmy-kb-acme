@@ -1,4 +1,4 @@
-## Coding Rules — Timmy-KB (v1.4.0)
+## Coding Rules — Timmy-KB (v1.5.0)
 
 Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L’obiettivo è garantire stabilità, tracciabilità, sicurezza e comportamento deterministico (specie in modalità batch) attraverso uno stile di codice coerente. Ogni nuova implementazione deve fare riferimento alla **Developer Guide** e alla descrizione dell’**Architettura**, mantenendo compatibilità locale e privilegiando il riuso di funzioni già presenti, proponendo aggiornamenti solo se strettamente necessario.
 
@@ -93,20 +93,13 @@ Regole operative per scrivere e manutenere il codice della pipeline Timmy-KB. L�
 Prima di una PR, eseguire:
 
 ```bash
-# Pre-onboarding (locale)
-py src/pre_onboarding.py --slug demo --non-interactive --dry-run
+# 1) genera l’utente/dataset dummy
+py src/tools/gen_dummy_kb.py --slug dummy
 
-# Tag onboarding (CSV + stub)
-py src/tag_onboarding.py --slug demo --source local --local-path ./some-pdfs --non-interactive --proceed
-
-# Semantic onboarding (conversione + preview)
-py src/semantic_onboarding.py --slug demo --non-interactive --no-preview
-
-# Push (solo GitHub)
-set GITHUB_TOKEN=...  # o esportare in .env
-py src/onboarding_full.py --slug demo --non-interactive
+# 2) lancia l’intera test suite
+pytest -ra
 ```
-
+Per l’E2E manuale (pre_onboarding → tag_onboarding → semantic_onboarding → push), i comandi e le varianti per file/singolo test sono documentati in [Test suite](test_suite.md) – Test smoke e Pydantic.
 ---
 
 ## 10) Qualità del codice

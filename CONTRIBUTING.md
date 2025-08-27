@@ -1,4 +1,4 @@
-# Contributing — Timmy-KB (v1.2.0)
+# Contributing — Timmy-KB 
 
 Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al codice o alla documentazione deve mantenere **coerenza, stabilità e tracciabilità**. Le regole qui indicate sono vincolanti per pull request, issue e revisioni.
 

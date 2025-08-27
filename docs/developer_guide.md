@@ -1,4 +1,4 @@
-# Developer Guide — Timmy-KB (v1.4.0)
+# Developer Guide — Timmy-KB (v1.5.0)
 
 Questa guida è rivolta agli sviluppatori e documenta le scelte architetturali e i principi di base adottati per garantire **coerenza, testabilità e robustezza** della pipeline.  
 È il documento di riferimento per chi sviluppa nuovo codice: ogni implementazione deve rifarsi a questa guida, alla descrizione dell’architettura e mantenere sempre compatibilità locale e riuso delle funzioni già presenti, proponendone l’eventuale aggiornamento solo se necessario.

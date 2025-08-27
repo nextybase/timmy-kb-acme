@@ -4,6 +4,52 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+---
+## [1.5.0] — 2025-08-27 — Test & Documentazione
+
+### Added
+- **Nuova area test** `tests/` con suite PyTest:
+  - `tests/test_contract_defaults.py` — verifica default CLI (es. `tag_onboarding`).
+  - `tests/test_smoke_dummy_e2e.py` — smoke end-to-end su dataset dummy.
+  - `tests/test_unit_book_guard.py` — contratto `book/` (solo `.md`, `.md.fp` ignorati).
+  - `tests/test_unit_emit_tags_csv.py` — header e path POSIX in `tags_raw.csv`.
+  - `tests/test_unit_tags_validator.py` — validazione `tags_reviewed.yaml` (ok/errori/duplicati).
+- **`pytest.ini`** con `pythonpath=.` e `testpaths=tests` per import stabili su tutti gli OS.
+- **Dataset utente dummy**: uso ufficiale di `py src/tools/gen_dummy_kb.py --slug dummy` per popolare `raw/` prima dei test.
+- **Documentazione test dedicata**: `docs/test_suite.md` (lancio globale, singoli file, selezione per keyword, coverage, principi di isolamento).
+
+### Changed
+- **Default sorgente in `tag_onboarding` → `drive`** (con `--source local` come alternativa). Allineati i test di contratto.
+- **Architettura**: aggiornata a **v1.5.0** in `docs/architecture.md` con sezione **tests/**, principi, piramide (unit/contract/smoke).
+- **User Guide**: sezione “Test minimi” resa sintetica e rimandata a `docs/test_suite.md`.
+
+### Fixed
+- **Preflight `book/`**: chiarita e verificata la regola “solo `.md`” (ignora `.md.fp`) prima del push.
+- Allineamento doc↔codice su flussi test e precondizioni (creazione utente dummy).
+
+### Migrazione / Note operative
+- Prima di eseguire i test:  
+  ```bash
+  py src/tools/gen_dummy_kb.py --slug dummy
+  pytest -ra
+  ---
+  I test non richiedono credenziali reali (Drive/GitHub mockati o bypassati); l’E2E “manuale” è documentato in docs/test_suite.md.
+---
+
+## [1.4.0] - fixing 2025-08-27
+### Added
+- Validatore `tags_reviewed.yaml` con report JSON.
+- Guard preflight in `onboarding_full` (solo `.md`, `.md.fp` ignorati).
+- Default `local` in `tag_onboarding` (Drive opt-in).
+- Iniezione blocco `context` in `semantic_mapping.yaml`.
+
+### Changed
+- SSoT: ora la pipeline usa `tags_reviewed.yaml` come unica fonte semantica.
+- Orchestratori riallineati: path-safety forte, logger tipizzato, errori mappati su `EXIT_CODES`.
+
+### Fixed
+- Hardening `semantic_onboarding`: gestione YAML e arricchimento frontmatter più robusti.
+
 ## [1.4.0] - 2025-08-26
 
 ### Added

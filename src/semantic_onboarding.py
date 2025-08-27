@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# src/semantic_onboarding.py
 """
 Semantic Onboarding: RAW → BOOK con arricchimento semantico e preview Docker.
-- NON usa Google Drive (i PDF sono già ).
-- Converte i PDF in output/timmy-kb-<slug>/raw/ in Markdown in output/timmy-kb-<slug>/book/ tramite le content utils.
-- Arricchisce i frontmatter dei .md usando (se presente) output/timmy-kb-<slug>/semantic/tags.yaml.
-- Genera README.md e SUMMARY.md tramite adapters/content_fallbacks (fallback standard centralizzato).
-- Avvia la preview Docker (HonKit) e chiede esplicitamente se fermarla prima di uscire.
 
-Nota: nessun push verso GitHub qui. Il push è demandato a `onboarding_full.py`.
+Cosa fa
+-------
+- Converte i PDF in `output/timmy-kb-<slug>/raw/` in Markdown in `output/timmy-kb-<slug>/book/`.
+- Arricchisce i frontmatter dei `.md` usando (se presente) `output/timmy-kb-<slug>/semantic/tags_reviewed.yaml`
+  come **SSoT** dei tag (post HiTL).
+- Genera `README.md` e `SUMMARY.md` (util di repo se disponibili, altrimenti fallback centralizzati).
+- Avvia la preview Docker (HonKit) e gestisce lo stop in modo esplicito.
+
+Nota: **nessun uso di Google Drive** in questo step e **nessun push GitHub** (demandato a `onboarding_full.py`).
 """
 from __future__ import annotations
 
@@ -16,8 +20,9 @@ import argparse
 import re
 import sys
 import uuid
+import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
 # --- Infra coerente con orchestratori esistenti ---
 from pipeline.logging_utils import get_structured_logger
@@ -59,7 +64,7 @@ from adapters.content_fallbacks import ensure_readme_summary
 # Adapter: Preview GitBook/HonKit
 from adapters.preview import start_preview, stop_preview
 
-# PyYAML per tags.yaml e frontmatter
+# PyYAML per tags_reviewed.yaml e frontmatter
 try:
     import yaml  # type: ignore
 except Exception:
@@ -80,82 +85,131 @@ def get_paths(slug: str) -> Dict[str, Path]:
     return {"base": base_dir, "raw": raw_dir, "book": book_dir, "semantic": semantic_dir}
 
 
-# ─────────────── Tags loading ───────────────
-def _load_tags_vocab(base_dir: Path, logger) -> Dict[str, Dict]:
-    vocab: Dict[str, Dict] = {}
-    tags_path = base_dir / "semantic" / "tags.yaml"
+# ─────────────── Tags loading (SSoT: tags_reviewed.yaml) ───────────────
+def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
+    """
+    Costruisce un vocabolario canonico a partire da `semantic/tags_reviewed.yaml`.
 
-    # Guardia path forte prima della lettura
+    Formato atteso (semplificato):
+    {
+      version: "1.x",
+      reviewed_at: "YYYY-MM-DD",
+      keep_only_listed: bool,
+      tags: [
+        { name: "Canonico", action: "keep"| "drop" | "merge_into:<target>", synonyms: [..], notes: "" },
+        ...
+      ]
+    }
+
+    Output:
+      {
+        "<canonical>": {"aliases": {<alias1>, <alias2>, ...}}
+      }
+
+    Regole:
+    - `keep` → canonical = name; aliases = {name} ∪ synonyms
+    - `drop` → ignorato (non entra nel vocab)
+    - `merge_into:X` → gli alias (name + synonyms) vengono accreditati a canonical=X
+      (se X non è ancora presente, viene creato placeholder e poi completato se appare).
+    """
+    tags_path = base_dir / "semantic" / "tags_reviewed.yaml"
+
+    # Guardia path forte
     try:
         ensure_within(base_dir / "semantic", tags_path)
     except ConfigError:
-        logger.warning("tags.yaml fuori dalla sandbox semantic/: skip lettura", extra={"file_path": str(tags_path)})
-        return vocab
+        logger.warning(
+            "tags_reviewed.yaml fuori dalla sandbox semantic/: skip lettura",
+            extra={"file_path": str(tags_path)},
+        )
+        return {}
 
     if not tags_path.exists():
-        logger.info("tags.yaml assente: frontmatter con tags vuoti")
-        return vocab
+        logger.info("tags_reviewed.yaml assente: frontmatter con tags vuoti")
+        return {}
     if yaml is None:
-        logger.warning("PyYAML assente: impossibile leggere tags.yaml; proceeding senza tag.")
-        return vocab
+        logger.warning("PyYAML assente: impossibile leggere tags_reviewed.yaml; proceeding senza tag.")
+        return {}
 
     try:
         data = yaml.safe_load(tags_path.read_text(encoding="utf-8")) or {}
-        for item in data.get("tags", []):
-            canon = str(item.get("canonical", "")).strip()
-            if not canon:
+        items = data.get("tags", []) or []
+        # prima passata: inizializza canonical keep
+        vocab: Dict[str, Dict[str, Set[str]]] = {}
+        for it in items:
+            if not isinstance(it, dict):
                 continue
-            vocab[canon] = {
-                "synonyms": [s for s in (item.get("synonyms") or []) if isinstance(s, str)],
-                "areas_hint": [a for a in (item.get("areas_hint") or []) if isinstance(a, str)],
-            }
-        logger.info("Vocabolario tag caricato", extra={"count": len(vocab)})
+            name = str(it.get("name", "")).strip()
+            action = str(it.get("action", "")).strip().lower()
+            synonyms = [s for s in (it.get("synonyms") or []) if isinstance(s, str)]
+            if not name:
+                continue
+            if action == "keep":
+                canon = name
+                entry = vocab.setdefault(canon, {"aliases": set()})
+                entry["aliases"].add(name)
+                entry["aliases"].update({s for s in synonyms if s.strip()})
+        # seconda passata: gestisci merge_into
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("name", "")).strip()
+            action = str(it.get("action", "")).strip().lower()
+            synonyms = [s for s in (it.get("synonyms") or []) if isinstance(s, str)]
+            if not name or not action.startswith("merge_into:"):
+                continue
+            target = action.split(":", 1)[1].strip()
+            if not target:
+                continue
+            entry = vocab.setdefault(target, {"aliases": set()})
+            entry["aliases"].add(name)
+            entry["aliases"].update({s for s in synonyms if s.strip()})
+        logger.info("Vocabolario (reviewed) caricato", extra={"canonicals": len(vocab)})
+        return vocab
     except (OSError, AttributeError) as e:
-        logger.warning("Impossibile leggere tags.yaml", extra={"file_path": str(tags_path), "error": str(e)})
+        logger.warning(
+            "Impossibile leggere tags_reviewed.yaml",
+            extra={"file_path": str(tags_path), "error": str(e)},
+        )
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
-        logger.warning("Impossibile parsare tags.yaml", extra={"file_path": str(tags_path), "error": str(e)})
-    return vocab
+        logger.warning(
+            "Impossibile parsare tags_reviewed.yaml",
+            extra={"file_path": str(tags_path), "error": str(e)},
+        )
+    return {}
 
 
-def _build_inverse_index(vocab: Dict[str, Dict]) -> Dict[str, set]:
+def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
     """
-    Crea un indice inverso {termine_lower: set(canonical)} includendo canonical e sinonimi.
-    Evita l'O(n×m) dei doppi loop su canonical×sinonimi nelle fasi di enrichment.
+    Crea un indice inverso {termine_lower: set(canonical)} includendo canonical e alias/sinonimi.
     """
-    inv: Dict[str, set] = {}
+    inv: Dict[str, Set[str]] = {}
     for canon, meta in (vocab or {}).items():
-        c = str(canon).strip().lower()
-        if c:
-            inv.setdefault(c, set()).add(canon)
-        for syn in meta.get("synonyms", []) or []:
-            s = str(syn).strip().lower()
-            if s:
-                inv.setdefault(s, set()).add(canon)
+        # canonical stesso è alias implicito
+        for term in {canon, *(meta.get("aliases") or set())}:
+            t = str(term).strip().lower()
+            if t:
+                inv.setdefault(t, set()).add(canon)
     return inv
 
 
-def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict], *, inv: Optional[Dict[str, set]] = None) -> Tuple[List[str], List[str]]:
+def _guess_tags_for_name(name_like_path: str, vocab: Dict[str, Dict[str, Set[str]]], *, inv: Optional[Dict[str, Set[str]]] = None) -> List[str]:
     """
-    Restituisce (tags_canonical, areas_hint) per un nome file/percorso.
-    Usa indice inverso per match in O(k) (k = #termini nell'indice), mantenendo semantica "substring".
+    Restituisce la lista di **tag canonici** (reviewed) trovati nel nome/percorso.
     """
     if not vocab:
-        return [], []
+        return []
     if inv is None:
         inv = _build_inverse_index(vocab)
 
     s = name_like_path.lower()
     s = re.sub(r"[_\\/\-\s]+", " ", s)
 
-    found = set()
+    found: Set[str] = set()
     for term, canon_set in inv.items():
         if term and term in s:
             found.update(canon_set)
-
-    areas = set()
-    for t in found:
-        areas.update(vocab.get(t, {}).get("areas_hint", []))
-    return sorted(found), sorted(areas) if areas else []
+    return sorted(found)
 
 
 # ─────────────── Frontmatter helpers ───────────────
@@ -193,9 +247,6 @@ def _dump_frontmatter(meta: Dict) -> str:
         if "tags" in meta and isinstance(meta["tags"], list):
             lines.append("tags:")
             lines.extend([f"  - {t}" for t in meta["tags"]])
-        if "areas" in meta and isinstance(meta["areas"], list):
-            lines.append("areas:")
-            lines.extend([f"  - {a}" for a in meta["areas"]])
         lines.append("---\n")
         return "\n".join(lines)
     try:
@@ -208,26 +259,21 @@ def _dump_frontmatter(meta: Dict) -> str:
         if "tags" in meta and isinstance(meta["tags"], list):
             lines.append("tags:")
             lines.extend([f"  - {t}" for t in meta["tags"]])
-        if "areas" in meta and isinstance(meta["areas"], list):
-            lines.append("areas:")
-            lines.extend([f"  - {a}" for a in meta["areas"]])
         lines.append("---\n")
         return "\n".join(lines)
 
 
-def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str], areas: List[str]) -> Dict:
+def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str]) -> Dict:
     meta = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title
     if tags:
         meta["tags"] = sorted(set((meta.get("tags") or []) + tags))
-    if areas:
-        meta["areas"] = sorted(set((meta.get("areas") or []) + areas))
     return meta
 
 
 # ─────────────── RAW → BOOK ───────────────
-def _convert_raw_to_book(context: ClientContext, logger, *, slug: str) -> List[Path]:
+def _convert_raw_to_book(context: ClientContext, logger: logging.Logger, *, slug: str) -> List[Path]:
     paths = get_paths(slug)
     raw_dir = paths["raw"]
     book_dir = paths["book"]
@@ -252,19 +298,18 @@ def _convert_raw_to_book(context: ClientContext, logger, *, slug: str) -> List[P
     return sorted_paths(book_dir.glob("*.md"), base=book_dir)
 
 
-def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], *, slug: str) -> List[Path]:
+def _enrich_frontmatter(context: ClientContext, logger: logging.Logger, vocab: Dict[str, Dict[str, Set[str]]], *, slug: str) -> List[Path]:
     paths = get_paths(slug)
     book_dir = paths["book"]
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
     touched: List[Path] = []
 
-    # Costruisci una volta l'indice inverso (performance su dataset grandi)
     inv = _build_inverse_index(vocab)
 
     for md in mds:
         name = md.name
         title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
-        tags, areas = _guess_tags_for_name(name, vocab, inv=inv)
+        tags = _guess_tags_for_name(name, vocab, inv=inv)
 
         try:
             text = md.read_text(encoding="utf-8")
@@ -273,7 +318,7 @@ def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], 
             continue
 
         meta, body = _parse_frontmatter(text)
-        new_meta = _merge_frontmatter(meta, title=title, tags=tags, areas=areas)
+        new_meta = _merge_frontmatter(meta, title=title, tags=tags)
         if meta == new_meta:
             continue
 
@@ -282,14 +327,14 @@ def _enrich_frontmatter(context: ClientContext, logger, vocab: Dict[str, Dict], 
             ensure_within(book_dir, md)  # path-safety forte
             safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
             touched.append(md)
-            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags, "areas": areas})
+            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
         except OSError as e:
             logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
 
     return touched
 
 
-def _write_summary_and_readme(context: ClientContext, logger, *, slug: str) -> None:
+def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *, slug: str) -> None:
     # 1) Tenta utility ufficiali
     if generate_summary_markdown is not None:
         try:
@@ -354,8 +399,8 @@ def semantic_onboarding_main(
     # 1) RAW → BOOK
     _convert_raw_to_book(context, logger, slug=slug)
 
-    # 2) Arricchimento frontmatter con semantica (se abbiamo il vocabolario)
-    vocab = _load_tags_vocab(base_dir, logger)
+    # 2) Arricchimento frontmatter con semantica (SSoT: tags_reviewed.yaml)
+    vocab = _load_reviewed_vocab(base_dir, logger)
     if vocab:
         _enrich_frontmatter(context, logger, vocab, slug=slug)
 
@@ -430,6 +475,7 @@ if __name__ == "__main__":
             preview_port=int(args.preview_port),
             run_id=run_id,
         )
+        sys.exit(0)
     except (ConfigError, PipelineError) as e:
         logger = get_structured_logger("semantic_onboarding", run_id=run_id)
         logger.error(str(e))

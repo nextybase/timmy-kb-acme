@@ -15,11 +15,14 @@ Punti chiave implementativi (coerenti con le linee guida della pipeline):
 - **Path-safety STRONG**: tutti i path di output passano da `ensure_within(...)`.
 - **Scritture atomiche centralizzate**: dove il file viene scritto da questo
   orchestratore (YAML/JSON/CSV), si usa `pipeline.file_utils.safe_write_text`.
-- Integrazione con Google Drive per il download dei PDF (opzione `--source=drive`).
+- Integrazione con Google Drive **di default** per il download dei PDF (`--source=drive`);
+  il locale è **opt-out** esplicito con `--source local`.
 - Checkpoint HiTL tra la generazione del CSV e la creazione degli stub semantici.
 
 Fase 1:
 - Scarica/copia PDF in `output/timmy-kb-<slug>/raw/`
+  - **Default**: scarica da Drive (usa gli ID presenti in `config.yaml`).
+  - Opzione locale: usa i PDF già presenti in `raw/` o copia da `--local-path`.
 - Genera `output/timmy-kb-<slug>/semantic/tags_raw.csv` (commit atomica via `safe_write_text`)
 - Checkpoint HiTL: chiedi se proseguire per consentire l'editing dei tag generati
 
@@ -41,6 +44,7 @@ import sys
 import time
 import uuid
 import shutil
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -87,12 +91,16 @@ def _prompt(msg: str) -> str:
 
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────
-def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
+def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
     src_dir = src_dir.expanduser().resolve()
     raw_dir = raw_dir.expanduser().resolve()
 
     if not src_dir.is_dir():
         raise ConfigError(f"Percorso locale non valido: {src_dir}", file_path=str(src_dir))
+
+    if src_dir == raw_dir:
+        logger.info("Sorgente coincidente con RAW: nessuna copia necessaria", extra={"raw": str(raw_dir)})
+        return 0
 
     count = 0
     pdfs: List[Path] = sorted_paths(src_dir.rglob("*.pdf"), base=src_dir)
@@ -110,7 +118,9 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
         try:
             ensure_within(raw_dir, dst)
         except ConfigError:
-            logger.warning("Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)})
+            logger.warning(
+                "Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)}
+            )
             continue
 
         dst_parent = dst.parent
@@ -131,7 +141,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger) -> int:
 
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
-def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger) -> int:
+def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     """
     Emette un CSV compatibile con la pipeline nuova:
       - relative_path: path POSIX relativo alla BASE, quindi prefissato con 'raw/...'
@@ -287,7 +297,7 @@ def _validate_tags_reviewed(data: dict) -> dict:
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
-def _write_validation_report(report_path: Path, result: dict, logger) -> None:
+def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -342,7 +352,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 def tag_onboarding_main(
     slug: str,
     *,
-    source: str = "drive",          # 'drive' | 'local'
+    source: str = "drive",          # 'drive' (default) | 'local'
     local_path: Optional[str] = None,
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
@@ -377,7 +387,7 @@ def tag_onboarding_main(
 
     logger.info("🚀 Avvio tag_onboarding", extra={"source": source})
 
-    # A) DRIVE
+    # A) DRIVE (default)
     if source == "drive":
         cfg = get_client_config(context) or {}
         drive_raw_folder_id = cfg.get("drive_raw_folder_id")
@@ -395,15 +405,23 @@ def tag_onboarding_main(
             )
         logger.info("✅ Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
 
-    # B) LOCALE
+    # B) LOCALE (opt-out)
     elif source == "local":
+        # Se non fornisci --local-path, usa direttamente la sandbox RAW del cliente.
         if not local_path:
-            if non_interactive:
-                raise ConfigError("In modalità non-interattiva è richiesto --local-path per source=local.")
-            local_path = _prompt("Percorso cartella PDF: ").strip()
-        with metrics_scope(logger, stage="local_copy", customer=context.slug):
-            copied = _copy_local_pdfs_to_raw(Path(local_path), raw_dir, logger)
-        logger.info("✅ Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
+            local_path = str(raw_dir)
+            logger.info(
+                "Nessun --local-path fornito: uso RAW del cliente come sorgente",
+                extra={"raw": str(raw_dir), "slug": context.slug},
+            )
+        src_dir = Path(local_path).expanduser().resolve()
+        if src_dir == raw_dir.expanduser().resolve():
+            # Sorgente == destinazione → nessuna copia, procediamo al CSV
+            logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
+        else:
+            with metrics_scope(logger, stage="local_copy", customer=context.slug):
+                copied = _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
+            logger.info("✅ Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
     else:
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
@@ -411,7 +429,10 @@ def tag_onboarding_main(
     csv_path = semantic_dir / "tags_raw.csv"
     with metrics_scope(logger, stage="emit_csv", customer=context.slug):
         _emit_tags_csv(raw_dir, csv_path, logger)
-    logger.info("⚠️  Controlla la lista keyword", extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)})
+    logger.info(
+        "⚠️  Controlla la lista keyword",
+        extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
+    )
 
     # Checkpoint HiTL
     if non_interactive:
@@ -419,7 +440,9 @@ def tag_onboarding_main(
             logger.info("Stop dopo CSV (non-interattivo, no --proceed).")
             return
     else:
-        cont = _prompt("Controlla e approva i tag generati. Sei pronto per proseguire con l'arricchimento semantico? (y/n): ").lower()
+        cont = _prompt(
+            "Controlla e approva i tag generati. Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
+        ).lower()
         if cont != "y":
             logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
             return
@@ -428,16 +451,30 @@ def tag_onboarding_main(
     with metrics_scope(logger, stage="semantic_stub", customer=context.slug):
         write_tagging_readme(semantic_dir, logger)
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
-    logger.info("✅ Arricchimento semantico completato", extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)})
+    logger.info(
+        "✅ Arricchimento semantico completato",
+        extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
+    )
 
 
 # ─────────────────────────────────── CLI ─────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Tag onboarding (download/copertura PDF + CSV + checkpoint HiTL + stub semantico)")
+    p = argparse.ArgumentParser(
+        description="Tag onboarding (copertura PDF + CSV + checkpoint HiTL + stub semantico)"
+    )
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
-    p.add_argument("--source", choices=("drive", "local"), default="drive", help="Sorgente PDF")
-    p.add_argument("--local-path", type=str, help="Percorso locale (richiesto se --source=local in non-interattivo)")
+    p.add_argument(
+        "--source",
+        choices=("drive", "local"),
+        default="drive",  # default drive; locale è opt-out
+        help="Sorgente PDF (default: drive). Usa --source=local per lavorare solo su disco.",
+    )
+    p.add_argument(
+        "--local-path",
+        type=str,
+        help="Percorso locale sorgente dei PDF. Se omesso con --source=local, userà direttamente output/<slug>/raw.",
+    )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     p.add_argument("--proceed", action="store_true", help="In non-interattivo: prosegue anche alla fase 2 (stub semantico)")
     p.add_argument("--validate-only", action="store_true", help="Esegue solo la validazione di tags_reviewed.yaml")

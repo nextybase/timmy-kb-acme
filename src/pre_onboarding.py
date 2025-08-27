@@ -23,6 +23,7 @@ import argparse
 import sys
 import uuid
 import shutil
+import logging
 import datetime as _dt
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
@@ -104,7 +105,9 @@ def _sync_env(context: ClientContext, *, require_env: bool) -> None:
                 context.env[key] = val
 
 
-def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client_name: str, logger) -> None:
+def bootstrap_semantic_templates(
+    repo_root: Path, context: ClientContext, client_name: str, logger: logging.Logger
+) -> None:
     """
     Copia i template semantici globali nella cartella cliente:
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
@@ -155,7 +158,9 @@ def bootstrap_semantic_templates(repo_root: Path, context: ClientContext, client
             safe_write_text(mapping_dst, payload, atomic=True)
             logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
     except Exception as e:  # noqa: BLE001 - log e continua: è uno stub non bloccante
-        logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
+        logger.warning(
+            {"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]}
+        )
 
 
 # ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni oltre I/O necessario -------
@@ -167,7 +172,7 @@ def _prepare_context_and_logger(
     require_env: bool,
     run_id: Optional[str],
     client_name: Optional[str],
-) -> Tuple[ClientContext, Any, str]:
+) -> Tuple[ClientContext, logging.Logger, str]:
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
     slug = ensure_valid_slug(slug, interactive=interactive, prompt=_prompt, logger=early_logger)
 
@@ -192,7 +197,7 @@ def _prepare_context_and_logger(
     return context, logger, client_name
 
 
-def _create_local_structure(context: ClientContext, logger, *, client_name: str) -> Path:
+def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
     """Crea struttura locale, scrive config, copia template semantici; restituisce il path allo YAML struttura."""
     ensure_within(context.base_dir, context.config_path)
 
@@ -223,7 +228,7 @@ def _create_local_structure(context: ClientContext, logger, *, client_name: str)
 
 def _drive_phase(
     context: ClientContext,
-    logger,
+    logger: logging.Logger,
     *,
     yaml_structure_file: Path,
     client_name: str,
@@ -297,7 +302,9 @@ def pre_onboarding_main(
     run_id: Optional[str] = None,
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
-    require_env = not (dry_run or (not interactive))
+    # FIX: l'ambiente è richiesto ogni volta che NON è dry-run (indipendentemente dall'interattività)
+    require_env = not dry_run
+
     context, logger, client_name = _prepare_context_and_logger(
         slug, interactive=interactive, require_env=require_env, run_id=run_id, client_name=client_name
     )
@@ -322,12 +329,16 @@ def pre_onboarding_main(
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
 
 def _parse_args() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Pre-onboarding NeXT KB")
+    p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
     p.add_argument("--name", type=str, help="Nome cliente (es. ACME Srl)")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
-    p.add_argument("--dry-run", action="store_true", help="Esegue solo la parte locale, salta Google Drive")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Esegue solo la parte locale e salta Google Drive (nessuna variabile d'ambiente richiesta).",
+    )
     return p
 
 

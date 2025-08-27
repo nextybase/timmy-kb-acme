@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# src/onboarding_full.py
 """
 Onboarding FULL (fase 2): Push GitHub.
+
+Cosa fa
+-------
 - Presuppone che la fase di semantic onboarding sia già stata eseguita.
-- Esegue esclusivamente il push su GitHub tramite pipeline.github_utils.
-- Masking centralizzato nel logger; env_utils resta “puro”.
-- Path-safety STRONG per le scritture (log) via ensure_within.
+- Esegue **solo** il push su GitHub tramite `pipeline.github_utils.push_output_to_github`.
+- Garantisce che in `book/` siano presenti file pubblicabili:
+  * per default SOLO `.md`
+  * i placeholder/artefatti con suffisso **`.md.fp` vengono IGNORATI di default**
+- Masking centralizzato nel logger; `env_utils` resta “puro”.
+- Path-safety STRONG per i log via `ensure_within`.
 - Orchestratore gestisce I/O utente e codici di uscita; i moduli sottostanti non fanno prompt/exit.
 """
 from __future__ import annotations
@@ -13,10 +20,11 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
+import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.exceptions import (
     PipelineError,
     ConfigError,
@@ -37,8 +45,9 @@ from pipeline.env_utils import get_env_var  # env “puro”
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
 except Exception as e:
-    # Adapter richiesto esplicitamente
-    raise ConfigError(f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})")
+    raise ConfigError(
+        f"Adapter mancante o non importabile: adapters.content_fallbacks.ensure_readme_summary ({e})"
+    )
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
@@ -53,12 +62,82 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-# ─────────────── Push GitHub (util repo, no fallback) ──────────
-def _git_push(context: ClientContext, logger) -> None:
-    if push_output_to_github is None:
-        raise ConfigError("push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils")
+# ─────────────── Book scope checks ──────────
+def _book_md_only_guard(
+    base_dir: Path,
+    logger: logging.Logger,
+    *,
+    allow_md_fp: bool = True,  # default: ignora .md.fp senza bisogno di flag
+) -> List[Path]:
+    """
+    Verifica che `book/` contenga solo file ammessi.
+    - Modalità default: SOLO .md; i file con suffisso `.md.fp` sono ignorati (placeholder).
+    Ritorna la lista dei `.md` trovati.
+    """
+    book_dir = base_dir / "book"
+    if not book_dir.exists():
+        raise PushError(f"Directory book/ non trovata: {book_dir}")
 
-    # Token letto da env (nessun masking qui; la redazione è gestita dal logger)
+    md_files = [p for p in book_dir.rglob("*.md") if p.is_file()]
+    all_files = [p for p in book_dir.rglob("*") if p.is_file()]
+
+    ignored: List[Path] = []
+    non_md: List[Path] = []
+    for p in all_files:
+        if p.suffix.lower() == ".md":
+            continue
+        name = p.name.lower()
+        if allow_md_fp and name.endswith(".md.fp"):
+            ignored.append(p)
+            continue
+        # ignora file di sistema noti
+        if name in (".ds_store", "thumbs.db"):
+            ignored.append(p)
+            continue
+        non_md.append(p)
+
+    logger.info(
+        "Preflight book/",
+        extra={
+            "book": str(book_dir),
+            "md_files": len(md_files),
+            "ignored_files": len(ignored),
+            "non_md_files": len(non_md),
+        },
+    )
+
+    if non_md:
+        examples = [tail_path(p) for p in non_md[:5]]
+        raise PushError(
+            "Violazione contratto: in book/ devono esserci solo file .md "
+            "(i placeholder .md.fp sono tollerati). "
+            f"Trovati {len(non_md)} non-md, es: {examples}. "
+            "Sposta risorse non-md altrove (es. assets/) o convertile."
+        )
+
+    if not md_files:
+        raise PushError("Nessun file .md in book/: niente da pubblicare.")
+
+    # Path-safety preventiva
+    for p in md_files:
+        ensure_within(book_dir, p)
+
+    if ignored:
+        logger.warning(
+            "File ignorati durante il preflight",
+            extra={"samples": [tail_path(p) for p in ignored[:5]]},
+        )
+
+    return md_files
+
+
+# ─────────────── Push GitHub (util repo, no fallback) ──────────
+def _git_push(context: ClientContext, logger: logging.Logger) -> None:
+    if push_output_to_github is None:
+        raise ConfigError(
+            "push_output_to_github non disponibile: verifica le dipendenze del modulo pipeline.github_utils"
+        )
+
     token = get_env_var("GITHUB_TOKEN", required=True)
 
     try:
@@ -72,7 +151,6 @@ def _git_push(context: ClientContext, logger) -> None:
         )
         logger.info("Git push completato (github_utils)")
     except Exception as e:
-        # Errore corretto e mappato su EXIT_CODES["PushError"]=40
         raise PushError(f"Git push fallito tramite github_utils: {e}") from e
 
 
@@ -111,13 +189,18 @@ def onboarding_full_main(
     except Exception as e:
         raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}") from e
 
-    # Conferma in interattivo (nessun prompt in non-interactive)
+    # 2) Contratto di pubblicazione: .md (+ .md.fp ignorati di default)
+    md_files = _book_md_only_guard(base_dir, logger, allow_md_fp=True)
+    logger.info("Contratto book/ OK", extra={"samples": [tail_path(p) for p in md_files[:5]]})
+
+    # 3) Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
     if not non_interactive:
         ans = (_prompt("Eseguo push su GitHub? (Y/n): ") or "y").lower()
         if ans.startswith("n"):
             do_push = False
 
+    # 4) Push
     if do_push:
         _git_push(context, logger)
 

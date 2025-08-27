@@ -1,237 +1,186 @@
-# User Guide — Timmy‑KB (v1.4.0)
+# User Guide — Timmy‑KB (v1.5.0)
 
-Questa guida spiega come usare la pipeline per generare una **KB Markdown AI‑ready** a partire da PDF del cliente, con arricchimento semantico, anteprima HonKit (Docker) e, se desiderato, push su GitHub.
+Guida aggiornata per l’uso della pipeline di **onboarding clienti** in Timmy‑KB. Converte PDF in Markdown AI‑ready, arricchisce i frontmatter, avvia anteprima HonKit (Docker) e, se richiesto, pubblica su GitHub.
 
 ---
 
 ## 1) Prerequisiti
 
 - **Python ≥ 3.10**
-- **Docker** (solo per l’anteprima)
-- (Solo per pre‑onboarding con Drive) **Credenziali Google** (Service Account JSON)
-- (Opz.) **GitHub Token** (`GITHUB_TOKEN`) per il push
+- **Docker** (per l’anteprima)
+- (Opz.) **Credenziali Google Drive** (Service Account JSON)
+- (Opz.) **GitHub Token** per il push finale
 
-### Variabili d’ambiente
+### Variabili d’ambiente principali
 
-Imposta le variabili (via `.env` o ambiente di sistema):
-
-- `SERVICE_ACCOUNT_FILE` → path al JSON del Service Account (solo per Drive)
-- `DRIVE_ID` → radice/parent dello spazio Drive (solo per Drive)
-- `GITHUB_TOKEN` → necessario solo se vuoi pubblicare su GitHub
-- `GIT_DEFAULT_BRANCH` → branch di default per il push (fallback `main`)
-- `YAML_STRUCTURE_FILE` → **override opzionale** del file YAML di struttura cartelle usato dal *pre_onboarding* (default `config/cartelle_raw.yaml`)
+- `SERVICE_ACCOUNT_FILE` → path JSON Service Account (Drive)
+- `DRIVE_ID` → ID cartella root dello spazio Drive
+- `GITHUB_TOKEN` → per il push su GitHub
+- `YAML_STRUCTURE_FILE` → override opzionale dello YAML cartelle (default: `config/cartelle_raw.yaml`)
 - `LOG_REDACTION` → `auto` (default), `on`, `off`
-- `ENV` → `dev`, `prod`, `ci`, ...
-- `CI` → `true`/`false`
+- `ENV`, `CI` → per modalità operative
 
 ---
 
-## 2) Struttura output per cliente
+## 2) Struttura output
 
 ```
 output/timmy-kb-<slug>/
-  ├─ raw/        # PDF locali (fonte unica)
-  ├─ book/       # Markdown + SUMMARY.md + README.md
+  ├─ raw/        # PDF
+  ├─ book/       # Markdown + README.md + SUMMARY.md
   ├─ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml
-  ├─ config/     # config.yaml (aggiornato con eventuali ID Drive e blocco semantic_tagger)
-  └─ logs/       # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
+  ├─ config/     # config.yaml
+  └─ logs/       # log centralizzati
 ```
 
-> Lo **slug** deve rispettare la regex definita in `config/config.yaml`. In interattivo, se non valido ti verrà chiesto di correggerlo.
+> **SSoT semantico**: `tags_reviewed.yaml` è la fonte unica dei tag canonici.
 
 ---
 
 ## 3) Flussi operativi
 
 ### Modalità interattiva vs CLI
-
-- **Interattiva**: l’utente viene guidato passo passo. Nel pre‑onboarding deve inserire *slug* e nome cliente; in onboarding può confermare/negare l’avvio della preview Docker e del push GitHub. In questa modalità i comandi si lanciano "secchi" (senza parametri), e lo script chiede via prompt i dati mancanti.  
-  - Esempi: `py src/pre_onboarding.py` oppure `py src/semantic_onboarding.py`.
-
-- **CLI (batch)**: tutti i parametri vanno passati via opzioni (`--slug`, `--name`, `--no-preview`, `--no-push`, ecc.). Non ci sono prompt ed è pensata per CI/CD o automazioni.  
-  - Esempi: `py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive` oppure `py src/semantic_onboarding.py --slug acme --no-preview --non-interactive`.
+- **Interattiva**: prompt a video, scelte passo‑passo.
+- **CLI/Batch**: nessun prompt, tutto via opzioni (`--slug`, `--non-interactive`, ...).
 
 ---
 
-### A) Pre‑onboarding (setup)
+### A) Pre‑Onboarding
 
 ```bash
-py src/pre_onboarding.py [--slug <id>] [--name <nome descrittivo>] [--non-interactive] [--dry-run]
+py src/pre_onboarding.py [--slug <id>] [--name <nome>] [--non-interactive] [--dry-run]
 ```
 
-**Sequenza tipica**
-
-1. **Slug cliente** → richiesto lo *slug* (es. `acme`). In interattivo, se non valido il sistema chiede un nuovo valore. In CLI puoi fornirlo con `--slug acme` e, opzionalmente, `--name "Cliente ACME"`.
-2. **Creazione struttura locale** → genera cartelle `raw/`, `book/`, `config/`, `logs/` e `config.yaml`.
-3. **Configurazioni semantiche** → copia `cartelle_raw.yaml` e `default_semantic_mapping.yaml` in `semantic/`, generando `semantic_mapping.yaml` con blocco `semantic_tagger` (valori di default modificabili).
-4. **Google Drive (opzionale)**
-   - Se configurato: crea/aggiorna la struttura remota e carica `config.yaml`.
-   - Se mancano credenziali: in interattivo puoi usare `--dry-run` per restare in locale; in batch l’esecuzione fallisce senza il flag.
-
-> In questa fase non ci sono anteprima né push: serve solo a predisporre l’ambiente.
+1. Richiede *slug* cliente.
+2. Crea struttura locale (raw, book, config, logs).
+3. Copia i template semantici in `semantic/` e arricchisce `semantic_mapping.yaml`.
+4. Se configurato, crea struttura su Drive e carica `config.yaml`.
 
 ---
 
-### B) Tagging semantico (HiTL)
+### B) Tag Onboarding (HiTL)
 
 ```bash
-py src/tag_onboarding.py --slug <id>
+py src/tag_onboarding.py --slug <id> [--source local|drive] [--proceed]
 ```
 
-**Sequenza tipica**
-
-1. Copia i PDF da Drive o locale in `raw/`.
-2. Genera `semantic/tags_raw.csv` con i candidati tag derivati dai path e dai nomi file.
-3. Checkpoint HiTL: in interattivo chiede se proseguire con l’arricchimento semantico; in CLI puoi usare `--proceed`.
-4. Se confermato, genera `README_TAGGING.md` e stub `tags_reviewed.yaml`.
+1. Copia/scarica PDF in `raw/`.
+2. Genera `semantic/tags_raw.csv`.
+3. Checkpoint umano: confermare prima di proseguire.
+4. Se confermato (o `--proceed`), crea `README_TAGGING.md` e `tags_reviewed.yaml`.
 
 ---
 
-### C) Semantic Onboarding (conversione + preview)
+### C) Semantic Onboarding
 
 ```bash
-py src/semantic_onboarding.py [--slug <id>] [opzioni]
+py src/semantic_onboarding.py --slug <id> [--no-preview] [--preview-port 4000]
 ```
 
-**Sequenza tipica**
-
-1. **Conversione PDF → Markdown** → genera `.md` in `book/`.
-2. **Arricchimento frontmatter** → integra tags/areas da `tags_reviewed.yaml` e mapping semantico.
-3. **README e SUMMARY** → generati in `book/`.
-4. **Anteprima HonKit (Docker)**
-   - Se Docker disponibile: chiede *«Avviare l’anteprima ora?»*. Lancia la preview e poi chiede *«Chiudere ORA la preview e terminare?»*.
-   - Se Docker assente: chiede *«Proseguire senza anteprima?»*.
-
-**Opzioni CLI aggiuntive:**
-- `--no-preview` → salta la preview Docker.
-- `--preview-port <N>` → porta per la preview (default 4000).
+1. Converte PDF → Markdown in `book/`.
+2. Arricchisce frontmatter con `tags_reviewed.yaml`.
+3. Genera `README.md` e `SUMMARY.md` (fallback idempotente).
+4. Avvia preview Docker (se presente). In interattivo chiede se avviare/fermare.
 
 ---
 
-### D) Onboarding Full (push)
+### D) Onboarding Full (Push)
 
 ```bash
-py src/onboarding_full.py --slug <id> [opzioni]
+py src/onboarding_full.py --slug <id>
 ```
 
-**Sequenza tipica**
-
-1. **Push GitHub** → pubblica i contenuti della cartella `book/` (commit + push).
-2. Richiede `GITHUB_TOKEN` valido.
-3. Integrazioni future: collegamento automatico con GitBook.
-
-**Opzioni CLI principali**
-
-- `--no-push` → salta il push GitHub.
-- `--force-push` + `--force-ack` → forza il push anche in caso di conflitto.
+1. Preflight su `book/`: ammessi solo `.md`, i `.md.fp` sono ignorati.
+2. Garantisce `README.md` e `SUMMARY.md`.
+3. Esegue push GitHub (richiede `GITHUB_TOKEN`). In interattivo chiede conferma.
 
 ---
 
 ## 4) Comandi rapidi
 
-### Interattivo (consigliato)
-
+### Interattivo
 ```bash
-# Setup cliente
 py src/pre_onboarding.py
-
-# Tagging semantico
 py src/tag_onboarding.py
-
-# Conversione + preview
 py src/semantic_onboarding.py
-
-# Push finale
 py src/onboarding_full.py
 ```
 
-### CLI / Batch / CI
-
+### CLI/Batch
 ```bash
-# Setup minimale, solo locale
 py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive --dry-run
-
-# Tagging
-py src/tag_onboarding.py --slug acme --non-interactive
-
-# Generazione book + enrichment, skip preview
+py src/tag_onboarding.py --slug acme --source local --non-interactive --proceed
 py src/semantic_onboarding.py --slug acme --no-preview --non-interactive
-
-# Push GitHub
-py src/onboarding_full.py --slug acme --no-push --non-interactive
+py src/onboarding_full.py --slug acme --non-interactive
 ```
 
 ---
 
-## 5) Log ed Exit Codes
+## 5) Log & Exit Codes
 
-- Log centralizzati in `output/timmy-kb-<slug>/logs/`.
-- Mascheramento segreti automatico (`LOG_REDACTION`).
-- Scritture atomiche e path-safety enforced (`ensure_within`).
-
-**Exit codes (estratto)**
-
-- `0`  → ok
-- `2`  → `ConfigError` (slug invalido, variabili mancanti)
-- `30` → `PreviewError`
-- `40` → `PushError`
+- Log in `logs/` per ogni fase.
+- Mascheramento automatico di credenziali (se `LOG_REDACTION=on/auto`).
+- Exit codes standardizzati: `0=OK`, `2=ConfigError`, `40=PushError`, ecc.
 
 ---
 
 ## 6) Troubleshooting
 
-- **Docker non installato** → interattivo: domanda se proseguire senza anteprima.
-- **Anteprima non raggiungibile** → verifica porta `4000`, stop con `docker rm -f gitbook-<slug>`.
+- **Docker mancante** → interattivo: chiede se saltare, CLI: skip automatico.
+- **Book con file non‑md** → errore. Sposta in `assets/` o converti. `.md.fp` sono ignorati.
 - **Push fallito** → controlla `GITHUB_TOKEN` e branch.
-- **Slug non valido** → richiesto reinserimento.
-- **Tags incoerenti** → assicurati che `tags_raw.csv` e `tags_reviewed.yaml` siano allineati.
+- **Tags incoerenti** → riallinea `tags_raw.csv` e `tags_reviewed.yaml`.
 
 ---
 
-## 7) Policy operative (estratto)
+## 7) Test e Policy operative
 
-- **Orchestratori** → UX/CLI, prompt e checkpoint HiTL.
-- **Moduli** → azioni tecniche, no prompt.
-- **Sicurezza I/O** → `ensure_within`, scritture atomiche via `safe_write_text`/`safe_write_bytes`.
-- **Coerenza doc/codice** → ogni modifica richiede aggiornamento documentazione.
+- **Orchestratori**: gestiscono prompt, UX, checkpoint HiTL e codici di uscita.  
+  **Moduli tecnici**: nessun I/O utente, nessun `sys.exit()`.
+
+- **Sicurezza I/O**: tutti i path sono validati con `ensure_within`; scritture atomiche via `safe_write_text`/`safe_write_bytes`.
+
+- **Test: principi**  
+  - I test sono **deterministici**, indipendenti dalla rete e riproducibili su Windows/Linux/Mac.  
+  - Le integrazioni esterne (Google Drive, GitHub) sono **mockate/stub** nella suite; l’uso reale è limitato allo **E2E manuale**.  
+  - Prima di eseguire i test, genera l’ambiente di prova con l’**utente/dataset dummy**.
+
+- **Livelli di test (vedi `docs/test_suite.md`)**  
+  - **Unit**: funzioni pure e utility (es. validatore YAML, emissione CSV, guard frontmatter/book).  
+  - **Contract/CLI**: firme, default e exit code degli orchestratori.  
+  - **Smoke/E2E**: percorso minimo su dataset dummy (senza servizi esterni), più varianti manuali opzionali.
+
+- **Come lanciare**  
+  - Globale: `pytest -ra` (dopo `py src/tools/gen_dummy_kb.py --slug dummy`).  
+  - Per file/funzione/marker e scenari manuali: rimando completo in [Test suite](test_suite.md).
+
+- **Policy doc↔codice**  
+  - Ogni modifica agli orchestratori o alle API interne richiede **aggiornamento contestuale** di documentazione e test.  
+  - Le PR devono mantenere **tutti i test verdi**; aggiungere test per regressioni e nuovi percorsi critici.
+
 
 ---
 
 ## 8) FAQ
 
-**Posso usare la preview se Docker non c’è?**  
-No. In batch viene saltata; in interattivo puoi proseguire senza.
+**Posso usare la preview senza Docker?**  No. Se Docker manca, viene saltata.
 
-**La preview blocca la pipeline?**  
-No. È *detached* e si può fermare a fine pipeline.
+**Cosa viene pushato su GitHub?**  Solo i `.md` in `book/`.
 
-**Cosa viene pubblicato su GitHub?**  
-Solo i `.md` in `book/` (esclusi i `.bak`).
+**Come gestire force push?**  Con `--force-push` + `--force-ack` (se implementato).
 
-**Posso cambiare la porta della preview?**  
-Sì: `--preview-port 4000`.
+**Slug non valido?**  In interattivo chiede correzione, in batch fallisce.
 
-**Come gestire un push con force?**  
-Passa `--force-push` e, se richiesto, `--force-ack`.
-
-**Posso lanciare senza variabili di ambiente?**  
-Sì, se usi `--non-interactive` e resti in locale (`--dry-run`).
-
-**Devo modificare a mano il mapping semantico?**  
-No: in `pre_onboarding` viene già generato con valori di default. Puoi però personalizzare `semantic_mapping.yaml` per cliente.
+**Devo modificare a mano semantic_mapping?**  Non obbligatorio. Puoi personalizzare `semantic_mapping.yaml` cliente.
 
 ---
 
 ## 9) Log & Redazione
 
-La pipeline usa redazione log centralizzata:
-
-- Modalità (`LOG_REDACTION`):
-  - `auto` (default) → attiva se `ENV` ∈ {prod, production, ci} o `CI=true`, o se presenti credenziali sensibili.
+- Modalità `LOG_REDACTION`:
+  - `auto` (default) → attiva in prod/ci o se presenti credenziali.
   - `on` → sempre attiva.
   - `off` → disattiva.
-- In debug (`log_level=DEBUG`), redazione sempre disattiva.
-- Dati sensibili (token, path credenziali) mascherati.
-
-Il flag `redact_logs` è calcolato in `ClientContext` e riflesso nei log strutturati.
+- In debug, redazione disattiva.
+- Dati sensibili (token, path credenziali) mascherati automaticamente.
 

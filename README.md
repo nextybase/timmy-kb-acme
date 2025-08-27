@@ -4,6 +4,32 @@ Pipeline per la generazione di una **Knowledge Base Markdown AI-ready** a partir
 
 ---
 
+# Timmy-KB Onboarding
+
+Pipeline di onboarding dei clienti per Timmy-KB.
+
+## Flusso principale
+1. **Pre-Onboarding**  
+   Crea la struttura locale e remota (Drive), copia i template semantici e genera il `config.yaml`.
+
+2. **Tag Onboarding (HiTL)**  
+   Estrae i PDF (da Drive o locale) → genera `semantic/tags_raw.csv`.  
+   Dopo il checkpoint umano, produce `README_TAGGING.md` e `tags_reviewed.yaml`.
+
+3. **Semantic Onboarding**  
+   Converte i PDF in `book/*.md`, arricchisce i frontmatter con i dati di `semantic/tags_reviewed.yaml`, genera `README.md` e `SUMMARY.md`.  
+   Avvia la preview Docker (HonKit).
+
+4. **Onboarding Full (Push)**  
+   Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati di default), garantisce i fallback README/SUMMARY e pubblica su GitHub.
+
+## Note
+- **SSoT dei tag**: il file di riferimento è `semantic/tags_reviewed.yaml`.  
+- **Drive**: usato solo in `pre_onboarding` e opzionale in `tag_onboarding` (`--source=drive`).  
+- **Logging**: centralizzato, con mascheramento degli ID sensibili.  
+
+---
+
 ## Prerequisiti
 
 - **Python ≥ 3.10**
@@ -118,6 +144,29 @@ py src/onboarding_full.py --slug <id>
 1. Esegue esclusivamente il push GitHub del contenuto di `book/`.  
 2. Richiede `GITHUB_TOKEN` valido.  
 3. In roadmap: integrazione diretta GitBook.  
+
+---
+
+## 7) Test 
+
+- **Orchestratori**: gestiscono prompt, UX, checkpoint HiTL e codici di uscita.  
+  **Moduli tecnici**: nessun I/O utente, nessun `sys.exit()`.
+
+- **Sicurezza I/O**: tutti i path sono validati con `ensure_within`; scritture atomiche via `safe_write_text`/`safe_write_bytes`.
+
+- **Test: principi**  
+  - I test sono **deterministici**, indipendenti dalla rete e riproducibili su Windows/Linux/Mac.  
+  - Le integrazioni esterne (Google Drive, GitHub) sono **mockate/stub** nella suite; l’uso reale è limitato allo **E2E manuale**.  
+  - Prima di eseguire i test, genera l’ambiente di prova con l’**utente/dataset dummy**.
+
+- **Livelli di test (vedi `docs/test_suite.md`)**  
+  - **Unit**: funzioni pure e utility (es. validatore YAML, emissione CSV, guard frontmatter/book).  
+  - **Contract/CLI**: firme, default e exit code degli orchestratori.  
+  - **Smoke/E2E**: percorso minimo su dataset dummy (senza servizi esterni), più varianti manuali opzionali.
+
+- **Come lanciare**  
+  - Globale: `pytest -ra` (dopo `py src/tools/gen_dummy_kb.py --slug dummy`).  
+  - Per file/funzione/marker e scenari manuali: rimando completo in [Test suite](test_suite.md).
 
 ---
 
