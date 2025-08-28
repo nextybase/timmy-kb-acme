@@ -1,406 +1,315 @@
 # onboarding_ui.py
 from __future__ import annotations
 
-# --- Bootstrap path: rende importabile la cartella 'src' come package root ---
+import logging
+import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Dict, Optional, Tuple
+
+# -----------------------------------------------------------------------------
+# Bootstrap PYTHONPATH per moduli locali (src/*)
+# -----------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
-SRC_DIR = ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-# ---------------------------------------------------------------------------
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-import io
-import os
-import signal
-import subprocess
-import time
-import uuid
-from typing import Tuple, Dict, Any, List
-
-import streamlit as st
-
-# Logging/env dal repo (fallback robuste)
-try:
-    from pipeline.logging_utils import get_structured_logger  # type: ignore
-except Exception:
-    get_structured_logger = None  # type: ignore
-
+# -----------------------------------------------------------------------------
+# Import pipeline (con fallback sicuro)
+# -----------------------------------------------------------------------------
 try:
     from pipeline.env_utils import compute_redact_flag  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     compute_redact_flag = None  # type: ignore
 
-# Moduli config_ui (API allineate)
-from src.config_ui.mapping_editor import (
+try:
+    from pipeline.logging_utils import get_structured_logger  # type: ignore
+except Exception:  # pragma: no cover
+    get_structured_logger = None  # type: ignore
+
+# -----------------------------------------------------------------------------
+# Import UI/Config helpers (riuso: NIENTE duplicazioni)
+# -----------------------------------------------------------------------------
+from config_ui.utils import (
+    yaml_load,
+    yaml_dump,
+    ensure_within_and_resolve,
+)  # type: ignore
+from config_ui.mapping_editor import (  # type: ignore
     load_default_mapping,
+    load_tags_reviewed,
+    save_tags_reviewed,
     split_mapping,
     build_mapping,
     validate_categories,
-    save_tags_reviewed,
-    examples_to_items,   # usiamo le helper esposte dal modulo
-    items_to_examples,
 )
-from src.config_ui.vision_parser import extract_ovm_sections, write_vision_yaml
+from config_ui.drive_runner import (  # type: ignore
+    build_drive_from_mapping,
+    emit_readmes_for_raw,
+)
+
+# -----------------------------------------------------------------------------
+# Streamlit (UI)
+# -----------------------------------------------------------------------------
+try:
+    import streamlit as st  # type: ignore
+except Exception as e:  # pragma: no cover
+    raise RuntimeError(
+        "Streamlit non disponibile. Installa le dipendenze UI per eseguire questo file."
+    ) from e
 
 
-# ----------------- Helper locali (log, shutdown, pdf) -----------------
-
-def _safe_compute_redact_flag() -> bool:
-    if compute_redact_flag is None:
-        return True
-    try:
-        return bool(compute_redact_flag())
-    except TypeError:
-        pass
-    try:
-        return bool(compute_redact_flag({}, "INFO"))
-    except Exception:
-        return True
-
-
-def _safe_get_logger(name: str, redact_flag: bool):
-    if get_structured_logger is None:
-        class _Stub:
-            def info(self, *a, **k): pass
-            def warning(self, *a, **k): pass
-            def error(self, *a, **k): pass
-            def exception(self, *a, **k): pass
-        return _Stub()
-    try:
-        return get_structured_logger(name, redact_secrets=redact_flag)  # type: ignore
-    except TypeError:
+# =============================================================================
+# Utility locali orchestratore (logging & redazione)
+# =============================================================================
+def _safe_compute_redact_flag(env: Optional[Dict[str, str]] = None, level: str = "INFO") -> bool:
+    """
+    Determina se abilitare la redazione log.
+    Riuso della funzione repo se presente, fallback minimale altrimenti.
+    """
+    env = env or dict(os.environ)
+    if compute_redact_flag is not None:
         try:
-            return get_structured_logger(name, redact=redact_flag)  # type: ignore
+            return bool(compute_redact_flag(env, level))  # type: ignore[arg-type]
         except TypeError:
-            return get_structured_logger(name)  # type: ignore
+            return bool(compute_redact_flag(env, level))  # type: ignore[misc]
+        except Exception:
+            pass
+    # Fallback: abilita redazione in prod o se esplicitamente richiesto
+    val = env.get("LOG_REDACTION") or env.get("LOG_REDACTED") or ""
+    if val.lower() in {"1", "true", "yes", "on"}:
+        return True
+    if (env.get("ENV") or "").lower() in {"prod", "production"}:
+        return True
+    return False
 
 
-def _shutdown_server() -> None:
+def _safe_get_logger(name: str, redact: bool) -> logging.Logger:
+    """
+    Logger strutturato del repo con `context` se disponibile; altrimenti fallback basicConfig.
+    """
+    if get_structured_logger is not None:
+        try:
+            ctx = SimpleNamespace(redact_logs=bool(redact))
+            return get_structured_logger(name, context=ctx)  # type: ignore[call-arg]
+        except Exception:
+            pass
+    # Fallback plain
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+    return logging.getLogger(name)
+
+
+def _request_shutdown(log: logging.Logger) -> None:
+    """
+    Termina il processo Streamlit avviato da terminale.
+    Prova con SIGTERM; fallback a os._exit(0) in casi estremi.
+    """
+    import signal
     try:
-        st.toast("Chiusura in corso…", icon="🛑")
-    except Exception:
-        pass
-    time.sleep(0.1)
-    try:
-        os.kill(os.getpid(), signal.SIGTERM)
+        log.info({"event": "ui_shutdown_request"})
+        pid = os.getpid()
+        os.kill(pid, signal.SIGTERM)
     except Exception:
         os._exit(0)
 
 
-def _run_orchestrator(cmd: list[str]) -> Tuple[int, str, str]:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    return proc.returncode, proc.stdout, proc.stderr
+# =============================================================================
+# Componenti UI
+# =============================================================================
+def _sidebar_context(log: logging.Logger) -> Tuple[str, str]:
+    st.sidebar.header("Contesto cliente")
+    slug = st.sidebar.text_input(
+        "Slug cliente",
+        value=st.session_state.get("slug", ""),
+        placeholder="es. acme",
+        key="inp_slug",
+    )
+    client_name = st.sidebar.text_input(
+        "Nome cliente (opz.)",
+        value=st.session_state.get("client_name", ""),
+        placeholder="ACME S.p.A.",
+        key="inp_client_name",
+    )
+    # Pulsante CHIUDI UI nella sidebar (colonna destra) sotto gli input
+    if st.sidebar.button("Chiudi UI", key="btn_close_ui_sidebar", use_container_width=True):
+        st.sidebar.info("Chiusura in corso…")
+        _request_shutdown(log)
+
+    st.session_state["slug"] = slug.strip()
+    st.session_state["client_name"] = client_name.strip()
+    return st.session_state["slug"], st.session_state["client_name"]
 
 
-def _pdf_to_text(file_bytes: bytes) -> str:
-    """Estrazione testo PDF (pypdf -> PyMuPDF)."""
+def _load_mapping(slug: str) -> Dict[str, Any]:
+    """
+    Carica il mapping rivisto se esiste, altrimenti default.
+    """
     try:
-        from pypdf import PdfReader  # type: ignore
-        reader = PdfReader(io.BytesIO(file_bytes))
-        return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+        return load_tags_reviewed(slug)
     except Exception:
-        pass
-    try:
-        import fitz  # type: ignore
-        text_parts = []
-        with fitz.open(stream=file_bytes, filetype="pdf") as doc:  # type: ignore[attr-defined]
-            for page in doc:
-                text_parts.append(page.get_text() or "")
-        return "\n".join(text_parts).strip()
-    except Exception as e:
-        raise RuntimeError("Installa `pypdf` oppure `pymupdf` per estrarre testo.") from e
+        return load_default_mapping()
 
 
-# ------------------------ App Streamlit ------------------------
+def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None:
+    st.subheader("Configurazione (mapping semantico)")
+    mapping = _load_mapping(slug)
 
-def main() -> None:
-    st.set_page_config(page_title="Timmy-KB · Onboarding UI", layout="wide")
+    # split: NO 'context' in UI (non lo mostriamo per richiesta esplicita)
+    cats, reserved = split_mapping(mapping)
+    normalize_keys = st.toggle(
+        "Normalizza chiavi in kebab-case",
+        value=True,
+        help="Applica SSoT di normalizzazione",
+        key="tgl_norm_keys",
+    )
+    col1, col2 = st.columns([1, 1])
 
-    redact = _safe_compute_redact_flag()
-    logger = _safe_get_logger(__name__, redact)
+    with col1:
+        st.caption("Panoramica categorie (solo lettura).")
+        st.json(cats, expanded=False)
 
-    st.title("Timmy-KB · Onboarding UI (incrementale)")
-    st.caption("Configurazione (mapping) + Pre-Onboarding. Runner Drive con import pigro e messaggi d’errore chiari.")
+    with col2:
+        st.caption("Modifica voci (una alla volta).")
+        # Accordion per-voce con key UNIVOCHE
+        for idx, cat_key in enumerate(sorted(cats.keys(), key=str)):
+            meta = cats.get(cat_key, {})
+            with st.expander(cat_key, expanded=False, key=f"exp_cat_{idx}_{cat_key}"):
+                amb = st.text_input(
+                    f"Ambito — {cat_key}",
+                    value=str(meta.get("ambito", "")),
+                    key=f"amb_{idx}_{cat_key}",
+                )
+                desc = st.text_area(
+                    f"Descrizione — {cat_key}",
+                    value=str(meta.get("descrizione", "")),
+                    height=120,
+                    key=f"desc_{idx}_{cat_key}",
+                )
+                examples_str = "\n".join([str(x) for x in (meta.get("esempio") or [])])
+                ex = st.text_area(
+                    f"Esempi (uno per riga) — {cat_key}",
+                    value=examples_str,
+                    height=120,
+                    key=f"ex_{idx}_{cat_key}",
+                )
 
-    # Sidebar
-    with st.sidebar:
-        st.header("Contesto")
-        slug = st.text_input("Slug cliente", placeholder="es. acme", key="slug")
-        client_name = st.text_input("Nome cliente", placeholder="Cliente ACME s.r.l.", key="client_name")
-        dry_run = st.toggle("Dry-run (solo locale)", value=True, key="dry_run")
-        st.caption("Valori usati nel context del mapping e nei runner Drive.")
-        st.divider()
-        if st.button("Esci", type="secondary"):
-            _shutdown_server()
+                if st.button(
+                    f"Salva “{cat_key}”",
+                    key=f"btn_save_cat_{idx}_{cat_key}",
+                    use_container_width=True,
+                ):
+                    try:
+                        # aggiorna solo questa voce
+                        new_cats = dict(cats)
+                        new_cats[cat_key] = {
+                            "ambito": amb.strip(),
+                            "descrizione": desc.strip(),
+                            "esempio": [ln.strip() for ln in ex.splitlines() if ln.strip()],
+                        }
+                        err = validate_categories(new_cats, normalize_keys=normalize_keys)
+                        if err:
+                            st.error(f"Errore: {err}")
+                        else:
+                            new_map = build_mapping(
+                                new_cats,
+                                reserved,
+                                slug=slug,
+                                client_name=client_name,
+                                normalize_keys=normalize_keys,
+                            )
+                            path = save_tags_reviewed(slug, new_map)
+                            log.info(
+                                {
+                                    "event": "tags_reviewed_saved_item",
+                                    "slug": slug,
+                                    "cat": cat_key,
+                                    "path": str(path),
+                                }
+                            )
+                            st.success(f"Salvata la voce: {cat_key}")
+                            try:
+                                st.rerun()
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        st.exception(e)
 
-    # Tabs
-    tab_config, tab_pre, tab_sem, tab_push = st.tabs(
-        ["Configurazione", "Pre-Onboarding", "Semantic Onboarding (vuoto)", "Onboarding Full (vuoto)"]
+        st.caption("Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali.")
+
+    # Azioni
+    colSx, colDx = st.columns([1, 1])
+    with colSx:
+        if st.button("Valida mapping", key="btn_validate_mapping", use_container_width=True):
+            err = validate_categories(cats, normalize_keys=normalize_keys)
+            if err:
+                st.error(f"Errore: {err}")
+            else:
+                st.success("Mapping valido.")
+    with colDx:
+        if st.button("Salva mapping rivisto", key="btn_save_mapping_all", type="primary", use_container_width=True):
+            try:
+                new_map = build_mapping(
+                    cats, reserved, slug=slug, client_name=client_name, normalize_keys=normalize_keys
+                )
+                path = save_tags_reviewed(slug, new_map)
+                st.success(f"Salvato: {path}")
+                log.info({"event": "tags_reviewed_saved_all", "slug": slug, "path": str(path)})
+            except Exception as e:
+                st.exception(e)
+
+
+def _render_drive_tab(log: logging.Logger, slug: str) -> None:
+    st.subheader("Drive")
+    st.caption(
+        "Crea la struttura su Drive a partire dal mapping rivisto e genera i README nelle sottocartelle di `raw/`."
     )
 
-    # ===== CONFIGURAZIONE (Editor — MAPPING) =====
-    with tab_config:
-        st.subheader("Configurazione — Editor del mapping semantico")
-        st.caption("Caricato da config/default_semantic_mapping.yaml. Salva in output/…/semantic/tags_reviewed.yaml")
+    colA, colB = st.columns([1, 1], gap="large")
 
-        st.markdown(
-            """
-            <style>
-            .map-card { background: #eef6ff; border: 1px solid #cfe3ff; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # Stato editor
-        st.session_state.setdefault("mapping_categories", {})
-        st.session_state.setdefault("mapping_reserved", {})
-        st.session_state.setdefault("mapping_normalize", True)
-        st.session_state.setdefault("mapping_auto_loaded", False)
-
-        # Autoload mapping
-        if not st.session_state["mapping_auto_loaded"]:
+    with colA:
+        if st.button("1) Crea/aggiorna struttura Drive", key="btn_drive_create", use_container_width=True):
             try:
-                root_map = load_default_mapping()
-                cats, res = split_mapping(root_map)
-                # UI: esempi in items con id
-                for k, v in list(cats.items()):
-                    v["esempio"] = examples_to_items(v.get("esempio", []))
-                st.session_state["mapping_categories"] = cats
-                st.session_state["mapping_reserved"] = res
-                st.session_state["mapping_auto_loaded"] = True
+                ids = build_drive_from_mapping(slug=slug, client_name=st.session_state.get("client_name", ""))
+                st.success(f"Struttura creata: {ids}")
+                log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
             except Exception as e:
-                st.error(f"Errore nel caricamento mapping: {e}")
+                st.exception(e)
+    with colB:
+        if st.button("2) Genera README in raw/", key="btn_drive_readmes", type="primary", use_container_width=True):
+            try:
+                result = emit_readmes_for_raw(slug=slug)
+                st.success(f"README creati: {len(result)}")
+                log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
+            except Exception as e:
+                st.exception(e)
 
-        st.toggle(
-            "Normalizza chiavi categoria in kebab-case al salvataggio",
-            value=st.session_state["mapping_normalize"],
-            key="mapping_normalize",
-        )
+    st.divider()
+    st.caption("Nota: richiede variabili d’ambiente valide (es. DRIVE_ID) e credenziali configurate.")
 
-        st.divider()
 
-        cats = st.session_state["mapping_categories"]
-        if not cats:
-            st.info("Nessun mapping caricato.")
-        else:
-            def _k(x: str) -> str:
-                x = x.strip().lower().replace("_", "-").replace(" ", "-")
-                import re as _re
-                x = _re.sub(r"[^a-z0-9-]+", "-", x)
-                x = _re.sub(r"-{2,}", "-", x).strip("-")
-                return x
+# =============================================================================
+# Main
+# =============================================================================
+def main() -> None:
+    st.set_page_config(page_title="NeXT — Onboarding UI", layout="wide")
+    redact = _safe_compute_redact_flag()
+    log = _safe_get_logger("onboarding_ui", redact)
 
-            cat_keys_sorted = sorted(list(cats.keys()), key=_k)
-            tab_objs = st.tabs(cat_keys_sorted)
+    st.title("NeXT — Onboarding UI")
+    st.write("Orchestratore UI per configurazione e provisioning struttura iniziale della Knowledge Base.")
 
-            if st.button("＋ Aggiungi nuova categoria"):
-                base = "nuova-categoria"
-                k = base
-                i = 1
-                while k in cats:
-                    k = f"{base}-{i}"
-                    i += 1
-                cats[k] = {"ambito": "", "descrizione": "", "esempio": []}
-                st.experimental_rerun()
+    slug, client_name = _sidebar_context(log)
+    if not slug or not client_name:
+        st.warning("Inserisci **slug** e **nome cliente** per procedere.")
+        return
 
-            for tab_key, cat_key in zip(tab_objs, cat_keys_sorted):
-                data = cats[cat_key]
-                with tab_key:
-                    rn_cols = st.columns([5, 2, 2])
-                    new_key = rn_cols[0].text_input("Rinomina categoria", value=cat_key, key=f"rn_key_{cat_key}")
-                    apply_rn = rn_cols[1].button("Applica rinomina", key=f"rn_apply_{cat_key}")
-                    del_cat = rn_cols[2].button("🗑️ Elimina categoria", key=f"rn_del_{cat_key}")
-
-                    if apply_rn:
-                        final_key = new_key.strip()
-                        if not final_key:
-                            st.warning("Nome categoria non valido.")
-                        elif final_key in cats and final_key != cat_key:
-                            st.warning(f"Esiste già '{final_key}'.")
-                        else:
-                            cats[final_key] = cats.pop(cat_key)
-                            st.experimental_rerun()
-
-                    if del_cat:
-                        cats.pop(cat_key, None)
-                        st.experimental_rerun()
-
-                    st.markdown('<div class="map-card">', unsafe_allow_html=True)
-                    ambito = st.text_input("Titolo (Ambito)", value=data.get("ambito", ""), key=f"amb_{cat_key}")
-                    descr = st.text_area("Descrizione", value=data.get("descrizione", ""), key=f"desc_{cat_key}")
-
-                    st.markdown("**Esempi**")
-                    items: List[Dict[str, str]] = data.get("esempio", []) or []
-                    for it in items:
-                        it.setdefault("id", uuid.uuid4().hex)
-                        it.setdefault("value", "")
-                    rm_idx = None
-                    for idx, it in enumerate(items):
-                        e_cols = st.columns([10, 1])
-                        it["value"] = e_cols[0].text_input(
-                            f"Esempio {idx+1}", value=it.get("value", ""), key=f"ex_{cat_key}_{it['id']}"
-                        )
-                        if e_cols[1].button("✖", key=f"ex_del_{cat_key}_{it['id']}"):
-                            rm_idx = idx
-                    if rm_idx is not None:
-                        items.pop(rm_idx)
-                        st.experimental_rerun()
-                    if st.button("＋ Aggiungi esempio", key=f"ex_add_{cat_key}"):
-                        items.append({"id": uuid.uuid4().hex, "value": ""})
-                        st.experimental_rerun()
-
-                    data["ambito"] = ambito
-                    data["descrizione"] = descr
-                    data["esempio"] = items
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-        st.divider()
-
-        cA, cB, cC = st.columns([1, 1, 1])
-        with cA:
-            if st.button("Valida mapping"):
-                cats_plain = {
-                    k: {
-                        "ambito": v.get("ambito", ""),
-                        "descrizione": v.get("descrizione", ""),
-                        "esempio": items_to_examples(v.get("esempio", []) or []),
-                    } for k, v in st.session_state["mapping_categories"].items()
-                }
-                err = validate_categories(cats_plain, normalize_keys=st.session_state["mapping_normalize"])
-                st.success("Mapping valido.") if not err else st.error(err)
-
-        with cB:
-            with st.expander("Anteprima YAML (mapping) — apri/chiudi", expanded=False):
-                cats_plain = {
-                    k: {
-                        "ambito": v.get("ambito", ""),
-                        "descrizione": v.get("descrizione", ""),
-                        "esempio": items_to_examples(v.get("esempio", []) or []),
-                    } for k, v in st.session_state["mapping_categories"].items()
-                }
-                final_map = build_mapping(
-                    categories=cats_plain,
-                    reserved=st.session_state["mapping_reserved"],
-                    slug=st.session_state.get("slug") or "",
-                    client_name=st.session_state.get("client_name") or "",
-                    normalize_keys=st.session_state["mapping_normalize"],
-                )
-                import yaml
-                st.code(yaml.safe_dump(final_map, allow_unicode=True, sort_keys=True), language="yaml")
-
-        with cC:
-            base_root = Path("output")
-            slug_val = st.session_state.get("slug")
-            if st.button("Salva mapping (tags_reviewed.yaml)"):
-                try:
-                    if not slug_val:
-                        st.warning("Inserisci lo slug nella sidebar.")
-                    else:
-                        cats_plain = {
-                            k: {
-                                "ambito": v.get("ambito", ""),
-                                "descrizione": v.get("descrizione", ""),
-                                "esempio": items_to_examples(v.get("esempio", []) or []),
-                            } for k, v in st.session_state["mapping_categories"].items()
-                        }
-                        err = validate_categories(cats_plain, normalize_keys=st.session_state["mapping_normalize"])
-                        if err:
-                            st.error(err)
-                        else:
-                            final_map = build_mapping(
-                                categories=cats_plain,
-                                reserved=st.session_state["mapping_reserved"],
-                                slug=slug_val,
-                                client_name=st.session_state.get("client_name") or slug_val,
-                                normalize_keys=st.session_state["mapping_normalize"],
-                            )
-                            path = save_tags_reviewed(slug_val, final_map, base_root=base_root)
-                            st.success(f"Salvato: {path}")
-                except Exception as e:
-                    st.error(f"Errore salvataggio: {e}")
-
-    # ===== PRE-ONBOARDING =====
-    with tab_pre:
-        st.subheader("Pre-Onboarding — Vision YAML + Drive provisioning")
-        st.caption("1) Vision PDF → vision.yaml (solo O/V/M). 2) Provisioning Drive (struttura + README).")
-
-        uploaded_pdf = st.file_uploader("Carica vision_statement.pdf", type=["pdf"], key="vision_pdf")
-
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            if st.button("Estrai testo → O/V/M → vision.yaml"):
-                slug_val = st.session_state.get("slug")
-                if not slug_val:
-                    st.warning("Inserisci lo slug nella sidebar.")
-                elif not uploaded_pdf:
-                    st.warning("Seleziona prima un file PDF.")
-                else:
-                    try:
-                        pdf_bytes = uploaded_pdf.read()
-                        full_text = _pdf_to_text(pdf_bytes)
-                        ovm = extract_ovm_sections(full_text)
-                        path = write_vision_yaml(slug_val, ovm, base_root="output")
-                        st.session_state["vision_text"] = full_text
-                        st.success(f"vision.yaml scritto in {path}")
-                    except Exception as e:
-                        st.error(f"Errore durante l'estrazione/scrittura: {e}")
-
-        with c2:
-            if st.session_state.get("vision_text"):
-                st.markdown("**Anteprima estratto (prime ~2000 battute)**")
-                st.code(st.session_state["vision_text"][:2000], language="markdown")
-                st.download_button(
-                    label="Scarica estratto (TXT)",
-                    data=st.session_state["vision_text"],
-                    file_name="vision_statement_extracted.txt",
-                    mime="text/plain",
-                )
-
-        st.divider()
-        st.markdown("### Passi su Drive")
-        d1, d2 = st.columns([1, 1])
-
-        with d1:
-            if st.button("Crea struttura su Drive"):
-                slug_val = st.session_state.get("slug")
-                if not slug_val:
-                    st.warning("Inserisci lo slug nella sidebar.")
-                else:
-                    try:
-                        from src.config_ui.drive_runner import build_drive_from_mapping
-                        ids = build_drive_from_mapping(
-                            slug_val,
-                            st.session_state.get("client_name") or slug_val,
-                            require_env=not st.session_state.get("dry_run", True),
-                            base_root="output",
-                        )
-                        st.success(f"Struttura creata. ClientFolderID: {ids.get('client_folder_id','?')[:6]}…  RAW: {ids.get('raw_id','?')[:6]}…")
-                    except Exception as e:
-                        st.error(f"Errore Drive (creazione struttura): {e}")
-
-        with d2:
-            if st.button("Genera README nelle cartelle RAW"):
-                slug_val = st.session_state.get("slug")
-                if not slug_val:
-                    st.warning("Inserisci lo slug nella sidebar.")
-                else:
-                    try:
-                        from src.config_ui.drive_runner import emit_readmes_for_raw
-                        uploaded = emit_readmes_for_raw(
-                            slug_val,
-                            base_root="output",
-                            require_env=not st.session_state.get("dry_run", True),
-                        )
-                        st.success(f"README caricati in {len(uploaded)} cartelle RAW.")
-                    except Exception as e:
-                        st.error(f"Errore Drive (README): {e}")
-
-    with tab_sem:
-        st.caption("")
-    with tab_push:
-        st.caption("")
+    tabs = st.tabs(["Configurazione", "Drive"])
+    with tabs[0]:
+        _render_config_tab(log, slug, client_name)
+    with tabs[1]:
+        _render_drive_tab(log, slug)
 
 
 if __name__ == "__main__":

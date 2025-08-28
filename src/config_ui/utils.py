@@ -1,6 +1,8 @@
 # src/config_ui/utils.py
 from __future__ import annotations
+
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any
 
@@ -14,6 +16,22 @@ try:
     from pipeline.file_utils import safe_write_text as _repo_safe_write_text  # type: ignore
 except Exception:
     _repo_safe_write_text = None  # type: ignore
+
+
+# ========= Normalizzazione chiavi (SSoT) =========
+def to_kebab(s: str) -> str:
+    """
+    Normalizza una stringa in kebab-case tollerante:
+    - strip + lower
+    - converte spazi/underscore in '-'
+    - riduce multipli '-'
+    - elimina caratteri non [a-z0-9-]
+    Questa è la funzione CANONICA da riusare in tutta la codebase.
+    """
+    s = (s or "").strip().lower().replace("_", "-").replace(" ", "-")
+    s = re.sub(r"[^a-z0-9-]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    return s
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:

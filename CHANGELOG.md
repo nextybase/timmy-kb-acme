@@ -5,6 +5,29 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
 
+## 1.5.0 fixing — 2025-08-28
+
+### Added
+- **Editing per-voce (UI Configurazione):** anteprima trasformata in *accordion*; ogni categoria ha campi propri (Ambito, Descrizione, Esempi) e pulsante **Salva** puntuale.
+- **Pulsante “Chiudi UI”**: aggiunto in **sidebar** (sotto gli input di contesto) per terminare Streamlit dal terminale (SIGTERM, fallback sicuro).
+
+### Changed
+- **Nasconde `context` nella UI**: l’anteprima/edit non mostra più `context: {slug, client_name, created_at}`.
+- **Requisiti d’avvio più stringenti:** per procedere servono **slug** e **nome cliente**.
+- **Normalizzazione chiavi centralizzata:** introdotta `to_kebab()` in `src/config_ui/utils.py` e riuso in tutta la UI.
+- **Logger coerente**: uso di `get_structured_logger(..., context=...)` anche nei runner, con redazione attiva via `compute_redact_flag`.
+
+### Fixed
+- **Bottone “Genera README in raw/”**: risolto crash (duplica logica/mancato import). Ora la generazione usa la `to_kebab()` centralizzata e funziona correttamente.
+- **StreamlitDuplicateElementId**: assegnate **key univoche** a tutti i `button` e agli `expander`.
+- **Allineamento runner Drive**: cleanup import e coerenza con le API `pipeline.drive_utils` (client, creazione struttura, upload config).
+
+### Notes
+- Patch **backward-compatible**; nessun breaking change.
+- Confermate **path-safety** e **scritture atomiche**; rispetto della regola di **riuso** delle funzioni di pipeline.
+
+---
+
 ## [Unreleased] — 2025-08-28
 
 ### Added

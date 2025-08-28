@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 
-# Import da pipeline
+# Import da pipeline (con fallback per ambienti dev)
 try:
     from pipeline.context import ClientContext  # type: ignore
     from pipeline.logging_utils import get_structured_logger  # type: ignore
@@ -29,9 +29,13 @@ from .mapping_editor import (
     mapping_to_raw_structure,
     write_raw_structure_yaml,
 )
+from .utils import to_kebab  # SSoT per normalizzazione nomi cartelle
 
-# Logger
-def _logger():
+
+# ===== Logger ================================================================
+
+def _get_logger(context=None):
+    """Ritorna un logger strutturato; fallback no-op in assenza del modulo pipeline."""
     if get_structured_logger is None:
         class _Stub:
             def info(self, *a, **k): pass
@@ -39,41 +43,47 @@ def _logger():
             def error(self, *a, **k): pass
             def exception(self, *a, **k): pass
         return _Stub()
-    return get_structured_logger("config_ui.drive_runner")
+    return get_structured_logger("config_ui.drive_runner", context=context)
 
 
-def build_drive_from_mapping(slug: str, client_name: Optional[str], *,
-                             require_env: bool = True,
-                             base_root: Path | str = "output") -> Dict[str, str]:
+# ===== Creazione struttura Drive da mapping =================================
+
+def build_drive_from_mapping(
+    slug: str,
+    client_name: Optional[str],
+    *,
+    require_env: bool = True,
+    base_root: Path | str = "output",
+) -> Dict[str, str]:
     """
     Crea su Drive:
       - cartella cliente con nome = slug
       - upload config.yaml
       - crea 'raw/' (dalle categorie del mapping) + 'contrattualistica/'
-    Ritorna dict: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
+    Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
-    log = _logger()
     if ClientContext is None or get_drive_service is None:
         raise RuntimeError("API Drive/Context non disponibili nel repo.")
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
     drive_parent_id = ctx.env.get("DRIVE_ID")
     if not drive_parent_id:
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
 
-    # Cartella cliente
+    # Cartella cliente (sotto DRIVE_ID)
     client_folder_id = create_drive_folder(
         svc, slug, parent_id=drive_parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
 
-    # Upload config.yaml
+    # Upload config.yaml nella cartella cliente
     upload_config_to_drive_folder(
         svc, ctx, parent_id=client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
 
-    # Struttura derivata dal mapping
+    # Struttura derivata dal mapping (locale -> YAML sintetico -> creazione su Drive)
     mapping = load_tags_reviewed(slug, base_root=base_root)
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
@@ -87,7 +97,7 @@ def build_drive_from_mapping(slug: str, client_name: Optional[str], *,
     if not raw_id:
         raise RuntimeError("ID cartella 'raw' non reperito dalla creazione struttura.")
 
-    out = {"client_folder_id": client_folder_id, "raw_id": raw_id}
+    out: Dict[str, str] = {"client_folder_id": client_folder_id, "raw_id": raw_id}
     if contr_id:
         out["contrattualistica_id"] = contr_id
 
@@ -95,9 +105,10 @@ def build_drive_from_mapping(slug: str, client_name: Optional[str], *,
     return out
 
 
-# ===== README per ogni categoria raw (PDF o TXT fallback) =====
+# ===== Helpers Drive =========================================================
 
 def _drive_list_folders(service, parent_id: str) -> List[Dict[str, str]]:
+    """Elenca le sottocartelle (id, name) immediate sotto parent_id."""
     results: List[Dict[str, str]] = []
     page_token = None
     while True:
@@ -117,7 +128,7 @@ def _drive_list_folders(service, parent_id: str) -> List[Dict[str, str]]:
 
 
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
-    """Tenta PDF via reportlab, altrimenti TXT."""
+    """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
     try:
         from reportlab.lib.pagesizes import A4  # type: ignore
         from reportlab.pdfgen import canvas  # type: ignore
@@ -161,6 +172,7 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
 
 
 def _drive_upload_bytes(service, parent_id: str, name: str, data: bytes, mime: str) -> str:
+    """Carica un file (bytes) in una cartella Drive."""
     from googleapiclient.http import MediaIoBaseUpload  # type: ignore
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
     body = {"name": name, "parents": [parent_id], "mimeType": mime}
@@ -173,8 +185,11 @@ def _drive_upload_bytes(service, parent_id: str, name: str, data: bytes, mime: s
     return file.get("id")
 
 
-def emit_readmes_for_raw(slug: str, *, base_root: Path | str = "output",
-                         require_env: bool = True) -> Dict[str, str]:
+# ===== README per ogni categoria raw (PDF o TXT fallback) ====================
+
+def emit_readmes_for_raw(
+    slug: str, *, base_root: Path | str = "output", require_env: bool = True
+) -> Dict[str, str]:
     """
     Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback) con:
       - ambito (titolo), descrizione, esempi
@@ -182,9 +197,9 @@ def emit_readmes_for_raw(slug: str, *, base_root: Path | str = "output",
     """
     if ClientContext is None or get_drive_service is None:
         raise RuntimeError("API Drive/Context non disponibili nel repo.")
-    log = _logger()
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
     mapping = load_tags_reviewed(slug, base_root=base_root)
@@ -212,7 +227,7 @@ def emit_readmes_for_raw(slug: str, *, base_root: Path | str = "output",
 
     uploaded: Dict[str, str] = {}
     for cat_name, meta in cats.items():
-        folder_k = _to_kebab(cat_name)
+        folder_k = to_kebab(cat_name)  # riuso SSoT (niente duplicazioni)
         folder_id = name_to_id.get(folder_k)
         if not folder_id:
             log.warning({"event": "raw_subfolder_missing", "category": folder_k})
@@ -225,17 +240,9 @@ def emit_readmes_for_raw(slug: str, *, base_root: Path | str = "output",
         file_id = _drive_upload_bytes(
             svc, folder_id,
             "README.pdf" if mime == "application/pdf" else "README.txt",
-            data, mime
+            data, mime,
         )
         uploaded[folder_k] = file_id
 
     log.info({"event": "raw_readmes_uploaded", "count": len(uploaded)})
     return uploaded
-
-
-# Local helper (usato in emit_readmes_for_raw)
-def _to_kebab(s: str) -> str:
-    s = s.strip().lower().replace("_", "-").replace(" ", "-")
-    s = re.sub(r"[^a-z0-9-]+", "-", s)
-    s = re.sub(r"-{2,}", "-", s).strip("-")
-    return s
