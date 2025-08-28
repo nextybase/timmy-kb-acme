@@ -111,7 +111,9 @@ def bootstrap_semantic_templates(
     """
     Copia i template semantici globali nella cartella cliente:
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
-    - default_semantic_mapping.yaml -> semantic/semantic_mapping.yaml (+ blocco context)
+    - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
+
+    Nota: se vuoi retro-compatibilità, puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
     semantic_dir = context.base_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -121,7 +123,7 @@ def bootstrap_semantic_templates(
     mapping_src = cfg_dir / "default_semantic_mapping.yaml"
 
     struct_dst = semantic_dir / "cartelle_raw.yaml"
-    mapping_dst = semantic_dir / "semantic_mapping.yaml"
+    mapping_dst = semantic_dir / "tags_reviewed.yaml"   # <- nuovo nome allineato alla UI
 
     ensure_within(semantic_dir, struct_dst)
     ensure_within(semantic_dir, mapping_dst)
@@ -134,7 +136,7 @@ def bootstrap_semantic_templates(
         shutil.copy2(mapping_src, mapping_dst)
         logger.info({"event": "semantic_template_copied", "file": str(mapping_dst)})
 
-    # Iniezione del blocco `context` in modo atomico e SSoT
+    # Iniezione blocco `context` nel mapping (atomico)
     try:
         import yaml
 
@@ -143,25 +145,33 @@ def bootstrap_semantic_templates(
             with mapping_dst.open("r", encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if isinstance(loaded, dict):
-                    data = loaded
+                    data = loaded or {}
 
         ctx = {
             "slug": context.slug,
             "client_name": client_name or context.slug,
             "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
         }
-        if "context" not in data and isinstance(data, dict):
-            # Prepend `context` preservando l'ordine delle chiavi
+
+        # Prepend `context` solo se non già presente
+        if "context" not in data:
             data = {"context": ctx, **data}
             payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
             ensure_within(semantic_dir, mapping_dst)
             safe_write_text(mapping_dst, payload, atomic=True)
             logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
-    except Exception as e:  # noqa: BLE001 - log e continua: è uno stub non bloccante
-        logger.warning(
-            {"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]}
-        )
 
+        # (Opzionale) retro-compatibilità: mantieni anche semantic_mapping.yaml
+        legacy = semantic_dir / "semantic_mapping.yaml"
+        if not legacy.exists():
+            try:
+                shutil.copy2(mapping_dst, legacy)
+                logger.info({"event": "semantic_mapping_legacy_copied", "file": str(legacy)})
+            except Exception:
+                pass
+
+    except Exception as e:  # non blocca il flusso
+        logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
 
 # ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni oltre I/O necessario -------
 
@@ -221,6 +231,12 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         cfg = {}
     if client_name:
         cfg["client_name"] = client_name
+
+    # Default coerenti con la nuova UI
+    rel_semantic_dir = Path(f"timmy-kb-{context.slug}/semantic")
+    cfg.setdefault("cartelle_raw_yaml", str(rel_semantic_dir / "cartelle_raw.yaml"))
+    cfg.setdefault("semantic_mapping_yaml", str(rel_semantic_dir / "tags_reviewed.yaml"))
+
     write_client_config_file(context, cfg)
 
     yaml_structure_file = _resolve_yaml_structure_file()

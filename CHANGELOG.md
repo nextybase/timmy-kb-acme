@@ -5,6 +5,48 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
 
+## [Unreleased] — 2025-08-28
+
+### Added
+- **Nuova tab “Configurazione” (prima posizione)**: editor del *mapping semantico* basato su `config/default_semantic_mapping.yaml`, con:
+  - schede per categoria (tabs, titolo = nome cartella);
+  - campi **Ambito**, **Descrizione**, **Esempi** (lista dinamica);
+  - validazione e **anteprima YAML** (expander apri/chiudi);
+  - salvataggio atomico in `output/timmy-kb-<slug>/semantic/tags_reviewed.yaml`.
+- **Caricamento Vision PDF (pre-onboarding)**:
+  - estrazione robusta delle sole sezioni **Organization / Vision / Mission**;
+  - normalizzazione testo e scrittura di `output/timmy-kb-<slug>/semantic/vision.yaml`.
+- **Runner Drive**:
+  - creazione cartella cliente `<slug>` su Drive + upload `config.yaml`;
+  - generazione della struttura **raw/** e **contrattualistica/** derivata da `tags_reviewed.yaml`;
+  - emissione automatica di **README.pdf** (o `.txt` fallback) in ogni sotto-cartella di `raw/`, contenente ambito, descrizione ed esempi.
+
+### Changed
+- Flusso UI rivisto: l’editor delle cartelle *raw* è stato sostituito dall’**editor del mapping**; la struttura `raw/` viene ora derivata da `tags_reviewed.yaml`.
+- La tab “Struttura (Editor — mapping)” è stata rinominata in **“Configurazione”** e portata al primo posto.
+- Anteprima YAML del mapping trasformata in **expander apri/chiudi**.
+
+### Fixed
+- Estrazione O/V/M dal PDF: migliorata la rilevazione dei titoli, la delimitazione dei paragrafi e la pulizia (linee orizzontali, bullet isolati, numeri pagina).
+- Serializzazione YAML di `vision.yaml` e `tags_reviewed.yaml`: struttura corretta e ordinata, con scrittura **atomica**.
+- **NameError `re`** nel generatore di README: centralizzata la normalizzazione in `utils.to_kebab()` ed import sistemati.
+
+### Removed
+- Pulsante **“Imposta in config.yaml (raw)”** e selettori sorgente YAML/“sezione” non più necessari nel nuovo flusso.
+- Editor ad albero della vecchia `cartelle_raw.yaml` dall’interfaccia.
+
+### Internal
+- Introdotto package **`src/config_ui/`** che separa la logica dall’UI:
+  - `utils.py` (path-safety `ensure_within_and_resolve`, scritture atomiche `safe_write_text_compat`, `yaml_load/dump`, `to_kebab`, estrazione PDF);
+  - `mapping_editor.py` (split/build/validate mapping, persistenza `tags_reviewed.yaml`, derivazione struttura `raw/`);
+  - `vision_parser.py` (parser O/V/M e writer `vision.yaml`);
+  - `drive_runner.py` (creazione struttura Drive e upload README).
+- Aggiornati gli import per usare, ove disponibili, le API di `src/pipeline` (context/drive/upload/logging).
+- **Hardening**: più controlli sui path, fallback su librerie PDF, gestione errori UI più chiara.
+- Nota di compatibilità: il vecchio `src/config_onboarding.py` resta temporaneamente nel repo per continuità; verrà rimosso quando tutte le tab saranno migrate sui nuovi runner.
+
+---
+
 ## [1.5.0] Fixing e allineamenti - 2025-08-27
 
 ### Added
