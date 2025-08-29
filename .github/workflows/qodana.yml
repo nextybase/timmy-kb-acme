@@ -1,24 +1,23 @@
-name: Qodana
-
+﻿name: code-quality
 on:
-  push:
-    branches: [ "**" ]
-  pull_request:
-    branches: [ "**" ]
-
+  pull_request: { branches: [ main ] }
+  push:        { branches: [ main ] }
 jobs:
   qodana:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Qodana Scan
         uses: JetBrains/qodana-action@v2025.2
         with:
-          args: --baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
+          # image ufficiale + baseline + quality gate (soli 'args')
+          args: --image,jetbrains/qodana-python-community:2025.2,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
           upload-result: true
           artifact-name: qodana-report
           results-dir: qodana-results
