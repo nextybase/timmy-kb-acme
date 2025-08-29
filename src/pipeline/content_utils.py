@@ -1,377 +1,145 @@
-# src/pipeline/content_utils.py
-"""
-Utility per generare e validare i Markdown a partire dai PDF in `raw/` nella
-pipeline Timmy-KB.
-
-Cosa fa questo modulo
----------------------
-- Converte i PDF organizzati in sottocartelle (anche annidate) in file `.md`
-  **aggregati per categoria top-level** sotto `book/`, preservando la gerarchia
-  con intestazioni Markdown.
-- Salta la rigenerazione se non ci sono cambiamenti (fingerprint dell’albero PDF).
-- Genera `SUMMARY.md` e `README.md` nella cartella `book/`.
-- Applica **path-safety STRONG** (`ensure_within`) e scritture **atomiche**
-  (SSoT) con `safe_write_text`.
-- Niente `print()`: solo logging strutturato.
-
-Note implementative
--------------------
-- Le write usano sempre `pipeline.file_utils.safe_write_text` (no wrapper legacy).
-- I nomi dei file `SUMMARY.md` e `README.md` provengono da `pipeline.constants`.
-- Concorrenza a grana grossa per categoria (configurabile).
-"""
-
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from typing import Optional, List, Tuple
-from hashlib import sha256
-from concurrent.futures import ThreadPoolExecutor
+from typing import Iterable
 
-from pipeline.logging_utils import get_structured_logger
-from pipeline.file_utils import safe_write_text  # ✅ SSoT scrittura atomica
-from pipeline.exceptions import PipelineError, InputDirectoryMissing
-from pipeline.context import ClientContext
-from pipeline.path_utils import ensure_within, sanitize_filename  # STRONG + sanitizzazione
-from pipeline import constants as _C  # per nomi file e default
-
-# Logger di modulo (fallback). Le funzioni preferiscono un logger contestualizzato.
-logger = get_structured_logger("pipeline.content_utils")
-
-# ----------------------------
-# Default di concorrenza/skip
-# ----------------------------
-DEFAULT_SKIP_IF_UNCHANGED: bool = True
-DEFAULT_MAX_WORKERS: int = 4
+from pipeline.exceptions import PipelineError
 
 
-def _titleize(name: str) -> str:
-    """Converte un nome cartella/file in un titolo leggibile."""
-    base = name.rsplit(".", 1)[0]
-    return " ".join(part.capitalize() for part in base.replace("_", " ").replace("-", " ").split())
+# ---------- helpers ----------
 
-
-def _ensure_heading_stack(
-    current_depth: int,
-    desired_depth: int,
-    headings: List[str],
-    parts: List[str],
-) -> List[str]:
-    """Garantisce le intestazioni fino a `desired_depth` incluso."""
-    while current_depth <= desired_depth:
-        title = _titleize(parts[current_depth - 1])
-        level = "#" * (current_depth + 1)  # depth 1 => "##", depth 2 => "###", ...
-        headings.append(f"{level} {title}\n")
-        current_depth += 1
-    return headings
-
-
-def _fingerprint_category(category: Path) -> str:
-    """Fingerprint deterministico basato su (path relativo, mtime_ns, size) dei PDF."""
-    parts: List[str] = []
-    for pdf in sorted(category.rglob("*.pdf")):
-        try:
-            st = pdf.stat()
-            rel = pdf.relative_to(category).as_posix()
-            parts.append(f"{rel}|{st.st_mtime_ns}|{st.st_size}")
-        except FileNotFoundError:
-            continue
-    src = "\n".join(parts) if parts else "EMPTY"
-    return sha256(src.encode("utf-8")).hexdigest()
-
-
-def _build_category_markdown(category: Path) -> str:
-    """Costruisce il contenuto markdown per una singola categoria (senza I/O)."""
-    content_parts: List[str] = [f"# {_titleize(category.name)}\n\n"]
-
-    pdf_files = sorted(category.rglob("*.pdf"))
-    last_parts: List[str] = []
-
-    if not pdf_files:
-        content_parts.append("_Nessun PDF trovato in questa categoria._\n")
-    else:
-        for pdf_path in pdf_files:
-            rel = pdf_path.parent.relative_to(category)  # path rispetto alla categoria
-            parts = list(rel.parts) if rel.parts else []
-
-            # Intestazioni gerarchiche per sottocartelle (stampate solo se cambiano)
-            heading_stack: List[str] = []
-            current_depth = 1
-            desired_depth = len(parts)
-            if desired_depth > 0 and parts != last_parts:
-                heading_stack = _ensure_heading_stack(current_depth, desired_depth, heading_stack, parts)
-                last_parts = parts
-
-            # Titolo del PDF
-            pdf_title = _titleize(pdf_path.name)
-            pdf_level = "#" * (desired_depth + 2)  # depth 0 => "##"
-            heading_line = ("## " + pdf_title + "\n") if desired_depth == 0 else f"{pdf_level} {pdf_title}\n"
-
-            if heading_stack:
-                content_parts.extend(heading_stack)
-            content_parts.append(heading_line)
-            content_parts.append(f"(Contenuto estratto/conversione da `{pdf_path.name}`)\n\n")
-
-    return "".join(content_parts)
-
-
-# --------------------------------------------------------------------
-# Helpers estratti per ridurre la funzione orchestratrice (refactor)
-# --------------------------------------------------------------------
-def _collect_categories(raw_dir: Path) -> List[Path]:
-    """Ritorna le sottocartelle immediate di raw/ in ordine deterministico."""
-    return sorted([p for p in raw_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
-
-
-def _process_category(category: Path) -> Tuple[str, str]:
-    """Costruisce (content, fingerprint) per una singola categoria (no I/O)."""
-    content = _build_category_markdown(category)
-    fp = _fingerprint_category(category)
-    return content, fp
-
-
-def _write_outputs(md_dir: Path, safe_name: str, content: str, fp: str, logger: logging.Logger) -> None:
-    """Scrive `<safe_name>.md` e sidecar `.fp` con guardie STRONG e scrittura atomica."""
-    md_path = md_dir / f"{safe_name}.md"
-    fp_path = md_path.with_suffix(md_path.suffix + ".fp")
-    ensure_within(md_dir, md_path)
-    ensure_within(md_dir, fp_path)
-    md_path.parent.mkdir(parents=True, exist_ok=True)
-    safe_write_text(md_path, content, encoding="utf-8", atomic=True)
-    safe_write_text(fp_path, fp + "\n", encoding="utf-8", atomic=True)
-    logger.info("File markdown scritto correttamente", extra={"file_path": str(md_path)})
-
-
-def _resolve_options(skip_if_unchanged: Optional[bool], max_workers: Optional[int]) -> Tuple[bool, int]:
-    """Legge i default da constants e restituisce (skip_if_unchanged, max_workers)."""
-    if skip_if_unchanged is None:
-        skip_if_unchanged = bool(getattr(_C, "SKIP_IF_UNCHANGED", DEFAULT_SKIP_IF_UNCHANGED))
-    if max_workers is None:
-        max_workers = int(getattr(_C, "MAX_CONCURRENCY", DEFAULT_MAX_WORKERS))
-    return skip_if_unchanged, max_workers
-
-
-def _guard_paths(context: ClientContext, raw_dir: Path, md_dir: Path) -> None:
-    """Applica guard-rail STRONG e validazioni di esistenza/formato per RAW/MD."""
-    try:
-        ensure_within(context.base_dir, raw_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Path non sicuro per la sorgente RAW: {raw_dir} ({e})",
-            slug=context.slug,
-            file_path=raw_dir,
-        )
-    try:
-        ensure_within(context.base_dir, md_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Path non sicuro per la destinazione MD: {md_dir} ({e})",
-            slug=context.slug,
-            file_path=md_dir,
-        )
-    if not raw_dir.exists():
-        raise InputDirectoryMissing(f"La cartella raw non esiste: {raw_dir}", slug=context.slug, file_path=raw_dir)
-    if not raw_dir.is_dir():
-        raise InputDirectoryMissing(f"Il path raw non è una directory: {raw_dir}", slug=context.slug, file_path=raw_dir)
-
-
-def _iter_results(categories: List[Path], max_workers: int) -> List[Tuple[Path, str, str]]:
-    """Elabora le categorie (eventualmente in parallelo) e ritorna [(cat, content, fp)]."""
-    results: List[Tuple[Path, str, str]] = []
-    if max_workers > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            mapped = list(ex.map(_process_category, categories))
-        results = [(cat, content, fp) for cat, (content, fp) in zip(categories, mapped)]
-    else:
-        for cat in categories:
-            content, fp = _process_category(cat)
-            results.append((cat, content, fp))
-    return results
-
-
-def _should_skip(fp_path: Path, fp: str) -> bool:
-    """True se esiste il sidecar .fp ed è invariato."""
-    if not fp_path.exists():
-        return False
-    try:
-        old_fp = fp_path.read_text(encoding="utf-8").strip()
-    except Exception:
-        return False
-    return old_fp == fp
-
-
-def _emit_category(
-    md_dir: Path,
-    category: Path,
-    content: str,
-    fp: str,
-    logger: logging.Logger,
-    *,
-    skip_if_unchanged: bool,
-) -> None:
-    """Prepara nomi/percorsi, valuta lo skip e scrive output atomici per una categoria."""
-    safe_name = sanitize_filename(category.name)
-    md_path = md_dir / f"{safe_name}.md"
-    fp_path = md_path.with_suffix(md_path.suffix + ".fp")
-
-    # STRONG path-safety
-    ensure_within(md_dir, md_path)
-    ensure_within(md_dir, fp_path)
-
-    if skip_if_unchanged and _should_skip(fp_path, fp):
-        logger.info("Skip generazione: nessuna modifica", extra={"file_path": str(md_path)})
-        return
-
-    logger.info("Creazione file markdown aggregato", extra={"file_path": str(md_path)})
-    _write_outputs(md_dir, safe_name, content, fp, logger)
-
-
-# --------------------------------------------------------------------
-# Orchestratore: conversione PDF → Markdown per categoria top-level
-# --------------------------------------------------------------------
-def convert_files_to_structured_markdown(
-    context: ClientContext,
-    raw_dir: Optional[Path] = None,
-    md_dir: Optional[Path] = None,
-    log: Optional[logging.Logger] = None,
-    *,
-    skip_if_unchanged: Optional[bool] = None,
-    max_workers: Optional[int] = None,
-) -> None:
-    """Converte i PDF in `raw/` in file Markdown aggregati per categoria top-level."""
-    raw_dir = Path(raw_dir or context.raw_dir)
-    md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
-
-    # Opzioni e guard-rail
-    skip_if_unchanged, max_workers = _resolve_options(skip_if_unchanged, max_workers)
-    _guard_paths(context, raw_dir, md_dir)
-    md_dir.mkdir(parents=True, exist_ok=True)
-
-    # Raccolta → Process → Write
-    categories = _collect_categories(raw_dir)
-    results = _iter_results(categories, max_workers)
-
-    for category, content, fp in sorted(results, key=lambda x: x[0].name.lower()):
-        try:
-            _emit_category(md_dir, category, content, fp, local_logger, skip_if_unchanged=skip_if_unchanged)
-        except Exception as e:
-            # Nota: in caso di errore, segnaliamo il path previsto del file md
-            err_md = md_dir / f"{sanitize_filename(category.name)}.md"
-            local_logger.error(
-                "Errore nella creazione markdown",
-                extra={"slug": context.slug, "file_path": str(err_md), "error": str(e)},
-            )
-            raise PipelineError(str(e), slug=context.slug, file_path=err_md)
-
-
-def generate_summary_markdown(
-    context: ClientContext,
-    md_dir: Optional[Path] = None,
-    log: Optional[logging.Logger] = None,
-) -> None:
-    """Genera `SUMMARY.md` in `md_dir` elencando tutti i `.md` (esclusi SUMMARY/README)."""
-    md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
-
-    try:
-        ensure_within(context.base_dir, md_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Tentativo di scrivere file in path non sicuro: {md_dir} ({e})",
-            slug=context.slug,
-            file_path=md_dir,
-        )
-
-    summary_path = md_dir / _C.SUMMARY_MD_NAME
-    try:
-        ensure_within(md_dir, summary_path)
-    except Exception as e:
-        raise PipelineError(
-            f"Path di output non sicuro per SUMMARY.md: {summary_path} ({e})",
-            slug=context.slug,
-            file_path=summary_path,
-        )
-
-    try:
-        content = "# Summary\n\n"
-        for md_file in sorted(md_dir.glob("*.md")):
-            if md_file.name not in (_C.SUMMARY_MD_NAME, _C.README_MD_NAME):
-                content += f"- [{md_file.stem}]({md_file.name})\n"
-
-        local_logger.info("Generazione SUMMARY.md", extra={"slug": context.slug, "file_path": str(summary_path)})
-        safe_write_text(summary_path, content, encoding="utf-8", atomic=True)
-        local_logger.info("SUMMARY.md generato con successo", extra={"slug": context.slug, "file_path": str(summary_path)})
-    except Exception as e:
-        local_logger.error("Errore generazione SUMMARY.md", extra={"slug": context.slug, "file_path": str(summary_path), "error": str(e)})
-        raise PipelineError(str(e), slug=context.slug, file_path=summary_path)
-
-
-def generate_readme_markdown(
-    context: ClientContext,
-    md_dir: Optional[Path] = None,
-    log: Optional[logging.Logger] = None,
-) -> None:
-    """Genera `README.md` in `md_dir`."""
-    md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
-
-    try:
-        ensure_within(context.base_dir, md_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Tentativo di scrivere file in path non sicuro: {md_dir} ({e})",
-            slug=context.slug,
-            file_path=md_dir,
-        )
-
-    readme_path = md_dir / _C.README_MD_NAME
-    try:
-        ensure_within(md_dir, readme_path)
-    except Exception as e:
-        raise PipelineError(
-            f"Path di output non sicuro per README.md: {readme_path} ({e})",
-            slug=context.slug,
-            file_path=readme_path,
-        )
-
-    try:
-        content = "# Documentazione Timmy-KB\n"
-        local_logger.info("Generazione README.md", extra={"slug": context.slug, "file_path": str(readme_path)})
-        safe_write_text(readme_path, content, encoding="utf-8", atomic=True)
-        local_logger.info("README.md generato con successo", extra={"slug": context.slug, "file_path": str(readme_path)})
-    except Exception as e:
-        local_logger.error("Errore generazione README.md", extra={"slug": context.slug, "file_path": str(readme_path), "error": str(e)})
-        raise PipelineError(str(e), slug=context.slug, file_path=readme_path)
-
-
-def validate_markdown_dir(
-    context: ClientContext,
-    md_dir: Optional[Path] = None,
-    log: Optional[logging.Logger] = None,
-) -> None:
-    """Verifica che la directory Markdown esista e sia valida.
-
-    Raises:
-        InputDirectoryMissing: se la cartella non esiste o non è una directory.
-        PipelineError: se il path è fuori dalla base consentita.
+def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
     """
-    md_dir = Path(md_dir or context.md_dir)
-    local_logger = log or get_structured_logger("pipeline.content_utils", context=context)
-
+    Ritorna `candidate.resolve()` se è sotto `base_dir.resolve()`,
+    altrimenti solleva PipelineError (protezione path traversal).
+    """
+    base = Path(base_dir).resolve()
+    cand = Path(candidate).resolve()
     try:
-        ensure_within(context.base_dir, md_dir)
-    except Exception as e:
-        raise PipelineError(
-            f"Tentativo di accedere a un path non sicuro: {md_dir} ({e})",
-            slug=context.slug,
-            file_path=md_dir,
-        )
+        cand.relative_to(base)
+    except ValueError:
+        raise PipelineError(f"Unsafe directory: {candidate}")
+    return cand
 
-    if not md_dir.exists():
-        local_logger.error("La cartella markdown non esiste", extra={"slug": context.slug, "file_path": str(md_dir)})
-        raise InputDirectoryMissing(f"La cartella markdown non esiste: {md_dir}", slug=context.slug, file_path=md_dir)
-    if not md_dir.is_dir():
-        local_logger.error("Il path non è una directory", extra={"slug": context.slug, "file_path": str(md_dir)})
-        raise InputDirectoryMissing(f"Il path non è una directory: {md_dir}", slug=context.slug, file_path=md_dir)
+
+# ---------- API ----------
+
+def validate_markdown_dir(ctx, md_dir: Path | None = None) -> Path:
+    """
+    Verifica che la cartella markdown esista, sia una directory e sia "safe"
+    rispetto a ctx.base_dir. Ritorna il Path risolto se è valida.
+    """
+    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
+    target = _ensure_safe(Path(ctx.base_dir), target)
+
+    if not target.exists():
+        raise PipelineError(f"Markdown directory does not exist: {target}")
+    if not target.is_dir():
+        raise PipelineError(f"Markdown path is not a directory: {target}")
+
+    return target
+
+
+def generate_readme_markdown(ctx, md_dir: Path | None = None) -> Path:
+    """
+    Crea (o sovrascrive) README.md nella cartella markdown target.
+    I test verificano solo l'esistenza del file.
+    """
+    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
+    target = _ensure_safe(Path(ctx.base_dir), target)
+    target.mkdir(parents=True, exist_ok=True)
+
+    readme = target / "README.md"
+    title = getattr(ctx, "slug", None) or "Knowledge Base"
+    readme.write_text(
+        f"# {title}\n\n"
+        "Contenuti generati/curati automaticamente.\n",
+        encoding="utf-8",
+    )
+    return readme
+
+
+def generate_summary_markdown(ctx, md_dir: Path | None = None) -> Path:
+    """
+    Genera SUMMARY.md elencando i .md nella cartella target
+    (esclude README.md e SUMMARY.md).
+    """
+    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
+    target = _ensure_safe(Path(ctx.base_dir), target)
+    target.mkdir(parents=True, exist_ok=True)
+
+    summary = target / "SUMMARY.md"
+
+    items: list[str] = []
+    for p in sorted(target.glob("*.md"), key=lambda p: p.name.lower()):
+        name = p.name.lower()
+        if name in {"readme.md", "summary.md"}:
+            continue
+        items.append(f"- [{p.stem}]({p.name})")
+
+    summary.write_text("# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8")
+    return summary
+
+
+def convert_files_to_structured_markdown(ctx, md_dir: Path | None = None) -> None:
+    """
+    Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file
+    <categoria>.md dentro md_dir con struttura:
+      - H1: nome categoria
+      - Heading per ogni livello di sottocartella (H2 = livello 0, H3 = livello 1, ...)
+      - Heading del PDF a livello (2 + depth) e riga placeholder di contenuto
+    Se una categoria non contiene PDF, scrive una riga informativa.
+    """
+    base = Path(ctx.base_dir)
+    raw_root = Path(ctx.raw_dir)
+    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
+
+    # sicurezza percorso
+    _ensure_safe(base, target)
+    target.mkdir(parents=True, exist_ok=True)
+
+    if not raw_root.exists():
+        raise PipelineError(f"Raw directory does not exist: {raw_root}")
+
+    # categorie = sole directory di primo livello sotto raw/
+    categories = sorted(
+        (d for d in raw_root.iterdir() if d.is_dir()),
+        key=lambda d: d.name.lower(),
+    )
+
+    for cat_dir in categories:
+        cat_name = cat_dir.name
+        md_file = target / f"{cat_name}.md"
+
+        lines: list[str] = [f"# {cat_name.capitalize()}"]
+
+        # tutti i PDF ricorsivi
+        pdfs = sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+        if not pdfs:
+            lines += ["", "_Nessun PDF trovato in questa categoria._"]
+        else:
+            # Evita di ripetere gli stessi heading di cartella
+            emitted_folders: set[tuple[int, str]] = set()
+
+            for pdf in pdfs:
+                rel = pdf.relative_to(cat_dir)  # es. "2024/Q4/doc1.pdf" o "doc2.pdf"
+                parts = list(rel.parts)
+
+                # heading delle sottocartelle
+                folder_parts = parts[:-1]
+                for depth, folder in enumerate(folder_parts):  # depth 0 -> H2
+                    level = 2 + depth
+                    key = (depth, folder)
+                    if key not in emitted_folders:
+                        lines += ["", f"{'#' * level} {folder}"]
+                        emitted_folders.add(key)
+
+                # heading del PDF
+                file_stem = Path(parts[-1]).stem
+                level = 2 + max(0, len(folder_parts))  # depth=0 -> H2, depth=2 -> H4
+                lines += [
+                    f"{'#' * level} {file_stem.capitalize()}",
+                    f"(Contenuto estratto/conversione da `{parts[-1]}`)",
+                ]
+
+        md_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
