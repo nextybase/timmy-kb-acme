@@ -1,4 +1,4 @@
-# Timmy‑KB — README (v1.5.0)
+# Timmy‑KB — README (v1.6.0)
 
 Pipeline per la generazione di una **Knowledge Base Markdown AI‑ready** a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
@@ -62,6 +62,8 @@ output/timmy-kb-<slug>/
 
 ## Modalità d’uso
 
+> **Doppio approccio**: puoi lavorare da **terminale** usando gli orchestratori in sequenza **oppure** tramite **interfaccia (Streamlit)**.
+
 ### Interattiva (prompt guidati)
 ```bash
 py src/pre_onboarding.py
@@ -77,6 +79,15 @@ py src/tag_onboarding.py --slug acme --non-interactive --proceed             # d
 py src/semantic_onboarding.py --slug acme --no-preview --non-interactive
 py src/onboarding_full.py --slug acme --non-interactive
 ```
+
+### Interfaccia (Streamlit)
+L’alternativa agli orchestratori via terminale è l’interfaccia.
+
+**Avvio:**
+```bash
+streamlit run onboarding_ui.py
+```
+Guida completa: [docs/guida_ui.md](docs/guida_ui.md)
 
 ---
 

@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 # -----------------------------------------------------------------------------
 # Bootstrap PYTHONPATH per moduli locali (src/*)
@@ -29,14 +29,26 @@ try:
 except Exception:  # pragma: no cover
     get_structured_logger = None  # type: ignore
 
+# ClientContext per la tab Semantica (opzionale)
+try:
+    from pipeline.context import ClientContext  # type: ignore
+except Exception:  # pragma: no cover
+    ClientContext = None  # type: ignore
+
+# Preview adapters (HonKit) opzionali
+try:
+    from adapters.preview import start_preview, stop_preview  # type: ignore
+except Exception:  # pragma: no cover
+    start_preview = stop_preview = None  # type: ignore
+
 # -----------------------------------------------------------------------------
 # Import UI/Config helpers (riuso: NIENTE duplicazioni)
 # -----------------------------------------------------------------------------
-from config_ui.utils import (
+from config_ui.utils import (  # type: ignore
     yaml_load,
     yaml_dump,
     ensure_within_and_resolve,
-)  # type: ignore
+)
 from config_ui.mapping_editor import (  # type: ignore
     load_default_mapping,
     load_tags_reviewed,
@@ -49,6 +61,27 @@ from config_ui.drive_runner import (  # type: ignore
     build_drive_from_mapping,
     emit_readmes_for_raw,
 )
+
+# Download PDF da Drive → raw/ locale (opzionale, potrebbe non essere ancora implementato)
+try:
+    from config_ui.drive_runner import download_raw_from_drive  # type: ignore
+except Exception:  # pragma: no cover
+    download_raw_from_drive = None  # type: ignore
+
+# -----------------------------------------------------------------------------
+# Import funzioni Semantica (opzionali, con fallback)
+# -----------------------------------------------------------------------------
+try:
+    # Nomi secondo src/semantic_onboarding.py
+    from semantic_onboarding import (  # type: ignore
+        get_paths as sem_get_paths,
+        _load_reviewed_vocab as sem_load_vocab,
+        _convert_raw_to_book as sem_convert,
+        _enrich_frontmatter as sem_enrich,
+        _write_summary_and_readme as sem_write_md,
+    )
+except Exception:  # pragma: no cover
+    sem_get_paths = sem_load_vocab = sem_convert = sem_enrich = sem_write_md = None  # type: ignore
 
 # -----------------------------------------------------------------------------
 # Streamlit (UI)
@@ -115,31 +148,57 @@ def _request_shutdown(log: logging.Logger) -> None:
         os._exit(0)
 
 
+def _norm_str(val: Optional[str]) -> str:
+    return val.strip() if isinstance(val, str) else ""
+
+
+def _safe_streamlit_rerun() -> None:
+    # Usa l’API stabile; fallback a experimental se presente. Evita warning Pylance.
+    fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
+    if callable(fn):
+        try:
+            fn()
+        except Exception:
+            pass
+
+
 # =============================================================================
 # Componenti UI
 # =============================================================================
-def _sidebar_context(log: logging.Logger) -> Tuple[str, str]:
-    st.sidebar.header("Contesto cliente")
-    slug = st.sidebar.text_input(
-        "Slug cliente",
-        value=st.session_state.get("slug", ""),
-        placeholder="es. acme",
-        key="inp_slug",
-    )
-    client_name = st.sidebar.text_input(
-        "Nome cliente (opz.)",
-        value=st.session_state.get("client_name", ""),
-        placeholder="ACME S.p.A.",
-        key="inp_client_name",
-    )
-    # Pulsante CHIUDI UI nella sidebar (colonna destra) sotto gli input
-    if st.sidebar.button("Chiudi UI", key="btn_close_ui_sidebar", use_container_width=True):
-        st.sidebar.info("Chiusura in corso…")
-        _request_shutdown(log)
+def _render_landing_inputs(log: logging.Logger) -> Tuple[bool, str, str]:
+    """
+    Schermata iniziale: SOLO due input centrali (slug, nome cliente).
+    Appena entrambi sono compilati, blocchiamo i valori e facciamo apparire la UI.
+    """
+    # Placeholder full-width senza altri elementi
+    st.markdown("<div style='height: 8vh'></div>", unsafe_allow_html=True)
 
-    st.session_state["slug"] = slug.strip()
-    st.session_state["client_name"] = client_name.strip()
-    return st.session_state["slug"], st.session_state["client_name"]
+    # Input centrali full-width
+    slug_raw = st.text_input("Slug cliente", value=st.session_state.get("slug", ""), placeholder="es. acme", key="landing_slug")
+    client_raw = st.text_input("Nome cliente", value=st.session_state.get("client_name", ""), placeholder="ACME S.p.A.", key="landing_client")
+
+    slug = _norm_str(slug_raw)
+    client = _norm_str(client_raw)
+
+    # Lock automatico quando entrambi non vuoti
+    if slug and client and not st.session_state.get("client_locked", False):
+        st.session_state["slug"] = slug
+        st.session_state["client_name"] = client
+        st.session_state["client_locked"] = True
+        _safe_streamlit_rerun()
+
+    locked = bool(st.session_state.get("client_locked", False))
+    return locked, st.session_state.get("slug", ""), st.session_state.get("client_name", "")
+
+
+def _render_header_after_lock(log: logging.Logger, slug: str, client_name: str) -> None:
+    # Mostra info bloccate e un pulsante di chiusura UI
+    left, right = st.columns([4, 1])
+    with left:
+        st.markdown(f"**Cliente:** {client_name} &nbsp;&nbsp;|&nbsp;&nbsp; **Slug:** `{slug}`")
+    with right:
+        if st.button("Chiudi UI", key="btn_close_ui_top", use_container_width=True):
+            _request_shutdown(log)
 
 
 def _load_mapping(slug: str) -> Dict[str, Any]:
@@ -172,10 +231,10 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
 
     with col2:
         st.caption("Modifica voci (una alla volta).")
-        # Accordion per-voce con key UNIVOCHE
+        # Accordion per-voce con widget con key UNIVOCHE (l'expander non supporta 'key' in alcune versioni)
         for idx, cat_key in enumerate(sorted(cats.keys(), key=str)):
             meta = cats.get(cat_key, {})
-            with st.expander(cat_key, expanded=False, key=f"exp_cat_{idx}_{cat_key}"):
+            with st.expander(cat_key, expanded=False):
                 amb = st.text_input(
                     f"Ambito — {cat_key}",
                     value=str(meta.get("ambito", "")),
@@ -282,11 +341,143 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 result = emit_readmes_for_raw(slug=slug)
                 st.success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
+                st.session_state["drive_readmes_done"] = True
             except Exception as e:
                 st.exception(e)
 
+    # -------------------------------------------------------------------------
+    # Nuova sezione: download PDF da Drive → raw/ (visibile SOLO dopo i README)
+    # -------------------------------------------------------------------------
+    if st.session_state.get("drive_readmes_done"):
+        st.markdown("---")
+        st.subheader("Download contenuti su raw/")
+        c1, c2 = st.columns([1, 3])
+        with c1:
+            if st.button("Scarica PDF da Drive in raw/", key="btn_drive_download_raw", use_container_width=True):
+                if download_raw_from_drive is None:
+                    st.error("Funzione di download non disponibile: aggiornare 'config_ui.drive_runner'.")
+                else:
+                    try:
+                        res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
+                        count = len(res) if hasattr(res, "__len__") else None
+                        st.success(f"Download completato{f' ({count} file)' if count is not None else ''}.")
+                        log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
+                        st.session_state["raw_downloaded"] = True
+                        try:
+                            st.rerun()  # per sbloccare la tab Semantica
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        st.exception(e)
+        with c2:
+            st.write(
+                "La struttura delle cartelle è stata creata su Drive; popolarne il contenuto seguendo le indicazioni del file README presente in ogni cartella per proseguire con la procedura"
+            )
+
+
+# =============================================================================
+# Tab: Semantica (RAW → BOOK + frontmatter + README/SUMMARY + preview)
+# =============================================================================
+def _ensure_context(slug: str, log: logging.Logger) -> object:
+    if ClientContext is None:
+        raise RuntimeError("Moduli pipeline non disponibili: impossibile creare il ClientContext.")
+    # Nessun prompt da UI; env non obbligatorio per operazioni locali
+    return ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[no-any-return]
+
+
+def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
+    st.subheader("Semantica (RAW → BOOK)")
+    st.caption("Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale.")
+
+    # Guardie minime su dipendenze
+    if any(x is None for x in (sem_convert, sem_enrich, sem_write_md, sem_load_vocab)):
+        st.error("Modulo semantic_onboarding non disponibile o import parziale. Verificare l'ambiente.")
+        return
+    if ClientContext is None:
+        st.error("Pipeline non disponibile: impossibile creare il contesto cliente.")
+        return
+
+    # Prepara contesto
+    try:
+        context = _ensure_context(slug, log)
+    except Exception as e:
+        st.exception(e)
+        return
+
+    colA, colB = st.columns([1, 1], gap="large")
+
+    with colA:
+        st.markdown("**1) Conversione RAW → BOOK**")
+        if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
+            try:
+                mds: List[Path] = sem_convert(context, log, slug=slug)  # type: ignore[misc]
+                st.success(f"OK. File Markdown in book/: {len(mds)}")
+                log.info({"event": "semantic_convert_done", "slug": slug, "md_count": len(mds)})
+            except Exception as e:
+                st.exception(e)
+
+        st.markdown("**2) Arricchisci frontmatter**")
+        if st.button("Arricchisci con tag canonici (tags_reviewed.yaml)", key="btn_sem_enrich", use_container_width=True):
+            try:
+                base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
+                vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
+                touched: List[Path] = sem_enrich(context, log, vocab, slug=slug)  # type: ignore[misc]
+                st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
+                log.info({"event": "semantic_enrich_done", "slug": slug, "touched": len(touched)})
+            except Exception as e:
+                st.exception(e)
+
+    with colB:
+        st.markdown("**3) README/SUMMARY**")
+        if st.button("Genera/valida README & SUMMARY", key="btn_sem_write_md", use_container_width=True):
+            try:
+                sem_write_md(context, log, slug=slug)  # type: ignore[misc]
+                st.success("OK. README.md e SUMMARY.md pronti.")
+                log.info({"event": "semantic_write_md_done", "slug": slug})
+            except Exception as e:
+                st.exception(e)
+
+        st.markdown("**4) Preview Docker (HonKit)**")
+        with st.container(border=True):
+            # Porta e stato container in sessione
+            preview_port = st.number_input(
+                "Porta preview", min_value=1, max_value=65535, value=4000, step=1, key="inp_sem_port"
+            )
+            running = bool(st.session_state.get("sem_preview_container"))
+            st.write(f"Stato: {'ATTIVA' if running else 'SPENTA'}")
+            cols = st.columns([1, 1])
+            with cols[0]:
+                if st.button(
+                    "Avvia preview",
+                    key="btn_sem_preview_start",
+                    use_container_width=True,
+                    disabled=(start_preview is None or running),
+                ):
+                    try:
+                        cname = start_preview(context, log, port=int(preview_port))  # type: ignore[misc]
+                        st.session_state["sem_preview_container"] = cname
+                        st.success(f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})")
+                        log.info({"event": "preview_started", "slug": slug, "port": int(preview_port), "container": cname})
+                    except Exception as e:
+                        st.exception(e)
+            with cols[1]:
+                if st.button(
+                    "Ferma preview",
+                    key="btn_sem_preview_stop",
+                    use_container_width=True,
+                    disabled=(stop_preview is None or not running),
+                ):
+                    try:
+                        cname = st.session_state.get("sem_preview_container")
+                        stop_preview(log, container_name=cname)  # type: ignore[misc]
+                        st.session_state["sem_preview_container"] = None
+                        st.success("Preview fermata.")
+                        log.info({"event": "preview_stopped", "slug": slug, "container": cname})
+                    except Exception as e:
+                        st.exception(e)
+
     st.divider()
-    st.caption("Nota: richiede variabili d’ambiente valide (es. DRIVE_ID) e credenziali configurate.")
+    st.caption("Nota: questo step **non** usa Google Drive né esegue push su GitHub; lavora su disco locale e preview.")
 
 
 # =============================================================================
@@ -297,19 +488,32 @@ def main() -> None:
     redact = _safe_compute_redact_flag()
     log = _safe_get_logger("onboarding_ui", redact)
 
+    # Gating iniziale: solo input slug+cliente a schermo pieno
+    if not st.session_state.get("client_locked", False):
+        locked, _, _ = _render_landing_inputs(log)
+        if not locked:
+            return  # finché non sono compilati entrambi, non mostrare altro
+
+    # Da qui in poi la UI completa
+    slug = st.session_state.get("slug", "")
+    client_name = st.session_state.get("client_name", "")
+
     st.title("NeXT — Onboarding UI")
-    st.write("Orchestratore UI per configurazione e provisioning struttura iniziale della Knowledge Base.")
+    _render_header_after_lock(log, slug, client_name)
 
-    slug, client_name = _sidebar_context(log)
-    if not slug or not client_name:
-        st.warning("Inserisci **slug** e **nome cliente** per procedere.")
-        return
+    # Tabs: Semantica nascosta finché non abbiamo scaricato i PDF su raw/
+    tabs_labels: List[str] = ["Configurazione", "Drive"]
+    if st.session_state.get("raw_downloaded"):
+        tabs_labels.append("Semantica")
 
-    tabs = st.tabs(["Configurazione", "Drive"])
+    tabs = st.tabs(tabs_labels)
     with tabs[0]:
         _render_config_tab(log, slug, client_name)
     with tabs[1]:
         _render_drive_tab(log, slug)
+    if "Semantica" in tabs_labels:
+        with tabs[2]:
+            _render_semantic_tab(log, slug)
 
 
 if __name__ == "__main__":

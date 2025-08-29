@@ -5,6 +5,56 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
 
+## 1.6.0 — 2025-08-29 — Interfaccia Streamlit
+
+### Added
+- **Nuova UI Streamlit (`onboarding_ui.py`)**
+  - Schermata iniziale “full-screen” con due soli input: **Slug cliente** e **Nome cliente**; al completamento i valori vengono **bloccati** e appare la UI completa.
+  - Header con **Cliente** e **Slug** e pulsante **Chiudi UI** (terminazione controllata del processo).
+- **Tab “Configurazione”**
+  - Editor del *mapping semantico* con **accordion per categoria** (Ambito, Descrizione, Esempi) e **Salva** puntuale per-voce.
+  - Validazione e **salvataggio atomico** del mapping rivisto (`tags_reviewed.yaml`). Normalizzazione chiavi via **SSoT `to_kebab()`**.
+- **Tab “Drive”**
+  - Pulsante **Crea/aggiorna struttura** (cartella cliente su Drive, `raw/`, `contrattualistica/`, upload `config.yaml`).
+  - Pulsante **Genera README in raw/** (emette `README.pdf` o `.txt` in ogni sotto-cartella `raw/`, con ambito/descrizione/esempi).
+  - **Nuova sezione “Download contenuti su raw/”**: pulsante **Scarica PDF da Drive** nella struttura locale `raw/`. Al termine sblocca la tab *Semantica*. Messaggio guida operativo accanto al pulsante.
+- **Tab “Semantica”**
+  - Integrazione con `src/semantic_onboarding.py`:
+    1) **Converti PDF in Markdown** (RAW → BOOK)  
+    2) **Arricchisci frontmatter** con vocabolario rivisto (`tags_reviewed.yaml`)  
+    3) **Genera/valida README & SUMMARY**  
+    4) **Preview Docker (HonKit)** avvio/stop con porta configurabile.
+- **Runner Drive**
+  - Nuova funzione `download_raw_from_drive(slug, ...)` con **path-safety** (`ensure_within_and_resolve`), **scritture atomiche**, sanitizzazione nomi file e **logging strutturato**.
+
+### Changed
+- **Gating dell’interfaccia**: la UI compare solo dopo lo sblocco iniziale (slug+cliente). La tab *Semantica* è nascosta finché non si completa il download dei PDF su `raw/`.
+- **Streamlit re-run**: introdotto `_safe_streamlit_rerun()` che usa `st.rerun` (fallback su `experimental_rerun` se presente) per compatibilità con gli stub Pylance.
+- **Pylance-compat nei runner Drive**: uso di `_require_callable(...)` per *narrowing* delle API opzionali (niente più `reportOptionalCall`), applicato a `get_drive_service`, `create_drive_folder`, `create_drive_structure_from_yaml`, `upload_config_to_drive_folder`.
+- **Coerenza logging/redazione**: inizializzazione del flag via `compute_redact_flag`; propagazione `context.redact_logs` nei call-site.
+
+### Fixed
+- Eliminati warning Pylance su accessi opzionali (`.strip` su `None`) con `_norm_str`.
+- Rimosso uso di `key=` non supportato su `st.expander` in alcune versioni; **key** univoche per i widget dove necessario.
+- Messaggistica d’errore UI più chiara e resilienza ai fallimenti delle operazioni Drive.
+
+### Security / Hardening
+- **Path-safety** estesa ai download Drive e alle generazioni locali; guardie anti path traversal.
+- **Scritture atomiche** per file generati/aggiornati (README, SUMMARY, Markdown convertiti).
+- Redazione automatica di identificativi/sensibili nei log quando abilitata.
+
+### Migration notes
+- Impostare credenziali Google Drive e **`DRIVE_ID`** nell’ambiente.  
+- Flusso consigliato per nuovi clienti:
+  1) Compilare **Slug** e **Nome cliente** (sblocco UI)  
+  2) Tab **Drive** → *Crea struttura* → *Genera README in raw/*  
+  3) **Scarica PDF** su `raw/` (sblocca tab **Semantica**)  
+  4) Tab **Semantica** → *Converti* → *Arricchisci* → *README & SUMMARY* → *(opz.) Preview Docker*  
+- Se esistono riferimenti a `st.experimental_rerun`, sostituirli con `_safe_streamlit_rerun()`.
+
+---
+
+
 ## 1.5.0 fixing — 2025-08-28
 
 ### Added

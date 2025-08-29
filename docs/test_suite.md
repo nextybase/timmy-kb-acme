@@ -4,7 +4,7 @@ Questi test servono a verificare rapidamente che la pipeline Timmy‑KB lavori e
 
 **Come funziona in sintesi**
 
-- Prima di eseguire i test locali, **crea l’utente dummy con il tool** `py src/tools/gen_dummy_kb.py`: popola `raw/` con PDF sintetici e genera i file minimi (es. `tags_raw.csv`).
+- Prima di eseguire i test locali, **crea l’utente dummy con il tool** `py src/tools/gen_dummy_kb.py`: popola `raw/` con PDF sintetici e genera i file minimi necessari(es. `tags_raw.csv`).
 - I test end‑to‑end usano questi contenuti per evitare dipendenze esterne (Drive/GitHub), ma puoi anche testare lo scenario con Drive passando le variabili d’ambiente.
 - `tag_onboarding` ha **default = Drive**: negli smoke locali usiamo `--source local` perché i PDF dummy sono già in `raw/`.
 

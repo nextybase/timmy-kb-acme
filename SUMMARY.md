@@ -6,6 +6,7 @@
 * Documentazione
   * [Indice documentazione](docs/index.md)
   * [Guida utente](docs/user_guide.md)
+  * [Manula dell'interfaccia](docs/guida_ui.md)
   * [Guida sviluppatore](docs/developer_guide.md)
   * [Regole di codifica](docs/coding_rule.md)
   * [Architettura tecnica](docs/architecture.md)

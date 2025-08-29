@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import io
+import os
+import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, TypeVar, cast
 
 # Import da pipeline (con fallback per ambienti dev)
 try:
@@ -29,12 +31,26 @@ from .mapping_editor import (
     mapping_to_raw_structure,
     write_raw_structure_yaml,
 )
-from .utils import to_kebab  # SSoT per normalizzazione nomi cartelle
+from .utils import to_kebab, ensure_within_and_resolve  # SSoT normalizzazione + path-safety
 
 
-# ===== Logger ================================================================
+# ===== Narrow helper per Optional[Callable] (fix Pylance: reportOptionalCall) =====
 
-def _get_logger(context=None):
+F = TypeVar("F", bound=Callable[..., object])
+
+def _require_callable(fn: Optional[F], name: str) -> F:
+    """
+    Narrow di tipo: se la funzione è None, alza un errore chiaro.
+    Dopo questo cast Pylance sa che 'fn' è Callable e non più Optional.
+    """
+    if fn is None:
+        raise RuntimeError(f"Funzione '{name}' non disponibile: verifica dipendenze/credenziali Drive.")
+    return cast(F, fn)
+
+
+# ===== Logger =================================================================
+
+def _get_logger(context: Optional[object] = None):
     """Ritorna un logger strutturato; fallback no-op in assenza del modulo pipeline."""
     if get_structured_logger is None:
         class _Stub:
@@ -46,7 +62,7 @@ def _get_logger(context=None):
     return get_structured_logger("config_ui.drive_runner", context=context)
 
 
-# ===== Creazione struttura Drive da mapping =================================
+# ===== Creazione struttura Drive da mapping ===================================
 
 def build_drive_from_mapping(
     slug: str,
@@ -67,19 +83,19 @@ def build_drive_from_mapping(
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
-    svc = get_drive_service(ctx)
+    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
 
     drive_parent_id = ctx.env.get("DRIVE_ID")
     if not drive_parent_id:
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
 
     # Cartella cliente (sotto DRIVE_ID)
-    client_folder_id = create_drive_folder(
+    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
         svc, slug, parent_id=drive_parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
 
     # Upload config.yaml nella cartella cliente
-    upload_config_to_drive_folder(
+    _require_callable(upload_config_to_drive_folder, "upload_config_to_drive_folder")(
         svc, ctx, parent_id=client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
 
@@ -88,7 +104,7 @@ def build_drive_from_mapping(
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
-    created_map = create_drive_structure_from_yaml(
+    created_map = _require_callable(create_drive_structure_from_yaml, "create_drive_structure_from_yaml")(
         svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
 
@@ -105,7 +121,7 @@ def build_drive_from_mapping(
     return out
 
 
-# ===== Helpers Drive =========================================================
+# ===== Helpers Drive ===========================================================
 
 def _drive_list_folders(service, parent_id: str) -> List[Dict[str, str]]:
     """Elenca le sottocartelle (id, name) immediate sotto parent_id."""
@@ -185,7 +201,7 @@ def _drive_upload_bytes(service, parent_id: str, name: str, data: bytes, mime: s
     return file.get("id")
 
 
-# ===== README per ogni categoria raw (PDF o TXT fallback) ====================
+# ===== README per ogni categoria raw (PDF o TXT fallback) =====================
 
 def emit_readmes_for_raw(
     slug: str, *, base_root: Path | str = "output", require_env: bool = True
@@ -200,7 +216,7 @@ def emit_readmes_for_raw(
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
-    svc = get_drive_service(ctx)
+    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
 
     mapping = load_tags_reviewed(slug, base_root=base_root)
     cats, _ = split_mapping(mapping)
@@ -209,12 +225,12 @@ def emit_readmes_for_raw(
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
-    client_folder_id = create_drive_folder(
+    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
         svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
-    created_map = create_drive_structure_from_yaml(
+    created_map = _require_callable(create_drive_structure_from_yaml, "create_drive_structure_from_yaml")(
         svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     raw_id = created_map.get("raw") or created_map.get("RAW")
@@ -246,3 +262,107 @@ def emit_readmes_for_raw(
 
     log.info({"event": "raw_readmes_uploaded", "count": len(uploaded)})
     return uploaded
+
+
+# ===== Download PDF da Drive → raw/ locale ====================================
+
+def download_raw_from_drive(
+    slug: str,
+    *,
+    base_root: Path | str = "output",
+    require_env: bool = True,
+    overwrite: bool = False,
+    logger: Optional[logging.Logger] = None,
+) -> List[Path]:
+    """
+    Scarica i PDF presenti nelle sottocartelle di 'raw/' su Drive nella struttura locale:
+      output/timmy-kb-<slug>/raw/<categoria>/<file>.pdf
+
+    Ritorna la lista dei percorsi scritti localmente.
+    """
+    if ClientContext is None or get_drive_service is None:
+        raise RuntimeError("API Drive/Context non disponibili nel repo.")
+
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = logger or _get_logger(ctx)
+    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+
+    parent_id = ctx.env.get("DRIVE_ID")
+    if not parent_id:
+        raise RuntimeError("DRIVE_ID non impostato.")
+
+    # Trova/crea cartella cliente e RAW
+    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+    )
+    sub = _drive_list_folders(svc, client_folder_id)
+    name_to_id = {d["name"]: d["id"] for d in sub}
+    raw_id = name_to_id.get("raw") or name_to_id.get("RAW")
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
+
+    # Elenca le sottocartelle di RAW
+    raw_subfolders = _drive_list_folders(svc, raw_id)
+
+    # Base dir locale
+    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    # Import per download binario
+    try:
+        from googleapiclient.http import MediaIoBaseDownload  # type: ignore
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
+
+    written: List[Path] = []
+
+    for folder in raw_subfolders:
+        folder_name = folder["name"]  # già kebab-case dal provisioning
+        folder_id = folder["id"]
+
+        # Elenca i PDF in questa sottocartella
+        q = (
+            f"'{folder_id}' in parents and "
+            f"mimeType = 'application/pdf' and trashed = false"
+        )
+        resp = svc.files().list(
+            q=q,
+            spaces="drive",
+            fields="nextPageToken, files(id, name, mimeType)",
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+        ).execute()
+        files = resp.get("files", [])
+
+        # Destinazione locale
+        dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        for f in files:
+            file_id = f["id"]
+            name = f["name"]
+            # Normalizza nome file (evita path traversal)
+            safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
+            dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+
+            if dest.exists() and not overwrite:
+                log.info({"event": "raw_download_skip_exists", "path": str(dest)})
+                continue
+
+            request = svc.files().get_media(fileId=file_id)
+            tmp = dest.with_suffix(dest.suffix + ".part")
+
+            # Download chunked su file temporaneo
+            with open(tmp, "wb") as fh:
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+
+            # Commit atomico
+            os.replace(tmp, dest)
+            written.append(dest)
+            log.info({"event": "raw_downloaded", "path": str(dest)})
+
+    log.info({"event": "raw_download_summary", "count": len(written)})
+    return written

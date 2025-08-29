@@ -1,11 +1,15 @@
-# Architettura — Timmy‑KB (v1.5.0)
+# Architettura — Timmy‑KB (v1.6.0)
 
 Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, flussi end‑to‑end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L’obiettivo è mantenere coerenza, riuso e sicurezza I/O (path‑safety + scritture atomiche).
+
+> **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Panorama generale
 
+- **Doppio approccio operativo**: orchestratori CLI *oppure* Interfaccia Streamlit (`onboarding_ui.py`) per l’onboarding end‑to‑end.
 - **Obiettivo**: trasformare PDF in una **KB Markdown AI‑ready**, arricchita semanticamente e pronta per anteprima (HonKit/Docker) e push GitHub.
 - **Scope RAW**: i PDF risiedono localmente in `output/timmy-kb-<slug>/raw/`. **Google Drive** è usato in:
   - **pre_onboarding** per creare la struttura remota e caricare il `config.yaml` di base. La struttura di cartelle su Drive è predisposta per consentire il caricamento dei pdf da parte del cliente;
@@ -80,7 +84,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 repo/
 ├─ README.md
 ├─ pytest.ini                         # config PyTest (pythonpath, testpaths, markers, coverage)
-├─ tests/                             # **NUOVA AREA TEST**
+├─ tests/                             # **AREA TEST**
 │  ├─ test_contract_defaults.py       # default CLI (es. tag_onboarding=drive)
 │  ├─ test_smoke_dummy_e2e.py         # smoke end-to-end con utente dummy
 │  ├─ test_unit_book_guard.py         # guard/contratto su book/ (solo .md, .md.fp ignorati)
@@ -167,8 +171,8 @@ repo/
 
 ## Versioning
 
-Questa pagina documenta la **release 1.5.0**. Cambi chiave rispetto alla 1.4.0:
-- `tag_onboarding` usa **Drive come default** per il download dei PDF (opzione `--source local` disponibile).
-- Introdotta e documentata l’**area `tests/`** con suite PyTest e utente dummy.
-- Rafforzate le regole di preflight su `book/` in `onboarding_full` (accetta solo `.md`, ignora `.md.fp`).
+Questa pagina documenta la **release 1.6.0**. Cambi chiave rispetto alla 1.5.0:
+- **Interfaccia Streamlit** per l’onboarding (alternativa agli orchestratori CLI), con gating iniziale *slug/nome cliente* e sblocco progressivo delle tab (Drive → Semantica).  
+- Sezione **Download contenuti su raw/** nel tab *Drive* (pull PDF da Drive → locale).  
+- Rifiniture di compatibilità Pylance/Streamlit e hardening path/atomiche.
 
