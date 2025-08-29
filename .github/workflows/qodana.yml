@@ -9,10 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Qodana (Python)
         uses: JetBrains/qodana-action@v2024.2
         with:
-          args: --save-report
+          args: --save-report,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
           use-caches: true
           project-dir: ./
           results-dir: ./.qodana
@@ -22,10 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Qodana (License Audit)
         uses: JetBrains/qodana-action@v2024.2
         with:
-          args: --save-report
+          args: --save-report,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
           use-caches: true
           project-dir: ./
           results-dir: ./.qodana-licenses

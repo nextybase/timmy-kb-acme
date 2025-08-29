@@ -39,5 +39,5 @@ exclude:
       - dist/**
       - build/**
       - output/**
-      - **/__pycache__/**
+      - "**/__pycache__/**"
 # baseline: .qodana/baseline.sarif.json
