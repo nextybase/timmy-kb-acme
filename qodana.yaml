@@ -1,6 +1,6 @@
 ﻿version: "1.0"
 linter: jetbrains/qodana-python-community:2025.2
-bootstrap: py -m pip install -r requirements.txt
+bootstrap: python -m pip install -r requirements.txt
 raiseLicenseProblems: true
 exclude:
   - name: All

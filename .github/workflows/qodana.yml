@@ -1,10 +1,8 @@
 name: code-quality
 
 on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
+  pull_request: { branches: [ main ] }
+  push:        { branches: [ main ] }
 
 jobs:
   qodana:
@@ -13,12 +11,10 @@ jobs:
       contents: write
       pull-requests: write
       checks: write
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Qodana Scan
         uses: JetBrains/qodana-action@v2025.2
         with:
