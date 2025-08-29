@@ -1,7 +1,9 @@
 ﻿name: code-quality
 on:
-  pull_request: { branches: [ main ] }
-  push:        { branches: [ main ] }
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
 jobs:
   qodana:
     runs-on: ubuntu-latest
@@ -16,8 +18,9 @@ jobs:
       - name: Qodana Scan
         uses: JetBrains/qodana-action@v2025.2
         with:
-          # image ufficiale + baseline + quality gate (soli 'args')
+          # usa l'immagine ufficiale + baseline gating SOLO via args
           args: --image,jetbrains/qodana-python-community:2025.2,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
           upload-result: true
           artifact-name: qodana-report
-          results-dir: qodana-results
+          results-dir: ${{ runner.temp }}/qodana-results
+          use-caches: false
