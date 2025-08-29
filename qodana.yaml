@@ -1,20 +1,18 @@
-version: "1.0"
-
-linter: jetbrains/qodana-python:2024.2
+﻿version: "1.0"
+linter: qodana-python-community
 
 profile:
   name: qodana.recommended
 
 failThreshold: 0
-
-bootstrap: |
+bootstrap: py -m pip install -r requirements.txt
   python -m pip install --upgrade pip
   python -m pip install -r requirements.txt
   # opzionali/dev:
   python -m pip install -r requirements-dev.txt || true
   # modelli spaCy usati nel repo:
   python -m spacy download it_core_news_sm || true
-  # (opzionale) vulnerability scan — rendilo strict se vuoi far fallire la CI:
+  # (opzionale) vulnerability scan â€” rendilo strict se vuoi far fallire la CI:
   python -m pip install pip-audit || true
   pip-audit -r requirements.txt || true
 
@@ -41,3 +39,13 @@ exclude:
       - output/**
       - "**/__pycache__/**"
 # baseline: .qodana/baseline.sarif.json
+
+exclude:
+  - name: All
+    paths:
+      - "output/**"
+      - "logs/**"
+      - ".venv/**"
+      - "venv/**"
+      - "__pycache__/**"
+
