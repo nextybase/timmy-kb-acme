@@ -13,7 +13,7 @@
 # =============================================================================
 
 # === Librerie principali per la pipeline NeXT Timmy-KB ===
-PyMuPDF==1.22.5
+PyMuPDF==1.24.14
 pydantic==2.7.1
 pydantic-settings==2.0.0
 python-dotenv==1.0.1
