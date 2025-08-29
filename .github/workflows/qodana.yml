@@ -2,35 +2,23 @@ name: Qodana
 
 on:
   push:
+    branches: [ "**" ]
   pull_request:
+    branches: [ "**" ]
 
 jobs:
-  code-quality:
+  qodana:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Qodana (Python)
-        uses: JetBrains/qodana-action@v2024.2
-        with:
-          args: --save-report,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
-          use-caches: true
-          project-dir: ./
-          results-dir: ./.qodana
-          # usa il qodana.yaml in root
 
-  license-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2025.2
         with:
-          fetch-depth: 0
-      - name: Qodana (License Audit)
-        uses: JetBrains/qodana-action@v2024.2
-        with:
-          args: --save-report,--baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
-          use-caches: true
-          project-dir: ./
-          results-dir: ./.qodana-licenses
-          qodana-yaml-path: qodana.licenses.yaml
+          args: --baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
+          upload-result: true
+          artifact-name: qodana-report
+          results-dir: qodana-results

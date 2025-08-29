@@ -1,0 +1,33 @@
+name: code-quality
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  qodana:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0   # serve a Qodana per analizzare bene le PR
+
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2025.2
+        with:
+          # passiamo baseline + quality gate SOLO via 'args'
+          args: --baseline,qodana.sarif.json,--baseline-include-absent,--fail-threshold,5
+          upload-result: true
+          artifact-name: qodana-report
+          results-dir: ${{ runner.temp }}/qodana/results
+        # Il token è opzionale con i linters Community; obbligatorio con Ultimate/Plus
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
