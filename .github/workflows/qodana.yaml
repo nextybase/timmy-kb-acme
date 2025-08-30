@@ -18,13 +18,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Qodana - Code Inspection (no cache)
+      - name: Download previous Qodana artifact (baseline)
+        id: dl
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: qodana.yaml
+          branch: main
+          name: qodana
+          path: ./.baseline
+          if_no_artifact_found: ignore
+
+      - name: Detect baseline file
+        id: detect
+        run: |
+          if [ -f "./.baseline/.qodana/qodana.sarif.json" ]; then
+            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_baseline=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Qodana - Code Inspection (with baseline, no cache)
+        if: steps.detect.outputs.has_baseline == 'true'
         uses: JetBrains/qodana-action@v2025.2
         with:
-          # Disabilita cache per avere report "puliti" ad ogni run
           use-caches: false
           pr-mode: false
-          # Salva report e SARIF negli output di job (non nel repo)
+          args: --save-report --report-dir=./qodana.report --results-dir=./.qodana --disable-caches --baseline ./.baseline/.qodana/qodana.sarif.json
+          upload-result: true
+
+      - name: Qodana - Code Inspection (first run, no cache)
+        if: steps.detect.outputs.has_baseline != 'true'
+        uses: JetBrains/qodana-action@v2025.2
+        with:
+          use-caches: false
+          pr-mode: false
           args: --save-report --report-dir=./qodana.report --results-dir=./.qodana --disable-caches
           upload-result: true
 
