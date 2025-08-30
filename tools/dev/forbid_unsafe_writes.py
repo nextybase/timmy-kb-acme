@@ -7,12 +7,15 @@ import sys
 
 PATTERN = re.compile(r"open\(.*\)\.write\(")
 
+
 def main() -> int:
     root = Path.cwd()
     bad: list[str] = []
     for p in root.rglob("*.py"):
         # Escludi virtualenv e cache
-        if any(part in {".git", ".venv", "venv", "__pycache__", "tools", "scripts"} for part in p.parts):
+        if any(
+            part in {".git", ".venv", "venv", "__pycache__", "tools", "scripts"} for part in p.parts
+        ):
             continue
         try:
             txt = p.read_text(encoding="utf-8", errors="ignore")
@@ -26,6 +29,7 @@ def main() -> int:
             print(" -", b)
         return 1
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

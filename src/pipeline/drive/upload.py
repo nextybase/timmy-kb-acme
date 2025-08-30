@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List, Union, cast
 from os import PathLike
 
-import yaml  # type: ignore
+import yaml
 from googleapiclient.errors import HttpError  # type: ignore
 
 from ..exceptions import ConfigError, DriveUploadError
@@ -108,7 +108,7 @@ def _list_existing_folder_by_name(
     files = cast(List[Dict[str, Any]], resp.get("files", []))
     if not files:
         return None
-    return files[0]["id"]
+    return cast(str, files[0]["id"])  # id è atteso stringa
 
 
 def _create_folder(service: Any, name: str, parent_id: Optional[str]) -> str:
@@ -135,9 +135,9 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
 
     try:
         _retry(_call, op_name="files.delete")
-    except HttpError as e:  # type: ignore[reportGeneralTypeIssues]
+    except HttpError as e:
         try:
-            status = int(e.resp.status)  # type: ignore[attr-defined]
+            status = int(e.resp.status)
         except Exception:
             status = None
         if status == 404:
@@ -374,7 +374,7 @@ def _find_existing_child_file_by_name(service: Any, parent_id: str, name: str) -
     """Ritorna l'ID di un file figlio con `name` sotto `parent_id`, altrimenti None."""
     q = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
 
-    def _call():
+    def _call() -> Any:
         return (
             service.files()
             .list(
@@ -389,10 +389,10 @@ def _find_existing_child_file_by_name(service: Any, parent_id: str, name: str) -
         )
 
     resp = _retry(_call, op_name="files.list.config_by_name")
-    files = resp.get("files", [])
+    files = cast(List[Dict[str, Any]], resp.get("files", []))
     if not files:
         return None
-    return files[0]["id"]
+    return cast(str, files[0]["id"])  # id stringa
 
 
 def upload_config_to_drive_folder(
@@ -443,7 +443,7 @@ def upload_config_to_drive_folder(
     media = MediaFileUpload(str(local_config), mimetype="application/octet-stream", resumable=False)
     body = {"name": "config.yaml", "parents": [parent_id]}
 
-    def _call():
+    def _call() -> Any:
         return (
             service.files()
             .create(body=body, media_body=media, fields="id", supportsAllDrives=True)
@@ -451,7 +451,7 @@ def upload_config_to_drive_folder(
         )
 
     try:
-        resp = _retry(_call, op_name="files.create.config")
+        resp = cast(Dict[str, Any], _retry(_call, op_name="files.create.config"))
     except Exception as e:  # noqa: BLE001
         local_logger.error(
             "drive.upload.config.error",
@@ -463,7 +463,7 @@ def upload_config_to_drive_folder(
         )
         raise DriveUploadError(f"Upload config.yaml fallito: {e}") from e
 
-    file_id = resp["id"]
+    file_id = cast(str, resp["id"])  # id è stringa
     local_logger.info(
         "drive.upload.config.done",
         extra={

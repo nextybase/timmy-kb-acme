@@ -51,6 +51,7 @@ except Exception as e:
 try:
     # (context, *, github_token:str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
     from pipeline.github_utils import push_output_to_github as _push_output_to_github
+
     push_output_to_github: Callable[..., None] | None = _push_output_to_github
 except Exception:
     push_output_to_github = None  # verrà gestito in _git_push

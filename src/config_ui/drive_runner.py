@@ -19,11 +19,11 @@ from .utils import to_kebab, ensure_within_and_resolve  # SSoT normalizzazione +
 # Import da pipeline (con fallback per ambienti dev)
 # Annotazioni esplicite (mypy): nomi possono essere riassegnati a None nel fallback
 ClientContext: Any
-get_structured_logger: Any
-get_drive_service: Any
-create_drive_folder: Any
-create_drive_structure_from_yaml: Any
-upload_config_to_drive_folder: Any
+get_structured_logger: Optional[Callable[..., Any]]
+get_drive_service: Optional[Callable[..., Any]]
+create_drive_folder: Optional[Callable[..., Any]]
+create_drive_structure_from_yaml: Optional[Callable[..., Any]]
+upload_config_to_drive_folder: Optional[Callable[..., Any]]
 try:
     import pipeline.context as _context
     import pipeline.logging_utils as _logging_utils
@@ -58,9 +58,7 @@ def _require_callable(fn: Optional[F], name: str) -> F:
         raise RuntimeError(
             f"Funzione '{name}' non disponibile: verifica dipendenze/credenziali Drive."
         )
-    from typing import cast
-
-    return cast(F, fn)
+    return fn
 
 
 # ===== Logger =================================================================
@@ -221,7 +219,7 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
 
 def _drive_upload_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
     """Carica un file (bytes) in una cartella Drive."""
-    from googleapiclient.http import MediaIoBaseUpload  # type: ignore[import]
+    from googleapiclient.http import MediaIoBaseUpload  # type: ignore[import-not-found]
 
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
     body = {"name": name, "parents": [parent_id], "mimeType": mime}
@@ -351,7 +349,7 @@ def download_raw_from_drive(
 
     # Import per download binario
     try:
-        from googleapiclient.http import MediaIoBaseDownload  # type: ignore[import]
+        from googleapiclient.http import MediaIoBaseDownload
     except Exception as e:  # pragma: no cover
         raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
 

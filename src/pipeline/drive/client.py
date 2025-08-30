@@ -29,16 +29,16 @@ import os
 import time
 import random
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Generator, cast
 from collections import defaultdict
 from contextvars import ContextVar
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Generator
+from typing import Callable
 
-from googleapiclient.discovery import build  # type: ignore
-from googleapiclient.errors import HttpError  # type: ignore
-from google.oauth2.service_account import Credentials  # type: ignore
+from googleapiclient.discovery import build  # type: ignore[import-not-found]
+from googleapiclient.errors import HttpError  # type: ignore[import-not-found]
+from google.oauth2.service_account import Credentials  # type: ignore[import-not-found]
 
 from ..exceptions import ConfigError
 from ..logging_utils import get_structured_logger
@@ -64,7 +64,9 @@ class _DriveRetryMetrics:
     """
 
     retries_total: int = 0
-    retries_by_error: Dict[str, int] = field(default_factory=lambda: defaultdict(int))  # type: ignore[arg-type]
+    retries_by_error: Dict[str, int] = field(
+        default_factory=lambda: cast(Dict[str, int], defaultdict(int))
+    )
     backoff_total_ms: int = 0
     last_error: Optional[str] = None
     last_status: Optional[int | str] = None
@@ -86,7 +88,7 @@ _METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar(
 
 
 @contextmanager
-def drive_metrics_scope():
+def drive_metrics_scope() -> Generator[_DriveRetryMetrics, None, None]:
     """
     Context manager per attivare la raccolta metriche dei retry Drive in un blocco.
 
@@ -123,7 +125,7 @@ def _is_retryable_error(err: Exception) -> bool:
     """
     if isinstance(err, HttpError):
         try:
-            status = int(err.resp.status)  # type: ignore[attr-defined]
+            status = int(err.resp.status)
         except Exception:
             status = None
         return status in {429, 500, 502, 503, 504}
@@ -261,7 +263,8 @@ def _resolve_service_account_file(context: Any) -> str:
             candidates.append(getattr(context, attr))
     # Mappa env nel contesto (se esiste)
     if hasattr(context, "env") and isinstance(getattr(context, "env"), dict):
-        candidates.append(context.env.get("SERVICE_ACCOUNT_FILE"))  # type: ignore[assignment]
+        sa: Optional[str] = cast(Optional[str], context.env.get("SERVICE_ACCOUNT_FILE"))
+        candidates.append(sa)
     # Variabile d'ambiente letta tramite resolver centralizzato
     candidates.append(get_env_var("SERVICE_ACCOUNT_FILE", default=None, required=False))
 
@@ -352,7 +355,7 @@ def list_drive_files(
 
     while True:
 
-        def _call():
+        def _call() -> Any:
             req = service.files().list(
                 q=q,
                 fields=fields,
@@ -396,10 +399,10 @@ def get_file_metadata(
     if not file_id:
         raise ValueError("file_id è obbligatorio")
 
-    def _call():
+    def _call() -> Any:
         return service.files().get(fileId=file_id, fields=fields, supportsAllDrives=True).execute()
 
-    return _retry(_call, op_name="files.get")
+    return cast(Dict[str, Any], _retry(_call, op_name="files.get"))
 
 
 # ------------------------------- Esportazioni modulo -------------------------------

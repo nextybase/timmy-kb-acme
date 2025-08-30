@@ -261,7 +261,9 @@ def _create_local_structure(
         },
     )
 
-    assert context.base_dir is not None and context.raw_dir is not None and context.md_dir is not None
+    assert (
+        context.base_dir is not None and context.raw_dir is not None and context.md_dir is not None
+    )
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
     with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
