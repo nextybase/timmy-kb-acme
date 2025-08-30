@@ -1,4 +1,4 @@
-# Guida all’interfaccia (Streamlit) — v1.6.0
+# Guida all’interfaccia (Streamlit) — v1.6.1
 
 Questa pagina spiega come usare l’interfaccia grafica di **Timmy‑KB** costruita con **Streamlit**. È l’alternativa ai run da terminale: stessi step, più guidati e con feedback immediati.
 
@@ -135,4 +135,3 @@ py src/semantic_onboarding.py
 py src/onboarding_full.py
 ```
 Dettagli nelle rispettive guide.
-

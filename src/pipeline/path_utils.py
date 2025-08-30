@@ -14,7 +14,8 @@ Ruolo del modulo (path-safety SSoT + regole di normalizzazione):
 - `normalize_path(path) -> Path`
   Normalizza/risolve un path con gestione errori non-critica (log + fallback al path originale).
 - `sanitize_filename(name, max_length=100) -> str`
-  **Ottimizzata**: usa regex precompilata; ammette solo `[A-Za-z0-9_.-]`, compatta separatori, NFKC, tronca a `max_length`.
+  **Ottimizzata**: usa regex precompilata; ammette solo `[A-Za-z0-9_.-]`,
+  compatta separatori, NFKC, tronca a `max_length`.
 - `sorted_paths(paths, base=None) -> List[Path]`
   Ordinamento deterministico case-insensitive, relativo a `base` se fornita.
 - `ensure_valid_slug(initial_slug, *, interactive, prompt, logger) -> str`
@@ -47,6 +48,8 @@ _logger = get_structured_logger("pipeline.path_utils")
 # -----------------------------------------------------------------------------
 # Consenti lettere/numeri/underscore/punto/trattino; sostituisci il resto.
 _SANITIZE_DISALLOWED_RE = re.compile(r"[^\w.\-]+", flags=re.UNICODE)
+
+
 # Comprimi ripetizioni del carattere di rimpiazzo (iniettata dinamicamente)
 def _compress_replacement(s: str, replacement: str) -> str:
     if not replacement:
@@ -130,14 +133,17 @@ def _load_slug_regex() -> str:
                 pattern = cfg.get("slug_regex", default_regex)
                 return pattern if isinstance(pattern, str) and pattern else default_regex
         except Exception as e:
-            _logger.error("Errore caricamento config slug_regex", extra={"error": str(e), "file_path": str(cfg_path)})
+            _logger.error(
+                "Errore caricamento config slug_regex",
+                extra={"error": str(e), "file_path": str(cfg_path)},
+            )
     return default_regex
 
 
 def clear_slug_regex_cache() -> None:
     """Svuota la cache della regex dello slug (da chiamare dopo update della config)."""
     try:
-        _load_slug_regex.cache_clear()  # type: ignore[attr-defined]
+        _load_slug_regex.cache_clear()
     except Exception as e:
         _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
 
@@ -218,7 +224,9 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         # Fallback
         return s or "file"
     except Exception as e:
-        _logger.error("Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name})
+        _logger.error(
+            "Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name}
+        )
         return "file"
 
 
@@ -293,12 +301,12 @@ def ensure_valid_slug(
 
 __all__ = [
     "is_safe_subpath",
-    "ensure_within",          # SSoT guardia STRONG
-    "clear_slug_regex_cache", # reset cache regex
+    "ensure_within",  # SSoT guardia STRONG
+    "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",
-    "validate_slug",          # helper dominio
+    "validate_slug",  # helper dominio
     "normalize_path",
     "sanitize_filename",
-    "sorted_paths",           # ordinamento deterministico
-    "ensure_valid_slug",      # wrapper interattivo
+    "sorted_paths",  # ordinamento deterministico
+    "ensure_valid_slug",  # wrapper interattivo
 ]

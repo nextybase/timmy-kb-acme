@@ -49,11 +49,15 @@ from github.GithubException import GithubException
 
 from pipeline.logging_utils import redact_secrets, get_structured_logger
 from pipeline.exceptions import PipelineError, ForcePushError, PushError
-from pipeline.path_utils import is_safe_subpath, ensure_within, sorted_paths  # sicurezza path + ordinamento deterministico
+from pipeline.path_utils import (
+    is_safe_subpath,
+    ensure_within,
+    sorted_paths,
+)  # sicurezza path + ordinamento deterministico
 from pipeline.env_utils import (
-    get_env_var,                       # 🔐 env resolver (no masking qui)
-    is_branch_allowed_for_force,       # ✅ allow-list branch per force push
-    get_force_allowed_branches,        # ✅ per log/errore esplicativo
+    get_env_var,  # 🔐 env resolver (no masking qui)
+    is_branch_allowed_for_force,  # ✅ allow-list branch per force push
+    get_force_allowed_branches,  # ✅ per log/errore esplicativo
 )
 from pipeline.constants import DEFAULT_GIT_BRANCH_ENV_KEYS
 from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
@@ -100,7 +104,9 @@ def _resolve_default_branch(context: _SupportsContext) -> str:
     return "main"
 
 
-def _sanitize_env(*envs: Mapping[str, Any], allow: Optional[Iterable[str]] = None) -> dict[str, str]:
+def _sanitize_env(
+    *envs: Mapping[str, Any], allow: Optional[Iterable[str]] = None
+) -> dict[str, str]:
     """
     Costruisce un env sicuro per subprocess:
       - parte da os.environ (str->str),
@@ -125,20 +131,36 @@ def _sanitize_env(*envs: Mapping[str, Any], allow: Optional[Iterable[str]] = Non
     return out
 
 
-def _run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, op: str = "git") -> None:
+def _run(
+    cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, op: str = "git"
+) -> None:
     """Helper compatibile che delega a run_cmd (con capture attivo per tail diagnostici)."""
     run_cmd(cmd, cwd=str(cwd) if cwd else None, env=env, capture=True, logger=logger, op=op)
 
 
 def _git_status_porcelain(cwd: Path, env: dict | None = None) -> str:
     """Ritorna l'output di `git status --porcelain`."""
-    cp = run_cmd(["git", "status", "--porcelain"], cwd=str(cwd), env=env, capture=True, logger=logger, op="git status")
+    cp = run_cmd(
+        ["git", "status", "--porcelain"],
+        cwd=str(cwd),
+        env=env,
+        capture=True,
+        logger=logger,
+        op="git status",
+    )
     return cp.stdout or ""
 
 
 def _git_rev_parse(ref: str, cwd: Path, env: dict | None = None) -> str:
     """Ritorna lo SHA (full) per un ref (es. HEAD, origin/main)."""
-    cp = run_cmd(["git", "rev-parse", ref], cwd=str(cwd), env=env, capture=True, logger=logger, op="git rev-parse")
+    cp = run_cmd(
+        ["git", "rev-parse", ref],
+        cwd=str(cwd),
+        env=env,
+        capture=True,
+        logger=logger,
+        op="git rev-parse",
+    )
     return (cp.stdout or "").strip()
 
 
@@ -157,13 +179,19 @@ def _mask_ack(tag: str) -> str:
 def _collect_md_files(book_dir: Path) -> list[Path]:
     """Seleziona file .md validi (no .bak), ricorsivamente, con ordinamento deterministico."""
     md_files = sorted_paths(
-        (f for f in book_dir.rglob("*.md") if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)),
+        (
+            f
+            for f in book_dir.rglob("*.md")
+            if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)
+        ),
         base=book_dir,
     )
     return md_files
 
 
-def _ensure_or_create_repo(gh: Github, user, repo_name: str, *, logger: logging.Logger, redact_logs: bool) -> Any:
+def _ensure_or_create_repo(
+    gh: Github, user, repo_name: str, *, logger: logging.Logger, redact_logs: bool
+) -> Any:
     """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente.
 
     Returns:
@@ -234,8 +262,16 @@ def _stage_and_commit(tmp_dir: Path, env: dict | None, *, commit_msg: str) -> bo
     return True
 
 
-def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, logger: logging.Logger, redact_logs: bool) -> None:
+def _push_with_retry(
+    tmp_dir: Path,
+    env: dict | None,
+    default_branch: str,
+    *,
+    logger: logging.Logger,
+    redact_logs: bool,
+) -> None:
     """Push senza force, con retry singolo dopo `pull --rebase` in caso di rifiuto."""
+
     def _attempt_push() -> None:
         _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
@@ -243,9 +279,16 @@ def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, lo
         logger.info(f"📤 Push su origin/{default_branch}")
         _attempt_push()
     except CmdError:
-        logger.warning("⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...")
+        logger.warning(
+            "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push..."
+        )
         try:
-            _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
+            _run(
+                ["git", "pull", "--rebase", "origin", default_branch],
+                cwd=tmp_dir,
+                env=env,
+                op="git pull --rebase",
+            )
             _attempt_push()
         except CmdError as e2:
             raw = (
@@ -258,7 +301,15 @@ def _push_with_retry(tmp_dir: Path, env: dict | None, default_branch: str, *, lo
             raise PushError(safe) from e2
 
 
-def _force_push_with_lease(tmp_dir: Path, env: dict | None, default_branch: str, force_ack: str, *, logger: logging.Logger, redact_logs: bool) -> None:
+def _force_push_with_lease(
+    tmp_dir: Path,
+    env: dict | None,
+    default_branch: str,
+    force_ack: str,
+    *,
+    logger: logging.Logger,
+    redact_logs: bool,
+) -> None:
     """Force push governato con `--force-with-lease` sul ref remoto."""
     # Fetch e calcolo SHA locali/remoti per il lease
     _run(["git", "fetch", "origin", default_branch], cwd=tmp_dir, env=env, op="git fetch")
@@ -267,7 +318,12 @@ def _force_push_with_lease(tmp_dir: Path, env: dict | None, default_branch: str,
 
     logger.info(
         "📌 Force push governato (with-lease)",
-        extra={"branch": default_branch, "local_sha": local_sha, "remote_sha": remote_sha, "force_ack": _mask_ack(force_ack)},
+        extra={
+            "branch": default_branch,
+            "local_sha": local_sha,
+            "remote_sha": remote_sha,
+            "force_ack": _mask_ack(force_ack),
+        },
     )
     lease_ref = f"refs/heads/{default_branch}:{remote_sha}"
     _run(
@@ -324,7 +380,10 @@ def push_output_to_github(
 
     # Validazione basilare prerequisiti
     if not github_token:
-        raise PipelineError("GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.", slug=getattr(context, "slug", None))
+        raise PipelineError(
+            "GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.",
+            slug=getattr(context, "slug", None),
+        )
 
     book_dir = context.md_dir
     if not book_dir.exists():
@@ -337,7 +396,9 @@ def push_output_to_github(
     # Guard-rail: directory dentro la base del cliente (STRONG)
     base_dir = getattr(context, "base_dir", None)
     if not base_dir:
-        raise PipelineError("Context.base_dir assente: impossibile determinare la working area.", slug=context.slug)
+        raise PipelineError(
+            "Context.base_dir assente: impossibile determinare la working area.", slug=context.slug
+        )
     try:
         ensure_within(base_dir, book_dir)
     except Exception:
@@ -351,7 +412,9 @@ def push_output_to_github(
     md_files = _collect_md_files(book_dir)
     if not md_files:
         msg = "⚠️ Nessun file .md valido trovato nella cartella book. Push annullato."
-        local_logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+        local_logger.warning(
+            redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug}
+        )
         return
 
     if do_push is False:
@@ -385,11 +448,18 @@ def push_output_to_github(
     header = base64.b64encode(f"x-access-token:{github_token}".encode()).decode()
     extra_env = {"GIT_HTTP_EXTRAHEADER": f"Authorization: Basic {header}"}
     allowed_from_context = {"GIT_SSH_COMMAND"}
-    env = _sanitize_env(getattr(context, "env", {}) or {}, extra_env, allow=allowed_from_context.union({"GIT_HTTP_EXTRAHEADER"}))
+    env = _sanitize_env(
+        getattr(context, "env", {}) or {},
+        extra_env,
+        allow=allowed_from_context.union({"GIT_HTTP_EXTRAHEADER"}),
+    )
 
     try:
         # Clone e checkout/creazione branch
-        local_logger.info("⬇️  Clonazione repo remoto in working dir temporanea", extra={"slug": context.slug, "file_path": str(tmp_dir)})
+        local_logger.info(
+            "⬇️  Clonazione repo remoto in working dir temporanea",
+            extra={"slug": context.slug, "file_path": str(tmp_dir)},
+        )
         _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
@@ -407,14 +477,30 @@ def push_output_to_github(
             exists_remote_branch = False
 
         if exists_remote_branch:
-            _run(["git", "checkout", "-B", default_branch, f"origin/{default_branch}"], cwd=tmp_dir, env=env, op="git checkout")
-            local_logger.info("↕️  Pull --rebase per sincronizzazione iniziale", extra={"slug": context.slug, "branch": default_branch})
-            _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
+            _run(
+                ["git", "checkout", "-B", default_branch, f"origin/{default_branch}"],
+                cwd=tmp_dir,
+                env=env,
+                op="git checkout",
+            )
+            local_logger.info(
+                "↕️  Pull --rebase per sincronizzazione iniziale",
+                extra={"slug": context.slug, "branch": default_branch},
+            )
+            _run(
+                ["git", "pull", "--rebase", "origin", default_branch],
+                cwd=tmp_dir,
+                env=env,
+                op="git pull --rebase",
+            )
         else:
             _run(["git", "checkout", "-B", default_branch], cwd=tmp_dir, env=env, op="git checkout")
 
         # Copia contenuti .md da book/ nella working dir clonata (STRONG sui dst)
-        local_logger.info("🧩 Preparazione contenuti da book/", extra={"slug": context.slug, "file_path": str(book_dir)})
+        local_logger.info(
+            "🧩 Preparazione contenuti da book/",
+            extra={"slug": context.slug, "file_path": str(book_dir)},
+        )
         _copy_md_tree(md_files, book_dir, tmp_dir)
 
         # Stage e commit
@@ -423,7 +509,10 @@ def push_output_to_github(
             commit_msg = f"{commit_msg}\n\nForce-Ack: {force_ack}"
         committed = _stage_and_commit(tmp_dir, env, commit_msg=commit_msg)
         if not committed:
-            local_logger.info("ℹ️  Nessuna modifica da pubblicare (working dir identica)", extra={"slug": context.slug})
+            local_logger.info(
+                "ℹ️  Nessuna modifica da pubblicare (working dir identica)",
+                extra={"slug": context.slug},
+            )
             return
 
         # Ramo di push: incrementale (default) o force governato
@@ -442,9 +531,18 @@ def push_output_to_github(
                     slug=context.slug,
                 )
 
-            _force_push_with_lease(tmp_dir, env, default_branch, force_ack, logger=local_logger, redact_logs=redact_logs)
+            _force_push_with_lease(
+                tmp_dir,
+                env,
+                default_branch,
+                force_ack,
+                logger=local_logger,
+                redact_logs=redact_logs,
+            )
         else:
-            _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
+            _push_with_retry(
+                tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs
+            )
 
         local_logger.info(
             f"✅ Push completato su {repo.full_name} ({default_branch})",

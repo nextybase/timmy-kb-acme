@@ -35,12 +35,10 @@ Dipendenze
 """
 
 from __future__ import annotations
-
-import io
 import os
 import tempfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from googleapiclient.http import MediaIoBaseDownload  # type: ignore
 
@@ -62,21 +60,18 @@ def _q_parent(parent_id: str) -> str:
     return f"'{parent_id}' in parents and trashed = false"
 
 
-def _list_children(service, parent_id: str, *, fields: str) -> List[Dict]:
+def _list_children(service: Any, parent_id: str, *, fields: str) -> List[Dict[str, Any]]:
     """Lista i children di un folder (una pagina alla volta)."""
     items: List[Dict] = []
     page_token: Optional[str] = None
     while True:
-        req = (
-            service.files()
-            .list(
-                q=_q_parent(parent_id),
-                fields=f"nextPageToken, files({fields})",
-                pageSize=1000,
-                pageToken=page_token,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            )
+        req = service.files().list(
+            q=_q_parent(parent_id),
+            fields=f"nextPageToken, files({fields})",
+            pageSize=1000,
+            pageToken=page_token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
         )
         resp = req.execute()
         items.extend(resp.get("files", []) or [])
@@ -86,7 +81,7 @@ def _list_children(service, parent_id: str, *, fields: str) -> List[Dict]:
     return items
 
 
-def _walk_drive_tree(service, root_id: str) -> Iterable[Tuple[List[str], Dict]]:
+def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Dict[str, Any]]]:
     """
     DFS: restituisce tuple (path_parts, item) per ogni file/cartella sotto root.
     path_parts = lista di nomi cartella dal root ai figli (sanificati).
@@ -127,12 +122,12 @@ def _ensure_dest(base_dir: Path, local_root_dir: Path, rel_parts: List[str], fil
 
 
 def _download_one_pdf_atomic(
-    service,
+    service: Any,
     file_id: str,
     dest_path: Path,
     *,
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
-    logger,
+    logger: Any,
     progress: bool = False,
 ) -> None:
     """
@@ -157,7 +152,10 @@ def _download_one_pdf_atomic(
                 pct = int((status.progress() or 0.0) * 100)
                 # Logga a soglie intere (evita flood)
                 if pct != last_pct and pct % 10 == 0:
-                    logger.info("download.progress", extra={"file_path": str(dest_path), "progress_pct": pct})
+                    logger.info(
+                        "download.progress",
+                        extra={"file_path": str(dest_path), "progress_pct": pct},
+                    )
                     last_pct = pct
             if done:
                 break
@@ -169,12 +167,12 @@ def _download_one_pdf_atomic(
 
 
 def download_drive_pdfs_to_local(
-    service,
+    service: Any,
     remote_root_folder_id: str,
     local_root_dir: Path,
     *,
     progress: bool = False,
-    context=None,
+    context: Any | None = None,
     redact_logs: bool = False,
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
 ) -> int:
@@ -212,7 +210,11 @@ def download_drive_pdfs_to_local(
     rid_masked = redact_secrets(remote_root_folder_id) if redact_logs else remote_root_folder_id
     logger.info(
         "drive.download.start",
-        extra={"remote_root": rid_masked, "local_root": str(local_root_dir), "local_tail": tail_path(local_root_dir)},
+        extra={
+            "remote_root": rid_masked,
+            "local_root": str(local_root_dir),
+            "local_tail": tail_path(local_root_dir),
+        },
     )
 
     downloaded = 0
@@ -249,7 +251,10 @@ def download_drive_pdfs_to_local(
         if dest_path.exists() and remote_size > 0:
             try:
                 if dest_path.stat().st_size == remote_size:
-                    logger.debug("download.skip.same_size", extra={"file_path": str(dest_path), "size": remote_size})
+                    logger.debug(
+                        "download.skip.same_size",
+                        extra={"file_path": str(dest_path), "size": remote_size},
+                    )
                     continue
             except OSError:
                 pass
@@ -269,7 +274,10 @@ def download_drive_pdfs_to_local(
         except Exception as e:
             fid = redact_secrets(file_id) if redact_logs else file_id
             errors.append((fid, str(e)))
-            logger.warning("download.fail", extra={"file_id": fid, "error": str(e), "file_path": str(dest_path)})
+            logger.warning(
+                "download.fail",
+                extra={"file_id": fid, "error": str(e), "file_path": str(dest_path)},
+            )
 
     if errors:
         # Non interrompiamo il flusso, ma segnaliamo in maniera aggregata

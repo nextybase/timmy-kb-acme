@@ -10,14 +10,14 @@ di presentazione. Le operazioni sono **idempotenti** e **atomiche**.
 
 Funzioni esposte
 ----------------
-- `build_default_readme(slug) -> str`  
+- `build_default_readme(slug) -> str`
   Restituisce un README.md minimale, informativo e timestamped.
 
-- `build_summary_index(book_dir: Path) -> str`  
+- `build_summary_index(book_dir: Path) -> str`
   Crea un SUMMARY.md che elenca i file Markdown nella cartella `book/`
   (escludendo README/SUMMARY), con titoli “umanizzati” a partire dai filename.
 
-- `ensure_readme_summary(context, logger, *, force=False) -> None`  
+- `ensure_readme_summary(context, logger, *, force=False) -> None`
   Verifica/garantisce la presenza di README.md e SUMMARY.md in `book/`.
   Se mancano o sono vuoti (o `force=True`), li (ri)genera con scrittura atomica.
   Esegue **path-safety STRONG** via `ensure_within(...)` prima delle scritture.
@@ -75,7 +75,8 @@ def build_summary_index(book_dir: Path) -> str:
     esclusi README.md e SUMMARY.md. L’ordine è deterministico tramite `sorted_paths`.
     """
     md_files = [
-        p for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        p
+        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
         if p.name.lower() not in ("readme.md", "summary.md")
     ]
     lines = ["# Summary\n"]
@@ -132,7 +133,9 @@ def ensure_readme_summary(context: Any, logger: logging.Logger, *, force: bool =
         book_dir = repo_root / "book"
         ensure_within(repo_root, book_dir)
     else:
-        raise ConfigError("Contesto privo di percorsi utili: servono md_dir o base_dir o repo_root_dir.")
+        raise ConfigError(
+            "Contesto privo di percorsi utili: servono md_dir o base_dir o repo_root_dir."
+        )
 
     slug = getattr(context, "slug", None) or "kb"
     book_dir.mkdir(parents=True, exist_ok=True)

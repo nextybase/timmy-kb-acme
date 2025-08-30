@@ -4,7 +4,7 @@ Loader della configurazione semantica cliente-specifica.
 
 Scopo
 -----
-Restituire un oggetto `SemanticConfig` che unisce: 
+Restituire un oggetto `SemanticConfig` che unisce:
 1) Valori di default robusti (fallback hardcoded)
 2) Override generali del cliente (output/.../config/config.yaml -> semantic_defaults)
 3) Parametri locali per il tagging (output/.../semantic/semantic_mapping.yaml -> semantic_tagger)
@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional, Set
 try:
     import yaml  # PyYAML è già usato nel repo
 except Exception:  # pragma: no cover
-    yaml = None  # degradiamo: se manca, useremo solo i default e gli overrides
+    yaml = None  # type: ignore[assignment]  # degrado: usa solo default/overrides
 
 
 __all__ = ["SemanticConfig", "load_semantic_config"]
@@ -35,13 +35,13 @@ __all__ = ["SemanticConfig", "load_semantic_config"]
 # ----------------------------- Defaults hardcoded ----------------------------- #
 
 _DEFAULTS = {
-    "lang": "it",          # it|en|auto
-    "max_pages": 5,        # numero di pagine lette per PDF
-    "top_k": 10,           # massimo numero di tag proposti per documento
-    "score_min": 0.40,     # soglia minima di confidenza
-    "ner": True,           # Named Entity Recognition
-    "keyphrases": True,    # estrazione keyphrase
-    "embeddings": False,   # fase 2 (clustering sinonimi)
+    "lang": "it",  # it|en|auto
+    "max_pages": 5,  # numero di pagine lette per PDF
+    "top_k": 10,  # massimo numero di tag proposti per documento
+    "score_min": 0.40,  # soglia minima di confidenza
+    "ner": True,  # Named Entity Recognition
+    "keyphrases": True,  # estrazione keyphrase
+    "embeddings": False,  # fase 2 (clustering sinonimi)
     "stop_tags": ["bozza", "varie"],  # blacklist locale
 }
 
@@ -62,15 +62,16 @@ class SemanticConfig:
     stop_tags: Set[str] = field(default_factory=set)
 
     # Riferimenti utili per l'orchestrazione
-    base_dir: Path = Path(".")               # output/timmy-kb-<slug> (resolve in load)
-    semantic_dir: Path = Path("semantic")    # base_dir / "semantic" (resolve in load)
-    raw_dir: Path = Path("raw")              # base_dir / "raw" (resolve in load)
+    base_dir: Path = Path(".")  # output/timmy-kb-<slug> (resolve in load)
+    semantic_dir: Path = Path("semantic")  # base_dir / "semantic" (resolve in load)
+    raw_dir: Path = Path("raw")  # base_dir / "raw" (resolve in load)
 
     # Mapping completo (cliente-specifico) caricato da semantic_mapping.yaml
     mapping: Dict[str, Any] = field(default_factory=dict)
 
 
 # ----------------------------- Helpers YAML ---------------------------------- #
+
 
 def _safe_load_yaml(p: Path) -> Dict[str, Any]:
     """
@@ -142,7 +143,10 @@ def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 
 # ----------------------------- API pubblica ---------------------------------- #
 
-def load_semantic_config(base_dir: Path, *, overrides: Optional[Dict[str, Any]] = None) -> SemanticConfig:
+
+def load_semantic_config(
+    base_dir: Path, *, overrides: Optional[Dict[str, Any]] = None
+) -> SemanticConfig:
     """
     Carica la configurazione semantica per il cliente sotto `base_dir`.
 

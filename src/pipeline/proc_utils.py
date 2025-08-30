@@ -46,6 +46,7 @@ __all__ = [
 
 # --------------------------------------- Error ---------------------------------------
 
+
 class CmdError(RuntimeError):
     """Errore di comando con contesto ricco per diagnosi (stdout/stderr tail, durata, tentativi)."""
 
@@ -76,6 +77,7 @@ class CmdError(RuntimeError):
 
 
 # ------------------------------------- Helpers --------------------------------------
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -125,6 +127,7 @@ def _default_timeout_for(op: Optional[str]) -> int:
 
 
 # ------------------------------------- Public API -----------------------------------
+
 
 def run_cmd(
     cmd: Sequence[str] | str,
@@ -290,8 +293,17 @@ def run_cmd(
         assert last_err is not None
         raise last_err
 
+    # Fallback per type checker: non raggiungibile a runtime
+    raise CmdError("Unexpected state: no result from run_cmd", cmd=argv, op=op_label)
 
-def wait_for_port(host: str, port: int, timeout: float = 30.0, interval: float = 0.5, logger: Optional[logging.Logger] = None) -> None:
+
+def wait_for_port(
+    host: str,
+    port: int,
+    timeout: float = 30.0,
+    interval: float = 0.5,
+    logger: Optional[logging.Logger] = None,
+) -> None:
     """
     Attende che una porta TCP sia raggiungibile entro `timeout` secondi.
     Solleva `TimeoutError` se la porta non risponde in tempo.
@@ -311,13 +323,20 @@ def wait_for_port(host: str, port: int, timeout: float = 30.0, interval: float =
 
     # timeout
     if logger:
-        logger.error("wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout})
-    raise TimeoutError(f"Porta non raggiungibile: {host}:{port} entro {timeout}s; last={last_exc!r}")
+        logger.error(
+            "wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout}
+        )
+    raise TimeoutError(
+        f"Porta non raggiungibile: {host}:{port} entro {timeout}s; last={last_exc!r}"
+    )
 
 
 # ----------------------------- Docker helpers --------------------------------------
 
-def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None) -> bool:
+
+def docker_available(
+    *, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None
+) -> bool:
     """Ritorna True se `docker` è invocabile e risponde a `docker --version`."""
     try:
         run_cmd(
@@ -337,7 +356,9 @@ def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Opti
 
 def _docker_rm_force(name: str, *, logger: Optional[logging.Logger] = None) -> None:
     try:
-        run_cmd(["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f")
+        run_cmd(
+            ["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f"
+        )
     except CmdError:
         # Best-effort
         if logger:
@@ -385,7 +406,10 @@ def run_docker_preview(
     """
     md_path = Path(md_dir).resolve()
     if logger:
-        logger.info("preview.start", extra={"md_dir": str(md_path), "container": container_name, "port": port})
+        logger.info(
+            "preview.start",
+            extra={"md_dir": str(md_path), "container": container_name, "port": port},
+        )
 
     if not docker_available(logger=logger):
         raise CmdError("Docker non disponibile", cmd=["docker", "--version"], op="docker version")
@@ -440,7 +464,10 @@ def run_docker_preview(
     # container id nel stdout (non logghiamo intero per pulizia)
     if logger:
         cid = (cp.stdout or "").strip()
-        logger.info("preview.container.started", extra={"container": container_name, "cid_prefix": cid[:12] if cid else ""})
+        logger.info(
+            "preview.container.started",
+            extra={"container": container_name, "cid_prefix": cid[:12] if cid else ""},
+        )
 
     # Readiness: attendiamo che la porta risponda
     try:
@@ -450,16 +477,27 @@ def run_docker_preview(
     except TimeoutError as e:
         running = _docker_inspect_running(container_name, logger=logger)
         if logger:
-            logger.error("preview.ready.timeout", extra={"container": container_name, "port": port, "running": running})
+            logger.error(
+                "preview.ready.timeout",
+                extra={"container": container_name, "port": port, "running": running},
+            )
         # best-effort cleanup
         _docker_rm_force(container_name, logger=logger)
         raise CmdError(str(e), cmd=["docker", "run", "..."], op="docker honkit serve")
 
 
-def stop_docker_preview(container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None) -> None:
+def stop_docker_preview(
+    container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None
+) -> None:
     """Tenta lo stop + remove del container di preview. Best-effort (non solleva)."""
     try:
-        run_cmd(["docker", "stop", container_name], retries=0, capture=True, logger=logger, op="docker stop")
+        run_cmd(
+            ["docker", "stop", container_name],
+            retries=0,
+            capture=True,
+            logger=logger,
+            op="docker stop",
+        )
     except CmdError:
         pass
     finally:

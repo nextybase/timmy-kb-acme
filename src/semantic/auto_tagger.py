@@ -1,6 +1,6 @@
 # src/semantic/auto_tagger.py
 """
-MVP: generatore di candidati semantici basato su euristiche (path/filename). 
+MVP: generatore di candidati semantici basato su euristiche (path/filename).
 
 Caratteristiche
 ---------------
@@ -121,6 +121,7 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
 
 # ------------------------------ API principali ------------------------------- #
 
+
 def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str, Dict[str, Any]]:
     """
     Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename.
@@ -192,7 +193,9 @@ def render_tags_csv(candidates: Dict[str, Dict[str, Any]], csv_path: Path) -> No
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
+    writer.writerow(
+        ["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"]
+    )
 
     for rel_path, meta in sorted(candidates.items()):
         tags = [str(t).strip().lower() for t in (meta.get("tags") or []) if str(t).strip()]
@@ -201,13 +204,15 @@ def render_tags_csv(candidates: Dict[str, Dict[str, Any]], csv_path: Path) -> No
         score = meta.get("score") or {}
         sources = meta.get("sources") or {}
 
-        writer.writerow([
-            rel_path,
-            ", ".join(tags),
-            json.dumps(ents, ensure_ascii=False),
-            json.dumps(keys, ensure_ascii=False),
-            json.dumps(score, ensure_ascii=False, sort_keys=True),
-            json.dumps(sources, ensure_ascii=False, sort_keys=True),
-        ])
+        writer.writerow(
+            [
+                rel_path,
+                ", ".join(tags),
+                json.dumps(ents, ensure_ascii=False),
+                json.dumps(keys, ensure_ascii=False),
+                json.dumps(score, ensure_ascii=False, sort_keys=True),
+                json.dumps(sources, ensure_ascii=False, sort_keys=True),
+            ]
+        )
 
     safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)

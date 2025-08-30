@@ -14,4 +14,5 @@ Struttura prevista:
 - pipeline/drive/upload.py    → creazione albero da YAML, upload config, delete
 """
 
-__all__ = ["client", "download", "upload"]
+# Espone i sotto-moduli previsti; l'import effettivo è gestito dalla facade `drive_utils`.
+__all__ = []

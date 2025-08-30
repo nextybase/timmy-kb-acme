@@ -55,7 +55,9 @@ def _now_utc_iso() -> str:
     return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def _unique_tags_with_examples(candidates: Dict[str, Dict[str, Any]], max_examples: int = 5) -> Dict[str, List[str]]:
+def _unique_tags_with_examples(
+    candidates: Dict[str, Dict[str, Any]], max_examples: int = 5
+) -> Dict[str, List[str]]:
     """
     Estrae l'insieme dei tag unici dal corpus e un piccolo campione di documenti
     in cui ciascun tag compare (per aiutare la revisione).
@@ -89,7 +91,10 @@ def write_review_stub(
     """
     if yaml is None:
         # Cambio: ConfigError al posto di RuntimeError per coerenza con orchestratori/EXIT_CODES
-        raise ConfigError("PyYAML non disponibile: impossibile scrivere lo YAML di review.", file_path=str(yaml_path))
+        raise ConfigError(
+            "PyYAML non disponibile: impossibile scrivere lo YAML di review.",
+            file_path=str(yaml_path),
+        )
 
     yaml_path = Path(yaml_path).resolve()
     # Path-safety forte: yaml_path deve stare sotto la propria directory madre
@@ -110,8 +115,8 @@ def write_review_stub(
         review_items.append(
             {
                 "name": tag,
-                "action": "keep",     # keep | drop | merge_into:<canonical>
-                "synonyms": [],       # puoi popolare qui sinonimi utili
+                "action": "keep",  # keep | drop | merge_into:<canonical>
+                "synonyms": [],  # puoi popolare qui sinonimi utili
                 "notes": "",
                 "examples": tag_examples[tag],
             }

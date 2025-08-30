@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+﻿# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive_utils.py
 """
 Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
@@ -6,49 +6,51 @@ Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
 Obiettivo
 ---------
 - Mantenere **invariata** l'API pubblica storica (`pipeline.drive_utils.*`) delegando
-  l’implementazione ai moduli interni suddivisi:
-  - `pipeline.drive.client`   → client e primitive di lettura/elenco
-  - `pipeline.drive.upload`   → creazione/albero/upload e struttura locale
-  - `pipeline.drive.download` → download dei contenuti (PDF, ecc.)
+  lâ€™implementazione ai moduli interni suddivisi:
+  - `pipeline.drive.client`   â†’ client e primitive di lettura/elenco
+  - `pipeline.drive.upload`   â†’ creazione/albero/upload e struttura locale
+  - `pipeline.drive.download` â†’ download dei contenuti (PDF, ecc.)
 
 Note
 ----
 - Questo file non contiene logica di business: effettua solo import **statici** e re-export.
-  In questo modo evitiamo import “lazy” a runtime e ogni rischio di cicli/race.
+  In questo modo evitiamo import â€œlazyâ€ a runtime e ogni rischio di cicli/race.
 - **Compat test**: riesporta `MIME_FOLDER`, `MIME_PDF` e `MediaIoBaseDownload` per
-  compatibilità con i test che monkeypatchano questi simboli a livello di facciata.
+  compatibilitÃ  con i test che monkeypatchano questi simboli a livello di facciata.
 - Gli orchestratori e il resto del codice continuano a importare da qui.
 
 Funzioni/Costanti riesportate (ruolo sintetico)
 -----------------------------------------------
 Client/Lettura:
-- `get_drive_service(context)` → istanzia client Drive v3 (Service Account), con redazione log a valle.
-- `list_drive_files(service, **query)` → elenca file/cartelle (paginato).
-- `get_file_metadata(service, file_id)` → metadata di un file (mimeType, name, parents, ecc.).
-- `_retry(fn, *args, **kwargs)` → helper interno (ri-esportato per test avanzati).
+- `get_drive_service(context)` â†’ istanzia client Drive v3 (Service Account), con redazione log a valle.
+- `list_drive_files(service, **query)` â†’ elenca file/cartelle (paginato).
+- `get_file_metadata(service, file_id)` â†’ metadata di un file (mimeType, name, parents, ecc.).
+- `_retry(fn, *args, **kwargs)` â†’ helper interno (ri-esportato per test avanzati).
 
 Upload/Strutture:
-- `create_drive_folder(service, name, parent_id, ...)` → crea una cartella.
-- `create_drive_structure_from_yaml(service, yaml_path, client_folder_id, ...)` → albero Drive da YAML.
-- `upload_config_to_drive_folder(service, context, parent_id, ...)` → carica `config.yaml`.
-- `delete_drive_file(service, file_id)` → rimozione file/cartella.
-- `create_local_base_structure(context, yaml_structure_file)` → struttura locale (mirror parziale).
+- `create_drive_folder(service, name, parent_id, ...)` â†’ crea una cartella.
+- `create_drive_structure_from_yaml(service, yaml_path, client_folder_id, ...)` â†’ albero Drive da YAML.
+- `upload_config_to_drive_folder(service, context, parent_id, ...)` â†’ carica `config.yaml`.
+- `delete_drive_file(service, file_id)` â†’ rimozione file/cartella.
+- `create_local_base_structure(context, yaml_structure_file)` â†’ struttura locale (mirror parziale).
 
 Download:
-- `download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, ...)` → scarica PDF su sandbox locale.
+- `download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, ...)` â†’ scarica PDF su sandbox locale.
 
 Redazione/Logging:
 - La redazione dei log (token, ID) e i dettagli di auditing sono gestiti **nei moduli implementativi**.
-  Questa facciata resta volutamente “thin” e priva di side effect.
+  Questa facciata resta volutamente â€œthinâ€ e priva di side effect.
 """
 
 from __future__ import annotations
+from typing import Any
+from pathlib import Path
 
 # ---------------------------------- Costanti MIME ----------------------------------
 # Alcuni test si aspettano che le costanti MIME siano accessibili come:
 #   DU.MIME_FOLDER  /  DU.MIME_PDF
 try:
-    from .constants import GDRIVE_FOLDER_MIME as MIME_FOLDER, PDF_MIME_TYPE as MIME_PDF  # type: ignore
+    from .constants import GDRIVE_FOLDER_MIME as MIME_FOLDER, PDF_MIME_TYPE as MIME_PDF
 except Exception:  # pragma: no cover - fallback sicuro per ambienti minimi
     # Fallback conservativo: valori standard noti
     MIME_FOLDER = "application/vnd.google-apps.folder"
@@ -59,21 +61,26 @@ except Exception:  # pragma: no cover - fallback sicuro per ambienti minimi
 # se disponibile, altrimenti forniamo un placeholder (sostituibile via monkeypatch).
 try:  # pragma: no cover - dipendenza opzionale in ambienti CI minimali
     from googleapiclient.http import MediaIoBaseDownload as _GAPI_MediaIoBaseDownload  # type: ignore
-    MediaIoBaseDownload = _GAPI_MediaIoBaseDownload  # re-export
+
+    MediaIoBaseDownload: Any = _GAPI_MediaIoBaseDownload
 except Exception:  # pragma: no cover
-    class MediaIoBaseDownload:  # type: ignore
+
+    class _MediaIoBaseDownloadPlaceholder:
         """Placeholder per `googleapiclient.http.MediaIoBaseDownload`.
 
-        Viene definito solo se la libreria `google-api-python-client` non è presente.
-        È pensato per essere rimpiazzato nei test con `monkeypatch.setattr(...)`.
+        Viene definito solo se la libreria `google-api-python-client` non Ã¨ presente.
+        Ãˆ pensato per essere rimpiazzato nei test con `monkeypatch.setattr(...)`.
         Qualsiasi istanziazione diretta solleva un ImportError esplicito.
         """
 
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise ImportError(
                 "googleapiclient non installato: `MediaIoBaseDownload` è un placeholder. "
                 "Installa `google-api-python-client` oppure monkeypatcha questa classe nei test."
             )
+
+    MediaIoBaseDownload = _MediaIoBaseDownloadPlaceholder
+
 
 # ----------------------------- Import espliciti (statici) --------------------------
 
@@ -104,10 +111,19 @@ except Exception as e:  # pragma: no cover
 
 # Download (opzionale ma consigliato). Se non presente, forniamo un errore chiaro a chiamata.
 try:  # noqa: SIM105
-    from .drive.download import download_drive_pdfs_to_local  # type: ignore
+    from .drive.download import download_drive_pdfs_to_local
 except Exception:
     # Fallback: definisce uno stub che guida l'utente a includere il modulo mancante.
-    def download_drive_pdfs_to_local(*args, **kwargs):  # type: ignore[no-redef]
+    def download_drive_pdfs_to_local(
+        service: Any,
+        remote_root_folder_id: str,
+        local_root_dir: Path,
+        *,
+        progress: bool = False,
+        context: Any | None = None,
+        redact_logs: bool = False,
+        chunk_size: int = 8 * 1024 * 1024,
+    ) -> int:
         """Stub: modulo 'pipeline.drive.download' non disponibile.
 
         Questo placeholder viene definito solo se l'import del modulo reale fallisce.
@@ -116,6 +132,7 @@ except Exception:
             "Funzione 'download_drive_pdfs_to_local' non disponibile: manca 'pipeline.drive.download'. "
             "Aggiungi 'src/pipeline/drive/download.py' oppure aggiorna l'installazione del pacchetto."
         )
+
 
 # ----------------------------- Superficie pubblica ---------------------------------
 
@@ -138,3 +155,4 @@ __all__ = [
     # download
     "download_drive_pdfs_to_local",
 ]
+

@@ -1,4 +1,4 @@
-# Policy di Push — Timmy-KB (v1.6.0)
+# Policy di Push — Timmy-KB (v1.6.1)
 
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
@@ -72,4 +72,3 @@ Opzioni comuni:
 - Allineamento contenuti `book/` ↔ spazio GitBook.
 
 > **Nota:** fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.
-

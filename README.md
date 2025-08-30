@@ -1,4 +1,4 @@
-# Timmy‑KB — README (v1.6.0)
+# Timmy‑KB — README (v1.6.1)
 
 Pipeline per la generazione di una **Knowledge Base Markdown AI‑ready** a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
@@ -173,4 +173,3 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Pubblicazione su GitHub: vengono inclusi **solo i `.md`** di `book/`.  
 - La sandbox/dataset dummy (`timmy-kb-dummy`) è usata nei test automatici per verificare coerenza e idempotenza della pipeline.  
 - Per scenari **air‑gapped** usa `tag_onboarding --source=local` e popola `raw/` manualmente.
-

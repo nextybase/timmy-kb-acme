@@ -11,7 +11,8 @@ Centralizza le utilità di configurazione per la pipeline Timmy-KB:
 - `write_client_config_file(context, config) -> Path`: serializza e salva **atomicamente**
   `config.yaml` nella sandbox del cliente usando `safe_write_text` (backup `.bak` incluso).
 - `get_client_config(context) -> dict`: legge e deserializza `config.yaml` dal contesto (errore se assente/malformato).
-- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di ambiente (config valido e cartelle chiave come `logs/`).
+- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di ambiente
+  (config valido e cartelle chiave come `logs/`).
 - `safe_write_file(file_path, content)`: **wrapper legacy** che scrive testo in modo atomico
   passando da `safe_write_text`. Per nuovo codice, usare direttamente `safe_write_text`.
 - `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale su `config.yaml`
@@ -71,23 +72,23 @@ class Settings(PydanticBaseSettings):
     """
 
     # Parametri Google Drive
-    DRIVE_ID: str = Field(..., env="DRIVE_ID")
-    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")
-    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")
+    DRIVE_ID: str = Field(..., env="DRIVE_ID")  # type: ignore[call-arg]
+    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")  # type: ignore[call-arg]
+    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")  # type: ignore[call-arg]
     DRIVE_ROOT_ID: Optional[str] = Field(
         None,
-        env="DRIVE_ROOT_ID",
+        env="DRIVE_ROOT_ID",  # type: ignore[call-arg]
         description="ID cartella radice cliente su Google Drive",
     )
 
     # Parametri GitHub/GitBook
-    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN")
-    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")
+    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN")  # type: ignore[call-arg]
+    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")  # type: ignore[call-arg]
 
     # Identificativo cliente e log
     slug: Optional[str] = None
-    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
-    DEBUG: bool = Field(False, env="DEBUG")
+    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")  # type: ignore[call-arg]
+    DEBUG: bool = Field(False, env="DEBUG")  # type: ignore[call-arg]
 
     @model_validator(mode="after")
     def check_critical(self) -> "Settings":
@@ -130,6 +131,8 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     Raises:
         ConfigError: in caso di errore I/O.
     """
+    # Assicurazioni formali per Pylance: campi opzionali nel contesto
+    assert context.output_dir is not None and context.base_dir is not None
     config_dir = context.output_dir / CONFIG_DIR_NAME
     config_path = config_dir / CONFIG_FILE_NAME
 
@@ -175,6 +178,7 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     Raises:
         ConfigError: se il file non esiste o in caso di errore di lettura/parsing.
     """
+    assert context.config_path is not None
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
@@ -187,7 +191,9 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
 # ----------------------------------------------------------
 #  Validazione pre-onboarding (coerenza minima ambiente)
 # ----------------------------------------------------------
-def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None) -> None:
+def validate_preonboarding_environment(
+    context: ClientContext, base_dir: Optional[Path] = None
+) -> None:
     """Verifica la coerenza minima dell'ambiente prima del pre-onboarding.
 
     STEP 1: presenza/validità di `config.yaml`.
@@ -197,6 +203,7 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         PreOnboardingValidationError: per config mancante/non valida o YAML malformato.
     """
     base_dir = base_dir or context.base_dir
+    assert base_dir is not None and context.config_path is not None
 
     if not context.config_path.exists():
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
@@ -207,7 +214,9 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
             cfg = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
-        raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
+        raise PreOnboardingValidationError(
+            f"Errore lettura config {context.config_path}: {e}"
+        ) from e
 
     if not isinstance(cfg, dict):
         logger.error("❗ Config YAML non valido o vuoto.")
@@ -277,6 +286,7 @@ def update_config_with_drive_ids(
     Raises:
         ConfigError: se la lettura/scrittura del config fallisce o se il file è assente.
     """
+    assert context.config_path is not None and context.base_dir is not None
     config_path = context.config_path
 
     if not config_path.exists():

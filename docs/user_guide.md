@@ -1,4 +1,4 @@
-# Timmy‑KB — User Guide (v1.6.0)
+# Timmy‑KB — User Guide (v1.6.1)
 
 Guida rapida all’onboarding e alla produzione della **KB Markdown AI‑ready**.
 
@@ -74,4 +74,3 @@ output/timmy-kb-<slug>/
 - `DRIVE_ID` mancante → lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).  
 - PDF non scaricati in UI → assicurati di aver prima **generato i README** in `raw/` e di avere permessi Drive corretti.  
 - Preview non parte → verifica Docker e porta libera.
-

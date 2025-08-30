@@ -5,26 +5,9 @@ import io
 import os
 import logging
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, TypeVar, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
-# Import da pipeline (con fallback per ambienti dev)
-try:
-    from pipeline.context import ClientContext  # type: ignore
-    from pipeline.logging_utils import get_structured_logger  # type: ignore
-    from pipeline.drive_utils import (  # type: ignore
-        get_drive_service,
-        create_drive_folder,
-        create_drive_structure_from_yaml,
-        upload_config_to_drive_folder,
-    )
-except Exception:  # pragma: no cover
-    ClientContext = None  # type: ignore
-    get_structured_logger = None  # type: ignore
-    get_drive_service = None  # type: ignore
-    create_drive_folder = None  # type: ignore
-    create_drive_structure_from_yaml = None  # type: ignore
-    upload_config_to_drive_folder = None  # type: ignore
-
+# Import locali (dev UI)
 from .mapping_editor import (
     split_mapping,
     load_tags_reviewed,
@@ -33,10 +16,38 @@ from .mapping_editor import (
 )
 from .utils import to_kebab, ensure_within_and_resolve  # SSoT normalizzazione + path-safety
 
+# Import da pipeline (con fallback per ambienti dev)
+# Annotazioni esplicite (mypy): nomi possono essere riassegnati a None nel fallback
+ClientContext: Any
+get_structured_logger: Any
+get_drive_service: Any
+create_drive_folder: Any
+create_drive_structure_from_yaml: Any
+upload_config_to_drive_folder: Any
+try:
+    import pipeline.context as _context
+    import pipeline.logging_utils as _logging_utils
+    import pipeline.drive_utils as _drive_utils
+
+    ClientContext = _context.ClientContext
+    get_structured_logger = _logging_utils.get_structured_logger
+    get_drive_service = _drive_utils.get_drive_service
+    create_drive_folder = _drive_utils.create_drive_folder
+    create_drive_structure_from_yaml = _drive_utils.create_drive_structure_from_yaml
+    upload_config_to_drive_folder = _drive_utils.upload_config_to_drive_folder
+except Exception:  # pragma: no cover
+    ClientContext = None
+    get_structured_logger = None
+    get_drive_service = None
+    create_drive_folder = None
+    create_drive_structure_from_yaml = None
+    upload_config_to_drive_folder = None
+
 
 # ===== Narrow helper per Optional[Callable] (fix Pylance: reportOptionalCall) =====
 
 F = TypeVar("F", bound=Callable[..., object])
+
 
 def _require_callable(fn: Optional[F], name: str) -> F:
     """
@@ -44,25 +55,40 @@ def _require_callable(fn: Optional[F], name: str) -> F:
     Dopo questo cast Pylance sa che 'fn' è Callable e non più Optional.
     """
     if fn is None:
-        raise RuntimeError(f"Funzione '{name}' non disponibile: verifica dipendenze/credenziali Drive.")
+        raise RuntimeError(
+            f"Funzione '{name}' non disponibile: verifica dipendenze/credenziali Drive."
+        )
+    from typing import cast
+
     return cast(F, fn)
 
 
 # ===== Logger =================================================================
 
-def _get_logger(context: Optional[object] = None):
+
+def _get_logger(context: Optional[object] = None) -> Any:
     """Ritorna un logger strutturato; fallback no-op in assenza del modulo pipeline."""
     if get_structured_logger is None:
+
         class _Stub:
-            def info(self, *a, **k): pass
-            def warning(self, *a, **k): pass
-            def error(self, *a, **k): pass
-            def exception(self, *a, **k): pass
+            def info(self, *a: Any, **k: Any) -> None:
+                pass
+
+            def warning(self, *a: Any, **k: Any) -> None:
+                pass
+
+            def error(self, *a: Any, **k: Any) -> None:
+                pass
+
+            def exception(self, *a: Any, **k: Any) -> None:
+                pass
+
         return _Stub()
     return get_structured_logger("config_ui.drive_runner", context=context)
 
 
 # ===== Creazione struttura Drive da mapping ===================================
+
 
 def build_drive_from_mapping(
     slug: str,
@@ -104,9 +130,9 @@ def build_drive_from_mapping(
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
-    created_map = _require_callable(create_drive_structure_from_yaml, "create_drive_structure_from_yaml")(
-        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
-    )
+    created_map = _require_callable(
+        create_drive_structure_from_yaml, "create_drive_structure_from_yaml"
+    )(svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False)))
 
     raw_id = created_map.get("raw") or created_map.get("RAW")
     contr_id = created_map.get("contrattualistica") or created_map.get("CONTRATTUALISTICA")
@@ -123,19 +149,24 @@ def build_drive_from_mapping(
 
 # ===== Helpers Drive ===========================================================
 
-def _drive_list_folders(service, parent_id: str) -> List[Dict[str, str]]:
+
+def _drive_list_folders(service: Any, parent_id: str) -> List[Dict[str, str]]:
     """Elenca le sottocartelle (id, name) immediate sotto parent_id."""
     results: List[Dict[str, str]] = []
     page_token = None
     while True:
-        resp = service.files().list(
-            q=f"'{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-            spaces="drive",
-            fields="nextPageToken, files(id, name)",
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-            pageToken=page_token,
-        ).execute()
+        resp = (
+            service.files()
+            .list(
+                q=f"'{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                spaces="drive",
+                fields="nextPageToken, files(id, name)",
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+                pageToken=page_token,
+            )
+            .execute()
+        )
         results.extend({"id": f["id"], "name": f["name"]} for f in resp.get("files", []))
         page_token = resp.get("nextPageToken")
         if not page_token:
@@ -149,12 +180,13 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
         from reportlab.lib.pagesizes import A4  # type: ignore
         from reportlab.pdfgen import canvas  # type: ignore
         from reportlab.lib.units import cm  # type: ignore
+
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         width, height = A4
         x, y = 2 * cm, height - 2 * cm
 
-        def draw_line(t: str, font="Helvetica", size=11, leading=14):
+        def draw_line(t: str, font: str = "Helvetica", size: int = 11, leading: int = 14) -> None:
             nonlocal y
             c.setFont(font, size)
             for line in (t or "").splitlines() or [""]:
@@ -187,21 +219,27 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
         return data, "text/plain"
 
 
-def _drive_upload_bytes(service, parent_id: str, name: str, data: bytes, mime: str) -> str:
+def _drive_upload_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
     """Carica un file (bytes) in una cartella Drive."""
-    from googleapiclient.http import MediaIoBaseUpload  # type: ignore
+    from googleapiclient.http import MediaIoBaseUpload  # type: ignore[import]
+
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
     body = {"name": name, "parents": [parent_id], "mimeType": mime}
-    file = service.files().create(
-        body=body,
-        media_body=media,
-        fields="id",
-        supportsAllDrives=True,
-    ).execute()
-    return file.get("id")
+    file = (
+        service.files()
+        .create(
+            body=body,
+            media_body=media,
+            fields="id",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    return str(file.get("id"))
 
 
 # ===== README per ogni categoria raw (PDF o TXT fallback) =====================
+
 
 def emit_readmes_for_raw(
     slug: str, *, base_root: Path | str = "output", require_env: bool = True
@@ -230,9 +268,9 @@ def emit_readmes_for_raw(
     )
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
-    created_map = _require_callable(create_drive_structure_from_yaml, "create_drive_structure_from_yaml")(
-        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
-    )
+    created_map = _require_callable(
+        create_drive_structure_from_yaml, "create_drive_structure_from_yaml"
+    )(svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False)))
     raw_id = created_map.get("raw") or created_map.get("RAW")
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata/creata.")
@@ -254,9 +292,11 @@ def emit_readmes_for_raw(
             examples=[str(x) for x in (meta.get("esempio") or []) if str(x).strip()],
         )
         file_id = _drive_upload_bytes(
-            svc, folder_id,
+            svc,
+            folder_id,
             "README.pdf" if mime == "application/pdf" else "README.txt",
-            data, mime,
+            data,
+            mime,
         )
         uploaded[folder_k] = file_id
 
@@ -265,6 +305,7 @@ def emit_readmes_for_raw(
 
 
 # ===== Download PDF da Drive → raw/ locale ====================================
+
 
 def download_raw_from_drive(
     slug: str,
@@ -310,7 +351,7 @@ def download_raw_from_drive(
 
     # Import per download binario
     try:
-        from googleapiclient.http import MediaIoBaseDownload  # type: ignore
+        from googleapiclient.http import MediaIoBaseDownload  # type: ignore[import]
     except Exception as e:  # pragma: no cover
         raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
 
@@ -321,17 +362,18 @@ def download_raw_from_drive(
         folder_id = folder["id"]
 
         # Elenca i PDF in questa sottocartella
-        q = (
-            f"'{folder_id}' in parents and "
-            f"mimeType = 'application/pdf' and trashed = false"
+        q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
+        resp = (
+            svc.files()
+            .list(
+                q=q,
+                spaces="drive",
+                fields="nextPageToken, files(id, name, mimeType)",
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+            )
+            .execute()
         )
-        resp = svc.files().list(
-            q=q,
-            spaces="drive",
-            fields="nextPageToken, files(id, name, mimeType)",
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-        ).execute()
         files = resp.get("files", [])
 
         # Destinazione locale

@@ -11,7 +11,7 @@ Refactor v1.0.5 (Blocco B):
 
 Assunzioni:
 - Il mapping è **canonico** {concept: [keywords...]} (normalizzato da semantic_mapping).
-- Modulo puro, senza I/O interattivo. 
+- Modulo puro, senza I/O interattivo.
 """
 
 from __future__ import annotations
@@ -27,7 +27,9 @@ from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
 
 
-def _list_markdown_files(context: ClientContext, logger: Optional[logging.Logger] = None) -> List[Path]:
+def _list_markdown_files(
+    context: ClientContext, logger: Optional[logging.Logger] = None
+) -> List[Path]:
     """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto.
 
     Raises:
@@ -35,11 +37,17 @@ def _list_markdown_files(context: ClientContext, logger: Optional[logging.Logger
         InputDirectoryMissing: se la directory markdown non esiste o non è una cartella valida.
     """
     logger = logger or get_structured_logger("semantic.files", context=context)
+    # Assicurazioni formali su campi opzionali del contesto
+    assert context.md_dir is not None and context.base_dir is not None
     if not is_safe_subpath(context.md_dir, context.base_dir):
-        raise PipelineError(f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir)
+        raise PipelineError(
+            f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir
+        )
 
     if not context.md_dir.exists() or not context.md_dir.is_dir():
-        raise InputDirectoryMissing(f"Directory markdown non valida: {context.md_dir}", slug=context.slug)
+        raise InputDirectoryMissing(
+            f"Directory markdown non valida: {context.md_dir}", slug=context.slug
+        )
 
     files = sorted(context.md_dir.glob("*.md"))
     logger.info(
@@ -137,12 +145,18 @@ def enrich_markdown_folder(context: ClientContext, logger: Optional[logging.Logg
         InputDirectoryMissing: se la directory markdown non esiste.
     """
     logger = logger or get_structured_logger("semantic.enrich", context=context)
+    # Assicurazioni formali su campi opzionali del contesto
+    assert context.md_dir is not None and context.base_dir is not None
 
     if not is_safe_subpath(context.md_dir, context.base_dir):
-        raise PipelineError(f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir)
+        raise PipelineError(
+            f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir
+        )
 
     if not context.md_dir.exists():
-        raise InputDirectoryMissing(f"Directory markdown non trovata: {context.md_dir}", slug=context.slug)
+        raise InputDirectoryMissing(
+            f"Directory markdown non trovata: {context.md_dir}", slug=context.slug
+        )
 
     markdown_files = _list_markdown_files(context, logger=logger)
     logger.info(

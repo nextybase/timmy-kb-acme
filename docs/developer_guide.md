@@ -1,4 +1,4 @@
-# Timmy‑KB — Developer Guide (v1.6.0)
+# Timmy‑KB — Developer Guide (v1.6.1)
 
 Questa guida è per chi sviluppa o estende Timmy‑KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 
@@ -130,4 +130,3 @@ Dettagli: [architecture.md](architecture.md).
 - Aggiungi/aggiorna i test quando modifichi comportamenti.  
 - Mantieni la documentazione allineata (README + docs/).  
 - Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
-

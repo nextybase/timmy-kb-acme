@@ -43,7 +43,7 @@ from pipeline.path_utils import ensure_within
 try:
     import yaml  # PyYAML
 except Exception:  # pragma: no cover
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 __all__ = ["load_yaml", "validate_tags_reviewed", "write_validation_report"]
 
@@ -77,7 +77,8 @@ def validate_tags_reviewed(data: dict) -> dict:
     Ritorna:
         dict con chiavi: errors (list[str]), warnings (list[str]), count (int, opzionale)
     """
-    errors, warnings = [], []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     if not isinstance(data, dict):
         errors.append("Il file YAML non è una mappa (dict) alla radice.")
@@ -121,7 +122,9 @@ def validate_tags_reviewed(data: dict) -> dict:
         else:
             act = action.strip().lower()
             if act not in ("keep", "drop") and not act.startswith("merge_into:"):
-                errors.append(f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>.")
+                errors.append(
+                    f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>."
+                )
             if act.startswith("merge_into:"):
                 target = act.split(":", 1)[1].strip()
                 if not target:
@@ -163,14 +166,21 @@ def write_validation_report(report_path: Path, result: dict, logger: logging.Log
         ensure_within(report_path.parent, report_path)
         report_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        raise ConfigError(f"Percorso output non sicuro: {report_path} ({e})", file_path=str(report_path)) from e
+        raise ConfigError(
+            f"Percorso output non sicuro: {report_path} ({e})", file_path=str(report_path)
+        ) from e
 
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         **(result or {}),
     }
     try:
-        safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+        safe_write_text(
+            report_path,
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+            atomic=True,
+        )
     except Exception as e:
         raise ConfigError(f"Errore scrittura report: {e}", file_path=str(report_path)) from e
 

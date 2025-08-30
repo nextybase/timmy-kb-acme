@@ -82,73 +82,88 @@ class PipelineError(Exception):
 
 class DriveDownloadError(PipelineError):
     """Errore nel download di file/cartelle da Google Drive."""
+
     pass
 
 
 class DriveUploadError(PipelineError):
     """Errore nel caricamento su Google Drive."""
+
     pass
 
 
 class ConversionError(PipelineError):
     """Errore durante la conversione di file (PDF→Markdown, ecc.)."""
+
     pass
 
 
 class PushError(PipelineError):
     """Errore durante il push su GitHub."""
+
     pass
 
 
 class ForcePushError(PipelineError):
     """Violazioni della policy di force push (richiede flag + ACK)."""
+
     pass
 
 
 class ConfigError(PipelineError):
     """Errore di caricamento o validazione della configurazione."""
+
     pass
 
 
 class CleanupError(PipelineError):
     """Errore durante la pulizia della cartella di output."""
+
     pass
 
 
 class PreviewError(PipelineError):
     """Errore durante la preview GitBook/Honkit via Docker."""
+
     pass
 
 
 class EnrichmentError(PipelineError):
     """Errore durante l'arricchimento semantico dei markdown."""
+
     pass
 
 
 class SemanticMappingError(PipelineError):
     """Errore nel caricamento del mapping semantico delle cartelle."""
+
     pass
 
 
 class PreOnboardingValidationError(PipelineError):
     """Errore di validazione durante la fase di pre-onboarding (config, env, file)."""
+
     pass
 
 
 # === Quick win: eccezioni tipizzate per I/O input e slug =====================
 
+
 class InputDirectoryMissing(PipelineError):
     """Directory di input attesa ma assente (es. raw/ o sottocartella richieste)."""
+
     pass
 
 
 class InputFileMissing(PipelineError):
     """File di input atteso ma assente (es. singolo PDF o YAML richiesto)."""
+
     pass
 
 
 class InvalidSlug(PipelineError):
     """Slug non valido secondo il pattern configurato (vedi `path_utils.validate_slug`)."""
+
     pass
 
 
@@ -170,6 +185,7 @@ EXIT_CODES = {
     "EnrichmentError": 60,
     "SemanticMappingError": 61,
 }
+
 
 def exit_code_for(exc: BaseException) -> int:
     """Restituisce il codice di uscita per un'eccezione (fallback a PipelineError=1)."""

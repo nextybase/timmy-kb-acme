@@ -50,6 +50,7 @@ logger = get_structured_logger("pipeline.drive.client")
 
 # ------------------------------- Metriche & Retry ---------------------------------
 
+
 @dataclass
 class _DriveRetryMetrics:
     """Metriche interne per i retry Drive (aggregate sul blocco corrente).
@@ -61,6 +62,7 @@ class _DriveRetryMetrics:
       - last_error: stringa breve con l’ultimo errore osservato.
       - last_status: ultimo HTTP status osservato (se disponibile).
     """
+
     retries_total: int = 0
     retries_by_error: Dict[str, int] = field(default_factory=lambda: defaultdict(int))  # type: ignore[arg-type]
     backoff_total_ms: int = 0
@@ -78,7 +80,9 @@ class _DriveRetryMetrics:
 
 
 # ContextVar che ospita le metriche correnti (thread-safe).
-_METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar("drive_metrics_ctx", default=None)
+_METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar(
+    "drive_metrics_ctx", default=None
+)
 
 
 @contextmanager
@@ -236,6 +240,7 @@ def _retry(
 
 # ------------------------------- Costruzione client --------------------------------
 
+
 def _resolve_service_account_file(context: Any) -> str:
     """
     Risolve il percorso assoluto del file JSON del service account.
@@ -314,6 +319,7 @@ def get_drive_service(context: Any) -> Any:
 
 # ------------------------------- Primitive di lettura ------------------------------
 
+
 def list_drive_files(
     service: Any,
     parent_id: str,
@@ -345,18 +351,16 @@ def list_drive_files(
     op_name = "files.list"
 
     while True:
+
         def _call():
-            req = (
-                service.files()
-                .list(
-                    q=q,
-                    fields=fields,
-                    spaces="drive",
-                    pageSize=page_size,
-                    pageToken=page_token,
-                    includeItemsFromAllDrives=True,
-                    supportsAllDrives=True,
-                )
+            req = service.files().list(
+                q=q,
+                fields=fields,
+                spaces="drive",
+                pageSize=page_size,
+                pageToken=page_token,
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
             )
             return req.execute()
 
@@ -393,11 +397,7 @@ def get_file_metadata(
         raise ValueError("file_id è obbligatorio")
 
     def _call():
-        return (
-            service.files()
-            .get(fileId=file_id, fields=fields, supportsAllDrives=True)
-            .execute()
-        )
+        return service.files().get(fileId=file_id, fields=fields, supportsAllDrives=True).execute()
 
     return _retry(_call, op_name="files.get")
 
@@ -408,7 +408,7 @@ __all__ = [
     "get_drive_service",
     "list_drive_files",
     "get_file_metadata",
-    "_retry",                # riuso intra-pacchetto (download/upload)
-    "drive_metrics_scope",   # attiva/gestisce metriche nel blocco corrente
-    "get_retry_metrics",     # snapshot metriche correnti (dict)
+    "_retry",  # riuso intra-pacchetto (download/upload)
+    "drive_metrics_scope",  # attiva/gestisce metriche nel blocco corrente
+    "get_retry_metrics",  # snapshot metriche correnti (dict)
 ]

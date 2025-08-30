@@ -13,11 +13,20 @@ from .utils import (
 )
 
 MAPPING_RESERVED = {
-    "context", "taxonomy", "synonyms", "canonical", "rules",
-    "meta", "defaults", "settings", "about", "notes"
+    "context",
+    "taxonomy",
+    "synonyms",
+    "canonical",
+    "rules",
+    "meta",
+    "defaults",
+    "settings",
+    "about",
+    "notes",
 }
 
 # -------- Caricamento mapping di default (da config/) --------
+
 
 def load_default_mapping() -> Dict[str, Any]:
     """Carica config/default_semantic_mapping.yaml a partire dalla root repo."""
@@ -29,6 +38,7 @@ def load_default_mapping() -> Dict[str, Any]:
 
 
 # -------- Split/Build/Validate (editor) --------
+
 
 def split_mapping(root: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """
@@ -80,7 +90,9 @@ def build_mapping(
     return out
 
 
-def validate_categories(categories: Dict[str, Dict[str, Any]], *, normalize_keys: bool) -> Optional[str]:
+def validate_categories(
+    categories: Dict[str, Dict[str, Any]], *, normalize_keys: bool
+) -> Optional[str]:
     seen = set()
     for k in categories.keys():
         kk = to_kebab(k) if normalize_keys else k.strip()
@@ -94,10 +106,12 @@ def validate_categories(categories: Dict[str, Dict[str, Any]], *, normalize_keys
 
 # ---- Helpers per la UI (lista <-> items con id) ----
 
+
 def examples_to_items(lst: Any) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
     if isinstance(lst, list):
         import uuid
+
         for v in lst:
             out.append({"id": uuid.uuid4().hex, "value": str(v)})
     return out
@@ -109,7 +123,10 @@ def items_to_examples(items: List[Dict[str, str]]) -> List[str]:
 
 # ---- Persistenza del mapping rivisto ----
 
-def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
+
+def save_tags_reviewed(
+    slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output"
+) -> Path:
     base_root = Path(base_root)
     client_root = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
     sem_dir = ensure_within_and_resolve(client_root, client_root / "semantic")
@@ -119,6 +136,7 @@ def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | 
 
 
 # -------- API aggiuntive usate dai runner Drive --------
+
 
 def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
     """
@@ -143,8 +161,10 @@ def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
     Converte il mapping categorie -> struttura cartelle (root_folders/raw/subfolders + contrattualistica).
     """
     cats, _ = split_mapping(mapping)
-    children = [{"name": to_kebab(k), "subfolders": []}
-                for k in sorted(cats.keys(), key=lambda x: to_kebab(x))]
+    children = [
+        {"name": to_kebab(k), "subfolders": []}
+        for k in sorted(cats.keys(), key=lambda x: to_kebab(x))
+    ]
     return {
         "root_folders": [
             {"name": "raw", "subfolders": children},
@@ -153,7 +173,9 @@ def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def write_raw_structure_yaml(slug: str, structure: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
+def write_raw_structure_yaml(
+    slug: str, structure: Dict[str, Any], *, base_root: Path | str = "output"
+) -> Path:
     """
     Scrive un YAML sintetico della struttura RAW in semantic/_raw_from_mapping.yaml (locale).
     """

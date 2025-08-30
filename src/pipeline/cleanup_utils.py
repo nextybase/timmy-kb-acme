@@ -38,7 +38,9 @@ def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
             shutil.rmtree(target, ignore_errors=False)
             log.info("🧹 Rimossa directory", extra={"file_path": str(target)})
         else:
-            log.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)})
+            log.info(
+                "ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)}
+            )
         return True
     except Exception as e:
         log.warning(
@@ -67,6 +69,8 @@ def clean_push_leftovers(
     """
     _logger = get_structured_logger(logger_name, context=context)
 
+    # Assicurazioni formali per type checker (campi opzionali nel contesto)
+    assert context.md_dir is not None and context.base_dir is not None
     book_dir: Path = context.md_dir
     base_dir: Path = context.base_dir
 

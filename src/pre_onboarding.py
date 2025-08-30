@@ -115,6 +115,7 @@ def bootstrap_semantic_templates(
 
     Nota: se vuoi retro-compatibilità, puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
+    assert context.base_dir is not None
     semantic_dir = context.base_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +124,7 @@ def bootstrap_semantic_templates(
     mapping_src = cfg_dir / "default_semantic_mapping.yaml"
 
     struct_dst = semantic_dir / "cartelle_raw.yaml"
-    mapping_dst = semantic_dir / "tags_reviewed.yaml"   # <- nuovo nome allineato alla UI
+    mapping_dst = semantic_dir / "tags_reviewed.yaml"  # <- nuovo nome allineato alla UI
 
     ensure_within(semantic_dir, struct_dst)
     ensure_within(semantic_dir, mapping_dst)
@@ -171,9 +172,13 @@ def bootstrap_semantic_templates(
                 pass
 
     except Exception as e:  # non blocca il flusso
-        logger.warning({"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]})
+        logger.warning(
+            {"event": "semantic_mapping_context_inject_failed", "err": str(e).splitlines()[:1]}
+        )
+
 
 # ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni oltre I/O necessario -------
+
 
 def _prepare_context_and_logger(
     slug: str,
@@ -208,20 +213,28 @@ def _prepare_context_and_logger(
         slug=slug, interactive=interactive, require_env=require_env, run_id=run_id
     )
 
+    assert context.base_dir is not None
     log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
+    logger = get_structured_logger(
+        "pre_onboarding", log_file=log_file, context=context, run_id=run_id
+    )
     if not require_env:
-        logger.info("🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
+        logger.info(
+            "🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False)."
+        )
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("🚀 Avvio pre-onboarding")
     return context, logger, client_name
 
 
-def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
+def _create_local_structure(
+    context: ClientContext, logger: logging.Logger, *, client_name: str
+) -> Path:
     """Crea struttura locale, scrive config, copia template semantici; restituisce il path allo YAML struttura."""
+    assert context.base_dir is not None and context.config_path is not None
     ensure_within(context.base_dir, context.config_path)
 
     cfg: Dict[str, Any] = {}
@@ -242,9 +255,13 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     yaml_structure_file = _resolve_yaml_structure_file()
     logger.info(
         "pre_onboarding.yaml.resolved",
-        extra={"yaml_path": str(yaml_structure_file), "yaml_path_tail": tail_path(yaml_structure_file)},
+        extra={
+            "yaml_path": str(yaml_structure_file),
+            "yaml_path_tail": tail_path(yaml_structure_file),
+        },
     )
 
+    assert context.base_dir is not None and context.raw_dir is not None and context.md_dir is not None
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
     with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
@@ -282,8 +299,13 @@ def _drive_phase(
     logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
 
     with metrics_scope(logger, stage="drive_create_client_folder", customer=context.slug):
-        client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
-    logger.info("📄 Cartella cliente creata su Drive", extra={"client_folder_id": mask_partial(client_folder_id)})
+        client_folder_id = create_drive_folder(
+            service, context.slug, parent_id=drive_parent_id, redact_logs=redact
+        )
+    logger.info(
+        "📄 Cartella cliente creata su Drive",
+        extra={"client_folder_id": mask_partial(client_folder_id)},
+    )
 
     with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
         created_map = create_drive_structure_from_yaml(
@@ -291,7 +313,10 @@ def _drive_phase(
         )
     logger.info(
         "📄 Struttura Drive creata",
-        extra={"yaml_tail": tail_path(yaml_structure_file), "created_map_masked": mask_id_map(created_map)},
+        extra={
+            "yaml_tail": tail_path(yaml_structure_file),
+            "created_map_masked": mask_id_map(created_map),
+        },
     )
 
     drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
@@ -308,7 +333,9 @@ def _drive_phase(
         uploaded_cfg_id = upload_config_to_drive_folder(
             service, context, parent_id=client_folder_id, redact_logs=redact
         )
-    logger.info("📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
+    logger.info(
+        "📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)}
+    )
 
     updates = {
         "drive_folder_id": client_folder_id,
@@ -321,6 +348,7 @@ def _drive_phase(
 
 
 # --------------------------------- ORCHESTRATORE SNELLITO ---------------------------------
+
 
 def pre_onboarding_main(
     slug: str,
@@ -335,7 +363,11 @@ def pre_onboarding_main(
     require_env = not dry_run
 
     context, logger, client_name = _prepare_context_and_logger(
-        slug, interactive=interactive, require_env=require_env, run_id=run_id, client_name=client_name
+        slug,
+        interactive=interactive,
+        require_env=require_env,
+        run_id=run_id,
+        client_name=client_name,
     )
 
     yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
@@ -356,6 +388,7 @@ def pre_onboarding_main(
 
 
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
+
 
 def _parse_args() -> argparse.ArgumentParser:
     """Costruisce e restituisce il parser CLI per l’orchestratore di pre-onboarding.
@@ -390,7 +423,9 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
+        early_logger.error(
+            "Errore: in modalità non interattiva è richiesto --slug (o slug posizionale)."
+        )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
         slug = ensure_valid_slug(

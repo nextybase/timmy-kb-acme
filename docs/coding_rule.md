@@ -1,4 +1,4 @@
-# Timmy‑KB — Coding Rules (v1.6.0)
+# Timmy‑KB — Coding Rules (v1.6.1)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -98,4 +98,3 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - PR piccole, atomic commit, messaggi chiari (imperativo al presente).
 - Copri con test i cambi di comportamento; mantieni l’asticella della qualità.
 - Evita duplicazioni: se serve una nuova utility, valuta prima i moduli esistenti.
-

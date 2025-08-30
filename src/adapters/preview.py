@@ -82,10 +82,14 @@ def start_preview(
             wait_on_exit=False,  # sempre detached per semplicità dell’orchestratore
             redact_logs=redact,
         )
-        logger.info("Preview avviata", extra={"container": cname, "port": port, "redact_logs": redact})
+        logger.info(
+            "Preview avviata", extra={"container": cname, "port": port, "redact_logs": redact}
+        )
         return cname
     except Exception as e:
-        logger.error("Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)})
+        logger.error(
+            "Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)}
+        )
         raise ConfigError(f"Avvio preview fallito: {e}")
 
 
@@ -103,11 +107,16 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
 
     # Validazione “soft”: se non valido, log avviso e interrompiamo (best-effort)
     if not _CONTAINER_RE.match(container_name):
-        logger.warning("Nome container non valido: skip stop_preview.", extra={"container": container_name})
+        logger.warning(
+            "Nome container non valido: skip stop_preview.", extra={"container": container_name}
+        )
         return
 
     try:
         stop_container_safely(container_name)
         logger.info("Preview Docker fermata", extra={"container": container_name})
     except Exception as e:  # best-effort
-        logger.warning("Stop preview fallito (best-effort)", extra={"container": container_name, "error": str(e)})
+        logger.warning(
+            "Stop preview fallito (best-effort)",
+            extra={"container": container_name, "error": str(e)},
+        )

@@ -134,7 +134,10 @@ def get_int(
 #  Helpers interni non esportati
 # ================================
 
-def _val_from(env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None) -> Optional[str]:
+
+def _val_from(
+    env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None
+) -> Optional[str]:
     """Legge prima da `env` (se dict-like), poi da `os.environ`."""
     if env is not None and isinstance(env, Mapping) and key in env:
         v = env.get(key)
@@ -165,6 +168,7 @@ def _truthy(val: Any) -> bool:
 # Policy redazione (SSoT del flag)
 # ================================
 
+
 def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") -> bool:
     """
     Calcola il flag di redazione log in modo deterministico (nessun masking qui).
@@ -192,7 +196,11 @@ def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") 
 
     env_name = (_val_from(env, "ENV", "dev") or "dev").strip().lower()
     ci_val = _val_from(env, "CI", "0")
-    auto_on = (env_name in {"prod", "production", "ci"}) or _truthy(ci_val) or _has_sensitive_credentials(env)
+    auto_on = (
+        (env_name in {"prod", "production", "ci"})
+        or _truthy(ci_val)
+        or _has_sensitive_credentials(env)
+    )
 
     redact = explicit if explicit is not None else auto_on
 
@@ -205,7 +213,11 @@ def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") 
 # Force-push branch allowlist
 # ================================
 
-def get_force_allowed_branches(context=None) -> list[str]:
+
+from typing import Any
+
+
+def get_force_allowed_branches(context: Any | None = None) -> list[str]:
     """
     Legge l'allow-list dei branch per il force push dalla variabile:
       GIT_FORCE_ALLOWED_BRANCHES=main,release/*
@@ -229,7 +241,9 @@ def get_force_allowed_branches(context=None) -> list[str]:
     return patterns
 
 
-def is_branch_allowed_for_force(branch: str, context=None, *, allow_if_unset: bool = True) -> bool:
+def is_branch_allowed_for_force(
+    branch: str, context: Any | None = None, *, allow_if_unset: bool = True
+) -> bool:
     """
     Verifica se `branch` è consentito per il force push.
 

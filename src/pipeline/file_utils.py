@@ -48,8 +48,12 @@ def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -
         os.fsync(fd)
     except Exception as e:
         if strict:
-            raise ConfigError(f"fsync(file) fallito: {e}", file_path=str(path) if path else None) from e
-        _logger.debug("fsync(file) best-effort fallito", extra={"file_path": str(path) if path else None})
+            raise ConfigError(
+                f"fsync(file) fallito: {e}", file_path=str(path) if path else None
+            ) from e
+        _logger.debug(
+            "fsync(file) best-effort fallito", extra={"file_path": str(path) if path else None}
+        )
 
 
 def _fsync_dir_best_effort(dir_path: Path) -> None:

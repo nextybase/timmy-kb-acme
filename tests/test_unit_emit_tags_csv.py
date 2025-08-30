@@ -2,10 +2,17 @@ import csv
 from pathlib import Path
 from src.tag_onboarding import _emit_tags_csv
 
+
 class _DummyLogger:
-    def info(self, *a, **kw): pass
-    def warning(self, *a, **kw): pass
-    def debug(self, *a, **kw): pass
+    def info(self, *a, **kw):
+        pass
+
+    def warning(self, *a, **kw):
+        pass
+
+    def debug(self, *a, **kw):
+        pass
+
 
 def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
     raw = tmp_path / "raw"
@@ -28,7 +35,14 @@ def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
         rows = list(reader)
 
     # Header atteso
-    assert reader.fieldnames == ["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"]
+    assert reader.fieldnames == [
+        "relative_path",
+        "suggested_tags",
+        "entities",
+        "keyphrases",
+        "score",
+        "sources",
+    ]
 
     rel_paths = {r["relative_path"] for r in rows}
     # Deve usare separatori POSIX e prefisso "raw/"

@@ -44,12 +44,7 @@ except Exception:  # pragma: no cover
 # -----------------------------------------------------------------------------
 # Import UI/Config helpers (riuso: NIENTE duplicazioni)
 # -----------------------------------------------------------------------------
-from config_ui.utils import (  # type: ignore
-    yaml_load,
-    yaml_dump,
-    ensure_within_and_resolve,
-)
-from config_ui.mapping_editor import (  # type: ignore
+from config_ui.mapping_editor import (  # type: ignore  # noqa: E402
     load_default_mapping,
     load_tags_reviewed,
     save_tags_reviewed,
@@ -57,7 +52,7 @@ from config_ui.mapping_editor import (  # type: ignore
     build_mapping,
     validate_categories,
 )
-from config_ui.drive_runner import (  # type: ignore
+from config_ui.drive_runner import (  # type: ignore  # noqa: E402
     build_drive_from_mapping,
     emit_readmes_for_raw,
 )
@@ -140,6 +135,7 @@ def _request_shutdown(log: logging.Logger) -> None:
     Prova con SIGTERM; fallback a os._exit(0) in casi estremi.
     """
     import signal
+
     try:
         log.info({"event": "ui_shutdown_request"})
         pid = os.getpid()
@@ -174,8 +170,18 @@ def _render_landing_inputs(log: logging.Logger) -> Tuple[bool, str, str]:
     st.markdown("<div style='height: 8vh'></div>", unsafe_allow_html=True)
 
     # Input centrali full-width
-    slug_raw = st.text_input("Slug cliente", value=st.session_state.get("slug", ""), placeholder="es. acme", key="landing_slug")
-    client_raw = st.text_input("Nome cliente", value=st.session_state.get("client_name", ""), placeholder="ACME S.p.A.", key="landing_client")
+    slug_raw = st.text_input(
+        "Slug cliente",
+        value=st.session_state.get("slug", ""),
+        placeholder="es. acme",
+        key="landing_slug",
+    )
+    client_raw = st.text_input(
+        "Nome cliente",
+        value=st.session_state.get("client_name", ""),
+        placeholder="ACME S.p.A.",
+        key="landing_client",
+    )
 
     slug = _norm_str(slug_raw)
     client = _norm_str(client_raw)
@@ -289,13 +295,15 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
                             )
                             st.success(f"Salvata la voce: {cat_key}")
                             try:
-                                st.rerun()
+                                _safe_streamlit_rerun()
                             except Exception:
                                 pass
                     except Exception as e:
                         st.exception(e)
 
-        st.caption("Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali.")
+        st.caption(
+            "Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali."
+        )
 
     # Azioni
     colSx, colDx = st.columns([1, 1])
@@ -307,10 +315,19 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
             else:
                 st.success("Mapping valido.")
     with colDx:
-        if st.button("Salva mapping rivisto", key="btn_save_mapping_all", type="primary", use_container_width=True):
+        if st.button(
+            "Salva mapping rivisto",
+            key="btn_save_mapping_all",
+            type="primary",
+            use_container_width=True,
+        ):
             try:
                 new_map = build_mapping(
-                    cats, reserved, slug=slug, client_name=client_name, normalize_keys=normalize_keys
+                    cats,
+                    reserved,
+                    slug=slug,
+                    client_name=client_name,
+                    normalize_keys=normalize_keys,
                 )
                 path = save_tags_reviewed(slug, new_map)
                 st.success(f"Salvato: {path}")
@@ -328,15 +345,24 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
     colA, colB = st.columns([1, 1], gap="large")
 
     with colA:
-        if st.button("1) Crea/aggiorna struttura Drive", key="btn_drive_create", use_container_width=True):
+        if st.button(
+            "1) Crea/aggiorna struttura Drive", key="btn_drive_create", use_container_width=True
+        ):
             try:
-                ids = build_drive_from_mapping(slug=slug, client_name=st.session_state.get("client_name", ""))
+                ids = build_drive_from_mapping(
+                    slug=slug, client_name=st.session_state.get("client_name", "")
+                )
                 st.success(f"Struttura creata: {ids}")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
             except Exception as e:
                 st.exception(e)
     with colB:
-        if st.button("2) Genera README in raw/", key="btn_drive_readmes", type="primary", use_container_width=True):
+        if st.button(
+            "2) Genera README in raw/",
+            key="btn_drive_readmes",
+            type="primary",
+            use_container_width=True,
+        ):
             try:
                 result = emit_readmes_for_raw(slug=slug)
                 st.success(f"README creati: {len(result)}")
@@ -353,25 +379,37 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
         st.subheader("Download contenuti su raw/")
         c1, c2 = st.columns([1, 3])
         with c1:
-            if st.button("Scarica PDF da Drive in raw/", key="btn_drive_download_raw", use_container_width=True):
+            if st.button(
+                "Scarica PDF da Drive in raw/",
+                key="btn_drive_download_raw",
+                use_container_width=True,
+            ):
                 if download_raw_from_drive is None:
-                    st.error("Funzione di download non disponibile: aggiornare 'config_ui.drive_runner'.")
+                    st.error(
+                        "Funzione di download non disponibile: aggiornare 'config_ui.drive_runner'."
+                    )
                 else:
                     try:
                         res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
                         count = len(res) if hasattr(res, "__len__") else None
-                        st.success(f"Download completato{f' ({count} file)' if count is not None else ''}.")
+                        st.success(
+                            f"Download completato{f' ({count} file)' if count is not None else ''}."
+                        )
                         log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                         st.session_state["raw_downloaded"] = True
                         try:
-                            st.rerun()  # per sbloccare la tab Semantica
+                            _safe_streamlit_rerun()  # per sbloccare la tab Semantica
                         except Exception:
                             pass
                     except Exception as e:
                         st.exception(e)
         with c2:
             st.write(
-                "La struttura delle cartelle è stata creata su Drive; popolarne il contenuto seguendo le indicazioni del file README presente in ogni cartella per proseguire con la procedura"
+                (
+                    "La struttura delle cartelle è stata creata su Drive; "
+                    "popolarne il contenuto seguendo le indicazioni del file README presente in ogni "
+                    "cartella per proseguire con la procedura"
+                )
             )
 
 
@@ -382,16 +420,25 @@ def _ensure_context(slug: str, log: logging.Logger) -> object:
     if ClientContext is None:
         raise RuntimeError("Moduli pipeline non disponibili: impossibile creare il ClientContext.")
     # Nessun prompt da UI; env non obbligatorio per operazioni locali
-    return ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[no-any-return]
+    return ClientContext.load(
+        slug=slug,
+        interactive=False,
+        require_env=False,
+        run_id=None,
+    )  # type: ignore[no-any-return]
 
 
 def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
     st.subheader("Semantica (RAW → BOOK)")
-    st.caption("Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale.")
+    st.caption(
+        "Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale."
+    )
 
     # Guardie minime su dipendenze
     if any(x is None for x in (sem_convert, sem_enrich, sem_write_md, sem_load_vocab)):
-        st.error("Modulo semantic_onboarding non disponibile o import parziale. Verificare l'ambiente.")
+        st.error(
+            "Modulo semantic_onboarding non disponibile o import parziale. Verificare l'ambiente."
+        )
         return
     if ClientContext is None:
         st.error("Pipeline non disponibile: impossibile creare il contesto cliente.")
@@ -417,7 +464,11 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                 st.exception(e)
 
         st.markdown("**2) Arricchisci frontmatter**")
-        if st.button("Arricchisci con tag canonici (tags_reviewed.yaml)", key="btn_sem_enrich", use_container_width=True):
+        if st.button(
+            "Arricchisci con tag canonici (tags_reviewed.yaml)",
+            key="btn_sem_enrich",
+            use_container_width=True,
+        ):
             try:
                 base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
                 vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
@@ -429,7 +480,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     with colB:
         st.markdown("**3) README/SUMMARY**")
-        if st.button("Genera/valida README & SUMMARY", key="btn_sem_write_md", use_container_width=True):
+        if st.button(
+            "Genera/valida README & SUMMARY", key="btn_sem_write_md", use_container_width=True
+        ):
             try:
                 sem_write_md(context, log, slug=slug)  # type: ignore[misc]
                 st.success("OK. README.md e SUMMARY.md pronti.")
@@ -441,7 +494,12 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
         with st.container(border=True):
             # Porta e stato container in sessione
             preview_port = st.number_input(
-                "Porta preview", min_value=1, max_value=65535, value=4000, step=1, key="inp_sem_port"
+                "Porta preview",
+                min_value=1,
+                max_value=65535,
+                value=4000,
+                step=1,
+                key="inp_sem_port",
             )
             running = bool(st.session_state.get("sem_preview_container"))
             st.write(f"Stato: {'ATTIVA' if running else 'SPENTA'}")
@@ -456,8 +514,17 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     try:
                         cname = start_preview(context, log, port=int(preview_port))  # type: ignore[misc]
                         st.session_state["sem_preview_container"] = cname
-                        st.success(f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})")
-                        log.info({"event": "preview_started", "slug": slug, "port": int(preview_port), "container": cname})
+                        st.success(
+                            f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})"
+                        )
+                        log.info(
+                            {
+                                "event": "preview_started",
+                                "slug": slug,
+                                "port": int(preview_port),
+                                "container": cname,
+                            }
+                        )
                     except Exception as e:
                         st.exception(e)
             with cols[1]:
@@ -477,7 +544,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         st.exception(e)
 
     st.divider()
-    st.caption("Nota: questo step **non** usa Google Drive né esegue push su GitHub; lavora su disco locale e preview.")
+    st.caption(
+        "Nota: questo step **non** usa Google Drive né esegue push su GitHub; lavora su disco locale e preview."
+    )
 
 
 # =============================================================================

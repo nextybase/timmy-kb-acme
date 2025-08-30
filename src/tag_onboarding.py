@@ -85,7 +85,6 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-
 # ───────────────────────────── Core: ingest locale ───────────────────────────
 def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
     """
@@ -113,7 +112,9 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
         raise ConfigError(f"Percorso locale non valido: {src_dir}", file_path=str(src_dir))
 
     if src_dir == raw_dir:
-        logger.info("Sorgente coincidente con RAW: nessuna copia necessaria", extra={"raw": str(raw_dir)})
+        logger.info(
+            "Sorgente coincidente con RAW: nessuna copia necessaria", extra={"raw": str(raw_dir)}
+        )
         return 0
 
     count = 0
@@ -133,7 +134,8 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
             ensure_within(raw_dir, dst)
         except ConfigError:
             logger.warning(
-                "Skip per path non sicuro", extra={"file_path": str(dst), "file_path_tail": tail_path(dst)}
+                "Skip per path non sicuro",
+                extra={"file_path": str(dst), "file_path_tail": tail_path(dst)},
             )
             continue
 
@@ -155,7 +157,10 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
 
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
-def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
+from typing import Any
+
+
+def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: Any) -> int:
     """
     Emette un CSV compatibile con la pipeline:
       - relative_path: path POSIX relativo alla BASE, prefissato con 'raw/...'
@@ -180,7 +185,9 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
     written = 0
     buf = io.StringIO(newline="")
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
+    writer.writerow(
+        ["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"]
+    )
 
     for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
         try:
@@ -203,9 +210,13 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int
         entities = "[]"
         keyphrases = "[]"
         score = "{}"
-        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
+        sources = json.dumps(
+            {"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False
+        )
 
-        writer.writerow([rel_base_posix, ", ".join(candidates), entities, keyphrases, score, sources])
+        writer.writerow(
+            [rel_base_posix, ", ".join(candidates), entities, keyphrases, score, sources]
+        )
         written += 1
 
     safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
@@ -241,6 +252,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path))
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
         raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
+
 
 def _validate_tags_reviewed(data: dict) -> dict:
     """
@@ -310,7 +322,9 @@ def _validate_tags_reviewed(data: dict) -> dict:
         else:
             act = action.strip().lower()
             if act not in ("keep", "drop") and not act.startswith("merge_into:"):
-                errors.append(f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>.")
+                errors.append(
+                    f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>."
+                )
             if act.startswith("merge_into:"):
                 target = act.split(":", 1)[1].strip()
                 if not target:
@@ -333,13 +347,19 @@ def _validate_tags_reviewed(data: dict) -> dict:
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
+
 def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         **result,
     }
-    safe_write_text(report_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    safe_write_text(
+        report_path,
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        atomic=True,
+    )
     logger.info("Report validazione scritto", extra={"file_path": str(report_path)})
 
 
@@ -406,7 +426,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 def tag_onboarding_main(
     slug: str,
     *,
-    source: str = "drive",          # default Drive (puoi passare --source=local)
+    source: str = "drive",  # default Drive (puoi passare --source=local)
     local_path: Optional[str] = None,
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
@@ -443,7 +463,9 @@ def tag_onboarding_main(
         - Nessuna `sys.exit()` viene chiamata qui: la gestione degli exit code è demandata all’entrypoint CLI.
     """
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
-    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
+    slug = ensure_valid_slug(
+        slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger
+    )
 
     # Context + logger coerenti con orchestratori
     context: ClientContext = ClientContext.load(
@@ -454,7 +476,9 @@ def tag_onboarding_main(
     )
 
     # Path base per il cliente
-    base_dir = getattr(context, "base_dir", None) or (Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}")
+    base_dir = getattr(context, "base_dir", None) or (
+        Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+    )
     ensure_within(base_dir.parent, base_dir)  # base_dir dentro output/
     raw_dir = getattr(context, "raw_dir", None) or (base_dir / "raw")
     semantic_dir = base_dir / "semantic"
@@ -467,7 +491,9 @@ def tag_onboarding_main(
     log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     ensure_within(base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
+    logger = get_structured_logger(
+        "tag_onboarding", log_file=log_file, context=context, run_id=run_id
+    )
 
     logger.info("🚀 Avvio tag_onboarding", extra={"source": source})
 
@@ -487,7 +513,10 @@ def tag_onboarding_main(
                 context=context,
                 redact_logs=getattr(context, "redact_logs", False),
             )
-        logger.info("✅ Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
+        logger.info(
+            "✅ Download da Drive completato",
+            extra={"folder_id": mask_partial(drive_raw_folder_id)},
+        )
 
     # B) LOCALE
     elif source == "local":
@@ -500,11 +529,16 @@ def tag_onboarding_main(
             )
         src_dir = Path(local_path).expanduser().resolve()
         if src_dir == raw_dir.expanduser().resolve():
-            logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
+            logger.info(
+                "Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)}
+            )
         else:
             with metrics_scope(logger, stage="local_copy", customer=context.slug):
                 copied = _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
-            logger.info("✅ Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
+            logger.info(
+                "✅ Copia locale completata",
+                extra={"count": copied, "raw_tail": tail_path(raw_dir)},
+            )
     else:
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
@@ -539,6 +573,7 @@ def tag_onboarding_main(
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
     )
 
+
 # ─────────────────────────────────── CLI ─────────────────────────────────────
 def _parse_args() -> argparse.Namespace:
     """Costruisce e restituisce il parser CLI per `tag_onboarding`.
@@ -572,8 +607,16 @@ def _parse_args() -> argparse.Namespace:
         help="Percorso locale sorgente dei PDF. Se omesso con --source=local, userà direttamente output/<slug>/raw.",
     )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
-    p.add_argument("--proceed", action="store_true", help="In non-interattivo: prosegue anche alla fase 2 (stub semantico)")
-    p.add_argument("--validate-only", action="store_true", help="Esegue solo la validazione di tags_reviewed.yaml")
+    p.add_argument(
+        "--proceed",
+        action="store_true",
+        help="In non-interattivo: prosegue anche alla fase 2 (stub semantico)",
+    )
+    p.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Esegue solo la validazione di tags_reviewed.yaml",
+    )
     return p.parse_args()
 
 
@@ -598,7 +641,9 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
+        early_logger.error(
+            "Errore: in modalità non interattiva è richiesto --slug (o slug posizionale)."
+        )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     try:

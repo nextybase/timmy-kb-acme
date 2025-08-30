@@ -39,14 +39,14 @@ from pathlib import Path
 from typing import List
 
 from pipeline.path_utils import (
-    is_safe_subpath,   # SOFT: pre-check booleano per shortlist/letture
-    ensure_within,     # STRONG: SSoT per write/delete
+    is_safe_subpath,  # SOFT: pre-check booleano per shortlist/letture
+    ensure_within,  # STRONG: SSoT per write/delete
     normalize_path,
     sanitize_filename,
     sorted_paths,
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.exceptions import PipelineError     # eccezione tipizzata per la pipeline
+from pipeline.exceptions import PipelineError  # eccezione tipizzata per la pipeline
 
 
 __all__ = ["copy_local_pdfs_to_raw", "emit_tags_csv"]
@@ -101,7 +101,10 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
             ensure_within(base_dir, dst)
         except Exception as e:
             # Qui manteniamo un log e saltiamo: path non valido per policy SSoT
-            logger.warning("Skip per path non valido (strong guard)", extra={"file_path": str(dst), "error": str(e)})
+            logger.warning(
+                "Skip per path non valido (strong guard)",
+                extra={"file_path": str(dst), "error": str(e)},
+            )
             continue
 
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -165,27 +168,27 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
 
         # Tag candidati:
         path_tags = {p.lower() for p in parts[:-1]}
-        file_tokens = {
-            tok.lower()
-            for tok in _SPLIT_RE.split(base_no_ext)
-            if tok
-        }
+        file_tokens = {tok.lower() for tok in _SPLIT_RE.split(base_no_ext) if tok}
         candidates = sorted(path_tags.union(file_tokens))
 
         # colonne “larghe” (compat future-proof)
         entities = "[]"
         keyphrases = "[]"
         score = "{}"
-        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
+        sources = json.dumps(
+            {"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False
+        )
 
-        rows.append([
-            rel_base_posix,
-            ", ".join(candidates),
-            entities,
-            keyphrases,
-            score,
-            sources,
-        ])
+        rows.append(
+            [
+                rel_base_posix,
+                ", ".join(candidates),
+                entities,
+                keyphrases,
+                score,
+                sources,
+            ]
+        )
 
     # STRONG (SSoT): autorizza la scrittura nella sandbox cliente
     ensure_within(base_dir, csv_path.parent)
@@ -201,5 +204,7 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
 
     safe_write_text(csv_path, data, encoding="utf-8", atomic=True)
 
-    logger.info("Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)})
+    logger.info(
+        "Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)}
+    )
     return len(rows)

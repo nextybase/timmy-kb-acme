@@ -4,6 +4,29 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
+## [1.6.1] – 2025-08-30
+
+### Added
+- Nuovo task **CILite** in `tools/dev/tasks.ps1` per esecuzione rapida di check locali:
+  `black --check`, `flake8`, `pytest -k 'unit or content_utils' -ra`.
+  Include opzionalmente `mypy -p config_ui`.
+
+### Changed
+- Pulizia e tipizzazione modulo **config_ui**:
+  - Rimossi `# type: ignore` inutilizzati.
+  - Annotazioni `Optional`/`Callable` per i compat (`_repo_ensure_within`, `_repo_safe_write_text`).
+  - Stub logger `_Stub` annotato con `Any` e ritorno `None`.
+  - Funzioni helper (`_get_logger`, `_drive_list_folders`, `_drive_upload_bytes`, ecc.) con firme tipizzate.
+  - Soppressione mirata `# type: ignore[import-untyped]` per import `MediaIoBaseUpload/Download`.
+
+- **pyproject.toml**: override `[[tool.mypy.overrides]]` per `config_ui.*` con `follow_imports = "skip"`, così mypy non scende in pipeline/* durante l’analisi mirata.
+
+### Fixed
+- **flake8**: portato a 0 errori (inclusi wrapping docstring lunghi).
+- **pytest (unit + content_utils)**: ora **13 test passati / 10 deselezionati**, tutto verde.
+- **mypy -p config_ui**: azzerati gli errori locali, residui confinati ai pacchetti `pipeline/*`.
+
+---
 
 ## 1.6.0 — 2025-08-29 — Interfaccia Streamlit
 
@@ -20,9 +43,9 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - **Nuova sezione “Download contenuti su raw/”**: pulsante **Scarica PDF da Drive** nella struttura locale `raw/`. Al termine sblocca la tab *Semantica*. Messaggio guida operativo accanto al pulsante.
 - **Tab “Semantica”**
   - Integrazione con `src/semantic_onboarding.py`:
-    1) **Converti PDF in Markdown** (RAW → BOOK)  
-    2) **Arricchisci frontmatter** con vocabolario rivisto (`tags_reviewed.yaml`)  
-    3) **Genera/valida README & SUMMARY**  
+    1) **Converti PDF in Markdown** (RAW → BOOK)
+    2) **Arricchisci frontmatter** con vocabolario rivisto (`tags_reviewed.yaml`)
+    3) **Genera/valida README & SUMMARY**
     4) **Preview Docker (HonKit)** avvio/stop con porta configurabile.
 - **Runner Drive**
   - Nuova funzione `download_raw_from_drive(slug, ...)` con **path-safety** (`ensure_within_and_resolve`), **scritture atomiche**, sanitizzazione nomi file e **logging strutturato**.
@@ -44,12 +67,12 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Redazione automatica di identificativi/sensibili nei log quando abilitata.
 
 ### Migration notes
-- Impostare credenziali Google Drive e **`DRIVE_ID`** nell’ambiente.  
+- Impostare credenziali Google Drive e **`DRIVE_ID`** nell’ambiente.
 - Flusso consigliato per nuovi clienti:
-  1) Compilare **Slug** e **Nome cliente** (sblocco UI)  
-  2) Tab **Drive** → *Crea struttura* → *Genera README in raw/*  
-  3) **Scarica PDF** su `raw/` (sblocca tab **Semantica**)  
-  4) Tab **Semantica** → *Converti* → *Arricchisci* → *README & SUMMARY* → *(opz.) Preview Docker*  
+  1) Compilare **Slug** e **Nome cliente** (sblocco UI)
+  2) Tab **Drive** → *Crea struttura* → *Genera README in raw/*
+  3) **Scarica PDF** su `raw/` (sblocca tab **Semantica**)
+  4) Tab **Semantica** → *Converti* → *Arricchisci* → *README & SUMMARY* → *(opz.) Preview Docker*
 - Se esistono riferimenti a `st.experimental_rerun`, sostituirli con `_safe_streamlit_rerun()`.
 
 ---
@@ -185,7 +208,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Allineamento doc↔codice su flussi test e precondizioni (creazione utente dummy).
 
 ### Migrazione / Note operative
-- Prima di eseguire i test:  
+- Prima di eseguire i test:
   ```bash
   py src/tools/gen_dummy_kb.py --slug dummy
   pytest -ra
@@ -287,9 +310,9 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Fixture `conftest.py` consolidata: genera sempre una sandbox dummy pulita (`--overwrite`), forza ambiente UTF-8 e gestisce teardown automatico salvo `KEEP_DUMMY_KB=1`.
 - **Refactor tool interattivo**
   - `src/tools/refactor_tool.py`: menu interattivo grafico (box ASCII) con 3 voci:
-    1. 🔎 Trova (solo ricerca)  
-    2. ✏️ Trova & Sostituisci  
-    3. 📌 Cerca TODO/FIXME  
+    1. 🔎 Trova (solo ricerca)
+    2. ✏️ Trova & Sostituisci
+    3. 📌 Cerca TODO/FIXME
   - Logging strutturato, dry-run con diff unificato leggibile, estendibile per futuri strumenti di refactor.
 
 ### Changed
@@ -426,7 +449,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ## [1.2.1] — 2025-08-24
 
-> Release focalizzata su refactor, documentazione e split chiaro degli orchestratori.  
+> Release focalizzata su refactor, documentazione e split chiaro degli orchestratori.
 > PR correlate: **PR-5** (Semantic Onboarding), **PR-6** (Docs v1.2.1).
 
 ### Added
@@ -534,9 +557,9 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Added
 - Prima versione stabile della pipeline con orchestratori separati (`pre_onboarding`, `tag_onboarding`, `onboarding_full`).
 - Struttura modulare in `src/pipeline/` con gestione centralizzata di:
-  - logging (`logging_utils`),  
-  - eccezioni tipizzate (`exceptions`),  
-  - variabili di ambiente e redazione (`env_utils`),  
+  - logging (`logging_utils`),
+  - eccezioni tipizzate (`exceptions`),
+  - variabili di ambiente e redazione (`env_utils`),
   - configurazioni e path safety (`config_utils`, `path_utils`).
 - Documentazione completa in `docs/` (User Guide, Developer Guide, Architecture, Coding Rules, Policy Push, Versioning).
 

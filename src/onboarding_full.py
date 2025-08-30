@@ -20,7 +20,7 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING, cast, Callable
 
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.exceptions import (
@@ -50,9 +50,14 @@ except Exception as e:
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
     # (context, *, github_token:str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
-    from pipeline.github_utils import push_output_to_github
+    from pipeline.github_utils import push_output_to_github as _push_output_to_github
+    push_output_to_github: Callable[..., None] | None = _push_output_to_github
 except Exception:
     push_output_to_github = None  # verrà gestito in _git_push
+
+# Solo per type-checking: Protocol del contesto richiesto da github_utils
+if TYPE_CHECKING:  # pragma: no cover - solo analisi statica
+    from pipeline.github_utils import _SupportsContext  # noqa: F401
 
 
 # ─────────────── Helpers UX ───────────────
@@ -204,10 +209,14 @@ def _git_push(context: ClientContext, logger: logging.Logger) -> None:
         )
 
     token = get_env_var("GITHUB_TOKEN", required=True)
+    # Assicurazioni formali per Pylance (nessun cambio di logica):
+    assert token is not None
+    assert context.md_dir is not None
+    assert context.base_dir is not None
 
     try:
         push_output_to_github(
-            context,
+            cast("_SupportsContext", context),
             github_token=token,
             do_push=True,
             force_push=False,
@@ -238,7 +247,9 @@ def onboarding_full_main(
         PipelineError: per violazioni del preflight o altri errori di pipeline.
     """
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
+    slug = ensure_valid_slug(
+        slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger
+    )
 
     base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
     log_dir = base_dir / LOGS_DIR_NAME
@@ -254,7 +265,9 @@ def onboarding_full_main(
         run_id=run_id,
     )
 
-    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
+    logger = get_structured_logger(
+        "onboarding_full", log_file=log_file, context=context, run_id=run_id
+    )
     logger.info("🚀 Avvio onboarding_full (PUSH GitHub)")
 
     # 1) README/SUMMARY minimi in book/ (idempotente)
@@ -314,7 +327,9 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
+        early_logger.error(
+            "Errore: in modalità non interattiva è richiesto --slug (o slug posizionale)."
+        )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
         slug = ensure_valid_slug(

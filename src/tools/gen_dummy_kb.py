@@ -35,7 +35,9 @@ from typing import Dict, Any, List
 try:
     import yaml  # PyYAML è richiesta
 except Exception as e:  # pragma: no cover
-    raise RuntimeError("PyYAML è richiesta per questo tool. Installa con: pip install pyyaml") from e
+    raise RuntimeError(
+        "PyYAML è richiesta per questo tool. Installa con: pip install pyyaml"
+    ) from e
 
 # ---------------------------------------------------------------------
 # Percorsi repository
@@ -60,6 +62,7 @@ try:
     from semantic.config import load_semantic_config
     from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
     from semantic.normalizer import normalize_tags
+
     # pipeline (path-safety + atomic I/O + logging)
     from pipeline.path_utils import ensure_within
     from pipeline.file_utils import safe_write_text, safe_write_bytes
@@ -69,6 +72,7 @@ except Exception as e:
         "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e 'src/pipeline' "
         "e che tu stia eseguendo lo script dalla root del progetto."
     ) from e
+
 
 # ---------------------------------------------------------------------
 # Utilità base
@@ -106,6 +110,7 @@ def _write_bytes_in_base(base: Path, path: Path, data: bytes, *, overwrite: bool
 
 def _now_date() -> str:
     return _dt.datetime.utcnow().strftime("%Y-%m-%d")
+
 
 # ---------------------------------------------------------------------
 # PDF minimale (una pagina, titolo + paragrafi)
@@ -154,18 +159,19 @@ endobj
 5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
 xref
 0 6
-0000000000 65535 f 
-0000000010 00000 n 
-0000000060 00000 n 
-0000000115 00000 n 
-0000000275 00000 n 
-0000000416 00000 n 
+0000000000 65535 f
+0000000010 00000 n
+0000000060 00000 n
+0000000115 00000 n
+0000000275 00000 n
+0000000416 00000 n
 trailer<</Root 1 0 R/Size 6>>
 startxref
 500
 %%EOF
 """
     return pdf.encode("latin-1", errors="ignore")
+
 
 # ---------------------------------------------------------------------
 # Builders mapping/config
@@ -199,7 +205,9 @@ def _merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _build_semantic_mapping_yaml(slug: str, client_name: str, template_mapping: Dict[str, Any]) -> str:
+def _build_semantic_mapping_yaml(
+    slug: str, client_name: str, template_mapping: Dict[str, Any]
+) -> str:
     data: Dict[str, Any] = {}
     data = _merge_dicts(data, _yaml_dump_context(slug, client_name))
     data = _merge_dicts(data, _yaml_dump_semantic_tagger_defaults())
@@ -208,7 +216,12 @@ def _build_semantic_mapping_yaml(slug: str, client_name: str, template_mapping: 
 
 
 def _min_config_yaml(client_name: str) -> str:
-    return yaml.safe_dump({"client_name": client_name, "semantic_defaults": {"lang": "it"}}, allow_unicode=True, sort_keys=False)
+    return yaml.safe_dump(
+        {"client_name": client_name, "semantic_defaults": {"lang": "it"}},
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
 
 # ---------------------------------------------------------------------
 # Costruzione SOLO dell’albero raw/ da cartelle_raw.yaml
@@ -230,11 +243,21 @@ def _build_only_raw(base_dir: Path, spec: Dict[str, Any]) -> None:
     """Crea solo la root 'raw' e le sue sotto-cartelle (ignora altre sezioni)."""
     roots = spec.get("root_folders")
     if not isinstance(roots, list):
-        raise RuntimeError("cartelle_raw.yaml: atteso campo 'root_folders: [...]' con nodi {name, subfolders}.")
-    raw_node = next((n for n in roots if isinstance(n, dict) and str(n.get("name") or "").strip().lower() == "raw"), None)
+        raise RuntimeError(
+            "cartelle_raw.yaml: atteso campo 'root_folders: [...]' con nodi {name, subfolders}."
+        )
+    raw_node = next(
+        (
+            n
+            for n in roots
+            if isinstance(n, dict) and str(n.get("name") or "").strip().lower() == "raw"
+        ),
+        None,
+    )
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)  # garantiamo raw/
     if raw_node:
         _create_tree_from_spec(base_dir, raw_node)
+
 
 # ---------------------------------------------------------------------
 # PDF da pdf_dummy.yaml (RAW soltanto)
@@ -252,16 +275,22 @@ _RAW_SECTIONS = {
 }
 
 
-def _emit_pdfs_from_pdf_dummy(base: Path, raw_dir: Path, pdf_dummy: Dict[str, Any], slug: str, overwrite: bool) -> List[Path]:
+def _emit_pdfs_from_pdf_dummy(
+    base: Path, raw_dir: Path, pdf_dummy: Dict[str, Any], slug: str, overwrite: bool
+) -> List[Path]:
     """Genera PDF SOLO per le sezioni RAW."""
     created: List[Path] = []
     for section, payload in pdf_dummy.items():
         if not isinstance(payload, dict):
-            raise RuntimeError(f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi).")
+            raise RuntimeError(
+                f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi)."
+            )
         titolo = str(payload.get("titolo") or section).strip()
         paragrafi = payload.get("paragrafi")
         if not isinstance(paragrafi, list) or not paragrafi:
-            raise RuntimeError(f"pdf_dummy.yaml: sezione '{section}' richiede 'paragrafi: [ ... ]' non vuoto.")
+            raise RuntimeError(
+                f"pdf_dummy.yaml: sezione '{section}' richiede 'paragrafi: [ ... ]' non vuoto."
+            )
 
         if section == "raw":
             dst_dir = raw_dir
@@ -283,10 +312,13 @@ def _emit_pdfs_from_pdf_dummy(base: Path, raw_dir: Path, pdf_dummy: Dict[str, An
         created.append(out)
     return created
 
+
 # ---------------------------------------------------------------------
 # Builder principale
 # ---------------------------------------------------------------------
-def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logging.Logger | None = None) -> Path:
+def build_dummy_kb(
+    slug: str, client_name: str, *, overwrite: bool, logger: logging.Logger | None = None
+) -> Path:
     """
     Costruisce la sandbox *dummy* per un cliente, generando cartelle,
     file YAML minimi, PDF di test e CSV dei tag.
@@ -302,7 +334,9 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logg
     """
     # Log iniziale
     if logger:
-        logger.info("▶️  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name})
+        logger.info(
+            "▶️  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name}
+        )
 
     # 1) leggi template contrattuali
     if logger:
@@ -335,7 +369,12 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logg
     if logger:
         logger.info(
             "Cartelle base create",
-            extra={"book": str(book_dir), "semantic": str(semantic_dir), "config": str(config_dir), "logs": str(logs_dir)},
+            extra={
+                "book": str(book_dir),
+                "semantic": str(semantic_dir),
+                "config": str(config_dir),
+                "logs": str(logs_dir),
+            },
         )
 
     _build_only_raw(base, cartelle)
@@ -345,19 +384,36 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logg
         logger.info("Albero RAW creato/garantito", extra={"raw": str(raw_dir)})
 
     # 4) template in semantic + mapping con context/tagger defaults
-    _write_bytes_in_base(base, semantic_dir / "cartelle_raw.yaml", TEMPLATE_CARTELLE_RAW.read_bytes(), overwrite=overwrite)
+    _write_bytes_in_base(
+        base,
+        semantic_dir / "cartelle_raw.yaml",
+        TEMPLATE_CARTELLE_RAW.read_bytes(),
+        overwrite=overwrite,
+    )
     if logger:
-        logger.info("cartelle_raw.yaml copiato in semantic/", extra={"file_path": str(semantic_dir / "cartelle_raw.yaml")})
+        logger.info(
+            "cartelle_raw.yaml copiato in semantic/",
+            extra={"file_path": str(semantic_dir / "cartelle_raw.yaml")},
+        )
 
     mapping_text = _build_semantic_mapping_yaml(slug, client_name, mapping_template)
-    _write_text_in_base(base, semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite)
+    _write_text_in_base(
+        base, semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite
+    )
     if logger:
-        logger.info("semantic_mapping.yaml generato", extra={"file_path": str(semantic_dir / "semantic_mapping.yaml")})
+        logger.info(
+            "semantic_mapping.yaml generato",
+            extra={"file_path": str(semantic_dir / "semantic_mapping.yaml")},
+        )
 
     # 5) config/config.yaml minimale
-    _write_text_in_base(base, config_dir / "config.yaml", _min_config_yaml(client_name), overwrite=overwrite)
+    _write_text_in_base(
+        base, config_dir / "config.yaml", _min_config_yaml(client_name), overwrite=overwrite
+    )
     if logger:
-        logger.info("config.yaml minimale scritto", extra={"file_path": str(config_dir / "config.yaml")})
+        logger.info(
+            "config.yaml minimale scritto", extra={"file_path": str(config_dir / "config.yaml")}
+        )
 
     # 6) genera PDF SOLO per RAW
     created_pdfs = _emit_pdfs_from_pdf_dummy(base, raw_dir, pdf_dummy, slug, overwrite=overwrite)
@@ -404,19 +460,38 @@ def build_dummy_kb(slug: str, client_name: str, *, overwrite: bool, logger: logg
         )
     return base
 
+
 # ---------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Genera sandbox cliente dummy (RAW-only) + tags_raw.csv via moduli semantic")
+    p = argparse.ArgumentParser(
+        description="Genera sandbox cliente dummy (RAW-only) + tags_raw.csv via moduli semantic"
+    )
+    p.add_argument(
+        "--out",
+        required=False,
+        help="Cartella di output in cui creare la sandbox (es. temp dir di pytest)",
+    )
     p.add_argument("--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)")
-    p.add_argument("--name", type=str, default=DEFAULT_CLIENT_NAME, help="Nome cliente (default: Cliente Dummy)")
+    p.add_argument(
+        "--name",
+        type=str,
+        default=DEFAULT_CLIENT_NAME,
+        help="Nome cliente (default: Cliente Dummy)",
+    )
     p.add_argument("--overwrite", action="store_true", help="Sovrascrive file già esistenti")
     return p.parse_args()
 
 
 def main() -> int:
     args = _parse_args()
+    # Override dinamico della root di output solo se passato da CLI
+    if getattr(args, "out", None):
+        from pathlib import Path as _Path
+
+        global OUTPUT_ROOT
+        OUTPUT_ROOT = _Path(args.out)
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("gen_dummy_kb", run_id=run_id)
 
@@ -436,7 +511,9 @@ def main() -> int:
         except Exception:
             logger = early_logger  # fallback
 
-        logger.info("🏁 Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)})
+        logger.info(
+            "🏁 Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)}
+        )
         return 0
     except KeyboardInterrupt:
         return 130

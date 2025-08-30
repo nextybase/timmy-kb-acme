@@ -4,18 +4,20 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Callable
 
 # Import compatibili dal repo
+_repo_ensure_within: Optional[Callable[[Path, Path], None]]
 try:
-    from pipeline.path_utils import ensure_within as _repo_ensure_within  # type: ignore
+    from pipeline.path_utils import ensure_within as _repo_ensure_within
 except Exception:
-    _repo_ensure_within = None  # type: ignore
+    _repo_ensure_within = None
 
+_repo_safe_write_text: Optional[Callable[..., Any]]
 try:
-    from pipeline.file_utils import safe_write_text as _repo_safe_write_text  # type: ignore
+    from pipeline.file_utils import safe_write_text as _repo_safe_write_text
 except Exception:
-    _repo_safe_write_text = None  # type: ignore
+    _repo_safe_write_text = None
 
 
 # ========= Normalizzazione chiavi (SSoT) =========
@@ -59,14 +61,16 @@ def safe_write_text_compat(path: Path | str, content: str, *, encoding: str = "u
     p.parent.mkdir(parents=True, exist_ok=True)
     if _repo_safe_write_text is not None:
         try:
-            _repo_safe_write_text(str(p), content, encoding=encoding)  # type: ignore
+            _repo_safe_write_text(str(p), content, encoding=encoding)
             return
         except TypeError:
             try:
-                _repo_safe_write_text(str(p), content)  # type: ignore
+                _repo_safe_write_text(str(p), content)
                 return
             except Exception:
-                pass
+                # Compat: in ambienti minimal i repo helpers potrebbero non essere disponibili.
+                # Questo fallback è intenzionale e sicuro per l’uso in config_ui.
+                pass  # noqa: S110
     tmp = p.with_suffix(p.suffix + ".tmp")
     with open(tmp, "w", encoding=encoding) as f:
         f.write(content)
@@ -75,11 +79,13 @@ def safe_write_text_compat(path: Path | str, content: str, *, encoding: str = "u
 
 def yaml_load(path: Path) -> Dict[str, Any]:
     import yaml
+
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
 def yaml_dump(data: Dict[str, Any]) -> str:
     import yaml
+
     # Ordine deterministico per stabilità Git
     return yaml.safe_dump(data or {}, allow_unicode=True, sort_keys=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 import pytest
 
 from pipeline.content_utils import (
@@ -64,8 +65,8 @@ def test_convert_creates_md_per_category_and_respects_structure(dummy_kb):
     # Titolo principale dal nome cartella
     assert "# Contratti" in c_txt
     # Heading annidati da sottocartelle
-    assert "## 2024" in c_txt      # depth 1
-    assert "### Q4" in c_txt       # depth 2
+    assert "## 2024" in c_txt  # depth 1
+    assert "### Q4" in c_txt  # depth 2
     # Titolo PDF: depth=2 => livello (2+2)=4 -> ####
     assert "#### Doc1" in c_txt
     assert "(Contenuto estratto/conversione da `doc1.pdf`)" in c_txt
@@ -152,7 +153,10 @@ def test_validate_markdown_dir_nonexistent_raises(dummy_kb):
 def test_validate_markdown_dir_not_a_directory_raises(dummy_kb):
     ctx = _mk_ctx(dummy_kb)
     ctx.md_dir.parent.mkdir(parents=True, exist_ok=True)
-    # Creiamo un file con lo stesso nome
+    # Se esiste come directory, rimuovila e ricreala come file (cross-platform)
+    if ctx.md_dir.exists() and ctx.md_dir.is_dir():
+        shutil.rmtree(ctx.md_dir)
+    # Ricrea come file con lo stesso nome
     ctx.md_dir.write_text("not a dir", encoding="utf-8")
     try:
         with pytest.raises(PipelineError):

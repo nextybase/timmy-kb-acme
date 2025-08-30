@@ -1,4 +1,4 @@
-# Timmy-KB — Documentazione (v1.6.0)
+# Timmy-KB — Documentazione (v1.6.1)
 
 Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida utente, guida sviluppatore, policy operative e regole di versioning.
 
@@ -22,4 +22,3 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [CHANGELOG](CHANGELOG.md) – novità e fix per ogni release.
 
 > La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.
-

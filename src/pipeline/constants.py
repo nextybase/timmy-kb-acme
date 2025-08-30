@@ -63,8 +63,8 @@ HONKIT_CONTAINER_NAME_PREFIX = "honkit_preview"
 
 # ⚙️ Parametri di performance (tuning “soft”)
 # I moduli li possono usare come default, lasciando override da CLI/env.
-MAX_CONCURRENCY = 4          # Concorrenza consigliata per job a grana grossa
-SKIP_IF_UNCHANGED = True     # Abilita skip quando input non è cambiato
+MAX_CONCURRENCY = 4  # Concorrenza consigliata per job a grana grossa
+SKIP_IF_UNCHANGED = True  # Abilita skip quando input non è cambiato
 
 __all__ = [
     # dir/file

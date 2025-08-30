@@ -12,7 +12,7 @@ Scopo
 Ordine di applicazione
 ----------------------
 1. drop → elimina i tag presenti in stoplist/mapping.rules.drop
-2. merge_into → rimappa sinonimi/alias verso un target 
+2. merge_into → rimappa sinonimi/alias verso un target
 3. synonyms → se il tag corrisponde a un sinonimo, sostituisce con il canonico
 4. canonical → forza alias verso canonical definito
 
@@ -76,7 +76,9 @@ def _normalize_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
                 canonical_map[alias_l] = canon_l
 
     # rules.drop: [tag1, tag2, ...]
-    drops_set = set(_coerce_list_str(rules_raw.get("drop")) if isinstance(rules_raw, Mapping) else [])
+    drops_set = set(
+        _coerce_list_str(rules_raw.get("drop")) if isinstance(rules_raw, Mapping) else []
+    )
 
     # rules.merge_into: {alias: target}
     merge_into_map: Dict[str, str] = {}
@@ -164,9 +166,13 @@ def normalize_tags(
 
             new_tags.append(tag)
 
-        # dedup preservando ordine
+        # dedup preservando ordine (senza usare side-effect in comprensione)
         seen: set[str] = set()
-        final_tags = [t for t in new_tags if not (t in seen or seen.add(t))]
+        final_tags: List[str] = []
+        for t in new_tags:
+            if t not in seen:
+                seen.add(t)
+                final_tags.append(t)
 
         # copia meta e sostituisci i tag normalizzati
         out_meta = dict(meta)

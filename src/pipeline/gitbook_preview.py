@@ -93,9 +93,14 @@ def _resolve_ports(context, explicit_host_port: Optional[int]) -> Tuple[int, int
 
     # Validazioni
     if not (1 <= int(host_port) <= 65535):
-        raise PreviewError(f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None))
+        raise PreviewError(
+            f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None)
+        )
     if not (1 <= int(container_port) <= 65535):
-        raise PreviewError(f"Porta container non valida per preview: {container_port}", slug=getattr(context, "slug", None))
+        raise PreviewError(
+            f"Porta container non valida per preview: {container_port}",
+            slug=getattr(context, "slug", None),
+        )
 
     return int(host_port), int(container_port)
 
@@ -103,7 +108,9 @@ def _resolve_ports(context, explicit_host_port: Optional[int]) -> Tuple[int, int
 # ----------------------------
 # Helpers idempotenti di setup
 # ----------------------------
-def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
+def ensure_book_json(
+    md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False
+) -> None:
     """Crea un book.json minimo se mancante (idempotente)."""
     book_json_path = Path(md_dir) / BOOK_JSON_NAME
     try:
@@ -120,7 +127,9 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
         data = {"title": "preview", "plugins": []}
         try:
             # ✅ scrittura atomica
-            safe_write_text(book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
+            safe_write_text(
+                book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
+            )
             logger.info(
                 _maybe_redact("📖 book.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(book_json_path)},
@@ -138,7 +147,9 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
         )
 
 
-def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
+def ensure_package_json(
+    md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False
+) -> None:
     """Crea un package.json minimo se mancante (idempotente)."""
     package_json_path = Path(md_dir) / PACKAGE_JSON_NAME
     try:
@@ -162,7 +173,9 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs
         }
         try:
             # ✅ scrittura atomica
-            safe_write_text(package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
+            safe_write_text(
+                package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
+            )
             logger.info(
                 _maybe_redact("📦 package.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(package_json_path)},
@@ -189,7 +202,9 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
     try:
         ensure_within(md_dir, md_dir / "README.md")  # validazione che vincola a md_dir
     except Exception as e:
-        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+        raise PreviewError(
+            f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir
+        )
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
@@ -207,20 +222,30 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
     ]
     try:
         run_cmd(cmd, op="docker run build", logger=logger)
-        logger.info(_maybe_redact("🔨 Build statica HonKit completata.", redact_logs), extra={"slug": slug})
+        logger.info(
+            _maybe_redact("🔨 Build statica HonKit completata.", redact_logs), extra={"slug": slug}
+        )
     except CmdError as e:
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
 
 
 def run_container_detached(
-    md_dir: Path, *, slug: Optional[str], container_name: str, host_port: int, container_port: int, redact_logs: bool
+    md_dir: Path,
+    *,
+    slug: Optional[str],
+    container_name: str,
+    host_port: int,
+    container_port: int,
+    redact_logs: bool,
 ) -> str:
     """Avvia `honkit serve` in modalità detached e ritorna l'ID del container."""
     # STRONG guard sulla directory di lavoro
     try:
         ensure_within(md_dir, md_dir / "README.md")
     except Exception as e:
-        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+        raise PreviewError(
+            f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir
+        )
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
@@ -258,7 +283,12 @@ def run_container_detached(
     except CmdError:
         # Cleanup soft se un container con lo stesso nome esiste già
         try:
-            run_cmd(["docker", "rm", "-f", container_name], op="docker rm -f (pre-retry)", logger=logger, capture=True)
+            run_cmd(
+                ["docker", "rm", "-f", container_name],
+                op="docker rm -f (pre-retry)",
+                logger=logger,
+                capture=True,
+            )
             cp = run_cmd(cmd, op="docker run serve (detached retry)", logger=logger, capture=True)
             container_id = (cp.stdout or "").strip()
             logger.info(
@@ -274,19 +304,30 @@ def run_container_detached(
             raise PreviewError(f"Errore 'honkit serve' (bg): {e2}", slug=slug)
 
 
-def wait_until_ready(host: str, port: int, *, timeout_s: Optional[int], slug: Optional[str], redact_logs: bool) -> None:
+def wait_until_ready(
+    host: str, port: int, *, timeout_s: Optional[int], slug: Optional[str], redact_logs: bool
+) -> None:
     """Attende che la porta sia raggiungibile entro `timeout_s` secondi."""
-    tout = float(timeout_s if timeout_s is not None else (get_int("PREVIEW_READY_TIMEOUT", 30) or 30))
+    tout = float(
+        timeout_s if timeout_s is not None else (get_int("PREVIEW_READY_TIMEOUT", 30) or 30)
+    )
     try:
         wait_for_port(host, int(port), timeout=tout, logger=logger)
     except TimeoutError as e:
-        raise PreviewError(f"Preview non raggiungibile su {host}:{port} entro {tout:.0f}s", slug=slug) from e
+        raise PreviewError(
+            f"Preview non raggiungibile su {host}:{port} entro {tout:.0f}s", slug=slug
+        ) from e
 
 
 def stop_container_safely(container_name: str) -> None:
     """Best-effort: prova a fermare/rimuovere il container; non solleva errori fatali."""
     try:
-        run_cmd(["docker", "rm", "-f", container_name], op="docker rm -f (safe)", logger=logger, capture=True)
+        run_cmd(
+            ["docker", "rm", "-f", container_name],
+            op="docker rm -f (safe)",
+            logger=logger,
+            capture=True,
+        )
         logger.info("🧹 Cleanup container completato", extra={"container": container_name})
     except Exception:
         # non interrompere il flusso in caso di fallimento del cleanup
@@ -346,7 +387,12 @@ def run_gitbook_docker_preview(
     md_output_path = Path(context.md_dir).resolve()
     logger.info(
         _maybe_redact("📂 Directory per anteprima", redact_logs),
-        extra={"slug": context.slug, "file_path": str(md_output_path), "host_port": host_port, "container_port": container_port},
+        extra={
+            "slug": context.slug,
+            "file_path": str(md_output_path),
+            "host_port": host_port,
+            "container_port": container_port,
+        },
     )
 
     # File necessari (idempotente)
@@ -400,4 +446,10 @@ def run_gitbook_docker_preview(
         )
 
         # 3) Attendi che la preview sia raggiungibile (best-effort, ma utile per early feedback)
-        wait_until_ready("127.0.0.1", host_port, timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30), slug=context.slug, redact_logs=redact_logs)
+        wait_until_ready(
+            "127.0.0.1",
+            host_port,
+            timeout_s=get_int("PREVIEW_READY_TIMEOUT", 30),
+            slug=context.slug,
+            redact_logs=redact_logs,
+        )

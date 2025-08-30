@@ -9,6 +9,7 @@ from pipeline.exceptions import PipelineError
 # Helpers
 # -----------------------------
 
+
 def _titleize(name: str) -> str:
     """Titolo leggibile da nome file/cartella."""
     parts = name.replace("_", " ").replace("-", " ").split()
@@ -33,7 +34,11 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 # API
 # -----------------------------
 
-def validate_markdown_dir(ctx, md_dir: Path | None = None) -> Path:
+
+from typing import Any
+
+
+def validate_markdown_dir(ctx: Any, md_dir: Path | None = None) -> Path:
     """
     Verifica che la cartella markdown esista, sia una directory e sia "safe"
     rispetto a ctx.base_dir. Ritorna il Path risolto se è valida.
@@ -48,7 +53,7 @@ def validate_markdown_dir(ctx, md_dir: Path | None = None) -> Path:
     return target
 
 
-def generate_readme_markdown(ctx, md_dir: Path | None = None) -> Path:
+def generate_readme_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
     """
     Crea (o sovrascrive) README.md nella cartella markdown target.
     I test verificano solo l'esistenza del file.
@@ -60,14 +65,13 @@ def generate_readme_markdown(ctx, md_dir: Path | None = None) -> Path:
     title = getattr(ctx, "slug", None) or "Knowledge Base"
     readme = target / "README.md"
     readme.write_text(
-        f"# {title}\n\n"
-        "Contenuti generati/curati automaticamente.\n",
+        f"# {title}\n\n" "Contenuti generati/curati automaticamente.\n",
         encoding="utf-8",
     )
     return readme
 
 
-def generate_summary_markdown(ctx, md_dir: Path | None = None) -> Path:
+def generate_summary_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
     """
     Genera SUMMARY.md elencando i .md nella cartella target
     (escludendo README.md e SUMMARY.md).
@@ -88,7 +92,7 @@ def generate_summary_markdown(ctx, md_dir: Path | None = None) -> Path:
     return summary
 
 
-def convert_files_to_structured_markdown(ctx, md_dir: Path | None = None) -> None:
+def convert_files_to_structured_markdown(ctx: Any, md_dir: Path | None = None) -> None:
     """
     Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file
     <categoria>.md dentro md_dir con struttura:

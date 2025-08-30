@@ -4,10 +4,13 @@ ClientContext – contenitore unico di stato e configurazione per Timmy-KB.
 
 Che cosa fa questo modulo (overview):
 - Valida lo slug cliente (`validate_slug`).
-- Calcola la radice canonica del workspace cliente (`_compute_repo_root_dir`), con override da ENV `REPO_ROOT_DIR`.
-- Garantisce la presenza del `config/config.yaml` del cliente (`_ensure_config`), generandolo da template se mancante.
+- Calcola la radice canonica del workspace cliente (`_compute_repo_root_dir`),
+  con override da ENV `REPO_ROOT_DIR`.
+- Garantisce la presenza del `config/config.yaml` del cliente (`_ensure_config`),
+  generandolo da template se mancante.
 - Carica la configurazione YAML del cliente (`_load_yaml_config`).
-- Raccoglie le variabili d’ambiente necessarie/opzionali (`_load_env`) e calcola la policy di redazione log (in `env_utils`).
+- Raccoglie le variabili d'ambiente necessarie/opzionali (`_load_env`) e calcola
+  la policy di redazione log (in `env_utils`).
 - Espone il dataclass `ClientContext.load(...)` che costruisce in modo coerente:
   percorsi canonici (repo_root_dir, raw_dir, md_dir, log_dir, …), impostazioni, logger, flag runtime.
 - Fornisce utility di tracking e correlazione (`log_error`, `log_warning`, `set_step_status`, `summary`,
@@ -26,7 +29,6 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
-import shutil
 import logging  # per tipizzare/gestire il logger
 
 from .exceptions import ConfigError, InvalidSlug
@@ -61,7 +63,8 @@ class ClientContext:
 
     Contiene:
     - Identità cliente (`slug`, `client_name`);
-    - Percorso radice del workspace cliente **canonico** (`repo_root_dir`) e derivati locali (`raw_dir`, `md_dir`, `log_dir`, ...);
+    - Percorso radice del workspace cliente **canonico** (`repo_root_dir`) e derivati locali
+      (`raw_dir`, `md_dir`, `log_dir`, ...);
     - Configurazione YAML caricata (in `settings`) e path di riferimento (`config_path`, `mapping_path`);
     - Variabili d’ambiente risolte da `.env`/processo (`env`);
     - Flag runtime e strutture di tracking (`error_list`, `warning_list`, `step_status`);
@@ -331,7 +334,12 @@ class ClientContext:
         """Registra lo stato di uno step della pipeline (es. 'download' → 'done')."""
         log = self._get_logger()
         self.step_status[step] = status
-        log.info("Step '%s' → %s", step, status, extra={"slug": self.slug, "step": step, "status": status})
+        log.info(
+            "Step '%s' → %s",
+            step,
+            status,
+            extra={"slug": self.slug, "step": step, "status": status},
+        )
 
     def summary(self) -> Dict[str, Any]:
         """Restituisce un riassunto sintetico dello stato corrente del contesto."""

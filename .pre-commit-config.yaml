@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks: [ { id: black } ]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.0
+    hooks:
+      - id: flake8
+        args: ["--config=.flake8"]
+        files: "^(src|tests)/"
+        additional_dependencies: []
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        pass_filenames: false
+        args: ["-p","config_ui"]
+        additional_dependencies:
+          - types-PyYAML
+
+  # Guard-rail SSoT scritture: vieta open(...).write(...)
+  - repo: local
+    hooks:
+      - id: forbid-unsafe-writes
+        name: Forbid direct open(...).write(...)
+        entry: python tools/dev/forbid_unsafe_writes.py
+        language: python
+        types: [python]

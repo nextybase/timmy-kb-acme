@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 import yaml
 
@@ -80,7 +80,9 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
     return norm
 
 
-def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
+def load_semantic_mapping(
+    context: ClientContext, logger: Optional[logging.Logger] = None
+) -> Dict[str, List[str]]:
     """
     Carica e normalizza il mapping semantico per il cliente corrente.
 
@@ -90,6 +92,7 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
     logger = logger or get_structured_logger("semantic.mapping", context=context)
 
     # 1) mapping specifico del cliente (sotto sandbox)
+    assert context.config_dir is not None
     mapping_path = context.config_dir / SEMANTIC_MAPPING_FILE
     try:
         ensure_within(context.config_dir, mapping_path)  # STRONG guard
@@ -106,7 +109,11 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
         # Coerenza contract errori: usare ConfigError (no built-in)
-        raise ConfigError(f"File mapping semantico non trovato: {mapping_path}", slug=context.slug, file_path=str(mapping_path))
+        raise ConfigError(
+            f"File mapping semantico non trovato: {mapping_path}",
+            slug=context.slug,
+            file_path=str(mapping_path),
+        )
 
     # 2) leggi mapping del cliente
     try:
@@ -122,7 +129,9 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
             f"❌ Errore lettura/parsing mapping: {e}",
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
-        raise PipelineError(f"Errore lettura mapping: {e}", slug=context.slug, file_path=mapping_path)
+        raise PipelineError(
+            f"Errore lettura mapping: {e}", slug=context.slug, file_path=mapping_path
+        )
 
     # 3) fallback se vuoto/non valido
     if not mapping:
@@ -131,7 +140,9 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
         # Risoluzione sicura del fallback rispetto alla root del repo
-        repo_root: Path = getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
+        repo_root: Path = (
+            getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
+        )
         repo_config_dir = repo_root / "config"
         default_path = repo_config_dir / "default_semantic_mapping.yaml"
         try:
@@ -150,7 +161,11 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
                 mapping = _normalize_semantic_mapping(raw)
                 logger.info(
                     "📑 Mapping di fallback caricato",
-                    extra={"slug": context.slug, "file_path": str(default_path), "concepts": len(mapping)},
+                    extra={
+                        "slug": context.slug,
+                        "file_path": str(default_path),
+                        "concepts": len(mapping),
+                    },
                 )
             except Exception as e:
                 logger.error(
@@ -167,6 +182,8 @@ def load_semantic_mapping(context: ClientContext, logger: Optional[logging.Logge
                 "❌ Mapping di fallback non trovato; impossibile continuare.",
                 extra={"slug": context.slug, "file_path": str(default_path)},
             )
-            raise ConfigError("Mapping di fallback mancante.", slug=context.slug, file_path=str(default_path))
+            raise ConfigError(
+                "Mapping di fallback mancante.", slug=context.slug, file_path=str(default_path)
+            )
 
     return mapping

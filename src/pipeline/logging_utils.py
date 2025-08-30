@@ -9,7 +9,8 @@ Obiettivi:
 - Utilità di **masking** coerenti per ID, percorsi e aggiornamenti di config.
 
 Formato di output (console/file):
-    %(asctime)s %(levelname)s %(name)s: %(message)s | slug=<slug> run_id=<run> file_path=<p> [event=<evt> branch=<b> repo=<r>]
+    %(asctime)s %(levelname)s %(name)s: %(message)s |
+    slug=<slug> run_id=<run> file_path=<p> [event=<evt> branch=<b> repo=<r>]
 
 Indice funzioni principali (ruolo):
 - `get_structured_logger(name, *, context=None, log_file=None, run_id=None, level=INFO)`:
@@ -36,11 +37,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Mapping, Union
+from typing import Type, Literal
+from types import TracebackType
 
 # ---------------------------------------------
 # Redazione (API semplice usata dai moduli)
 # ---------------------------------------------
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
+
 
 def redact_secrets(msg: str) -> str:
     """Redige token/credenziali se accidentalmente presenti in un testo libero."""
@@ -53,20 +57,24 @@ def redact_secrets(msg: str) -> str:
     out = out.replace("Authorization: Bearer ", "Authorization: Bearer ***")
     return out
 
+
 def mask_partial(value: Optional[str], keep: int = 3) -> str:
     """Maschera parzialmente un identificativo: 'abcdef' -> 'abc…'."""
     if not value:
         return ""
     return value[:keep] + "…" if len(value) > keep else value
 
+
 def tail_path(p: Union[Path, str], keep_segments: int = 2) -> str:
     """Restituisce la coda del path per logging compatto (accetta `Path` o `str`)."""
     parts = list(Path(p).parts)
     return "/".join(parts[-keep_segments:]) if parts else str(p)
 
+
 def mask_id_map(d: Mapping[str, Any]) -> Mapping[str, Any]:
     """Maschera i valori (ID) di un mapping, lasciando le chiavi in chiaro."""
     return {k: mask_partial(str(v)) for k, v in (d or {}).items()}
+
 
 def mask_updates(d: Mapping[str, Any]) -> Mapping[str, Any]:
     """Maschera in modo prudente alcuni campi noti durante il log degli update di config."""
@@ -89,6 +97,7 @@ class _CtxView:
     run_id: Optional[str] = None
     redact_logs: bool = False
 
+
 def _ctx_view_from(context: Any = None, run_id: Optional[str] = None) -> _CtxView:
     """Estrae una vista minima del contesto per i filtri di logging."""
     cv = _CtxView()
@@ -101,8 +110,10 @@ def _ctx_view_from(context: Any = None, run_id: Optional[str] = None) -> _CtxVie
         cv.run_id = run_id
     return cv
 
+
 class _ContextFilter(logging.Filter):
     """Arricchisce ogni record con campi standardizzati."""
+
     def __init__(self, ctx: _CtxView):
         super().__init__()
         self.ctx = ctx
@@ -118,8 +129,10 @@ class _ContextFilter(logging.Filter):
             record.file_path = getattr(record, "pathname", None)
         return True
 
+
 class _RedactFilter(logging.Filter):
     """Applica redazione ai messaggi quando attiva."""
+
     def __init__(self, enabled: bool):
         super().__init__()
         self.enabled = enabled
@@ -132,7 +145,12 @@ class _RedactFilter(logging.Filter):
             if isinstance(record.msg, str):
                 record.msg = redact_secrets(record.msg)
             # redigi campi extra comuni
-            for field in ("GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"):
+            for field in (
+                "GITHUB_TOKEN",
+                "SERVICE_ACCOUNT_FILE",
+                "Authorization",
+                "GIT_HTTP_EXTRAHEADER",
+            ):
                 if hasattr(record, field):
                     setattr(record, field, "***")
         except Exception:
@@ -140,8 +158,10 @@ class _RedactFilter(logging.Filter):
             pass
         return True
 
+
 class _KVFormatter(logging.Formatter):
     """Formatter semplice e leggibile, con campi chiave-valore stabili."""
+
     def format(self, record: logging.LogRecord) -> str:
         base = super().format(record)
         kv = []
@@ -154,17 +174,20 @@ class _KVFormatter(logging.Formatter):
             return f"{base} | " + " ".join(kv)
         return base
 
+
 def _make_console_handler(level: int, fmt: str) -> logging.Handler:
     ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(level)
     ch.setFormatter(_KVFormatter(fmt))
     return ch
 
+
 def _make_file_handler(path: Path, level: int, fmt: str) -> logging.Handler:
     fh = logging.FileHandler(path, encoding="utf-8")
     fh.setLevel(level)
     fh.setFormatter(_KVFormatter(fmt))
     return fh
+
 
 def _ensure_no_duplicate_handlers(lg: logging.Logger, key: str) -> None:
     """Evita handler duplicati (idempotenza)."""
@@ -174,6 +197,7 @@ def _ensure_no_duplicate_handlers(lg: logging.Logger, key: str) -> None:
             to_remove.append(h)
     for h in to_remove:
         lg.removeHandler(h)
+
 
 def get_structured_logger(
     name: str,
@@ -257,16 +281,22 @@ class metrics_scope:
         INFO ✅ end:<stage>   | slug=<customer>
         ERROR ⛔ fail:<stage>: <exc> | slug=<customer>
     """
+
     def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
         self.logger = logger
         self.stage = stage
         self.customer = customer
 
-    def __enter__(self):
+    def __enter__(self) -> "metrics_scope":
         self.logger.info(f"▶️  start:{self.stage}", extra={"slug": self.customer})
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> Literal[False]:
         if exc:
             self.logger.error(f"⛔ fail:{self.stage}: {exc}", extra={"slug": self.customer})
         else:

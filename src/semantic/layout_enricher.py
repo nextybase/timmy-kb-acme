@@ -12,6 +12,7 @@ from collections import Counter
 # Types & Constraints Handling
 # ============================
 
+
 @dataclass(frozen=True)
 class Constraints:
     """
@@ -21,6 +22,7 @@ class Constraints:
     - semantic_mapping: mappa canonico -> sinonimi/varianti per evitare duplicati.
     - max_nodes: limite massimo di nodi totali nella proposta generata.
     """
+
     max_depth: int
     allowed_prefixes: Tuple[str, ...]
     semantic_mapping: Dict[str, Tuple[str, ...]]
@@ -67,7 +69,10 @@ class Constraints:
 # Public API
 # ============================
 
-def suggest_layout(base_yaml: Dict[str, Any], vision_text: str, constraints: Dict[str, Any]) -> Dict[str, Any]:
+
+def suggest_layout(
+    base_yaml: Dict[str, Any], vision_text: str, constraints: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Genera una proposta di struttura YAML (dict) coerente con il Vision Statement.
     - Funzione pura: nessun I/O, nessun accesso a rete o env.
@@ -102,9 +107,7 @@ def suggest_layout(base_yaml: Dict[str, Any], vision_text: str, constraints: Dic
         # Se già presente in base_yaml, evitiamo di duplicare il top-level;
         # la proposta aggiungerà solo sotto-sezioni mancanti.
         existing_branch = _get_branch(base_yaml, [top])
-        proposed_branch, used = _build_branch(
-            top, tokens, c, existing_branch=existing_branch
-        )
+        proposed_branch, used = _build_branch(top, tokens, c, existing_branch=existing_branch)
         node_budget -= used
         if proposed_branch:
             # Merge shallow nel risultato (la UI farà il merge vero con base_yaml)
@@ -181,11 +184,50 @@ def _extract_keywords(text: str, min_len: int = 4, top_k: int = 24) -> List[str]
         return []
 
     stop = {
-        "the", "and", "for", "with", "this", "that", "from", "your",
-        "una", "uno", "gli", "nei", "nelle", "delle", "degli", "per",
-        "con", "del", "della", "dello", "dei", "il", "lo", "la", "le",
-        "un", "di", "da", "in", "su", "tra", "fra", "come", "anche",
-        "non", "che", "sono", "è", "e", "a", "al", "ai", "agli", "agli"
+        "the",
+        "and",
+        "for",
+        "with",
+        "this",
+        "that",
+        "from",
+        "your",
+        "una",
+        "uno",
+        "gli",
+        "nei",
+        "nelle",
+        "delle",
+        "degli",
+        "per",
+        "con",
+        "del",
+        "della",
+        "dello",
+        "dei",
+        "il",
+        "lo",
+        "la",
+        "le",
+        "un",
+        "di",
+        "da",
+        "in",
+        "su",
+        "tra",
+        "fra",
+        "come",
+        "anche",
+        "non",
+        "che",
+        "sono",
+        "è",
+        "e",
+        "a",
+        "al",
+        "ai",
+        "agli",
+        "agli",
     }
     # split su non-ltr
     raw = re.split(r"[^A-Za-zÀ-ÖØ-öø-ÿ0-9_]+", text)
@@ -266,7 +308,9 @@ def _build_branch(
 
     # Sottotemi: prendi token che iniziano con lo stesso prefisso principale o che contengono il top
     # (approccio conservativo e deterministico, senza ML).
-    subtokens = [t for t in tokens if t != top and (top in t or _first_token(t) == _first_token(top))]
+    subtokens = [
+        t for t in tokens if t != top and (top in t or _first_token(t) == _first_token(top))
+    ]
     # Rendi un set ordinato deterministico
     candidates = []
     seen = set()
@@ -325,8 +369,27 @@ def _enforce_max_nodes(tree: Dict[str, Any], max_nodes: int) -> None:
     Garantisce che il numero totale di nodi (dict) non superi max_nodes.
     """
     count = _count_nodes(tree)
-    if count > max_nodes:
-        raise ValueError(f"Limite nodi superato: {count} > {max_nodes}")
+    if count <= max_nodes:
+        return
+
+    # Taglio non distruttivo ma deterministico: rimuove chiavi in eccesso partendo dalle foglie.
+    def prune(d: Dict[str, Any]) -> None:
+        nonlocal count
+        if count <= max_nodes:
+            return
+        # Visita prima i figli (profondità), poi eventualmente elimina la chiave corrente
+        for k in list(d.keys()):
+            if count <= max_nodes:
+                break
+            v = d.get(k)
+            if isinstance(v, dict) and v:
+                prune(v)
+            if count > max_nodes and k in d:
+                # Rimuovi il nodo corrente (foglia o ramo già potato)
+                del d[k]
+                count -= 1
+
+    prune(tree)
 
 
 def _count_nodes(tree: Dict[str, Any]) -> int:
