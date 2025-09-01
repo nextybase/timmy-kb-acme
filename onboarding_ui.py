@@ -491,7 +491,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
         st.markdown("**2) Arricchisci frontmatter**")
         if st.button(
-            "Arricchisci con tag canonici (tags_reviewed.yaml)",
+            "Arricchisci con tag canonici (SQLite)",
             key="btn_sem_enrich",
             use_container_width=True,
         ):

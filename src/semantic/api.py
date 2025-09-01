@@ -33,7 +33,13 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    """Public wrapper: load canonical vocab from tags_reviewed.yaml under base_dir/semantic."""
+    """Public wrapper: load canonical vocab from SQLite (SSoT).
+
+    Notes:
+    - Canonical source is the SQLite DB under `semantic/` (e.g., `tags.db`).
+    - Legacy YAML (`tags_reviewed.yaml`) may still exist and be used for migration,
+      but runtime reads the canonical vocab from the DB for consistency and auditability.
+    """
     return _load_reviewed_vocab(base_dir, logger)
 
 
