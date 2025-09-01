@@ -5,6 +5,7 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 ## 1) Responsabilità e orchestratori
 
 - **`semantic_onboarding.py`**: conversione RAW→BOOK, enrichment, README/SUMMARY, preview Docker. **Non fa push.**
+  - La UI Streamlit non usa direttamente gli helper interni ma passa dalla façade `semantic.api` (API pubblica stabile).
 - **`onboarding_full.py`**: esegue **solo** il push GitHub (e in futuro l’integrazione GitBook). Richiede che `book/` sia già pronto.
 
 ## 2) Prerequisiti

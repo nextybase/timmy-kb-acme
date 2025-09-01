@@ -5,6 +5,8 @@ Guida rapida all’onboarding e alla produzione della **KB Markdown AI‑ready**
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
 > Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
+Nota: la UI usa la façade pubblica `semantic.api` per invocare la logica semantica senza dipendere dagli helper interni di `semantic_onboarding`.
+
 ---
 
 ## Prerequisiti
