@@ -285,4 +285,31 @@ In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SU
 
 > **Versione**: 2025-09-01\
 > **Stato**: Allineata all’implementazione corrente di `onboarding_ui.py` e ai moduli correlati. Per modifiche, aprire PR su `docs/guida_ui.md`.
+\n+## Novità: API semantica pubblica (facade)
+
+- Da ora la UI può importare funzioni stabili da `semantic.api` invece di usare helper privati con underscore da `semantic_onboarding`.
+- Obiettivo: stabilizzare l’API per la UI, mantenendo liberi gli internals di evolvere senza breaking changes.
+
+Funzioni esposte in `semantic.api`:
+- `get_paths(slug)`: percorsi `base/raw/book/semantic` per lo slug.
+- `load_reviewed_vocab(base_dir, logger)`: carica il vocabolario canonico (da `semantic/tags_reviewed.yaml`).
+- `convert_markdown(context, logger, *, slug)`: converte PDF in Markdown sotto `book/`.
+- `enrich_frontmatter(context, logger, vocab, *, slug)`: arricchisce frontmatter (`title`, `tags`).
+- `write_summary_and_readme(context, logger, *, slug)`: genera/valida `SUMMARY.md` e `README.md`.
+
+Esempio di import consigliato per la UI:
+
+```python
+from semantic.api import (
+    get_paths,
+    load_reviewed_vocab,
+    convert_markdown,
+    enrich_frontmatter,
+    write_summary_and_readme,
+)
+```
+
+Note di transizione:
+- Gli import esistenti da `semantic_onboarding` continuano a funzionare per compatibilità, ma si consiglia di migrare alla facade.
+- Le firme pubbliche riportate qui sono considerate stabili; eventuali cambiamenti saranno versionati e documentati.
 
