@@ -65,7 +65,7 @@ Scopo: definire/raffinare il **mapping semantico** del cliente (categorie, descr
 - Opzione di **normalizzazione chiavi** (kebab-case) per coerenza
 - Salvataggio **puntuale** (della categoria) o **integrale** (tutto il mapping)
 
-**Funzioni usate (modulo **``**)**
+**Funzioni usate (modulo `config_ui.mapping_editor`)**
 
 - `load_default_mapping()` / `load_tags_reviewed()`
 - `split_mapping(mapping)` → parti editabili vs. riservate
@@ -147,14 +147,14 @@ Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatte
 
 **Funzioni usate**
 
-- Modulo `semantic_api` (API operative):
-  - `_convert_raw_to_book(context)`
-  - `_enrich_frontmatter(context, vocab)`
-  - `_write_summary_and_readme(context)`
-  - `_load_reviewed_vocab(context)`
+- Modulo `semantic.api` (API operative):
+  - `convert_markdown(context, logger, *, slug)`
+  - `enrich_frontmatter(context, logger, vocab, *, slug)`
+  - `write_summary_and_readme(context, logger, *, slug)`
+  - `get_paths(slug)`, `load_reviewed_vocab(base_dir, logger)`
 - Modulo `adapters.preview` (preview Docker):
-  - `start_preview(context, port, container_name)`
-  - `stop_preview(context, container_name)`
+  - `start_preview(context, logger, *, port=4000, container_name=None) -> str`
+  - `stop_preview(logger, *, container_name)`
 
 **Output locale**
 
@@ -231,32 +231,31 @@ output/
 
 ## 11) API surface (per sviluppatori)
 
-``
+**config_ui.mapping_editor**
 
 - `load_default_mapping()` / `load_tags_reviewed()`
 - `split_mapping(mapping)`
-- `validate_categories(cats)`
-- `build_mapping(cats, reserved)`
-- `save_tags_reviewed(mapping)`
+- `validate_categories(cats, normalize_keys=True|False)`
+- `build_mapping(cats, reserved, slug, client_name, normalize_keys=True|False)`
+- `save_tags_reviewed(slug, mapping)`
 
-``
+**config_ui.drive_runner**
 
 - `build_drive_from_mapping(slug, client_name, progress_cb=None)`
 - `emit_readmes_for_raw(slug)`
 - `download_raw_from_drive_with_progress(slug)` → preferita se disponibile
 - `download_raw_from_drive(slug)` → fallback
 
-``
+**semantic.api**
 
-- `_load_reviewed_vocab(context)`
-- `_convert_raw_to_book(context)`
-- `_enrich_frontmatter(context, vocab)`
-- `_write_summary_and_readme(context)`
+- `get_paths(slug)`
+- `load_reviewed_vocab(base_dir, logger)`
+- `convert_markdown(context, logger, *, slug) -> list[Path]`
+- `enrich_frontmatter(context, logger, vocab, *, slug) -> list[Path]`
+- `write_summary_and_readme(context, logger, *, slug) -> None`
 
-``
-
-- `start_preview(context, port, container_name='gitbook-<slug>')`
-- `stop_preview(context, container_name)`
+- `start_preview(context, logger, *, port=4000, container_name=None) -> str`
+- `stop_preview(logger, *, container_name)`
 
 ---
 

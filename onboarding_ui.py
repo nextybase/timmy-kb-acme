@@ -457,9 +457,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     # Guardie minime su dipendenze
     if any(x is None for x in (sem_convert, sem_enrich, sem_write_md, sem_load_vocab)):
-        st.error(
-            "Modulo semantic_onboarding non disponibile o import parziale. Verificare l'ambiente."
-        )
+        st.error("Modulo semantic.api non disponibile o import parziale. Verificare l'ambiente.")
         return
     if ClientContext is None:
         st.error("Pipeline non disponibile: impossibile creare il contesto cliente.")
