@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # src/semantic/tags_io.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
@@ -9,19 +10,18 @@ Cosa fa il modulo
 -----------------
 - `write_tagging_readme(semantic_dir, logger) -> Path`
   Crea/aggiorna un README rapido per il processo HiTL di tagging.
-  Scrittura **atomica** e guard-rail **STRONG** sull’output.
+  Scrittura atomica e guard-rail STRONG sull'output.
 
 - `write_tags_review_stub_from_csv(semantic_dir, csv_path, logger, top_n=100) -> Path`
-  Genera uno stub `tags_reviewed.yaml` partendo da `tags_raw.csv`:
+  Genera uno stub (ora in SQLite) a partire da `tags_raw.csv`:
   deduplica e normalizza i suggerimenti (lowercase) fino a `top_n`.
-  Lettura consentita **solo** se il CSV è sotto `semantic_dir`
-  (validazione con `ensure_within`). Scrittura **atomica**.
+  Lettura consentita solo se il CSV è sotto `semantic_dir` (validazione con `ensure_within`).
 
 Sicurezza & I/O
 ---------------
 - Nessun `print()`/`input()` o terminazioni del processo.
 - Path-safety: `ensure_within` per output e per vincolare il CSV alla sandbox.
-- Scritture atomiche con `safe_write_text`.
+- Scritture atomiche con `safe_write_text` (solo per README).
 """
 
 import logging
@@ -33,6 +33,10 @@ from typing import List
 from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
 from pipeline.path_utils import ensure_within
 from pipeline.file_utils import safe_write_text
+from storage.tags_store import (
+    derive_db_path_from_yaml_path,
+    save_tags_reviewed as save_tags_reviewed_db,
+)
 
 __all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
 
@@ -60,7 +64,7 @@ def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
         "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
         "3. Quando pronto, crea/aggiorna `tags_reviewed.yaml` con i tag canonici + sinonimi.\n"
         "\n"
-        "_Nota_: `tags_raw.csv` usa lo schema esteso "
+        "Nota: `tags_raw.csv` usa lo schema esteso "
         "`relative_path | suggested_tags | entities | keyphrases | score | sources`.\n"
     )
     safe_write_text(out, content, encoding="utf-8", atomic=True)
@@ -75,7 +79,7 @@ def write_tags_review_stub_from_csv(
     top_n: int = 100,
 ) -> Path:
     """
-    Genera uno stub `tags_reviewed.yaml` a partire dai suggerimenti in `tags_raw.csv`.
+    Genera uno stub di revisione a partire dai suggerimenti in `tags_raw.csv` e lo salva in SQLite.
 
     Compatibilità:
     - Preferisce lo schema esteso con header `suggested_tags`.
@@ -84,16 +88,16 @@ def write_tags_review_stub_from_csv(
     Regole:
     - Usa tutti i suggerimenti (split su ',') normalizzati in lowercase e deduplicati preservando l'ordine.
     - Si ferma quando ha raccolto `top_n` tag unici.
-    - Path-safety: garantita su file di output; lettura CSV consentita solo se sotto `semantic_dir`.
+    - Path-safety: garantita su file di input/output; lettura CSV consentita solo se sotto `semantic_dir`.
 
     Args:
-        semantic_dir: Directory `semantic/` in cui scrivere lo YAML.
+        semantic_dir: Directory `semantic/` in cui scrivere il DB.
         csv_path: Percorso al CSV dei tag grezzi.
         logger: Logger strutturato.
         top_n: Numero massimo di tag unici da includere.
 
     Returns:
-        Path del file `tags_reviewed.yaml` generato.
+        Path del database `tags.db` generato/aggiornato.
     """
     semantic_dir = Path(semantic_dir).resolve()
     csv_path = Path(csv_path).resolve()
@@ -138,29 +142,21 @@ def write_tags_review_stub_from_csv(
     except Exception as e:
         raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
 
-    # Preparazione output YAML (stub di review)
+    # Persistenza su SQLite (stesso dict dell'originario YAML)
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    out = semantic_dir / "tags_reviewed.yaml"
-    ensure_within(semantic_dir, out)  # guardia anti path traversal
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+    ensure_within(semantic_dir, yaml_path)
+    db_path = derive_db_path_from_yaml_path(yaml_path)
 
-    lines = [
-        "version: 1",
-        f'reviewed_at: "{time.strftime("%Y-%m-%d")}"',
-        "keep_only_listed: true",
-        "tags:",
-    ]
-    # `suggested` è già deduplicato preservando l'ordine
-    for t in suggested:
-        lines += [
-            f'  - name: "{t}"',
-            "    action: keep   # keep | drop | merge_into:<canonical>",
-            "    synonyms: []",
-            '    notes: ""',
-        ]
-
-    safe_write_text(out, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
+    data = {
+        "version": "1",
+        "reviewed_at": time.strftime("%Y-%m-%d"),
+        "keep_only_listed": True,
+        "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],
+    }
+    save_tags_reviewed_db(db_path, data)
     logger.info(
         "tags_reviewed stub scritto",
-        extra={"file_path": str(out), "suggested": len(suggested)},
+        extra={"file_path": str(db_path), "suggested": len(suggested)},
     )
-    return out
+    return Path(db_path)

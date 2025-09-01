@@ -54,7 +54,7 @@ def test_smoke_dummy_e2e(tmp_path: Path, monkeypatch):
 
     # Assert principali
     assert (out / "raw").exists()
-    assert (out / "semantic" / "tags_reviewed.yaml").exists()
+    assert (out / "semantic" / "tags.db").exists()
     assert (out / "book" / "README.md").exists()
     assert (out / "book" / "SUMMARY.md").exists()
 

@@ -47,6 +47,23 @@ def _validate_container_name(name: str) -> None:
         raise ConfigError(f"Nome container non valido: '{name}'")
 
 
+def _docker_unavailable_hint(msg: str) -> str | None:
+    """Ritorna un messaggio standard se sembra che Docker non sia attivo."""
+    m = (msg or "").lower()
+    patterns = (
+        "docker",
+        "daemon",
+        "dockerd",
+        "cannot connect",
+        "connection refused",
+        "is the docker daemon running",
+        "error while fetching server api version",
+    )
+    if any(p in m for p in patterns):
+        return "Docker non attivo: avvia Docker Desktop e riprova."
+    return None
+
+
 def start_preview(
     context: Any,
     logger: logging.Logger,
@@ -87,6 +104,13 @@ def start_preview(
         )
         return cname
     except Exception as e:
+        hint = _docker_unavailable_hint(str(e))
+        if hint:
+            logger.warning(
+                "Preview non avviata: Docker non attivo",
+                extra={"container": cname, "port": port, "error": str(e)},
+            )
+            raise ConfigError(hint)
         logger.error(
             "Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)}
         )
@@ -116,6 +140,13 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
         stop_container_safely(container_name)
         logger.info("Preview Docker fermata", extra={"container": container_name})
     except Exception as e:  # best-effort
+        hint = _docker_unavailable_hint(str(e))
+        if hint:
+            logger.warning(
+                "Stop preview: Docker non attivo (best-effort)",
+                extra={"container": container_name, "error": str(e)},
+            )
+            return
         logger.warning(
             "Stop preview fallito (best-effort)",
             extra={"container": container_name, "error": str(e)},

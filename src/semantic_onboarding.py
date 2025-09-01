@@ -65,7 +65,7 @@ from adapters.content_fallbacks import ensure_readme_summary
 # Adapter: Preview GitBook/HonKit
 from adapters.preview import start_preview, stop_preview
 
-# PyYAML per tags_reviewed.yaml e frontmatter
+# PyYAML per frontmatter (i tag reviewed ora sono letti da SQLite)
 try:
     import yaml  # type: ignore
 except Exception:
@@ -103,6 +103,12 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 
 # ─────────────── Tags loading (SSoT: tags_reviewed.yaml) ───────────────
+from storage.tags_store import (  # noqa: E402
+    derive_db_path_from_yaml_path,
+    load_tags_reviewed as load_tags_reviewed_db,
+)
+
+
 def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
     """
     Costruisce un vocabolario canonico a partire da `semantic/tags_reviewed.yaml`.
@@ -141,17 +147,10 @@ def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Di
         )
         return {}
 
-    if not tags_path.exists():
-        logger.info("tags_reviewed.yaml assente: frontmatter con tags vuoti")
-        return {}
-    if yaml is None:
-        logger.warning(
-            "PyYAML assente: impossibile leggere tags_reviewed.yaml; proceeding senza tag."
-        )
-        return {}
-
+    # Carica da SQLite (anche se il file YAML non esiste più)
     try:
-        data = yaml.safe_load(tags_path.read_text(encoding="utf-8")) or {}
+        db_path = derive_db_path_from_yaml_path(tags_path)
+        data = load_tags_reviewed_db(db_path) or {}
         items = data.get("tags", []) or []
         # prima passata: inizializza canonical keep
         vocab: Dict[str, Dict[str, Set[str]]] = {}
@@ -187,12 +186,12 @@ def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Di
         return vocab
     except (OSError, AttributeError) as e:
         logger.warning(
-            "Impossibile leggere tags_reviewed.yaml",
+            "Impossibile leggere tags dal DB",
             extra={"file_path": str(tags_path), "error": str(e)},
         )
-    except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
+    except (ValueError, TypeError) as e:
         logger.warning(
-            "Impossibile parsare tags_reviewed.yaml",
+            "Impossibile parsare dati tags dal DB",
             extra={"file_path": str(tags_path), "error": str(e)},
         )
     return {}
@@ -381,7 +380,11 @@ def _convert_raw_to_book(
     # Parametri extra opzionali passati come kwargs, ignorati se non supportati (compat formale)
     if convert_files_to_structured_markdown is not None:
         try:
-            convert_files_to_structured_markdown(context, skip_if_unchanged=None, max_workers=None)  # type: ignore[call-arg]
+            convert_files_to_structured_markdown(
+                context,
+                skip_if_unchanged=None,
+                max_workers=None,
+            )  # type: ignore[call-arg]
         except TypeError:
             # Firme più vecchie non accettano questi kwargs; richiama senza
             convert_files_to_structured_markdown(context)  # type: ignore[misc]

@@ -349,8 +349,16 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
             "1) Crea/aggiorna struttura Drive", key="btn_drive_create", use_container_width=True
         ):
             try:
+                prog = st.progress(0)
+                status = st.empty()
+
+                def _cb(step: int, total: int, label: str) -> None:
+                    pct = int(step * 100 / total)
+                    prog.progress(pct)
+                    status.markdown(f"{pct}% — {label}")
+
                 ids = build_drive_from_mapping(
-                    slug=slug, client_name=st.session_state.get("client_name", "")
+                    slug=slug, client_name=st.session_state.get("client_name", ""), progress=_cb
                 )
                 st.success(f"Struttura creata: {ids}")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
@@ -390,7 +398,20 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                     )
                 else:
                     try:
-                        res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
+                        # Usa variante con progress se disponibile
+                        prog = st.progress(0)
+                        status = st.empty()
+                        try:
+                            from config_ui.drive_runner import download_raw_from_drive_with_progress  # type: ignore
+
+                            def _pcb(done: int, total: int, label: str) -> None:
+                                pct = int((done * 100) / (total or 1))
+                                prog.progress(pct)
+                                status.markdown(f"{pct}% — {label}")
+
+                            res = download_raw_from_drive_with_progress(slug=slug, on_progress=_pcb)  # type: ignore[misc]
+                        except Exception:
+                            res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
                         count = len(res) if hasattr(res, "__len__") else None
                         st.success(
                             f"Download completato{f' ({count} file)' if count is not None else ''}."
@@ -525,8 +546,22 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                                 "container": cname,
                             }
                         )
+                        _safe_streamlit_rerun()
                     except Exception as e:
-                        st.exception(e)
+                        msg = str(e)
+                        if any(
+                            k in msg.lower()
+                            for k in ("docker", "daemon", "not running", "cannot connect")
+                        ):
+                            st.warning(
+                                "Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."
+                            )
+                            log.warning(
+                                "Preview non avviata: Docker non attivo",
+                                extra={"error": msg},
+                            )
+                        else:
+                            st.exception(e)
             with cols[1]:
                 if st.button(
                     "Ferma preview",
@@ -540,6 +575,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         st.session_state["sem_preview_container"] = None
                         st.success("Preview fermata.")
                         log.info({"event": "preview_stopped", "slug": slug, "container": cname})
+                        _safe_streamlit_rerun()
                     except Exception as e:
                         st.exception(e)
 

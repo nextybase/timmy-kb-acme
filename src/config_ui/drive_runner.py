@@ -94,6 +94,7 @@ def build_drive_from_mapping(
     *,
     require_env: bool = True,
     base_root: Path | str = "output",
+    progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> Dict[str, str]:
     """
     Crea su Drive:
@@ -114,14 +115,22 @@ def build_drive_from_mapping(
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
 
     # Cartella cliente (sotto DRIVE_ID)
+    total_steps = 3
+    step = 0
     client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
         svc, slug, parent_id=drive_parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
+    step += 1
+    if progress:
+        progress(step, total_steps, "Cartella cliente creata")
 
     # Upload config.yaml nella cartella cliente
     _require_callable(upload_config_to_drive_folder, "upload_config_to_drive_folder")(
         svc, ctx, parent_id=client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
+    step += 1
+    if progress:
+        progress(step, total_steps, "config.yaml caricato")
 
     # Struttura derivata dal mapping (locale -> YAML sintetico -> creazione su Drive)
     mapping = load_tags_reviewed(slug, base_root=base_root)
@@ -131,6 +140,9 @@ def build_drive_from_mapping(
     created_map = _require_callable(
         create_drive_structure_from_yaml, "create_drive_structure_from_yaml"
     )(svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False)))
+    step += 1
+    if progress:
+        progress(step, total_steps, "Struttura RAW/ creata")
 
     raw_id = created_map.get("raw") or created_map.get("RAW")
     contr_id = created_map.get("contrattualistica") or created_map.get("CONTRATTUALISTICA")
@@ -403,6 +415,106 @@ def download_raw_from_drive(
             os.replace(tmp, dest)
             written.append(dest)
             log.info({"event": "raw_downloaded", "path": str(dest)})
+
+    log.info({"event": "raw_download_summary", "count": len(written)})
+    return written
+
+
+# Variante con progress callback (UI helper)
+def download_raw_from_drive_with_progress(
+    slug: str,
+    *,
+    base_root: Path | str = "output",
+    require_env: bool = True,
+    overwrite: bool = False,
+    logger: Optional[logging.Logger] = None,
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+) -> List[Path]:
+    if ClientContext is None or get_drive_service is None:
+        raise RuntimeError("API Drive/Context non disponibili nel repo.")
+
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = logger or _get_logger(ctx)
+    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+
+    parent_id = ctx.env.get("DRIVE_ID")
+    if not parent_id:
+        raise RuntimeError("DRIVE_ID non impostato.")
+
+    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+    )
+    sub = _drive_list_folders(svc, client_folder_id)
+    name_to_id = {d["name"]: d["id"] for d in sub}
+    raw_id = name_to_id.get("raw") or name_to_id.get("RAW")
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
+
+    raw_subfolders = _drive_list_folders(svc, raw_id)
+
+    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from googleapiclient.http import MediaIoBaseDownload
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
+
+    # Preconta
+    total = 0
+    by_folder: Dict[str, List[Dict[str, str]]] = {}
+    for folder in raw_subfolders:
+        folder_id = folder["id"]
+        q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
+        resp = (
+            svc.files()
+            .list(
+                q=q,
+                spaces="drive",
+                fields="nextPageToken, files(id, name, mimeType)",
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        files = resp.get("files", [])
+        by_folder[folder_id] = files
+        total += len(files)
+    done = 0
+
+    written: List[Path] = []
+    for folder in raw_subfolders:
+        folder_name = folder["name"]
+        folder_id = folder["id"]
+        files = by_folder.get(folder_id, [])
+        dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            file_id = f["id"]
+            name = f["name"]
+            safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
+            dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+
+            if dest.exists() and not overwrite:
+                log.info({"event": "raw_download_skip_exists", "path": str(dest)})
+                done += 1
+                if on_progress:
+                    on_progress(done, total, f"{folder_name}/{safe_name}")
+                continue
+
+            request = svc.files().get_media(fileId=file_id)
+            tmp = dest.with_suffix(dest.suffix + ".part")
+            with open(tmp, "wb") as fh:
+                downloader = MediaIoBaseDownload(fh, request)
+                _done = False
+                while not _done:
+                    status, _done = downloader.next_chunk()
+            os.replace(tmp, dest)
+            written.append(dest)
+            log.info({"event": "raw_downloaded", "path": str(dest)})
+            done += 1
+            if on_progress:
+                on_progress(done, total, f"{folder_name}/{safe_name}")
 
     log.info({"event": "raw_download_summary", "count": len(written)})
     return written
