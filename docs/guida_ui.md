@@ -1,8 +1,8 @@
-# Onboarding UI  —  guida aggiornata
+﻿# Onboarding UI  â€”  guida aggiornata
 
-Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni. È pensata per sostituire/aggiornare `docs/guida_ui.md`.
+Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore piÃ¹ comuni. Ãˆ pensata per sostituire/aggiornare `docs/guida_ui.md`.
 
-> In sintesi: la UI è una app **Streamlit** con tre step operativi  —  **Configurazione**, **Drive**, **Semantica**  —  e opzionale **Preview Docker (HonKit)**. Alcune funzioni degradano con *fallback* se i moduli di pipeline non sono disponibili.
+> In sintesi: la UI Ã¨ una app **Streamlit** con tre step operativi  â€”  **Configurazione**, **Drive**, **Semantica**  â€”  e opzionale **Preview Docker (HonKit)**. Alcune funzioni degradano con *fallback* se i moduli di pipeline non sono disponibili.
 
 ---
 
@@ -16,7 +16,7 @@ Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_u
 **Per la tab "Drive"**
 
 - Credenziali Google Drive configurate (es. `SERVICE_ACCOUNT_FILE`)
-- ID dell'unità o cartella di lavoro (es. `DRIVE_ID`)
+- ID dell'unitÃ  o cartella di lavoro (es. `DRIVE_ID`)
 
 **Per la Preview**
 
@@ -34,9 +34,9 @@ Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_u
 Da root del repo:
 
 - macOS/Linux: `streamlit run onboarding_ui.py`
-- Windows: `streamlit run onboarding_ui.py`
+- Windows: `py -m streamlit run onboarding_ui.py`
 
-La **landing** chiede `slug` e `nome cliente`. Quando entrambi sono valorizzati, la UI si "sblocca" e salva lo stato in sessione. C'è un pulsante "Chiudi UI" per terminare il processo Streamlit in modo pulito.
+La **landing** chiede `slug` e `nome cliente`. Quando entrambi sono valorizzati, la UI si "sblocca" e salva lo stato in sessione. C'Ã¨ un pulsante "Chiudi UI" per terminare il processo Streamlit in modo pulito.
 
 ---
 
@@ -49,7 +49,7 @@ La UI usa `st.session_state` per:
 - **Gate Semantica**: la tab **Semantica** appare **solo dopo** il download locale dei PDF su `raw/`
 - **Preview**: nome container, porta e stato *running*/*stopped*
 
-La redazione log è calcolata con una funzione "safe" che preferisce la logica di pipeline se disponibile; in assenza, abilita la redazione se `ENV=prod` o se trovate variabili esplicite.
+La redazione log Ã¨ calcolata con una funzione "safe" che preferisce la logica di pipeline se disponibile; in assenza, abilita la redazione se `ENV=prod` o se trovate variabili esplicite.
 
 ---
 
@@ -68,17 +68,17 @@ Scopo: definire/raffinare il **mapping semantico** del cliente (categorie, descr
 **Funzioni usate (modulo `config_ui.mapping_editor`)**
 
 - `load_default_mapping()` / `load_tags_reviewed()`
-- `split_mapping(mapping)` → parti editabili vs. riservate
+- `split_mapping(mapping)` â†’ parti editabili vs. riservate
 - `validate_categories(cats)`
-- `build_mapping(cats, reserved)` → ricompone la struttura
+- `build_mapping(cats, reserved)` â†’ ricompone la struttura
 - `save_tags_reviewed(mapping)`
 
 **File & percorsi**
 
-- Il mapping rivisto viene salvato in `semantic/tags_reviewed.yaml` **nel workspace del cliente** (vedi §7)
-- Le utilità interne adottano scritture atomiche e *path-safety*
+- Il mapping rivisto viene salvato in `semantic/tags_reviewed.yaml` **nel workspace del cliente** (vedi Â§7)
+- Le utilitÃ  interne adottano scritture atomiche e *path-safety*
 
-> Nota: la sezione `context` (se esiste nel mapping) non è esposta in UI.
+> Nota: la sezione `context` (se esiste nel mapping) non Ã¨ esposta in UI.
 
 ---
 
@@ -90,7 +90,7 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 
 1. **Crea/aggiorna struttura**: genera l'albero cartelle per il cliente, incluse `raw/` e sotto-cartelle per ambiti/categorie
 2. **Genera README per raw/**: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l'upload dei materiali
-3. **Download contenuti**: scarica i file da Drive su disco locale → `raw/` del workspace; al termine imposta lo stato `raw_downloaded=True`
+3. **Download contenuti**: scarica i file da Drive su disco locale â†’ `raw/` del workspace; al termine imposta lo stato `raw_downloaded=True`
 
 **Funzioni usate (modulo `config_ui.drive_runner`)**
 
@@ -100,22 +100,22 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 
 **Requisiti ENV**
 
-- `SERVICE_ACCOUNT_FILE` → credenziali Service Account
-- `DRIVE_ID` → id dello *space*/cartella di lavoro
+- `SERVICE_ACCOUNT_FILE` â†’ credenziali Service Account
+- `DRIVE_ID` â†’ id dello *space*/cartella di lavoro
 
 **Output locale**
 
 - Workspace cliente: `output/timmy-kb-<slug>/`
-  - `raw/` → PDF scaricati (naming sicuro)
+  - `raw/` â†’ PDF scaricati (naming sicuro)
   - altri metadati di provisioning
 
-> La tab **Semantica** resta nascosta finché non viene completato almeno un download su `raw/`.
+> La tab **Semantica** resta nascosta finchÃ© non viene completato almeno un download su `raw/`.
 
 ---
 
 ## 6) Tab "Semantica"
 
-Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatter** con tag canonici e generazione/validazione di **README & SUMMARY** per la navigazione; opzionalmente **Preview Docker**.
+Scopo: conversione **RAW â†’ BOOK** (PDFâ†’Markdown), **arricchimento frontmatter** con tag canonici e generazione/validazione di **README & SUMMARY** per la navigazione; opzionalmente **Preview Docker**.
 
 **Context**
 
@@ -127,7 +127,7 @@ Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatte
 1. **Converti PDF in Markdown**
 
    - Converte i contenuti di `raw/` in `book/` (una dir di Markdown puliti)
-   - Se l'utility di conversione non è disponibile, esce con avviso senza distruggere lo stato
+   - Se l'utility di conversione non Ã¨ disponibile, esce con avviso senza distruggere lo stato
 
 2. **Arricchisci frontmatter**
 
@@ -137,13 +137,13 @@ Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatte
 3. **README & SUMMARY**
 
    - Genera/aggiorna i file di navigazione del libro (compatibili con HonKit/GitBook)
-   - Se le utilità "ufficiali" non sono disponibili, usa *fallback* **idempotenti** per garantire la presenza minima dei file
+   - Se le utilitÃ  "ufficiali" non sono disponibili, usa *fallback* **idempotenti** per garantire la presenza minima dei file
 
 4. **Preview Docker (HonKit)**
 
    - Avvia **container** con nome sicuro (default: `gitbook-<slug>`) e porta configurabile
    - Stato del container tracciato in sessione; pulsanti **Start/Stop**
-   - Messaggi guida se Docker non è attivo o la porta è occupata
+   - Messaggi guida se Docker non Ã¨ attivo o la porta Ã¨ occupata
 
 **Funzioni usate**
 
@@ -153,14 +153,14 @@ Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatte
   - `write_summary_and_readme(context, logger, *, slug)`
   - `get_paths(slug)`, `load_reviewed_vocab(base_dir, logger)`
 - Modulo `adapters.preview` (preview Docker):
-  - `start_preview(context, logger, *, port=4000, container_name=None) -> str`
+  - `start_preview(context, logger, *, port=4000, container_name='gitbook-<slug>') -> str`
   - `stop_preview(logger, *, container_name)`
 
 **Output locale**
 
 - `output/timmy-kb-<slug>/`
-  - `raw/` → input scaricati da Drive
-  - `book/` → Markdown convertiti
+  - `raw/` â†’ input scaricati da Drive
+  - `book/` â†’ Markdown convertiti
   - `README.md`, `SUMMARY.md` nella radice del libro
 
 ---
@@ -176,21 +176,21 @@ output/
     book/           # Markdown generati
     semantic/
       tags_reviewed.yaml   # mapping rivisto (origine storica)
-      … (eventuale DB SQLite per i tag "reviewed", gestito da storage/tags_store)
+      â€¦ (eventuale DB SQLite per i tag "reviewed", gestito da storage/tags_store)
     README.md
     SUMMARY.md
 ```
 
-> Nota importante: **SSoT dei tag "reviewed"**. L'interfaccia continua a salvare/mantenere lo YAML `semantic/tags_reviewed.yaml`, ma le funzioni semantiche leggono i tag consolidati da un **DB SQLite** (migrato dallo YAML) per garantire audit e versioning. Se il DB non è presente, viene rigenerato/aggiornato a partire dallo YAML quando previsto dal codice.
+> Nota importante: **SSoT dei tag "reviewed"**. L'interfaccia continua a salvare/mantenere lo YAML `semantic/tags_reviewed.yaml`, ma le funzioni semantiche leggono i tag consolidati da un **DB SQLite** (migrato dallo YAML) per garantire audit e versioning. Se il DB non Ã¨ presente, viene rigenerato/aggiornato a partire dallo YAML quando previsto dal codice.
 
 ---
 
 ## 8) Logging & redazione
 
 - La UI tenta di usare un **logger strutturato** della pipeline; in fallback usa `logging.basicConfig`
-- Il flag di **redazione** (mascheramento dati sensibili nei log) è calcolato così:
+- Il flag di **redazione** (mascheramento dati sensibili nei log) Ã¨ calcolato cosÃ¬:
   1. Se disponibile, usa la funzione di pipeline (`compute_redact_flag`)
-  2. In alternativa, abilita se `LOG_REDACTION`/`LOG_REDACTED` è truthy o se `ENV=prod`
+  2. In alternativa, abilita se `LOG_REDACTION`/`LOG_REDACTED` Ã¨ truthy o se `ENV=prod`
 
 ---
 
@@ -221,7 +221,7 @@ output/
 
 ## 10) Best practice operative
 
-- Procedi **in ordine**: Configurazione → Drive → Semantica → Preview
+- Procedi **in ordine**: Configurazione â†’ Drive â†’ Semantica â†’ Preview
 - Mantieni il mapping "rivisto" **coerente** con i materiali effettivi in `raw/`
 - Usa la **normalizzazione chiavi** per tag/categorie stabili e prevedibili
 - Evita spazi/caratteri speciali nei nomi file sorgenti
@@ -241,10 +241,10 @@ output/
 
 **config_ui.drive_runner**
 
-- `build_drive_from_mapping(slug, client_name, progress_cb=None)`
+- `build_drive_from_mapping(slug, client_name, progress=None)`
 - `emit_readmes_for_raw(slug)`
-- `download_raw_from_drive_with_progress(slug)` → preferita se disponibile
-- `download_raw_from_drive(slug)` → fallback
+- `download_raw_from_drive_with_progress(slug)` â†’ preferita se disponibile
+- `download_raw_from_drive(slug)` â†’ fallback
 
 **semantic.api**
 
@@ -254,7 +254,7 @@ output/
 - `enrich_frontmatter(context, logger, vocab, *, slug) -> list[Path]`
 - `write_summary_and_readme(context, logger, *, slug) -> None`
 
-- `start_preview(context, logger, *, port=4000, container_name=None) -> str`
+- `start_preview(context, logger, *, port=4000, container_name='gitbook-<slug>') -> str`
 - `stop_preview(logger, *, container_name)`
 
 ---
@@ -264,10 +264,10 @@ output/
 ## 12) FAQ
 
 **Posso usare la tab Semantica senza Drive?**\
-Sì, se hai già i PDF in `raw/` locale.
+SÃ¬, se hai giÃ  i PDF in `raw/` locale.
 
 **Posso fermare la UI in sicurezza?**\
-Sì, con il pulsante "Chiudi UI" o interrompendo Streamlit dal terminale.
+SÃ¬, con il pulsante "Chiudi UI" o interrompendo Streamlit dal terminale.
 
 **Dove trovo i file generati?**\
 In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SUMMARY.md`).
@@ -276,17 +276,18 @@ In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SU
 
 ## 13) Appendice: comandi utili
 
-- Avvio UI: `streamlit run onboarding_ui.py`
-- Alternative Windows: `streamlit run onboarding_ui.py`
-- (Debug) Avvio preview manuale: usa i bottoni in UI; evita di eseguire docker a mano a meno di necessità
+- macOS/Linux: `streamlit run onboarding_ui.py`
+- Windows: `py -m streamlit run onboarding_ui.py`
+- (Debug) Avvio preview manuale: usa i bottoni in UI; evita di eseguire docker a mano a meno di necessitÃ 
 
 ---
 
 > **Versione**: 2025-09-01\
 > **Stato**: Allineata all'implementazione corrente di `onboarding_ui.py` e ai moduli correlati. Per modifiche, aprire PR su `docs/guida_ui.md`.
-\n+## Novità: API semantica pubblica (facade)
 
-- Da ora la UI può importare funzioni stabili da `semantic.api` invece di usare helper privati con underscore da `semantic_onboarding`.
+## NovitÃ : API semantica pubblica (facade)
+
+- Da ora la UI puÃ² importare funzioni stabili da `semantic.api` invece di usare helper privati con underscore da `semantic_onboarding`.
 - Obiettivo: stabilizzare l'API per la UI, mantenendo liberi gli internals di evolvere senza breaking changes.
 
 Funzioni esposte in `semantic.api`:
@@ -309,9 +310,10 @@ from semantic.api import (
 ```
 
 Note di transizione:
-- Gli import esistenti da `semantic_onboarding` continuano a funzionare per compatibilità, ma si consiglia di migrare alla facade.
+- Gli import esistenti da `semantic_onboarding` continuano a funzionare per compatibilitÃ , ma si consiglia di migrare alla facade.
 - Le firme pubbliche riportate qui sono considerate stabili; eventuali cambiamenti saranno versionati e documentati.
-\n+## Prerequisiti
+
+## Prerequisiti
 - Docker attivo (Docker Desktop su Windows/macOS; WSL2 su Windows consigliato).
 - Porte libere per la preview (default `4000`). Configurabile dalla UI.
 - Ambiente Drive opzionale: credenziali e permessi se si usa il download da Drive.
@@ -322,8 +324,8 @@ Checklist rapida
 - Verifica porta: apri `http://127.0.0.1:4000` dopo l'avvio preview.
 - Se usi Drive: test del token/credenziali con il comando di download.
 
-## SSoT Tag e Migrazione (YAML → SQLite)
-- Fonte di verità dei tag: `output/<slug>/semantic/tags.db` (SQLite).
+## SSoT Tag e Migrazione (YAML â†’ SQLite)
+- Fonte di veritÃ  dei tag: `output/<slug>/semantic/tags.db` (SQLite).
 - Il vecchio `tags_reviewed.yaml` resta supportato come input per migrare.
 - Script di migrazione: `tools/migrate_yaml_to_db.py`.
   - Converte il contenuto YAML in schema `v2` su SQLite in modo idempotente.
