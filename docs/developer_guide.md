@@ -72,6 +72,8 @@ streamlit run onboarding_ui.py
 ```
 Guida completa: [docs/guida_ui.md](guida_ui.md).
 
+Nota API: la UI importa le funzioni semantiche dalla façade pubblica `semantic.api` (non dagli underscore di `semantic_onboarding`). Gli orchestratori CLI restano invariati.
+
 ---
 
 ## Struttura progetto (promemoria)

@@ -126,6 +126,8 @@ Checkpoint HiTL → se confermato (o `--proceed`), Fase 2 genera `README_TAGGING
 
 ```bash
 py src/semantic_onboarding.py --slug <id> [--no-preview] [--preview-port 4000] [--non-interactive]
+
+Nota per la UI: l'interfaccia Streamlit usa `semantic.api` come strato pubblico e stabile per invocare la logica di `semantic_onboarding` senza dipendere dagli helper interni.
 ```
 
 - Conversione PDF → Markdown in `book/`.  

@@ -16,7 +16,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
   - Un altro accesso a Google Drive è effettuata da **tag_onboarding** per **scaricare i PDF (default)** nella sandbox locale (`raw/`).
 - **Separazione ruoli**: orchestratori (UX/CLI, prompt, exit codes) vs moduli tecnici (logica pura, niente prompt/exit).
 - **Sicurezza & coerenza**: `ensure_within` come **SSoT** per path‑safety; scritture atomiche via `safe_write_*`; redazione log centralizzata.
-- **Split orchestratori**: conversione/enrichment/preview in `semantic_onboarding.py`; push in `onboarding_full.py`.
+- **Split orchestratori**: conversione/enrichment/preview in `semantic_onboarding.py` (API pubblica per la UI esposta via `semantic.api`); push in `onboarding_full.py`.
 - **Testing**: suite PyTest con **utente dummy** generato on‑demand, test unitari/middle/smoke end‑to‑end.
 - **Performance**: CSV via scrittura streaming + commit atomico; enrichment ottimizzato con un **indice inverso** per sinonimi/tag.
 
@@ -34,7 +34,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 **Azioni:** genera `semantic/tags_raw.csv` (euristiche path/filename, scrittura streaming), checkpoint HiTL che produce `README_TAGGING.md` e `tags_reviewed.yaml` (stub di revisione umana).
 **Output:** `tags_raw.csv` + `tags_reviewed.yaml` (stub) per la revisione.
 
-### 3) `semantic_onboarding` → conversione + enrichment + preview
+### 3) `semantic_onboarding` → conversione + enrichment + preview (UI via `semantic.api`)
 **Input:** `raw/` + (opz.) **vocabolario canonico** `semantic/tags_reviewed.yaml` (derivato dalla revisione).
 **Azioni:** conversione PDF→Markdown in `book/`; arricchimento frontmatter (tags/areas) tramite vocabolario/sinonimi e **indice inverso**; generazione `README.md` e `SUMMARY.md` (utilità repo → fallback adapter); preview HonKit Docker con stop esplicito.
 **Output:** Markdown pronti in `book/`; anteprima su `localhost:<port>`.
@@ -44,7 +44,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 **Azioni:** preflight su `book/` (accetta solo `.md`, ignora `.md.fp`), push su GitHub via `github_utils`.
 **Output:** commit/push su repo remoto.
 
-> **Nota sul vocabolario:** `tags_reviewed.yaml` è il file di **revisione umana** (HiTL). Da esso si ottiene/aggiorna il vocabolario **canonico** `tags_reviewed.yaml`, che è quello consumato in runtime da `semantic_onboarding` per l’arricchimento dei frontmatter.
+> **Nota sul vocabolario:** `tags_reviewed.yaml` è il file di **revisione umana** (HiTL). Da esso si ottiene/aggiorna il vocabolario **canonico** su SQLite, consumato in runtime dagli orchestratori e dalla UI (che accede tramite `semantic.api`) per l’arricchimento dei frontmatter.
 
 ---
 
@@ -53,7 +53,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 - **Orchestratori**
   - `pre_onboarding.py`: setup locale; opz. Drive structure + upload `config.yaml`.
   - `tag_onboarding.py`: ingest PDF (default Drive → RAW), `tags_raw.csv`, checkpoint HiTL → `tags_reviewed.yaml`.
-  - `semantic_onboarding.py`: PDF→MD, enrichment, README/SUMMARY, preview Docker.
+  - `semantic_onboarding.py`: PDF→MD, enrichment, README/SUMMARY, preview Docker (UI integra tramite `semantic.api`).
   - `onboarding_full.py`: preflight `book/`, push GitHub.
 
 - **Adapter**
