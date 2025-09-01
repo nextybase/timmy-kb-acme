@@ -144,6 +144,13 @@ from storage.tags_store import (  # noqa: E402
 
 
 def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
+    import warnings as _warnings
+
+    _warnings.warn(
+        "_load_reviewed_vocab is deprecated; use semantic.api.load_reviewed_vocab",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     """
     Costruisce un vocabolario canonico a partire da `semantic/tags_reviewed.yaml`.
 
@@ -372,6 +379,13 @@ def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str])
 def _convert_raw_to_book(
     context: ClientContext, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
+    import warnings as _warnings
+
+    _warnings.warn(
+        "_convert_raw_to_book is deprecated; use semantic.api.convert_markdown",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     """Converte i PDF presenti in `raw/` in file Markdown sotto `book/`.
 
     Note:
@@ -437,6 +451,13 @@ def _enrich_frontmatter(
     *,
     slug: str,
 ) -> List[Path]:
+    import warnings as _warnings
+
+    _warnings.warn(
+        "_enrich_frontmatter is deprecated; use semantic.api.enrich_frontmatter",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     """Arricchisce i frontmatter dei `.md` in `book/` con `title` e `tags` canonici (se disponibili).
 
     Args:
@@ -484,6 +505,13 @@ def _enrich_frontmatter(
 
 
 def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *, slug: str) -> None:
+    import warnings as _warnings
+
+    _warnings.warn(
+        "_write_summary_and_readme is deprecated; use semantic.api.write_summary_and_readme",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     """Genera/valida `SUMMARY.md` e `README.md` in `book/` usando util ufficiali o fallback centralizzati.
 
     Strategia:

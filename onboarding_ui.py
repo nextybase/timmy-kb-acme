@@ -480,7 +480,14 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
             try:
                 mds: List[Path] = sem_convert(context, log, slug=slug)  # type: ignore[misc]
                 st.success(f"OK. File Markdown in book/: {len(mds)}")
-                log.info({"event": "semantic_convert_done", "slug": slug, "md_count": len(mds)})
+                log.info(
+                    {
+                        "event": "semantic_convert_done",
+                        "slug": slug,
+                        "run_id": st.session_state.get("run_id"),
+                        "md_count": len(mds),
+                    }
+                )
             except Exception as e:
                 st.exception(e)
 
@@ -495,7 +502,14 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                 vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
                 touched: List[Path] = sem_enrich(context, log, vocab, slug=slug)  # type: ignore[misc]
                 st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
-                log.info({"event": "semantic_enrich_done", "slug": slug, "touched": len(touched)})
+                log.info(
+                    {
+                        "event": "semantic_enrich_done",
+                        "slug": slug,
+                        "run_id": st.session_state.get("run_id"),
+                        "touched": len(touched),
+                    }
+                )
             except Exception as e:
                 st.exception(e)
 
@@ -507,7 +521,13 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
             try:
                 sem_write_md(context, log, slug=slug)  # type: ignore[misc]
                 st.success("OK. README.md e SUMMARY.md pronti.")
-                log.info({"event": "semantic_write_md_done", "slug": slug})
+                log.info(
+                    {
+                        "event": "semantic_write_md_done",
+                        "slug": slug,
+                        "run_id": st.session_state.get("run_id"),
+                    }
+                )
             except Exception as e:
                 st.exception(e)
 
