@@ -89,10 +89,10 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 **Sequenza tipica**
 
 1. **Crea/aggiorna struttura**: genera l’albero cartelle per il cliente, incluse `raw/` e sotto-cartelle per ambiti/categorie
-2. **Genera README per \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\***``: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l’upload dei materiali
+2. **Genera README per raw/**: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l’upload dei materiali
 3. **Download contenuti**: scarica i file da Drive su disco locale → `raw/` del workspace; al termine imposta lo stato `raw_downloaded=True`
 
-**Funzioni usate (modulo **``**)**
+**Funzioni usate (modulo `config_ui.drive_runner`)**
 
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
 - `emit_readmes_for_raw(slug)`
