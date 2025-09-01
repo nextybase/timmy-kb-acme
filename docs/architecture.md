@@ -1,4 +1,4 @@
-# Architettura  —  Timmy‑KB (v1.6.1)
+# Architettura - Timmy-KB (v1.7.0)
 
 Questa pagina descrive l'architettura **aggiornata** del sistema: componenti, flussi end‑to‑end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo è mantenere coerenza, riuso e sicurezza I/O (path‑safety + scritture atomiche).
 
@@ -138,7 +138,7 @@ repo/
 - **Utente dummy**: generato da `py src/tools/gen_dummy_kb.py --slug dummy` per popolare `raw/` con PDF di esempio e asset necessari al flusso.
 - **Piramide test**: unit (validatori/CSV/guard), middle (contratti CLI), smoke E2E (dummy) per rilevare regressioni di flusso.
 - **Isolamento esterni**: i test non richiedono credenziali reali; componenti Drive/Git sono mockati o bypassati dove sensato.
-- **Compatibilità OS**: suite compatibile Windows/Linux; attenzione a path POSIX nei CSV.
+- **compatibilità OS**: suite compatibile Windows/Linux; attenzione a path POSIX nei CSV.
 
 ---
 

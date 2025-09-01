@@ -1,5 +1,5 @@
 # docs/versioning_policy.md
-# Policy di Versioning  —  Timmy-KB (v1.6.1)
+# Policy di Versioning - Timmy-KB (v1.7.0)
 
 Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilità.
 
@@ -34,7 +34,7 @@ PR obbligatorie verso `main`. Protezioni:
 - `Require status checks` (lint/test base)
 - `Require linear history` (no merge commit, preferisci squash)
 
-## 4) Compatibilità & Deprecazioni
+## 4) compatibilità & Deprecazioni
 
 - Ogni breaking change richiede:
   - incremento **MAJOR**

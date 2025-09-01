@@ -1,4 +1,4 @@
-# Timmy‑KB  —  Coding Rules (v1.6.1)
+# Timmy-KB - Coding Rules (v1.7.0)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -12,7 +12,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - **Idempotenza**: ogni step deve poter essere rieseguito senza effetti collaterali.
 - **Path‑safety**: nessuna write/copy/rm senza passare da utility di sicurezza.
 - **Fail‑fast & messaggi chiari**: errori espliciti e log azionabili.
-- **Compatibilità cross‑platform**: Windows/Linux (path, encoding, newline).
+- **compatibilità cross‑platform**: Windows/Linux (path, encoding, newline).
 
 ---
 

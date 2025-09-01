@@ -1,7 +1,0 @@
-# Suite di test e uso dell’utente **dummy**
-
-Questi test servono a verificare rapidamente che la pipeline Timmy‑KB lavori end‑to‑end (pre → tag → semantic → full) o per singoli orchestratori. Per accelerare e rendere riproducibili i test **usiamo un utente dummy**, cioè una sandbox con PDF finti e struttura già pronta.
-
-**Come funziona in sintesi**
-
-- Prima di eseguire i test local

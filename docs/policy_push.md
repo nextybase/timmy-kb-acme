@@ -1,12 +1,12 @@
-# Policy di Push  —  Timmy-KB (v1.6.1)
+# Policy di Push - Timmy-KB (v1.7.0)
 
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
 ## 1) Responsabilità e orchestratori
 
-- **`semantic_onboarding.py`**: conversione RAW → BOOK, enrichment, README/SUMMARY, preview Docker. **Non fa push.**
-  - La UI Streamlit non usa direttamente gli helper interni ma passa dalla façade `semantic.api` (API pubblica stabile).
-- **`onboarding_full.py`**: esegue **solo** il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia già pronto.
+- `semantic_onboarding.py`: conversione RAW -> BOOK, enrichment, README/SUMMARY, preview Docker. Non fa push.
+  - La UI Streamlit non usa direttamente gli helper interni ma passa dalla facade `semantic.api` (API pubblica stabile).
+- `onboarding_full.py`: esegue solo il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia già pronto.
 
 ## 2) Prerequisiti
 
@@ -16,20 +16,20 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 
 ## 3) Regole operative
 
-- **Branch protetti**: push su `main` solo via PR. In CI → merge protetto.
-- **Force push**: vietato di default. Consentito solo con:
+- Branch protetti: push su `main` solo via PR. In CI -> merge protetto.
+- Force push: vietato di default. Consentito solo con:
   - flag espliciti (es. `--force-push` + `--force-ack`) quando previsti dall'orchestratore
   - strategia `--force-with-lease`
   - autorizzazione esplicita in PR/policy team
 
-- **Scope dei contenuti**: versionare solo `book/` e file di progetto necessari. Escludere asset temporanei e `.bak`.
-- **Messaggi di commit**: chiari, includere slug cliente e run_id se disponibile (es. `onboarding_full(acme): build book v1.2.1`).
+- Scope dei contenuti: versionare solo `book/` e file di progetto necessari. Escludere asset temporanei e `.bak`.
+- Messaggi di commit: chiari, includere slug cliente e run_id se disponibile (es. `onboarding_full(acme): build book v1.2.1`).
 
 ## 4) Sicurezza
 
-- **Token**: non in chiaro nei log; mai in URL. Usare header.
-- **Redazione log**: abilitata se `compute_redact_flag(...)` restituisce `True`. Dati sensibili mascherati.
-- **Path-safety & atomicità**: garantita a monte in fase di generazione contenuti (`ensure_within`, `safe_write_*`).
+- Token: non in chiaro nei log; mai in URL. Usare header.
+- Redazione log: abilitata se `compute_redact_flag(...)` restituisce `True`. Dati sensibili mascherati.
+- Path-safety & atomicità: garantita a monte in fase di generazione contenuti (`ensure_within`, `safe_write_*`).
 
 ## 5) Sequenza tipica (CLI)
 
@@ -48,8 +48,8 @@ Opzioni comuni:
 
 ## 6) Error handling
 
-- Errori di autenticazione → `PushError` con exit code dedicato (40).
-- Errori di rete/permessi → log strutturati con contesto (`slug`, branch, repo).
+- Errori di autenticazione -> `PushError` con exit code dedicato (40).
+- Errori di rete/permessi -> log strutturati con contesto (`slug`, branch, repo).
 - Nessun fallback locale: se il push fallisce, la pipeline non tenta ritenti non guidati.
 
 ## 7) CI / CD
@@ -70,6 +70,7 @@ Opzioni comuni:
 
 - Pubblicazione automatica su GitBook a valle del push (`onboarding_full.py`).
 - Gestione token GitBook con redazione log.
-- Allineamento contenuti `book/` → spazio GitBook.
+- Allineamento contenuti `book/` -> spazio GitBook.
 
-> **Nota:** fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.
+Nota: fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.
+
