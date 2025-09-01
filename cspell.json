@@ -41,7 +41,9 @@
     "manutenibile",
     "normalizzatori",
     "sanitizzazione",
-    "mocka"
+    "mocka",
+    "venv",
+    "façade"
   ],
   "languageSettings": [
     {
