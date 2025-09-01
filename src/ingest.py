@@ -9,22 +9,17 @@ kb_db.insert_chunks. Skips binary files. Logs a summary.
 """
 
 from __future__ import annotations
+
 import logging
 from glob import glob
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, runtime_checkable
+from types import ModuleType
+from typing import Dict, List, Optional, Sequence
 
+from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 from .kb_db import insert_chunks
 
 LOGGER = logging.getLogger("timmy_kb.ingest")
-
-
-@runtime_checkable
-class EmbeddingsClient(Protocol):
-    """Protocol for embeddings clients used by ingestion functions."""
-
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:  # pragma: no cover - protocol
-        ...
 
 
 def _read_text_file(p: Path) -> Optional[str]:
@@ -32,12 +27,12 @@ def _read_text_file(p: Path) -> Optional[str]:
         # Try UTF-8 first
         return p.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        # Fallback common encodings
+        # Fallback common encodings (senza continue in except)
         for enc in ("utf-16", "latin-1"):
             try:
                 return p.read_text(encoding=enc)
-            except Exception:
-                continue
+            except (UnicodeDecodeError, OSError):
+                LOGGER.debug("Fallback encoding failed for %s with %s", p, enc)
         LOGGER.warning("Cannot read text file: %s", p)
         return None
 
@@ -55,7 +50,7 @@ def _is_binary(path: Path) -> bool:
         return True
 
 
-def _try_import_tiktoken():
+def _try_import_tiktoken() -> ModuleType | None:
     try:
         import tiktoken  # type: ignore
 
@@ -88,10 +83,10 @@ def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -
     return chunks
 
 
-class OpenAIEmbeddings:
+class OpenAIEmbeddings(EmbeddingsClient):
     """Simple embeddings client around openai>=1.x API."""
 
-    def __init__(self, model: str = "text-embedding-3-small") -> None:
+    def __init__(self: "OpenAIEmbeddings", model: str = "text-embedding-3-small") -> None:
         try:
             from openai import OpenAI  # type: ignore
         except Exception as e:  # pragma: no cover - import error path
@@ -100,10 +95,17 @@ class OpenAIEmbeddings:
         self._client = OpenAI()
         self._model = model
 
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+    def embed_texts(
+        self: "OpenAIEmbeddings",
+        texts: Sequence[str],
+        *,
+        model: str | None = None,
+    ) -> Sequence[Sequence[float]]:
+        # Uniformiamo a Sequence[str] e supportiamo il parametro keyword-only `model`
         if not texts:
             return []
-        resp = self._client.embeddings.create(model=self._model, input=texts)
+        mdl = model or self._model
+        resp = self._client.embeddings.create(model=mdl, input=list(texts))
         return [d.embedding for d in resp.data]
 
 
@@ -126,9 +128,13 @@ def ingest_path(
     text = _read_text_file(p)
     if text is None:
         return 0
-    chunks = _chunk_text(text)
+    chunks: List[str] = _chunk_text(text)
     client = embeddings_client or OpenAIEmbeddings()
-    vectors = client.embed_texts(chunks)
+    vectors_seq = client.embed_texts(chunks)
+
+    # Converte in List[List[float]] per compat con insert_chunks
+    vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
+
     inserted = insert_chunks(
         project_slug=project_slug,
         scope=scope,

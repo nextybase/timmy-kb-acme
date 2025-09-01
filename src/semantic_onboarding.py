@@ -23,7 +23,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple, Set, cast
 
 # --- Infra coerente con orchestratori esistenti ---
 from pipeline.logging_utils import get_structured_logger
@@ -49,10 +49,10 @@ from pipeline.file_utils import safe_write_text  # scritture atomiche
 # Content utils ufficiali (se presenti)
 try:
     from pipeline.content_utils import (
-        convert_files_to_structured_markdown,  # (context, skip_if_unchanged=None, max_workers=None)
-        generate_summary_markdown,  # (context)
-        generate_readme_markdown,  # (context)
-        validate_markdown_dir,  # (context)
+        convert_files_to_structured_markdown,  # (ctx, skip_if_unchanged=None, max_workers=None)
+        generate_summary_markdown,  # (ctx)
+        generate_readme_markdown,  # (ctx)
+        validate_markdown_dir,  # (ctx)
     )
 except Exception:
     convert_files_to_structured_markdown = None  # type: ignore
@@ -71,6 +71,12 @@ try:
     import yaml  # type: ignore
 except Exception:
     yaml = None
+
+# Protocol strutturale richiesto dalle util (base_dir/raw_dir/md_dir/slug non opzionali)
+from semantic.types import ClientContextProtocol  # noqa: E402
+
+# Loader dei tag (SSoT: SQLite) — implementazione condivisa
+from semantic.vocab_loader import load_reviewed_vocab  # noqa: E402
 
 
 def _convert_markdown_compat(context: ClientContext) -> None:
@@ -95,13 +101,16 @@ def _convert_markdown_compat(context: ClientContext) -> None:
             # Firma ignota; prova con kwargs standard e poi fallback
             kwargs = {"skip_if_unchanged": None, "max_workers": None}
 
+        # Pylance: le util vogliono ClientContextProtocol (Path non opzionali)
+        ctxp = cast(ClientContextProtocol, context)
+
         try:
             if kwargs:
-                convert_files_to_structured_markdown(context, **kwargs)  # type: ignore[misc]
+                convert_files_to_structured_markdown(ctxp, **kwargs)  # type: ignore[misc]
             else:
-                convert_files_to_structured_markdown(context)  # type: ignore[misc]
+                convert_files_to_structured_markdown(ctxp)  # type: ignore[misc]
         except TypeError:
-            convert_files_to_structured_markdown(context)  # type: ignore[misc]
+            convert_files_to_structured_markdown(ctxp)  # type: ignore[misc]
     except Exception:
         raise
 
@@ -122,96 +131,6 @@ def get_paths(slug: str) -> Dict[str, Path]:
     book_dir = base_dir / "book"
     semantic_dir = base_dir / "semantic"
     return {"base": base_dir, "raw": raw_dir, "book": book_dir, "semantic": semantic_dir}
-
-
-# Tags loading (SSoT: SQLite)
-from storage.tags_store import (  # noqa: E402
-    derive_db_path_from_yaml_path,
-    load_tags_reviewed as load_tags_reviewed_db,
-)
-
-
-def _load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    """
-    Costruisce il vocabolario canonico dal DB semantic/tags.db (preferito come SSoT)
-    e/o dal file legacy semantic/tags_reviewed.yaml.
-    Output:
-      {
-        "<canonical>": {"aliases": {<alias1>, <alias2>, ...}}
-      }
-    """
-    import warnings as _warnings
-
-    _warnings.warn(
-        "_load_reviewed_vocab is deprecated; use semantic.api.load_reviewed_vocab",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    tags_path = base_dir / "semantic" / "tags_reviewed.yaml"
-
-    # Guardia path forte
-    try:
-        ensure_within(base_dir / "semantic", tags_path)
-    except ConfigError:
-        logger.warning(
-            "tags_reviewed.yaml fuori da semantic/: skip lettura",
-            extra={"file_path": str(tags_path)},
-        )
-        return {}
-
-    try:
-        db_path = derive_db_path_from_yaml_path(tags_path)
-        data = load_tags_reviewed_db(db_path) or {}
-        items = data.get("tags", []) or []
-
-        vocab: Dict[str, Dict[str, Set[str]]] = {}
-
-        # keep
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            name = str(it.get("name", "")).strip()
-            action = str(it.get("action", "")).strip().lower()
-            synonyms = [s for s in (it.get("synonyms") or []) if isinstance(s, str)]
-            if not name:
-                continue
-            if action == "keep":
-                canon = name
-                entry = vocab.setdefault(canon, {"aliases": set()})
-                entry["aliases"].add(name)
-                entry["aliases"].update({s for s in synonyms if s.strip()})
-
-        # merge_into:<target>
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            name = str(it.get("name", "")).strip()
-            action = str(it.get("action", "")).strip().lower()
-            synonyms = [s for s in (it.get("synonyms") or []) if isinstance(s, str)]
-            if not name or not action.startswith("merge_into:"):
-                continue
-            target = action.split(":", 1)[1].strip()
-            if not target:
-                continue
-            entry = vocab.setdefault(target, {"aliases": set()})
-            entry["aliases"].add(name)
-            entry["aliases"].update({s for s in synonyms if s.strip()})
-
-        logger.info("Vocabolario reviewed caricato", extra={"canonicals": len(vocab)})
-        return vocab
-
-    except (OSError, AttributeError) as e:
-        logger.warning(
-            "Impossibile leggere tags dal DB",
-            extra={"file_path": str(tags_path), "error": str(e)},
-        )
-    except (ValueError, TypeError) as e:
-        logger.warning(
-            "Impossibile parsare dati tags dal DB",
-            extra={"file_path": str(tags_path), "error": str(e)},
-        )
-    return {}
 
 
 def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
@@ -242,7 +161,7 @@ def _guess_tags_for_name(
         inv = _build_inverse_index(vocab)
 
     s = name_like_path.lower()
-    s = re.sub(r"[_\\/\\-\\s]+", " ", s)
+    s = re.sub(r"[_\/\-\s]+", " ", s)
 
     found: Set[str] = set()
     for term, canon_set in inv.items():
@@ -383,7 +302,7 @@ def _enrich_frontmatter(
 
     for md in mds:
         name = md.name
-        title = re.sub(r"[_\\/\\-]+", " ", Path(name).stem).strip() or "Documento"
+        title = re.sub(r"[_\/\-]+", " ", Path(name).stem).strip() or "Documento"
         tags = _guess_tags_for_name(name, vocab, inv=inv)
 
         try:
@@ -421,10 +340,13 @@ def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *,
         stacklevel=2,
     )
 
+    # Cast strutturale richiesto da Pylance/mypy (Path non opzionali nel Protocol)
+    ctxp = cast(ClientContextProtocol, context)
+
     # 1) Tenta utility ufficiali
     if generate_summary_markdown is not None:
         try:
-            generate_summary_markdown(context)
+            generate_summary_markdown(ctxp)
             logger.info("SUMMARY.md scritto (repo util)")
         except Exception as e:
             logger.warning(
@@ -434,7 +356,7 @@ def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *,
 
     if generate_readme_markdown is not None:
         try:
-            generate_readme_markdown(context)
+            generate_readme_markdown(ctxp)
             logger.info("README.md scritto (repo util)")
         except Exception as e:
             logger.warning(
@@ -448,7 +370,7 @@ def _write_summary_and_readme(context: ClientContext, logger: logging.Logger, *,
     # 3) Validazione opzionale
     if validate_markdown_dir is not None:
         try:
-            validate_markdown_dir(context)
+            validate_markdown_dir(ctxp)
             logger.info("Validazione directory MD OK")
         except Exception as e:
             logger.warning("Validazione directory MD fallita", extra={"error": str(e)})
@@ -531,7 +453,7 @@ def semantic_onboarding_main(
     _convert_raw_to_book(context, logger, slug=slug)
 
     # 2) Arricchimento frontmatter con semantica (SSoT: DB + legacy YAML)
-    vocab = _load_reviewed_vocab(base_dir, logger)
+    vocab = load_reviewed_vocab(base_dir, logger)
     if vocab:
         _enrich_frontmatter(context, logger, vocab, slug=slug)
 

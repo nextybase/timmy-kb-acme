@@ -25,7 +25,7 @@ import importlib.util
 import logging
 import os
 from pathlib import Path
-from typing import Sequence, cast
+from typing import cast
 
 import streamlit as st
 
@@ -56,22 +56,6 @@ logging.basicConfig(
 LOGGER = logging.getLogger("timmy_kb.ui")
 
 
-class _EmbeddingsAdapter(EmbeddingsClient):
-    """Adapter per rendere OpenAIEmbeddings conforme al Protocol EmbeddingsClient."""
-
-    def __init__(self: "_EmbeddingsAdapter", inner: OpenAIEmbeddings) -> None:
-        self._inner = inner
-
-    def embed_texts(
-        self: "_EmbeddingsAdapter",
-        texts: Sequence[str],
-        *,
-        model: str | None = None,  # ignorato dal backend attuale
-    ) -> Sequence[Sequence[float]]:
-        # OpenAIEmbeddings si aspetta List[str]; normalizziamo e ritorniamo List[List[float]]
-        return self._inner.embed_texts(list(texts))
-
-
 def _ensure_startup() -> None:
     """Ensure required folders and DB exist."""
     Path("data").mkdir(parents=True, exist_ok=True)
@@ -89,7 +73,7 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
         st.warning("OPENAI_API_KEY non trovato nell'ambiente (.env consigliato). RAG disattivato.")
         return None
     try:
-        return _EmbeddingsAdapter(OpenAIEmbeddings())
+        return OpenAIEmbeddings()
     except Exception as e:  # pragma: no cover - mostra feedback in UI
         LOGGER.exception("Errore init embeddings: %s", e)
         st.error(f"Errore init embeddings: {e}")
