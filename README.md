@@ -1,68 +1,69 @@
-﻿# Timmyâ€‘KB â€” README (v1.6.1)
+# Timmy KB - README (v1.6.1)
 
-Pipeline per la generazione di una **Knowledge Base Markdown AIâ€‘ready** a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
+Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
 ---
 
-# Timmyâ€‘KB Onboarding
+# Timmy KB Onboarding
 
-Pipeline di onboarding dei clienti per Timmyâ€‘KB.
+Pipeline di onboarding dei clienti per Timmy KB.
 
 ## Flusso principale
-1. **Preâ€‘Onboarding**  
+1. Pre-Onboarding  
    Crea la struttura locale, opzionalmente quella remota su Drive, copia i template semantici e genera `config.yaml`.
 
-2. **Tag Onboarding (HiTL)**  
-   **Default: Google Drive** â†’ scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.  
+2. Tag Onboarding (HiTL)  
+   Default: Google Drive — scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.  
    Dopo il checkpoint umano produce `README_TAGGING.md` e `tags_reviewed.yaml`.
 
-3. **Semantic Onboarding**  
-   Converte i PDF in `book/*.md`, arricchisce i frontmatter con `semantic/tags_reviewed.yaml`, genera `README.md` e `SUMMARY.md`, e puÃ² avviare la preview Docker (HonKit).
+3. Semantic Onboarding  
+   Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e può avviare la preview Docker (HonKit).
 
-4. **Onboarding Full (Push)**  
+4. Onboarding Full (Push)  
    Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati), garantisce i fallback README/SUMMARY e pubblica su GitHub.
 
-> **SSoT dei tag:** la fonte unica è il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
+> SSoT dei tag: la fonte unica è il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
 
 ---
 
 ## Prerequisiti
 
-- **Python â‰¥ 3.10**
-- **Docker** (per lâ€™anteprima)
-- **Credenziali Google Drive** (Service Account JSON) â†’ **necessarie** per il default di `tag_onboarding` (Drive)
-- (Opz.) **GitHub Token** (`GITHUB_TOKEN`) per il push
+- Python >= 3.10
+- Docker (per la preview)
+- Credenziali Google Drive (Service Account JSON) — necessarie per il default di `tag_onboarding` (Drive)
+- (Opz.) GitHub Token (`GITHUB_TOKEN`) per il push
 
-### Variabili dâ€™ambiente
+### Variabili d'ambiente
 
-- `SERVICE_ACCOUNT_FILE` â†’ path al JSON del Service Account (Drive)  
-- `DRIVE_ID` â†’ ID cartella root dello spazio Drive (RAW parent)  
-- `GITHUB_TOKEN` â†’ richiesto per il push GitHub  
-- `GIT_DEFAULT_BRANCH` â†’ branch di default (fallback `main`)  
-- `YAML_STRUCTURE_FILE` â†’ override opzionale del file YAML per il preâ€‘onboarding (default `config/cartelle_raw.yaml`)  
-- `LOG_REDACTION` â†’ `auto` (default), `on`, `off`  
-- `ENV`, `CI` â†’ modalitÃ  operative
+- `SERVICE_ACCOUNT_FILE`: path al JSON del Service Account (Drive)  
+- `DRIVE_ID`: ID cartella root dello spazio Drive (RAW parent)  
+- `GITHUB_TOKEN`: richiesto per il push GitHub  
+- `GIT_DEFAULT_BRANCH`: branch di default (fallback `main`)  
+- `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)  
+- `LOG_REDACTION`: `auto` (default), `on`, `off`  
+- `ENV`, `CI`: modalità operative
 
 ---
 
 ## Struttura output per cliente
 
 ```
-output/timmy-kb-<slug>/
-  â”œâ”€ raw/        # PDF caricati/scaricati
-  â”œâ”€ book/       # Markdown + SUMMARY.md + README.md
-  â”œâ”€ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml
-  â”œâ”€ config/     # config.yaml (aggiornato con eventuali ID Drive)
-  â””â”€ logs/       # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
+output/
+  timmy-kb-<slug>/
+    raw/      # PDF caricati/scaricati
+    book/     # Markdown + SUMMARY.md + README.md
+    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db
+    config/   # config.yaml (aggiornato con eventuali ID Drive)
+    logs/     # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
 ```
 
-> Lo **slug** deve rispettare le regole in `config/config.yaml`. In interattivo, se non valido, viene richiesto di correggerlo.
+> Lo slug deve rispettare le regole in `config/config.yaml`. In interattivo, se non valido, viene richiesto di correggerlo.
 
 ---
 
-## ModalitÃ  dâ€™uso
+## Modalità d'uso
 
-> **Doppio approccio**: puoi lavorare da **terminale** usando gli orchestratori in sequenza **oppure** tramite **interfaccia (Streamlit)**.
+> Doppio approccio: puoi lavorare da terminale usando gli orchestratori in sequenza oppure tramite interfaccia (Streamlit).
 
 ### Interattiva (prompt guidati)
 ```bash
@@ -81,26 +82,26 @@ py src/onboarding_full.py --slug acme --non-interactive
 ```
 
 ### Interfaccia (Streamlit)
-Lâ€™alternativa agli orchestratori via terminale Ã¨ lâ€™interfaccia.
+L'alternativa agli orchestratori via terminale è l'interfaccia.
 
-**Avvio:**
+Avvio:
 ```bash
 streamlit run onboarding_ui.py
 ```
-Guida completa: [docs/guida_ui.md](docs/guida_ui.md)
+Guida completa: `docs/guida_ui.md`.
 
 ---
 
-## 1) Preâ€‘onboarding
+## 1) Pre-onboarding
 
 ```bash
 py src/pre_onboarding.py [--slug <id>] [--name <nome>] [--non-interactive] [--dry-run]
 ```
 
-1) Richiede *slug* (e, se interattivo, nome cliente).  
+1) Richiede slug (e, se interattivo, nome cliente).  
 2) Crea struttura locale (`raw/`, `book/`, `config/`, `logs/`, `semantic/`).  
 3) Copia template in `semantic/` (`cartelle_raw.yaml`, `semantic_mapping.yaml`) con blocco di contesto.  
-4) **Drive (opz.)**: se configurato, crea/aggiorna la struttura remota e carica `config.yaml`; aggiorna il config locale con gli ID.
+4) Drive (opz.): se configurato, crea/aggiorna la struttura remota e carica `config.yaml`; aggiorna il config locale con gli ID.
 
 > Con `--dry-run` lavora solo in locale, senza Drive.
 
@@ -112,11 +113,11 @@ py src/pre_onboarding.py [--slug <id>] [--name <nome>] [--non-interactive] [--dr
 py src/tag_onboarding.py --slug <id> [--source drive|local] [--local-path <dir>] [--proceed] [--non-interactive]
 ```
 
-- **Default:** `--source=drive` â†’ scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.  
-- **Offline/locale:** `--source=local` (opz. `--local-path <dir>`). Se `--local-path` Ã¨ omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
+- Default: `--source=drive` — scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.  
+- Offline/locale: `--source=local` (opz. `--local-path <dir>`). Se `--local-path` è omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
 
-Output Fase 1 â†’ `semantic/tags_raw.csv` (path **baseâ€‘relative** `raw/...` + colonne standard).  
-Checkpoint HiTL â†’ se confermato (o `--proceed`), Fase 2 genera `README_TAGGING.md` e `tags_reviewed.yaml` (stub).
+Output Fase 1 — `semantic/tags_raw.csv` (path base-relative `raw/...` + colonne standard).  
+Checkpoint HiTL — se confermato (o `--proceed`), Fase 2 genera `README_TAGGING.md` e `tags_reviewed.yaml` (stub).
 
 > Validazione standalone: `py src/tag_onboarding.py --slug <id> --validate-only` produce `semantic/tags_review_validation.json`.
 
@@ -130,8 +131,8 @@ py src/semantic_onboarding.py --slug <id> [--no-preview] [--preview-port 4000] [
 Nota per la UI: l'interfaccia Streamlit usa `semantic.api` come strato pubblico e stabile per invocare la logica di `semantic_onboarding` senza dipendere dagli helper interni.
 ```
 
-- Conversione PDF â†’ Markdown in `book/`.  
-- Arricchimento frontmatter dai tag canonici (`tags_reviewed.yaml`).  
+- Conversione PDF -> Markdown in `book/`.  
+- Arricchimento frontmatter dai tag canonici dal DB SQLite (`semantic/tags.db`).  
 - Generazione `README.md` e `SUMMARY.md` (fallback idempotente).  
 - Preview Docker (HonKit): in interattivo chiede se avviare/fermare; in CLI `--no-preview` la salta.
 
@@ -152,7 +153,7 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 ## Test (overview)
 
 - I test sono deterministici, senza dipendenze di rete; le integrazioni esterne sono mockate/stub.  
-- Prima di eseguirli, crea il dataset **dummy**:
+- Prima di eseguirli, crea il dataset dummy:
   ```bash
   py src/tools/gen_dummy_kb.py --slug dummy
   pytest -ra
@@ -164,17 +165,15 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 ## Log, sicurezza, exit codes
 
 - Log centralizzati in `output/timmy-kb-<slug>/logs/`, con `run_id` e mascheramento automatico dei segreti (`LOG_REDACTION`).  
-- Pathâ€‘safety enforced (`ensure_within` SSoT) e scritture atomiche (`safe_write_text/bytes`).  
-- Exit codes principali: `0` OK Â· `2` ConfigError Â· `30` PreviewError Â· `40` PushError.
+- Path-safety enforced (`ensure_within` SSoT) e scritture atomiche (`safe_write_text/bytes`).  
+- Exit codes principali: 0 OK; 2 ConfigError; 30 PreviewError; 40 PushError.
 
 ---
 
 ## Note operative
 
 - La preview richiede Docker; se assente viene saltata.  
-- Pubblicazione su GitHub: vengono inclusi **solo i `.md`** di `book/`.  
-- La sandbox/dataset dummy (`timmy-kb-dummy`) Ã¨ usata nei test automatici per verificare coerenza e idempotenza della pipeline.  
-- Per scenari **airâ€‘gapped** usa `tag_onboarding --source=local` e popola `raw/` manualmente.
-
-
+- Pubblicazione su GitHub: vengono inclusi solo i `.md` di `book/`.  
+- La sandbox/dataset dummy (`timmy-kb-dummy`) è usata nei test automatici per verificare coerenza e idempotenza della pipeline.  
+- Per scenari air-gapped usa `tag_onboarding --source=local` e popola `raw/` manualmente.
 
