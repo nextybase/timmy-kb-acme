@@ -60,8 +60,19 @@
     "dall",
     "sull",
     "pell",
-    "pdfs"
-
+    "titleize",
+    "cand",
+    "wrappare",
+    "pdfs",
+    "monkeypatchano",
+    "istanzia",
+    "paginato",
+    "GDRIVE",
+    "patchano",
+    "googleapiclient",
+    "GAPI",
+    "istanziazione",
+    "monkeypatcha"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

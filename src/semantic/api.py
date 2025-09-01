@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Set, TYPE_CHECKING, Any
+from typing import Dict, List, Set, TYPE_CHECKING, Protocol, runtime_checkable
 
 # Import orchestrator internals (private helpers) and stable public names
 from semantic_onboarding import (
@@ -13,10 +13,27 @@ from semantic_onboarding import (
     _write_summary_and_readme as _write_summary_and_readme,
 )
 
+
+# ---- Typing: ClientContext as a Protocol to avoid runtime hard deps while keeping strong typing ----
+@runtime_checkable
+class ClientContextProtocol(Protocol):
+    """Minimal structural contract expected by the façade/orchestrators.
+
+    Add here only the attributes that are *actually* used by downstream calls.
+    Keeping it small avoids tight coupling while preserving type-safety.
+    """
+
+    base_dir: Path
+    raw_dir: Path
+    md_dir: Path
+    slug: str  # commonly accessed by generators/metadata
+
+
 if TYPE_CHECKING:  # during type checking, import the real type
     from pipeline.context import ClientContext as ClientContextType  # type: ignore
-else:  # at runtime, fall back to Any to avoid hard dependency
-    ClientContextType = Any  # type: ignore
+else:  # at runtime, use the structural Protocol (no Any fallback)
+    ClientContextType = ClientContextProtocol  # type: ignore
+
 
 __all__ = [
     "get_paths",

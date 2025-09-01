@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from pipeline.exceptions import PipelineError
+from pipeline.file_utils import safe_write_text  # scritture atomiche
 
 
 # -----------------------------
@@ -35,9 +37,6 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 # -----------------------------
 
 
-from typing import Any
-
-
 def validate_markdown_dir(ctx: Any, md_dir: Path | None = None) -> Path:
     """
     Verifica che la cartella markdown esista, sia una directory e sia "safe"
@@ -64,9 +63,11 @@ def generate_readme_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
     readme = target / "README.md"
-    readme.write_text(
+    safe_write_text(
+        readme,
         f"# {title}\n\n" "Contenuti generati/curati automaticamente.\n",
         encoding="utf-8",
+        atomic=True,
     )
     return readme
 
@@ -88,7 +89,9 @@ def generate_summary_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
             continue
         items.append(f"- [{p.stem}]({p.name})")
 
-    summary.write_text("# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8")
+    safe_write_text(
+        summary, "# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8", atomic=True
+    )
     return summary
 
 
@@ -107,8 +110,10 @@ def convert_files_to_structured_markdown(ctx: Any, md_dir: Path | None = None) -
     raw_root = Path(ctx.raw_dir)
     target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
 
-    # sicurezza percorso per target
+    # sicurezza percorso per target e raw_root
     _ensure_safe(base, target)
+    _ensure_safe(base, raw_root)
+
     target.mkdir(parents=True, exist_ok=True)
 
     if not raw_root.exists():
@@ -157,4 +162,4 @@ def convert_files_to_structured_markdown(ctx: Any, md_dir: Path | None = None) -
                     f"(Contenuto estratto/conversione da `{parts[-1]}`)",
                 ]
 
-        md_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        safe_write_text(md_file, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
