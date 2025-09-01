@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, TYPE_CHECKING, Any
 
 # Import orchestrator internals (private helpers) and stable public names
 from semantic_onboarding import (
@@ -13,10 +13,10 @@ from semantic_onboarding import (
     _write_summary_and_readme as _write_summary_and_readme,
 )
 
-try:  # type: ignore
-    from pipeline.context import ClientContext  # type: ignore
-except Exception:  # pragma: no cover
-    ClientContext = object  # type: ignore
+if TYPE_CHECKING:  # during type checking, import the real type
+    from pipeline.context import ClientContext as ClientContextType  # type: ignore
+else:  # at runtime, fall back to Any to avoid hard dependency
+    ClientContextType = Any  # type: ignore
 
 __all__ = [
     "get_paths",
@@ -37,13 +37,15 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     return _load_reviewed_vocab(base_dir, logger)
 
 
-def convert_markdown(context: ClientContext, logger: logging.Logger, *, slug: str) -> List[Path]:
+def convert_markdown(
+    context: ClientContextType, logger: logging.Logger, *, slug: str
+) -> List[Path]:
     """Public wrapper: convert PDFs under raw/ to Markdown under book/."""
     return _convert_raw_to_book(context, logger, slug=slug)
 
 
 def enrich_frontmatter(
-    context: ClientContext,
+    context: ClientContextType,
     logger: logging.Logger,
     vocab: Dict[str, Dict[str, Set[str]]],
     *,
@@ -53,6 +55,8 @@ def enrich_frontmatter(
     return _enrich_frontmatter(context, logger, vocab, slug=slug)
 
 
-def write_summary_and_readme(context: ClientContext, logger: logging.Logger, *, slug: str) -> None:
+def write_summary_and_readme(
+    context: ClientContextType, logger: logging.Logger, *, slug: str
+) -> None:
     """Public wrapper: ensure SUMMARY.md and README.md are generated/validated under book/."""
     return _write_summary_and_readme(context, logger, slug=slug)

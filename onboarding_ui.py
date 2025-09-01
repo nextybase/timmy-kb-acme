@@ -544,7 +544,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
             )
 
             # Avanzate: container_name opzionale
-            def _docker_safe(name: str) -> str:
+            from typing import Optional
+
+            def _docker_safe(name: Optional[str]) -> str:
                 import re as _re
 
                 s = (name or "").strip()
