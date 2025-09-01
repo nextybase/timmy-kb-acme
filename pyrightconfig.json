@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pyright/schemas/pyrightconfig.schema.json",
+  "include": ["src", "tools", "tests"],
+  "exclude": [
+    "output",
+    "venv",
+    ".venv",
+    "node_modules",
+    "build",
+    "dist",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache"
+  ],
+  "extraPaths": ["./src"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.11",
+  "reportMissingImports": "warning"
+}
+
