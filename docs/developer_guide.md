@@ -7,6 +7,14 @@ Questa guida è per chi sviluppa o estende Timmy‑KB: principi, setup locale, o
 
 ---
 
+## Integrazione con Codex
+
+Per velocizzare sviluppo, refactor e manutenzione del progetto puoi usare **Codex** come coding agent direttamente in VS Code.  
+L’integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre l’approccio Human-in-the-Loop.  
+Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integrazione](codex_integrazione.md).
+
+---
+
 ## Principi architetturali
 - **Separazione dei ruoli**: orchestratori = UX/CLI e controllo flusso; moduli `pipeline/*` e `semantic/*` = logica pura senza I/O interattivo.
 - **Idempotenza**: le operazioni possono essere ripetute senza effetti collaterali. Scritture **atomiche**.
