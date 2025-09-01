@@ -28,7 +28,16 @@
     "YAML",
     "POSIX",
     "README_TAGGING",
-    "air-gapped"
+    "air-gapped",
+    "validatori",
+    "validatore",
+    "idempotenti",
+    "idempotenza",
+    "pytest",
+    "pythonpath",
+    "testpaths",
+    "mockati",
+    "Pylance"
   ],
   "languageSettings": [
     {
