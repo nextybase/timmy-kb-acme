@@ -1,12 +1,12 @@
-# Policy di Push — Timmy-KB (v1.6.1)
+# Policy di Push  —  Timmy-KB (v1.6.1)
 
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
 ## 1) Responsabilità e orchestratori
 
-- **`semantic_onboarding.py`**: conversione RAW→BOOK, enrichment, README/SUMMARY, preview Docker. **Non fa push.**
+- **`semantic_onboarding.py`**: conversione RAW → BOOK, enrichment, README/SUMMARY, preview Docker. **Non fa push.**
   - La UI Streamlit non usa direttamente gli helper interni ma passa dalla façade `semantic.api` (API pubblica stabile).
-- **`onboarding_full.py`**: esegue **solo** il push GitHub (e in futuro l’integrazione GitBook). Richiede che `book/` sia già pronto.
+- **`onboarding_full.py`**: esegue **solo** il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia già pronto.
 
 ## 2) Prerequisiti
 
@@ -18,7 +18,7 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 
 - **Branch protetti**: push su `main` solo via PR. In CI → merge protetto.
 - **Force push**: vietato di default. Consentito solo con:
-  - flag espliciti (es. `--force-push` + `--force-ack`) quando previsti dall’orchestratore
+  - flag espliciti (es. `--force-push` + `--force-ack`) quando previsti dall'orchestratore
   - strategia `--force-with-lease`
   - autorizzazione esplicita in PR/policy team
 
@@ -43,7 +43,7 @@ py src/onboarding_full.py --slug acme --non-interactive
 
 Opzioni comuni:
 - `--no-preview` (non usato in `onboarding_full.py`, resta per compatibilità in v1.2.x se previsto)
-- `--no-push` (non applicabile: l’orchestratore è “solo push”)
+- `--no-push` (non applicabile: l'orchestratore è solo push)
 - `--force-with-lease` / `--force-push` (se/quando supportati: usare con cautela)
 
 ## 6) Error handling
@@ -70,6 +70,6 @@ Opzioni comuni:
 
 - Pubblicazione automatica su GitBook a valle del push (`onboarding_full.py`).
 - Gestione token GitBook con redazione log.
-- Allineamento contenuti `book/` ↔ spazio GitBook.
+- Allineamento contenuti `book/` → spazio GitBook.
 
 > **Nota:** fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.

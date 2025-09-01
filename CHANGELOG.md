@@ -4,6 +4,20 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
+## [Unreleased]
+
+### Added
+- cSpell: nuove parole di progetto in `cspell.json` (es. “Pydantic”, “versionare”, “sottocartella”, “versionati”, “idempotente”, “versionato”, “conftest”, “versioniamo”, “taggata”, “rilasciabile”).
+- cSpell: `ignoreRegExpList` per gestire contrazioni italiane con apostrofo tipografico/ASCII (es. `dell’utente`, `dell'utente`).
+- Script `scripts/fix_mojibake.py` (usa `ftfy`) per normalizzare caratteri UTF‑8 nei Markdown.
+
+### Changed
+- Priorità lingua cSpell impostata a `it,en` in `cspell.json` e `.vscode/settings.json`.
+- Normalizzazione encoding e tipografia nei Markdown sotto `docs/` (accenti, em-dash, frecce, “façade”).
+
+### Fixed
+- Risolti avvisi cSpell residui in `docs/guida_ui.md`, `docs/test_suite.md`, `docs/versioning_policy.md`, `docs/policy_push.md`.
+- Ripristinati caratteri corretti e rimosso “mojibake” in `docs/policy_push.md`, `docs/test_suite.md`, `docs/index.md` e altri file `docs/*`.
 ## [1.6.1] – 2025-08-30
 
 ### Added

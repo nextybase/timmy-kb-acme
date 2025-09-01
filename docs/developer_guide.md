@@ -1,9 +1,9 @@
-# Timmy‑KB — Developer Guide (v1.6.1)
+# Timmy‑KB  —  Developer Guide (v1.6.1)
 
 Questa guida è per chi sviluppa o estende Timmy‑KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
-> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py`  —  vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
@@ -11,7 +11,7 @@ Questa guida è per chi sviluppa o estende Timmy‑KB: principi, setup locale, o
 - **Separazione dei ruoli**: orchestratori = UX/CLI e controllo flusso; moduli `pipeline/*` e `semantic/*` = logica pura senza I/O interattivo.
 - **Idempotenza**: le operazioni possono essere ripetute senza effetti collaterali. Scritture **atomiche**.
 - **Path‑safety**: ogni I/O passa da SSoT (`ensure_within`, `sanitize_filename`).
-- **Configurazione esplicita**: variabili d’ambiente lette tramite `ClientContext`; niente valori magici sparsi.
+- **Configurazione esplicita**: variabili d'ambiente lette tramite `ClientContext`; niente valori magici sparsi.
 - **Logging strutturato** con redazione automatica se `LOG_REDACTION` è attivo.
 
 Vedi anche: [Coding Rules](coding_rules.md) e [Architecture](architecture.md).
@@ -40,7 +40,7 @@ pip install -U pip wheel
 pip install -r requirements.txt
 ```
 
-### Variabili d’ambiente utili
+### Variabili d'ambiente utili
 - `SERVICE_ACCOUNT_FILE` → path al JSON del Service Account (Drive)
 - `DRIVE_ID` → ID della cartella root su Drive
 - `GITHUB_TOKEN` → token per push su GitHub (solo `onboarding_full`)
@@ -94,7 +94,7 @@ Dettagli: [architecture.md](architecture.md).
 - **Pylance/typing**: quando import opzionali possono essere `None`, usa il *narrowing* pattern:
   - wrapper `_require_callable(fn, name)` per funzioni opzionali;
   - controlli `if x is None: raise RuntimeError(...)` per oggetti/moduli opzionali.
-- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c’è l’alternativa stabile.
+- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c'è l'alternativa stabile.
 - **Logging**: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
 - **I/O**: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
 - **Naming**: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
@@ -114,7 +114,7 @@ Dettagli: [architecture.md](architecture.md).
 ---
 
 ## Drive & sicurezza
-- Non inserire credenziali nel repo; usa file JSON localmente e variabili d’ambiente.
+- Non inserire credenziali nel repo; usa file JSON localmente e variabili d'ambiente.
 - Ogni upload/download passa tramite le API alto livello in `pipeline/drive_utils.py`.
 - Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path‑safety).
 

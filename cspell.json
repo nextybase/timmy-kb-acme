@@ -1,6 +1,6 @@
 {
   "version": "0.2",
-  "language": "en,it",
+  "language": "it,en",
   "files": ["**/*"],
   "ignorePaths": [
     "output/**",
@@ -43,7 +43,20 @@
     "sanitizzazione",
     "mocka",
     "venv",
-    "façade"
+    "façade",
+    "Pydantic",
+    "versionare",
+    "sottocartella",
+    "versionati",
+    "idempotente",
+    "versionato",
+    "conftest",
+    "versioniamo",
+    "taggata",
+    "rilasciabile"
+  ],
+  "ignoreRegExpList": [
+    "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"
   ],
   "languageSettings": [
     {

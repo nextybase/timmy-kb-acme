@@ -1,9 +1,9 @@
-# Timmy‑KB — Coding Rules (v1.6.1)
+# Timmy‑KB  —  Coding Rules (v1.6.1)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
-> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py`  —  vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
@@ -96,5 +96,5 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 ## Contributi
 - PR piccole, atomic commit, messaggi chiari (imperativo al presente).
-- Copri con test i cambi di comportamento; mantieni l’asticella della qualità.
+- Copri con test i cambi di comportamento; mantieni l'asticella della qualità.
 - Evita duplicazioni: se serve una nuova utility, valuta prima i moduli esistenti.
