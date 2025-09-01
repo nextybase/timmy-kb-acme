@@ -58,7 +58,7 @@ Modalità **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 output/timmy-kb-<slug>/
   ├─ raw/        # PDF
   ├─ book/       # Markdown + SUMMARY.md + README.md
-  ├─ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml
+  ├─ semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db
   ├─ config/     # config.yaml (con eventuali ID Drive)
   └─ logs/
 ```

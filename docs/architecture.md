@@ -35,7 +35,7 @@ Questa pagina descrive l’architettura **aggiornata** del sistema: componenti, 
 **Output:** `tags_raw.csv` + `tags_reviewed.yaml` (stub) per la revisione.
 
 ### 3) `semantic_onboarding` → conversione + enrichment + preview (UI via `semantic.api`)
-**Input:** `raw/` + (opz.) **vocabolario canonico** `semantic/tags_reviewed.yaml` (derivato dalla revisione).
+**Input:** `raw/` + (opz.) **vocabolario canonico** su SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) è usato per authoring/migrazione.
 **Azioni:** conversione PDF→Markdown in `book/`; arricchimento frontmatter (tags/areas) tramite vocabolario/sinonimi e **indice inverso**; generazione `README.md` e `SUMMARY.md` (utilità repo → fallback adapter); preview HonKit Docker con stop esplicito.
 **Output:** Markdown pronti in `book/`; anteprima su `localhost:<port>`.
 

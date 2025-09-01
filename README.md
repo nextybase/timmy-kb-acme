@@ -177,3 +177,4 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Per scenari **airâ€‘gapped** usa `tag_onboarding --source=local` e popola `raw/` manualmente.
 
 
+

@@ -291,7 +291,7 @@ In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SU
 
 Funzioni esposte in `semantic.api`:
 - `get_paths(slug)`: percorsi `base/raw/book/semantic` per lo slug.
-- `load_reviewed_vocab(base_dir, logger)`: carica il vocabolario canonico (da `semantic/tags_reviewed.yaml`).
+- `load_reviewed_vocab(base_dir, logger)`: carica il vocabolario canonico dal DB SQLite (`semantic/tags.db`).
 - `convert_markdown(context, logger, *, slug)`: converte PDF in Markdown sotto `book/`.
 - `enrich_frontmatter(context, logger, vocab, *, slug)`: arricchisce frontmatter (`title`, `tags`).
 - `write_summary_and_readme(context, logger, *, slug)`: genera/valida `SUMMARY.md` e `README.md`.
