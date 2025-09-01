@@ -72,6 +72,40 @@ except Exception:
     yaml = None
 
 
+def _convert_markdown_compat(context: ClientContext) -> None:
+    """Compat wrapper around convert_files_to_structured_markdown.
+
+    Detects supported kwargs at runtime to avoid static checker complaints
+    and older versions that don't accept extra parameters.
+    """
+    if convert_files_to_structured_markdown is None:
+        return
+    try:
+        import inspect
+
+        kwargs = {}
+        try:
+            sig = inspect.signature(convert_files_to_structured_markdown)
+            params = sig.parameters
+            if "skip_if_unchanged" in params:
+                kwargs["skip_if_unchanged"] = None
+            if "max_workers" in params:
+                kwargs["max_workers"] = None
+        except Exception:
+            # Unknown signature; try with kwargs, then fallback
+            kwargs = {"skip_if_unchanged": None, "max_workers": None}
+
+        try:
+            if kwargs:
+                convert_files_to_structured_markdown(context, **kwargs)  # type: ignore[misc]
+            else:
+                convert_files_to_structured_markdown(context)  # type: ignore[misc]
+        except TypeError:
+            convert_files_to_structured_markdown(context)  # type: ignore[misc]
+    except Exception:
+        raise
+
+
 # ─────────────── Helpers UX ───────────────
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori).
@@ -377,13 +411,18 @@ def _convert_raw_to_book(
             logger.warning("Nessun .md in book/: conversione non disponibile e directory vuota")
         return mds
 
+    # Conversione markdown con compatibilità di firma (Pylance-safe)
+    if convert_files_to_structured_markdown is not None:
+        _convert_markdown_compat(context)
+    return sorted_paths(book_dir.glob("*.md"), base=book_dir)
+
     # Parametri extra opzionali passati come kwargs, ignorati se non supportati (compat formale)
     if convert_files_to_structured_markdown is not None:
         try:
             convert_files_to_structured_markdown(
                 context,
-                skip_if_unchanged=None,
-                max_workers=None,
+                skip_if_unchanged=None,  # pyright: ignore[reportCallIssue]
+                max_workers=None,  # pyright: ignore[reportCallIssue]
             )  # type: ignore[call-arg]
         except TypeError:
             # Firme più vecchie non accettano questi kwargs; richiama senza
