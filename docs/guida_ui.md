@@ -312,4 +312,26 @@ from semantic.api import (
 Note di transizione:
 - Gli import esistenti da `semantic_onboarding` continuano a funzionare per compatibilità, ma si consiglia di migrare alla facade.
 - Le firme pubbliche riportate qui sono considerate stabili; eventuali cambiamenti saranno versionati e documentati.
+\n+## Prerequisiti
+- Docker attivo (Docker Desktop su Windows/macOS; WSL2 su Windows consigliato).
+- Porte libere per la preview (default `4000`). Configurabile dalla UI.
+- Ambiente Drive opzionale: credenziali e permessi se si usa il download da Drive.
+- Python 3.10+ e dipendenze installate secondo `requirements*.txt`.
+
+Checklist rapida
+- `docker info` deve rispondere senza errori.
+- Verifica porta: apri `http://127.0.0.1:4000` dopo l’avvio preview.
+- Se usi Drive: test del token/credenziali con il comando di download.
+
+## SSoT Tag e Migrazione (YAML → SQLite)
+- Fonte di verità dei tag: `output/<slug>/semantic/tags.db` (SQLite).
+- Il vecchio `tags_reviewed.yaml` resta supportato come input per migrare.
+- Script di migrazione: `tools/migrate_yaml_to_db.py`.
+  - Converte il contenuto YAML in schema `v2` su SQLite in modo idempotente.
+  - Esegue l’upsert di meta, tag e sinonimi.
+- Runtime: l’orchestratore e la UI leggono dallo SQLite per coerenza e prestazioni.
+
+Suggerimenti operativi
+- Tieni versionato il YAML e genera lo SQLite durante il run (build artifact locale).
+- Usa la UI per validare dopo migrazione (frontmatter enrichment + README/SUMMARY).
 

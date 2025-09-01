@@ -522,6 +522,34 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                 step=1,
                 key="inp_sem_port",
             )
+
+            # Avanzate: container_name opzionale
+            def _docker_safe(name: str) -> str:
+                import re as _re
+
+                s = (name or "").strip()
+                if not s:
+                    return s
+                s = _re.sub(r"[^a-zA-Z0-9_.-]", "-", s)
+                s = s.strip("-._") or s
+                return s
+
+            def _default_container(slug_val: str) -> str:
+                import re as _re
+
+                safe = _re.sub(r"[^a-zA-Z0-9_.-]+", "-", (slug_val or "kb")).strip("-") or "kb"
+                return f"gitbook-{safe}"
+
+            with st.expander("Avanzate", expanded=False):
+                current_default = _default_container(slug)
+                container_name_raw = st.text_input(
+                    "Nome container Docker",
+                    value=st.session_state.get("sem_container_name", current_default),
+                    help="Lasciare vuoto per usare il default suggerito.",
+                    key="inp_sem_container_name",
+                )
+                container_name = _docker_safe(container_name_raw) or current_default
+                st.session_state["sem_container_name"] = container_name
             running = bool(st.session_state.get("sem_preview_container"))
             st.write(f"Stato: {'ATTIVA' if running else 'SPENTA'}")
             cols = st.columns([1, 1])
@@ -533,7 +561,12 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     disabled=(start_preview is None or running),
                 ):
                     try:
-                        cname = start_preview(context, log, port=int(preview_port))  # type: ignore[misc]
+                        cname = start_preview(
+                            context,
+                            log,
+                            port=int(preview_port),
+                            container_name=st.session_state.get("sem_container_name"),
+                        )  # type: ignore[misc]
                         st.session_state["sem_preview_container"] = cname
                         st.success(
                             f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})"
@@ -542,6 +575,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                             {
                                 "event": "preview_started",
                                 "slug": slug,
+                                "run_id": st.session_state.get("run_id"),
                                 "port": int(preview_port),
                                 "container": cname,
                             }
@@ -574,7 +608,14 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         stop_preview(log, container_name=cname)  # type: ignore[misc]
                         st.session_state["sem_preview_container"] = None
                         st.success("Preview fermata.")
-                        log.info({"event": "preview_stopped", "slug": slug, "container": cname})
+                        log.info(
+                            {
+                                "event": "preview_stopped",
+                                "slug": slug,
+                                "run_id": st.session_state.get("run_id"),
+                                "container": cname,
+                            }
+                        )
                         _safe_streamlit_rerun()
                     except Exception as e:
                         st.exception(e)
@@ -592,6 +633,14 @@ def main() -> None:
     st.set_page_config(page_title="NeXT — Onboarding UI", layout="wide")
     redact = _safe_compute_redact_flag()
     log = _safe_get_logger("onboarding_ui", redact)
+    # run_id per correlazione log UI
+    try:
+        import uuid as _uuid
+
+        if not st.session_state.get("run_id"):
+            st.session_state["run_id"] = _uuid.uuid4().hex
+    except Exception:
+        pass
 
     # Gating iniziale: solo input slug+cliente a schermo pieno
     if not st.session_state.get("client_locked", False):
