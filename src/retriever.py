@@ -1,13 +1,13 @@
-"""Embedding search utilities for Timmy KB.
+"""Utility di ricerca basata su embedding per la Timmy KB.
 
-Functions:
+Funzioni esposte:
 - cosine(a, b) -> float
-- search(db_path, embeddings_client, query, project_slug, scope, k) -> list[dict]
+- search(params, embeddings_client) -> list[dict]
 
 Design:
-- Fetch a generous LIMIT of candidates from SQLite (e.g., 4000).
-- Compute cosine similarity in Python over all candidates.
-- Return top-k dicts with content, meta, score.
+- Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
+- Calcola la similarità coseno in Python su tutti i candidati.
+- Restituisce i top-k come dict con: content, meta, score.
 """
 
 from __future__ import annotations
@@ -15,23 +15,46 @@ from __future__ import annotations
 import logging
 import math
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
+from semantic.types import EmbeddingsClient
 from .kb_db import fetch_candidates
 
 LOGGER = logging.getLogger("timmy_kb.retriever")
 
 
-def cosine(a: List[float], b: List[float]) -> float:
-    """Compute cosine similarity between two vectors.
+@dataclass(frozen=True)
+class QueryParams:
+    """Parametri strutturati per la ricerca.
 
-    Returns 0.0 if any vector is empty or norms are zero.
+    Note:
+    - `db_path`: percorso del DB SQLite; se None, usa il default interno di `fetch_candidates`.
+    - `project_slug`: progetto/spazio logico da cui recuperare i candidati.
+    - `scope`: sotto-spazio o ambito (es. sezione o agente).
+    - `query`: testo naturale da embeddare e confrontare con i candidati.
+    - `k`: numero di risultati da restituire (top-k).
+    - `candidate_limit`: massimo numero di candidati da caricare dal DB.
+    """
+
+    db_path: Optional[Path]
+    project_slug: str
+    scope: str
+    query: str
+    k: int = 8
+    candidate_limit: int = 4000
+
+
+def cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    """Calcola la similarità coseno tra due vettori numerici.
+
+    Ritorna 0.0 se uno dei vettori è vuoto o se le norme sono nulle.
+    Se le lunghezze differiscono, confronta sul minimo comune.
     """
     if not a or not b:
         return 0.0
     if len(a) != len(b):
-        # Fallback: compare on min common length
         n = min(len(a), len(b))
         a = a[:n]
         b = b[:n]
@@ -47,45 +70,62 @@ def cosine(a: List[float], b: List[float]) -> float:
     return dot / math.sqrt(na * nb)
 
 
-def search(
-    db_path: Optional[Path],
-    embeddings_client,
-    query: str,
-    project_slug: str,
-    scope: str,
-    k: int,
-    candidate_limit: int = 4000,
-) -> List[Dict]:
-    """Search relevant chunks for a query using cosine similarity.
+def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dict]:
+    """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
-    - Embeds the query via `embeddings_client` (must provide `embed_texts([str])`).
-    - Loads at most `candidate_limit` candidates for (project_slug, scope).
-    - Computes cosine similarity in Python and returns top-k.
-    Returns list of dicts: {content, meta, score}.
+    Flusso:
+    1) Ottiene l'embedding di `params.query` tramite `embeddings_client.embed_texts([str])`.
+    2) Carica al massimo `params.candidate_limit` candidati per `(project_slug, scope)`.
+    3) Calcola la similarità coseno e ordina i candidati per score decrescente.
+    4) Restituisce i top-`params.k` in forma di lista di dict: {content, meta, score}.
     """
     t0 = time.time()
-    # Embed query
-    q_vecs = embeddings_client.embed_texts([query])
+
+    # 1) Embedding della query
+    q_vecs = embeddings_client.embed_texts([params.query])
     if not q_vecs or not q_vecs[0]:
         LOGGER.warning("Empty query embedding; returning no results")
         return []
     qv = q_vecs[0]
 
-    # Fetch candidates
-    cands = list(fetch_candidates(project_slug, scope, limit=candidate_limit, db_path=db_path))
-    LOGGER.debug("Fetched %d candidates for %s/%s", len(cands), project_slug, scope)
+    # 2) Caricamento candidati dal DB
+    cands = list(
+        fetch_candidates(
+            params.project_slug,
+            params.scope,
+            limit=params.candidate_limit,
+            db_path=params.db_path,
+        )
+    )
+    LOGGER.debug(
+        "Fetched %d candidates for %s/%s",
+        len(cands),
+        params.project_slug,
+        params.scope,
+    )
 
-    # Score
-    scored = []
+    # 3) Scoring
+    scored: List[Dict] = []
     for c in cands:
         emb = c.get("embedding") or []
         sim = cosine(qv, emb)
-        scored.append({"content": c["content"], "meta": c.get("meta", {}), "score": float(sim)})
+        scored.append(
+            {
+                "content": c["content"],
+                "meta": c.get("meta", {}),
+                "score": float(sim),
+            }
+        )
 
-    # Sort and top-k
+    # 4) Ordinamento e top-k
     scored.sort(key=lambda x: x["score"], reverse=True)
-    out = scored[: max(0, int(k))]
+    out = scored[: max(0, int(params.k))]
 
     dt = (time.time() - t0) * 1000
-    LOGGER.info("search(): k=%s candidates=%s took=%.1fms", k, len(cands), dt)
+    LOGGER.info(
+        "search(): k=%s candidates=%s took=%.1fms",
+        params.k,
+        len(cands),
+        dt,
+    )
     return out

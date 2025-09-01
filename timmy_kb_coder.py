@@ -21,27 +21,26 @@ Quick demo script:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 from pathlib import Path
-from typing import cast
+from typing import Sequence, cast
 
 import streamlit as st
 
+from semantic.types import EmbeddingsClient
+from src.ingest import OpenAIEmbeddings
 from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
-from src.retriever import search
+from src.retriever import QueryParams, search
 from src.vscode_bridge import read_response, write_request
-from src.ingest import OpenAIEmbeddings
 
-# Optional: load .env
-try:  # pragma: no cover - optional dependency
+# Optional: load .env without try/except/pass (avoids flake8-bandit S110)
+if importlib.util.find_spec("dotenv") is not None:  # pragma: no cover - optional dependency
     from dotenv import load_dotenv  # type: ignore
 
     load_dotenv()
-except Exception:
-    pass
-
 
 # Logging setup
 LOGS_DIR = Path("logs")
@@ -57,15 +56,32 @@ logging.basicConfig(
 LOGGER = logging.getLogger("timmy_kb.ui")
 
 
+class _EmbeddingsAdapter(EmbeddingsClient):
+    """Adapter per rendere OpenAIEmbeddings conforme al Protocol EmbeddingsClient."""
+
+    def __init__(self: "_EmbeddingsAdapter", inner: OpenAIEmbeddings) -> None:
+        self._inner = inner
+
+    def embed_texts(
+        self: "_EmbeddingsAdapter",
+        texts: Sequence[str],
+        *,
+        model: str | None = None,  # ignorato dal backend attuale
+    ) -> Sequence[Sequence[float]]:
+        # OpenAIEmbeddings si aspetta List[str]; normalizziamo e ritorniamo List[List[float]]
+        return self._inner.embed_texts(list(texts))
+
+
 def _ensure_startup() -> None:
-    # Ensure DB and local folders
+    """Ensure required folders and DB exist."""
     Path("data").mkdir(parents=True, exist_ok=True)
     Path(".timmykb").mkdir(parents=True, exist_ok=True)
     Path(".timmykb/history").mkdir(parents=True, exist_ok=True)
     init_db(get_db_path())
 
 
-def _emb_client_or_none(use_rag: bool):
+def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
+    """Return an embeddings client if RAG is enabled and credentials are present; otherwise None."""
     if not use_rag:
         return None
     api_key = os.getenv("OPENAI_API_KEY")
@@ -73,8 +89,8 @@ def _emb_client_or_none(use_rag: bool):
         st.warning("OPENAI_API_KEY non trovato nell'ambiente (.env consigliato). RAG disattivato.")
         return None
     try:
-        return OpenAIEmbeddings()
-    except Exception as e:
+        return _EmbeddingsAdapter(OpenAIEmbeddings())
+    except Exception as e:  # pragma: no cover - mostra feedback in UI
         LOGGER.exception("Errore init embeddings: %s", e)
         st.error(f"Errore init embeddings: {e}")
         return None
@@ -104,19 +120,20 @@ def main() -> None:
     # Actions
     c1, c2 = st.columns([1, 1])
     if c1.button("Compila & Invia a VS Code", use_container_width=True):
-        retrieved = []
+        retrieved: list[dict] = []
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
             try:
-                retrieved = search(
+                params = QueryParams(
                     db_path=get_db_path(),
-                    embeddings_client=emb_client,
-                    query=f"{task}\n\n{chat_context}" if chat_context else task,
                     project_slug=project_slug,
                     scope=scope,
+                    query=f"{task}\n\n{chat_context}" if chat_context else task,
                     k=8,
+                    candidate_limit=4000,
                 )
-            except Exception as e:
+                retrieved = search(params, emb_client)
+            except Exception as e:  # pragma: no cover - mostra feedback in UI
                 LOGGER.exception("Errore nella ricerca: %s", e)
                 st.error(f"Errore nella ricerca: {e}")
                 retrieved = []

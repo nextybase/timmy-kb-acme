@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, runtime_checkable
 
 
 __all__ = ["Vector", "EmbeddingsClient", "ClientContextProtocol"]
@@ -30,26 +29,21 @@ class EmbeddingsClient(Protocol):
 
 @runtime_checkable
 class ClientContextProtocol(Protocol):
-    """Contratto strutturale minimale per il contesto cliente usato dalla façade.
+    """Contratto strutturale **minimale** per il contesto cliente.
 
     Mantieni qui solo ciò che è realmente consumato dai servizi/orchestratori,
     così eviti dipendenze dure e cicliche:
-      - base_dir / repo_root: radice sicura per path-safety
+      - base_dir: radice sicura per path-safety
+      - raw_dir / md_dir: cartelle operative usate dai servizi di contenuto
       - slug: identificatore logico del cliente
-      - logger: logging già configurato
-      - config: mappa di configurazione (opzionale, dipende dai moduli)
-      - raw_dir / md_dir: cartelle usate più spesso nei servizi di contenuto
     """
 
-    # Radici percorso (almeno una delle due è comunemente presente)
+    # Radice percorso
     base_dir: Path
-    repo_root: Path  # se non esiste nel contesto reale, può essere alias di base_dir
 
-    # Cartelle operative più comuni
+    # Cartelle operative
     raw_dir: Path
     md_dir: Path
 
-    # Metadati/servizi
+    # Metadato logico
     slug: str
-    logger: logging.Logger
-    config: Mapping[str, Any]

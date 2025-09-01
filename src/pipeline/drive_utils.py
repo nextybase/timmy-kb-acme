@@ -6,7 +6,7 @@ Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
 Obiettivo
 ---------
 - Mantenere **invariata** l'API pubblica storica (`pipeline.drive_utils.*`) delegando
-  l’implementazione ai moduli interni suddivisi:
+  Implementazione ai moduli interni suddivisi:
   - `pipeline.drive.client`   → client e primitive di lettura/elenco
   - `pipeline.drive.upload`   → creazione/albero/upload e struttura locale
   - `pipeline.drive.download` → download dei contenuti (PDF, ecc.)

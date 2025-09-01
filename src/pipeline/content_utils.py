@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from pipeline.exceptions import PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
+from semantic.types import ClientContextProtocol  # usa sempre il protocollo strutturale
 
 
 # -----------------------------
@@ -37,13 +37,14 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 # -----------------------------
 
 
-def validate_markdown_dir(ctx: Any, md_dir: Path | None = None) -> Path:
+def validate_markdown_dir(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
     """
     Verifica che la cartella markdown esista, sia una directory e sia "safe"
     rispetto a ctx.base_dir. Ritorna il Path risolto se è valida.
     """
-    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
-    target = _ensure_safe(Path(ctx.base_dir), target)
+    # Evita passaggi di Path|None a Path(...)
+    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
+    target = _ensure_safe(ctx.base_dir, target_input)
 
     if not target.exists():
         raise PipelineError(f"Markdown directory does not exist: {target}")
@@ -52,13 +53,13 @@ def validate_markdown_dir(ctx: Any, md_dir: Path | None = None) -> Path:
     return target
 
 
-def generate_readme_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
+def generate_readme_markdown(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
     """
     Crea (o sovrascrive) README.md nella cartella markdown target.
     I test verificano solo l'esistenza del file.
     """
-    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
-    target = _ensure_safe(Path(ctx.base_dir), target)
+    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
+    target = _ensure_safe(ctx.base_dir, target_input)
     target.mkdir(parents=True, exist_ok=True)
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
@@ -72,13 +73,13 @@ def generate_readme_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
     return readme
 
 
-def generate_summary_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
+def generate_summary_markdown(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
     """
     Genera SUMMARY.md elencando i .md nella cartella target
     (escludendo README.md e SUMMARY.md).
     """
-    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
-    target = _ensure_safe(Path(ctx.base_dir), target)
+    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
+    target = _ensure_safe(ctx.base_dir, target_input)
     target.mkdir(parents=True, exist_ok=True)
 
     summary = target / "SUMMARY.md"
@@ -95,7 +96,9 @@ def generate_summary_markdown(ctx: Any, md_dir: Path | None = None) -> Path:
     return summary
 
 
-def convert_files_to_structured_markdown(ctx: Any, md_dir: Path | None = None) -> None:
+def convert_files_to_structured_markdown(
+    ctx: ClientContextProtocol, md_dir: Path | None = None
+) -> None:
     """
     Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file
     <categoria>.md dentro md_dir con struttura:
@@ -106,14 +109,15 @@ def convert_files_to_structured_markdown(ctx: Any, md_dir: Path | None = None) -
 
     Se una categoria non contiene PDF, scrive una riga informativa.
     """
-    base = Path(ctx.base_dir)
-    raw_root = Path(ctx.raw_dir)
-    target = Path(md_dir) if md_dir is not None else Path(ctx.md_dir)
+    base = ctx.base_dir
+    raw_root = ctx.raw_dir
+    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
 
     # sicurezza percorso per target e raw_root
-    _ensure_safe(base, target)
+    _ensure_safe(base, target_input)
     _ensure_safe(base, raw_root)
 
+    target = target_input
     target.mkdir(parents=True, exist_ok=True)
 
     if not raw_root.exists():
