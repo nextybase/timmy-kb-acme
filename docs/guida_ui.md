@@ -335,3 +335,7 @@ Suggerimenti operativi
 - Tieni versionato il YAML e genera lo SQLite durante il run (build artifact locale).
 - Usa la UI per validare dopo migrazione (frontmatter enrichment + README/SUMMARY).
 
+## Deprecazioni
+- Le funzioni interne con underscore di `src/semantic_onboarding.py` sono considerate deprecated per uso da UI.
+- Usare la facade pubblica `semantic.api` per import stabili: `get_paths`, `load_reviewed_vocab`, `convert_markdown`, `enrich_frontmatter`, `write_summary_and_readme`.
+- Le chiamate agli underscore generano `DeprecationWarning` a runtime per favorire la migrazione.
