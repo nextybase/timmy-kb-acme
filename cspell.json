@@ -1,6 +1,6 @@
 {
   "version": "0.2",
-  "language": "it,en",
+  "language": "en,it",
   "files": ["**/*"],
   "ignorePaths": [
     "output/**",
@@ -19,13 +19,16 @@
     "slug",
     "HiTL",
     "Timmy",
-    "Frontmatter",
+    "frontmatter",
     "sqlite",
     "Markdown",
     "Streamlit",
     "Docker",
     "GitBook",
-    "YAML"
+    "YAML",
+    "POSIX",
+    "README_TAGGING",
+    "air-gapped"
   ],
   "languageSettings": [
     {
@@ -34,4 +37,3 @@
     }
   ]
 }
-
