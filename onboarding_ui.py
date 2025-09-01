@@ -67,13 +67,13 @@ except Exception:  # pragma: no cover
 # Import funzioni Semantica (opzionali, con fallback)
 # -----------------------------------------------------------------------------
 try:
-    # Nomi secondo src/semantic_onboarding.py
-    from semantic_onboarding import (  # type: ignore
+    # Facade pubblica stabile per la UI
+    from semantic.api import (  # type: ignore
         get_paths as sem_get_paths,
-        _load_reviewed_vocab as sem_load_vocab,
-        _convert_raw_to_book as sem_convert,
-        _enrich_frontmatter as sem_enrich,
-        _write_summary_and_readme as sem_write_md,
+        load_reviewed_vocab as sem_load_vocab,
+        convert_markdown as sem_convert,
+        enrich_frontmatter as sem_enrich,
+        write_summary_and_readme as sem_write_md,
     )
 except Exception:  # pragma: no cover
     sem_get_paths = sem_load_vocab = sem_convert = sem_enrich = sem_write_md = None  # type: ignore

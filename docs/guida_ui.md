@@ -1,137 +1,288 @@
-# Guida all’interfaccia (Streamlit) — v1.6.1
+# Onboarding UI — guida aggiornata
 
-Questa pagina spiega come usare l’interfaccia grafica di **Timmy‑KB** costruita con **Streamlit**. È l’alternativa ai run da terminale: stessi step, più guidati e con feedback immediati.
+Questa guida descrive **come usare e come funziona** l’interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d’errore più comuni. È pensata per sostituire/aggiornare `docs/guida_ui.md`.
 
-> Avvio rapido: `streamlit run onboarding_ui.py`  
-> Requisiti minimi: Python ≥ 3.10. Per la preview serve Docker. Per le funzioni su Drive servono credenziali e `DRIVE_ID`.
-
----
-
-## 1) Primo avvio e “gating” iniziale
-All’apertura vedi solo **due campi centrali** a schermo intero:
-- **Slug cliente** (es. `acme`)
-- **Nome cliente** (es. `ACME S.p.A.`)
-
-Appena li compili entrambi, la UI si **sblocca** e i valori vengono **bloccati** (non modificabili). In alto appare un header con **Cliente** e **Slug**, più il pulsante **Chiudi UI** per terminare l’app.
-
-> Per cambiare slug/nome dopo lo sblocco, riavvia l’app.
+> In sintesi: la UI è una app **Streamlit** con tre step operativi — **Configurazione**, **Drive**, **Semantica** — e opzionale **Preview Docker (HonKit)**. Alcune funzioni degradano con *fallback* se i moduli di pipeline non sono disponibili.
 
 ---
 
-## 2) Struttura delle tab
-Dopo lo sblocco compaiono due tab:
-- **Configurazione**
-- **Drive**
+## 1) Prerequisiti
 
-La terza tab **Semantica** compare **solo dopo** che avrai scaricato i PDF su `raw/` dalla tab *Drive* (vedi §3.3).
+**Obbligatori**
 
----
+- Python 3.10+ e **Streamlit** installato
+- Repository clonato e avviato dalla *root*
 
-## 3) Tab “Configurazione”
-Questa sezione gestisce il **mapping semantico** (le categorie e i loro metadati) che guida i passi successivi.
+**Per la tab “Drive”**
 
-- **Panoramica categorie (solo lettura)**: preview JSON delle categorie correnti.
-- **Editor per‑categoria**: ogni categoria ha un *accordion* con tre campi:
-  - **Ambito** (titolo/area)
-  - **Descrizione** (testo libero)
-  - **Esempi** (uno per riga)
-  Premi **Salva** dentro la singola voce per aggiornare solo quella categoria.
-- **Normalizzazione chiavi**: toggle per forzare la **kebab‑case** (SSoT).
-- **Azioni globali**:
-  - **Valida mapping**: controlli di coerenza rapidi.
-  - **Salva mapping rivisto**: scrive `semantic/tags_reviewed.yaml` nello spazio del cliente.
+- Credenziali Google Drive configurate (es. `SERVICE_ACCOUNT_FILE`)
+- ID dell’unità o cartella di lavoro (es. `DRIVE_ID`)
 
-> Nota: la funzione usa gli helper del repo (nessuna duplicazione). Eventuali errori sono mostrati a schermo e loggati con dettagli tecnici.
+**Per la Preview**
+
+- **Docker** installato e in esecuzione
+- Porta TCP libera (configurabile in UI)
+
+**Logging/Redazione (opzionale ma consigliato)**
+
+- Variabili: `LOG_REDACTION` / `LOG_REDACTED` (attiva redazione log) e/o `ENV=prod`
 
 ---
 
-## 4) Tab “Drive”
-Questa sezione prepara e popola la struttura su **Google Drive**.
+## 2) Avvio
 
-### 4.1 Crea/aggiorna struttura
-Pulsante **“Crea/aggiorna struttura Drive”**:
-- Crea (sotto `DRIVE_ID`) la cartella del cliente (nome = slug)
-- Carica `config.yaml` nella cartella cliente
-- Crea la gerarchia **`raw/`** (e **`contrattualistica/`** se prevista) partendo dal mapping rivisto
+Da root del repo:
 
-> Requisiti: `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` nel tuo ambiente.
+- macOS/Linux: `streamlit run onboarding_ui.py`
+- Windows: `streamlit run onboarding_ui.py`
 
-### 4.2 Genera README in raw/
-Pulsante **“Genera README in raw/”**:
-- Per ogni sotto‑cartella di `raw/`, genera un **README.pdf** (o `.txt` fallback) con ambito/descrizione/esempi
-- Carica i README nelle rispettive directory su Drive
-
-Al termine compare un messaggio di promemoria:
-> “La struttura delle cartelle è stata creata su Drive; popolarne il contenuto seguendo le indicazioni del file README presente in ogni cartella per proseguire con la procedura”.
-
-### 4.3 Scarica PDF su `raw/` locale
-Dopo la generazione dei README appare una nuova sezione **“Download contenuti su raw/”** con il pulsante **“Scarica PDF da Drive in raw/”**.
-- Scarica i PDF dalla struttura Drive appena creata **nella sandbox locale** del cliente (`output/timmy-kb-<slug>/raw/`).
-- A download completato, la UI **sblocca** la tab **Semantica**.
-
-> Se vedi l’errore “Funzione di download non disponibile”, aggiorna il modulo `config_ui/drive_runner.py` (serve `download_raw_from_drive`).
+La **landing** chiede `slug` e `nome cliente`. Quando entrambi sono valorizzati, la UI si “sblocca” e salva lo stato in sessione. C’è un pulsante “Chiudi UI” per terminare il processo Streamlit in modo pulito.
 
 ---
 
-## 5) Tab “Semantica”
-Questa tab appare solo dopo il download dei PDF in `raw/`. Raccoglie le funzioni per la trasformazione e l’arricchimento.
+## 3) Struttura logica e stato
 
-### 5.1 Converti PDF → Markdown (RAW → BOOK)
-Pulsante **“Converti PDF in Markdown”**:
-- Converte i PDF in file `.md` sotto `book/` usando la pipeline `semantic_onboarding`.
+La UI usa `st.session_state` per:
 
-### 5.2 Arricchisci frontmatter
-Pulsante **“Arricchisci con tag canonici (tags_reviewed.yaml)”**:
-- Carica il **vocabolario rivisto** e aggiorna i frontmatter dei Markdown con tag/aree coerenti.
+- **Lock cliente**: blocca `slug`/`nome` dopo l’inserimento
+- **Stato Drive**: progress provisioning e download
+- **Gate Semantica**: la tab **Semantica** appare **solo dopo** il download locale dei PDF su `raw/`
+- **Preview**: nome container, porta e stato *running*/*stopped*
 
-### 5.3 Genera/valida README & SUMMARY
-Pulsante **“Genera/valida README & SUMMARY”**:
-- Garantisce la presenza/validità di `SUMMARY.md` e `README.md` in `book/` (contenuti fallback idempotenti).
-
-### 5.4 Preview Docker (HonKit)
-Sezione con stato e due pulsanti:
-- **Avvia preview**: lancia un container HonKit. Porta configurabile (default **4000**). Messaggio di esito e link locale.
-- **Ferma preview**: arresta il container in esecuzione.
-
-> Se Docker non è presente o la porta è occupata, viene mostrato un errore; nessun dato del cliente viene modificato.
+La redazione log è calcolata con una funzione “safe” che preferisce la logica di pipeline se disponibile; in assenza, abilita la redazione se `ENV=prod` o se trovate variabili esplicite.
 
 ---
 
-## 6) Messaggi, log e resilienza
-- Gli esiti positivi sono mostrati con **success banner**; errori/imprevisti con **stacktrace** sintetico.
-- I log sono **strutturati**; dove configurato è attiva la **redazione** (mascheramento ID/segreti).
-- Le scritture su disco usano **path‑safety** e **scritture atomiche** per evitare corruzioni.
+## 4) Tab “Configurazione”
+
+Scopo: definire/raffinare il **mapping semantico** del cliente (categorie, descrizioni, esempi, alias/tag suggeriti).
+
+**Cosa fa**
+
+- Carica il mapping **rivisto** se presente; altrimenti carica un **default**
+- Mostra editor per **una categoria alla volta** (comodo per iterazioni HiTL)
+- Valida le categorie (duplicati, campi obbligatori, coerenza)
+- Opzione di **normalizzazione chiavi** (kebab-case) per coerenza
+- Salvataggio **puntuale** (della categoria) o **integrale** (tutto il mapping)
+
+**Funzioni usate (modulo **``**)**
+
+- `load_default_mapping()` / `load_tags_reviewed()`
+- `split_mapping(mapping)` → parti editabili vs. riservate
+- `validate_categories(cats)`
+- `build_mapping(cats, reserved)` → ricompone la struttura
+- `save_tags_reviewed(mapping)`
+
+**File & percorsi**
+
+- Il mapping rivisto viene salvato in `semantic/tags_reviewed.yaml` **nel workspace del cliente** (vedi §7)
+- Le utilità interne adottano scritture atomiche e *path-safety*
+
+> Nota: la sezione `context` (se esiste nel mapping) non è esposta in UI.
 
 ---
 
-## 7) Domande frequenti
-**La tab Semantica non compare.**  
-Assicurati di aver eseguito **“Genera README in raw/”** e poi **“Scarica PDF da Drive in raw/”** nella tab *Drive*.
+## 5) Tab “Drive”
 
-**Non riesco a creare la struttura su Drive.**  
-Verifica `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`. Controlla i permessi del Service Account sulla root indicata.
+Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, **README** nelle sottocartelle di `raw/` e **download** dei contenuti localmente.
 
-**La preview non parte.**  
-Controlla che Docker sia avviato e che la porta scelta non sia usata da altri processi.
+**Sequenza tipica**
 
-**Ho bisogno di cambiare slug/nome cliente.**  
-Riavvia l’app e reinserisci i due valori nella schermata iniziale.
+1. **Crea/aggiorna struttura**: genera l’albero cartelle per il cliente, incluse `raw/` e sotto-cartelle per ambiti/categorie
+2. **Genera README per \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\***``: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l’upload dei materiali
+3. **Download contenuti**: scarica i file da Drive su disco locale → `raw/` del workspace; al termine imposta lo stato `raw_downloaded=True`
+
+**Funzioni usate (modulo **``**)**
+
+- `build_drive_from_mapping(slug, client_name, progress_cb)`
+- `emit_readmes_for_raw(slug)`
+- `download_raw_from_drive_with_progress(slug)` (se disponibile) o `download_raw_from_drive(slug)`
+
+**Requisiti ENV**
+
+- `SERVICE_ACCOUNT_FILE` → credenziali Service Account
+- `DRIVE_ID` → id dello *space*/cartella di lavoro
+
+**Output locale**
+
+- Workspace cliente: `output/timmy-kb-<slug>/`
+  - `raw/` → PDF scaricati (naming sicuro)
+  - altri metadati di provisioning
+
+> La tab **Semantica** resta nascosta finché non viene completato almeno un download su `raw/`.
 
 ---
 
-## 8) Suggerimenti d’uso
-- Completa sempre gli step della tab **Drive** prima di passare alla **Semantica**.
-- Tieni aperta accanto la cartella `output/timmy-kb-<slug>/` per verificare cosa viene generato.
-- Se lavori spesso con gli stessi clienti, considera una naming convention per gli *slug* (breve, significativo, kebab‑case).
+## 6) Tab “Semantica”
+
+Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatter** con tag canonici e generazione/validazione di **README & SUMMARY** per la navigazione; opzionalmente **Preview Docker**.
+
+**Context**
+
+- La tab crea un `ClientContext` puntato al workspace locale del cliente
+- Non richiede variabili ENV esterne (si lavora su disco)
+
+**Step operativi**
+
+1. **Converti PDF in Markdown**
+
+   - Converte i contenuti di `raw/` in `book/` (una dir di Markdown puliti)
+   - Se l’utility di conversione non è disponibile, esce con avviso senza distruggere lo stato
+
+2. **Arricchisci frontmatter**
+
+   - Carica il **vocabolario rivisto** (SSoT attuale: **DB SQLite** gestito da `storage/tags_store`, migrato dallo YAML storico)
+   - Aggiunge frontmatter coerente (`title`, `tags` canonici, eventuali alias)
+
+3. **README & SUMMARY**
+
+   - Genera/aggiorna i file di navigazione del libro (compatibili con HonKit/GitBook)
+   - Se le utilità “ufficiali” non sono disponibili, usa *fallback* **idempotenti** per garantire la presenza minima dei file
+
+4. **Preview Docker (HonKit)**
+
+   - Avvia **container** con nome sicuro (default: `gitbook-<slug>`) e porta configurabile
+   - Stato del container tracciato in sessione; pulsanti **Start/Stop**
+   - Messaggi guida se Docker non è attivo o la porta è occupata
+
+**Funzioni usate**
+
+- Modulo `semantic_api` (API operative):
+  - `_convert_raw_to_book(context)`
+  - `_enrich_frontmatter(context, vocab)`
+  - `_write_summary_and_readme(context)`
+  - `_load_reviewed_vocab(context)`
+- Modulo `adapters.preview` (preview Docker):
+  - `start_preview(context, port, container_name)`
+  - `stop_preview(context, container_name)`
+
+**Output locale**
+
+- `output/timmy-kb-<slug>/`
+  - `raw/` → input scaricati da Drive
+  - `book/` → Markdown convertiti
+  - `README.md`, `SUMMARY.md` nella radice del libro
 
 ---
 
-## 9) Esecuzione da terminale (alternativa)
-Se preferisci la CLI, gli step equivalenti sono disponibili negli **orchestratori**:
-```bash
-py src/pre_onboarding.py
-py src/tag_onboarding.py
-py src/semantic_onboarding.py
-py src/onboarding_full.py
+## 7) Workspace del cliente (layout)
+
+Per ogni `slug` la UI lavora in un **workspace locale** sotto `output/`:
+
 ```
-Dettagli nelle rispettive guide.
+output/
+  timmy-kb-<slug>/
+    raw/            # PDF e fonti originali scaricate
+    book/           # Markdown generati
+    semantic/
+      tags_reviewed.yaml   # mapping rivisto (origine storica)
+      … (eventuale DB SQLite per i tag “reviewed”, gestito da storage/tags_store)
+    README.md
+    SUMMARY.md
+```
+
+> Nota importante: **SSoT dei tag “reviewed”**. L’interfaccia continua a salvare/mantenere lo YAML `semantic/tags_reviewed.yaml`, ma le funzioni semantiche leggono i tag consolidati da un **DB SQLite** (migrato dallo YAML) per garantire audit e versioning. Se il DB non è presente, viene rigenerato/aggiornato a partire dallo YAML quando previsto dal codice.
+
+---
+
+## 8) Logging & redazione
+
+- La UI tenta di usare un **logger strutturato** della pipeline; in fallback usa `logging.basicConfig`
+- Il flag di **redazione** (mascheramento dati sensibili nei log) è calcolato così:
+  1. Se disponibile, usa la funzione di pipeline (`compute_redact_flag`)
+  2. In alternativa, abilita se `LOG_REDACTION`/`LOG_REDACTED` è truthy o se `ENV=prod`
+
+---
+
+## 9) Errori comuni & soluzioni
+
+**Docker non attivo / porta occupata**
+
+- Avvia Docker Desktop; scegli una porta libera; riprova `Start Preview`
+
+**Credenziali Drive mancanti**
+
+- Verifica `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`; riesegui la tab Drive
+
+**RAW vuota o conversione fallita**
+
+- Assicurati che il download abbia popolato `raw/` e che i PDF siano leggibili
+- Riprova “Converti PDF in Markdown”; controlla il log per filename problematici
+
+**Validazione mapping**
+
+- Correggi duplicati, rinomina con normalizzazione chiavi (opzione dedicata), salva e riprova
+
+**Container “bloccato”**
+
+- Usa `Stop Preview`; se serve, elimina manualmente il container `gitbook-<slug>` e riavvia
+
+---
+
+## 10) Best practice operative
+
+- Procedi **in ordine**: Configurazione → Drive → Semantica → Preview
+- Mantieni il mapping “rivisto” **coerente** con i materiali effettivi in `raw/`
+- Usa la **normalizzazione chiavi** per tag/categorie stabili e prevedibili
+- Evita spazi/caratteri speciali nei nomi file sorgenti
+- Tieni Docker avviato **solo** quando serve la preview
+
+---
+
+## 11) API surface (per sviluppatori)
+
+``
+
+- `load_default_mapping()` / `load_tags_reviewed()`
+- `split_mapping(mapping)`
+- `validate_categories(cats)`
+- `build_mapping(cats, reserved)`
+- `save_tags_reviewed(mapping)`
+
+``
+
+- `build_drive_from_mapping(slug, client_name, progress_cb=None)`
+- `emit_readmes_for_raw(slug)`
+- `download_raw_from_drive_with_progress(slug)` → preferita se disponibile
+- `download_raw_from_drive(slug)` → fallback
+
+``
+
+- `_load_reviewed_vocab(context)`
+- `_convert_raw_to_book(context)`
+- `_enrich_frontmatter(context, vocab)`
+- `_write_summary_and_readme(context)`
+
+``
+
+- `start_preview(context, port, container_name='gitbook-<slug>')`
+- `stop_preview(context, container_name)`
+
+---
+
+---
+
+## 12) FAQ
+
+**Posso usare la tab Semantica senza Drive?**\
+Sì, se hai già i PDF in `raw/` locale.
+
+**Posso fermare la UI in sicurezza?**\
+Sì, con il pulsante “Chiudi UI” o interrompendo Streamlit dal terminale.
+
+**Dove trovo i file generati?**\
+In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SUMMARY.md`).
+
+---
+
+## 13) Appendice: comandi utili
+
+- Avvio UI: `streamlit run onboarding_ui.py`
+- Alternative Windows: `streamlit run onboarding_ui.py`
+- (Debug) Avvio preview manuale: usa i bottoni in UI; evita di eseguire docker a mano a meno di necessità
+
+---
+
+> **Versione**: 2025-09-01\
+> **Stato**: Allineata all’implementazione corrente di `onboarding_ui.py` e ai moduli correlati. Per modifiche, aprire PR su `docs/guida_ui.md`.
+
