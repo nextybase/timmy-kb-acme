@@ -10,7 +10,7 @@ Nota: la UI usa la façade pubblica `semantic.api` per invocare la logica semant
 ---
 
 ## Prerequisiti
-- **Python  3.10**  
+- **Python >= 3.11**  
 - (Opz.) **Docker** per preview HonKit  
 - (Default Drive) **Service Account JSON** e `DRIVE_ID`
 
