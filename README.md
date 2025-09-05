@@ -1,4 +1,4 @@
-# Timmy KB - README (v1.6.1)
+# Timmy KB - README (v1.7.0)
 
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
@@ -28,7 +28,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 
 ## Prerequisiti
 
-- Python >= 3.10
+- Python >= 3.11
 - Docker (per la preview)
 - Credenziali Google Drive (Service Account JSON) — necessarie per il default di `tag_onboarding` (Drive)
 - (Opz.) GitHub Token (`GITHUB_TOKEN`) per il push
@@ -52,7 +52,7 @@ output/
   timmy-kb-<slug>/
     raw/      # PDF caricati/scaricati
     book/     # Markdown + SUMMARY.md + README.md
-    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db
+    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db, finance.db (opz.)
     config/   # config.yaml (aggiornato con eventuali ID Drive)
     logs/     # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
 ```
@@ -176,4 +176,3 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Pubblicazione su GitHub: vengono inclusi solo i `.md` di `book/`.  
 - La sandbox/dataset dummy (`timmy-kb-dummy`) è usata nei test automatici per verificare coerenza e idempotenza della pipeline.  
 - Per scenari air-gapped usa `tag_onboarding --source=local` e popola `raw/` manualmente.
-

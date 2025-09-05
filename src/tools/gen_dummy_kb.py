@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # src/tools/gen_dummy_kb.py
 """
 Tool: generazione sandbox *dummy* per Timmy-KB + tagging semantico iniziale (CSV).
@@ -33,10 +33,10 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 try:
-    import yaml  # PyYAML è richiesta
+    import yaml  # PyYAML Ã¨ richiesta
 except Exception as e:  # pragma: no cover
     raise RuntimeError(
-        "PyYAML è richiesta per questo tool. Installa con: pip install pyyaml"
+        "PyYAML Ã¨ richiesta per questo tool. Installa con: pip install pyyaml"
     ) from e
 
 # ---------------------------------------------------------------------
@@ -67,6 +67,15 @@ try:
     from pipeline.path_utils import ensure_within
     from pipeline.file_utils import safe_write_text, safe_write_bytes
     from pipeline.logging_utils import get_structured_logger, tail_path
+    from semantic.tags_io import (
+        write_tagging_readme as _write_tagging_readme,
+        write_tags_review_stub_from_csv as _write_review_stub_from_csv,
+    )
+
+    try:
+        from finance.api import import_csv as _fin_import_csv  # type: ignore
+    except Exception:  # pragma: no cover
+        _fin_import_csv = None  # type: ignore
 except Exception as e:
     raise RuntimeError(
         "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e 'src/pipeline' "
@@ -75,7 +84,7 @@ except Exception as e:
 
 
 # ---------------------------------------------------------------------
-# Utilità base
+# UtilitÃ  base
 # ---------------------------------------------------------------------
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
     if not p.exists():
@@ -224,7 +233,7 @@ def _min_config_yaml(client_name: str) -> str:
 
 
 # ---------------------------------------------------------------------
-# Costruzione SOLO dell’albero raw/ da cartelle_raw.yaml
+# Costruzione SOLO dellâ€™albero raw/ da cartelle_raw.yaml
 # ---------------------------------------------------------------------
 def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
     name = str(node.get("name") or "").strip()
@@ -283,7 +292,7 @@ def _emit_pdfs_from_pdf_dummy(
     for section, payload in pdf_dummy.items():
         if not isinstance(payload, dict):
             raise RuntimeError(
-                f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi)."
+                f"pdf_dummy.yaml: sezione '{section}' non Ã¨ un mapping (titolo/paragrafi)."
             )
         titolo = str(payload.get("titolo") or section).strip()
         paragrafi = payload.get("paragrafi")
@@ -298,7 +307,7 @@ def _emit_pdfs_from_pdf_dummy(
         else:
             sub = _RAW_SECTIONS.get(section)
             if not sub:
-                continue  # NON RAW (es. contrattualistica) → skip
+                continue  # NON RAW (es. contrattualistica) â†’ skip
             dst_dir = raw_dir / sub
             file_name = f"{sub}_intro_{slug}.pdf"
 
@@ -326,7 +335,7 @@ def build_dummy_kb(
     Args:
         slug: identificatore cliente.
         client_name: nome cliente.
-        overwrite: se True, sovrascrive file già presenti.
+        overwrite: se True, sovrascrive file giÃ  presenti.
         logger: logger strutturato per audit (opzionale).
 
     Returns:
@@ -335,7 +344,7 @@ def build_dummy_kb(
     # Log iniziale
     if logger:
         logger.info(
-            "▶️  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name}
+            "â–¶ï¸  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name}
         )
 
     # 1) leggi template contrattuali
@@ -359,7 +368,7 @@ def build_dummy_kb(
     if logger:
         logger.info("Base destinazione risolta", extra={"base": str(base), "tail": tail_path(base)})
 
-    # 3) crea cartelle standard + SOLO l’albero raw/
+    # 3) crea cartelle standard + SOLO lâ€™albero raw/
     book_dir = base / "book"
     semantic_dir = base / "semantic"
     config_dir = base / "config"
@@ -427,9 +436,9 @@ def build_dummy_kb(
             },
         )
 
-    # 7) CSV via moduli semantic (RAW → tags_raw.csv)
+    # 7) CSV via moduli semantic (RAW â†’ tags_raw.csv)
     if logger:
-        logger.info("Estrazione candidati semantici (RAW → tags_raw.csv)")
+        logger.info("Estrazione candidati semantici (RAW â†’ tags_raw.csv)")
     cfg = load_semantic_config(base)
 
     candidates = extract_semantic_candidates(cfg.raw_dir, cfg)
@@ -453,9 +462,45 @@ def build_dummy_kb(
             extra={"file_path": str(tags_csv_path), "candidates": cand_len, "normalized": norm_len},
         )
 
+    # README_TAGGING e stub reviewed -> genera DB SQLite minimale (tags.db)
+    try:
+        _write_tagging_readme(semantic_dir, logger or get_structured_logger("gen_dummy_kb"))
+        _write_review_stub_from_csv(
+            semantic_dir, tags_csv_path, logger or get_structured_logger("gen_dummy_kb"), top_n=8
+        )
+        if logger:
+            logger.info(
+                "tags_reviewed stub generato in DB (da CSV)",
+                extra={"csv": str(tags_csv_path), "db": str(semantic_dir / "tags.db")},
+            )
+    except Exception as e:
+        if logger:
+            logger.warning("Impossibile generare stub reviewed/DB", extra={"error": str(e)})
+
+    # (Opz.) Finanza: genera un CSV minimo e importalo in semantic/finance.db
+    try:
+        if _fin_import_csv is not None:
+            fin_csv = semantic_dir / "finance_dummy.csv"
+            fin_rows = [
+                "metric,period,value,unit,currency,canonical_term\n",
+                "revenues,2023,1250000,EUR,EUR,fatturato\n",
+                "ebitda,2023Q4,210000,EUR,EUR,ebitda\n",
+                "market_share,2024H1,0.123,, ,quota-mercato\n",
+            ]
+            _write_text_in_base(base, fin_csv, "".join(fin_rows), overwrite=True)
+            res = _fin_import_csv(base, fin_csv)  # type: ignore[misc]
+            if logger:
+                logger.info(
+                    "Finanza: import CSV",
+                    extra={"csv": str(fin_csv), "rows": res.get("rows"), "db": res.get("db")},
+                )
+    except Exception as e:
+        if logger:
+            logger.warning("Import finanza fallito (opzionale)", extra={"error": str(e)})
+
     if logger:
         logger.info(
-            "✅ Sandbox dummy creata",
+            "âœ… Sandbox dummy creata",
             extra={"base": str(base), "base_tail": tail_path(base), "raw_tail": tail_path(raw_dir)},
         )
     return base
@@ -480,7 +525,7 @@ def _parse_args() -> argparse.Namespace:
         default=DEFAULT_CLIENT_NAME,
         help="Nome cliente (default: Cliente Dummy)",
     )
-    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file già esistenti")
+    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file giÃ  esistenti")
     return p.parse_args()
 
 
@@ -512,7 +557,7 @@ def main() -> int:
             logger = early_logger  # fallback
 
         logger.info(
-            "🏁 Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)}
+            "ðŸ Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)}
         )
         return 0
     except KeyboardInterrupt:

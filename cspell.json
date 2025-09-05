@@ -85,7 +85,22 @@
     "Clas",
     "evagrin",
     "ctxp",
-    "monkeypatcha"
+    "monkeypatcha",
+    "NeXT",
+    "Probabilismo",
+    "MCP",
+    "SQLite",
+    "SemVer",
+    "KeyBERT",
+    "YAKE",
+    "spaCy",
+    "PyMuPDF",
+    "GitHub",
+    "Git",
+    "CLI",
+    "UI",
+    "Codex",
+    "AGENTS"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

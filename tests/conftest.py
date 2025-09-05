@@ -37,6 +37,10 @@ def dummy_kb(tmp_path: Path) -> Mapping[str, Path]:
             [sys.executable, str(script), "--out", str(kb), "--slug", "dummy"],
             check=True,
         )
+        # Se lo script ha creato una root annidata (timmy-kb-dummy), usa quella
+        nested = kb / "timmy-kb-dummy"
+        if nested.exists():
+            kb = nested
     else:
         # Fallback minimo: crea le cartelle base
         (kb / "raw").mkdir(parents=True, exist_ok=True)

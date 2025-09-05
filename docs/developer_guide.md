@@ -1,9 +1,9 @@
 # Timmy-KB - Developer Guide (v1.7.0)
 
-Questa guida è per chi sviluppa o estende Timmy‑KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
+Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
-> Avvio interfaccia: `streamlit run onboarding_ui.py`  —  vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
@@ -18,18 +18,18 @@ Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integ
 ## Principi architetturali
 - **Separazione dei ruoli**: orchestratori = UX/CLI e controllo flusso; moduli `pipeline/*` e `semantic/*` = logica pura senza I/O interattivo.
 - **Idempotenza**: le operazioni possono essere ripetute senza effetti collaterali. Scritture **atomiche**.
-- **Path‑safety**: ogni I/O passa da SSoT (`ensure_within`, `sanitize_filename`).
+- **Path-safety**: ogni I/O passa da SSoT (`ensure_within`, `sanitize_filename`).
 - **Configurazione esplicita**: variabili d'ambiente lette tramite `ClientContext`; niente valori magici sparsi.
 - **Logging strutturato** con redazione automatica se `LOG_REDACTION` è attivo.
 
-Vedi anche: [Coding Rules](coding_rules.md) e [Architecture](architecture.md).
+Vedi anche: [Coding Rules](coding_rule.md) e [Architecture](architecture.md).
 
 ---
 
 ## Setup locale
 
 ### Requisiti
-- **Python ≥ 3.10**
+- **Python >= 3.11**
 - (Opz.) **Docker** per la preview HonKit
 - (Se usi Drive) JSON del **Service Account** e `DRIVE_ID`
 
@@ -49,16 +49,16 @@ pip install -r requirements.txt
 ```
 
 ### Variabili d'ambiente utili
-- `SERVICE_ACCOUNT_FILE` → path al JSON del Service Account (Drive)
-- `DRIVE_ID` → ID della cartella root su Drive
-- `GITHUB_TOKEN` → token per push su GitHub (solo `onboarding_full`)
+- `SERVICE_ACCOUNT_FILE`: path al JSON del Service Account (Drive)
+- `DRIVE_ID`: ID della cartella root su Drive
+- `GITHUB_TOKEN`: token per push su GitHub (solo `onboarding_full`)
 - `GIT_DEFAULT_BRANCH`, `LOG_REDACTION`, `ENV`, `CI`, `YAML_STRUCTURE_FILE`
 
 ---
 
 ## Esecuzione: orchestratori vs UI
 
-### Orchestratori (terminal‑first)
+### Orchestratori (terminal-first)
 ```bash
 # 1) Setup locale (+ Drive opzionale)
 py src/pre_onboarding.py --slug acme --name "Cliente ACME"
@@ -80,7 +80,7 @@ streamlit run onboarding_ui.py
 ```
 Guida completa: [docs/guida_ui.md](guida_ui.md).
 
-Nota API: la UI importa le funzioni semantiche dalla façade pubblica `semantic.api` (non dagli underscore di `semantic_onboarding`). Gli orchestratori CLI restano invariati.
+Nota API: la UI importa le funzioni semantiche dalla facade pubblica `semantic.api` (non dagli underscore di `semantic_onboarding`). Gli orchestratori CLI restano invariati.
 
 ---
 
@@ -98,11 +98,11 @@ Dettagli: [architecture.md](architecture.md).
 ---
 
 ## Qualità & DX
-- **Type‑safety**: preferisci firme esplicite e `Optional[...]` solo dove serve; evita `Any` nei moduli core.
+- **Type-safety**: preferisci firme esplicite e `Optional[...]` solo dove serve; evita `Any` nei moduli core.
 - **Pylance/typing**: quando import opzionali possono essere `None`, usa il *narrowing* pattern:
   - wrapper `_require_callable(fn, name)` per funzioni opzionali;
   - controlli `if x is None: raise RuntimeError(...)` per oggetti/moduli opzionali.
-- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c'è l'alternativa stabile.
+- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c’è l'alternativa stabile.
 - **Logging**: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
 - **I/O**: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
 - **Naming**: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
@@ -110,7 +110,7 @@ Dettagli: [architecture.md](architecture.md).
 ---
 
 ## Testing
-- **Dummy dataset** per smoke end‑to‑end:
+- **Dummy dataset** per smoke end-to-end:
   ```bash
   py src/tools/gen_dummy_kb.py --slug dummy
   pytest -ra
@@ -124,7 +124,7 @@ Dettagli: [architecture.md](architecture.md).
 ## Drive & sicurezza
 - Non inserire credenziali nel repo; usa file JSON localmente e variabili d'ambiente.
 - Ogni upload/download passa tramite le API alto livello in `pipeline/drive_utils.py`.
-- Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path‑safety).
+- Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
 
 ---
 
@@ -140,3 +140,4 @@ Dettagli: [architecture.md](architecture.md).
 - Aggiungi/aggiorna i test quando modifichi comportamenti.  
 - Mantieni la documentazione allineata (README + docs/).  
 - Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
+
