@@ -20,6 +20,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilità.
   - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
 - **Changelog**
-  - [CHANGELOG](CHANGELOG.md) - novità e fix per ogni release.
+  - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
 
 > La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.
+

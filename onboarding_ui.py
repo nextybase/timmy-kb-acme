@@ -79,6 +79,13 @@ except Exception:  # pragma: no cover
     sem_get_paths = sem_load_vocab = sem_convert = sem_enrich = sem_write_md = None  # type: ignore
 
 # -----------------------------------------------------------------------------
+# Import Finanza (opzionale)
+# -----------------------------------------------------------------------------
+try:
+    from finance.api import import_csv as fin_import_csv, summarize_metrics as fin_summarize  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover
+    fin_import_csv = fin_summarize = None  # type: ignore
+# -----------------------------------------------------------------------------
 # Streamlit (UI)
 # -----------------------------------------------------------------------------
 try:
@@ -449,6 +456,78 @@ def _ensure_context(slug: str, log: logging.Logger) -> object:
     )  # type: ignore[no-any-return]
 
 
+def _render_finance_tab(log: logging.Logger, slug: str) -> None:
+    from pathlib import Path as _Path
+
+    try:
+        from pipeline.path_utils import ensure_within as _ensure_within  # type: ignore
+        from pipeline.file_utils import safe_write_bytes as _safe_write_bytes  # type: ignore
+    except Exception:
+        _ensure_within = None  # type: ignore
+        _safe_write_bytes = None  # type: ignore
+
+    st.subheader("Finanza (CSV → finance.db)")
+    st.caption(
+        "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
+    )
+    if fin_import_csv is None or fin_summarize is None:
+        st.warning(
+            "Modulo finanza non disponibile. Verificare l'ambiente o l'installazione del progetto."
+        )
+        return
+
+    colA, colB = st.columns([1, 1], gap="large")
+    with colA:
+        file = st.file_uploader(
+            "Carica CSV: metric, period, value, [unit], [currency], [note], [canonical_term]",
+            type=["csv"],
+            accept_multiple_files=False,
+        )
+        if st.button(
+            "Importa in finance.db",
+            key="btn_fin_import",
+            use_container_width=True,
+            disabled=(file is None),
+        ):
+            try:
+                base = sem_get_paths(slug)["base"] if sem_get_paths else _Path(".")
+                sem_dir = base / "semantic"
+                tmp_name = f"tmp-finance-{st.session_state.get('run_id','run')}.csv"
+                tmp_csv = sem_dir / tmp_name
+                if _ensure_within is not None:
+                    _ensure_within(sem_dir, tmp_csv)
+                sem_dir.mkdir(parents=True, exist_ok=True)
+                data = file.read() if file is not None else b""
+                if _safe_write_bytes is not None:
+                    _safe_write_bytes(tmp_csv, data, atomic=True)
+                else:
+                    tmp_csv.write_bytes(data)
+                res = fin_import_csv(base, tmp_csv)  # type: ignore[misc]
+                st.success(
+                    f"Import OK — righe: {res.get('rows', 0)}  in {res.get('db', str(sem_dir / 'finance.db'))}"
+                )
+                log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
+                try:
+                    tmp_csv.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            except Exception as e:
+                st.exception(e)
+    with colB:
+        try:
+            base = sem_get_paths(slug)["base"] if sem_get_paths else _Path(".")
+            summary = fin_summarize(base)  # type: ignore[misc]
+            if summary:
+                st.caption("Metriche presenti:")
+                st.table(
+                    {"metric": [m for m, _ in summary], "osservazioni": [n for _, n in summary]}
+                )
+            else:
+                st.info("Nessuna metrica importata al momento.")
+        except Exception as e:
+            st.exception(e)
+
+
 def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
     st.subheader("Semantica (RAW → BOOK)")
     st.caption(
@@ -676,8 +755,28 @@ def main() -> None:
     _render_header_after_lock(log, slug, client_name)
 
     # Tabs: Semantica nascosta finché non abbiamo scaricato i PDF su raw/
-    tabs_labels: List[str] = ["Configurazione", "Drive"]
-    if st.session_state.get("raw_downloaded"):
+    tabs_labels: List[str] = ["Configurazione", "Drive", "Finanza"]
+
+    # Sblocca la tab "Semantica" se:
+    # - la UI ha appena scaricato i PDF (flag di sessione), oppure
+    # - esiste la cartella raw/ locale del cliente con almeno un PDF (stato reale)
+    raw_ready = False
+    try:
+        if sem_get_paths is not None and slug:
+            raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
+            if raw_dir.exists():
+                try:
+                    # pronto se ci sono PDF in raw/ (ricorsivo)
+                    has_pdfs = any(raw_dir.rglob("*.pdf"))
+                except Exception:
+                    has_pdfs = False
+                # in alternativa, considera pronto se esiste il CSV generato nella fase tag
+                has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
+                raw_ready = bool(has_pdfs or has_csv)
+    except Exception:
+        raw_ready = False
+
+    if st.session_state.get("raw_downloaded") or raw_ready:
         tabs_labels.append("Semantica")
 
     tabs = st.tabs(tabs_labels)
@@ -685,8 +784,10 @@ def main() -> None:
         _render_config_tab(log, slug, client_name)
     with tabs[1]:
         _render_drive_tab(log, slug)
+    with tabs[2]:
+        _render_finance_tab(log, slug)
     if "Semantica" in tabs_labels:
-        with tabs[2]:
+        with tabs[3]:
             _render_semantic_tab(log, slug)
 
 
