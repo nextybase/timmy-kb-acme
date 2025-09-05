@@ -61,3 +61,8 @@ book.json
 .qodana/
 qodana.report/
 qodana.sarif.json
+
+/semantic/
+/=
+/=3.11
+
