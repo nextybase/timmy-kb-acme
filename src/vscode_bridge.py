@@ -1,12 +1,12 @@
-"""File bridge between Streamlit UI and VS Code watcher.
+"""Bridge tra UI Streamlit e watcher di VS Code.
 
-Functions:
+Funzioni:
 - write_request(prompt) -> str
 - read_response() -> Optional[str]
 
-Writes last request to `.timmykb/last_request.prompt` and also copies to
-`.timmykb/history/<timestamp>.prompt`. Reads `.timmykb/last_response.md` if
-present.
+Scrive l'ultima richiesta in `.timmykb/last_request.prompt` e ne copia una
+copia in `.timmykb/history/<timestamp>.prompt`. Legge `.timmykb/last_response.md`
+se presente.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _ensure_dirs() -> None:
 
 
 def write_request(prompt: str) -> str:
-    """Write the prompt to last_request and history. Returns path to last file."""
+    """Scrive il prompt nei file last_request e history. Ritorna il path del file scritto."""
     _ensure_dirs()
     last_path = BASE / "last_request.prompt"
     last_path.write_text(prompt, encoding="utf-8")
@@ -41,7 +41,7 @@ def write_request(prompt: str) -> str:
 
 
 def read_response() -> Optional[str]:
-    """Read last response markdown if present, else None."""
+    """Legge l'ultima risposta markdown se presente, altrimenti None."""
     p = BASE / "last_response.md"
     if p.exists():
         try:

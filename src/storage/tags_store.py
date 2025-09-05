@@ -80,21 +80,22 @@ def _now_iso() -> str:
 
 
 def derive_db_path_from_yaml_path(p: str | Path) -> str:
-    """Given a YAML path (e.g. semantic/tags_reviewed.yaml), return sibling DB path 'tags.db'."""
+    """Dato il path YAML (es. semantic/tags_reviewed.yaml), ritorna il path DB adiacente 'tags.db'."""
     pp = Path(p)
     return str(pp.parent / "tags.db")
 
 
 def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
-    """Return a dict with the same shape as the legacy YAML file.
+    """Ritorna un dict con la stessa struttura del file YAML legacy.
 
+    Struttura:
     {
       "version": str,
       "reviewed_at": str,
       "keep_only_listed": bool,
       "tags": [ {"name": str, "action": str, "synonyms": [str,...], "note": str|None}, ... ]
     }
-    If the DB is missing or empty, return the minimal default structure.
+    Se il DB è assente o vuoto, ritorna la struttura minima di default.
     """
     dbp = Path(db_path)
     if not dbp.parent.exists():
@@ -148,7 +149,7 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
 
 
 def save_tags_reviewed(db_path: str, data: Dict[str, Any]) -> None:
-    """Persist the same dict formerly written to YAML into SQLite (upsert)."""
+    """Persiste in SQLite (upsert) lo stesso dict precedentemente scritto in YAML."""
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(dbp)

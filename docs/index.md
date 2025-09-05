@@ -13,7 +13,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [User Guide](user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, refactor orchestratori, test suggeriti.
   - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicità, versioning.
-  - [Test suite](test_suite.md) - Test smoke e Pydantic.
+  - [Test suite](test_suite.md) - test smoke e suite PyTest.
   - [Guida UI (Streamlit)](guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
   - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
 - **Policy**
@@ -23,4 +23,3 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
 
 > La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.
-

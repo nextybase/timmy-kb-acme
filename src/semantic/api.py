@@ -7,11 +7,11 @@ from typing import Dict, List, Set, TYPE_CHECKING
 # Import orchestrator internals (private helpers) and stable public names
 from semantic_onboarding import (
     get_paths as _get_paths,
-    _load_reviewed_vocab as _load_reviewed_vocab,
     _convert_raw_to_book as _convert_raw_to_book,
     _enrich_frontmatter as _enrich_frontmatter,
     _write_summary_and_readme as _write_summary_and_readme,
 )
+from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 
 # Tipi: a compile-time usiamo il tipo concreto per matchare le firme interne,
 # a runtime restiamo decoupled con il Protocol strutturale.
@@ -30,17 +30,17 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    """Public wrapper: resolve base/raw/book/semantic paths for a client slug."""
+    """Wrapper pubblico: risolve i percorsi base/raw/book/semantic per uno slug cliente."""
     return _get_paths(slug)
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    """Public wrapper: load canonical vocab from SQLite (SSoT).
+    """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT).
 
-    Notes:
-    - Canonical source is the SQLite DB under `semantic/` (e.g., `tags.db`).
-    - Legacy YAML (`tags_reviewed.yaml`) may still exist and be used for migration,
-      but runtime reads the canonical vocab from the DB for consistency and auditability.
+    Note:
+    - La fonte canonica è il DB SQLite sotto `semantic/` (es. `tags.db`).
+    - Lo YAML legacy (`tags_reviewed.yaml`) può esistere per migrazione/authoring,
+      ma a runtime si legge dal DB per coerenza e tracciabilità.
     """
     return _load_reviewed_vocab(base_dir, logger)
 
@@ -48,7 +48,7 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
 def convert_markdown(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
-    """Public wrapper: convert PDFs under raw/ to Markdown under book/."""
+    """Wrapper pubblico: converte i PDF in raw/ in Markdown sotto book/."""
     return _convert_raw_to_book(context, logger, slug=slug)
 
 
@@ -59,12 +59,12 @@ def enrich_frontmatter(
     *,
     slug: str,
 ) -> List[Path]:
-    """Public wrapper: enrich Markdown frontmatter with title and canonical tags."""
+    """Wrapper pubblico: arricchisce i frontmatter dei Markdown con title e tag canonici."""
     return _enrich_frontmatter(context, logger, vocab, slug=slug)
 
 
 def write_summary_and_readme(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> None:
-    """Public wrapper: ensure SUMMARY.md and README.md are generated/validated under book/."""
+    """Wrapper pubblico: garantisce la generazione/validazione di SUMMARY.md e README.md sotto book/."""
     return _write_summary_and_readme(context, logger, slug=slug)

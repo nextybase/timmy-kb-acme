@@ -50,7 +50,7 @@ I documenti in `docs/` riportano la versione in testata. Allineare sempre:
 - `architecture.md`
 - `user_guide.md`
 - `developer_guide.md`
-- `coding_rules.md`
+- `coding_rule.md`
 - `policy_push.md`
 - `versioning_policy.md`
 - `CHANGELOG.md`

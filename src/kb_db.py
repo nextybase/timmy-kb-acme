@@ -1,11 +1,12 @@
-"""Lightweight SQLite storage for Timmy KB.
+"""Archivio SQLite leggero per Timmy KB.
 
-Exposes:
+Espone:
 - insert_chunks(project_slug, scope, path, version, meta_dict, chunks, embeddings)
 - fetch_candidates(project_slug, scope, limit=64)
 
-This module centralizes DB path handling and initialization. Embeddings are
-stored as JSON arrays for portability. Uses WAL mode to reduce lock contention.
+Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
+Le embedding sono salvate come array JSON per portabilità. Usa la modalità WAL
+per ridurre la contesa dei lock.
 """
 
 from __future__ import annotations
@@ -27,21 +28,21 @@ DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "kb.sqlite"
 
 
 def ensure_data_dir(path: Path | str = DEFAULT_DATA_DIR) -> Path:
-    """Ensure the data directory exists and return it."""
+    """Garantisce l'esistenza della cartella dati e la ritorna."""
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def get_db_path() -> Path:
-    """Return the SQLite DB path (ensures parent dir)."""
+    """Ritorna il path del DB SQLite (creando la dir padre se manca)."""
     ensure_data_dir(DEFAULT_DATA_DIR)
     return DEFAULT_DB_PATH
 
 
 @contextmanager
 def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
-    """Context manager for SQLite connection with sane PRAGMAs."""
+    """Context manager per connessione SQLite con PRAGMA adeguati."""
     dbp = Path(db_path) if db_path else get_db_path()
     dbp.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(str(dbp), timeout=30, check_same_thread=False)
@@ -55,7 +56,7 @@ def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
 
 
 def init_db(db_path: Optional[Path] = None) -> None:
-    """Create tables and indexes if missing."""
+    """Crea tabelle e indici se mancanti."""
     with connect(db_path) as con:
         con.execute(
             """
