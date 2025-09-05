@@ -100,7 +100,18 @@
     "CLI",
     "UI",
     "Codex",
-    "AGENTS"
+    "AGENTS",
+    "getpid",
+    "mojibake",
+    "ftfy",
+    "pyproject",
+    "Qodana",
+    "rmtree",
+    "keyphrases",
+    "dedup",
+    "EXTRAHEADER",
+    "PYTHONIOENCODING",
+    "PYTHONUTF"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

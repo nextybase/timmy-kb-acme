@@ -82,7 +82,10 @@ except Exception:  # pragma: no cover
 # Import Finanza (opzionale)
 # -----------------------------------------------------------------------------
 try:
-    from finance.api import import_csv as fin_import_csv, summarize_metrics as fin_summarize  # type: ignore  # noqa: E402
+    from finance.api import (  # type: ignore  # noqa: E402
+        import_csv as fin_import_csv,
+        summarize_metrics as fin_summarize,
+    )
 except Exception:  # pragma: no cover
     fin_import_csv = fin_summarize = None  # type: ignore
 # -----------------------------------------------------------------------------
@@ -451,7 +454,10 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                                 prog.progress(pct)
                                 status.markdown(f"{pct}% â€” {label}")
 
-                            res = download_raw_from_drive_with_progress(slug=slug, on_progress=_pcb)  # type: ignore[misc]
+                            res = download_raw_from_drive_with_progress(
+                                slug=slug,
+                                on_progress=_pcb,
+                            )  # type: ignore[misc]
                         except Exception:
                             res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
                         count = len(res) if hasattr(res, "__len__") else None

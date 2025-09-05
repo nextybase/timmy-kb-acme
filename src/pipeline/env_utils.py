@@ -73,7 +73,7 @@ def get_env_var(
         default: valore di default se assente/vuota.
         required: se True, solleva ConfigError quando la variabile è assente o vuota.
 
-    Returns:
+    Restituisce:
         Il valore (stringa) o `None`.
     """
     value = os.getenv(key, default)
@@ -214,9 +214,6 @@ def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") 
 # ================================
 
 
-from typing import Any
-
-
 def get_force_allowed_branches(context: Any | None = None) -> list[str]:
     """
     Legge l'allow-list dei branch per il force push dalla variabile:
@@ -247,7 +244,7 @@ def is_branch_allowed_for_force(
     """
     Verifica se `branch` è consentito per il force push.
 
-    Returns:
+    Restituisce:
         True se almeno un pattern combacia (fnmatch), altrimenti False.
         Se la allow-list non è impostata/è vuota → `allow_if_unset`.
     """
