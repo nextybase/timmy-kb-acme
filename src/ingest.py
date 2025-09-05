@@ -1,11 +1,12 @@
-"""Ingestion utilities for Timmy KB.
+"""
+Utility di ingestion per Timmy KB.
 
-Functions:
+Funzioni:
 - ingest_path(project_slug, scope, path, version, meta)
 - ingest_folder(project_slug, scope, folder_glob, version, meta)
 
-Reads text files, splits into chunks, embeds, and stores in SQLite via
-kb_db.insert_chunks. Skips binary files. Logs a summary.
+Legge file di testo, li divide in chunk, calcola le embedding e le salva in SQLite
+tramite kb_db.insert_chunks. Salta i file binari. Registra un riepilogo nei log.
 """
 
 from __future__ import annotations
@@ -24,16 +25,16 @@ LOGGER = logging.getLogger("timmy_kb.ingest")
 
 def _read_text_file(p: Path) -> Optional[str]:
     try:
-        # Try UTF-8 first
+        # Prova prima con UTF-8
         return p.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        # Fallback common encodings (senza continue in except)
+        # Fallback su codifiche comuni (senza continue in except)
         for enc in ("utf-16", "latin-1"):
             try:
                 return p.read_text(encoding=enc)
             except (UnicodeDecodeError, OSError):
-                LOGGER.debug("Fallback encoding failed for %s with %s", p, enc)
-        LOGGER.warning("Cannot read text file: %s", p)
+                LOGGER.debug("Fallback di codifica fallito per %s con %s", p, enc)
+        LOGGER.warning("Impossibile leggere file di testo: %s", p)
         return None
 
 
@@ -43,7 +44,7 @@ def _is_binary(path: Path) -> bool:
             chunk = f.read(1024)
         if b"\0" in chunk:
             return True
-        # Heuristic: if many non-text bytes
+        # Euristica: se troppi byte non testuali
         text_bytes = sum(c in b"\n\r\t\f\v\b\x1b" or 32 <= c <= 126 for c in chunk)
         return text_bytes / max(1, len(chunk)) < 0.9
     except Exception:
@@ -60,10 +61,10 @@ def _try_import_tiktoken() -> ModuleType | None:
 
 
 def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -> List[str]:
-    """Chunk text by tokens when possible, else by chars."""
+    """Divide il testo in chunk basati su token quando possibile, altrimenti per caratteri."""
     tk = _try_import_tiktoken()
     if tk is None:
-        # Fallback: char length ~ 4 chars per token heuristic
+        # Fallback: lunghezza in caratteri ~ 4 caratteri per token (euristica)
         size = target_tokens * 4
         ov = overlap_tokens * 4
         chunks: List[str] = []
@@ -84,13 +85,13 @@ def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -
 
 
 class OpenAIEmbeddings(EmbeddingsClient):
-    """Simple embeddings client around openai>=1.x API."""
+    """Client semplice per calcolare embedding tramite API openai>=1.x."""
 
     def __init__(self: "OpenAIEmbeddings", model: str = "text-embedding-3-small") -> None:
         try:
             from openai import OpenAI  # type: ignore
-        except Exception as e:  # pragma: no cover - import error path
-            raise RuntimeError("openai package not available. Please install openai>=1.x") from e
+        except Exception as e:  # pragma: no cover - errore di import
+            raise RuntimeError("Pacchetto openai non disponibile. Installa openai>=1.x") from e
         self._OpenAI = OpenAI
         self._client = OpenAI()
         self._model = model
@@ -117,13 +118,13 @@ def ingest_path(
     meta: Dict,
     embeddings_client: Optional[EmbeddingsClient] = None,
 ) -> int:
-    """Ingest a single text file: chunk, embed, save. Returns chunk count."""
+    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
     p = Path(path)
     if not p.exists() or not p.is_file():
-        LOGGER.error("ingest_path: not a file: %s", path)
+        LOGGER.error("ingest_path: non è un file valido: %s", path)
         return 0
     if _is_binary(p):
-        LOGGER.info("Skipping binary file: %s", path)
+        LOGGER.info("File binario saltato: %s", path)
         return 0
     text = _read_text_file(p)
     if text is None:
@@ -132,7 +133,7 @@ def ingest_path(
     client = embeddings_client or OpenAIEmbeddings()
     vectors_seq = client.embed_texts(chunks)
 
-    # Converte in List[List[float]] per compat con insert_chunks
+    # Converte in List[List[float]] per compatibilità con insert_chunks
     vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
 
     inserted = insert_chunks(
@@ -145,7 +146,11 @@ def ingest_path(
         embeddings=vectors,
     )
     LOGGER.info(
-        "ingest_path: %s -> %d chunks stored for %s/%s", path, inserted, project_slug, scope
+        "ingest_path: %s -> %d chunk salvati per progetto=%s scope=%s",
+        path,
+        inserted,
+        project_slug,
+        scope,
     )
     return inserted
 
@@ -158,9 +163,9 @@ def ingest_folder(
     meta: Dict,
     embeddings_client: Optional[EmbeddingsClient] = None,
 ) -> Dict[str, int]:
-    """Ingest all .md/.txt files under the given glob.
+    """Ingest di tutti i file .md/.txt che corrispondono al glob indicato.
 
-    Returns a summary dict with counts: {files, chunks}.
+    Restituisce un dizionario di riepilogo con i conteggi: {files, chunks}.
     """
     files = [Path(p) for p in glob(folder_glob, recursive=True)]
     files = [p for p in files if p.is_file() and p.suffix.lower() in {".md", ".txt"}]
@@ -179,11 +184,11 @@ def ingest_folder(
             if n > 0:
                 total_chunks += n
                 count_files += 1
-        except Exception as e:  # robust ingest
-            LOGGER.exception("Error ingesting %s: %s", p, e)
+        except Exception as e:  # ingest robusto
+            LOGGER.exception("Errore durante ingestion di %s: %s", p, e)
             continue
     LOGGER.info(
-        "ingest_folder summary: files=%d chunks=%d scope=%s project=%s",
+        "Riepilogo ingest_folder: files=%d chunks=%d scope=%s project=%s",
         count_files,
         total_chunks,
         scope,

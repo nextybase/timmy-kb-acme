@@ -1,4 +1,5 @@
-"""Archivio SQLite leggero per Timmy KB.
+"""
+Archivio SQLite leggero per Timmy KB.
 
 Espone:
 - insert_chunks(project_slug, scope, path, version, meta_dict, chunks, embeddings)
@@ -19,34 +20,33 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
-
 LOGGER = logging.getLogger("timmy_kb.kb_db")
-
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "kb.sqlite"
 
 
 def ensure_data_dir(path: Path | str = DEFAULT_DATA_DIR) -> Path:
-    """Garantisce l'esistenza della cartella dati e la ritorna."""
+    """Garantisce l'esistenza della cartella dati e la restituisce."""
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def get_db_path() -> Path:
-    """Ritorna il path del DB SQLite (creando la dir padre se manca)."""
+    """Restituisce il path del DB SQLite (creando la directory padre se manca)."""
     ensure_data_dir(DEFAULT_DATA_DIR)
     return DEFAULT_DB_PATH
 
 
 @contextmanager
 def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
-    """Context manager per connessione SQLite con PRAGMA adeguati."""
+    """Context manager per una connessione SQLite con PRAGMA adeguati."""
     dbp = Path(db_path) if db_path else get_db_path()
     dbp.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(str(dbp), timeout=30, check_same_thread=False)
     try:
+        # Configurazioni di performance e integrità
         con.execute("PRAGMA journal_mode=WAL;")
         con.execute("PRAGMA synchronous=NORMAL;")
         con.execute("PRAGMA foreign_keys=ON;")
@@ -73,6 +73,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             );
             """
         )
+        # Crea un indice composito per ricerche rapide su progetto e scope
         con.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_chunks_project_scope
@@ -80,7 +81,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             """
         )
         con.commit()
-    LOGGER.debug("DB initialized at %s", (db_path or get_db_path()))
+    LOGGER.debug("DB inizializzato in %s", (db_path or get_db_path()))
 
 
 def insert_chunks(
@@ -93,12 +94,12 @@ def insert_chunks(
     embeddings: List[List[float]],
     db_path: Optional[Path] = None,
 ) -> int:
-    """Insert chunk+embedding rows. Returns number of rows inserted.
+    """Inserisce righe (chunk + embedding). Restituisce il numero di righe inserite.
 
-    Raises ValueError if lengths mismatch.
+    Solleva ValueError se le lunghezze di chunks ed embeddings non coincidono.
     """
     if len(chunks) != len(embeddings):
-        raise ValueError("chunks and embeddings length mismatch")
+        raise ValueError("il numero di chunks non coincide con il numero di embeddings")
     init_db(db_path)
     now = datetime.utcnow().isoformat()
     rows = [
@@ -109,7 +110,7 @@ def insert_chunks(
             version,
             json.dumps(meta_dict, ensure_ascii=False),
             chunk,
-            json.dumps(vec),
+            json.dumps(vec, ensure_ascii=False),
             now,
         )
         for chunk, vec in zip(chunks, embeddings)
@@ -125,7 +126,9 @@ def insert_chunks(
         )
         con.commit()
         inserted = cur.rowcount if cur.rowcount is not None else len(rows)
-    LOGGER.info("Inserted %d chunks for %s/%s from %s", inserted, project_slug, scope, path)
+    LOGGER.info(
+        "Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path
+    )
     return inserted
 
 
@@ -135,10 +138,10 @@ def fetch_candidates(
     limit: int = 64,
     db_path: Optional[Path] = None,
 ) -> Iterator[Dict]:
-    """Yield candidate rows for a (project_slug, scope).
+    """Restituisce (iterator) i candidati per (project_slug, scope).
 
-    Each yielded dict has: content(str), meta(dict), embedding(list[float]).
-    Ordered by newest first. LIMIT is applied at SQL level.
+    Ogni dict prodotto contiene: content (str), meta (dict), embedding (list[float]).
+    Ordinati dal più recente. Il LIMIT è applicato a livello SQL.
     """
     init_db(db_path)
     sql = (
@@ -151,8 +154,10 @@ def fetch_candidates(
                 meta = json.loads(meta_json) if meta_json else {}
             except json.JSONDecodeError:
                 meta = {}
+                LOGGER.warning("Meta JSON non valido: %s", meta_json)
             try:
-                emb = json.loads(emb_json)
+                emb = json.loads(emb_json) if emb_json else []
             except json.JSONDecodeError:
                 emb = []
+                LOGGER.warning("Embedding JSON non valido: %s", emb_json)
             yield {"content": content, "meta": meta, "embedding": emb}
