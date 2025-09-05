@@ -349,6 +349,41 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
         "Crea la struttura su Drive a partire dal mapping rivisto e genera i README nelle sottocartelle di `raw/`."
     )
 
+    # Preflight Drive: mostra env e verifica accesso
+    with st.expander("Preflight Drive", expanded=False):
+        import os as _os
+        from pathlib import Path as _P
+
+        saf = _os.getenv("SERVICE_ACCOUNT_FILE") or ""
+        did = _os.getenv("DRIVE_ID") or ""
+
+        def _mask_path(p: str) -> str:
+            try:
+                return _P(p).name if p else "(unset)"
+            except Exception:
+                return "(invalid)"
+
+        def _mask_id(s: str) -> str:
+            return (s[:6] + "…") if s else "(unset)"
+
+        st.write(f"SERVICE_ACCOUNT_FILE: {_mask_path(saf)}")
+        st.write(f"DRIVE_ID: {_mask_id(did)}")
+
+        if st.button(
+            "Verifica credenziali Drive", key="btn_drive_preflight", use_container_width=True
+        ):
+            try:
+                from pipeline.context import ClientContext as _Ctx  # type: ignore
+                from pipeline.drive_utils import get_drive_service as _gds  # type: ignore
+
+                ctx = _Ctx.load(slug=slug, interactive=False, require_env=True, run_id=None)
+                svc = _gds(ctx)
+                # chiamata leggera per testare accesso
+                _ = svc.about().get(fields="user").execute()
+                st.success("OK: credenziali e accesso Drive verificati.")
+            except Exception as e:
+                st.exception(e)
+
     colA, colB = st.columns([1, 1], gap="large")
 
     with colA:
