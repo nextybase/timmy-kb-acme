@@ -20,6 +20,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - DRY validazioni: `enrich_markdown_folder` ora delega a `_list_markdown_files` per path-safety/esistenza.
 - SRP `content_utils`: estratti helper `_iter_category_pdfs` e `_render_category_markdown` per separare traversal/rendering.
 - Documentazione aggiornata (README, Developer Guide, Coding Rules, Index) con note su contratti SSoT e type checking.
+ - Error handling: `_ensure_safe` in `pipeline.content_utils` ora cattura solo `ConfigError` (propaga altre eccezioni), evitando di mascherare errori imprevisti.
 
 ### Fixed
 - Pulizia `flake8` e formattazione Black nei nuovi test e moduli toccati.
