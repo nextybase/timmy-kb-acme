@@ -136,7 +136,41 @@ Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatte
 2. **Arricchisci frontmatter**
 
    - Carica il **vocabolario rivisto** (SSoT attuale: **DB SQLite** gestito da `storage/tags_store`, migrato dallo YAML storico)
-   - Aggiunge frontmatter coerente (`title`, `tags` canonici, eventuali alias)
+    - Aggiunge frontmatter coerente (`title`, `tags` canonici, eventuali alias)
+
+---
+
+## 6bis) Vision Statement (output YAML)
+
+Dopo l'upload di `config/VisionStatement.pdf`, la pipeline genera automaticamente un file YAML strutturato in:
+
+`config/vision_statement.yaml`
+
+Schema di riferimento (placeholder, stabile per integrazioni future):
+
+```yaml
+meta:
+  title: VisionStatement
+vision: "..."
+mission: "..."
+ethical_framework: ["..."]
+goals:
+  general: ["..."]
+  baskets:
+    b3: ["..."]
+    b6: ["..."]
+    b12: ["..."]
+uvp: ["..."]
+stakeholders_impact: ["..."]
+key_metrics: ["..."]
+risks_mitigations: ["..."]
+operating_model: ["..."]
+architecture_principles: ["..."]
+ethics_governance_tools: ["..."]
+roadmap_baskets: ["..."]
+```
+
+Nota: il parser attuale è un segnaposto robusto (regex su titoli noti). In futuro potrà essere sostituito da un estrattore AI senza cambiare lo schema.
 
 3. **README & SUMMARY**
 
