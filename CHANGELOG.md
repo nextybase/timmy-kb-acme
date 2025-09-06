@@ -4,6 +4,26 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
+## [1.8.2] - 2025-09-06
+
+### Changed
+- UI Onboarding (`onboarding_ui.py`):
+  - Introdotto helper `_mark_modified_and_bump_once` per centralizzare il bump versione (N_VER) e il flag `modified`, rimuovendo duplicazioni.
+  - Sblocco tab “Semantica” ottimizzato: cache di `raw_ready` in sessione per evitare scansioni FS ripetute; aggiunto pulsante “Rileva PDF in raw/” per aggiornare lo stato senza nuovo download.
+  - Generazione README su Drive ora chiama `emit_readmes_for_raw(..., ensure_structure=True)` per garantire la struttura quando necessario.
+- Runner Drive (`src/config_ui/drive_runner.py`):
+  - Evitata ricreazione non necessaria della struttura in `emit_readmes_for_raw` con nuovo parametro `ensure_structure` (default: False) e lookup della cartella `raw/` via listing.
+  - De-duplicazione download: `download_raw_from_drive` delega alla variante con progress (`download_raw_from_drive_with_progress` con `on_progress=None`).
+  - Pre-scan delle liste Drive eseguito solo se serve la barra di avanzamento; in caso semplice, singolo passaggio per ridurre le chiamate API.
+- Test: suite invariata (nessun cambiamento ai contratti pubblici); refactor trasparente.
+
+### Fixed
+- UI: normalizzati caratteri e simboli (“→”, accenti) in titoli e didascalie.
+- Documentazione: ripulita “mojibake” in `docs/guida_ui.md`, `docs/user_guide.md`, `docs/index.md`; aggiunte note su “ensure_structure” e pulsante “Rileva PDF in raw/”.
+
+### Notes
+- Nessun breaking change; migliorate performance e manutenibilità (DRY) su UI/Drive. Tutti i test passano: 46 passed.
+
 ## [1.8.1] - 2025-09-06
 
 ### Added

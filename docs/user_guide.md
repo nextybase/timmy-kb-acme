@@ -1,11 +1,11 @@
-# Timmy-KB - User Guide (v1.8.1)
+﻿# Timmy-KB - User Guide (v1.8.1)
 
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
 > Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
 
-Nota: la UI usa la façade pubblica `semantic.api` per tutta la logica semantica (gli helper interni/ex-CLI sono deprecati).
+Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica (gli helper interni/ex-CLI sono deprecati).
 
 ---
 
@@ -27,6 +27,10 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 3. Tab **Drive**: crea struttura, genera README, poi **Scarica PDF** su `raw/`.  
 4. Tab **Semantica**: **Converti**  **Arricchisci**  **README & SUMMARY**.  
 5. (Opz.) Avvia **Preview Docker**.
+
+Note Drive nella UI:
+- La generazione dei README usa la variante che assicura la struttura delle cartelle.
+- È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
@@ -76,4 +80,10 @@ output/timmy-kb-<slug>/
 - `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).  
 - PDF non scaricati in UI  assicurati di aver prima **generato i README** in `raw/` e di avere permessi Drive corretti.  
 - Preview non parte  verifica Docker e porta libera.
+
+
+
+
+
+
 

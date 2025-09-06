@@ -201,7 +201,11 @@ def _drive_upload_bytes(service: Any, parent_id: str, name: str, data: bytes, mi
 
 
 def emit_readmes_for_raw(
-    slug: str, *, base_root: Path | str = "output", require_env: bool = True
+    slug: str,
+    *,
+    base_root: Path | str = "output",
+    require_env: bool = True,
+    ensure_structure: bool = False,
 ) -> Dict[str, str]:
     """
     Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback) con:
@@ -215,21 +219,32 @@ def emit_readmes_for_raw(
     mapping = load_tags_reviewed(slug, base_root=base_root)
     cats, _ = split_mapping(mapping)
 
-    # crea/recupera struttura
+    # crea/recupera struttura cliente; opzionalmente crea albero RAW da mapping
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
     client_folder_id = create_drive_folder(
         svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
-    structure = mapping_to_raw_structure(mapping)
-    tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
-    created_map = create_drive_structure_from_yaml(
-        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
-    )
-    raw_id = created_map.get("raw")
+
+    raw_id: Optional[str] = None
+    if ensure_structure:
+        structure = mapping_to_raw_structure(mapping)
+        tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
+        created_map = create_drive_structure_from_yaml(
+            svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+        )
+        raw_id = created_map.get("raw")
+    else:
+        # Non ricreare la struttura: cerca la cartella 'raw' esistente
+        sub = _drive_list_folders(svc, client_folder_id)
+        name_to_id = {d["name"]: d["id"] for d in sub}
+        raw_id = name_to_id.get("raw")
+
     if not raw_id:
-        raise RuntimeError("Cartella 'raw' non trovata/creata.")
+        raise RuntimeError(
+            "Cartella 'raw' non trovata/creata. Esegui 'Crea/aggiorna struttura Drive' e riprova."
+        )
 
     # sottocartelle RAW
     subfolders = _drive_list_folders(svc, raw_id)
@@ -277,93 +292,18 @@ def download_raw_from_drive(
 
     Ritorna la lista dei percorsi scritti localmente.
     """
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
-    log = logger or _get_logger(ctx)
-    svc = get_drive_service(ctx)
-
-    parent_id = ctx.env.get("DRIVE_ID")
-    if not parent_id:
-        raise RuntimeError("DRIVE_ID non impostato.")
-
-    # Trova/crea cartella cliente e RAW
-    client_folder_id = create_drive_folder(
-        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+    return download_raw_from_drive_with_progress(
+        slug,
+        base_root=base_root,
+        require_env=require_env,
+        overwrite=overwrite,
+        logger=logger,
+        on_progress=None,
     )
-    sub = _drive_list_folders(svc, client_folder_id)
-    name_to_id = {d["name"]: d["id"] for d in sub}
-    raw_id = name_to_id.get("raw")
-    if not raw_id:
-        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
 
-    # Elenca le sottocartelle di RAW
-    raw_subfolders = _drive_list_folders(svc, raw_id)
-
-    # Base dir locale
-    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    base_dir.mkdir(parents=True, exist_ok=True)
-
-    # Import per download binario
-    try:
-        from googleapiclient.http import MediaIoBaseDownload
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
-
-    written: List[Path] = []
-
-    for folder in raw_subfolders:
-        folder_name = folder["name"]  # giÃ  kebab-case dal provisioning
-        folder_id = folder["id"]
-
-        # Elenca i PDF in questa sottocartella
-        q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
-        resp = (
-            svc.files()
-            .list(
-                q=q,
-                spaces="drive",
-                fields="nextPageToken, files(id, name, mimeType)",
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-        files = resp.get("files", [])
-
-        # Destinazione locale
-        dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        for f in files:
-            file_id = f["id"]
-            name = f["name"]
-            # Normalizza nome file (evita path traversal)
-            safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
-            dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
-
-            if dest.exists() and not overwrite:
-                log.info({"event": "raw_download_skip_exists", "path": str(dest)})
-                continue
-
-            request = svc.files().get_media(fileId=file_id)
-            tmp = dest.with_suffix(dest.suffix + ".part")
-
-            # Download chunked su file temporaneo
-            with open(tmp, "wb") as fh:
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while not done:
-                    status, done = downloader.next_chunk()
-
-            # Commit atomico
-            os.replace(tmp, dest)
-            written.append(dest)
-            log.info({"event": "raw_downloaded", "path": str(dest)})
-
-    log.info({"event": "raw_download_summary", "count": len(written)})
-    return written
+    # Variante con progress callback (UI helper)
 
 
-# Variante con progress callback (UI helper)
 def download_raw_from_drive_with_progress(
     slug: str,
     *,
@@ -400,61 +340,101 @@ def download_raw_from_drive_with_progress(
     except Exception as e:  # pragma: no cover
         raise RuntimeError("googleapiclient non disponibile. Installa le dipendenze Drive.") from e
 
-    # Preconta
-    total = 0
-    by_folder: Dict[str, List[Dict[str, str]]] = {}
-    for folder in raw_subfolders:
-        folder_id = folder["id"]
-        q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
-        resp = (
-            svc.files()
-            .list(
-                q=q,
-                spaces="drive",
-                fields="nextPageToken, files(id, name, mimeType)",
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-        files = resp.get("files", [])
-        by_folder[folder_id] = files
-        total += len(files)
-    done = 0
-
     written: List[Path] = []
-    for folder in raw_subfolders:
-        folder_name = folder["name"]
-        folder_id = folder["id"]
-        files = by_folder.get(folder_id, [])
-        dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        for f in files:
-            file_id = f["id"]
-            name = f["name"]
-            safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
-            dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
 
-            if dest.exists() and not overwrite:
-                log.info({"event": "raw_download_skip_exists", "path": str(dest)})
-                done += 1
-                if on_progress:
+    if on_progress:
+        # Preconta solo se necessario per progress globale
+        total = 0
+        by_folder: Dict[str, List[Dict[str, str]]] = {}
+        for folder in raw_subfolders:
+            folder_id = folder["id"]
+            q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
+            resp = (
+                svc.files()
+                .list(
+                    q=q,
+                    spaces="drive",
+                    fields="nextPageToken, files(id, name, mimeType)",
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+            files = resp.get("files", [])
+            by_folder[folder_id] = files
+            total += len(files)
+        done = 0
+
+        for folder in raw_subfolders:
+            folder_name = folder["name"]
+            folder_id = folder["id"]
+            files = by_folder.get(folder_id, [])
+            dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                file_id = f["id"]
+                name = f["name"]
+                safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
+                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+
+                if dest.exists() and not overwrite:
+                    log.info({"event": "raw_download_skip_exists", "path": str(dest)})
+                    done += 1
                     on_progress(done, total, f"{folder_name}/{safe_name}")
-                continue
+                    continue
 
-            request = svc.files().get_media(fileId=file_id)
-            tmp = dest.with_suffix(dest.suffix + ".part")
-            with open(tmp, "wb") as fh:
-                downloader = MediaIoBaseDownload(fh, request)
-                _done = False
-                while not _done:
-                    status, _done = downloader.next_chunk()
-            os.replace(tmp, dest)
-            written.append(dest)
-            log.info({"event": "raw_downloaded", "path": str(dest)})
-            done += 1
-            if on_progress:
+                request = svc.files().get_media(fileId=file_id)
+                tmp = dest.with_suffix(dest.suffix + ".part")
+                with open(tmp, "wb") as fh:
+                    downloader = MediaIoBaseDownload(fh, request)
+                    _done = False
+                    while not _done:
+                        status, _done = downloader.next_chunk()
+                os.replace(tmp, dest)
+                written.append(dest)
+                log.info({"event": "raw_downloaded", "path": str(dest)})
+                done += 1
                 on_progress(done, total, f"{folder_name}/{safe_name}")
+    else:
+        # Nessun progress: singolo passaggio senza pre-scan
+        for folder in raw_subfolders:
+            folder_name = folder["name"]
+            folder_id = folder["id"]
+            q = f"'{folder_id}' in parents and " f"mimeType = 'application/pdf' and trashed = false"
+            resp = (
+                svc.files()
+                .list(
+                    q=q,
+                    spaces="drive",
+                    fields="nextPageToken, files(id, name, mimeType)",
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+            files = resp.get("files", [])
+            dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                file_id = f["id"]
+                name = f["name"]
+                safe_name = name.replace("\\", "_").replace("/", "_").strip() or "file.pdf"
+                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+
+                if dest.exists() and not overwrite:
+                    log.info({"event": "raw_download_skip_exists", "path": str(dest)})
+                    continue
+
+                request = svc.files().get_media(fileId=file_id)
+                tmp = dest.with_suffix(dest.suffix + ".part")
+                with open(tmp, "wb") as fh:
+                    downloader = MediaIoBaseDownload(fh, request)
+                    _done = False
+                    while not _done:
+                        status, _done = downloader.next_chunk()
+                os.replace(tmp, dest)
+                written.append(dest)
+                log.info({"event": "raw_downloaded", "path": str(dest)})
 
     log.info({"event": "raw_download_summary", "count": len(written)})
     return written

@@ -162,6 +162,23 @@ def _safe_streamlit_rerun() -> None:
 # =============================================================================
 # Componenti UI
 # =============================================================================
+def _mark_modified_and_bump_once(
+    slug: str, log: logging.Logger, *, context: Optional[object] = None
+) -> None:
+    """Segna la sessione come modificata e fa bump N_VER una sola volta.
+
+    Usa un contesto passato se disponibile, altrimenti lo carica.
+    """
+    try:
+        if (not bool(st.session_state.get("bumped"))) and bump_n_ver_if_needed is not None:
+            ctx = context if context is not None else _ensure_context(slug, log)
+            bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
+            st.session_state["bumped"] = True
+        st.session_state["modified"] = True
+    except Exception:
+        pass
+
+
 def _render_landing_inputs(log: logging.Logger) -> Tuple[bool, str, str]:
     """
     Schermata iniziale: SOLO due input centrali (slug, nome cliente).
@@ -301,17 +318,7 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
                                 }
                             )
                             # Versioning: bump N_VER una sola volta per sessione
-                            try:
-                                if (
-                                    not bool(st.session_state.get("bumped"))
-                                    and bump_n_ver_if_needed is not None
-                                ):
-                                    ctx = _ensure_context(slug, log)
-                                    bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
-                                    st.session_state["bumped"] = True
-                                st.session_state["modified"] = True
-                            except Exception:
-                                pass
+                            _mark_modified_and_bump_once(slug, log)
                             st.success(f"Salvata la voce: {cat_key}")
                             try:
                                 _safe_streamlit_rerun()
@@ -352,17 +359,7 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
                 st.success(f"Salvato: {path}")
                 log.info({"event": "tags_reviewed_saved_all", "slug": slug, "path": str(path)})
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        ctx = _ensure_context(slug, log)
-                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log)
             except Exception as e:
                 st.exception(e)
 
@@ -444,22 +441,12 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
             use_container_width=True,
         ):
             try:
-                result = emit_readmes_for_raw(slug=slug)
+                result = emit_readmes_for_raw(slug=slug, ensure_structure=True)
                 st.success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
                 st.session_state["drive_readmes_done"] = True
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        ctx = _ensure_context(slug, log)
-                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log)
             except FileNotFoundError as e:
                 st.error(
                     "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
@@ -470,7 +457,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 st.exception(e)
 
     # -------------------------------------------------------------------------
-    # Nuova sezione: download PDF da Drive â†’ raw/ (visibile SOLO dopo i README)
+    # Nuova sezione: download PDF da Drive → raw/ (visibile SOLO dopo i README)
     # -------------------------------------------------------------------------
     if st.session_state.get("drive_readmes_done"):
         st.markdown("---")
@@ -511,12 +498,40 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                         )
                         log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                         st.session_state["raw_downloaded"] = True
+                        st.session_state["raw_ready"] = True
                         try:
                             _safe_streamlit_rerun()  # per sbloccare la tab Semantica
                         except Exception:
                             pass
                     except Exception as e:
                         st.exception(e)
+            st.markdown("")
+            if st.button(
+                "Rileva PDF in raw/",
+                key="btn_drive_detect_raw_ready",
+                use_container_width=True,
+            ):
+                try:
+                    if sem_get_paths is not None and slug:
+                        raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
+                        has_pdfs = any(raw_dir.rglob("*.pdf")) if raw_dir.exists() else False
+                        has_csv = (
+                            (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
+                            if raw_dir.exists()
+                            else False
+                        )
+                        st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
+                        st.success(
+                            "Rilevazione completata: "
+                            + (
+                                "PDF trovati o CSV presente."
+                                if st.session_state["raw_ready"]
+                                else "nessun PDF rilevato."
+                            )
+                        )
+                        _safe_streamlit_rerun()
+                except Exception as e:
+                    st.exception(e)
         with c2:
             st.write(
                 (
@@ -528,7 +543,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
 
 
 # =============================================================================
-# Tab: Semantica (RAW â†’ BOOK + frontmatter + README/SUMMARY + preview)
+# Tab: Semantica (RAW → BOOK + frontmatter + README/SUMMARY + preview)
 # =============================================================================
 def _ensure_context(slug: str, log: logging.Logger) -> object:
     # Nessun prompt da UI; env non obbligatorio per operazioni locali
@@ -550,7 +565,7 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
         _ensure_within = None  # type: ignore
         _safe_write_bytes = None  # type: ignore
 
-    st.subheader("Finanza (CSV â†’ finance.db)")
+    st.subheader("Finanza (CSV → finance.db)")
     st.caption(
         "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
     )
@@ -592,17 +607,7 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
                 )
                 log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        ctx = _ensure_context(slug, log)
-                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log)
                 try:
                     tmp_csv.unlink(missing_ok=True)
                 except Exception:
@@ -625,7 +630,7 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
 
 
 def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
-    st.subheader("Semantica (RAW â†’ BOOK)")
+    st.subheader("Semantica (RAW → BOOK)")
     st.caption(
         "Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale."
     )
@@ -645,7 +650,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
     colA, colB = st.columns([1, 1], gap="large")
 
     with colA:
-        st.markdown("**1) Conversione RAW â†’ BOOK**")
+        st.markdown("**1) Conversione RAW → BOOK**")
         if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
             try:
                 mds: List[Path] = sem_convert(context, log, slug=slug)  # type: ignore[misc]
@@ -659,16 +664,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     }
                 )
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log, context=context)
             except Exception as e:
                 st.exception(e)
 
@@ -692,16 +688,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     }
                 )
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log, context=context)
             except Exception as e:
                 st.exception(e)
 
@@ -721,16 +708,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     }
                 )
                 # Versioning: bump N_VER una sola volta per sessione
-                try:
-                    if (
-                        not bool(st.session_state.get("bumped"))
-                        and bump_n_ver_if_needed is not None
-                    ):
-                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
-                        st.session_state["bumped"] = True
-                    st.session_state["modified"] = True
-                except Exception:
-                    pass
+                _mark_modified_and_bump_once(slug, log, context=context)
             except Exception as e:
                 st.exception(e)
 
@@ -894,21 +872,22 @@ def main() -> None:
     # Sblocca la tab "Semantica" se:
     # - la UI ha appena scaricato i PDF (flag di sessione), oppure
     # - esiste la cartella raw/ locale del cliente con almeno un PDF (stato reale)
-    raw_ready = False
-    try:
-        if sem_get_paths is not None and slug:
-            raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
-            if raw_dir.exists():
-                try:
-                    # pronto se ci sono PDF in raw/ (ricorsivo)
-                    has_pdfs = any(raw_dir.rglob("*.pdf"))
-                except Exception:
-                    has_pdfs = False
-                # in alternativa, considera pronto se esiste il CSV generato nella fase tag
-                has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
-                raw_ready = bool(has_pdfs or has_csv)
-    except Exception:
-        raw_ready = False
+    raw_ready = bool(st.session_state.get("raw_ready"))
+    if not raw_ready:
+        try:
+            if sem_get_paths is not None and slug:
+                raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
+                if raw_dir.exists():
+                    try:
+                        # pronto se ci sono PDF in raw/ (ricorsivo)
+                        has_pdfs = any(raw_dir.rglob("*.pdf"))
+                    except Exception:
+                        has_pdfs = False
+                    # in alternativa, considera pronto se esiste il CSV generato nella fase tag
+                    has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
+                    raw_ready = bool(has_pdfs or has_csv)
+        except Exception:
+            raw_ready = False
 
     if st.session_state.get("raw_downloaded") or raw_ready:
         tabs_labels.append("Semantica")

@@ -1,4 +1,4 @@
-# Onboarding UI    guida aggiornata
+﻿# Onboarding UI    guida aggiornata
 
 Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni. 
 
@@ -89,13 +89,15 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 **Sequenza tipica**
 
 1. **Crea/aggiorna struttura**: genera l'albero cartelle per il cliente, incluse `raw/` e sotto-cartelle per ambiti/categorie
-2. **Genera README per raw/**: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l'upload dei materiali
+2. **Genera README per raw/**: PDF (o TXT fallback) caricati su Drive, uno per sottocartella, per istruire l'upload dei materiali. Dalla UI si usa la variante che assicura la struttura.
 3. **Download contenuti**: scarica i file da Drive su disco locale  `raw/` del workspace; al termine imposta lo stato `raw_downloaded=True`
+
+> Pulsante aggiuntivo: "Rileva PDF in raw/" aggiorna lo stato senza rifare il download (scansione locale di PDF/CSV).
 
 **Funzioni usate (modulo `config_ui.drive_runner`)**
 
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
-- `emit_readmes_for_raw(slug)`
+ - `emit_readmes_for_raw(slug, ensure_structure=True)`
 - `download_raw_from_drive_with_progress(slug)` (se disponibile) o `download_raw_from_drive(slug)`
 
 **Requisiti ENV**
@@ -115,7 +117,7 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 
 ## 6) Tab "Semantica"
 
-Scopo: conversione **RAW  BOOK** (PDFMarkdown), **arricchimento frontmatter** con tag canonici e generazione/validazione di **README & SUMMARY** per la navigazione; opzionalmente **Preview Docker**.
+Scopo: conversione **RAW → BOOK** (PDF→Markdown), **arricchimento frontmatter** con tag canonici e generazione/validazione di **README & SUMMARY** per la navigazione; opzionalmente **Preview Docker**.
 
 **Context**
 
@@ -310,11 +312,11 @@ from semantic.api import (
 ```
 
 Note di transizione:
-- Evitare nuovi import da `semantic_onboarding`; migrare alla façade pubblica.
+- Evitare nuovi import da `semantic_onboarding`; migrare alla facade pubblica.
 - Le firme pubbliche riportate qui sono considerate stabili; eventuali cambiamenti saranno versionati e documentati.
 
 ## Prerequisiti
-- Docker attivo (Docker Desktop su Windows/macOS; WSL2 su Windows consigliato).
+- Docker attivo (Docker Desktop su Windows/macosì WSL2 su Windows consigliato).
 - Porte libere per la preview (default `4000`). Configurabile dalla UI.
 - Ambiente Drive opzionale: credenziali e permessi se si usa il download da Drive.
 - Python >= 3.11 e dipendenze installate secondo `requirements*.txt`.
@@ -324,7 +326,7 @@ Checklist rapida
 - Verifica porta: apri `http://127.0.0.1:4000` dopo l'avvio preview.
 - Se usi Drive: test del token/credenziali con il comando di download.
 
-## SSoT Tag e Migrazione (YAML  SQLite)
+## SSoT Tag e Migrazione (YAML → SQLite)
 - Fonte di verità dei tag: `output/<slug>/semantic/tags.db` (SQLite).
 - Il vecchio `tags_reviewed.yaml` resta supportato come input per migrare.
 - Script di migrazione: `tools/migrate_yaml_to_db.py`.
@@ -340,6 +342,23 @@ Suggerimenti operativi
 - Le funzioni interne con underscore di `src/semantic_onboarding.py` sono deprecate e non più supportate in UI.
 - Usare la facade pubblica `semantic.api` per import stabili: `get_paths`, `load_reviewed_vocab`, `convert_markdown`, `enrich_frontmatter`, `write_summary_and_readme`.
 - Le chiamate agli underscore generano `DeprecationWarning` a runtime per favorire la migrazione.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
