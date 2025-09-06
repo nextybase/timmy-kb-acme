@@ -17,6 +17,12 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Pre-scan delle liste Drive eseguito solo se serve la barra di avanzamento; in caso semplice, singolo passaggio per ridurre le chiamate API.
 - Test: suite invariata (nessun cambiamento ai contratti pubblici); refactor trasparente.
 
+### Added
+- Vision parser placeholder: `semantic/vision_parser.pdf_to_vision_yaml()` genera `config/vision_statement.yaml` dal PDF `config/VisionStatement.pdf` durante il nuovo onboarding (UI slug-first).
+
+### Removed
+- Rimosso il parser legacy `src/config_ui/vision_parser.py` e il vecchio flusso `semantic/vision.yaml`. Il file canonico ora è `config/vision_statement.yaml`.
+
 ### Fixed
 - UI: normalizzati caratteri e simboli (“→”, accenti) in titoli e didascalie.
 - Documentazione: ripulita “mojibake” in `docs/guida_ui.md`, `docs/user_guide.md`, `docs/index.md`; aggiunte note su “ensure_structure” e pulsante “Rileva PDF in raw/”.

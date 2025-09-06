@@ -94,6 +94,8 @@ Scopo: **provisioning** della struttura su Google Drive a partire dal mapping, *
 
 > Pulsante aggiuntivo: "Rileva PDF in raw/" aggiorna lo stato senza rifare il download (scansione locale di PDF/CSV).
 
+> Nota Vision: al primo onboarding, dopo l'upload di `config/VisionStatement.pdf`, la pipeline genera automaticamente il file YAML strutturato `config/vision_statement.yaml` (parser placeholder, schema stabile per integrazioni future).
+
 **Funzioni usate (modulo `config_ui.drive_runner`)**
 
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
