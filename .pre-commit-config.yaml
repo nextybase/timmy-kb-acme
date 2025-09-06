@@ -28,3 +28,13 @@ repos:
         entry: python tools/dev/forbid_unsafe_writes.py
         language: python
         types: [python]
+      - id: forbid-runtime-asserts
+        name: Forbid runtime asserts in src/
+        entry: python tools/dev/forbid_runtime_asserts.py
+        language: python
+        types: [python]
+      - id: forbid-path-write-text-bytes
+        name: Forbid Path.write_text/bytes in src/
+        entry: python tools/dev/forbid_path_writetext_bytes.py
+        language: python
+        types: [python]

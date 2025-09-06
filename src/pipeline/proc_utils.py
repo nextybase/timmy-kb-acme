@@ -290,7 +290,8 @@ def run_cmd(
             continue
 
         # Fine tentativi → solleva l'ultimo errore
-        assert last_err is not None
+        if last_err is None:
+            raise CmdError("Unexpected state: no captured error on failure", cmd=argv, op=op_label)
         raise last_err
 
     # Fallback per type checker: non raggiungibile a runtime

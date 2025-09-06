@@ -19,12 +19,25 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ### Changed
 - src/config_ui/utils.py ora delega alle utility pipeline (ensure_within, safe_write_text, to_kebab).
-- Log ASCII‑only per messaggi console; rimossi emoji/simboli non ASCII.
+- Log ASCII-only per messaggi console; rimossi emoji/simboli non ASCII.
 - config/cartelle_raw.yaml convertito al formato moderno.
+- Refactor leggibilità `content_utils`: estratti helper puri e `__all__` per API chiara.
+- Ottimizzazione `semantic_extractor.extract_semantic_concepts`: pre-normalizzazione keyword e early-exit per file.
+- Tipizzazione: introdotti `Protocol` locali (`_Context`, `_Ctx`) in moduli che usano subset del contesto.
 
 ### Fixed
 - Normalizzati messaggi logger in vari moduli (pre_onboarding, gitbook_preview, github_utils, config_utils).
-- Runner Drive: generazione README coerente (titoli ed elenchi ASCII) e logging alias‑free.
+- Runner Drive: generazione README coerente (titoli ed elenchi ASCII) e logging alias-free.
+- Path-safety e scritture atomiche: `vscode_bridge.py` ora usa `safe_write_text` + `ensure_within` (niente `Path.write_text`).
+- Fail-fast coerente: rimossi `assert` runtime in `proc_utils.py` e `tag_onboarding.py` sostituiti con eccezioni tipizzate.
+
+### Tooling / Governance
+- Pre-commit: aggiunti hook locali
+  - `forbid-runtime-asserts` (blocca `assert` in `src/`),
+  - `forbid-path-write-text-bytes` (blocca `Path.write_text/bytes` in `src/`).
+- Documentazione aggiornata:
+  - `.codex/CODING_STANDARDS.md`: policy pre-commit, API di modulo con `__all__`, uso `Protocol`.
+  - `.codex/CHECKLISTS.md`: sezione “Pre-commit policies”.
 
 ---## [1.7.0] - 2025-09-01
 

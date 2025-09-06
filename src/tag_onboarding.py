@@ -294,8 +294,12 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
             parent_db_path = str(Path(db_path).parent).replace("\\", "/")
             if parent_db_path == ".":
                 parent_db_path = "raw"
-        parent_id = upsert_folder(conn, db_path, parent_db_path)
-    assert parent_id is not None
+    parent_id = upsert_folder(conn, db_path, parent_db_path)
+    if parent_id is None:
+        raise PipelineError(
+            "upsert_folder_chain: parent_id non determinato",
+            file_path=str(folder_path),
+        )
     return parent_id
 
 

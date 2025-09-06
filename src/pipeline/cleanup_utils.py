@@ -16,14 +16,20 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Protocol
 
 from pipeline.logging_utils import get_structured_logger
+from pipeline.exceptions import PipelineError
 from pipeline.path_utils import ensure_within  # SSoT guardia STRONG
-from pipeline.context import ClientContext
 
 # Logger di modulo (fallback).
 logger = get_structured_logger("pipeline.cleanup_utils")
+
+
+class _Ctx(Protocol):
+    md_dir: Path | None
+    base_dir: Path | None
+    slug: str | None
 
 
 def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
@@ -51,7 +57,7 @@ def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
 
 
 def clean_push_leftovers(
-    context: ClientContext,
+    context: _Ctx,
     *,
     logger_name: str = "pipeline.cleanup_utils",
 ) -> Dict[str, Any]:
@@ -69,8 +75,9 @@ def clean_push_leftovers(
     """
     _logger = get_structured_logger(logger_name, context=context)
 
-    # Assicurazioni formali per type checker (campi opzionali nel contesto)
-    assert context.md_dir is not None and context.base_dir is not None
+    # Fail-fast esplicito su campi richiesti
+    if context.md_dir is None or context.base_dir is None:
+        raise PipelineError("Contesto incompleto: md_dir/base_dir mancanti")
     book_dir: Path = context.md_dir
     base_dir: Path = context.base_dir
 

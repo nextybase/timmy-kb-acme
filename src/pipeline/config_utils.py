@@ -132,8 +132,12 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
     Raises:
         ConfigError: in caso di errore I/O.
     """
-    # Assicurazioni formali per Pylance: campi opzionali nel contesto
-    assert context.output_dir is not None and context.base_dir is not None
+    # Fail-fast esplicito su campi richiesti del contesto
+    if context.output_dir is None or context.base_dir is None:
+        raise PipelineError(
+            "Contesto incompleto: output_dir/base_dir mancanti",
+            slug=context.slug,
+        )
     config_dir = context.output_dir / CONFIG_DIR_NAME
     config_path = config_dir / CONFIG_FILE_NAME
 
@@ -179,7 +183,8 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     Raises:
         ConfigError: se il file non esiste o in caso di errore di lettura/parsing.
     """
-    assert context.config_path is not None
+    if context.config_path is None:
+        raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
@@ -204,7 +209,11 @@ def validate_preonboarding_environment(
         PreOnboardingValidationError: per config mancante/non valida o YAML malformato.
     """
     base_dir = base_dir or context.base_dir
-    assert base_dir is not None and context.config_path is not None
+    if base_dir is None or context.config_path is None:
+        raise PipelineError(
+            "Contesto incompleto: base_dir/config_path mancanti",
+            slug=context.slug,
+        )
 
     if not context.config_path.exists():
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
@@ -287,7 +296,11 @@ def update_config_with_drive_ids(
     Raises:
         ConfigError: se la lettura/scrittura del config fallisce o se il file è assente.
     """
-    assert context.config_path is not None and context.base_dir is not None
+    if context.config_path is None or context.base_dir is None:
+        raise PipelineError(
+            "Contesto incompleto: config_path/base_dir mancanti",
+            slug=context.slug,
+        )
     config_path = context.config_path
 
     if not config_path.exists():

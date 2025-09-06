@@ -18,18 +18,21 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Protocol
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, InputDirectoryMissing
-from pipeline.context import ClientContext
 from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
 
 
-def _list_markdown_files(
-    context: ClientContext, logger: Optional[logging.Logger] = None
-) -> List[Path]:
+class _Ctx(Protocol):
+    base_dir: Path | None
+    md_dir: Path | None
+    slug: str | None
+
+
+def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None) -> List[Path]:
     """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto.
 
     Raises:
@@ -37,8 +40,12 @@ def _list_markdown_files(
         InputDirectoryMissing: se la directory markdown non esiste o non è una cartella valida.
     """
     logger = logger or get_structured_logger("semantic.files", context=context)
-    # Assicurazioni formali su campi opzionali del contesto
-    assert context.md_dir is not None and context.base_dir is not None
+    # Fail-fast esplicito su campi richiesti
+    if getattr(context, "md_dir", None) is None or getattr(context, "base_dir", None) is None:
+        raise PipelineError(
+            "Contesto incompleto: md_dir/base_dir mancanti",
+            slug=getattr(context, "slug", None),
+        )
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(
             f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir
@@ -58,7 +65,7 @@ def _list_markdown_files(
 
 
 def extract_semantic_concepts(
-    context: ClientContext,
+    context: _Ctx,
     logger: Optional[logging.Logger] = None,
     *,
     max_scan_bytes: Optional[int] = None,
@@ -95,6 +102,19 @@ def extract_semantic_concepts(
             extracted_data[concept] = []
             continue
 
+        # Pre-normalizza le keyword (ordine stabile, dedup case-insensitive)
+        seen_lowers: set[str] = set()
+        norm_kws: List[tuple[str, str]] = []  # (lower, original)
+        for kw in keywords:
+            k = str(kw).strip()
+            if not k:
+                continue
+            kl = k.lower()
+            if kl in seen_lowers:
+                continue
+            seen_lowers.add(kl)
+            norm_kws.append((kl, k))
+
         matches: List[Dict[str, str]] = []
         for file in markdown_files:
             try:
@@ -119,12 +139,11 @@ def extract_semantic_concepts(
 
                 content = file.read_text(encoding="utf-8")
                 content_l = content.lower()
-                for kw in keywords:
-                    k = str(kw).strip()
-                    if not k:
-                        continue
-                    if k.lower() in content_l:
-                        matches.append({"file": file.name, "keyword": k})
+
+                # Early-exit: registra solo la prima keyword che fa match per file
+                hit = next((orig for kl, orig in norm_kws if kl in content_l), None)
+                if hit:
+                    matches.append({"file": file.name, "keyword": hit})
             except Exception as e:
                 logger.warning(
                     f"⚠️ Impossibile leggere {file}: {e}",
@@ -137,7 +156,7 @@ def extract_semantic_concepts(
     return extracted_data
 
 
-def enrich_markdown_folder(context: ClientContext, logger: Optional[logging.Logger] = None) -> None:
+def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = None) -> None:
     """Orchestratore dell'arricchimento semantico (placeholder per step futuri).
 
     Raises:
@@ -145,8 +164,12 @@ def enrich_markdown_folder(context: ClientContext, logger: Optional[logging.Logg
         InputDirectoryMissing: se la directory markdown non esiste.
     """
     logger = logger or get_structured_logger("semantic.enrich", context=context)
-    # Assicurazioni formali su campi opzionali del contesto
-    assert context.md_dir is not None and context.base_dir is not None
+    # Fail-fast esplicito su campi richiesti
+    if getattr(context, "md_dir", None) is None or getattr(context, "base_dir", None) is None:
+        raise PipelineError(
+            "Contesto incompleto: md_dir/base_dir mancanti",
+            slug=getattr(context, "slug", None),
+        )
 
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(
@@ -179,3 +202,6 @@ def enrich_markdown_folder(context: ClientContext, logger: Optional[logging.Logg
             continue
 
     logger.info("✅ Arricchimento semantico completato.", extra={"slug": context.slug})
+
+
+__all__ = ["extract_semantic_concepts", "enrich_markdown_folder"]

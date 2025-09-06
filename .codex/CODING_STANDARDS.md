@@ -8,3 +8,16 @@
 - Orchestratori gestiscono input utente e exit codes; moduli interni non chiamano `sys.exit()`/`input()`.
 - Test: pytest, deterministici, senza rete; mock/bypass per Drive/Git. Solo `.md` in `book/` (i `.md.fp` tollerati).
 - Lint: flake8 + mypy coerenti con `pyproject.toml`; rispetta line-length e regole esistenti.
+
+## Policy aggiuntive (pre-commit)
+
+- Vietato usare `assert` runtime in `src/` (consentiti nei test): usa eccezioni tipizzate (`PipelineError`, `ConfigError`, ...).
+  - Hook: `forbid-runtime-asserts` (tools/dev/forbid_runtime_asserts.py)
+- Vietato `Path.write_text/Path.write_bytes` in `src/`: usa `safe_write_text/bytes` (scrittura atomica) dopo guardia `ensure_within`.
+  - Hook: `forbid-path-write-text-bytes` (tools/dev/forbid_path_writetext_bytes.py)
+- SSoT path-safety: chi scrive/copia/elimina deve invocare `ensure_within(base, target)` prima dell’operazione.
+
+## API di modulo e tipizzazione
+
+- Esporta solo l’API pubblica con `__all__ = [...]`; helper/Protocol interni restano con prefisso `_`.
+- Preferisci `Protocol` locali per i parametri `context` quando servono solo pochi attributi; evita dipendenze forti inutili.

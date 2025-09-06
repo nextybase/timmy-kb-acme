@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Protocol
 
 import yaml
 
@@ -29,9 +29,14 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
 from pipeline.exceptions import PipelineError, ConfigError
 from pipeline.constants import SEMANTIC_MAPPING_FILE
-from pipeline.context import ClientContext
 
 __all__ = ["load_semantic_mapping"]
+
+
+class _Ctx(Protocol):
+    config_dir: Optional[Path]
+    repo_root_dir: Optional[Path]
+    slug: Optional[str]
 
 
 def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
@@ -81,7 +86,7 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
 
 
 def load_semantic_mapping(
-    context: ClientContext, logger: Optional[logging.Logger] = None
+    context: _Ctx, logger: Optional[logging.Logger] = None
 ) -> Dict[str, List[str]]:
     """
     Carica e normalizza il mapping semantico per il cliente corrente.
@@ -92,7 +97,8 @@ def load_semantic_mapping(
     logger = logger or get_structured_logger("semantic.mapping", context=context)
 
     # 1) mapping specifico del cliente (sotto sandbox)
-    assert context.config_dir is not None
+    if context.config_dir is None:
+        raise PipelineError("Contesto incompleto: config_dir mancante", slug=context.slug)
     mapping_path = context.config_dir / SEMANTIC_MAPPING_FILE
     try:
         ensure_within(context.config_dir, mapping_path)  # STRONG guard

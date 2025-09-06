@@ -115,7 +115,8 @@ def bootstrap_semantic_templates(
 
     Nota: se vuoi retro-compatibilitÃ , puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
-    assert context.base_dir is not None
+    if context.base_dir is None:
+        raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
     semantic_dir = context.base_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
@@ -213,7 +214,8 @@ def _prepare_context_and_logger(
         slug=slug, interactive=interactive, require_env=require_env, run_id=run_id
     )
 
-    assert context.base_dir is not None
+    if context.base_dir is None:
+        raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
     log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -234,7 +236,11 @@ def _create_local_structure(
     context: ClientContext, logger: logging.Logger, *, client_name: str
 ) -> Path:
     """Crea struttura locale, scrive config, copia template semantici; restituisce il path allo YAML struttura."""
-    assert context.base_dir is not None and context.config_path is not None
+    if context.base_dir is None or context.config_path is None:
+        raise PipelineError(
+            "Contesto incompleto: base_dir/config_path mancanti",
+            slug=context.slug,
+        )
     ensure_within(context.base_dir, context.config_path)
 
     cfg: Dict[str, Any] = {}
@@ -261,9 +267,11 @@ def _create_local_structure(
         },
     )
 
-    assert (
-        context.base_dir is not None and context.raw_dir is not None and context.md_dir is not None
-    )
+    if context.base_dir is None or context.raw_dir is None or context.md_dir is None:
+        raise PipelineError(
+            "Contesto incompleto: base_dir/raw_dir/md_dir mancanti",
+            slug=context.slug,
+        )
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
     with metrics_scope(logger, stage="create_local_structure", customer=context.slug):

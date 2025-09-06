@@ -15,6 +15,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 
 LOGGER = logging.getLogger("timmy_kb.vscode_bridge")
 
@@ -32,10 +34,12 @@ def write_request(prompt: str) -> str:
     """Scrive il prompt nei file last_request e history. Ritorna il path del file scritto."""
     _ensure_dirs()
     last_path = BASE / "last_request.prompt"
-    last_path.write_text(prompt, encoding="utf-8")
+    ensure_within(BASE, last_path)
+    safe_write_text(last_path, prompt, encoding="utf-8", atomic=True)
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     hist_path = HISTORY / f"{ts}.prompt"
-    hist_path.write_text(prompt, encoding="utf-8")
+    ensure_within(HISTORY, hist_path)
+    safe_write_text(hist_path, prompt, encoding="utf-8", atomic=True)
     LOGGER.info("Prompt written: %s and %s", last_path, hist_path)
     return str(last_path)
 

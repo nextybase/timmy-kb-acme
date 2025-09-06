@@ -1,10 +1,30 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol, Iterable
 
 from pipeline.exceptions import PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from semantic.types import ClientContextProtocol  # usa sempre il protocollo strutturale
+from pipeline.path_utils import ensure_within  # SSoT path-safety
+
+__all__ = [
+    "validate_markdown_dir",
+    "generate_readme_markdown",
+    "generate_summary_markdown",
+    "convert_files_to_structured_markdown",
+]
+
+
+class _Context(Protocol):
+    """Protocollo locale minimo richiesto da queste utilità Markdown.
+
+    Richiede solo i campi usati: `base_dir`, `md_dir`, `raw_dir`, `slug`.
+    """
+
+    base_dir: Path
+    md_dir: Path
+    raw_dir: Path
+    slug: str | None
 
 
 # -----------------------------
@@ -20,16 +40,38 @@ def _titleize(name: str) -> str:
 
 def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
     """
-    Ritorna candidate.resolve() se è sotto base_dir.resolve(),
-    altrimenti solleva PipelineError (protezione path traversal).
+    Wrapper locale che delega la guardia STRONG a `ensure_within` (SSoT)
+    e restituisce il path risolto. Mantiene la semantica di errore del modulo
+    convertendo in `PipelineError` per coerenza con i call-site esistenti.
     """
-    base = Path(base_dir).resolve()
-    cand = Path(candidate).resolve()
     try:
-        cand.relative_to(base)
-    except ValueError:
-        raise PipelineError(f"Unsafe directory: {candidate}")
-    return cand
+        ensure_within(base_dir, candidate)
+    except Exception as e:
+        raise PipelineError(f"Unsafe directory: {candidate}") from e
+    return Path(candidate).resolve()
+
+
+# ---- Helpers estratti per leggibilità --------------------------------------
+def _sorted_pdfs(cat_dir: Path) -> list[Path]:
+    return sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+
+
+def _append_folder_headings(
+    lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]
+) -> None:
+    for depth, folder in enumerate(folder_parts):
+        level = 2 + depth
+        key = (depth, folder.lower())
+        if key not in emitted:
+            lines += ["", f"{'#' * level} {_titleize(folder)}"]
+            emitted.add(key)
+
+
+def _append_pdf_section(lines: list[str], file_stem: str, *, level: int, filename: str) -> None:
+    lines += [
+        f"{'#' * level} {_titleize(file_stem)}",
+        f"(Contenuto estratto/conversione da `{filename}`)",
+    ]
 
 
 # -----------------------------
@@ -37,10 +79,10 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 # -----------------------------
 
 
-def validate_markdown_dir(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
+def validate_markdown_dir(ctx: _Context, md_dir: Path | None = None) -> Path:
     """
     Verifica che la cartella markdown esista, sia una directory e sia "safe"
-    rispetto a ctx.base_dir. Ritorna il Path risolto se è valida.
+    rispetto a ctx.base_dir. Ritorna il Path risolto se valida.
     """
     # Evita passaggi di Path|None a Path(...)
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
@@ -53,7 +95,7 @@ def validate_markdown_dir(ctx: ClientContextProtocol, md_dir: Path | None = None
     return target
 
 
-def generate_readme_markdown(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
+def generate_readme_markdown(ctx: _Context, md_dir: Path | None = None) -> Path:
     """
     Crea (o sovrascrive) README.md nella cartella markdown target.
     I test verificano solo l'esistenza del file.
@@ -73,7 +115,7 @@ def generate_readme_markdown(ctx: ClientContextProtocol, md_dir: Path | None = N
     return readme
 
 
-def generate_summary_markdown(ctx: ClientContextProtocol, md_dir: Path | None = None) -> Path:
+def generate_summary_markdown(ctx: _Context, md_dir: Path | None = None) -> Path:
     """
     Genera SUMMARY.md elencando i .md nella cartella target
     (escludendo README.md e SUMMARY.md).
@@ -96,9 +138,7 @@ def generate_summary_markdown(ctx: ClientContextProtocol, md_dir: Path | None = 
     return summary
 
 
-def convert_files_to_structured_markdown(
-    ctx: ClientContextProtocol, md_dir: Path | None = None
-) -> None:
+def convert_files_to_structured_markdown(ctx: _Context, md_dir: Path | None = None) -> None:
     """
     Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file
     <categoria>.md dentro md_dir con struttura:
@@ -113,11 +153,10 @@ def convert_files_to_structured_markdown(
     raw_root = ctx.raw_dir
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
 
-    # sicurezza percorso per target e raw_root
-    _ensure_safe(base, target_input)
-    _ensure_safe(base, raw_root)
+    # sicurezza percorso per target e raw_root (usa i path risolti)
+    target = _ensure_safe(base, target_input)
+    raw_root = _ensure_safe(base, raw_root)
 
-    target = target_input
     target.mkdir(parents=True, exist_ok=True)
 
     if not raw_root.exists():
@@ -126,10 +165,7 @@ def convert_files_to_structured_markdown(
         raise PipelineError(f"Raw path is not a directory: {raw_root}")
 
     # categorie = sole directory immediate sotto raw/
-    categories = sorted(
-        (d for d in raw_root.iterdir() if d.is_dir()),
-        key=lambda d: d.name.lower(),
-    )
+    categories = sorted((d for d in raw_root.iterdir() if d.is_dir()), key=lambda d: d.name.lower())
 
     for cat_dir in categories:
         cat_name = cat_dir.name
@@ -138,7 +174,7 @@ def convert_files_to_structured_markdown(
         lines: list[str] = [f"# {_titleize(cat_name)}"]
 
         # tutti i PDF ricorsivi nella categoria
-        pdfs = sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+        pdfs = _sorted_pdfs(cat_dir)
         if not pdfs:
             lines += ["", "_Nessun PDF trovato in questa categoria._"]
         else:
@@ -146,24 +182,15 @@ def convert_files_to_structured_markdown(
             emitted_folders: set[tuple[int, str]] = set()
 
             for pdf in pdfs:
-                rel = pdf.relative_to(cat_dir)  # es. "2024/Q4/doc1.pdf" o "doc2.pdf"
-                parts = list(rel.parts)
-
-                # heading delle sottocartelle
-                folder_parts = parts[:-1]
-                for depth, folder in enumerate(folder_parts):  # depth 0 -> H2, depth 1 -> H3, ...
-                    level = 2 + depth
-                    key = (depth, folder.lower())
-                    if key not in emitted_folders:
-                        lines += ["", f"{'#' * level} {_titleize(folder)}"]
-                        emitted_folders.add(key)
+                rel_parts = list(
+                    pdf.relative_to(cat_dir).parts
+                )  # es. "2024/Q4/doc1.pdf" o "doc2.pdf"
+                folder_parts = rel_parts[:-1]
+                _append_folder_headings(lines, folder_parts, emitted=emitted_folders)
 
                 # heading del PDF
-                file_stem = Path(parts[-1]).stem  # es. "doc1"
+                file_stem = Path(rel_parts[-1]).stem  # es. "doc1"
                 level = 2 + max(0, len(folder_parts))  # depth=0 -> H2, depth=2 -> H4
-                lines += [
-                    f"{'#' * level} {_titleize(file_stem)}",
-                    f"(Contenuto estratto/conversione da `{parts[-1]}`)",
-                ]
+                _append_pdf_section(lines, file_stem, level=level, filename=rel_parts[-1])
 
         safe_write_text(md_file, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)

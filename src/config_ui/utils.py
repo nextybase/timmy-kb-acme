@@ -13,10 +13,15 @@ def to_kebab(s: str) -> str:
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:
+    """Valida che `target` ricada sotto `root` e ritorna il path risolto.
+
+    Usa `ensure_within` (SSoT) per la guardia STRONG e restituisce `Path.resolve()`
+    del target per coerenza con il nome della funzione.
+    """
     root_p = Path(root)
     tgt_p = Path(target)
     ensure_within(root_p, tgt_p)
-    return tgt_p
+    return tgt_p.resolve()
 
 
 def safe_write_text_compat(path: Path | str, content: str, *, encoding: str = "utf-8") -> None:

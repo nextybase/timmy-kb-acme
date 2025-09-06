@@ -10,6 +10,11 @@
 - Path validati (ensure_within); nessuna write “a mano”.
 - Scritture atomiche; rollback definito su errori.
 
+## Pre-commit policies
+- Nessun `assert` runtime in `src/` (solo nei test). Hook: `forbid-runtime-asserts`.
+- Nessun `Path.write_text/bytes` in `src/`. Usa `safe_write_text/bytes` + `ensure_within`. Hook: `forbid-path-write-text-bytes`.
+- Guard-rail SSoT: prima di ogni write/copy/delete chiama `ensure_within(base, target)`.
+
 ## UI / Workflow
 - Gating tab **Semantica** → `raw/` presente.
 - Preview Docker: valida porta (1..65535) e `container_name` sicuro.
