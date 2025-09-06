@@ -75,7 +75,16 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         "Nome cliente", value=st.session_state.get("client_name", ""), key="ls_name"
     )
     pdf = st.file_uploader(
-        "Vision Statement (PDF)", type=["pdf"], accept_multiple_files=False, key="ls_pdf"
+        "Vision Statement (PDF)",
+        type=["pdf"],
+        accept_multiple_files=False,
+        key="ls_pdf",
+        help=(
+            "Perché chiediamo questo PDF?\n"
+            "• È il documento di visione iniziale per contestualizzare la KB.\n"
+            "• Lo salviamo come `config/VisionStatement.pdf` nel workspace locale.\n"
+            "• Puoi aggiornarlo/sostituirlo in seguito nella stessa cartella."
+        ),
     )
 
     disabled = not (slug and client_name and pdf is not None)
