@@ -1,4 +1,4 @@
-# Architettura - Timmy-KB (v1.7.0)
+# Architettura - Timmy-KB (v1.8.1)
 
 Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi end-to-end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo è mantenere coerenza, riuso e sicurezza I/O (path-safety + scritture atomiche).
 

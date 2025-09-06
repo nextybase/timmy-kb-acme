@@ -4,6 +4,29 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
+## [1.8.1] - 2025-09-06
+
+### Added
+- Test unitari/E2E per semantica:
+  - `tests/test_semantic_extractor.py`: `_list_markdown_files`, `extract_semantic_concepts` (`max_scan_bytes`, short-circuit mapping vuoto).
+  - `tests/test_semantic_mapping.py`: normalizzazione varianti (`keywords`/`esempio`/`tags`), fallback e errori.
+  - `tests/test_semantic_api_frontmatter.py`: parse/dump/merge frontmatter, indice inverso e tag guessing.
+  - `tests/test_semantic_api_enrich_frontmatter.py`: flusso E2E con scrittura sicura.
+  - `tests/test_semantic_api_summary_readme.py`: generatori + fallback + validazione.
+- Makefile: target `type-pyright` per eseguire Pyright (o `npx pyright`).
+
+### Changed
+- Refactor per SSoT dei contratti: uso di `semantic.types.ClientContextProtocol` in `pipeline.content_utils` e `semantic.semantic_extractor`; rimozione dei `Protocol` locali duplicati.
+- DRY validazioni: `enrich_markdown_folder` ora delega a `_list_markdown_files` per path-safety/esistenza.
+- SRP `content_utils`: estratti helper `_iter_category_pdfs` e `_render_category_markdown` per separare traversal/rendering.
+- Documentazione aggiornata (README, Developer Guide, Coding Rules, Index) con note su contratti SSoT e type checking.
+
+### Fixed
+- Pulizia `flake8` e formattazione Black nei nuovi test e moduli toccati.
+
+### Notes
+- Nessun breaking change; refactor interni e copertura test ampliata.
+
 ## [1.8.0] - 2025-09-06
 
 ### Breaking
