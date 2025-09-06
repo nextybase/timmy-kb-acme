@@ -339,6 +339,29 @@ def ensure_local_workspace_for_ui(
             updates["client_name"] = resolved_name
         update_config_with_drive_ids(context, updates, logger=logger)
 
+        # Genera YAML strutturato del Vision Statement (placeholder parser)
+        try:
+            from semantic.vision_parser import pdf_to_vision_yaml  # type: ignore
+
+            out_yaml = cfg_dir / "vision_statement.yaml"
+            ensure_within(context.base_dir, out_yaml)
+            pdf_to_vision_yaml(target, out_yaml)
+            logger.info(
+                {
+                    "event": "vision_yaml_generated",
+                    "slug": context.slug,
+                    "file_path": str(out_yaml),
+                }
+            )
+        except Exception as e:
+            logger.warning(
+                {
+                    "event": "vision_yaml_generation_failed",
+                    "slug": context.slug,
+                    "error": str(e).splitlines()[:1],
+                }
+            )
+
     logger.info(
         {
             "event": "new_client_workspace_created",

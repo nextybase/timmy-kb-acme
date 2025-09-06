@@ -1,4 +1,4 @@
-LICENSE.md
+﻿LICENSE.md
 README.md
 pyproject.toml
 src/adapters/content_fallbacks.py
@@ -7,7 +7,6 @@ src/config_ui/__init__.py
 src/config_ui/drive_runner.py
 src/config_ui/mapping_editor.py
 src/config_ui/utils.py
-src/config_ui/vision_parser.py
 src/pipeline/__init__.py
 src/pipeline/cleanup_utils.py
 src/pipeline/config_utils.py
