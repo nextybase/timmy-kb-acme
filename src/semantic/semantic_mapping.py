@@ -86,7 +86,7 @@ def load_semantic_mapping(
     """
     Carica e normalizza il mapping semantico per il cliente corrente.
 
-    Returns:
+    Restituisce:
         dict[str, list[str]]: mapping canonico {concept: [keywords...]}
     """
     logger = logger or get_structured_logger("semantic.mapping", context=context)

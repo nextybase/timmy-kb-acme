@@ -50,7 +50,7 @@ def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
         semantic_dir: Directory in cui generare il README_TAGGING.
         logger: Logger strutturato.
 
-    Returns:
+    Restituisce:
         Path del file README_TAGGING generato.
     """
     semantic_dir = Path(semantic_dir).resolve()

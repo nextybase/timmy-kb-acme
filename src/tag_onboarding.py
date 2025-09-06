@@ -106,7 +106,7 @@ def _prompt(msg: str) -> str:
     Args:
         msg: Messaggio da visualizzare all’utente.
 
-    Returns:
+    Restituisce:
         La risposta inserita dall’utente, già normalizzata con ``strip()``.
     """
     return input(msg).strip()
@@ -126,7 +126,7 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
         raw_dir: Cartella RAW del cliente (destinazione).
         logger: Logger strutturato.
 
-    Returns:
+    Restituisce:
         int: Numero di PDF effettivamente copiati.
 
     Raises:
@@ -200,7 +200,7 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: Any) -> int:
         csv_path: Percorso completo del CSV di output.
         logger: Logger strutturato.
 
-    Returns:
+    Restituisce:
         int: Numero di righe (PDF) scritte nel CSV (escluso header).
     """
     raw_prefix = "raw"
@@ -495,7 +495,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
     Args:
         path: Percorso del file YAML da leggere.
 
-    Returns:
+    Restituisce:
         Dizionario Python ottenuto dal contenuto del file, oppure {} se vuoto.
 
     Raises:
@@ -529,7 +529,7 @@ def _validate_tags_reviewed(data: dict) -> dict:
     Args:
         data: Dizionario Python ottenuto dal parsing di `tags_reviewed.yaml`.
 
-    Returns:
+    Restituisce:
         dict: Un dizionario con:
             - `errors` (List[str]): elenco degli errori bloccanti rilevati.
             - `warnings` (List[str]): elenco degli avvisi non bloccanti.
@@ -637,7 +637,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         slug: Identificatore cliente (slug).
         run_id: ID di correlazione opzionale per i log.
 
-    Returns:
+    Restituisce:
         int: exit code secondo la semantica sopra.
     """
     base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
@@ -846,7 +846,7 @@ def _parse_args() -> argparse.Namespace:
         --proceed: In non-interattivo, prosegue oltre la generazione del CSV.
         --validate-only: Esegue solo la validazione di `tags_reviewed.yaml`.
 
-    Returns:
+    Restituisce:
         argparse.Namespace: lo spazio dei parametri ottenuto dal parsing della CLI.
     """
     p = argparse.ArgumentParser(

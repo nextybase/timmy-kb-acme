@@ -62,7 +62,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     - Idempotenza: se esiste e ha stessa dimensione, salta la copia.
     - Error handling: raccoglie errori di copia e, se presenti, solleva PipelineError a fine ciclo.
 
-    Returns:
+    Restituisce:
         Numero di file copiati con successo.
 
     Raises:

@@ -72,7 +72,7 @@ def extract_semantic_concepts(
         max_scan_bytes: se impostato, i file .md con dimensione > soglia vengono **saltati**
                         (loggando una micro-nota) per evitare scan troppo costosi.
 
-    Returns:
+    Restituisce:
         dict: {concept: [{"file": <name>, "keyword": <kw>}, ...], ...}
     """
     logger = logger or get_structured_logger("semantic.extract", context=context)

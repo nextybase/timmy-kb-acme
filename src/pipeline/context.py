@@ -44,7 +44,7 @@ def validate_slug(slug: str) -> str:
     Args:
         slug: Identificativo cliente da validare.
 
-    Returns:
+    Restituisce:
         Lo slug originale se valido.
 
     Raises:

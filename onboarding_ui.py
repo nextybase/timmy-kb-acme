@@ -82,7 +82,7 @@ except Exception:  # pragma: no cover
 # Import Finanza (opzionale)
 # -----------------------------------------------------------------------------
 try:
-    from finance.api import (  # type: ignore  # noqa: E402
+    from finance.api import (
         import_csv as fin_import_csv,
         summarize_metrics as fin_summarize,
     )

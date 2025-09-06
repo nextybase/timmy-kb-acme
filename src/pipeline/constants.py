@@ -9,7 +9,7 @@ Perché qui:
 - Consente modifiche architetturali controllate (es. rinominare `output/` o `book/`).
 - Mantiene coerenza tra orchestratori, adapters e moduli `pipeline.*`.
 
-Note d’uso:
+Note uso:
 - I chiamanti devono **importare da qui** invece di hardcodare stringhe.
 - Cambiare un valore richiede verifiche d’impatto (es. path già persistiti su disco/Drive).
 """

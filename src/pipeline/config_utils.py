@@ -125,7 +125,7 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
         context: Contesto del cliente (fornisce perimetro sandbox).
         config: Dizionario di configurazione.
 
-    Returns:
+    Restituisce:
         Path al file `config.yaml` scritto.
 
     Raises:
@@ -172,7 +172,7 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     Args:
         context: Contesto del cliente, con `config_path` valorizzato.
 
-    Returns:
+    Restituisce:
         Il contenuto del config come `dict` (o `{}` se il file è vuoto).
 
     Raises:

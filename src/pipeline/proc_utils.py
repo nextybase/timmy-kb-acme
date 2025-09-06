@@ -157,7 +157,7 @@ def run_cmd(
         logger: logger strutturato per log diagnostici (opzionale).
         op: etichetta operativa (es. "docker build", "git push") per log e default timeout.
 
-    Returns:
+    Restituisce:
         subprocess.CompletedProcess in caso di successo (returncode == 0).
 
     Raises:

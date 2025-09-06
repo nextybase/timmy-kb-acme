@@ -64,7 +64,7 @@ def clean_push_leftovers(
 
     Non elimina `book/` né altri file `.md` generati dalla pipeline.
 
-    Returns:
+    Restituisce:
         Report con esito per ciascun target pulito.
     """
     _logger = get_structured_logger(logger_name, context=context)

@@ -194,7 +194,7 @@ def _ensure_or_create_repo(
 ) -> Any:
     """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente.
 
-    Returns:
+    Restituisce:
         Oggetto repository (PyGithub), tipizzato come `Any` per compatibilità runtime.
     """
     try:

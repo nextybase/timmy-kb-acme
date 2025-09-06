@@ -402,7 +402,7 @@ def _parse_args() -> argparse.ArgumentParser:
         --non-interactive: Esecuzione senza prompt.
         --dry-run: Esegue solo la parte locale e salta Google Drive.
 
-    Returns:
+    Restituisce:
         argparse.ArgumentParser: parser configurato (non ancora “parsed”).
     """
     p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")

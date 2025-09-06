@@ -338,7 +338,7 @@ def build_dummy_kb(
         overwrite: se True, sovrascrive file giÃ  presenti.
         logger: logger strutturato per audit (opzionale).
 
-    Returns:
+    Restituisce:
         Path della sandbox cliente generata.
     """
     # Log iniziale
