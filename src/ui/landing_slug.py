@@ -31,6 +31,17 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     Restituisce: (locked, slug, client_name)
     """
     st.markdown("<div style='height: 6vh'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(
+            (
+                "**Benvenuto!**\n\n"
+                "- Inserisci lo `slug` del cliente (es. `acme`).\n"
+                "- Se il workspace locale esiste, la UI lo carica e prosegue.\n"
+                "- Se non esiste: inserisci anche il nome cliente e carica il PDF iniziale;\n"
+                "  premi ‘Crea workspace cliente’ per creare la struttura standard.\n\n"
+                "Nota: il PDF viene salvato come `config/VisionStatement.pdf` e il `config.yaml` viene aggiornato."
+            )
+        )
 
     slug = st.text_input("Slug cliente", value=st.session_state.get("slug", ""), key="ls_slug")
     slug = (slug or "").strip()
