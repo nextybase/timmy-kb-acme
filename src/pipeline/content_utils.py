@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pipeline.exceptions import PipelineError
+from pipeline.exceptions import PipelineError, ConfigError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.path_utils import ensure_within  # SSoT path-safety
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
@@ -35,7 +35,8 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
     """
     try:
         ensure_within(base_dir, candidate)
-    except Exception as e:
+    except ConfigError as e:
+        # mappa l'errore di configurazione/path-safety nel dominio content_utils
         raise PipelineError(f"Unsafe directory: {candidate}") from e
     return Path(candidate).resolve()
 

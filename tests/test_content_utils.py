@@ -171,3 +171,19 @@ def test_validate_markdown_dir_unsafe_dir_raises(dummy_kb):
     unsafe_md = ctx.base_dir.parent / "outside-book"
     with pytest.raises(PipelineError):
         validate_markdown_dir(ctx, md_dir=unsafe_md)
+
+
+def test__ensure_safe_propagates_non_configerror(monkeypatch, dummy_kb):
+    """Se ensure_within solleva eccezioni non-ConfigError, non devono essere mascherate."""
+    from pipeline import content_utils as cu
+
+    # Patch ensure_within per sollevare un errore NON di dominio (es. ValueError)
+    monkeypatch.setattr(
+        cu, "ensure_within", lambda base, target: (_ for _ in ()).throw(ValueError("boom"))
+    )
+
+    ctx = _mk_ctx(dummy_kb)
+    ctx.md_dir.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(ValueError):
+        # validate_markdown_dir chiama _ensure_safe -> ensure_within (patch) -> ValueError deve propagare
+        validate_markdown_dir(ctx)
