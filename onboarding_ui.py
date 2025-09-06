@@ -858,6 +858,22 @@ def main() -> None:
     # Gating iniziale: landing minimale (solo slug; crea workspace se necessario)
     if not st.session_state.get("client_locked", False):
         locked, _, _ = render_landing_slug(log)
+        # Pulsante "Esci" anche nella landing (in alto a destra)
+        top_l, top_r = st.columns([4, 1])
+        with top_r:
+            if st.button(
+                "Esci",
+                key="btn_exit_landing",
+                help="Chiude l'interfaccia Streamlit e termina il processo.",
+                use_container_width=True,
+            ):
+                try:
+                    log.info(
+                        {"event": "ui_exit_requested", "slug": st.session_state.get("slug", "-")}
+                    )
+                except Exception:
+                    pass
+                _request_shutdown(log)
         if not locked:
             return  # finché non è lockato, non mostrare altro
 
