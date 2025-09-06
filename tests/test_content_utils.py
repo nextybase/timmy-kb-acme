@@ -118,15 +118,18 @@ def test_generate_readme_and_summary(dummy_kb):
 def test_generate_summary_unsafe_dir_raises(dummy_kb):
     ctx = _mk_ctx(dummy_kb)
     unsafe_md = ctx.base_dir.parent / "outside-book"
-    with pytest.raises(PipelineError):
+    with pytest.raises(PipelineError) as exc:
         generate_summary_markdown(ctx, md_dir=unsafe_md)
+    # PipelineError deve contenere il file_path per tracciabilità
+    assert str(getattr(exc.value, "file_path", "")) == str(unsafe_md)
 
 
 def test_generate_readme_unsafe_dir_raises(dummy_kb):
     ctx = _mk_ctx(dummy_kb)
     unsafe_md = ctx.base_dir.parent / "outside-book"
-    with pytest.raises(PipelineError):
+    with pytest.raises(PipelineError) as exc:
         generate_readme_markdown(ctx, md_dir=unsafe_md)
+    assert str(getattr(exc.value, "file_path", "")) == str(unsafe_md)
 
 
 # -----------------------------
@@ -169,8 +172,9 @@ def test_validate_markdown_dir_not_a_directory_raises(dummy_kb):
 def test_validate_markdown_dir_unsafe_dir_raises(dummy_kb):
     ctx = _mk_ctx(dummy_kb)
     unsafe_md = ctx.base_dir.parent / "outside-book"
-    with pytest.raises(PipelineError):
+    with pytest.raises(PipelineError) as exc:
         validate_markdown_dir(ctx, md_dir=unsafe_md)
+    assert str(getattr(exc.value, "file_path", "")) == str(unsafe_md)
 
 
 def test__ensure_safe_propagates_non_configerror(monkeypatch, dummy_kb):

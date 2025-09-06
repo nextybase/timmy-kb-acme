@@ -37,7 +37,7 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
         ensure_within(base_dir, candidate)
     except ConfigError as e:
         # mappa l'errore di configurazione/path-safety nel dominio content_utils
-        raise PipelineError(f"Unsafe directory: {candidate}") from e
+        raise PipelineError(f"Unsafe directory: {candidate}", file_path=str(candidate)) from e
     return Path(candidate).resolve()
 
 
