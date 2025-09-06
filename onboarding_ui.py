@@ -851,11 +851,11 @@ def main() -> None:
     if "bumped" not in st.session_state:
         st.session_state["bumped"] = False
 
-    # Gating iniziale: solo input slug+cliente a schermo pieno
+    # Gating iniziale: landing minimale (solo slug; crea workspace se necessario)
     if not st.session_state.get("client_locked", False):
-        locked, _, _ = _render_landing_inputs(log)
+        locked, _, _ = render_landing_slug(log)
         if not locked:
-            return  # finché non sono compilati entrambi, non mostrare altro
+            return  # finché non è lockato, non mostrare altro
 
     # Da qui in poi la UI completa
     slug = st.session_state.get("slug", "")

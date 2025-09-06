@@ -53,7 +53,7 @@ from pipeline.drive_utils import (
 from pipeline.env_utils import get_env_var
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
-from pipeline.file_utils import safe_write_text  # SSoT per scritture atomiche
+from pipeline.file_utils import safe_write_text, safe_write_bytes  # SSoT per scritture atomiche
 
 
 def _prompt(msg: str) -> str:
@@ -279,6 +279,74 @@ def _create_local_structure(
 
     repo_root = Path(__file__).resolve().parents[1]
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
+    return yaml_structure_file
+
+
+# ---- Entry point minimale per la UI (landing solo slug) ----------------------
+
+
+def ensure_local_workspace_for_ui(
+    slug: str,
+    client_name: Optional[str] = None,
+    vision_statement_pdf: Optional[bytes] = None,
+) -> Path:
+    """Garantisce la presenza del workspace locale del cliente per la UI.
+
+    Comportamento:
+      - Prepara contesto offline (interactive=False, require_env=False) e logger.
+      - RIUSA la creazione struttura locale e config tramite `_create_local_structure`.
+      - Se `vision_statement_pdf` è fornito, lo salva in `config/VisionStatement.pdf` (atomico) e
+        aggiorna `config.yaml` con:
+          * `vision_statement_pdf: 'config/VisionStatement.pdf'`
+          * `client_name: <client_name>` (se fornito)
+      - Ritorna il path allo YAML struttura usato per la creazione locale.
+
+    Note:
+      - Nessuna interazione con Google Drive/GitHub.
+      - Path-safety e scritture atomiche applicate (ensure_within, safe_write_bytes).
+    """
+    # Prepara contesto/log in modalità offline e valida lo slug
+    context, logger, resolved_name = _prepare_context_and_logger(
+        slug,
+        interactive=False,
+        require_env=False,
+        run_id=None,
+        client_name=client_name,
+    )
+
+    # Crea struttura locale e config di base (idempotente)
+    yaml_structure_file = _create_local_structure(
+        context, logger, client_name=(resolved_name or slug)
+    )
+
+    # Salva VisionStatement.pdf se fornito
+    if vision_statement_pdf:
+        if context.base_dir is None:
+            raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
+        cfg_dir = context.base_dir / "config"
+        target = cfg_dir / "VisionStatement.pdf"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        ensure_within(context.base_dir, target)
+        # Scrittura atomica del PDF
+        safe_write_bytes(target, vision_statement_pdf, atomic=True)
+        logger.info(
+            {"event": "vision_statement_saved", "slug": context.slug, "file_path": str(target)}
+        )
+
+        # Aggiorna config con percorso PDF e nome cliente
+        updates: Dict[str, Any] = {"vision_statement_pdf": "config/VisionStatement.pdf"}
+        if resolved_name:
+            updates["client_name"] = resolved_name
+        update_config_with_drive_ids(context, updates, logger=logger)
+
+    logger.info(
+        {
+            "event": "new_client_workspace_created",
+            "slug": context.slug,
+            "base": str(context.base_dir) if context.base_dir else None,
+            "yaml": str(yaml_structure_file),
+        }
+    )
     return yaml_structure_file
 
 
