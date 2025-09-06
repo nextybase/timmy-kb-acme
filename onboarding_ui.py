@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional, Tuple, List
@@ -53,6 +54,7 @@ from config_ui.drive_runner import (
     emit_readmes_for_raw,
     download_raw_from_drive,
 )
+from ui.landing_slug import render_landing_slug  # type: ignore  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # Import funzioni Semantica (opzionali, con fallback)
@@ -221,14 +223,16 @@ def _render_header_after_lock(log: logging.Logger, slug: str, client_name: str) 
     with left:
         st.markdown(f"**Cliente:** {client_name} &nbsp;&nbsp;|&nbsp;&nbsp; **Slug:** `{slug}`")
     with right:
-        if st.button("Chiudi UI", key="btn_close_ui_top", use_container_width=True):
-            try:
-                if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
-                    ctx = _ensure_context(slug, log)
-                    set_data_ver_today(ctx, log)  # type: ignore[misc]
-            except Exception:
-                pass
-            _request_shutdown(log)
+        # Spostato nella sidebar: se sidebar attiva, non mostrare qui il pulsante
+        if not bool(st.session_state.get("sidebar_active")):
+            if st.button("Chiudi UI", key="btn_close_ui_top", use_container_width=True):
+                try:
+                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
+                        ctx = _ensure_context(slug, log)
+                        set_data_ver_today(ctx, log)  # type: ignore[misc]
+                except Exception:
+                    pass
+                _request_shutdown(log)
 
 
 def _load_mapping(slug: str) -> Dict[str, Any]:
@@ -860,6 +864,50 @@ def main() -> None:
     # Da qui in poi la UI completa
     slug = st.session_state.get("slug", "")
     client_name = st.session_state.get("client_name", "")
+
+    # Sidebar (attiva solo dopo il lock)
+    st.session_state["sidebar_active"] = False
+    if st.session_state.get("client_locked", False):
+        with st.sidebar:
+            st.session_state["sidebar_active"] = True
+            st.markdown("### " + (client_name or slug))
+            st.caption("Slug: " + slug)
+
+            # Pulsante CHIUDI (torna alla landing, non chiude il processo)
+            if st.button("Chiudi", key="btn_close_sidebar"):
+                try:
+                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
+                        ctx = _ensure_context(slug, log)
+                        set_data_ver_today(ctx, log)  # type: ignore[misc]
+                except Exception:
+                    pass
+                try:
+                    st.session_state.clear()
+                except Exception:
+                    pass
+                _safe_streamlit_rerun()
+
+            # Pulsante GENERA/AGGIORNA DUMMY
+            if st.button("Genera/Aggiorna dummy", key="btn_dummy"):
+                slug_local = slug
+                with st.spinner("Generazione dummy in corso…"):
+                    try:
+                        proc = subprocess.run(
+                            ["py", "src/tools/gen_dummy_kb.py", "--slug", slug_local],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        if proc.returncode == 0:
+                            st.success("Dummy generato/aggiornato.")
+                        else:
+                            st.error(f"Dummy: errore (code {proc.returncode})")
+                            if proc.stderr:
+                                st.code(proc.stderr[:4000])
+                        if proc.stdout:
+                            st.code(proc.stdout[:4000])
+                    except Exception as e:
+                        st.error(f"Eccezione durante la generazione dummy: {e}")
 
     st.title("NeXT - Onboarding UI")
     _render_header_after_lock(log, slug, client_name)
