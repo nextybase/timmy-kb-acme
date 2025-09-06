@@ -173,6 +173,10 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
   ```
 - Dettagli, casi singoli e markers: vedi `docs/test_suite.md`.
 
+### Type checking rapido
+- Mypy: `make type`
+- Pyright: `make type-pyright` (richiede `pyright` nel PATH oppure `npx`)
+
 ---
 
 ## Log, sicurezza, exit codes

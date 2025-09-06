@@ -154,3 +154,19 @@ Dettagli: [architecture.md](architecture.md).
 - Aggiungi/aggiorna i test quando modifichi comportamenti.  
 - Mantieni la documentazione allineata (README + docs/).  
 - Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
+
+---
+
+## SSoT dei contratti e type checking
+
+### `ClientContextProtocol` (contratto condiviso)
+- Riutilizza `semantic.types.ClientContextProtocol` quando una funzione richiede solo `base_dir`, `raw_dir`, `md_dir`, `slug`.
+- Evita protocolli locali duplicati (`typing.Protocol`) per lo stesso scopo; mantieni un solo contratto condiviso.
+- Esempi di firma consigliata:
+  - `pipeline.content_utils.*(ctx: ClientContextProtocol, ...)`
+  - `semantic.semantic_extractor.*(context: ClientContextProtocol, ...)`
+- Quando servono campi aggiuntivi specifici (es. `config_dir`, `repo_root_dir` per mapping), definisci protocolli locali minimali separati.
+
+### Type checking
+- `make type` esegue `mypy` su `src/`.
+- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento è configurato da `pyrightconfig.json`.

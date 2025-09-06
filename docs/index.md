@@ -12,14 +12,16 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
 - **Guide**
   - [User Guide](user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, refactor orchestratori, test suggeriti.
-  - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicità, versioning.
+  - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicit��, versioning.
   - [Test suite](test_suite.md) - test smoke e suite PyTest.
   - [Guida UI (Streamlit)](guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
   - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
+  - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
-  - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilità.
+  - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilit��.
   - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
 - **Changelog**
-  - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
+  - [CHANGELOG](../CHANGELOG.md) - novit�� e fix per ogni release.
 
-> La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.
+> La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* �� in `output/timmy-kb-<slug>/config/config.yaml`.
+

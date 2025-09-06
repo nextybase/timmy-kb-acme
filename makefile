@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type test fmt fmt-check ci
+.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -24,6 +24,13 @@ lint: env-check
 
 type: env-check
 	@mypy src
+
+type-pyright: env-check
+	@if command -v pyright >/dev/null 2>&1; then \
+	  pyright; \
+	else \
+	  npx -y pyright; \
+	fi
 
 test: env-check
 	@pytest -ra

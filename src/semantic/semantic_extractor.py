@@ -18,18 +18,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Protocol
+from typing import Optional, List, Dict
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError, InputDirectoryMissing
 from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
-
-
-class _Ctx(Protocol):
-    base_dir: Path | None
-    md_dir: Path | None
-    slug: str | None
+from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
 
 def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None) -> List[Path]:
@@ -164,23 +159,7 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
         InputDirectoryMissing: se la directory markdown non esiste.
     """
     logger = logger or get_structured_logger("semantic.enrich", context=context)
-    # Fail-fast esplicito su campi richiesti
-    if getattr(context, "md_dir", None) is None or getattr(context, "base_dir", None) is None:
-        raise PipelineError(
-            "Contesto incompleto: md_dir/base_dir mancanti",
-            slug=getattr(context, "slug", None),
-        )
-
-    if not is_safe_subpath(context.md_dir, context.base_dir):
-        raise PipelineError(
-            f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir
-        )
-
-    if not context.md_dir.exists():
-        raise InputDirectoryMissing(
-            f"Directory markdown non trovata: {context.md_dir}", slug=context.slug
-        )
-
+    # DRY: demand path safety/existence checks to _list_markdown_files
     markdown_files = _list_markdown_files(context, logger=logger)
     logger.info(
         f"📂 Avvio arricchimento semantico su {len(markdown_files)} file",

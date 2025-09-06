@@ -16,20 +16,15 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Any, Protocol
+from typing import Dict, Any
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError
 from pipeline.path_utils import ensure_within  # SSoT guardia STRONG
+from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
 # Logger di modulo (fallback).
 logger = get_structured_logger("pipeline.cleanup_utils")
-
-
-class _Ctx(Protocol):
-    md_dir: Path | None
-    base_dir: Path | None
-    slug: str | None
 
 
 def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
