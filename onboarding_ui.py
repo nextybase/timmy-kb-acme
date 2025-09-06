@@ -888,15 +888,30 @@ def main() -> None:
                 _safe_streamlit_rerun()
 
             # Pulsante GENERA/AGGIORNA DUMMY
-            if st.button("Genera/Aggiorna dummy", key="btn_dummy"):
+            if st.button(
+                "Genera/Aggiorna dummy",
+                key="btn_dummy",
+                help=(
+                    "Genera/aggiorna un utente e un dataset dummy per lo slug corrente.\n"
+                    "Utile per test locali della pipeline senza materiali reali."
+                ),
+            ):
                 slug_local = slug
                 with st.spinner("Generazione dummy in corso…"):
                     try:
+                        log.info({"event": "ui_dummy_generate_start", "slug": slug_local})
                         proc = subprocess.run(
                             ["py", "src/tools/gen_dummy_kb.py", "--slug", slug_local],
                             capture_output=True,
                             text=True,
                             check=False,
+                        )
+                        log.info(
+                            {
+                                "event": "ui_dummy_generate_end",
+                                "slug": slug_local,
+                                "returncode": proc.returncode,
+                            }
                         )
                         if proc.returncode == 0:
                             st.success("Dummy generato/aggiornato.")
@@ -908,6 +923,16 @@ def main() -> None:
                             st.code(proc.stdout[:4000])
                     except Exception as e:
                         st.error(f"Eccezione durante la generazione dummy: {e}")
+                        try:
+                            log.error(
+                                {
+                                    "event": "ui_dummy_generate_exception",
+                                    "slug": slug_local,
+                                    "error": str(e).splitlines()[:1],
+                                }
+                            )
+                        except Exception:
+                            pass
 
     st.title("NeXT - Onboarding UI")
     _render_header_after_lock(log, slug, client_name)
