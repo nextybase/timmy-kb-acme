@@ -887,6 +887,21 @@ def main() -> None:
                     pass
                 _safe_streamlit_rerun()
 
+            # Pulsante ESCI (termina Streamlit)
+            if st.button(
+                "Esci",
+                key="btn_exit_sidebar",
+                help="Chiude l'interfaccia Streamlit e termina il processo.",
+            ):
+                try:
+                    log.info({"event": "ui_exit_requested", "slug": slug})
+                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
+                        ctx = _ensure_context(slug, log)
+                        set_data_ver_today(ctx, log)  # type: ignore[misc]
+                except Exception:
+                    pass
+                _request_shutdown(log)
+
             # Pulsante GENERA/AGGIORNA DUMMY
             if st.button(
                 "Genera/Aggiorna dummy",
