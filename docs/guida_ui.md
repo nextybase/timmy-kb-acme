@@ -287,7 +287,7 @@ In `output/timmy-kb-<slug>/book/` e nella radice del workspace (`README.md`, `SU
 
 ## Novità: API semantica pubblica (facade)
 
-- Da ora la UI può importare funzioni stabili da `semantic.api` invece di usare helper privati con underscore da `semantic_onboarding`.
+- Da ora la UI importa funzioni stabili da `semantic.api`; gli helper interni/CLI storici sono deprecati.
 - Obiettivo: stabilizzare l'API per la UI, mantenendo liberi gli internals di evolvere senza breaking changes.
 
 Funzioni esposte in `semantic.api`:
@@ -310,7 +310,7 @@ from semantic.api import (
 ```
 
 Note di transizione:
-- Gli import esistenti da `semantic_onboarding` continuano a funzionare per compatibilità, ma si consiglia di migrare alla facade.
+- Evitare nuovi import da `semantic_onboarding`; migrare alla façade pubblica.
 - Le firme pubbliche riportate qui sono considerate stabili; eventuali cambiamenti saranno versionati e documentati.
 
 ## Prerequisiti
@@ -337,7 +337,7 @@ Suggerimenti operativi
 - Usa la UI per validare dopo migrazione (frontmatter enrichment + README/SUMMARY).
 
 ## Deprecazioni
-- Le funzioni interne con underscore di `src/semantic_onboarding.py` sono considerate deprecated per uso da UI.
+- Le funzioni interne con underscore di `src/semantic_onboarding.py` sono deprecate e non più supportate in UI.
 - Usare la facade pubblica `semantic.api` per import stabili: `get_paths`, `load_reviewed_vocab`, `convert_markdown`, `enrich_frontmatter`, `write_summary_and_readme`.
 - Le chiamate agli underscore generano `DeprecationWarning` a runtime per favorire la migrazione.
 

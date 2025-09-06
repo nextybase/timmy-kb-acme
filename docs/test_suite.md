@@ -28,7 +28,7 @@ py src/tools/gen_dummy_kb.py --slug dummy
 py src/tag_onboarding.py --slug dummy --source local --non-interactive --proceed
 
 # 4) Conversione + enrichment (no preview)
-py src/semantic_onboarding.py --slug dummy --no-preview --non-interactive
+Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
 # 5) Push (richiede GITHUB_TOKEN) — opzionale
 # $env:GITHUB_TOKEN="<token>"; py src/onboarding_full.py --slug dummy --non-interactive
@@ -50,7 +50,7 @@ py src/pre_onboarding.py --slug demo --name "Cliente Demo" --non-interactive
 py src/tag_onboarding.py --slug demo --non-interactive --proceed
 
 # 3) Semantic (senza preview)
-py src/semantic_onboarding.py --slug demo --no-preview --non-interactive
+Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
 # 4) Push (se vuoi testarlo)
 # $env:GITHUB_TOKEN="<token>"; py src/onboarding_full.py --slug demo --non-interactive
@@ -70,7 +70,7 @@ py src/pre_onboarding.py --slug prova --name "Cliente Prova" --non-interactive -
 py src/tag_onboarding.py --slug prova --source local --non-interactive --proceed
 
 # semantic (no preview)
-py src/semantic_onboarding.py --slug prova --no-preview --non-interactive
+Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
 # onboarding full (push) — richiede GITHUB_TOKEN
 # $env:GITHUB_TOKEN="<token>"; py src/onboarding_full.py --slug prova --non-interactive
@@ -161,4 +161,3 @@ Get-Content .\output\timmy-kb-*\logs\*.log -Tail 80
 # pulizia sandbox di prova
 Get-ChildItem .\output -Directory "timmy-kb-*" | Remove-Item -Recurse -Force
 ```
-

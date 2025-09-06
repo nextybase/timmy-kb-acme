@@ -67,7 +67,21 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME"
 py src/tag_onboarding.py --slug acme --proceed
 
 # 3) Conversione + enrichment + README/SUMMARY (+ preview opz.)
-py src/semantic_onboarding.py --slug acme --no-preview
+Esempio headless via semantic.api (consigliato):
+py - <<PY
+from semantic.api import get_paths, convert_markdown, enrich_frontmatter, write_summary_and_readme
+from pipeline.context import ClientContext
+import logging
+slug = 'acme'
+ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+log = logging.getLogger('semantic.manual')
+convert_markdown(ctx, log, slug=slug)
+base = get_paths(slug)['base']
+from semantic.vocab_loader import load_reviewed_vocab
+vocab = load_reviewed_vocab(base, log)
+enrich_frontmatter(ctx, log, vocab, slug=slug)
+write_summary_and_readme(ctx, log, slug=slug)
+PY
 
 # 4) Push finale (se richiesto)
 py src/onboarding_full.py --slug acme
@@ -90,7 +104,7 @@ src/
   adapters/         # preview HonKit, fallback contenuti
   pipeline/         # path/file/log/config/github/drive utils, context, eccezioni
   semantic/         # tagging I/O, validator, enrichment
-  pre_onboarding.py | tag_onboarding.py | semantic_onboarding.py | onboarding_full.py
+  pre_onboarding.py | tag_onboarding.py | onboarding_full.py (semantica via semantic.api)
 output/timmy-kb-<slug>/{raw,book,semantic,config,logs}
 ```
 Dettagli: [architecture.md](architecture.md).
@@ -140,4 +154,3 @@ Dettagli: [architecture.md](architecture.md).
 - Aggiungi/aggiorna i test quando modifichi comportamenti.  
 - Mantieni la documentazione allineata (README + docs/).  
 - Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
-

@@ -1,10 +1,32 @@
-# Changelog - Timmy-KB
+﻿# Changelog - Timmy-KB
 
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 ---
-## [1.7.0] - 2025-09-01
+## [1.8.0] - 2025-09-06
+
+### Breaking
+- YAML struttura: supporto unico al formato moderno { raw: {...}, contrattualistica: {} }.
+- Drive: rimossi alias nel risultato (RAW/YAML), usare solo chiavi effettive.
+- Mapping: accettato solo semantic/tags_reviewed.yaml (rimosso alias 	ags_reviews.yaml).
+- UI/Runner: dipendenze pipeline.* obbligatorie (rimossi import opzionali e stubs).
+- Semantica: façade semantic.api unica; rimosso src/semantic_onboarding.py.
+
+### Added
+- pipeline.path_utils.to_kebab(s: str) come SSoT per normalizzazione chiavi.
+- src/semantic_headless.py (CLI minimale) per conversione/enrichment/README&SUMMARY via façade.
+
+### Changed
+- src/config_ui/utils.py ora delega alle utility pipeline (ensure_within, safe_write_text, to_kebab).
+- Log ASCII‑only per messaggi console; rimossi emoji/simboli non ASCII.
+- config/cartelle_raw.yaml convertito al formato moderno.
+
+### Fixed
+- Normalizzati messaggi logger in vari moduli (pre_onboarding, gitbook_preview, github_utils, config_utils).
+- Runner Drive: generazione README coerente (titoli ed elenchi ASCII) e logging alias‑free.
+
+---## [1.7.0] - 2025-09-01
 
 ### Added
 - cSpell: nuove parole di progetto in cspell.json (es. "Pydantic", "versionare", "sottocartella", "versionati", "idempotente", "versionato", "conftest", "versioniamo", "taggata", "rilasciabile").
@@ -25,8 +47,8 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Script `scripts/fix_mojibake.py` (usa `ftfy`) per normalizzare caratteri UTF8 nei Markdown.
 
 ### Changed
-- Priorità lingua cSpell impostata a `it,en` in `cspell.json` e `.vscode/settings.json`.
-- Normalizzazione encoding e tipografia nei Markdown sotto `docs/` (accenti, em-dash, frecce, façade).
+- PrioritÃ  lingua cSpell impostata a `it,en` in `cspell.json` e `.vscode/settings.json`.
+- Normalizzazione encoding e tipografia nei Markdown sotto `docs/` (accenti, em-dash, frecce, faÃ§ade).
 
 ### Fixed
 - Risolti avvisi cSpell residui in `docs/guida_ui.md`, `docs/test_suite.md`, `docs/versioning_policy.md`, `docs/policy_push.md`.
@@ -46,7 +68,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Funzioni helper (`_get_logger`, `_drive_list_folders`, `_drive_upload_bytes`, ecc.) con firme tipizzate.
   - Soppressione mirata `# type: ignore[import-untyped]` per import `MediaIoBaseUpload/Download`.
 
-- **pyproject.toml**: override `[[tool.mypy.overrides]]` per `config_ui.*` con `follow_imports = "skip"`, così mypy non scende in pipeline/* durante lanalisi mirata.
+- **pyproject.toml**: override `[[tool.mypy.overrides]]` per `config_ui.*` con `follow_imports = "skip"`, cosÃ¬ mypy non scende in pipeline/* durante lanalisi mirata.
 
 ### Fixed
 - **flake8**: portato a 0 errori (inclusi wrapping docstring lunghi).
@@ -78,15 +100,15 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Nuova funzione `download_raw_from_drive(slug, ...)` con **path-safety** (`ensure_within_and_resolve`), **scritture atomiche**, sanitizzazione nomi file e **logging strutturato**.
 
 ### Changed
-- **Gating dellinterfaccia**: la UI compare solo dopo lo sblocco iniziale (slug+cliente). La tab *Semantica* è nascosta finché non si completa il download dei PDF su `raw/`.
-- **Streamlit re-run**: introdotto `_safe_streamlit_rerun()` che usa `st.rerun` (fallback su `experimental_rerun` se presente) per compatibilità con gli stub Pylance.
-- **Pylance-compat nei runner Drive**: uso di `_require_callable(...)` per *narrowing* delle API opzionali (niente più `reportOptionalCall`), applicato a `get_drive_service`, `create_drive_folder`, `create_drive_structure_from_yaml`, `upload_config_to_drive_folder`.
+- **Gating dellinterfaccia**: la UI compare solo dopo lo sblocco iniziale (slug+cliente). La tab *Semantica* Ã¨ nascosta finchÃ© non si completa il download dei PDF su `raw/`.
+- **Streamlit re-run**: introdotto `_safe_streamlit_rerun()` che usa `st.rerun` (fallback su `experimental_rerun` se presente) per compatibilitÃ  con gli stub Pylance.
+- **Pylance-compat nei runner Drive**: uso di `_require_callable(...)` per *narrowing* delle API opzionali (niente piÃ¹ `reportOptionalCall`), applicato a `get_drive_service`, `create_drive_folder`, `create_drive_structure_from_yaml`, `upload_config_to_drive_folder`.
 - **Coerenza logging/redazione**: inizializzazione del flag via `compute_redact_flag`; propagazione `context.redact_logs` nei call-site.
 
 ### Fixed
 - Eliminati warning Pylance su accessi opzionali (`.strip` su `None`) con `_norm_str`.
 - Rimosso uso di `key=` non supportato su `st.expander` in alcune versioni; **key** univoche per i widget dove necessario.
-- Messaggistica derrore UI più chiara e resilienza ai fallimenti delle operazioni Drive.
+- Messaggistica derrore UI piÃ¹ chiara e resilienza ai fallimenti delle operazioni Drive.
 
 ### Security / Hardening
 - **Path-safety** estesa ai download Drive e alle generazioni locali; guardie anti path traversal.
@@ -112,8 +134,8 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - **Pulsante Chiudi UI**: aggiunto in **sidebar** (sotto gli input di contesto) per terminare Streamlit dal terminale (SIGTERM, fallback sicuro).
 
 ### Changed
-- **Nasconde `context` nella UI**: lanteprima/edit non mostra più `context: {slug, client_name, created_at}`.
-- **Requisiti davvio più stringenti:** per procedere servono **slug** e **nome cliente**.
+- **Nasconde `context` nella UI**: lanteprima/edit non mostra piÃ¹ `context: {slug, client_name, created_at}`.
+- **Requisiti davvio piÃ¹ stringenti:** per procedere servono **slug** e **nome cliente**.
 - **Normalizzazione chiavi centralizzata:** introdotta `to_kebab()` in `src/config_ui/utils.py` e riuso in tutta la UI.
 - **Logger coerente**: uso di `get_structured_logger(..., context=...)` anche nei runner, con redazione attiva via `compute_redact_flag`.
 
@@ -158,8 +180,8 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - emissione automatica di **README.pdf** (o `.txt` fallback) in ogni sotto-cartella di `raw/`, contenente ambito, descrizione ed esempi.
 
 ### Changed
-- Flusso UI rivisto: leditor delle cartelle *raw* è stato sostituito dall**editor del mapping**; la struttura `raw/` viene ora derivata da `tags_reviewed.yaml`.
-- La tab Struttura (Editor  mapping) è stata rinominata in **Configurazione** e portata al primo posto.
+- Flusso UI rivisto: leditor delle cartelle *raw* Ã¨ stato sostituito dall**editor del mapping**; la struttura `raw/` viene ora derivata da `tags_reviewed.yaml`.
+- La tab Struttura (Editor  mapping) Ã¨ stata rinominata in **Configurazione** e portata al primo posto.
 - Anteprima YAML del mapping trasformata in **expander apri/chiudi**.
 
 ### Fixed
@@ -168,7 +190,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - **NameError `re`** nel generatore di README: centralizzata la normalizzazione in `utils.to_kebab()` ed import sistemati.
 
 ### Removed
-- Pulsante **Imposta in config.yaml (raw)** e selettori sorgente YAML/sezione non più necessari nel nuovo flusso.
+- Pulsante **Imposta in config.yaml (raw)** e selettori sorgente YAML/sezione non piÃ¹ necessari nel nuovo flusso.
 - Editor ad albero della vecchia `cartelle_raw.yaml` dallinterfaccia.
 
 ### Internal
@@ -178,8 +200,8 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - `vision_parser.py` (parser O/V/M e writer `vision.yaml`);
   - `drive_runner.py` (creazione struttura Drive e upload README).
 - Aggiornati gli import per usare, ove disponibili, le API di `src/pipeline` (context/drive/upload/logging).
-- **Hardening**: più controlli sui path, fallback su librerie PDF, gestione errori UI più chiara.
-- Nota di compatibilità: il vecchio `src/config_onboarding.py` resta temporaneamente nel repo per continuità; verrà rimosso quando tutte le tab saranno migrate sui nuovi runner.
+- **Hardening**: piÃ¹ controlli sui path, fallback su librerie PDF, gestione errori UI piÃ¹ chiara.
+- Nota di compatibilitÃ : il vecchio `src/config_onboarding.py` resta temporaneamente nel repo per continuitÃ ; verrÃ  rimosso quando tutte le tab saranno migrate sui nuovi runner.
 
 ---
 
@@ -195,7 +217,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Rimozione di `print()` a favore di log strutturati.
 - **Path-safety STRONG**: validazioni con `ensure_within(...)` prima di scrivere/copiare/rimuovere file e nel mount Docker.
 - **Scritture atomiche**: adozione di `safe_write_text`/`safe_write_bytes` nei moduli che generano file (es. preview, review writer, tags I/O).
-- **Preview porta configurabile**: `preview_port` ora può essere impostata via config/env (fallback a 4000).
+- **Preview porta configurabile**: `preview_port` ora puÃ² essere impostata via config/env (fallback a 4000).
 - **Adapter Preview** (`src/adapters/preview.py`):
   - Firma coerente: `start_preview(context, logger, *, port, container_name) -> str` e `stop_preview(logger, *, container_name)`.
   - Propagazione `context.redact_logs`.
@@ -208,7 +230,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - `semantic_mapping`/`semantic_extractor`: `FileNotFoundError`/`NotADirectoryError` rimpiazzati con errori di pipeline coerenti e messaggi migliorati.
 - **github_utils**:
   - Refactor push con `_push_with_retry` e `_force_push_with_lease` (governati), env sicuro con `GIT_HTTP_EXTRAHEADER`.
-  - Raccolta deterministica dei `.md` (no `.bak`) e cleanup temporanei più robusto.
+  - Raccolta deterministica dei `.md` (no `.bak`) e cleanup temporanei piÃ¹ robusto.
 
 ### Fixed
 - `gen_dummy_kb`: definizioni mancanti e ordine funzioni; ora build sandbox dummy completa senza `NameError`.
@@ -253,7 +275,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   py src/tools/gen_dummy_kb.py --slug dummy
   pytest -ra
   ---
-  I test non richiedono credenziali reali (Drive/GitHub mockati o bypassati); lE2E manuale è documentato in docs/test_suite.md.
+  I test non richiedono credenziali reali (Drive/GitHub mockati o bypassati); lE2E manuale Ã¨ documentato in docs/test_suite.md.
 ---
 
 ## [1.4.0] - fixing 2025-08-27
@@ -268,7 +290,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Orchestratori riallineati: path-safety forte, logger tipizzato, errori mappati su `EXIT_CODES`.
 
 ### Fixed
-- Hardening `semantic_onboarding`: gestione YAML e arricchimento frontmatter più robusti.
+- Hardening `semantic_onboarding`: gestione YAML e arricchimento frontmatter piÃ¹ robusti.
 
 ## [1.4.0] - 2025-08-26
 
@@ -303,11 +325,11 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - `src/pipeline/cleanup_utils.py`: rimozione sicura di artefatti legacy (`book/.git`) con `ensure_within`.
   - `src/tools/cleanup_repo.py`: cancellazione repo remoto via **API (PyGithub)** con fallback automatico a **CLI `gh`**, owner auto-detected; messaggistica migliorata.
 - **Consistenza YAML**: uniformato su estensione `.yaml` anche per configurazioni CI/Qodana.
-- **Dipendenze**: versioni aggiornate/pinnate per ripetibilità build (PyGithub, google-api-python-client, PyYAML, docker, spaCy, ecc.).
+- **Dipendenze**: versioni aggiornate/pinnate per ripetibilitÃ  build (PyGithub, google-api-python-client, PyYAML, docker, spaCy, ecc.).
 
 ### Fixed
 - Eliminato rischio di **path traversal** su write/delete grazie a `ensure_within` su tutti i punti critici.
-- Affidabilità preview HonKit: readiness check sulla porta e gestione container duplicati.
+- AffidabilitÃ  preview HonKit: readiness check sulla porta e gestione container duplicati.
 - Coerenza logging: rimosse stampe dirette; solo **logging strutturato**.
 
 ### Security
@@ -315,7 +337,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Redazione automatica dei segreti nei log; autenticazione GitHub via header HTTP (niente token in argv).
 
 ### Known Issues
-- La cancellazione del repo via API/CLI richiede permessi **admin** sul repository; in assenza di permessi si riceve 401/403 dalla API o errore dalla CLI. Lo strumento gestisce e logga il fallback, ma non può bypassare i permessi.
+- La cancellazione del repo via API/CLI richiede permessi **admin** sul repository; in assenza di permessi si riceve 401/403 dalla API o errore dalla CLI. Lo strumento gestisce e logga il fallback, ma non puÃ² bypassare i permessi.
 
 ### Migration Notes
 - Se presenti vecchi file `.yml`, rinominarli in `.yaml` per allineamento e per i riferimenti nei workflow/strumenti.
@@ -330,7 +352,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Uniformata la gestione di fallback/adapters  ora tutte le funzioni usano `(context, logger, **opts)`.
 - Migliorata la pipeline di tagging (`tag_onboarding.py`):
   - Passaggio a scrittura **CSV streaming riga-per-riga** con commit atomico.
-  - Validazione YAML più robusta e reporting strutturato.
+  - Validazione YAML piÃ¹ robusta e reporting strutturato.
 - Aggiornato `semantic_onboarding.py`:
   - Arricchimento frontmatter ottimizzato tramite dizionario inverso dei sinonimi (O(1) lookup).
   - Consolidato luso di `ensure_readme_summary` come fallback centralizzato per README/SUMMARY.
@@ -351,7 +373,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - **Refactor tool interattivo**
   - `src/tools/refactor_tool.py`: menu interattivo grafico (box ASCII) con 3 voci:
     1.  Trova (solo ricerca)
-    2. ️ Trova & Sostituisci
+    2. ï¸ Trova & Sostituisci
     3.  Cerca TODO/FIXME
   - Logging strutturato, dry-run con diff unificato leggibile, estendibile per futuri strumenti di refactor.
 
@@ -361,13 +383,13 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Robustezza mapping: canonical/merge normalizzati a lowercase; coercizione prudente delle liste `synonyms`.
 - **`src/tools/cleanup_repo.py`**
   - Flusso interattivo semplificato:
-    - Conferma obbligatoria per la cancellazione locale di `output/timmy-kb-<slug>`, evidenziando che è irreversibile.
+    - Conferma obbligatoria per la cancellazione locale di `output/timmy-kb-<slug>`, evidenziando che Ã¨ irreversibile.
     - Solo se confermata, viene chiesto se eliminare anche il repo GitHub remoto (`gh repo delete`).
   - Uso coerente di `pipeline.logging_utils.redact_secrets` al posto di `env_utils`.
 
 ### Fixed
 - Import path per `pipeline.*` nei tool (`gen_dummy_kb.py`, `cleanup_repo.py`, `refactor_tool.py`) resi consistenti con il bootstrap della cartella `src/`.
-- Errori di compatibilità Windows (`ModuleNotFoundError: pipeline`) gestiti allineando sys.path a livello di progetto.
+- Errori di compatibilitÃ  Windows (`ModuleNotFoundError: pipeline`) gestiti allineando sys.path a livello di progetto.
 
 ### Migration notes
 - Per avviare i test singoli:
@@ -391,7 +413,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Copia `cartelle_raw.yaml` in `semantic/` e crea `semantic_mapping.yaml` con blocco `semantic_tagger` default.
   - Genera `tags_raw.csv` tramite i moduli semantic (`extract_semantic_candidates  normalize_tags  render_tags_csv`).
 - **`src/tag_onboarding.py`**:
-  - `_emit_tags_csv` ora produce path base-relative (`raw/...`) e colonne extra (`entities`, `keyphrases`, `score`, `sources`) per compatibilità futura.
+  - `_emit_tags_csv` ora produce path base-relative (`raw/...`) e colonne extra (`entities`, `keyphrases`, `score`, `sources`) per compatibilitÃ  futura.
 
 ### Fixed
 - Crash su Windows (`UnicodeEncodeError` da emoji , `NameError: json`).
@@ -412,11 +434,11 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ### Changed
 - **github_utils**
-  - Estratto `_collect_md_files`, `_ensure_or_create_repo`, `_push_with_retry` e helper correlati per ridurre complessità di `push_output_to_github` (~400 <150 righe).
-  - Migliorata leggibilità e testabilità mantenendo lo stesso comportamento.
+  - Estratto `_collect_md_files`, `_ensure_or_create_repo`, `_push_with_retry` e helper correlati per ridurre complessitÃ  di `push_output_to_github` (~400 <150 righe).
+  - Migliorata leggibilitÃ  e testabilitÃ  mantenendo lo stesso comportamento.
 - **onboarding_full.py**
   - Orchestratore snellito: usa `_git_push` dedicato con error handling coerente.
-  - Conferme interattive più chiare, non-interactive totalmente silente.
+  - Conferme interattive piÃ¹ chiare, non-interactive totalmente silente.
 - **logging_utils**
   - Refactor completo: `get_structured_logger` ora unica entrypoint.
   - Filtri di contesto e redazione applicati a tutti i call-sites.
@@ -437,7 +459,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ## [1.2.1]  2025-08-24
 
-> Hardening trasversale: SSoT per path-safety, redazione log centralizzata e orchestratori resi più coesi.
+> Hardening trasversale: SSoT per path-safety, redazione log centralizzata e orchestratori resi piÃ¹ coesi.
 
 ### Added
 - **logging_utils**
@@ -462,7 +484,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - **content_utils**
   - Conversione RAWBOOK con gerarchie annidate; fingerprint per skip idempotente; nomi file sanificati; scritture atomiche e path-safety; generatori `SUMMARY.md`/`README.md`.
 - **drive/download**
-  - Scansione BFS, idempotenza (MD5/size), verifica integrità post-download, path-safety forte e log redatti.
+  - Scansione BFS, idempotenza (MD5/size), verifica integritÃ  post-download, path-safety forte e log redatti.
 - **Orchestratori**
   - `pre_onboarding.py`: estratto `_sync_env()`, validazione slug centralizzata, redazione propagata.
   - `tag_onboarding.py`: CSV + stub semantico con scritture atomiche e guardie `ensure_within`.
@@ -505,7 +527,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - **Adapter**
   - Uso uniforme di `ensure_within` da `pipeline.path_utils` come SSoT per path-safety.
 - **Tool**
-  - `gen_dummy_kb.py`: refactor secondo le nuove regole di atomicità e path-safety.
+  - `gen_dummy_kb.py`: refactor secondo le nuove regole di atomicitÃ  e path-safety.
 
 ### Fixed
 - Spostato limport `from __future__ import annotations` allinizio dei file per evitare `SyntaxError`.
@@ -514,14 +536,14 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Documentation
 - Aggiornati a v1.2.1:
   - `docs/architecture.md`: riflesso lo split orchestratori (`semantic_onboarding` vs `onboarding_full`).
-  - `docs/developer_guide.md`: bootstrap `ClientContext`, policy redazione, responsabilità orchestratori.
+  - `docs/developer_guide.md`: bootstrap `ClientContext`, policy redazione, responsabilitÃ  orchestratori.
   - `docs/user_guide.md`: nuovo flusso operativo con `semantic_onboarding`.
-  - `docs/coding_rule.md`: chiariti punti su atomicità e adapter.
+  - `docs/coding_rule.md`: chiariti punti su atomicitÃ  e adapter.
   - `docs/policy_push.md`: rivista policy di pubblicazione.
   - `README.md` e `docs/index.md`: aggiornati esempi CLI e versioni.
 
 ### Migration notes
-- Usare ora `semantic_onboarding.py` per conversione/enrichment/preview.
+- Usare ora la faÃ§ade `semantic.api` per conversione/enrichment/preview (deprecated: `semantic_onboarding.py`).
 - `onboarding_full.py` va utilizzato solo per il push.
 - Nei moduli, sostituire eventuali riferimenti a `file_utils.ensure_within` con `path_utils.ensure_within`.
 
@@ -552,7 +574,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
     - Emissione `tags_raw.csv`, `README_TAGGING.md`, `tags_reviewed.yaml`, `tags_review_validation.json` con `safe_write_text`; guardie `ensure_within`/`is_safe_subpath`.
     - Fallback `context.redact_logs` se mancante  `compute_redact_flag()`.
   - `src/pre_onboarding.py`:
-    - Risoluzione robusta `YAML_STRUCTURE_FILE`; messaggistica più chiara; uso coerente di `repo_root_dir` ed env helpers (no cambi funzionali in assenza di Drive).
+    - Risoluzione robusta `YAML_STRUCTURE_FILE`; messaggistica piÃ¹ chiara; uso coerente di `repo_root_dir` ed env helpers (no cambi funzionali in assenza di Drive).
 - **ENV/Redaction**
   - `pipeline/env_utils.py`: `compute_redact_flag(env, log_level)` come single source of truth; orchestratori inizializzano `context.redact_logs` se non presente.
 - **Demo tool**
@@ -560,7 +582,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ### Fixed
 - Allineata firma `ensure_readme_summary(...)` negli orchestratori (rimosso argomento non supportato `book_dir`).
-- Log più robusti e non verbosi su assenza opzionale di PyYAML; migliorata resilienza del parsing frontmatter.
+- Log piÃ¹ robusti e non verbosi su assenza opzionale di PyYAML; migliorata resilienza del parsing frontmatter.
 
 ### Security / Hardening
 - **Scritture atomiche di default** per file generati dalla pipeline  evita file troncati su interruzioni.
@@ -574,9 +596,9 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Documentation
 - Aggiornati e riallineati:
   - `docs/architecture.md` (SSoT `repo_root_dir`, fallback uniformi, scritture atomiche).
-  - `docs/developer_guide.md` (bootstrap `ClientContext`, policy redazione, responsabilità orchestratori vs moduli).
+  - `docs/developer_guide.md` (bootstrap `ClientContext`, policy redazione, responsabilitÃ  orchestratori vs moduli).
   - `docs/user_guide.md` (flussi interattivo/CLI, opzioni preview/push, troubleshooting).
-  - `docs/coding_rule.md` (regole I/O sicure, atomicità, logging).
+  - `docs/coding_rule.md` (regole I/O sicure, atomicitÃ , logging).
   - `docs/policy_push.md` (uso `--no-push`, `--force-push` + `--force-ack`, `GIT_DEFAULT_BRANCH`).
   - `docs/versioning_policy.md` (SemVer leggero, requisiti di release).
   - `docs/index.md` e **README** (sezioni riviste, esempi CLI aggiornati).
@@ -592,7 +614,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   if not hasattr(context, "redact_logs"):
       context.redact_logs = compute_redact_flag(context.env, log_level="INFO")
 
-## [1.1.0]  2025-08-23 · Lancio baseline stabile
+## [1.1.0]  2025-08-23 Â· Lancio baseline stabile
 
 ### Added
 - Prima versione stabile della pipeline con orchestratori separati (`pre_onboarding`, `tag_onboarding`, `onboarding_full`).
@@ -608,4 +630,5 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Output standardizzato in `output/timmy-kb-<slug>/` con sottocartelle (`raw`, `book`, `semantic`, `config`, `logs`).
 
 ### Notes
-- Questa versione rappresenta la **base di partenza ufficiale**: da qui in poi ogni refactor, fix o nuova feature dovrà essere registrata come incremento SemVer e mantenere la compatibilità documentale.
+- Questa versione rappresenta la **base di partenza ufficiale**: da qui in poi ogni refactor, fix o nuova feature dovrÃ  essere registrata come incremento SemVer e mantenere la compatibilitÃ  documentale.
+

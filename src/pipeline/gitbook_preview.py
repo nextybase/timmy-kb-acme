@@ -131,7 +131,7 @@ def ensure_book_json(
                 book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
             )
             logger.info(
-                _maybe_redact("📖 book.json generato", redact_logs),
+                _maybe_redact("book.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(book_json_path)},
             )
         except Exception as e:
@@ -142,7 +142,7 @@ def ensure_book_json(
             )
     else:
         logger.info(
-            _maybe_redact("📖 book.json già presente", redact_logs),
+            _maybe_redact("book.json già presente", redact_logs),
             extra={"slug": slug, "file_path": str(book_json_path)},
         )
 
@@ -177,7 +177,7 @@ def ensure_package_json(
                 package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
             )
             logger.info(
-                _maybe_redact("📦 package.json generato", redact_logs),
+                _maybe_redact("package.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(package_json_path)},
             )
         except Exception as e:
@@ -188,7 +188,7 @@ def ensure_package_json(
             )
     else:
         logger.info(
-            _maybe_redact("📦 package.json già presente", redact_logs),
+            _maybe_redact("package.json già presente", redact_logs),
             extra={"slug": slug, "file_path": str(package_json_path)},
         )
 
@@ -223,7 +223,7 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
     try:
         run_cmd(cmd, op="docker run build", logger=logger)
         logger.info(
-            _maybe_redact("🔨 Build statica HonKit completata.", redact_logs), extra={"slug": slug}
+            _maybe_redact("Build statica HonKit completata.", redact_logs), extra={"slug": slug}
         )
     except CmdError as e:
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
@@ -272,7 +272,7 @@ def run_container_detached(
         cp = run_cmd(cmd, op="docker run serve (detached)", logger=logger, capture=True)
         container_id = (cp.stdout or "").strip()
         logger.info(
-            _maybe_redact("▶️ HonKit serve avviato (detached).", redact_logs),
+            _maybe_redact("HonKit serve avviato (detached).", redact_logs),
             extra={
                 "slug": slug,
                 "file_path": f"{container_name}@{host_port}->{container_port}",
@@ -292,7 +292,7 @@ def run_container_detached(
             cp = run_cmd(cmd, op="docker run serve (detached retry)", logger=logger, capture=True)
             container_id = (cp.stdout or "").strip()
             logger.info(
-                _maybe_redact("▶️ HonKit serve avviato (detached) dopo retry.", redact_logs),
+                _maybe_redact("HonKit serve avviato (detached) dopo retry.", redact_logs),
                 extra={
                     "slug": slug,
                     "file_path": f"{container_name}@{host_port}->{container_port}",
@@ -386,7 +386,7 @@ def run_gitbook_docker_preview(
 
     md_output_path = Path(context.md_dir).resolve()
     logger.info(
-        _maybe_redact("📂 Directory per anteprima", redact_logs),
+        _maybe_redact("Directory per anteprima", redact_logs),
         extra={
             "slug": context.slug,
             "file_path": str(md_output_path),

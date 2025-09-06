@@ -162,6 +162,9 @@ def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
     Ritorna un dict annidato pronto per `_create_remote_tree_from_mapping`.
     """
     if isinstance(data, dict):
+        # v1.8.0: formato legacy non supportato
+        if "root_folders" in data:
+            raise ConfigError("Formato legacy 'root_folders' non supportato in v1.8.0.")
         # Legacy con root_folders lista
         if isinstance(data.get("root_folders"), list):
 
@@ -306,15 +309,7 @@ def create_drive_structure_from_yaml(
         service, client_folder_id, mapping, redact_logs=redact_logs, result=result
     )
 
-    # Alias SOLO nel risultato (compat CLI/orchestratori)
-    if "raw" in result and "RAW" not in result:
-        result["RAW"] = result["raw"]
-    if "RAW" in result and "raw" not in result:
-        result["raw"] = result["RAW"]
-    if "yaml" in result and "YAML" not in result:
-        result["YAML"] = result["yaml"]
-    if "YAML" in result and "yaml" not in result:
-        result["yaml"] = result["YAML"]
+    # v1.8.0: nessun alias nel risultato
 
     logger.info(
         "drive.upload.tree.created",
@@ -547,7 +542,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
             pass
 
     struct = _read_yaml_structure(yaml_path)
-    raw_mapping = struct.get("RAW") or struct.get("raw") or {}
+    raw_mapping = struct.get("raw") or {}
 
     def _mk_children(base_path: Path, mapping: Dict[str, Any]) -> None:
         for raw_name, subtree in (mapping or {}).items():

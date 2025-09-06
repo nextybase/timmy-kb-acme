@@ -280,7 +280,7 @@ def _push_with_retry(
         _attempt_push()
     except CmdError:
         logger.warning(
-            "⚠️  Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push..."
+            "Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push..."
         )
         try:
             _run(

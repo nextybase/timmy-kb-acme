@@ -65,7 +65,7 @@ I documenti in `docs/` riportano la versione in testata. Allineare sempre:
 
 ## 7) Allineamento orchestratori per v1.2.1
 
-- **Nuovo**: `semantic_onboarding.py` (conversione/enrichment/preview).
+- **Nuovo**: façade `semantic.api` (conversione/enrichment/preview) — il vecchio `semantic_onboarding.py` è deprecato.
 - **Ridotto**: `onboarding_full.py` (solo push, in futuro GitBook).
 - **SSoT**: `ensure_within` in `pipeline.path_utils`.
 

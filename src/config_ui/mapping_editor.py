@@ -1,4 +1,4 @@
-# src/config_ui/mapping_editor.py
+﻿# src/config_ui/mapping_editor.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -140,36 +140,31 @@ def save_tags_reviewed(
 
 def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
     """
-    Carica mapping rivisto del cliente; accetta alias 'tags_reviews.yaml' se presente.
+    Carica il mapping rivisto del cliente (formato unico: 'tags_reviewed.yaml').
     """
     base_root = Path(base_root)
     sem_dir = ensure_within_and_resolve(
         base_root / f"timmy-kb-{slug}",
         base_root / f"timmy-kb-{slug}" / "semantic",
     )
-    p1 = sem_dir / "tags_reviewed.yaml"
-    p2 = sem_dir / "tags_reviews.yaml"  # alias tollerato
-    if p1.is_file():
-        return yaml_load(p1)
-    if p2.is_file():
-        return yaml_load(p2)
-    raise FileNotFoundError(f"Mapping non trovato (atteso {p1} o {p2}).")
+    path = sem_dir / "tags_reviewed.yaml"
+    if path.is_file():
+        return yaml_load(path)
+    raise FileNotFoundError(f"Mapping non trovato: {path}.")
 
 
 def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Converte il mapping categorie -> struttura cartelle (root_folders/raw/subfolders + contrattualistica).
+    Converte il mapping categorie -> struttura cartelle in formato moderno:
+      { 'raw': {categoria_kebab: {} ...}, 'contrattualistica': {} }
     """
     cats, _ = split_mapping(mapping)
-    children = [
-        {"name": to_kebab(k), "subfolders": []}
-        for k in sorted(cats.keys(), key=lambda x: to_kebab(x))
-    ]
+    raw_children: Dict[str, Dict[str, Any]] = {
+        to_kebab(k): {} for k in sorted(cats.keys(), key=lambda x: to_kebab(x))
+    }
     return {
-        "root_folders": [
-            {"name": "raw", "subfolders": children},
-            {"name": "contrattualistica", "subfolders": []},
-        ]
+        "raw": raw_children,
+        "contrattualistica": {},
     }
 
 

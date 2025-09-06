@@ -5,7 +5,7 @@ Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
 > Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
 
-Nota: la UI usa la façade pubblica `semantic.api` per invocare la logica semantica senza dipendere dagli helper interni di `semantic_onboarding`.
+Nota: la UI usa la façade pubblica `semantic.api` per tutta la logica semantica (gli helper interni/ex-CLI sono deprecati).
 
 ---
 
@@ -43,7 +43,7 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME"
 py src/tag_onboarding.py --slug acme --proceed
 
 # 3) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
-py src/semantic_onboarding.py --slug acme --no-preview
+Esempio headless via `semantic.api` riportato in README.
 
 # 4) Push finale (se richiesto)
 py src/onboarding_full.py --slug acme

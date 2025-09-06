@@ -33,10 +33,10 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 try:
-    import yaml  # PyYAML Ã¨ richiesta
+    import yaml  # PyYAML è richiesta
 except Exception as e:  # pragma: no cover
     raise RuntimeError(
-        "PyYAML Ã¨ richiesta per questo tool. Installa con: pip install pyyaml"
+        "PyYAML è richiesta per questo tool. Installa con: pip install pyyaml"
     ) from e
 
 # ---------------------------------------------------------------------
@@ -84,7 +84,7 @@ except Exception as e:
 
 
 # ---------------------------------------------------------------------
-# UtilitÃ  base
+# Utilità base
 # ---------------------------------------------------------------------
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
     if not p.exists():
@@ -225,15 +225,26 @@ def _build_semantic_mapping_yaml(
 
 
 def _min_config_yaml(client_name: str) -> str:
+    """Config minimale per sandbox dummy, allineato al template di repo.
+
+    Include i nuovi campi di versioning gestiti dalla UI/pipeline:
+    - N_VER: parte da 0
+    - DATA_VER: null
+    """
     return yaml.safe_dump(
-        {"client_name": client_name, "semantic_defaults": {"lang": "it"}},
+        {
+            "client_name": client_name,
+            "semantic_defaults": {"lang": "it"},
+            "N_VER": 0,
+            "DATA_VER": None,
+        },
         allow_unicode=True,
         sort_keys=False,
     )
 
 
 # ---------------------------------------------------------------------
-# Costruzione SOLO dellâ€™albero raw/ da cartelle_raw.yaml
+# Costruzione SOLO dell’albero raw/ da cartelle_raw.yaml
 # ---------------------------------------------------------------------
 def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
     name = str(node.get("name") or "").strip()
@@ -249,23 +260,30 @@ def _create_tree_from_spec(root_base: Path, node: Dict[str, Any]) -> None:
 
 
 def _build_only_raw(base_dir: Path, spec: Dict[str, Any]) -> None:
-    """Crea solo la root 'raw' e le sue sotto-cartelle (ignora altre sezioni)."""
-    roots = spec.get("root_folders")
-    if not isinstance(roots, list):
+    """Crea solo la root 'raw' e le sue sotto-cartelle (ignora altre sezioni).
+
+    Formato supportato (v1.8.0): mapping moderno con chiave 'raw'.
+    Esempio: { "raw": { "identity": {}, ... }, "contrattualistica": {} }
+    """
+    raw_map = spec.get("raw")
+    if not isinstance(raw_map, dict):
         raise RuntimeError(
-            "cartelle_raw.yaml: atteso campo 'root_folders: [...]' con nodi {name, subfolders}."
+            "cartelle_raw.yaml: atteso mapping moderno con chiave 'raw': {raw: {...}}."
         )
-    raw_node = next(
-        (
-            n
-            for n in roots
-            if isinstance(n, dict) and str(n.get("name") or "").strip().lower() == "raw"
-        ),
-        None,
-    )
-    (base_dir / "raw").mkdir(parents=True, exist_ok=True)  # garantiamo raw/
-    if raw_node:
-        _create_tree_from_spec(base_dir, raw_node)
+    raw_base = base_dir / "raw"
+    raw_base.mkdir(parents=True, exist_ok=True)
+
+    def _mk_from_map(base: Path, mapping: Dict[str, Any]) -> None:
+        for k, v in (mapping or {}).items():
+            child = base / str(k)
+            child.mkdir(parents=True, exist_ok=True)
+            if isinstance(v, dict):
+                _mk_from_map(child, v)
+            elif isinstance(v, (list, tuple)):
+                for leaf in v:
+                    (child / str(leaf)).mkdir(parents=True, exist_ok=True)
+
+    _mk_from_map(raw_base, raw_map)
 
 
 # ---------------------------------------------------------------------
@@ -292,7 +310,7 @@ def _emit_pdfs_from_pdf_dummy(
     for section, payload in pdf_dummy.items():
         if not isinstance(payload, dict):
             raise RuntimeError(
-                f"pdf_dummy.yaml: sezione '{section}' non Ã¨ un mapping (titolo/paragrafi)."
+                f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi)."
             )
         titolo = str(payload.get("titolo") or section).strip()
         paragrafi = payload.get("paragrafi")
@@ -307,7 +325,7 @@ def _emit_pdfs_from_pdf_dummy(
         else:
             sub = _RAW_SECTIONS.get(section)
             if not sub:
-                continue  # NON RAW (es. contrattualistica) â†’ skip
+                continue  # NON RAW (es. contrattualistica) -> skip
             dst_dir = raw_dir / sub
             file_name = f"{sub}_intro_{slug}.pdf"
 
@@ -335,7 +353,7 @@ def build_dummy_kb(
     Args:
         slug: identificatore cliente.
         client_name: nome cliente.
-        overwrite: se True, sovrascrive file giÃ  presenti.
+        overwrite: se True, sovrascrive file già presenti.
         logger: logger strutturato per audit (opzionale).
 
     Restituisce:
@@ -343,9 +361,7 @@ def build_dummy_kb(
     """
     # Log iniziale
     if logger:
-        logger.info(
-            "â–¶ï¸  Start build sandbox dummy", extra={"slug": slug, "client_name": client_name}
-        )
+        logger.info("Start build sandbox dummy", extra={"slug": slug, "client_name": client_name})
 
     # 1) leggi template contrattuali
     if logger:
@@ -368,7 +384,7 @@ def build_dummy_kb(
     if logger:
         logger.info("Base destinazione risolta", extra={"base": str(base), "tail": tail_path(base)})
 
-    # 3) crea cartelle standard + SOLO lâ€™albero raw/
+    # 3) crea cartelle standard + SOLO l’albero raw/
     book_dir = base / "book"
     semantic_dir = base / "semantic"
     config_dir = base / "config"
@@ -436,9 +452,9 @@ def build_dummy_kb(
             },
         )
 
-    # 7) CSV via moduli semantic (RAW â†’ tags_raw.csv)
+    # 7) CSV via moduli semantic (RAW -> tags_raw.csv)
     if logger:
-        logger.info("Estrazione candidati semantici (RAW â†’ tags_raw.csv)")
+        logger.info("Estrazione candidati semantici (RAW -> tags_raw.csv)")
     cfg = load_semantic_config(base)
 
     candidates = extract_semantic_candidates(cfg.raw_dir, cfg)
@@ -500,7 +516,7 @@ def build_dummy_kb(
 
     if logger:
         logger.info(
-            "âœ… Sandbox dummy creata",
+            "Sandbox dummy creata",
             extra={"base": str(base), "base_tail": tail_path(base), "raw_tail": tail_path(raw_dir)},
         )
     return base
@@ -525,12 +541,32 @@ def _parse_args() -> argparse.Namespace:
         default=DEFAULT_CLIENT_NAME,
         help="Nome cliente (default: Cliente Dummy)",
     )
-    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file giÃ  esistenti")
+    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file già esistenti")
     return p.parse_args()
 
 
 def main() -> int:
     args = _parse_args()
+    # Fallback: forza stdout/stderr UTF-8 per console Windows (evita UnicodeEncodeError)
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            import io as _io
+
+            sys.stdout = _io.TextIOWrapper(
+                getattr(sys.stdout, "buffer", sys.stdout),
+                encoding="utf-8",
+                errors="replace",
+            )  # type: ignore[assignment]
+            sys.stderr = _io.TextIOWrapper(
+                getattr(sys.stderr, "buffer", sys.stderr),
+                encoding="utf-8",
+                errors="replace",
+            )  # type: ignore[assignment]
+        except Exception:
+            pass
     # Override dinamico della root di output solo se passato da CLI
     if getattr(args, "out", None):
         from pathlib import Path as _Path
@@ -556,9 +592,7 @@ def main() -> int:
         except Exception:
             logger = early_logger  # fallback
 
-        logger.info(
-            "ðŸ Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)}
-        )
+        logger.info("Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)})
         return 0
     except KeyboardInterrupt:
         return 130

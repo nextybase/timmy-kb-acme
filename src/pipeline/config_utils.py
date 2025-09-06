@@ -32,6 +32,7 @@ import yaml
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+from datetime import date
 
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic import Field, model_validator
@@ -219,7 +220,7 @@ def validate_preonboarding_environment(
         ) from e
 
     if not isinstance(cfg, dict):
-        logger.error("❗ Config YAML non valido o vuoto.")
+        logger.error("Config YAML non valido o vuoto.")
         raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
 
     # Chiavi obbligatorie minime
@@ -326,4 +327,41 @@ __all__ = [
     "validate_preonboarding_environment",
     "safe_write_file",
     "update_config_with_drive_ids",
+    "bump_n_ver_if_needed",
+    "set_data_ver_today",
 ]
+
+
+# ----------------------------------------------------------
+#  Versioning helpers (N_VER / DATA_VER)
+# ----------------------------------------------------------
+def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None = None) -> None:
+    """Incrementa N_VER di 1 nel config del cliente.
+
+    Nota: la logica "if needed" è demandata al chiamante (UI tiene un flag di sessione)
+    per garantire un solo incremento per sessione. Questa funzione è idempotente a
+    livello di singola invocazione: legge il valore corrente (default 0) e scrive +1.
+    """
+    log = logger or globals().get("logger")
+    cfg = get_client_config(context) or {}
+    try:
+        current = int(cfg.get("N_VER", 0) or 0)
+    except Exception:
+        current = 0
+    new_val = current + 1
+    if log:
+        log.info({"event": "bump_n_ver", "old": current, "new": new_val, "slug": context.slug})
+    update_config_with_drive_ids(context, updates={"N_VER": new_val}, logger=log)
+
+
+def set_data_ver_today(context: ClientContext, logger: logging.Logger | None = None) -> None:
+    """Imposta DATA_VER alla data odierna (YYYY-MM-DD) nel config del cliente.
+
+    Viene tipicamente chiamata alla chiusura della UI, solo se nella sessione ci sono
+    state modifiche. Rimuove eventuali flag temporanei (nessun flag gestito qui).
+    """
+    log = logger or globals().get("logger")
+    today = date.today().isoformat()
+    if log:
+        log.info({"event": "set_data_ver_today", "value": today, "slug": context.slug})
+    update_config_with_drive_ids(context, updates={"DATA_VER": today}, logger=log)

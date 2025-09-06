@@ -230,6 +230,26 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         return "file"
 
 
+def to_kebab(s: str) -> str:
+    """Normalizza una stringa in kebab-case stabile per nomi cartella.
+
+    Regole:
+    - trim + lower
+    - sostituisce spazi/underscore con '-'
+    - rimuove caratteri non [a-z0-9-]
+    - comprime '-' ripetuti e li trimma ai lati
+    """
+    try:
+        import re as _re
+
+        s = (s or "").strip().lower().replace("_", "-").replace(" ", "-")
+        s = _re.sub(r"[^a-z0-9-]+", "-", s)
+        s = _re.sub(r"-{2,}", "-", s).strip("-")
+        return s
+    except Exception:
+        return str(s or "").strip().lower() or "-"
+
+
 # ----------------------------------------
 # Ordinamento deterministico
 # ----------------------------------------

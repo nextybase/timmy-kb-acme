@@ -4,7 +4,7 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 
 ## 1) Responsabilità e orchestratori
 
-- `semantic_onboarding.py`: conversione RAW -> BOOK, enrichment, README/SUMMARY, preview Docker. Non fa push.
+- Facade `semantic.api`: conversione RAW -> BOOK, enrichment, README/SUMMARY, preview Docker (via adapters). Non fa push.
   - La UI Streamlit non usa direttamente gli helper interni ma passa dalla facade `semantic.api` (API pubblica stabile).
 - `onboarding_full.py`: esegue solo il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia già pronto.
 
@@ -35,7 +35,7 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 
 ```bash
 # 1) Prepara contenuti
-py src/semantic_onboarding.py --slug acme --non-interactive --no-preview
+Vedi esempio headless via `semantic.api` (README).
 
 # 2) Push (solo push)
 py src/onboarding_full.py --slug acme --non-interactive
@@ -56,7 +56,7 @@ Opzioni comuni:
 
 - Pipeline CI deve:
   - validare build/lint/test
-  - eseguire `semantic_onboarding.py` (senza preview) su branch di lavoro
+  - eseguire conversione/enrichment/README&SUMMARY via `semantic.api` su branch di lavoro
   - creare PR verso `main`
   - dopo approvazione, eseguire `onboarding_full.py` (solo push) sul merge in `main`.
 
@@ -73,4 +73,3 @@ Opzioni comuni:
 - Allineamento contenuti `book/` -> spazio GitBook.
 
 Nota: fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.
-

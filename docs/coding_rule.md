@@ -55,7 +55,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ---
 
 ## Orchestratori & UI
-- Orchestratori (`pre_onboarding`, `tag_onboarding`, `semantic_onboarding`, `onboarding_full`):
+ - Orchestratori (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) + façade `semantic.api` per la semantica:
   - Niente input bloccanti nei moduli di servizio; tutta la UX rimane negli orchestratori.
   - Gestisci `--non-interactive` per batch/CI.
 - UI (`onboarding_ui.py`):

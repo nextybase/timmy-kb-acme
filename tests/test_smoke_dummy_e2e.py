@@ -49,8 +49,8 @@ def test_smoke_dummy_e2e(tmp_path: Path, monkeypatch):
         ]
     )
 
-    # 4) semantic: senza preview
-    run([PY, "src/semantic_onboarding.py", "--slug", slug, "--no-preview", "--non-interactive"])
+    # 4) semantic headless (facade semantic.api)
+    run([PY, "src/semantic_headless.py", "--slug", slug, "--no-preview", "--non-interactive"])
 
     # Assert principali
     assert (out / "raw").exists()

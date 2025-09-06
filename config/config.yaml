@@ -23,5 +23,13 @@ log_max_bytes: 1048576                # Max size per rotazione log (byte)
 log_backup_count: 3                   # Numero max file di backup per log rotazione
 debug: false                          # true/false per abilitare log verbose (default: false)
 
+# === Versioning UI session ===
+# Incrementale a cura della UI/pipeline:
+# - N_VER: intero che parte da 0; viene incrementato una sola volta alla prima modifica
+#          (yaml/db/etc.) in una sessione UI.
+# - DATA_VER: stringa ISO data (YYYY-MM-DD); aggiornata alla chiusura UI se ci sono state modifiche.
+N_VER: 0
+DATA_VER: null
+
 # === Policy aggiuntive / estensioni future ===
 # (Aggiungi qui ulteriori parametri pipeline editabili)

@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # src/pre_onboarding.py
 """
 Orchestratore della fase di **pre-onboarding** per Timmy-KB.
 
-Responsabilità:
+ResponsabilitÃ :
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
@@ -12,7 +12,7 @@ Responsabilità:
 
 Note architetturali:
 - Gli orchestratori gestiscono **I/O utente (prompt)** e **terminazione del processo**
-  (mappando eccezioni → `EXIT_CODES`). I moduli invocati **non** chiamano `sys.exit()` o `input()`.
+  (mappando eccezioni â†’ `EXIT_CODES`). I moduli invocati **non** chiamano `sys.exit()` o `input()`.
 - **Redazione centralizzata** via `logging_utils`.
 - **Path-safety STRONG**: `ensure_within()` prima di ogni write/copy/delete.
 - Non stampa segreti nei log (usa mascheratura parziale per ID e percorsi).
@@ -113,7 +113,7 @@ def bootstrap_semantic_templates(
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
     - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
 
-    Nota: se vuoi retro-compatibilità, puoi duplicare anche in semantic/semantic_mapping.yaml.
+    Nota: se vuoi retro-compatibilitÃ , puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
     assert context.base_dir is not None
     semantic_dir = context.base_dir / "semantic"
@@ -154,7 +154,7 @@ def bootstrap_semantic_templates(
             "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
         }
 
-        # Prepend `context` solo se non già presente
+        # Prepend `context` solo se non giÃ  presente
         if "context" not in data:
             data = {"context": ctx, **data}
             payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
@@ -162,7 +162,7 @@ def bootstrap_semantic_templates(
             safe_write_text(mapping_dst, payload, atomic=True)
             logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
 
-        # (Opzionale) retro-compatibilità: mantieni anche semantic_mapping.yaml
+        # (Opzionale) retro-compatibilitÃ : mantieni anche semantic_mapping.yaml
         legacy = semantic_dir / "semantic_mapping.yaml"
         if not legacy.exists():
             try:
@@ -223,10 +223,10 @@ def _prepare_context_and_logger(
     )
     if not require_env:
         logger.info(
-            "🌐 Modalità offline: variabili d'ambiente esterne non richieste (require_env=False)."
+            "ModalitÃ  offline: variabili d'ambiente esterne non richieste (require_env=False)."
         )
     logger.info(f"Config cliente caricata: {context.config_path}")
-    logger.info("🚀 Avvio pre-onboarding")
+    logger.info("Avvio pre-onboarding")
     return context, logger, client_name
 
 
@@ -305,7 +305,7 @@ def _drive_phase(
             service, context.slug, parent_id=drive_parent_id, redact_logs=redact
         )
     logger.info(
-        "📄 Cartella cliente creata su Drive",
+        "ðŸ“„ Cartella cliente creata su Drive",
         extra={"client_folder_id": mask_partial(client_folder_id)},
     )
 
@@ -314,14 +314,14 @@ def _drive_phase(
             service, yaml_structure_file, client_folder_id, redact_logs=redact
         )
     logger.info(
-        "📄 Struttura Drive creata",
+        "ðŸ“„ Struttura Drive creata",
         extra={
             "yaml_tail": tail_path(yaml_structure_file),
             "created_map_masked": mask_id_map(created_map),
         },
     )
 
-    drive_raw_folder_id = created_map.get("RAW") or created_map.get("raw")
+    drive_raw_folder_id = created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
@@ -336,7 +336,7 @@ def _drive_phase(
             service, context, parent_id=client_folder_id, redact_logs=redact
         )
     logger.info(
-        "📤 Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)}
+        "ðŸ“¤ Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)}
     )
 
     updates = {
@@ -346,7 +346,7 @@ def _drive_phase(
         "client_name": client_name,
     }
     update_config_with_drive_ids(context, updates=updates, logger=logger)
-    logger.info("🔑 Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
+    logger.info("ðŸ”‘ Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
 
 
 # --------------------------------- ORCHESTRATORE SNELLITO ---------------------------------
@@ -361,7 +361,7 @@ def pre_onboarding_main(
     run_id: Optional[str] = None,
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
-    # FIX: l'ambiente è richiesto ogni volta che NON è dry-run (indipendentemente dall'interattività)
+    # FIX: l'ambiente Ã¨ richiesto ogni volta che NON Ã¨ dry-run (indipendentemente dall'interattivitÃ )
     require_env = not dry_run
 
     context, logger, client_name = _prepare_context_and_logger(
@@ -375,8 +375,8 @@ def pre_onboarding_main(
     yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
 
     if dry_run:
-        logger.info("🧪 Modalità dry-run: salto operazioni su Google Drive.")
-        logger.info("✅ Pre-onboarding locale completato (dry-run).")
+        logger.info("ModalitÃ  dry-run: salto operazioni su Google Drive.")
+        logger.info("Pre-onboarding locale completato (dry-run).")
         return
 
     _drive_phase(
@@ -386,24 +386,24 @@ def pre_onboarding_main(
         client_name=client_name,
         require_env=require_env,
     )
-    logger.info(f"✅ Pre-onboarding completato per cliente: {context.slug}")
+    logger.info(f"âœ… Pre-onboarding completato per cliente: {context.slug}")
 
 
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
 
 
 def _parse_args() -> argparse.ArgumentParser:
-    """Costruisce e restituisce il parser CLI per l’orchestratore di pre-onboarding.
+    """Costruisce e restituisce il parser CLI per lâ€™orchestratore di pre-onboarding.
 
     Opzioni:
         slug_pos: Argomento posizionale per lo slug cliente.
         --slug: Slug cliente (alternativa al posizionale).
-        --name: Nome cliente (es. “ACME Srl”).
+        --name: Nome cliente (es. â€œACME Srlâ€).
         --non-interactive: Esecuzione senza prompt.
         --dry-run: Esegue solo la parte locale e salta Google Drive.
 
     Restituisce:
-        argparse.ArgumentParser: parser configurato (non ancora “parsed”).
+        argparse.ArgumentParser: parser configurato (non ancora â€œparsedâ€).
     """
     p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error(
-            "Errore: in modalità non interattiva è richiesto --slug (o slug posizionale)."
+            "Errore: in modalitÃ  non interattiva Ã¨ richiesto --slug (o slug posizionale)."
         )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:

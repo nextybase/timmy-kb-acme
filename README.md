@@ -54,7 +54,7 @@ output/
     book/     # Markdown + SUMMARY.md + README.md
     semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db, finance.db (opz.)
     config/   # config.yaml (aggiornato con eventuali ID Drive)
-    logs/     # log centralizzati (pre_onboarding, tag_onboarding, semantic_onboarding, onboarding_full)
+    logs/     # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
 ```
 
 > Lo slug deve rispettare le regole in `config/config.yaml`. In interattivo, se non valido, viene richiesto di correggerlo.
@@ -69,7 +69,20 @@ output/
 ```bash
 py src/pre_onboarding.py
 py src/tag_onboarding.py
-py src/semantic_onboarding.py
+py - <<PY
+from semantic.api import get_paths, convert_markdown, enrich_frontmatter, write_summary_and_readme
+from pipeline.context import ClientContext
+import logging
+slug = 'acme'
+ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+log = logging.getLogger('semantic.manual')
+convert_markdown(ctx, log, slug=slug)
+base = get_paths(slug)['base']
+from semantic.vocab_loader import load_reviewed_vocab
+vocab = load_reviewed_vocab(base, log)
+enrich_frontmatter(ctx, log, vocab, slug=slug)
+write_summary_and_readme(ctx, log, slug=slug)
+PY
 py src/onboarding_full.py
 ```
 
@@ -77,7 +90,7 @@ py src/onboarding_full.py
 ```bash
 py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive
 py src/tag_onboarding.py --slug acme --non-interactive --proceed             # default: Drive
-py src/semantic_onboarding.py --slug acme --no-preview --non-interactive
+Rem: per flussi CLI, usare direttamente semantic.api come da snippet sopra.
 py src/onboarding_full.py --slug acme --non-interactive
 ```
 
@@ -126,9 +139,9 @@ Checkpoint HiTL — se confermato (o `--proceed`), Fase 2 genera `README_TAGGING
 ## 3) Semantic onboarding
 
 ```bash
-py src/semantic_onboarding.py --slug <id> [--no-preview] [--preview-port 4000] [--non-interactive]
+Rem: vedi snippet Python sopra per invocazioni headless.
 
-Nota per la UI: l'interfaccia Streamlit usa `semantic.api` come strato pubblico e stabile per invocare la logica di `semantic_onboarding` senza dipendere dagli helper interni.
+Nota per la UI: l'interfaccia Streamlit usa `semantic.api` come strato pubblico e stabile per tutta la logica semantica (niente dipendenza da helper interni).
 ```
 
 - Conversione PDF -> Markdown in `book/`.  

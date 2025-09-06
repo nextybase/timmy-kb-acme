@@ -16,7 +16,7 @@ Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi
   - tag_onboarding per scaricare i PDF (default) nella sandbox locale (`raw/`).
 - Separazione ruoli: orchestratori (UX/CLI, prompt, exit codes) vs moduli tecnici (logica pura, niente prompt/exit).
 - Sicurezza & coerenza: `ensure_within` come SSoT per path-safety; scritture atomiche via `safe_write_*`; redazione log centralizzata.
-- Split orchestratori: conversione/enrichment/preview in `semantic_onboarding.py` (API pubblica per la UI esposta via `semantic.api`); push in `onboarding_full.py`.
+- Orchestrazione semantica esposta via `semantic.api` (UI e script usano solo la façade pubblica). Il vecchio `semantic_onboarding.py` è deprecato.
 - Testing: suite PyTest con utente dummy generato on-demand, test unitari/middle/smoke end-to-end.
 - Performance: CSV via scrittura streaming + commit atomico; enrichment ottimizzato con un indice inverso per sinonimi/tag.
 
@@ -34,7 +34,7 @@ Input: PDF. Per default, la sorgente è Drive (scaricati nella sandbox `raw/`). 
 Azioni: genera `semantic/tags_raw.csv` (euristiche path/filename, scrittura streaming), checkpoint HiTL che produce `README_TAGGING.md` e `tags_reviewed.yaml` (stub di revisione umana).
 Output: `tags_raw.csv` + `tags_reviewed.yaml` (stub) per la revisione.
 
-### 3) `semantic_onboarding` — conversione + enrichment + preview (UI via `semantic.api`)
+### 3) Semantica — conversione + enrichment + preview (facade `semantic.api`)
 Input: `raw/` + (opz.) vocabolario canonico su SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) è usato per authoring/migrazione.
 Azioni: conversione PDF→Markdown in `book/`; arricchimento frontmatter (tags/aree) tramite vocabolario/sinonimi e indice inverso; generazione `README.md` e `SUMMARY.md` (util di repo o fallback adapter); preview HonKit Docker con stop esplicito.
 Output: Markdown pronti in `book/`; anteprima su `localhost:<port>`.
@@ -53,7 +53,7 @@ Output: commit/push su repo remoto.
 - Orchestratori
   - `pre_onboarding.py`: setup locale; opz. Drive structure + upload `config.yaml`.
   - `tag_onboarding.py`: ingest PDF (default Drive→RAW), `tags_raw.csv`, checkpoint HiTL → `tags_reviewed.yaml`.
-  - `semantic_onboarding.py`: PDF→MD, enrichment, README/SUMMARY, preview Docker (UI integra tramite `semantic.api`).
+  - Facade `semantic.api`: PDF→MD, enrichment, README/SUMMARY, preview (via adapters), usata da UI/CLI.
   - `onboarding_full.py`: preflight `book/`, push GitHub.
 
 - Adapter
@@ -129,4 +129,3 @@ Questa pagina documenta la release 1.7.0. Cambi chiave rispetto alla 1.6.0:
 - Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive → Semantica).  
 - Sezione “Download contenuti su raw/” nel tab Drive (pull PDF da Drive → locale).  
 - Rifiniture di compatibilità Pylance/Streamlit e hardening path/atomiche.
-

@@ -17,23 +17,19 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 # -----------------------------------------------------------------------------
-# Import pipeline (con fallback sicuro)
+# Import pipeline (obbligatori in v1.8.0)
 # -----------------------------------------------------------------------------
-try:
-    from pipeline.env_utils import compute_redact_flag  # type: ignore
-except Exception:  # pragma: no cover
-    compute_redact_flag = None  # type: ignore
-
-try:
-    from pipeline.logging_utils import get_structured_logger  # type: ignore
-except Exception:  # pragma: no cover
-    get_structured_logger = None  # type: ignore
+from pipeline.env_utils import compute_redact_flag
+from pipeline.logging_utils import get_structured_logger
 
 # ClientContext per la tab Semantica (opzionale)
-try:
-    from pipeline.context import ClientContext  # type: ignore
-except Exception:  # pragma: no cover
-    ClientContext = None  # type: ignore
+from pipeline.context import ClientContext
+
+# Config helpers (versioning)
+from pipeline.config_utils import (
+    bump_n_ver_if_needed,
+    set_data_ver_today,
+)
 
 # Preview adapters (HonKit) opzionali
 try:
@@ -52,16 +48,11 @@ from config_ui.mapping_editor import (  # type: ignore  # noqa: E402
     build_mapping,
     validate_categories,
 )
-from config_ui.drive_runner import (  # type: ignore  # noqa: E402
+from config_ui.drive_runner import (
     build_drive_from_mapping,
     emit_readmes_for_raw,
+    download_raw_from_drive,
 )
-
-# Download PDF da Drive â†’ raw/ locale (opzionale, potrebbe non essere ancora implementato)
-try:
-    from config_ui.drive_runner import download_raw_from_drive  # type: ignore
-except Exception:  # pragma: no cover
-    download_raw_from_drive = None  # type: ignore
 
 # -----------------------------------------------------------------------------
 # Import funzioni Semantica (opzionali, con fallback)
@@ -159,7 +150,7 @@ def _norm_str(val: Optional[str]) -> str:
 
 
 def _safe_streamlit_rerun() -> None:
-    # Usa lâ€™API stabile; fallback a experimental se presente. Evita warning Pylance.
+    # Usa l’API stabile; fallback a experimental se presente. Evita warning Pylance.
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
     if callable(fn):
         try:
@@ -214,6 +205,12 @@ def _render_header_after_lock(log: logging.Logger, slug: str, client_name: str) 
         st.markdown(f"**Cliente:** {client_name} &nbsp;&nbsp;|&nbsp;&nbsp; **Slug:** `{slug}`")
     with right:
         if st.button("Chiudi UI", key="btn_close_ui_top", use_container_width=True):
+            try:
+                if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
+                    ctx = _ensure_context(slug, log)
+                    set_data_ver_today(ctx, log)  # type: ignore[misc]
+            except Exception:
+                pass
             _request_shutdown(log)
 
 
@@ -252,26 +249,26 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
             meta = cats.get(cat_key, {})
             with st.expander(cat_key, expanded=False):
                 amb = st.text_input(
-                    f"Ambito â€” {cat_key}",
+                    f"Ambito - {cat_key}",
                     value=str(meta.get("ambito", "")),
                     key=f"amb_{idx}_{cat_key}",
                 )
                 desc = st.text_area(
-                    f"Descrizione â€” {cat_key}",
+                    f"Descrizione - {cat_key}",
                     value=str(meta.get("descrizione", "")),
                     height=120,
                     key=f"desc_{idx}_{cat_key}",
                 )
                 examples_str = "\n".join([str(x) for x in (meta.get("esempio") or [])])
                 ex = st.text_area(
-                    f"Esempi (uno per riga) â€” {cat_key}",
+                    f"Esempi (uno per riga) - {cat_key}",
                     value=examples_str,
                     height=120,
                     key=f"ex_{idx}_{cat_key}",
                 )
 
                 if st.button(
-                    f"Salva â€œ{cat_key}â€",
+                    f"Salva {cat_key}",
                     key=f"btn_save_cat_{idx}_{cat_key}",
                     use_container_width=True,
                 ):
@@ -303,6 +300,18 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
                                     "path": str(path),
                                 }
                             )
+                            # Versioning: bump N_VER una sola volta per sessione
+                            try:
+                                if (
+                                    not bool(st.session_state.get("bumped"))
+                                    and bump_n_ver_if_needed is not None
+                                ):
+                                    ctx = _ensure_context(slug, log)
+                                    bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
+                                    st.session_state["bumped"] = True
+                                st.session_state["modified"] = True
+                            except Exception:
+                                pass
                             st.success(f"Salvata la voce: {cat_key}")
                             try:
                                 _safe_streamlit_rerun()
@@ -342,6 +351,18 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
                 path = save_tags_reviewed(slug, new_map)
                 st.success(f"Salvato: {path}")
                 log.info({"event": "tags_reviewed_saved_all", "slug": slug, "path": str(path)})
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        ctx = _ensure_context(slug, log)
+                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
             except Exception as e:
                 st.exception(e)
 
@@ -400,13 +421,19 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 def _cb(step: int, total: int, label: str) -> None:
                     pct = int(step * 100 / total)
                     prog.progress(pct)
-                    status.markdown(f"{pct}% â€” {label}")
+                    status.markdown(f"{pct}% - {label}")
 
                 ids = build_drive_from_mapping(
                     slug=slug, client_name=st.session_state.get("client_name", ""), progress=_cb
                 )
                 st.success(f"Struttura creata: {ids}")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
+            except FileNotFoundError as e:
+                st.error(
+                    "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
+                    "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                )
+                st.caption(f"Dettagli: {e}")
             except Exception as e:
                 st.exception(e)
     with colB:
@@ -421,6 +448,24 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 st.success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
                 st.session_state["drive_readmes_done"] = True
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        ctx = _ensure_context(slug, log)
+                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
+            except FileNotFoundError as e:
+                st.error(
+                    "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
+                    "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                )
+                st.caption(f"Dettagli: {e}")
             except Exception as e:
                 st.exception(e)
 
@@ -452,7 +497,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                             def _pcb(done: int, total: int, label: str) -> None:
                                 pct = int((done * 100) / (total or 1))
                                 prog.progress(pct)
-                                status.markdown(f"{pct}% â€” {label}")
+                                status.markdown(f"{pct}% - {label}")
 
                             res = download_raw_from_drive_with_progress(
                                 slug=slug,
@@ -475,7 +520,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
         with c2:
             st.write(
                 (
-                    "La struttura delle cartelle Ã¨ stata creata su Drive; "
+                    "La struttura delle cartelle è stata creata su Drive; "
                     "popolarne il contenuto seguendo le indicazioni del file README presente in ogni "
                     "cartella per proseguire con la procedura"
                 )
@@ -486,8 +531,6 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
 # Tab: Semantica (RAW â†’ BOOK + frontmatter + README/SUMMARY + preview)
 # =============================================================================
 def _ensure_context(slug: str, log: logging.Logger) -> object:
-    if ClientContext is None:
-        raise RuntimeError("Moduli pipeline non disponibili: impossibile creare il ClientContext.")
     # Nessun prompt da UI; env non obbligatorio per operazioni locali
     return ClientContext.load(
         slug=slug,
@@ -545,9 +588,21 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
                     tmp_csv.write_bytes(data)
                 res = fin_import_csv(base, tmp_csv)  # type: ignore[misc]
                 st.success(
-                    f"Import OK â€” righe: {res.get('rows', 0)}  in {res.get('db', str(sem_dir / 'finance.db'))}"
+                    f"Import OK - righe: {res.get('rows', 0)}  in {res.get('db', str(sem_dir / 'finance.db'))}"
                 )
                 log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        ctx = _ensure_context(slug, log)
+                        bump_n_ver_if_needed(ctx, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
                 try:
                     tmp_csv.unlink(missing_ok=True)
                 except Exception:
@@ -579,9 +634,6 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
     if any(x is None for x in (sem_convert, sem_enrich, sem_write_md, sem_load_vocab)):
         st.error("Modulo semantic.api non disponibile o import parziale. Verificare l'ambiente.")
         return
-    if ClientContext is None:
-        st.error("Pipeline non disponibile: impossibile creare il contesto cliente.")
-        return
 
     # Prepara contesto
     try:
@@ -606,6 +658,17 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         "md_count": len(mds),
                     }
                 )
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
             except Exception as e:
                 st.exception(e)
 
@@ -628,6 +691,17 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         "touched": len(touched),
                     }
                 )
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
             except Exception as e:
                 st.exception(e)
 
@@ -646,6 +720,17 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                         "run_id": st.session_state.get("run_id"),
                     }
                 )
+                # Versioning: bump N_VER una sola volta per sessione
+                try:
+                    if (
+                        not bool(st.session_state.get("bumped"))
+                        and bump_n_ver_if_needed is not None
+                    ):
+                        bump_n_ver_if_needed(context, log)  # type: ignore[misc]
+                        st.session_state["bumped"] = True
+                    st.session_state["modified"] = True
+                except Exception:
+                    pass
             except Exception as e:
                 st.exception(e)
 
@@ -762,7 +847,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     st.divider()
     st.caption(
-        "Nota: questo step **non** usa Google Drive nÃ© esegue push su GitHub; lavora su disco locale e preview."
+        "Nota: questo step **non** usa Google Drive né esegue push su GitHub; lavora su disco locale e preview."
     )
 
 
@@ -770,7 +855,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 # Main
 # =============================================================================
 def main() -> None:
-    st.set_page_config(page_title="NeXT â€” Onboarding UI", layout="wide")
+    st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
     redact = _safe_compute_redact_flag()
     log = _safe_get_logger("onboarding_ui", redact)
     # run_id per correlazione log UI
@@ -782,20 +867,26 @@ def main() -> None:
     except Exception:
         pass
 
+    # Flag di sessione per versioning
+    if "modified" not in st.session_state:
+        st.session_state["modified"] = False
+    if "bumped" not in st.session_state:
+        st.session_state["bumped"] = False
+
     # Gating iniziale: solo input slug+cliente a schermo pieno
     if not st.session_state.get("client_locked", False):
         locked, _, _ = _render_landing_inputs(log)
         if not locked:
-            return  # finchÃ© non sono compilati entrambi, non mostrare altro
+            return  # finché non sono compilati entrambi, non mostrare altro
 
     # Da qui in poi la UI completa
     slug = st.session_state.get("slug", "")
     client_name = st.session_state.get("client_name", "")
 
-    st.title("NeXT â€” Onboarding UI")
+    st.title("NeXT - Onboarding UI")
     _render_header_after_lock(log, slug, client_name)
 
-    # Tabs: Semantica nascosta finchÃ© non abbiamo scaricato i PDF su raw/
+    # Tabs: Semantica nascosta finché non abbiamo scaricato i PDF su raw/
     tabs_labels: List[str] = ["Configurazione", "Drive"]
     if st.session_state.get("client_locked"):
         tabs_labels.append("Finanza")

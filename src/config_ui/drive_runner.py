@@ -1,11 +1,11 @@
-# src/config_ui/drive_runner.py
+﻿# src/config_ui/drive_runner.py
 from __future__ import annotations
 
 import io
 import os
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import locali (dev UI)
 from .mapping_editor import (
@@ -16,72 +16,22 @@ from .mapping_editor import (
 )
 from .utils import to_kebab, ensure_within_and_resolve  # SSoT normalizzazione + path-safety
 
-# Import da pipeline (con fallback per ambienti dev)
-# Annotazioni esplicite (mypy): nomi possono essere riassegnati a None nel fallback
-ClientContext: Any
-get_structured_logger: Optional[Callable[..., Any]]
-get_drive_service: Optional[Callable[..., Any]]
-create_drive_folder: Optional[Callable[..., Any]]
-create_drive_structure_from_yaml: Optional[Callable[..., Any]]
-upload_config_to_drive_folder: Optional[Callable[..., Any]]
-try:
-    import pipeline.context as _context
-    import pipeline.logging_utils as _logging_utils
-    import pipeline.drive_utils as _drive_utils
-
-    ClientContext = _context.ClientContext
-    get_structured_logger = _logging_utils.get_structured_logger
-    get_drive_service = _drive_utils.get_drive_service
-    create_drive_folder = _drive_utils.create_drive_folder
-    create_drive_structure_from_yaml = _drive_utils.create_drive_structure_from_yaml
-    upload_config_to_drive_folder = _drive_utils.upload_config_to_drive_folder
-except Exception:  # pragma: no cover
-    ClientContext = None
-    get_structured_logger = None
-    get_drive_service = None
-    create_drive_folder = None
-    create_drive_structure_from_yaml = None
-    upload_config_to_drive_folder = None
-
-
-# ===== Narrow helper per Optional[Callable] (fix Pylance: reportOptionalCall) =====
-
-F = TypeVar("F", bound=Callable[..., object])
-
-
-def _require_callable(fn: Optional[F], name: str) -> F:
-    """
-    Narrow di tipo: se la funzione è None, alza un errore chiaro.
-    Dopo questo cast Pylance sa che 'fn' è Callable e non più Optional.
-    """
-    if fn is None:
-        raise RuntimeError(
-            f"Funzione '{name}' non disponibile: verifica dipendenze/credenziali Drive."
-        )
-    return fn
+# Import pipeline (obbligatori in v1.8.0)
+from pipeline.context import ClientContext
+from pipeline.logging_utils import get_structured_logger
+from pipeline.drive_utils import (
+    get_drive_service,
+    create_drive_folder,
+    create_drive_structure_from_yaml,
+    upload_config_to_drive_folder,
+)
 
 
 # ===== Logger =================================================================
 
 
 def _get_logger(context: Optional[object] = None) -> Any:
-    """Ritorna un logger strutturato; fallback no-op in assenza del modulo pipeline."""
-    if get_structured_logger is None:
-
-        class _Stub:
-            def info(self, *a: Any, **k: Any) -> None:
-                pass
-
-            def warning(self, *a: Any, **k: Any) -> None:
-                pass
-
-            def error(self, *a: Any, **k: Any) -> None:
-                pass
-
-            def exception(self, *a: Any, **k: Any) -> None:
-                pass
-
-        return _Stub()
+    """Ritorna un logger strutturato del modulo pipeline.logging_utils."""
     return get_structured_logger("config_ui.drive_runner", context=context)
 
 
@@ -103,12 +53,9 @@ def build_drive_from_mapping(
       - crea 'raw/' (dalle categorie del mapping) + 'contrattualistica/'
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
-    if ClientContext is None or get_drive_service is None:
-        raise RuntimeError("API Drive/Context non disponibili nel repo.")
-
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
-    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+    svc = get_drive_service(ctx)
 
     drive_parent_id = ctx.env.get("DRIVE_ID")
     if not drive_parent_id:
@@ -117,7 +64,7 @@ def build_drive_from_mapping(
     # Cartella cliente (sotto DRIVE_ID)
     total_steps = 3
     step = 0
-    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+    client_folder_id = create_drive_folder(
         svc, slug, parent_id=drive_parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     step += 1
@@ -125,7 +72,7 @@ def build_drive_from_mapping(
         progress(step, total_steps, "Cartella cliente creata")
 
     # Upload config.yaml nella cartella cliente
-    _require_callable(upload_config_to_drive_folder, "upload_config_to_drive_folder")(
+    upload_config_to_drive_folder(
         svc, ctx, parent_id=client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     step += 1
@@ -137,14 +84,14 @@ def build_drive_from_mapping(
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
-    created_map = _require_callable(
-        create_drive_structure_from_yaml, "create_drive_structure_from_yaml"
-    )(svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False)))
+    created_map = create_drive_structure_from_yaml(
+        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+    )
     step += 1
     if progress:
         progress(step, total_steps, "Struttura RAW/ creata")
 
-    raw_id = created_map.get("raw") or created_map.get("RAW")
+    raw_id = created_map.get("raw")
     contr_id = created_map.get("contrattualistica") or created_map.get("CONTRATTUALISTICA")
     if not raw_id:
         raise RuntimeError("ID cartella 'raw' non reperito dalla creazione struttura.")
@@ -153,7 +100,9 @@ def build_drive_from_mapping(
     if contr_id:
         out["contrattualistica_id"] = contr_id
 
-    log.info({"event": "drive_structure_created", "ids": {k: v[:6] + "…" for k, v in out.items()}})
+    log.info(
+        {"event": "drive_structure_created", "ids": {k: v[:6] + "..." for k, v in out.items()}}
+    )
     return out
 
 
@@ -206,8 +155,8 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
                     c.showPage()
                     y = height - 2 * cm
 
-        c.setTitle(f"README — {title}")
-        draw_line(f"README — {title}", font="Helvetica-Bold", size=14, leading=18)
+        c.setTitle(f"README - {title}")
+        draw_line(f"README - {title}", font="Helvetica-Bold", size=14, leading=18)
         y -= 4
         draw_line("")
         draw_line("Ambito:", font="Helvetica-Bold", size=12, leading=16)
@@ -215,7 +164,7 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
         draw_line("")
         draw_line("Esempi:", font="Helvetica-Bold", size=12, leading=16)
         for ex in examples or []:
-            draw_line(f"• {ex}")
+            draw_line(f"- {ex}")
         c.showPage()
         c.save()
         data = buf.getvalue()
@@ -223,7 +172,7 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
         return data, "application/pdf"
     except Exception:
         # fallback TXT
-        lines = [f"README — {title}", "", "Ambito:", descr or "", "", "Esempi:"]
+        lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
         lines += [f"- {ex}" for ex in (examples or [])]
         data = ("\n".join(lines)).encode("utf-8")
         return data, "text/plain"
@@ -259,12 +208,9 @@ def emit_readmes_for_raw(
       - ambito (titolo), descrizione, esempi
     Upload in ciascuna sottocartella. Ritorna {category_name -> file_id}
     """
-    if ClientContext is None or get_drive_service is None:
-        raise RuntimeError("API Drive/Context non disponibili nel repo.")
-
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
-    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+    svc = get_drive_service(ctx)
 
     mapping = load_tags_reviewed(slug, base_root=base_root)
     cats, _ = split_mapping(mapping)
@@ -273,15 +219,15 @@ def emit_readmes_for_raw(
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
-    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+    client_folder_id = create_drive_folder(
         svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
-    created_map = _require_callable(
-        create_drive_structure_from_yaml, "create_drive_structure_from_yaml"
-    )(svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False)))
-    raw_id = created_map.get("raw") or created_map.get("RAW")
+    created_map = create_drive_structure_from_yaml(
+        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+    )
+    raw_id = created_map.get("raw")
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata/creata.")
 
@@ -314,7 +260,7 @@ def emit_readmes_for_raw(
     return uploaded
 
 
-# ===== Download PDF da Drive → raw/ locale ====================================
+# ===== Download PDF da Drive â†’ raw/ locale ====================================
 
 
 def download_raw_from_drive(
@@ -331,24 +277,21 @@ def download_raw_from_drive(
 
     Ritorna la lista dei percorsi scritti localmente.
     """
-    if ClientContext is None or get_drive_service is None:
-        raise RuntimeError("API Drive/Context non disponibili nel repo.")
-
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
-    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+    svc = get_drive_service(ctx)
 
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
 
     # Trova/crea cartella cliente e RAW
-    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+    client_folder_id = create_drive_folder(
         svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     sub = _drive_list_folders(svc, client_folder_id)
     name_to_id = {d["name"]: d["id"] for d in sub}
-    raw_id = name_to_id.get("raw") or name_to_id.get("RAW")
+    raw_id = name_to_id.get("raw")
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
 
@@ -368,7 +311,7 @@ def download_raw_from_drive(
     written: List[Path] = []
 
     for folder in raw_subfolders:
-        folder_name = folder["name"]  # già kebab-case dal provisioning
+        folder_name = folder["name"]  # giÃ  kebab-case dal provisioning
         folder_id = folder["id"]
 
         # Elenca i PDF in questa sottocartella
@@ -430,23 +373,20 @@ def download_raw_from_drive_with_progress(
     logger: Optional[logging.Logger] = None,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[Path]:
-    if ClientContext is None or get_drive_service is None:
-        raise RuntimeError("API Drive/Context non disponibili nel repo.")
-
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
-    svc = _require_callable(get_drive_service, "get_drive_service")(ctx)
+    svc = get_drive_service(ctx)
 
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
 
-    client_folder_id = _require_callable(create_drive_folder, "create_drive_folder")(
+    client_folder_id = create_drive_folder(
         svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     sub = _drive_list_folders(svc, client_folder_id)
     name_to_id = {d["name"]: d["id"] for d in sub}
-    raw_id = name_to_id.get("raw") or name_to_id.get("RAW")
+    raw_id = name_to_id.get("raw")
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
 
