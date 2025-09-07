@@ -100,16 +100,16 @@ def write_tags_review_stub_from_csv(
         Path del database `tags.db` generato/aggiornato.
     """
     semantic_dir = Path(semantic_dir).resolve()
-    csv_path = Path(csv_path).resolve()
+    csv_path = Path(csv_path)
 
     # Consenti la lettura solo di CSV dentro semantic/: harden per evitare scan errati
-    ensure_within(semantic_dir, csv_path)
+    from pipeline.path_utils import open_for_read
 
     suggested: List[str] = []
     seen = set()
 
     try:
-        with open(csv_path, "r", encoding="utf-8", newline="") as f:
+        with open_for_read(semantic_dir, csv_path, encoding="utf-8") as f:
             reader = csv.reader(f)
             header = next(reader, None)
 

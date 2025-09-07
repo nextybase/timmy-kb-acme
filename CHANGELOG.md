@@ -3,6 +3,19 @@
 Tutte le modifiche rilevanti a questo progetto saranno documentate in questo file, seguendo il formato [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) e aderendo a [Semantic Versioning](https://semver.org/lang/it/).
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
+
+## [1.8.2] - 2025-09-07
+### Added
+- Introdotto `ensure_within_and_resolve` in `pipeline/path_utils.py` come wrapper unico per la validazione e normalizzazione dei path in lettura.
+
+### Changed
+- Tutte le letture di file (Markdown, CSV, YAML) nei moduli `semantic/*` e `pipeline/*` ora passano attraverso il wrapper di path-safety.
+- Aggiornata la documentazione (`coding_rule.md`, `developer_guide.md`) per riflettere l’obbligo di usare il wrapper anche in lettura.
+
+### Security
+- Prevenzione completa di path traversal e accessi non autorizzati a file fuori dal `base_dir` anche in fase di lettura.
+- Aggiunti test specifici per traversal `../` e symlink esterni.
+
 ---
 ## [1.8.2] - 2025-09-06
 
@@ -694,4 +707,3 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ### Notes
 - Questa versione rappresenta la **base di partenza ufficiale**: da qui in poi ogni refactor, fix o nuova feature dovrÃ  essere registrata come incremento SemVer e mantenere la compatibilitÃ  documentale.
-

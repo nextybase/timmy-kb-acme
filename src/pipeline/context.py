@@ -261,8 +261,9 @@ class ClientContext:
                     slug=slug,
                     file_path=template_config,
                 )
-            # Copia sicura (atomica) del contenuto
-            payload = template_config.read_text(encoding="utf-8")
+            # Copia sicura (atomica) del contenuto (path-safety anche in LETTURA)
+            from .path_utils import read_text_safe
+            payload = read_text_safe(template_config.parent, template_config, encoding="utf-8")
             safe_write_text(config_path, payload, encoding="utf-8", atomic=True)
 
         return config_path
@@ -271,7 +272,8 @@ class ClientContext:
     def _load_yaml_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
         """Carica e valida il file YAML di configurazione del cliente."""
         try:
-            with config_path.open("r", encoding="utf-8") as f:
+            from .path_utils import open_for_read
+            with open_for_read(config_path.parent, config_path, encoding="utf-8") as f:
                 settings = yaml.safe_load(f) or {}
         except Exception as e:  # pragma: no cover
             raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path) from e

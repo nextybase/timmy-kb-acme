@@ -36,6 +36,7 @@ import yaml
 import logging
 from typing import Optional, Iterable, List, Tuple, Callable
 from functools import lru_cache  # caching per slug regex
+from contextlib import contextmanager
 
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger
@@ -110,6 +111,70 @@ def ensure_within(base: Path, target: Path) -> None:
         )
 
 
+def ensure_within_and_resolve(base: Path, p: Path) -> Path:
+    """
+    Path-safety per LETTURA: risolve `p` e garantisce che il path risultante ricada sotto `base`.
+
+    Restituisce il path risolto pronto all'uso (per `open`, `read_text`, ecc.).
+
+    Args:
+        base: Directory perimetrale consentita (radice sandbox o directory attesa).
+        p: Path da risolvere e validare.
+
+    Returns:
+        Path risolto (assoluto) se la validazione ha esito positivo.
+
+    Raises:
+        ConfigError: se la risoluzione fallisce o se il path risultante non ricade in `base`.
+    """
+    try:
+        base_r = Path(base).resolve()
+        p_r = Path(p).resolve()
+    except Exception as e:  # pragma: no cover - fallback di sicurezza
+        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(p)) from e
+
+    try:
+        p_r.relative_to(base_r)
+    except Exception:
+        raise ConfigError(
+            f"Path di lettura non consentito: {p_r} non è sotto {base_r}",
+            file_path=str(p),
+        )
+    return p_r
+
+
+@contextmanager
+def open_for_read(
+    base: Path,
+    p: Path,
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = None,
+):
+    """
+    Helper ergonomico: apre in lettura un file entro il perimetro `base` in modo sicuro.
+
+    Esempio:
+        with open_for_read(book_dir, md) as f:
+            text = f.read()
+    """
+    safe_p = ensure_within_and_resolve(base, p)
+    f = safe_p.open("r", encoding=encoding, newline=newline)
+    try:
+        yield f
+    finally:
+        try:
+            f.close()
+        except Exception:
+            pass
+
+
+def read_text_safe(base: Path, p: Path, *, encoding: str = "utf-8") -> str:
+    """Legge l'intero contenuto testo applicando path-safety (wrapper comodo)."""
+    safe_p = ensure_within_and_resolve(base, p)
+    return safe_p.read_text(encoding=encoding)
+
+
 @lru_cache(maxsize=1)
 def _load_slug_regex() -> str:
     """
@@ -128,7 +193,7 @@ def _load_slug_regex() -> str:
     for cfg_path in candidates:
         try:
             if cfg_path.exists():
-                with cfg_path.open("r", encoding="utf-8") as f:
+                with open_for_read(cfg_path.parent, cfg_path, encoding="utf-8") as f:
                     cfg = yaml.safe_load(f) or {}
                 pattern = cfg.get("slug_regex", default_regex)
                 return pattern if isinstance(pattern, str) and pattern else default_regex
@@ -322,6 +387,9 @@ def ensure_valid_slug(
 __all__ = [
     "is_safe_subpath",
     "ensure_within",  # SSoT guardia STRONG
+    "ensure_within_and_resolve",  # guardia LETTURA + resolve
+    "open_for_read",  # helper ergonomico context manager
+    "read_text_safe",  # helper ergonomico testo
     "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",
     "validate_slug",  # helper dominio

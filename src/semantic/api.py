@@ -125,7 +125,8 @@ def enrich_frontmatter(
         title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
-            text = md.read_text(encoding="utf-8")
+            from pipeline.path_utils import read_text_safe
+            text = read_text_safe(book_dir, md, encoding="utf-8")
         except OSError as e:
             logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
             continue

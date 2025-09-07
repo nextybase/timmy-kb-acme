@@ -78,10 +78,15 @@ def _safe_load_yaml(p: Path) -> Dict[str, Any]:
     Carica YAML come dict. Se il file o PyYAML non ci sono, ritorna {}.
     Non solleva eccezioni: il chiamante ha già fallback robusti.
     """
-    if not p or not p.exists() or yaml is None:
+    if not p or yaml is None:
         return {}
     try:
-        data = yaml.safe_load(p.read_text(encoding="utf-8"))
+        from pipeline.path_utils import ensure_within_and_resolve
+        # Perimetro minimo: la directory padre del file
+        safe_p = ensure_within_and_resolve(p.parent, p)
+        if not safe_p.exists():
+            return {}
+        data = yaml.safe_load(safe_p.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}

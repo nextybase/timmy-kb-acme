@@ -297,7 +297,10 @@ def create_drive_structure_from_yaml(
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
 
     try:
-        with open(str(yaml_path), "r", encoding="utf-8") as fh:
+        from ..path_utils import ensure_within_and_resolve
+        p = Path(str(yaml_path))
+        safe_p = ensure_within_and_resolve(p.parent, p)
+        with safe_p.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
@@ -475,10 +478,13 @@ def upload_config_to_drive_folder(
 
 def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]:
     """Carica il file YAML e ritorna la struttura normalizzata (vedi _normalize_yaml_structure)."""
-    if not os.path.isfile(str(yaml_path)):
+    p = Path(str(yaml_path))
+    if not p.exists():
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
     try:
-        with open(str(yaml_path), "r", encoding="utf-8") as fh:
+        from ..path_utils import ensure_within_and_resolve
+        safe_p = ensure_within_and_resolve(p.parent, p)
+        with safe_p.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e

@@ -188,7 +188,9 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
-        with context.config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import ensure_within_and_resolve
+        safe_cfg = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+        with safe_cfg.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
@@ -220,7 +222,9 @@ def validate_preonboarding_environment(
         raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
     try:
-        with context.config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import ensure_within_and_resolve
+        safe_cfg = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+        with safe_cfg.open("r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
@@ -312,9 +316,10 @@ def update_config_with_drive_ids(
     if logger:
         logger.info(f"💾 Backup config creato: {backup_path}")
 
-    # Carica config esistente
+    # Carica config esistente (path-safety in LETTURA)
     try:
-        with config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import open_for_read
+        with open_for_read(config_path.parent, config_path, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {config_path}: {e}") from e

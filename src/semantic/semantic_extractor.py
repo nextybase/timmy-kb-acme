@@ -132,7 +132,8 @@ def extract_semantic_concepts(
                         # best-effort: se stat fallisce, si procede alla lettura
                         pass
 
-                content = file.read_text(encoding="utf-8")
+                from pipeline.path_utils import read_text_safe
+                content = read_text_safe(context.md_dir, file, encoding="utf-8")
                 content_l = content.lower()
 
                 # Early-exit: registra solo la prima keyword che fa match per file
