@@ -82,6 +82,7 @@ def _safe_load_yaml(p: Path) -> Dict[str, Any]:
         return {}
     try:
         from pipeline.path_utils import ensure_within_and_resolve
+
         # Perimetro minimo: la directory padre del file
         safe_p = ensure_within_and_resolve(p.parent, p)
         if not safe_p.exists():
@@ -180,7 +181,9 @@ def load_semantic_config(
     # 3) semantic_mapping.yaml → semantic_tagger
     semantic_mapping_yaml = (semantic_dir / "semantic_mapping.yaml").resolve()
     mapping_all = _safe_load_yaml(semantic_mapping_yaml)
-    tagger_from_mapping = _normalize_tagger_section(mapping_all.get("semantic_tagger") or {})
+    tagger_from_mapping = _normalize_tagger_section(
+        mapping_all.get("semantic_tagger") or {}
+    )
     acc = _merge(acc, tagger_from_mapping)
 
     # 4) overrides espliciti
@@ -188,7 +191,9 @@ def load_semantic_config(
     acc = _merge(acc, overrides_norm)
 
     # Normalizza stop_tags in set lowercase
-    stop_tags = set(s.lower().strip() for s in (acc.get("stop_tags") or []) if str(s).strip())
+    stop_tags = set(
+        s.lower().strip() for s in (acc.get("stop_tags") or []) if str(s).strip()
+    )
 
     # Costruisci l’oggetto finale (percorsi risolti con .resolve())
     cfg = SemanticConfig(

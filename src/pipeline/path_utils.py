@@ -29,14 +29,15 @@ Principi:
 
 from __future__ import annotations
 
-from pathlib import Path
-import unicodedata
-import re
-import yaml
 import logging
-from typing import Optional, Iterable, List, Tuple, Callable
-from functools import lru_cache  # caching per slug regex
+import re
+import unicodedata
 from contextlib import contextmanager
+from functools import lru_cache  # caching per slug regex
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Tuple
+
+import yaml
 
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger
@@ -100,7 +101,9 @@ def ensure_within(base: Path, target: Path) -> None:
         base_r = Path(base).resolve()
         tgt_r = Path(target).resolve()
     except Exception as e:
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
+        raise ConfigError(
+            f"Impossibile risolvere i path: {e}", file_path=str(target)
+        ) from e
 
     try:
         tgt_r.relative_to(base_r)
@@ -196,7 +199,9 @@ def _load_slug_regex() -> str:
                 with open_for_read(cfg_path.parent, cfg_path, encoding="utf-8") as f:
                     cfg = yaml.safe_load(f) or {}
                 pattern = cfg.get("slug_regex", default_regex)
-                return pattern if isinstance(pattern, str) and pattern else default_regex
+                return (
+                    pattern if isinstance(pattern, str) and pattern else default_regex
+                )
         except Exception as e:
             _logger.error(
                 "Errore caricamento config slug_regex",
@@ -210,7 +215,9 @@ def clear_slug_regex_cache() -> None:
     try:
         _load_slug_regex.cache_clear()
     except Exception as e:
-        _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
+        _logger.error(
+            "Errore nel reset della cache slug_regex", extra={"error": str(e)}
+        )
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -234,7 +241,9 @@ def is_valid_slug(slug: str) -> bool:
 def validate_slug(slug: str) -> str:
     """Valida lo slug e alza un'eccezione di dominio in caso di non conformità."""
     if not is_valid_slug(slug):
-        raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
+        raise InvalidSlug(
+            f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug
+        )
     return slug
 
 
@@ -252,7 +261,9 @@ def normalize_path(path: Path) -> Path:
         return Path(path)
 
 
-def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
+def sanitize_filename(
+    name: str, max_length: int = 100, *, replacement: str = "_"
+) -> str:
     """
     Pulisce un nome file per l’uso su filesystem.
 
@@ -290,7 +301,8 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         return s or "file"
     except Exception as e:
         _logger.error(
-            "Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name}
+            "Errore nella sanitizzazione nome file",
+            extra={"error": str(e), "name": name},
         )
         return "file"
 

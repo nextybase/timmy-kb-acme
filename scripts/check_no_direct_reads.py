@@ -20,7 +20,6 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
-
 READ_MODES = {"r", "rb", "r+", "rt"}
 
 
@@ -34,11 +33,19 @@ def _iter_py_files(paths: Iterable[Path]) -> Iterable[Path]:
 
 def _get_mode_from_call(call: ast.Call) -> str | None:
     # Positional second arg
-    if len(call.args) >= 2 and isinstance(call.args[1], ast.Constant) and isinstance(call.args[1].value, str):
+    if (
+        len(call.args) >= 2
+        and isinstance(call.args[1], ast.Constant)
+        and isinstance(call.args[1].value, str)
+    ):
         return call.args[1].value
     # Keyword arg 'mode'
     for kw in call.keywords or []:
-        if kw.arg == "mode" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+        if (
+            kw.arg == "mode"
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, str)
+        ):
             return kw.value.value
     return None
 
@@ -62,19 +69,37 @@ def check_file(path: Path) -> List[Tuple[int, int, str]]:
             if isinstance(node.func, ast.Name) and node.func.id == "open":
                 mode = _get_mode_from_call(node)
                 if mode and any(m in mode for m in READ_MODES):
-                    issues.append((node.lineno, node.col_offset, "open() in lettura vietato: usa ensure_within_and_resolve + Path.open"))
+                    issues.append(
+                        (
+                            node.lineno,
+                            node.col_offset,
+                            "open() in lettura vietato: usa ensure_within_and_resolve + Path.open",
+                        )
+                    )
             # Path-like .open("r", ...)
             if isinstance(node.func, ast.Attribute) and node.func.attr == "open":
                 if _is_safe_receiver(node.func.value):
                     continue
                 mode = _get_mode_from_call(node)
                 if mode and any(m in mode for m in READ_MODES):
-                    issues.append((node.lineno, node.col_offset, ".open('r') in lettura vietato su path non safe_*"))
+                    issues.append(
+                        (
+                            node.lineno,
+                            node.col_offset,
+                            ".open('r') in lettura vietato su path non safe_*",
+                        )
+                    )
             # .read_text(...)
             if isinstance(node.func, ast.Attribute) and node.func.attr == "read_text":
                 if _is_safe_receiver(node.func.value):
                     continue
-                issues.append((node.lineno, node.col_offset, ".read_text() vietato su path non safe_*"))
+                issues.append(
+                    (
+                        node.lineno,
+                        node.col_offset,
+                        ".read_text() vietato su path non safe_*",
+                    )
+                )
 
     return issues
 
@@ -93,7 +118,9 @@ def main(argv: List[str]) -> int:
             rel = f.as_posix()
         except Exception:
             rel = str(f)
-        if not ("src/pipeline/" in rel or "src/semantic/" in rel or "src/adapters/" in rel):
+        if not (
+            "src/pipeline/" in rel or "src/semantic/" in rel or "src/adapters/" in rel
+        ):
             continue
         issues = check_file(f)
         for ln, col, msg in issues:

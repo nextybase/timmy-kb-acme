@@ -3,21 +3,22 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Set, TYPE_CHECKING, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, cast
 
-from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX  # type: ignore
+from pipeline.constants import OUTPUT_DIR_NAME  # type: ignore
+from pipeline.constants import REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError  # type: ignore
-from pipeline.path_utils import ensure_within, sorted_paths  # type: ignore
 from pipeline.file_utils import safe_write_text  # type: ignore
+from pipeline.path_utils import ensure_within, sorted_paths  # type: ignore
 
 # Content utils opzionali (compat con varianti di firma)
 try:  # pragma: no cover - opzionale a runtime
-    from pipeline.content_utils import (  # type: ignore
+    from pipeline.content_utils import (
         convert_files_to_structured_markdown as _convert_md,
-        generate_summary_markdown as _gen_summary,
-        generate_readme_markdown as _gen_readme,
-        validate_markdown_dir as _validate_md,
-    )
+    )  # type: ignore
+    from pipeline.content_utils import generate_readme_markdown as _gen_readme
+    from pipeline.content_utils import generate_summary_markdown as _gen_summary
+    from pipeline.content_utils import validate_markdown_dir as _validate_md
 except Exception:  # pragma: no cover - opzionale a runtime
     _convert_md = _gen_summary = _gen_readme = _validate_md = None  # type: ignore
 
@@ -51,7 +52,9 @@ def get_paths(slug: str) -> Dict[str, Path]:
     }
 
 
-def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
+def load_reviewed_vocab(
+    base_dir: Path, logger: logging.Logger
+) -> Dict[str, Dict[str, Set[str]]]:
     """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT).
 
     Note:
@@ -71,7 +74,9 @@ def convert_markdown(
     book_dir = paths["book"]
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
-    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    local_pdfs = [
+        p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"
+    ]
     if not local_pdfs and _convert_md is not None:
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
     book_dir.mkdir(parents=True, exist_ok=True)
@@ -126,9 +131,12 @@ def enrich_frontmatter(
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
             from pipeline.path_utils import read_text_safe
+
             text = read_text_safe(book_dir, md, encoding="utf-8")
         except OSError as e:
-            logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
+            logger.warning(
+                "Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)}
+            )
             continue
         meta, body = _parse_frontmatter(text)
         new_meta = _merge_frontmatter(meta, title=title, tags=tags)
@@ -139,9 +147,13 @@ def enrich_frontmatter(
             ensure_within(book_dir, md)
             safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
             touched.append(md)
-            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
+            logger.info(
+                "Frontmatter arricchito", extra={"file_path": str(md), "tags": tags}
+            )
         except OSError as e:
-            logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
+            logger.warning(
+                "Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)}
+            )
     return touched
 
 
@@ -156,7 +168,8 @@ def write_summary_and_readme(
             logger.info("SUMMARY.md scritto (repo util)")
         except Exception as e:
             logger.warning(
-                "generate_summary_markdown fallita; procedo con fallback", extra={"error": str(e)}
+                "generate_summary_markdown fallita; procedo con fallback",
+                extra={"error": str(e)},
             )
     if _gen_readme is not None:
         try:
@@ -215,7 +228,9 @@ def _dump_frontmatter(meta: Dict) -> str:
         import yaml  # type: ignore
 
         return (
-            "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
+            "---\n"
+            + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()
+            + "\n---\n"
         )
     except Exception:
         lines = ["---"]
@@ -229,7 +244,9 @@ def _dump_frontmatter(meta: Dict) -> str:
         return "\n".join(lines)
 
 
-def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str]) -> Dict:
+def _merge_frontmatter(
+    existing: Dict, *, title: Optional[str], tags: List[str]
+) -> Dict:
     meta = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title

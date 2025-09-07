@@ -18,16 +18,18 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
+from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import PipelineError, InputDirectoryMissing
 from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
 from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
 
-def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None) -> List[Path]:
+def _list_markdown_files(
+    context: _Ctx, logger: Optional[logging.Logger] = None
+) -> List[Path]:
     """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto.
 
     Raises:
@@ -36,14 +38,19 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
     """
     logger = logger or get_structured_logger("semantic.files", context=context)
     # Fail-fast esplicito su campi richiesti
-    if getattr(context, "md_dir", None) is None or getattr(context, "base_dir", None) is None:
+    if (
+        getattr(context, "md_dir", None) is None
+        or getattr(context, "base_dir", None) is None
+    ):
         raise PipelineError(
             "Contesto incompleto: md_dir/base_dir mancanti",
             slug=getattr(context, "slug", None),
         )
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(
-            f"Path non sicuro: {context.md_dir}", slug=context.slug, file_path=context.md_dir
+            f"Path non sicuro: {context.md_dir}",
+            slug=context.slug,
+            file_path=context.md_dir,
         )
 
     if not context.md_dir.exists() or not context.md_dir.is_dir():
@@ -133,6 +140,7 @@ def extract_semantic_concepts(
                         pass
 
                 from pipeline.path_utils import read_text_safe
+
                 content = read_text_safe(context.md_dir, file, encoding="utf-8")
                 content_l = content.lower()
 
@@ -152,7 +160,9 @@ def extract_semantic_concepts(
     return extracted_data
 
 
-def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = None) -> None:
+def enrich_markdown_folder(
+    context: _Ctx, logger: Optional[logging.Logger] = None
+) -> None:
     """Orchestratore dell'arricchimento semantico (placeholder per step futuri).
 
     Raises:

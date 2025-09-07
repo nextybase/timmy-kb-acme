@@ -1,11 +1,10 @@
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
-from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.exceptions import ConfigError
+from pipeline.path_utils import ensure_within_and_resolve
 
 
 def test_resolve_allows_file_within_base(tmp_path: Path) -> None:
@@ -40,7 +39,10 @@ def test_blocks_symlink_pointing_outside(tmp_path: Path) -> None:
     # Try to create a symlink; skip if not supported in this environment.
     try:
         os.symlink(str(outside), str(link))
-    except (OSError, NotImplementedError) as e:  # pragma: no cover - platform limitation
+    except (
+        OSError,
+        NotImplementedError,
+    ) as e:  # pragma: no cover - platform limitation
         pytest.skip(f"symlink not supported on this platform: {e}")
 
     with pytest.raises(ConfigError):

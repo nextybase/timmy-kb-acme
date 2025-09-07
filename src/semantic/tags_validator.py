@@ -34,7 +34,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -59,8 +59,11 @@ def load_yaml(path: Path) -> Dict[str, Any]:
                      o se il parsing fallisce.
     """
     if yaml is None:
-        raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path))
+        raise ConfigError(
+            "PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path)
+        )
     from pipeline.path_utils import ensure_within_and_resolve
+
     path = Path(path)
     # Perimetro minimo di sicurezza: directory padre del file
     safe_p = ensure_within_and_resolve(path.parent, path)
@@ -70,7 +73,9 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         data = yaml.safe_load(safe_p.read_text(encoding="utf-8")) or {}
         return data if isinstance(data, dict) else {}
     except Exception as e:
-        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)) from e
+        raise ConfigError(
+            f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)
+        ) from e
 
 
 def validate_tags_reviewed(data: dict) -> dict:
@@ -112,11 +117,15 @@ def validate_tags_reviewed(data: dict) -> dict:
         if len(name_stripped) > 80:
             warnings.append(f"{ctx}: 'name' troppo lungo (>80).")
         if _INVALID_CHARS_RE.search(name_stripped):
-            errors.append(f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |).")
+            errors.append(
+                f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |)."
+            )
 
         name_ci = name_stripped.lower()
         if name_ci in names_seen_ci:
-            errors.append(f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'.")
+            errors.append(
+                f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'."
+            )
         names_seen_ci.add(name_ci)
 
         action = item.get("action")
@@ -151,7 +160,9 @@ def validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
+def write_validation_report(
+    report_path: Path, result: dict, logger: logging.Logger
+) -> None:
     """
     Scrive il report JSON della validazione in modo atomico con path-safety.
 
@@ -170,7 +181,8 @@ def write_validation_report(report_path: Path, result: dict, logger: logging.Log
         report_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         raise ConfigError(
-            f"Percorso output non sicuro: {report_path} ({e})", file_path=str(report_path)
+            f"Percorso output non sicuro: {report_path} ({e})",
+            file_path=str(report_path),
         ) from e
 
     payload = {
@@ -185,6 +197,8 @@ def write_validation_report(report_path: Path, result: dict, logger: logging.Log
             atomic=True,
         )
     except Exception as e:
-        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(report_path)) from e
+        raise ConfigError(
+            f"Errore scrittura report: {e}", file_path=str(report_path)
+        ) from e
 
     logger.info("Report validazione scritto", extra={"file_path": str(report_path)})

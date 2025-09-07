@@ -24,19 +24,17 @@ Sicurezza & I/O
 - Scritture atomiche con `safe_write_text` (solo per README).
 """
 
+import csv
 import logging
 import time
-import csv
 from pathlib import Path
 from typing import List
 
 from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
-from pipeline.path_utils import ensure_within
 from pipeline.file_utils import safe_write_text
-from storage.tags_store import (
-    derive_db_path_from_yaml_path,
-    save_tags_reviewed as save_tags_reviewed_db,
-)
+from pipeline.path_utils import ensure_within
+from storage.tags_store import derive_db_path_from_yaml_path
+from storage.tags_store import save_tags_reviewed as save_tags_reviewed_db
 
 __all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
 
@@ -138,9 +136,13 @@ def write_tags_review_stub_from_csv(
                     break
 
     except FileNotFoundError as e:
-        raise ConfigError(f"CSV dei tag non trovato: {e}", file_path=str(csv_path)) from e
+        raise ConfigError(
+            f"CSV dei tag non trovato: {e}", file_path=str(csv_path)
+        ) from e
     except Exception as e:
-        raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
+        raise ConfigError(
+            f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)
+        ) from e
 
     # Persistenza su SQLite (stesso dict dell'originario YAML)
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -152,7 +154,9 @@ def write_tags_review_stub_from_csv(
         "version": "1",
         "reviewed_at": time.strftime("%Y-%m-%d"),
         "keep_only_listed": True,
-        "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],
+        "tags": [
+            {"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested
+        ],
     }
     save_tags_reviewed_db(db_path, data)
     logger.info(
