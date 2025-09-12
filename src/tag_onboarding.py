@@ -19,14 +19,10 @@ Punti chiave:
 from __future__ import annotations
 
 import argparse
-import csv
-import io
-import json
 import re
 import sys
 import time
 import uuid
-import shutil
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
