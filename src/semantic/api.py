@@ -77,9 +77,13 @@ def convert_markdown(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
     """Converte i PDF in raw/ in Markdown sotto book/ (via content_utils se disponibili)."""
+    # Preferisci i percorsi dal contesto se presenti, altrimenti convenzione SSoT
     paths = get_paths(slug)
-    raw_dir = paths["raw"]
-    book_dir = paths["book"]
+    base_dir = getattr(context, "base_dir", None) or paths["base"]
+    raw_dir = getattr(context, "raw_dir", None) or paths["raw"]
+    book_dir = getattr(context, "md_dir", None) or paths["book"]
+    ensure_within(base_dir, raw_dir)
+    ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
     local_pdfs = [
