@@ -355,7 +355,7 @@ def build_markdown_book(
     - Idempotente; nessuna rete.
     """
     # 1) Conversione RAW → Markdown (riuso content_utils)
-    convert_markdown(context, logger, slug=slug)
+    mds = convert_markdown(context, logger, slug=slug)
 
     # 2) Fallback README/SUMMARY
     write_summary_and_readme(context, logger, slug=slug)
@@ -366,9 +366,8 @@ def build_markdown_book(
     if vocab:
         enrich_frontmatter(context, logger, vocab, slug=slug)
 
-    # Ritorna lista aggiornata di MD
-    book_dir = paths["book"]
-    return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    # Ritorna i file di contenuto generati (esclude README/SUMMARY)
+    return mds
 
 
 def index_markdown_to_db(
