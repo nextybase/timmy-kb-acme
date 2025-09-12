@@ -24,6 +24,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: black-fix
+        name: black (auto-format)
+        entry: python -m black
+        language: system
+        types: [python]
+        pass_filenames: true
+        stages: [pre-commit]
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
         entry: python tools/dev/check_no_local_emit_or_copy.py
@@ -35,7 +42,7 @@ repos:
         entry: python tools/dev/qa_safe.py
         language: system
         pass_filenames: false
-        stages: [pre-commit]
+        stages: [pre-push]
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
         entry: python tools/dev/qa_safe.py --with-tests

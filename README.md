@@ -218,6 +218,10 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Evita helper locali e import diretti da semantic.tags_extractor fuori da src/semantic/.
 - Un hook pre-commit (no-dup-ingest-csv) previene regressioni su duplicazioni/usi non consentiti.
 
+- Su Windows, se il binario `pre-commit` non è nel PATH del venv, usa Python launcher:
+  - `py -3.11 -m pre_commit install --hook-type pre-commit --hook-type pre-push`
+  - `py -3.11 -m pre_commit run -a`
+
 ---
 
 ## Note operative

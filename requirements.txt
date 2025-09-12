@@ -32,6 +32,7 @@ PyGithub==2.3.0
 # === Test & Dev tools ===
 pytest==8.0.0
 pytest-cov==5.0.0
+pre-commit==4.3.0
 
 # === Utility e compatibilità ===
 typing-extensions==4.12.2
