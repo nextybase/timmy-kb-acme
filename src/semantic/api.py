@@ -24,6 +24,10 @@ except Exception:  # pragma: no cover - opzionale a runtime
 
 from adapters.content_fallbacks import ensure_readme_summary  # type: ignore
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
+from semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
+from semantic.tags_io import write_tagging_readme as _write_tagging_readme
+from semantic.types import EmbeddingsClient as _EmbeddingsClient
+from kb_db import insert_chunks as _insert_chunks
 
 # Tipi: a compile-time usiamo il tipo concreto per matchare le firme interne,
 # a runtime restiamo decoupled con il Protocol strutturale.
@@ -38,6 +42,10 @@ __all__ = [
     "convert_markdown",
     "enrich_frontmatter",
     "write_summary_and_readme",
+    "build_mapping_from_vision",
+    "build_tags_csv",
+    "build_markdown_book",
+    "index_markdown_to_db",
 ]
 
 
@@ -187,6 +195,244 @@ def write_summary_and_readme(
             logger.info("Validazione directory MD OK")
         except Exception as e:
             logger.warning("Validazione directory MD fallita", extra={"error": str(e)})
+
+
+def build_mapping_from_vision(
+    context: ClientContextType, logger: logging.Logger, *, slug: str
+) -> Path:
+    """Genera/aggiorna `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`.
+
+    Regole e scopo:
+    - Non introduce dipendenze di rete; parsing deterministico del vision YAML.
+    - Mappa liste e sezioni note in un mapping {concept: [keywords...]}, pronto per evoluzioni GPT future.
+    - Idempotente: rilanci sicuri con scrittura atomica; nessun side-effect fuori perimetro cliente.
+    - UI e interfacce pubbliche: additive (nuova API), nessuna rottura.
+    """
+    # Preferisci base_dir dal contesto, fallback alla convenzione SSoT
+    base_dir = getattr(context, "base_dir", None) or get_paths(slug)["base"]
+    config_dir = base_dir / "config"
+    mapping_path = config_dir / "semantic_mapping.yaml"
+    vision_yaml = config_dir / "vision_statement.yaml"
+
+    # Path-safety e precondizioni minime
+    ensure_within(base_dir, config_dir)
+    ensure_within(config_dir, mapping_path)
+    ensure_within(config_dir, vision_yaml)
+    if not vision_yaml.exists():
+        raise ConfigError(
+            f"Vision YAML non trovato: {vision_yaml}", file_path=str(vision_yaml)
+        )
+
+    try:
+        import yaml  # type: ignore
+        raw = yaml.safe_load(vision_yaml.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        raise ConfigError(
+            f"Errore lettura/parsing vision YAML: {e}", file_path=str(vision_yaml)
+        ) from e
+
+    def _as_list(val: object) -> list[str]:
+        if isinstance(val, list):
+            return [str(x).strip() for x in val if str(x).strip()]
+        if isinstance(val, str) and val.strip():
+            return [val.strip()]
+        return []
+
+    # Estrai sezioni note in concetti semplici; dedup case-insensitive preservando ordine
+    mapping: dict[str, list[str]] = {}
+    sections: list[tuple[str, object]] = [
+        ("ethical_framework", raw.get("ethical_framework")),
+        ("uvp", raw.get("uvp")),
+        ("key_metrics", raw.get("key_metrics")),
+        ("risks_mitigations", raw.get("risks_mitigations")),
+        ("operating_model", raw.get("operating_model")),
+        ("architecture_principles", raw.get("architecture_principles")),
+        ("ethics_governance_tools", raw.get("ethics_governance_tools")),
+        ("stakeholders_impact", raw.get("stakeholders_impact")),
+    ]
+    # goals
+    goals = raw.get("goals") or {}
+    if isinstance(goals, dict):
+        sections.append(("goals_general", (goals.get("general") or [])))
+        baskets = goals.get("baskets") or {}
+        if isinstance(baskets, dict):
+            sections.append(("goals_b3", baskets.get("b3") or []))
+            sections.append(("goals_b6", baskets.get("b6") or []))
+            sections.append(("goals_b12", baskets.get("b12") or []))
+
+    for concept, payload in sections:
+        values = _as_list(payload)
+        if not values:
+            continue
+        seen: set[str] = set()
+        norm: list[str] = []
+        for v in values:
+            key = v.lower()
+            if key not in seen:
+                seen.add(key)
+                norm.append(v)
+        if norm:
+            mapping[concept] = norm
+
+    # Serializza mapping (anche se vuoto: preferiamo fallire chiaramente)
+    if not mapping:
+        raise ConfigError(
+            "Vision YAML non contiene sezioni utili per il mapping.",
+            file_path=str(vision_yaml),
+        )
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        import yaml  # type: ignore
+        safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
+        safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
+    except Exception as e:
+        raise ConfigError(
+            f"Scrittura mapping fallita: {e}", file_path=str(mapping_path)
+        ) from e
+
+    logger.info(
+        "vision.mapping.built",
+        extra={
+            "file_path": str(mapping_path),
+            "concepts": len(mapping),
+        },
+    )
+    return mapping_path
+
+
+def build_tags_csv(
+    context: ClientContextType, logger: logging.Logger, *, slug: str
+) -> Path:
+    """Scansiona RAW e genera `semantic/tags_raw.csv` in modo deterministico.
+
+    Azioni:
+    - Emette `tags_raw.csv` sotto `semantic/` usando euristiche conservative su path/filename.
+    - Scrive/aggiorna un README tagging rapido in `semantic/`.
+    - Idempotente e con path-safety SSoT; no rete.
+    """
+    paths = get_paths(slug)
+    base_dir = getattr(context, "base_dir", None) or paths["base"]
+    raw_dir = getattr(context, "raw_dir", None) or paths["raw"]
+    semantic_dir = base_dir / "semantic"
+    csv_path = semantic_dir / "tags_raw.csv"
+
+    # Path-safety
+    ensure_within(base_dir, raw_dir)
+    ensure_within(base_dir, semantic_dir)
+    ensure_within(semantic_dir, csv_path)
+
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    # Genera CSV tag grezzi
+    count = _emit_tags_csv(raw_dir, csv_path, logger)
+    logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
+    # README tagging
+    _write_tagging_readme(semantic_dir, logger)
+    return csv_path
+
+
+def build_markdown_book(
+    context: ClientContextType, logger: logging.Logger, *, slug: str
+) -> list[Path]:
+    """Pipeline RAW → Markdown (uno per cartella) + README/SUMMARY + frontmatter.
+
+    - Converte i PDF in `book/` (un `.md` per cartella di primo livello) via content_utils.
+    - Garantisce `README.md` e `SUMMARY.md` in `book/`.
+    - Arricchisce i frontmatter con title/tags usando il vocabolario consolidato su SQLite (se presente).
+    - Idempotente; nessuna rete.
+    """
+    # 1) Conversione RAW → Markdown (riuso content_utils)
+    convert_markdown(context, logger, slug=slug)
+
+    # 2) Fallback README/SUMMARY
+    write_summary_and_readme(context, logger, slug=slug)
+
+    # 3) Arricchimento frontmatter con vocab (se disponibile)
+    paths = get_paths(slug)
+    vocab = load_reviewed_vocab(paths["base"], logger)
+    if vocab:
+        enrich_frontmatter(context, logger, vocab, slug=slug)
+
+    # Ritorna lista aggiornata di MD
+    book_dir = paths["book"]
+    return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+
+
+def index_markdown_to_db(
+    context: ClientContextType,
+    logger: logging.Logger,
+    *,
+    slug: str,
+    scope: str = "book",
+    embeddings_client: _EmbeddingsClient,
+) -> int:
+    """Indicizza i Markdown in `book/` nel DB locale (SQLite) con chunk + embedding.
+
+    Regole:
+    - Un chunk per file (implementazione minimale; estendibile a chunking per heading).
+    - Meta: {"file": name} e path relativo a `book/`.
+    - Version: stringa YYYYMMDD (giorno), per rotazione semplice.
+    - Path-safety SSoT, idempotente lato DB (nessuna de-duplicazione automatica).
+    """
+    paths = get_paths(slug)
+    base_dir = getattr(context, "base_dir", None) or paths["base"]
+    book_dir = getattr(context, "md_dir", None) or paths["book"]
+    ensure_within(base_dir, book_dir)
+    book_dir.mkdir(parents=True, exist_ok=True)
+
+    files = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    if not files:
+        logger.info("Nessun Markdown da indicizzare", extra={"book": str(book_dir)})
+        return 0
+
+    from pipeline.path_utils import read_text_safe
+    contents: list[str] = []
+    rel_paths: list[str] = []
+    for f in files:
+        try:
+            text = read_text_safe(book_dir, f, encoding="utf-8")
+        except Exception as e:
+            logger.warning("Lettura MD fallita", extra={"file_path": str(f), "error": str(e)})
+            continue
+        contents.append(text)
+        rel_paths.append(f.name)
+
+    if not contents:
+        logger.info("Nessun contenuto valido da indicizzare", extra={"book": str(book_dir)})
+        return 0
+
+    vecs = embeddings_client.embed_texts(contents)
+    if not vecs or len(vecs) != len(contents):
+        logger.warning(
+            "Embedding client non ha prodotto vettori coerenti",
+            extra={"count": len(vecs) if vecs else 0},
+        )
+        return 0
+
+    from datetime import datetime as _dt
+
+    version = _dt.utcnow().strftime("%Y%m%d")
+    inserted_total = 0
+    for text, rel_name, emb in zip(contents, rel_paths, vecs):
+        meta = {"file": rel_name}
+        try:
+            inserted_total += _insert_chunks(
+                project_slug=slug,
+                scope=scope,
+                path=rel_name,
+                version=version,
+                meta_dict=meta,
+                chunks=[text],
+                embeddings=[list(emb)],
+                db_path=None,
+            )
+        except Exception as e:
+            logger.warning(
+                "Inserimento DB fallito", extra={"file": rel_name, "error": str(e)}
+            )
+            continue
+    logger.info("Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)})
+    return inserted_total
 
 
 # ---- Helpers interni (copiati da semantic_onboarding, senza side effects CLI) ----
