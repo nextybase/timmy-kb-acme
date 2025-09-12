@@ -133,55 +133,8 @@ def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger
     Raises:
         ConfigError: se `src_dir` non esiste o non è una directory.
     """
-    src_dir = src_dir.expanduser().resolve()
-    raw_dir = raw_dir.expanduser().resolve()
-
-    if not src_dir.is_dir():
-        raise ConfigError(f"Percorso locale non valido: {src_dir}", file_path=str(src_dir))
-
-    if src_dir == raw_dir:
-        logger.info(
-            "Sorgente coincidente con RAW: nessuna copia necessaria", extra={"raw": str(raw_dir)}
-        )
-        return 0
-
-    count = 0
-    pdfs: List[Path] = sorted_paths(src_dir.rglob("*.pdf"), base=src_dir)
-
-    for src in pdfs:
-        try:
-            rel = src.relative_to(src_dir)
-        except ValueError:
-            rel = Path(sanitize_filename(src.name))
-
-        rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
-        dst = raw_dir / rel_sanitized
-
-        # STRONG path-safety: l'output deve rimanere sotto raw_dir
-        try:
-            ensure_within(raw_dir, dst)
-        except ConfigError:
-            logger.warning(
-                "Skip per path non sicuro",
-                extra={"file_path": str(dst), "file_path_tail": tail_path(dst)},
-            )
-            continue
-
-        dst_parent = dst.parent
-        ensure_within(raw_dir, dst_parent)
-        dst_parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            if dst.exists() and dst.stat().st_size == src.stat().st_size:
-                logger.debug("Skip copia (stessa dimensione)", extra={"file_path": str(dst)})
-            else:
-                shutil.copy2(src, dst)
-                logger.info("PDF copiato", extra={"file_path": str(dst)})
-                count += 1
-        except OSError as e:
-            logger.warning("Copia fallita", extra={"file_path": str(dst), "error": str(e)})
-
-    return count
+    # Delegato a semantic.api per evitare duplicazioni
+    return copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
 
 
 # ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
@@ -204,55 +157,9 @@ def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: Any) -> int:
     Restituisce:
         int: Numero di righe (PDF) scritte nel CSV (escluso header).
     """
-    raw_prefix = "raw"
-
-    ensure_within(csv_path.parent, csv_path)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-
-    written = 0
-    buf = io.StringIO(newline="")
-    writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(
-        ["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"]
-    )
-
-    for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
-        try:
-            rel_raw = pdf.relative_to(raw_dir).as_posix()
-        except ValueError:
-            rel_raw = Path(pdf.name).as_posix()
-
-        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
-
-        parts = [p for p in Path(rel_raw).parts if p]
-        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
-        path_tags = {p.lower() for p in parts[:-1]}  # solo sottocartelle
-        file_tokens = {
-            tok.lower()
-            for tok in re.split(r"[^\w]+", base_no_ext.replace("_", " ").replace("-", " "))
-            if tok
-        }
-        candidates = sorted(path_tags.union(file_tokens))
-
-        entities = "[]"
-        keyphrases = "[]"
-        score = "{}"
-        sources = json.dumps(
-            {"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False
-        )
-
-        writer.writerow(
-            [rel_base_posix, ", ".join(candidates), entities, keyphrases, score, sources]
-        )
-        written += 1
-
-    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
-
-    logger.info(
-        "Tag grezzi generati (base-relative, atomic write)",
-        extra={"file_path": str(csv_path), "count": written, "file_path_tail": tail_path(csv_path)},
-    )
-    return written
+    # Delegato a semantic.tags_extractor per evitare duplicazioni
+    from semantic.tags_extractor import emit_tags_csv as _emit
+    return _emit(raw_dir, csv_path, logger)
 
 
 # =============================
