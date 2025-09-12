@@ -104,35 +104,40 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
         params.scope,
     )
 
-    # 3) Scoring
-    scored: List[Dict] = []
-    for c in cands:
-        emb = c.get("embedding") or []
-        sim = cosine(qv, emb)
-        scored.append(
-            {
-                "content": c["content"],
-                "meta": c.get("meta", {}),
-                "score": float(sim),
-            }
-        )
+    # 3) Scoring (on-the-fly)
+    def _iter_scored():
+        for idx, c in enumerate(cands):
+            emb = c.get("embedding") or []
+            sim = cosine(qv, emb)
+            yield (
+                {
+                    "content": c["content"],
+                    "meta": c.get("meta", {}),
+                    "score": float(sim),
+                },
+                idx,
+            )
 
     # 4) Ordinamento e top-k
     k = max(0, int(params.k))
-    n = len(scored)
+    n = len(cands)
     if k == 0:
         out: List[Dict] = []
     elif k >= n:
         # Comportamento invariato: ordina tutto quando k >= n
-        scored.sort(key=lambda x: x["score"], reverse=True)
-        out = scored
+        scored_list = [item for item, _ in _iter_scored()]
+        scored_list.sort(key=lambda x: x["score"], reverse=True)
+        out = scored_list
     else:
         # Selezione efficiente top-k con tie-break deterministico sull'ordine di arrivo
         import heapq
 
-        tuples = [(-item["score"], idx, item) for idx, item in enumerate(scored)]
-        best = heapq.nsmallest(k, tuples)
-        out = [it[2] for it in best]
+        best = heapq.nlargest(
+            k,
+            _iter_scored(),
+            key=lambda t: (t[0]["score"], -t[1]),  # score desc, idx asc
+        )
+        out = [it[0] for it in best]
 
     dt = (time.time() - t0) * 1000
     LOGGER.info(
