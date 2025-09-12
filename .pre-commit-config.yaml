@@ -24,9 +24,15 @@ repos:
 
   - repo: local
     hooks:
-      - id: pytest
-        name: pytest
-        entry: pytest -q
+      - id: qa-safe
+        name: qa-safe (black/flake8/mypy se presenti)
+        entry: python -m tools.dev.qa_safe
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: qa-safe-tests
+        name: qa-safe --with-tests (pytest se presente)
+        entry: python -m tools.dev.qa_safe --with-tests
         language: system
         pass_filenames: false
         stages: [pre-push]

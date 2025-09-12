@@ -4,6 +4,24 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [1.9.0] - 2025-09-12
+### Added
+- UI: introdotti asset locali configurabili in `assets/`:
+  - `assets/html/app_skeleton.html` con placeholder espliciti per landing/schermata generale.
+  - `assets/css/base.css` (tema light, banner sidebar, pill, card 2 colonne).
+  - `assets/js/main.js` (micro-interazioni opzionali; degrada senza errori se assente).
+- QA: hook pre-commit `qa-safe` (black/flake8/mypy se presenti) e hook pre-push `qa-safe --with-tests`.
+- Makefile: target `qa-safe` e `ci-safe` per esecuzione degradabile dei check.
+- Nuova utility `pipeline.yaml_utils.yaml_read` con cache opzionale.
+
+### Changed
+- Convergenza letture YAML: tutti i call-site di lettura YAML passano da `yaml_read` (SafeLoader, path-safety fail-closed, encoding utf-8, errori uniformi).
+- Documentazione aggiornata (README sezione QA locale; CHANGELOG): nessuna modifica alle API pubbliche.
+
+### Security
+- Fail-closed su path fuori perimetro, file mancanti o YAML malformati (uniformato su `ConfigError`).
+
+---
 ## [1.8.2] - 2025-09-07
 ### Added
 - Introdotto `ensure_within_and_resolve` in `pipeline/path_utils.py` come wrapper unico per la validazione e normalizzazione dei path in lettura.

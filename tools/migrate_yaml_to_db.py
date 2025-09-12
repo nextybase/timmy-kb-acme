@@ -26,8 +26,13 @@ from storage.tags_store import derive_db_path_from_yaml_path, save_tags_reviewed
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    # Usa utility centrale per path-safety e SafeLoader
+    try:
+        from pipeline.yaml_utils import yaml_read
+
+        return yaml_read(path.parent, path) or {}
+    except Exception as e:
+        raise SystemExit(f"Errore lettura YAML {path}: {e}")
 
 
 def main() -> int:

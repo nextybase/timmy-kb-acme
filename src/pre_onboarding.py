@@ -144,10 +144,14 @@ def bootstrap_semantic_templates(
 
         data: Dict[str, Any] = {}
         if mapping_dst.exists():
-            with mapping_dst.open("r", encoding="utf-8") as f:
-                loaded = yaml.safe_load(f)
+            try:
+                from pipeline.yaml_utils import yaml_read
+
+                loaded = yaml_read(mapping_dst.parent, mapping_dst) or {}
                 if isinstance(loaded, dict):
-                    data = loaded or {}
+                    data = loaded
+            except Exception:
+                data = {}
 
         ctx = {
             "slug": context.slug,

@@ -287,10 +287,9 @@ class ClientContext:
     def _load_yaml_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
         """Carica e valida il file YAML di configurazione del cliente."""
         try:
-            from .path_utils import open_for_read
+            from .yaml_utils import yaml_read
 
-            with open_for_read(config_path.parent, config_path, encoding="utf-8") as f:
-                settings = yaml.safe_load(f) or {}
+            settings = yaml_read(config_path.parent, config_path) or {}
         except Exception as e:  # pragma: no cover
             raise ConfigError(
                 f"Errore lettura config cliente: {e}", file_path=config_path

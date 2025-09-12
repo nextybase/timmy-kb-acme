@@ -32,10 +32,11 @@ def safe_write_text_compat(path: Path | str, content: str, *, encoding: str = "u
 
 
 def yaml_load(path: Path) -> Dict[str, Any]:
-    import yaml
+    # Centralizza su utility pipeline, mantenendo la stessa firma
+    from pipeline.yaml_utils import yaml_read
 
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    p = Path(path)
+    return yaml_read(p.parent, p) or {}
 
 
 def yaml_dump(data: Dict[str, Any]) -> str:

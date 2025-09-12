@@ -237,8 +237,8 @@ def build_mapping_from_vision(
         )
 
     try:
-        import yaml  # type: ignore
-        raw = yaml.safe_load(vision_yaml.read_text(encoding="utf-8")) or {}
+        from pipeline.yaml_utils import yaml_read  # type: ignore
+        raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
     except Exception as e:
         raise ConfigError(
             f"Errore lettura/parsing vision YAML: {e}", file_path=str(vision_yaml)

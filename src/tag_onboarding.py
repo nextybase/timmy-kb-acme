@@ -508,7 +508,8 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        from pipeline.yaml_utils import yaml_read
+        return yaml_read(path.parent, path) or {}
     except (OSError,) as e:
         raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path))
     except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]

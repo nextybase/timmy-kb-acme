@@ -61,15 +61,13 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         raise ConfigError(
             "PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path)
         )
-    from pipeline.path_utils import ensure_within_and_resolve
+    from pipeline.yaml_utils import yaml_read
 
     path = Path(path)
-    # Perimetro minimo di sicurezza: directory padre del file
-    safe_p = ensure_within_and_resolve(path.parent, path)
-    if not safe_p.exists():
+    if not path.exists():
         raise ConfigError("File YAML non trovato.", file_path=str(path))
     try:
-        data = yaml.safe_load(safe_p.read_text(encoding="utf-8")) or {}
+        data = yaml_read(path.parent, path) or {}
         return data if isinstance(data, dict) else {}
     except Exception as e:
         raise ConfigError(

@@ -89,7 +89,12 @@ except Exception as e:
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
     if not p.exists():
         raise RuntimeError(f"File YAML mancante: {p}")
-    data = yaml.safe_load(read_text_safe(p.parent, p, encoding="utf-8"))
+    try:
+        from pipeline.yaml_utils import yaml_read
+
+        data = yaml_read(p.parent, p) or {}
+    except Exception as e:
+        raise RuntimeError(f"Errore lettura YAML {p}: {e}")
     if not isinstance(data, dict):
         raise RuntimeError(f"Formato YAML non valido (atteso mapping/dict): {p}")
     return data

@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci
+.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci qa-safe ci-safe
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -42,3 +42,29 @@ fmt-check: env-check
 	@black --check src tests
 
 ci: fmt-check lint type test
+
+# Esegue linters/type-check solo se disponibili nel PATH, altrimenti salta (degrado pulito)
+qa-safe:
+	@if command -v black >/dev/null 2>&1; then \
+	  echo "[qa-safe] black --check"; black --check src tests; \
+	else \
+	  echo "[qa-safe] black non installato: skip"; \
+	fi
+	@if command -v flake8 >/dev/null 2>&1; then \
+	  echo "[qa-safe] flake8"; flake8 src tests; \
+	else \
+	  echo "[qa-safe] flake8 non installato: skip"; \
+	fi
+	@if command -v mypy >/dev/null 2>&1; then \
+	  echo "[qa-safe] mypy"; mypy src; \
+	else \
+	  echo "[qa-safe] mypy non installato: skip"; \
+	fi
+
+# Variante completa che include i test, ma sempre in modalita degradabile
+ci-safe: qa-safe
+	@if command -v pytest >/dev/null 2>&1; then \
+	  echo "[ci-safe] pytest"; pytest -ra; \
+	else \
+	  echo "[ci-safe] pytest non installato: skip"; \
+	fi

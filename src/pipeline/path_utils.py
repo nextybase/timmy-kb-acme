@@ -196,8 +196,8 @@ def _load_slug_regex() -> str:
     for cfg_path in candidates:
         try:
             if cfg_path.exists():
-                with open_for_read(cfg_path.parent, cfg_path, encoding="utf-8") as f:
-                    cfg = yaml.safe_load(f) or {}
+                from pipeline.yaml_utils import yaml_read
+                cfg = yaml_read(cfg_path.parent, cfg_path) or {}
                 pattern = cfg.get("slug_regex", default_regex)
                 return (
                     pattern if isinstance(pattern, str) and pattern else default_regex

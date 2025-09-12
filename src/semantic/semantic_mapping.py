@@ -125,11 +125,9 @@ def load_semantic_mapping(
 
     # 2) leggi mapping del cliente
     try:
-        from pipeline.path_utils import ensure_within_and_resolve
+        from pipeline.yaml_utils import yaml_read
 
-        safe_map = ensure_within_and_resolve(context.config_dir, mapping_path)
-        with safe_map.open("r", encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
+        raw = yaml_read(context.config_dir, mapping_path) or {}
         mapping = _normalize_semantic_mapping(raw)
         logger.info(
             "📑 Mapping semantico caricato",
@@ -172,11 +170,9 @@ def load_semantic_mapping(
 
         if default_path.exists():
             try:
-                from pipeline.path_utils import ensure_within_and_resolve
+                from pipeline.yaml_utils import yaml_read
 
-                safe_def = ensure_within_and_resolve(repo_config_dir, default_path)
-                with safe_def.open("r", encoding="utf-8") as f:
-                    raw = yaml.safe_load(f) or {}
+                raw = yaml_read(repo_config_dir, default_path) or {}
                 mapping = _normalize_semantic_mapping(raw)
                 logger.info(
                     "📑 Mapping di fallback caricato",

@@ -81,13 +81,11 @@ def _safe_load_yaml(p: Path) -> Dict[str, Any]:
     if not p or yaml is None:
         return {}
     try:
-        from pipeline.path_utils import ensure_within_and_resolve
+        from pipeline.yaml_utils import yaml_read
 
-        # Perimetro minimo: la directory padre del file
-        safe_p = ensure_within_and_resolve(p.parent, p)
-        if not safe_p.exists():
+        if not p.exists():
             return {}
-        data = yaml.safe_load(safe_p.read_text(encoding="utf-8"))
+        data = yaml_read(p.parent, p) or {}
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
