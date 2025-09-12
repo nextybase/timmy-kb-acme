@@ -9,7 +9,8 @@ from pipeline.file_utils import safe_write_text
 
 
 def to_kebab(s: str) -> str:
-    return _to_kebab(s)
+    # Cast conservativo: l'helper di pipeline ritorna str in pratica
+    return str(_to_kebab(s))
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:

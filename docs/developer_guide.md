@@ -1,17 +1,17 @@
-# Timmy-KB - Developer Guide (v1.8.1)
+﻿# Timmy-KB - Developer Guide (v1.8.1)
 
-Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
+Questa guida Ã¨ per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualitÃ .
 
-> **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
-> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
+> **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
+> Avvio interfaccia: `streamlit run onboarding_ui.py` â€” vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Integrazione con Codex
 
-Per velocizzare sviluppo, refactor e manutenzione del progetto puoi usare **Codex** come coding agent direttamente in VS Code.  
-L’integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre l’approccio Human-in-the-Loop.  
-Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integrazione](codex_integrazione.md).
+Per velocizzare sviluppo, refactor e manutenzione del progetto puoi usare **Codex** come coding agent direttamente in VS Code.
+Lâ€™integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre lâ€™approccio Human-in-the-Loop.
+Trovi la guida completa, con configurazione e scenari dâ€™uso, qui: [Codex Integrazione](codex_integrazione.md).
 
 ---
 
@@ -20,7 +20,7 @@ Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integ
 - **Idempotenza**: le operazioni possono essere ripetute senza effetti collaterali. Scritture **atomiche**.
 - **Path-safety**: ogni I/O passa da SSoT (`ensure_within`, `sanitize_filename`).
 - **Configurazione esplicita**: variabili d'ambiente lette tramite `ClientContext`; niente valori magici sparsi.
-- **Logging strutturato** con redazione automatica se `LOG_REDACTION` è attivo.
+- **Logging strutturato** con redazione automatica se `LOG_REDACTION` Ã¨ attivo.
 
 Vedi anche: [Coding Rules](coding_rule.md) e [Architecture](architecture.md).
 
@@ -111,12 +111,12 @@ Dettagli: [architecture.md](architecture.md).
 
 ---
 
-## Qualità & DX
+## QualitÃ  & DX
 - **Type-safety**: preferisci firme esplicite e `Optional[...]` solo dove serve; evita `Any` nei moduli core.
 - **Pylance/typing**: quando import opzionali possono essere `None`, usa il *narrowing* pattern:
   - wrapper `_require_callable(fn, name)` per funzioni opzionali;
   - controlli `if x is None: raise RuntimeError(...)` per oggetti/moduli opzionali.
-- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c’è l'alternativa stabile.
+- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se câ€™Ã¨ l'alternativa stabile.
 - **Logging**: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
 - **I/O**: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
 - **Naming**: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
@@ -129,7 +129,7 @@ Dettagli: [architecture.md](architecture.md).
   py src/tools/gen_dummy_kb.py --slug dummy
   pytest -ra
   ```
-- I test non richiedono credenziali reali (Drive/Git mockati).  
+- I test non richiedono credenziali reali (Drive/Git mockati).
 - Verifica invarianti: solo `.md` in `book/`; `README.md`/`SUMMARY.md` sempre presenti.
 - Windows/Linux supportati; occhio a path POSIX nei CSV.
 
@@ -138,7 +138,7 @@ Dettagli: [architecture.md](architecture.md).
 ## Drive & sicurezza
 - Non inserire credenziali nel repo; usa file JSON localmente e variabili d'ambiente.
 - Ogni upload/download passa tramite le API alto livello in `pipeline/drive_utils.py`.
-- Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
+- Per il download via UI Ã¨ esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
 
 ---
 
@@ -150,10 +150,10 @@ Dettagli: [architecture.md](architecture.md).
 ---
 
 ## Contributi
-- Pull request piccole, atomic commit, messaggi chiari.  
-- Aggiungi/aggiorna i test quando modifichi comportamenti.  
-- Mantieni la documentazione allineata (README + docs/).  
-- Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
+- Pull request piccole, atomic commit, messaggi chiari.
+- Aggiungi/aggiorna i test quando modifichi comportamenti.
+- Mantieni la documentazione allineata (README + docs/).
+- Evita duplicazioni: riusa utilitÃ  esistenti (SSoT) prima di introdurne di nuove.
 
 ---
 
@@ -169,4 +169,24 @@ Dettagli: [architecture.md](architecture.md).
 
 ### Type checking
 - `make type` esegue `mypy` su `src/`.
-- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento è configurato da `pyrightconfig.json`.
+- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento Ã¨ configurato da `pyrightconfig.json`.
+
+
+---
+
+## Path-Safety Lettura (Aggiornamento)
+- Per tutte le letture di file utente (Markdown, CSV, YAML) in pipeline/* e semantic/* usa
+  pipeline.path_utils.ensure_within_and_resolve(base, p) per ottenere un path risolto e sicuro.
+- È vietato usare direttamente open() o Path.read_text() su input esterni senza passare dal wrapper.
+
+Esempi d'uso
+```python
+from pipeline.path_utils import open_for_read, read_text_safe
+
+# Lettura testo semplice (sicura)
+text = read_text_safe(book_dir, md_path)
+
+# Context manager (sicuro) per CSV/YAML/MD
+with open_for_read(semantic_dir, csv_path) as f:
+    rows = f.read().splitlines()
+```

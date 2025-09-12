@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # src/tools/gen_dummy_kb.py
 """
 Tool: generazione sandbox *dummy* per Timmy-KB + tagging semantico iniziale (CSV).
@@ -30,7 +30,7 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 try:
     import yaml  # PyYAML è richiesta
@@ -59,16 +59,16 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 try:
     # semantic
-    from semantic.config import load_semantic_config
-    from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
-    from semantic.normalizer import normalize_tags
+    from pipeline.file_utils import safe_write_bytes, safe_write_text
+    from pipeline.logging_utils import get_structured_logger, tail_path
 
     # pipeline (path-safety + atomic I/O + logging)
-    from pipeline.path_utils import ensure_within
-    from pipeline.file_utils import safe_write_text, safe_write_bytes
-    from pipeline.logging_utils import get_structured_logger, tail_path
+    from pipeline.path_utils import ensure_within, read_text_safe
+    from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
+    from semantic.config import load_semantic_config
+    from semantic.normalizer import normalize_tags
+    from semantic.tags_io import write_tagging_readme as _write_tagging_readme
     from semantic.tags_io import (
-        write_tagging_readme as _write_tagging_readme,
         write_tags_review_stub_from_csv as _write_review_stub_from_csv,
     )
 
@@ -89,13 +89,15 @@ except Exception as e:
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
     if not p.exists():
         raise RuntimeError(f"File YAML mancante: {p}")
-    data = yaml.safe_load(p.read_text(encoding="utf-8"))
+    data = yaml.safe_load(read_text_safe(p.parent, p, encoding="utf-8"))
     if not isinstance(data, dict):
         raise RuntimeError(f"Formato YAML non valido (atteso mapping/dict): {p}")
     return data
 
 
-def _write_text_in_base(base: Path, path: Path, content: str, *, overwrite: bool) -> None:
+def _write_text_in_base(
+    base: Path, path: Path, content: str, *, overwrite: bool
+) -> None:
     """Scrittura atomica testo, con guardia STRONG sul perimetro base."""
     path = path.resolve()
     base = base.resolve()
@@ -106,7 +108,9 @@ def _write_text_in_base(base: Path, path: Path, content: str, *, overwrite: bool
     safe_write_text(path, content, encoding="utf-8", atomic=True)
 
 
-def _write_bytes_in_base(base: Path, path: Path, data: bytes, *, overwrite: bool) -> None:
+def _write_bytes_in_base(
+    base: Path, path: Path, data: bytes, *, overwrite: bool
+) -> None:
     """Scrittura atomica bytes, con guardia STRONG sul perimetro base."""
     path = path.resolve()
     base = base.resolve()
@@ -186,7 +190,9 @@ startxref
 # Builders mapping/config
 # ---------------------------------------------------------------------
 def _yaml_dump_context(slug: str, client_name: str) -> Dict[str, Any]:
-    return {"context": {"slug": slug, "client_name": client_name, "created_at": _now_date()}}
+    return {
+        "context": {"slug": slug, "client_name": client_name, "created_at": _now_date()}
+    }
 
 
 def _yaml_dump_semantic_tagger_defaults() -> Dict[str, Any]:
@@ -344,7 +350,11 @@ def _emit_pdfs_from_pdf_dummy(
 # Builder principale
 # ---------------------------------------------------------------------
 def build_dummy_kb(
-    slug: str, client_name: str, *, overwrite: bool, logger: logging.Logger | None = None
+    slug: str,
+    client_name: str,
+    *,
+    overwrite: bool,
+    logger: logging.Logger | None = None,
 ) -> Path:
     """
     Costruisce la sandbox *dummy* per un cliente, generando cartelle,
@@ -361,7 +371,10 @@ def build_dummy_kb(
     """
     # Log iniziale
     if logger:
-        logger.info("Start build sandbox dummy", extra={"slug": slug, "client_name": client_name})
+        logger.info(
+            "Start build sandbox dummy",
+            extra={"slug": slug, "client_name": client_name},
+        )
 
     # 1) leggi template contrattuali
     if logger:
@@ -382,7 +395,10 @@ def build_dummy_kb(
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     ensure_within(OUTPUT_ROOT.resolve(), base)
     if logger:
-        logger.info("Base destinazione risolta", extra={"base": str(base), "tail": tail_path(base)})
+        logger.info(
+            "Base destinazione risolta",
+            extra={"base": str(base), "tail": tail_path(base)},
+        )
 
     # 3) crea cartelle standard + SOLO l’albero raw/
     book_dir = base / "book"
@@ -433,15 +449,21 @@ def build_dummy_kb(
 
     # 5) config/config.yaml minimale
     _write_text_in_base(
-        base, config_dir / "config.yaml", _min_config_yaml(client_name), overwrite=overwrite
+        base,
+        config_dir / "config.yaml",
+        _min_config_yaml(client_name),
+        overwrite=overwrite,
     )
     if logger:
         logger.info(
-            "config.yaml minimale scritto", extra={"file_path": str(config_dir / "config.yaml")}
+            "config.yaml minimale scritto",
+            extra={"file_path": str(config_dir / "config.yaml")},
         )
 
     # 6) genera PDF SOLO per RAW
-    created_pdfs = _emit_pdfs_from_pdf_dummy(base, raw_dir, pdf_dummy, slug, overwrite=overwrite)
+    created_pdfs = _emit_pdfs_from_pdf_dummy(
+        base, raw_dir, pdf_dummy, slug, overwrite=overwrite
+    )
     if logger:
         logger.info(
             "PDF dummy generati",
@@ -475,14 +497,23 @@ def build_dummy_kb(
     if logger:
         logger.info(
             "CSV semantico scritto",
-            extra={"file_path": str(tags_csv_path), "candidates": cand_len, "normalized": norm_len},
+            extra={
+                "file_path": str(tags_csv_path),
+                "candidates": cand_len,
+                "normalized": norm_len,
+            },
         )
 
     # README_TAGGING e stub reviewed -> genera DB SQLite minimale (tags.db)
     try:
-        _write_tagging_readme(semantic_dir, logger or get_structured_logger("gen_dummy_kb"))
+        _write_tagging_readme(
+            semantic_dir, logger or get_structured_logger("gen_dummy_kb")
+        )
         _write_review_stub_from_csv(
-            semantic_dir, tags_csv_path, logger or get_structured_logger("gen_dummy_kb"), top_n=8
+            semantic_dir,
+            tags_csv_path,
+            logger or get_structured_logger("gen_dummy_kb"),
+            top_n=8,
         )
         if logger:
             logger.info(
@@ -491,7 +522,9 @@ def build_dummy_kb(
             )
     except Exception as e:
         if logger:
-            logger.warning("Impossibile generare stub reviewed/DB", extra={"error": str(e)})
+            logger.warning(
+                "Impossibile generare stub reviewed/DB", extra={"error": str(e)}
+            )
 
     # (Opz.) Finanza: genera un CSV minimo e importalo in semantic/finance.db
     try:
@@ -508,16 +541,26 @@ def build_dummy_kb(
             if logger:
                 logger.info(
                     "Finanza: import CSV",
-                    extra={"csv": str(fin_csv), "rows": res.get("rows"), "db": res.get("db")},
+                    extra={
+                        "csv": str(fin_csv),
+                        "rows": res.get("rows"),
+                        "db": res.get("db"),
+                    },
                 )
     except Exception as e:
         if logger:
-            logger.warning("Import finanza fallito (opzionale)", extra={"error": str(e)})
+            logger.warning(
+                "Import finanza fallito (opzionale)", extra={"error": str(e)}
+            )
 
     if logger:
         logger.info(
             "Sandbox dummy creata",
-            extra={"base": str(base), "base_tail": tail_path(base), "raw_tail": tail_path(raw_dir)},
+            extra={
+                "base": str(base),
+                "base_tail": tail_path(base),
+                "raw_tail": tail_path(raw_dir),
+            },
         )
     return base
 
@@ -534,14 +577,18 @@ def _parse_args() -> argparse.Namespace:
         required=False,
         help="Cartella di output in cui creare la sandbox (es. temp dir di pytest)",
     )
-    p.add_argument("--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)")
+    p.add_argument(
+        "--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)"
+    )
     p.add_argument(
         "--name",
         type=str,
         default=DEFAULT_CLIENT_NAME,
         help="Nome cliente (default: Cliente Dummy)",
     )
-    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file già esistenti")
+    p.add_argument(
+        "--overwrite", action="store_true", help="Sovrascrive file già esistenti"
+    )
     return p.parse_args()
 
 
@@ -588,11 +635,16 @@ def main() -> int:
         try:
             ensure_within(base, log_file)
             log_file.parent.mkdir(parents=True, exist_ok=True)
-            logger = get_structured_logger("gen_dummy_kb", log_file=log_file, run_id=run_id)
+            logger = get_structured_logger(
+                "gen_dummy_kb", log_file=log_file, run_id=run_id
+            )
         except Exception:
             logger = early_logger  # fallback
 
-        logger.info("Fine: sandbox pronta", extra={"base": str(base), "base_tail": tail_path(base)})
+        logger.info(
+            "Fine: sandbox pronta",
+            extra={"base": str(base), "base_tail": tail_path(base)},
+        )
         return 0
     except KeyboardInterrupt:
         return 130

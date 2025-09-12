@@ -43,17 +43,17 @@ e mantiene la compatibilità con il monolite precedente.
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Any, Dict, Optional, List, Union, cast
 from os import PathLike
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union, cast
 
 import yaml
 from googleapiclient.errors import HttpError  # type: ignore
 
+from ..constants import OUTPUT_DIR_NAME
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
 from ..path_utils import sanitize_filename
-from ..constants import OUTPUT_DIR_NAME
 from .client import _retry
 
 # Logger di modulo (fallback). Dove possibile, useremo un logger contestualizzato locale.
@@ -121,7 +121,11 @@ def _create_folder(service: Any, name: str, parent_id: Optional[str]) -> str:
         body["parents"] = [parent_id]
 
     def _call() -> Any:
-        return service.files().create(body=body, fields="id", supportsAllDrives=True).execute()
+        return (
+            service.files()
+            .create(body=body, fields="id", supportsAllDrives=True)
+            .execute()
+        )
 
     resp = cast(Dict[str, Any], _retry(_call, op_name="files.create.folder"))
     return cast(str, resp["id"])  # ID previsto stringa
@@ -182,7 +186,9 @@ def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
         # Moderno/generico: accetta il dict così com'è
         return data
 
-    raise ConfigError("Struttura YAML non valida: atteso un mapping o un root_folders:list.")
+    raise ConfigError(
+        "Struttura YAML non valida: atteso un mapping o un root_folders:list."
+    )
 
 
 # ------------------------------- API: Cartelle/Albero -----------------------------
@@ -258,7 +264,9 @@ def _create_remote_tree_from_mapping(
 
     for raw_name, subtree in (mapping or {}).items():
         name = sanitize_filename(str(raw_name))
-        folder_id = create_drive_folder(service, name, parent_id, redact_logs=redact_logs)
+        folder_id = create_drive_folder(
+            service, name, parent_id, redact_logs=redact_logs
+        )
         result[name] = folder_id
 
         if isinstance(subtree, dict):
@@ -297,7 +305,11 @@ def create_drive_structure_from_yaml(
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
 
     try:
-        with open(str(yaml_path), "r", encoding="utf-8") as fh:
+        from ..path_utils import ensure_within_and_resolve
+
+        p = Path(str(yaml_path))
+        safe_p = ensure_within_and_resolve(p.parent, p)
+        with safe_p.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
@@ -362,10 +374,14 @@ def _resolve_local_config_path(context: Any) -> Path:
         if p.is_file():
             return p
 
-    raise ConfigError("Impossibile individuare il file locale config.yaml nel contesto fornito.")
+    raise ConfigError(
+        "Impossibile individuare il file locale config.yaml nel contesto fornito."
+    )
 
 
-def _find_existing_child_file_by_name(service: Any, parent_id: str, name: str) -> Optional[str]:
+def _find_existing_child_file_by_name(
+    service: Any, parent_id: str, name: str
+) -> Optional[str]:
     """Ritorna l'ID di un file figlio con `name` sotto `parent_id`, altrimenti None."""
     q = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
 
@@ -405,10 +421,13 @@ def upload_config_to_drive_folder(
 
     # Logger contestualizzato + redazione auto-derivata dal contesto (come in download.py)
     local_logger = (
-        get_structured_logger("pipeline.drive.upload", context=context) if context else logger
+        get_structured_logger("pipeline.drive.upload", context=context)
+        if context
+        else logger
     )
     redact_logs = bool(
-        redact_logs or (getattr(context, "redact_logs", False) if context is not None else False)
+        redact_logs
+        or (getattr(context, "redact_logs", False) if context is not None else False)
     )
 
     local_config = _resolve_local_config_path(context)
@@ -435,7 +454,9 @@ def upload_config_to_drive_folder(
             "Installa la libreria o usa --dry-run."
         ) from e
 
-    media = MediaFileUpload(str(local_config), mimetype="application/octet-stream", resumable=False)
+    media = MediaFileUpload(
+        str(local_config), mimetype="application/octet-stream", resumable=False
+    )
     body = {"name": "config.yaml", "parents": [parent_id]}
 
     def _call() -> Any:
@@ -475,17 +496,23 @@ def upload_config_to_drive_folder(
 
 def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]:
     """Carica il file YAML e ritorna la struttura normalizzata (vedi _normalize_yaml_structure)."""
-    if not os.path.isfile(str(yaml_path)):
+    p = Path(str(yaml_path))
+    if not p.exists():
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
     try:
-        with open(str(yaml_path), "r", encoding="utf-8") as fh:
+        from ..path_utils import ensure_within_and_resolve
+
+        safe_p = ensure_within_and_resolve(p.parent, p)
+        with safe_p.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
     return _normalize_yaml_structure(data)
 
 
-def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str]]) -> None:
+def create_local_base_structure(
+    context: Any, yaml_path: Union[str, PathLike[str]]
+) -> None:
     """
     Crea la struttura LOCALE di base in modo **permissivo**.
 
@@ -500,7 +527,9 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
     """
     # Logger contestualizzato per uniformità con gli orchestratori
     local_logger = (
-        get_structured_logger("pipeline.drive.upload", context=context) if context else logger
+        get_structured_logger("pipeline.drive.upload", context=context)
+        if context
+        else logger
     )
 
     slug = getattr(context, "slug", "client")
@@ -562,7 +591,11 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
 
     local_logger.info(
         "drive.upload.local_structure.created",
-        extra={"raw_dir": str(raw_dir), "book_dir": str(book_dir), "config_dir": str(cfg_dir)},
+        extra={
+            "raw_dir": str(raw_dir),
+            "book_dir": str(book_dir),
+            "config_dir": str(cfg_dir),
+        },
     )
 
 

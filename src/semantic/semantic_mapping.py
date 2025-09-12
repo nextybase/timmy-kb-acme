@@ -21,14 +21,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 import yaml
 
+from pipeline.constants import SEMANTIC_MAPPING_FILE
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
-from pipeline.exceptions import PipelineError, ConfigError
-from pipeline.constants import SEMANTIC_MAPPING_FILE
 
 __all__ = ["load_semantic_mapping"]
 
@@ -98,7 +98,9 @@ def load_semantic_mapping(
 
     # 1) mapping specifico del cliente (sotto sandbox)
     if context.config_dir is None:
-        raise PipelineError("Contesto incompleto: config_dir mancante", slug=context.slug)
+        raise PipelineError(
+            "Contesto incompleto: config_dir mancante", slug=context.slug
+        )
     mapping_path = context.config_dir / SEMANTIC_MAPPING_FILE
     try:
         ensure_within(context.config_dir, mapping_path)  # STRONG guard
@@ -123,12 +125,19 @@ def load_semantic_mapping(
 
     # 2) leggi mapping del cliente
     try:
-        with open(mapping_path, "r", encoding="utf-8") as f:
+        from pipeline.path_utils import ensure_within_and_resolve
+
+        safe_map = ensure_within_and_resolve(context.config_dir, mapping_path)
+        with safe_map.open("r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         mapping = _normalize_semantic_mapping(raw)
         logger.info(
             "📑 Mapping semantico caricato",
-            extra={"slug": context.slug, "file_path": str(mapping_path), "concepts": len(mapping)},
+            extra={
+                "slug": context.slug,
+                "file_path": str(mapping_path),
+                "concepts": len(mapping),
+            },
         )
     except Exception as e:
         logger.error(
@@ -147,7 +156,8 @@ def load_semantic_mapping(
         )
         # Risoluzione sicura del fallback rispetto alla root del repo
         repo_root: Path = (
-            getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
+            getattr(context, "repo_root_dir", None)
+            or Path(__file__).resolve().parents[2]
         )
         repo_config_dir = repo_root / "config"
         default_path = repo_config_dir / "default_semantic_mapping.yaml"
@@ -162,7 +172,10 @@ def load_semantic_mapping(
 
         if default_path.exists():
             try:
-                with open(default_path, "r", encoding="utf-8") as f:
+                from pipeline.path_utils import ensure_within_and_resolve
+
+                safe_def = ensure_within_and_resolve(repo_config_dir, default_path)
+                with safe_def.open("r", encoding="utf-8") as f:
                     raw = yaml.safe_load(f) or {}
                 mapping = _normalize_semantic_mapping(raw)
                 logger.info(
@@ -189,7 +202,9 @@ def load_semantic_mapping(
                 extra={"slug": context.slug, "file_path": str(default_path)},
             )
             raise ConfigError(
-                "Mapping di fallback mancante.", slug=context.slug, file_path=str(default_path)
+                "Mapping di fallback mancante.",
+                slug=context.slug,
+                file_path=str(default_path),
             )
 
     return mapping

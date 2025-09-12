@@ -27,25 +27,21 @@ Linee guida implementative
 
 from __future__ import annotations
 
-import shutil
-import yaml
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any
+import shutil
 from datetime import date
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from pydantic_settings import BaseSettings as PydanticBaseSettings
+import yaml
 from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings as PydanticBaseSettings
 
-from pipeline.logging_utils import get_structured_logger
-from pipeline.constants import (
-    CONFIG_FILE_NAME,
-    BACKUP_SUFFIX,
-    CONFIG_DIR_NAME,
-)
-from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
+from pipeline.constants import BACKUP_SUFFIX, CONFIG_DIR_NAME, CONFIG_FILE_NAME
 from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
 
 logger = get_structured_logger("pipeline.config_utils")
@@ -184,11 +180,18 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
         ConfigError: se il file non esiste o in caso di errore di lettura/parsing.
     """
     if context.config_path is None:
-        raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
+        raise PipelineError(
+            "Contesto incompleto: config_path mancante", slug=context.slug
+        )
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
-        with context.config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import ensure_within_and_resolve
+
+        safe_cfg = ensure_within_and_resolve(
+            context.config_path.parent, context.config_path
+        )
+        with safe_cfg.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
@@ -217,10 +220,17 @@ def validate_preonboarding_environment(
 
     if not context.config_path.exists():
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
-        raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
+        raise PreOnboardingValidationError(
+            f"Config cliente non trovato: {context.config_path}"
+        )
 
     try:
-        with context.config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import ensure_within_and_resolve
+
+        safe_cfg = ensure_within_and_resolve(
+            context.config_path.parent, context.config_path
+        )
+        with safe_cfg.open("r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
@@ -237,7 +247,9 @@ def validate_preonboarding_environment(
     missing = [k for k in required_keys if k not in cfg]
     if missing:
         logger.error(f"❗ Chiavi obbligatorie mancanti in config: {missing}")
-        raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
+        raise PreOnboardingValidationError(
+            f"Chiavi obbligatorie mancanti in config: {missing}"
+        )
 
     # Verifica/creazione directory richieste (logs)
     logs_dir = (base_dir / "logs").resolve()
@@ -312,9 +324,11 @@ def update_config_with_drive_ids(
     if logger:
         logger.info(f"💾 Backup config creato: {backup_path}")
 
-    # Carica config esistente
+    # Carica config esistente (path-safety in LETTURA)
     try:
-        with config_path.open("r", encoding="utf-8") as f:
+        from pipeline.path_utils import open_for_read
+
+        with open_for_read(config_path.parent, config_path, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
@@ -348,7 +362,9 @@ __all__ = [
 # ----------------------------------------------------------
 #  Versioning helpers (N_VER / DATA_VER)
 # ----------------------------------------------------------
-def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None = None) -> None:
+def bump_n_ver_if_needed(
+    context: ClientContext, logger: logging.Logger | None = None
+) -> None:
     """Incrementa N_VER di 1 nel config del cliente.
 
     Nota: la logica "if needed" è demandata al chiamante (UI tiene un flag di sessione)
@@ -363,11 +379,20 @@ def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None =
         current = 0
     new_val = current + 1
     if log:
-        log.info({"event": "bump_n_ver", "old": current, "new": new_val, "slug": context.slug})
+        log.info(
+            {
+                "event": "bump_n_ver",
+                "old": current,
+                "new": new_val,
+                "slug": context.slug,
+            }
+        )
     update_config_with_drive_ids(context, updates={"N_VER": new_val}, logger=log)
 
 
-def set_data_ver_today(context: ClientContext, logger: logging.Logger | None = None) -> None:
+def set_data_ver_today(
+    context: ClientContext, logger: logging.Logger | None = None
+) -> None:
     """Imposta DATA_VER alla data odierna (YYYY-MM-DD) nel config del cliente.
 
     Viene tipicamente chiamata alla chiusura della UI, solo se nella sessione ci sono

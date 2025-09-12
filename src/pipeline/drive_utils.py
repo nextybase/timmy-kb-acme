@@ -60,7 +60,7 @@ except Exception:  # pragma: no cover - fallback sicuro per ambienti minimi
 # I test patchano DU.MediaIoBaseDownload; la riesportiamo dal pacchetto googleapiclient
 # se disponibile, altrimenti forniamo un placeholder (sostituibile via monkeypatch).
 try:  # pragma: no cover - dipendenza opzionale in ambienti CI minimali
-    from googleapiclient.http import MediaIoBaseDownload as _GAPI_MediaIoBaseDownload  # type: ignore
+    from googleapiclient.http import MediaIoBaseDownload as _GAPI_MediaIoBaseDownload
 
     MediaIoBaseDownload: Any = _GAPI_MediaIoBaseDownload
 except Exception:  # pragma: no cover

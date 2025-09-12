@@ -1,0 +1,3 @@
+# Ignora sempre il DB puntatore e ogni file temporaneo locale
+current_tags.db
+*.tmp

@@ -29,13 +29,15 @@ Principi:
 
 from __future__ import annotations
 
-from pathlib import Path
-import unicodedata
-import re
-import yaml
 import logging
-from typing import Optional, Iterable, List, Tuple, Callable
+import re
+import unicodedata
+from contextlib import contextmanager
 from functools import lru_cache  # caching per slug regex
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Tuple, Iterator, TextIO
+
+import yaml
 
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger
@@ -99,7 +101,9 @@ def ensure_within(base: Path, target: Path) -> None:
         base_r = Path(base).resolve()
         tgt_r = Path(target).resolve()
     except Exception as e:
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
+        raise ConfigError(
+            f"Impossibile risolvere i path: {e}", file_path=str(target)
+        ) from e
 
     try:
         tgt_r.relative_to(base_r)
@@ -108,6 +112,70 @@ def ensure_within(base: Path, target: Path) -> None:
             f"Path traversal rilevato: {tgt_r} non è sotto {base_r}",
             file_path=str(target),
         )
+
+
+def ensure_within_and_resolve(base: Path, p: Path) -> Path:
+    """
+    Path-safety per LETTURA: risolve `p` e garantisce che il path risultante ricada sotto `base`.
+
+    Restituisce il path risolto pronto all'uso (per `open`, `read_text`, ecc.).
+
+    Args:
+        base: Directory perimetrale consentita (radice sandbox o directory attesa).
+        p: Path da risolvere e validare.
+
+    Returns:
+        Path risolto (assoluto) se la validazione ha esito positivo.
+
+    Raises:
+        ConfigError: se la risoluzione fallisce o se il path risultante non ricade in `base`.
+    """
+    try:
+        base_r = Path(base).resolve()
+        p_r = Path(p).resolve()
+    except Exception as e:  # pragma: no cover - fallback di sicurezza
+        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(p)) from e
+
+    try:
+        p_r.relative_to(base_r)
+    except Exception:
+        raise ConfigError(
+            f"Path di lettura non consentito: {p_r} non è sotto {base_r}",
+            file_path=str(p),
+        )
+    return p_r
+
+
+@contextmanager
+def open_for_read(
+    base: Path,
+    p: Path,
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = None,
+) -> Iterator[TextIO]:
+    """
+    Helper ergonomico: apre in lettura un file entro il perimetro `base` in modo sicuro.
+
+    Esempio:
+        with open_for_read(book_dir, md) as f:
+            text = f.read()
+    """
+    safe_p = ensure_within_and_resolve(base, p)
+    f = safe_p.open("r", encoding=encoding, newline=newline)
+    try:
+        yield f
+    finally:
+        try:
+            f.close()
+        except Exception:
+            pass
+
+
+def read_text_safe(base: Path, p: Path, *, encoding: str = "utf-8") -> str:
+    """Legge l'intero contenuto testo applicando path-safety (wrapper comodo)."""
+    safe_p = ensure_within_and_resolve(base, p)
+    return safe_p.read_text(encoding=encoding)
 
 
 @lru_cache(maxsize=1)
@@ -128,10 +196,12 @@ def _load_slug_regex() -> str:
     for cfg_path in candidates:
         try:
             if cfg_path.exists():
-                with cfg_path.open("r", encoding="utf-8") as f:
+                with open_for_read(cfg_path.parent, cfg_path, encoding="utf-8") as f:
                     cfg = yaml.safe_load(f) or {}
                 pattern = cfg.get("slug_regex", default_regex)
-                return pattern if isinstance(pattern, str) and pattern else default_regex
+                return (
+                    pattern if isinstance(pattern, str) and pattern else default_regex
+                )
         except Exception as e:
             _logger.error(
                 "Errore caricamento config slug_regex",
@@ -145,7 +215,9 @@ def clear_slug_regex_cache() -> None:
     try:
         _load_slug_regex.cache_clear()
     except Exception as e:
-        _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
+        _logger.error(
+            "Errore nel reset della cache slug_regex", extra={"error": str(e)}
+        )
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -169,7 +241,9 @@ def is_valid_slug(slug: str) -> bool:
 def validate_slug(slug: str) -> str:
     """Valida lo slug e alza un'eccezione di dominio in caso di non conformità."""
     if not is_valid_slug(slug):
-        raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
+        raise InvalidSlug(
+            f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug
+        )
     return slug
 
 
@@ -187,7 +261,9 @@ def normalize_path(path: Path) -> Path:
         return Path(path)
 
 
-def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
+def sanitize_filename(
+    name: str, max_length: int = 100, *, replacement: str = "_"
+) -> str:
     """
     Pulisce un nome file per l’uso su filesystem.
 
@@ -225,7 +301,8 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         return s or "file"
     except Exception as e:
         _logger.error(
-            "Errore nella sanitizzazione nome file", extra={"error": str(e), "name": name}
+            "Errore nella sanitizzazione nome file",
+            extra={"error": str(e), "name": name},
         )
         return "file"
 
@@ -322,6 +399,9 @@ def ensure_valid_slug(
 __all__ = [
     "is_safe_subpath",
     "ensure_within",  # SSoT guardia STRONG
+    "ensure_within_and_resolve",  # guardia LETTURA + resolve
+    "open_for_read",  # helper ergonomico context manager
+    "read_text_safe",  # helper ergonomico testo
     "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",
     "validate_slug",  # helper dominio

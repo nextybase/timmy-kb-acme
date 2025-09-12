@@ -40,7 +40,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from googleapiclient.http import MediaIoBaseDownload  # type: ignore
+from googleapiclient.http import MediaIoBaseDownload
 
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
 from pipeline.path_utils import ensure_within, sanitize_filename
@@ -62,7 +62,7 @@ def _q_parent(parent_id: str) -> str:
 
 def _list_children(service: Any, parent_id: str, *, fields: str) -> List[Dict[str, Any]]:
     """Lista i children di un folder (una pagina alla volta)."""
-    items: List[Dict] = []
+    items: List[Dict[str, Any]] = []
     page_token: Optional[str] = None
     while True:
         req = service.files().list(
