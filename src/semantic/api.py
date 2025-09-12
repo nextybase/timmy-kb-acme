@@ -141,6 +141,7 @@ def enrich_frontmatter(
     slug: str,
 ) -> List[Path]:
     """Arricchisce i frontmatter dei Markdown con title e tag canonici."""
+    from pipeline.path_utils import read_text_safe
     paths = get_paths(slug)
     book_dir = paths["book"]
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
@@ -151,8 +152,6 @@ def enrich_frontmatter(
         title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
-            from pipeline.path_utils import read_text_safe
-
             text = read_text_safe(book_dir, md, encoding="utf-8")
         except OSError as e:
             logger.warning(
