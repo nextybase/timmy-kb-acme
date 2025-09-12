@@ -1,0 +1,194 @@
+:root {
+  --color-primary: #ffc400; /* giallo NeXT */
+  --color-bg: #ffffff;
+  --color-text: #1f2937; /* gray-800 */
+  --color-muted: #6b7280; /* gray-500 */
+  --color-border: #e5e7eb; /* gray-200 */
+  --color-elev: #f9fafb; /* gray-50 */
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font: 15px/1.5 var(--font-sans);
+}
+
+/* Visibilità a stato (usata da {{LANDING_VISIBLE}} / {{GENERAL_VISIBLE}}) */
+[data-visible="false"] { display: none !important; }
+[data-visible="true"] { display: block; }
+
+/* Layout principale */
+.layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  border-right: 1px solid var(--color-border);
+  background: var(--color-elev);
+  padding: 16px 12px;
+}
+.sidebar__banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 12px 8px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 12px;
+}
+.sidebar__banner-img {
+  display: block;
+  max-width: 100%;
+  height: 36px; /* orizzontale, poco invasivo */
+  object-fit: contain;
+}
+.sidebar__menu {
+  display: grid;
+  gap: 8px;
+}
+.sidebar__menu a,
+.sidebar__menu button {
+  display: block;
+  text-decoration: none;
+  color: var(--color-text);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.sidebar__menu a:hover,
+.sidebar__menu button:hover {
+  border-color: var(--color-primary);
+}
+
+/* Main */
+.main {
+  padding: 16px 20px 32px;
+}
+
+/* Header generale */
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+}
+.title {
+  font-size: 22px;
+  margin: 0;
+}
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.header__actions { display: flex; align-items: center; gap: 8px; }
+
+/* Pill “Preview Docker” */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+}
+.pill[data-state="ON"] {
+  background: #e8f5e9; /* verde chiaro */
+  border-color: #a5d6a7;
+  color: #1b5e20;
+}
+.pill[data-state="OFF"] {
+  background: #fff3e0; /* arancio chiaro */
+  border-color: #ffe0b2;
+  color: #e65100;
+}
+
+/* Landing minimale */
+.landing {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 100px);
+}
+.landing__inner {
+  width: min(680px, 92vw);
+  display: grid;
+  gap: 16px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+.landing__slug,
+.landing__client,
+.landing__upload,
+.landing__help {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--color-elev);
+}
+.landing__help { color: var(--color-muted); font-size: 14px; }
+
+/* Schermata generale: griglia carte in 2 colonne */
+.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 840px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
+}
+.card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+.card__title { margin: 0 0 6px 0; font-size: 16px; }
+.card__desc { margin: 0; color: var(--color-muted); font-size: 14px; }
+
+/* Pulsanti base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--color-primary); }
+.btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #111827; /* testo scuro per contrasto AA */
+}
+
+/* Accessibilità di base */
+a:focus, button:focus, .btn:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+img { max-width: 100%; height: auto; }
