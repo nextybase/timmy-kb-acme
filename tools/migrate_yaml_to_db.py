@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # tools/migrate_yaml_to_db.py
-from __future__ import annotations
-
 """
 Migra un file `tags_reviewed.yaml` verso il database SQLite `tags.db` adiacente.
 
@@ -13,6 +11,7 @@ Requisiti:
   - PyYAML installato (già presente nel progetto)
   - Nessuna dipendenza extra (usa sqlite3 stdlib)
 """
+from __future__ import annotations
 
 import argparse
 from pathlib import Path

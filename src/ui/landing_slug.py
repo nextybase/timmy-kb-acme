@@ -26,24 +26,40 @@ def _base_dir_for(slug: str) -> Path:
 
 
 def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
-    """Landing minimale: chiede solo lo slug; se manca il workspace, chiede Nome+PDF.
+    """Landing minimale: inizialmente solo slug; su slug nuovo mostra Nome+PDF+help.
 
     Restituisce: (locked, slug, client_name)
     """
     st.markdown("<div style='height: 6vh'></div>", unsafe_allow_html=True)
-    with st.container(border=True):
-        st.markdown(
-            (
-                "**Benvenuto!**\n\n"
-                "- Inserisci lo `slug` del cliente (es. `acme`).\n"
-                "- Se il workspace locale esiste, la UI lo carica e prosegue.\n"
-                "- Se non esiste: inserisci anche il nome cliente e carica il PDF iniziale;\n"
-                "  premi ‘Crea workspace cliente’ per creare la struttura standard.\n\n"
-                "Nota: il PDF viene salvato come `config/VisionStatement.pdf` e il `config.yaml` viene aggiornato."
-            )
+
+    # Banner in alto a destra (landing)
+    try:
+        ROOT = Path(__file__).resolve().parents[2]
+        _logo = ROOT / "assets" / "next-logo.png"
+        if _logo.exists():
+            import base64 as _b64
+
+            _data = _logo.read_bytes()
+            _enc = _b64.b64encode(_data).decode("ascii")
+            left, right = st.columns([4, 1])
+            with right:
+                st.markdown(
+                    f"<img src='data:image/png;base64,{_enc}' alt='NeXT' style='width:100%;height:auto;display:block;' />",
+                    unsafe_allow_html=True,
+                )
+    except Exception:
+        pass
+
+    # Input slug centrato (unico elemento iniziale)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        slug = st.text_input(
+            "Slug cliente",
+            value=st.session_state.get("slug", ""),
+            key="ls_slug",
+            placeholder="es. acme",
         )
 
-    slug = st.text_input("Slug cliente", value=st.session_state.get("slug", ""), key="ls_slug")
     slug = (slug or "").strip()
     if not slug:
         return False, "", ""
@@ -67,10 +83,16 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         st.session_state["slug"] = slug
         st.session_state["client_name"] = client_name
         st.session_state["client_locked"] = True
+        st.session_state["active_section"] = "Configurazione"
+        # Allinea comportamento al caso B: forza un rerun per pulire la landing
+        try:
+            st.rerun()
+        except Exception:
+            pass
         return True, slug, client_name
 
     # Caso B: workspace NON esiste → chiedi Nome + upload PDF e crea workspace
-    st.caption("Nuovo cliente: inserisci anche il nome e carica il PDF iniziale.")
+    st.caption("Nuovo cliente rilevato.")
     client_name = st.text_input(
         "Nome cliente", value=st.session_state.get("client_name", ""), key="ls_name"
     )
@@ -80,11 +102,12 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         accept_multiple_files=False,
         key="ls_pdf",
         help=(
-            "Perché chiediamo questo PDF?\n"
-            "• È il documento di visione iniziale per contestualizzare la KB.\n"
-            "• Lo salviamo come `config/VisionStatement.pdf` nel workspace locale.\n"
-            "• Puoi aggiornarlo/sostituirlo in seguito nella stessa cartella."
+            "Carica il Vision Statement (PDF). Verrà archiviato nel workspace del cliente e potrà essere aggiornato in seguito."
         ),
+    )
+    st.info(
+        "Carica il Vision Statement (PDF). Verrà archiviato nel workspace del cliente e potrà essere aggiornato in seguito.",
+        icon="ℹ️",
     )
 
     disabled = not (slug and client_name and pdf is not None)
@@ -104,6 +127,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             st.session_state["slug"] = slug
             st.session_state["client_name"] = client_name
             st.session_state["client_locked"] = True
+            st.session_state["active_section"] = "Configurazione"
             st.success("Workspace creato con successo.")
             st.rerun()
         except Exception as e:  # pragma: no cover

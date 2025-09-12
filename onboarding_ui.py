@@ -1,4 +1,4 @@
-﻿# onboarding_ui.py
+# onboarding_ui.py
 from __future__ import annotations
 
 import logging
@@ -20,14 +20,14 @@ if str(SRC) not in sys.path:
 # -----------------------------------------------------------------------------
 # Import pipeline (obbligatori in v1.8.0)
 # -----------------------------------------------------------------------------
-from pipeline.env_utils import compute_redact_flag
-from pipeline.logging_utils import get_structured_logger
+from pipeline.env_utils import compute_redact_flag  # noqa: E402
+from pipeline.logging_utils import get_structured_logger  # noqa: E402
 
 # ClientContext per la tab Semantica (opzionale)
-from pipeline.context import ClientContext
+from pipeline.context import ClientContext  # noqa: E402
 
 # Config helpers (versioning)
-from pipeline.config_utils import (
+from pipeline.config_utils import (  # noqa: E402
     bump_n_ver_if_needed,
     set_data_ver_today,
 )
@@ -49,7 +49,7 @@ from config_ui.mapping_editor import (  # type: ignore  # noqa: E402
     build_mapping,
     validate_categories,
 )
-from config_ui.drive_runner import (
+from config_ui.drive_runner import (  # noqa: E402
     build_drive_from_mapping,
     emit_readmes_for_raw,
     download_raw_from_drive,
@@ -152,7 +152,7 @@ def _norm_str(val: Optional[str]) -> str:
 
 
 def _safe_streamlit_rerun() -> None:
-    # Usa l’API stabile; fallback a experimental se presente. Evita warning Pylance.
+    # Usa l'API stabile; fallback a experimental se presente. Evita warning Pylance.
     fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
     if callable(fn):
         try:
@@ -218,21 +218,8 @@ def _render_landing_inputs(log: logging.Logger) -> Tuple[bool, str, str]:
 
 
 def _render_header_after_lock(log: logging.Logger, slug: str, client_name: str) -> None:
-    # Mostra info bloccate e un pulsante di chiusura UI
-    left, right = st.columns([4, 1])
-    with left:
-        st.markdown(f"**Cliente:** {client_name} &nbsp;&nbsp;|&nbsp;&nbsp; **Slug:** `{slug}`")
-    with right:
-        # Spostato nella sidebar: se sidebar attiva, non mostrare qui il pulsante
-        if not bool(st.session_state.get("sidebar_active")):
-            if st.button("Chiudi UI", key="btn_close_ui_top", use_container_width=True):
-                try:
-                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
-                        ctx = _ensure_context(slug, log)
-                        set_data_ver_today(ctx, log)  # type: ignore[misc]
-                except Exception:
-                    pass
-                _request_shutdown(log)
+    # Subheader informativo compatto (nessun pulsante qui; i controlli restano in sidebar)
+    st.markdown(f"**Cliente:** {client_name} | **Slug:** `{slug}`")
 
 
 def _load_mapping(slug: str) -> Dict[str, Any]:
@@ -389,7 +376,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 return "(invalid)"
 
         def _mask_id(s: str) -> str:
-            return (s[:6] + "…") if s else "(unset)"
+            return (s[:6] + " ") if s else "(unset)"
 
         st.write(f"SERVICE_ACCOUNT_FILE: {_mask_path(saf)}")
         st.write(f"DRIVE_ID: {_mask_id(did)}")
@@ -461,7 +448,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 st.exception(e)
 
     # -------------------------------------------------------------------------
-    # Nuova sezione: download PDF da Drive → raw/ (visibile SOLO dopo i README)
+    # Nuova sezione: download PDF da Drive ? raw/ (visibile SOLO dopo i README)
     # -------------------------------------------------------------------------
     if st.session_state.get("drive_readmes_done"):
         st.markdown("---")
@@ -539,7 +526,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
         with c2:
             st.write(
                 (
-                    "La struttura delle cartelle è stata creata su Drive; "
+                    "La struttura delle cartelle   stata creata su Drive; "
                     "popolarne il contenuto seguendo le indicazioni del file README presente in ogni "
                     "cartella per proseguire con la procedura"
                 )
@@ -547,7 +534,7 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
 
 
 # =============================================================================
-# Tab: Semantica (RAW → BOOK + frontmatter + README/SUMMARY + preview)
+# Tab: Semantica (RAW ? BOOK + frontmatter + README/SUMMARY + preview)
 # =============================================================================
 def _ensure_context(slug: str, log: logging.Logger) -> object:
     # Nessun prompt da UI; env non obbligatorio per operazioni locali
@@ -569,7 +556,7 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
         _ensure_within = None  # type: ignore
         _safe_write_bytes = None  # type: ignore
 
-    st.subheader("Finanza (CSV → finance.db)")
+    st.subheader("Finanza (CSV ? finance.db)")
     st.caption(
         "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
     )
@@ -634,7 +621,7 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
 
 
 def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
-    st.subheader("Semantica (RAW → BOOK)")
+    st.subheader("Semantica (RAW ? BOOK)")
     st.caption(
         "Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale."
     )
@@ -654,7 +641,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
     colA, colB = st.columns([1, 1], gap="large")
 
     with colA:
-        st.markdown("**1) Conversione RAW → BOOK**")
+        st.markdown("<div class='next-card'>", unsafe_allow_html=True)
+        st.markdown("**1) Conversione RAW ? BOOK**")
+        st.caption("Converte i PDF in Markdown (cartella book/).")
         if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
             try:
                 mds: List[Path] = sem_convert(context, log, slug=slug)  # type: ignore[misc]
@@ -671,51 +660,59 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                 _mark_modified_and_bump_once(slug, log, context=context)
             except Exception as e:
                 st.exception(e)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("**2) Arricchisci frontmatter**")
-        if st.button(
-            "Arricchisci con tag canonici (SQLite)",
-            key="btn_sem_enrich",
-            use_container_width=True,
-        ):
-            try:
-                base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
-                vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
-                touched: List[Path] = sem_enrich(context, log, vocab, slug=slug)  # type: ignore[misc]
-                st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
-                log.info(
-                    {
-                        "event": "semantic_enrich_done",
-                        "slug": slug,
-                        "run_id": st.session_state.get("run_id"),
-                        "touched": len(touched),
-                    }
-                )
-                # Versioning: bump N_VER una sola volta per sessione
-                _mark_modified_and_bump_once(slug, log, context=context)
-            except Exception as e:
-                st.exception(e)
+        with st.container(border=True):
+            st.markdown("**2) Arricchisci frontmatter**")
+            st.caption("Arricchisce i metadati con tag canonici (SQLite).")
+            if st.button(
+                "Arricchisci con tag canonici (SQLite)",
+                key="btn_sem_enrich",
+                use_container_width=True,
+            ):
+                try:
+                    base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
+                    vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
+                    touched: List[Path] = sem_enrich(context, log, vocab, slug=slug)  # type: ignore[misc]
+                    st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
+                    log.info(
+                        {
+                            "event": "semantic_enrich_done",
+                            "slug": slug,
+                            "run_id": st.session_state.get("run_id"),
+                            "touched": len(touched),
+                        }
+                    )
+                    # Versioning: bump N_VER una sola volta per sessione
+                    _mark_modified_and_bump_once(slug, log, context=context)
+                except Exception as e:
+                    st.exception(e)
 
     with colB:
-        st.markdown("**3) README/SUMMARY**")
-        if st.button(
-            "Genera/valida README & SUMMARY", key="btn_sem_write_md", use_container_width=True
-        ):
-            try:
-                sem_write_md(context, log, slug=slug)  # type: ignore[misc]
-                st.success("OK. README.md e SUMMARY.md pronti.")
-                log.info(
-                    {
-                        "event": "semantic_write_md_done",
-                        "slug": slug,
-                        "run_id": st.session_state.get("run_id"),
-                    }
-                )
-                # Versioning: bump N_VER una sola volta per sessione
-                _mark_modified_and_bump_once(slug, log, context=context)
-            except Exception as e:
-                st.exception(e)
+        with st.container(border=True):
+            st.markdown("**3) README/SUMMARY**")
+            st.caption("Prepara e valida README.md e SUMMARY.md.")
+            if st.button(
+                "Genera/valida README & SUMMARY", key="btn_sem_write_md", use_container_width=True
+            ):
+                try:
+                    sem_write_md(context, log, slug=slug)  # type: ignore[misc]
+                    st.success("OK. README.md e SUMMARY.md pronti.")
+                    log.info(
+                        {
+                            "event": "semantic_write_md_done",
+                            "slug": slug,
+                            "run_id": st.session_state.get("run_id"),
+                        }
+                    )
+                    # Versioning: bump N_VER una sola volta per sessione
+                    _mark_modified_and_bump_once(slug, log, context=context)
+                except Exception as e:
+                    st.exception(e)
 
+        running = bool(st.session_state.get("sem_preview_container"))
+        _pill = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        st.markdown(f"**Preview Docker:** {_pill}", unsafe_allow_html=True)
         st.markdown("**4) Preview Docker (HonKit)**")
         with st.container(border=True):
             # Porta e stato container in sessione
@@ -729,7 +726,6 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
             )
 
             # Avanzate: container_name opzionale
-            from typing import Optional
 
             def _docker_safe(name: Optional[str]) -> str:
                 import re as _re
@@ -829,7 +825,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     st.divider()
     st.caption(
-        "Nota: questo step **non** usa Google Drive né esegue push su GitHub; lavora su disco locale e preview."
+        "Nota: questo step **non** usa Google Drive n  esegue push su GitHub; lavora su disco locale e preview."
     )
 
 
@@ -837,7 +833,64 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 # Main
 # =============================================================================
 def main() -> None:
-    st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
+    # Page config: layout wide + favicon se presente (fallback silenzioso)
+    try:
+        _fav = ROOT / "assets" / "ico-next.png"
+        if _fav.exists():
+            st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide", page_icon=str(_fav))
+        else:
+            st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
+    except Exception:
+        st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
+
+    # Toolbar minimal + stile pill, card e bottoni (regole leggere, solo estetica)
+    st.markdown(
+        """
+        <style>
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        /* Pulsanti gialli */
+        .stButton > button {
+            background: #F2B400 !important;
+            color: #111827 !important;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            border: 1px solid #e5e7eb !important;
+        }
+        .stButton > button:hover { filter: brightness(0.98); }
+        /* Card leggere */
+        .next-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; background: #ffffff; }
+        /* Pill chiare */
+        .pill { display:inline-block; padding: 4px 12px; border-radius: 9999px; font-weight:600; border:1px solid #f5d98b; }
+        .pill.off { background:#FEF3C7; color:#6B7280; }
+        .pill.on  { background:#FDE68A; color:#1F2937; }
+        /* Sidebar menu */
+        .sb-section { font-size: 0.9rem; color:#6B7280; margin-top: 0.75rem; }
+        .sb-item { display:block; padding:6px 10px; border-radius:8px; color:#111827; text-decoration:none; }
+        .sb-item.active { background:#FDE68A; border:1px solid #f5d98b; }
+        /* Sidebar radio menu styled as button group */
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] {
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label {
+            display:block; padding:8px 12px; border-radius:10px; color:#111827; cursor:pointer;
+            border:1px solid #e5e7eb; background:#ffffff; font-weight:600;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label:hover { background:#FDF6B2; }
+        /* Hide default radio indicator for button look */
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label > div[role="radio"] { display:none; }
+        /* Active (selected) state */
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label:has(div[role="radio"][aria-checked="true"]) {
+            background:#FDE68A; border:1px solid #f5d98b;
+        }
+        /* Fallback highlight if :has unsupported */
+        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radio"][aria-checked="true"] {
+            background:#FDE68A; border:1px solid #f5d98b; border-radius:10px; padding:8px 12px; font-weight:700;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     redact = _safe_compute_redact_flag()
     log = _safe_get_logger("onboarding_ui", redact)
     # run_id per correlazione log UI
@@ -875,7 +928,7 @@ def main() -> None:
                     pass
                 _request_shutdown(log)
         if not locked:
-            return  # finché non è lockato, non mostrare altro
+            return  # finch  non   lockato, non mostrare altro
 
     # Da qui in poi la UI completa
     slug = st.session_state.get("slug", "")
@@ -886,11 +939,44 @@ def main() -> None:
     if st.session_state.get("client_locked", False):
         with st.sidebar:
             st.session_state["sidebar_active"] = True
-            st.markdown("### " + (client_name or slug))
-            st.caption("Slug: " + slug)
+            # Branding: banner orizzontale in alto a sinistra (fallback se assente)
+            try:
+                _logo = ROOT / "assets" / "next-logo.png"
+                if _logo.exists():
+                    import base64 as _b64
+                    _data = _logo.read_bytes()
+                    _b64 = _b64.b64encode(_data).decode("ascii")
+                    st.markdown(
+                        f"<img src='data:image/png;base64,{_b64}' alt='NeXT' style='width:100%;height:auto;display:block;' />",
+                        unsafe_allow_html=True,
+                    )
+            except Exception:
+                pass
+            # Menù (cliccabile)
+            st.subheader("Menù")
+            _menu_items = ["Configurazione", "Drive", "Semantica", "Preview"]
+            _current = st.session_state.get("active_section") or "Configurazione"
+            try:
+                _default_index = _menu_items.index(_current) if _current in _menu_items else 2
+            except Exception:
+                _default_index = 2
+            _choice = st.radio(
+                label="Sezione",
+                options=_menu_items,
+                index=_default_index,
+                key="sidebar_menu",
+                label_visibility="collapsed",
+            )
+            if _choice != _current:
+                st.session_state["active_section"] = _choice
+                _safe_streamlit_rerun()
 
-            # Pulsante CHIUDI (torna alla landing, non chiude il processo)
-            if st.button("Chiudi", key="btn_close_sidebar"):
+            # (Dataset section rimossa su richiesta)
+
+            # Note block rimosso
+
+            # Pulsante CAMBIA CLIENTE (torna alla landing, non chiude il processo)
+            if st.button("Cambia cliente", key="btn_close_sidebar"):
                 try:
                     if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
                         ctx = _ensure_context(slug, log)
@@ -903,20 +989,8 @@ def main() -> None:
                     pass
                 _safe_streamlit_rerun()
 
-            # Pulsante ESCI (termina Streamlit)
-            if st.button(
-                "Esci",
-                key="btn_exit_sidebar",
-                help="Chiude l'interfaccia Streamlit e termina il processo.",
-            ):
-                try:
-                    log.info({"event": "ui_exit_requested", "slug": slug})
-                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
-                        ctx = _ensure_context(slug, log)
-                        set_data_ver_today(ctx, log)  # type: ignore[misc]
-                except Exception:
-                    pass
-                _request_shutdown(log)
+            # Titolo Tools
+            st.subheader("Tools")
 
             # Pulsante GENERA/AGGIORNA DUMMY
             if st.button(
@@ -928,7 +1002,7 @@ def main() -> None:
                 ),
             ):
                 slug_local = slug
-                with st.spinner("Generazione dummy in corso…"):
+                with st.spinner("Generazione dummy in corso "):
                     try:
                         log.info({"event": "ui_dummy_generate_start", "slug": slug_local})
                         proc = subprocess.run(
@@ -965,10 +1039,25 @@ def main() -> None:
                         except Exception:
                             pass
 
-    st.title("NeXT - Onboarding UI")
+            # Pulsante ESCI (termina Streamlit)
+            if st.button(
+                "Esci",
+                key="btn_exit_sidebar",
+                help="Chiude l'interfaccia Streamlit e termina il processo.",
+            ):
+                try:
+                    log.info({"event": "ui_exit_requested", "slug": slug})
+                    if bool(st.session_state.get("modified")) and set_data_ver_today is not None:
+                        ctx = _ensure_context(slug, log)
+                        set_data_ver_today(ctx, log)  # type: ignore[misc]
+                except Exception:
+                    pass
+                _request_shutdown(log)
+
+    st.title("NeXT Onboarding")
     _render_header_after_lock(log, slug, client_name)
 
-    # Tabs: Semantica nascosta finché non abbiamo scaricato i PDF su raw/
+    # Tabs: Semantica nascosta finch  non abbiamo scaricato i PDF su raw/
     tabs_labels: List[str] = ["Configurazione", "Drive"]
     if st.session_state.get("client_locked"):
         tabs_labels.append("Finanza")
@@ -996,18 +1085,89 @@ def main() -> None:
     if st.session_state.get("raw_downloaded") or raw_ready:
         tabs_labels.append("Semantica")
 
-    tabs = st.tabs(tabs_labels)
-    with tabs[0]:
+    # Navigazione senza tabs: usa sezione attiva dalla sidebar (se presente)
+    section = (
+        st.session_state.get("active_section")
+        or st.session_state.get("nav_section")
+        or "Configurazione"
+    )
+    if section == "Configurazione":
         _render_config_tab(log, slug, client_name)
-    with tabs[1]:
+    elif section == "Drive":
         _render_drive_tab(log, slug)
-    if "Finanza" in tabs_labels:
-        with tabs[2]:
-            _render_finance_tab(log, slug)
-    if "Semantica" in tabs_labels:
-        fin_index = 1 + (1 if "Finanza" in tabs_labels else 0)
-        with tabs[1 + fin_index]:
+    elif section == "Semantica":
+        if raw_ready or st.session_state.get("raw_downloaded"):
             _render_semantic_tab(log, slug)
+        else:
+            st.info("Per abilitare la sezione Semantica scarica prima i PDF in raw/ dalla sezione Drive.")
+    elif section == "Preview":
+        running = bool(st.session_state.get("sem_preview_container"))
+        _pill = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        st.markdown(f"**Preview Docker:** {_pill}", unsafe_allow_html=True)
+        with st.container(border=True):
+            preview_port = st.number_input(
+                "Porta preview",
+                min_value=1,
+                max_value=65535,
+                value=4000,
+                step=1,
+                key="inp_sem_port_preview_only",
+            )
+            from typing import Optional as _Opt
+            def _docker_safe(name: _Opt[str]) -> str:
+                import re as _re
+                s = (name or "").strip()
+                if not s:
+                    return s
+                s = _re.sub(r"[^a-zA-Z0-9_.-]", "-", s)
+                s = s.strip("-._") or s
+                return s
+            def _default_container(slug_val: str) -> str:
+                import re as _re
+                safe = _re.sub(r"[^a-zA-Z0-9_.-]+", "-", (slug_val or "kb")).strip("-") or "kb"
+                return f"gitbook-{safe}"
+            with st.expander("Avanzate", expanded=False):
+                current_default = _default_container(slug)
+                container_name_raw = st.text_input(
+                    "Nome container Docker",
+                    value=st.session_state.get("sem_container_name", current_default),
+                    help="Lasciare vuoto per usare il default suggerito.",
+                    key="inp_sem_container_name_preview_only",
+                )
+                container_name = _docker_safe(container_name_raw) or current_default
+                st.session_state["sem_container_name"] = container_name
+            running = bool(st.session_state.get("sem_preview_container"))
+            if st.button(
+                "Avvia preview",
+                key="btn_sem_preview_start_preview_only",
+                use_container_width=True,
+                disabled=(start_preview is None or running),
+            ):
+                try:
+                    cname = start_preview(  # type: ignore[misc]
+                        log,
+                        port=int(preview_port),
+                        container_name=st.session_state.get("sem_container_name"),
+                    )
+                    st.session_state["sem_preview_container"] = cname
+                    st.success(
+                        f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})"
+                    )
+                except Exception as e:
+                    st.exception(e)
+            if st.button(
+                "Ferma preview",
+                key="btn_sem_preview_stop_preview_only",
+                use_container_width=True,
+                disabled=(stop_preview is None or not running),
+            ):
+                try:
+                    cname = st.session_state.get("sem_preview_container")
+                    stop_preview(log, container_name=cname)  # type: ignore[misc]
+                    st.session_state["sem_preview_container"] = None
+                    st.success("Preview fermata.")
+                except Exception as e:
+                    st.exception(e)
 
 
 if __name__ == "__main__":

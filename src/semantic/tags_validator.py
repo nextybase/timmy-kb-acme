@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/tags_validator.py
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """
 Validatore per `tags_reviewed.yaml` – Timmy-KB
 
@@ -28,6 +26,7 @@ Sicurezza & I/O
 - Path-safety: `ensure_within` prima di scritture su disco.
 - Scritture atomiche con `safe_write_text`.
 """
+from __future__ import annotations
 
 import json
 import logging

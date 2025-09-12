@@ -1,6 +1,4 @@
 # src/pipeline/gitbook_preview.py
-from __future__ import annotations
-
 """
 Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
 
@@ -17,6 +15,7 @@ Linee guida applicate:
 - **Path-safety STRONG** con `ensure_within(...)` prima di scrivere o montare.
 - Comandi esterni con `proc_utils.run_cmd` (timeout/retry/capture).
 """
+from __future__ import annotations
 
 import os
 import json

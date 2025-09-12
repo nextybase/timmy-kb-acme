@@ -1,7 +1,5 @@
 # src/semantic/tags_extractor.py
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """
 Estrattore tag per PDF "raw" + utilità di ingest locale (Timmy-KB).
 
@@ -28,6 +26,7 @@ Sicurezza & I/O
 - Scritture: commit atomiche (`safe_write_text`) e guard-rail STRONG (`ensure_within`).
 - Letture: pre-filtro SOFT (`is_safe_subpath`) per evitare path sospetti.
 """
+from __future__ import annotations
 
 import csv
 import io

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # src/semantic/tags_io.py
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """
 I/O utility per il flusso di tagging (cartella `semantic/`) – Timmy-KB
 
@@ -23,6 +21,7 @@ Sicurezza & I/O
 - Path-safety: `ensure_within` per output e per vincolare il CSV alla sandbox.
 - Scritture atomiche con `safe_write_text` (solo per README).
 """
+from __future__ import annotations
 
 import csv
 import logging

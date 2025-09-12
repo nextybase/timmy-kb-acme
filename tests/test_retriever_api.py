@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Tests for retriever.search API.
 
@@ -7,6 +5,7 @@ Verifica:
 - pass-through dei parametri via QueryParams verso fetch_candidates
 - compatibilità con EmbeddingsClient (protocollo) e top-k
 """
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Sequence

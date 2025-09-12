@@ -1,6 +1,4 @@
 # src/pipeline/env_utils.py
-from __future__ import annotations
-
 """
 Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
 
@@ -24,6 +22,7 @@ Linee guida:
 - Nessun logging qui: gli orchestratori/adapter gestiscono il reporting.
 - Coerenza con il domain error handling: alza `ConfigError` per variabili obbligatorie.
 """
+from __future__ import annotations
 
 import os
 import fnmatch  # per matching glob dei branch

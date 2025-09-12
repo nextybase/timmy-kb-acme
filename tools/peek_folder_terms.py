@@ -1,6 +1,6 @@
 # tools/peek_folder_terms.py
-import sys, sqlite3
-from pathlib import Path
+import sys
+import sqlite3
 
 db = sys.argv[1]
 folder = sys.argv[2]
