@@ -24,7 +24,10 @@ except Exception:  # pragma: no cover - opzionale a runtime
 
 from adapters.content_fallbacks import ensure_readme_summary  # type: ignore
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
-from semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
+from semantic.tags_extractor import (
+    emit_tags_csv as _emit_tags_csv,
+    copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw,
+)
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from kb_db import insert_chunks as _insert_chunks
@@ -46,6 +49,7 @@ __all__ = [
     "build_tags_csv",
     "build_markdown_book",
     "index_markdown_to_db",
+    "copy_local_pdfs_to_raw",
 ]
 
 
@@ -357,6 +361,14 @@ def build_tags_csv(
     # README tagging
     _write_tagging_readme(semantic_dir, logger)
     return csv_path
+
+
+def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
+    """Wrapper pubblico: copia PDF locali dentro RAW riusando l'implementazione semantica.
+
+    Mantiene semantica e path-safety dell'helper interno.
+    """
+    return _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
 
 
 def build_markdown_book(

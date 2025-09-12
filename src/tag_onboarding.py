@@ -54,6 +54,7 @@ from pipeline.path_utils import (
     ensure_within,  # STRONG guard SSoT
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
+from semantic.api import copy_local_pdfs_to_raw, build_tags_csv
 
 # Stub/README tagging centralizzati
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
@@ -798,7 +799,7 @@ def tag_onboarding_main(
             )
         else:
             with metrics_scope(logger, stage="local_copy", customer=context.slug):
-                copied = _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
+                copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
             logger.info(
                 "✅ Copia locale completata",
                 extra={"count": copied, "raw_tail": tail_path(raw_dir)},
@@ -807,9 +808,8 @@ def tag_onboarding_main(
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
     # Fase 1: CSV in semantic/
-    csv_path = semantic_dir / "tags_raw.csv"
     with metrics_scope(logger, stage="emit_csv", customer=context.slug):
-        _emit_tags_csv(raw_dir, csv_path, logger)
+        csv_path = build_tags_csv(context, logger, slug=slug)
     logger.info(
         "⚠️  Controlla la lista keyword",
         extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},

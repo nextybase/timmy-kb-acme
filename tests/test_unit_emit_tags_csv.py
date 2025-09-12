@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from src.tag_onboarding import _emit_tags_csv
+from src.semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
 
 
 class _DummyLogger:
