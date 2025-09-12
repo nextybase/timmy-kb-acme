@@ -94,8 +94,17 @@ def convert_markdown(
     book_dir.mkdir(parents=True, exist_ok=True)
     if _convert_md is None:
         logger.warning(
-            "convert_files_to_structured_markdown non disponibile: skip conversione (fallback)"
+            "convert_files_to_structured_markdown non disponibile: uso fallback minimale"
         )
+        # Fallback minimale: per ogni cartella diretta in raw/ crea <cartella>.md con placeholder
+        for cat in sorted([d for d in raw_dir.iterdir() if d.is_dir()], key=lambda d: d.name.lower()):
+            md_file = book_dir / f"{cat.name}.md"
+            try:
+                ensure_within(book_dir, md_file)
+                title = re.sub(r"[_\\/\-]+", " ", cat.name).strip() or cat.name
+                safe_write_text(md_file, f"# {title}\n\n(Contenuti da {cat.name}/)\n", encoding="utf-8", atomic=True)
+            except Exception:
+                continue
         return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
 
     # Compat firma: prova con kwargs opzionali
