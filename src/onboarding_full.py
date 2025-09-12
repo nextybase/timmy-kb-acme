@@ -42,10 +42,11 @@ from pipeline.env_utils import get_env_var  # env "puro"
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
     from adapters.content_fallbacks import ensure_readme_summary as _ensure_readme_summary
+    from adapters.book_purity import ensure_book_purity as _ensure_book_purity
 except Exception as e:
     raise ConfigError(
         "Adapter mancante o non importabile: "
-        f"adapters.content_fallbacks.ensure_readme_summary ({e})"
+        f"adapters.content_fallbacks.ensure_readme_summary / adapters.book_purity.ensure_book_purity ({e})"
     )
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
@@ -223,7 +224,7 @@ def onboarding_full_main(
         raise ConfigError(f"Impossibile assicurare README/SUMMARY in book/: {e}") from e
 
     # 2) Preflight book/ (solo .md; ignora .md.fp, builder files e sottodirectory di build)
-    _preflight_book_dir(base_dir, logger)
+    _ensure_book_purity(context, logger)
 
     # 3) Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
