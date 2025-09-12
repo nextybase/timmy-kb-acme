@@ -4,7 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any
 
-from pipeline.path_utils import ensure_within, to_kebab as _to_kebab
+from pipeline.path_utils import (
+    ensure_within,
+    to_kebab as _to_kebab,
+    ensure_within_and_resolve as _ensure_within_and_resolve,
+)
 from pipeline.file_utils import safe_write_text
 
 
@@ -14,15 +18,11 @@ def to_kebab(s: str) -> str:
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:
-    """Valida che `target` ricada sotto `root` e ritorna il path risolto.
+    """Wrapper compatibile che delega alla SSoT `pipeline.path_utils.ensure_within_and_resolve`.
 
-    Usa `ensure_within` (SSoT) per la guardia STRONG e restituisce `Path.resolve()`
-    del target per coerenza con il nome della funzione.
+    Effettua solo il cast `Path|str` -> `Path` e delega, mantenendo la firma pubblica.
     """
-    root_p = Path(root)
-    tgt_p = Path(target)
-    ensure_within(root_p, tgt_p)
-    return tgt_p.resolve()
+    return _ensure_within_and_resolve(Path(root), Path(target))
 
 
 def safe_write_text_compat(path: Path | str, content: str, *, encoding: str = "utf-8") -> None:
