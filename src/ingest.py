@@ -19,28 +19,31 @@ from typing import Dict, List, Optional, Sequence
 
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 from .kb_db import insert_chunks
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 
 LOGGER = logging.getLogger("timmy_kb.ingest")
 
 
-def _read_text_file(p: Path) -> Optional[str]:
+def _read_text_file(base_dir: Path, p: Path) -> Optional[str]:
     try:
         # Prova prima con UTF-8
-        return p.read_text(encoding="utf-8")
+        return read_text_safe(base_dir, p, encoding="utf-8")
     except UnicodeDecodeError:
         # Fallback su codifiche comuni (senza continue in except)
         for enc in ("utf-16", "latin-1"):
             try:
-                return p.read_text(encoding=enc)
+                return read_text_safe(base_dir, p, encoding=enc)
             except (UnicodeDecodeError, OSError):
                 LOGGER.debug("Fallback di codifica fallito per %s con %s", p, enc)
         LOGGER.warning("Impossibile leggere file di testo: %s", p)
         return None
 
 
-def _is_binary(path: Path) -> bool:
+def _is_binary(base_dir: Path, path: Path) -> bool:
     try:
-        with open(path, "rb") as f:
+        ensure_within(base_dir, path)
+        safe_p = ensure_within_and_resolve(base_dir, path)
+        with safe_p.open("rb") as f:
             chunk = f.read(1024)
         if b"\0" in chunk:
             return True
@@ -117,16 +120,19 @@ def ingest_path(
     version: str,
     meta: Dict,
     embeddings_client: Optional[EmbeddingsClient] = None,
+    *,
+    base_dir: Optional[Path] = None,
 ) -> int:
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
     p = Path(path)
+    base = Path(base_dir) if base_dir is not None else p.parent
     if not p.exists() or not p.is_file():
         LOGGER.error("ingest_path: non è un file valido: %s", path)
         return 0
-    if _is_binary(p):
+    if _is_binary(base, p):
         LOGGER.info("File binario saltato: %s", path)
         return 0
-    text = _read_text_file(p)
+    text = _read_text_file(base, p)
     if text is None:
         return 0
     chunks: List[str] = _chunk_text(text)
@@ -180,6 +186,7 @@ def ingest_folder(
                 version=version,
                 meta=meta,
                 embeddings_client=embeddings_client,
+                base_dir=p.parent,
             )
             if n > 0:
                 total_chunks += n
