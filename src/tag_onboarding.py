@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # src/tag_onboarding.py
 """
@@ -9,7 +9,7 @@ A partire dai PDF grezzi in `raw/`, produce un CSV con i tag suggeriti e
 (dopo conferma) genera gli stub per la revisione semantica.
 
 Punti chiave:
-- Niente `print()` → logging strutturato.
+- Niente `print()` â†’ logging strutturato.
 - Path-safety STRONG con `ensure_within`.
 - Scritture atomiche centralizzate con `safe_write_text`.
 - Integrazione Google Drive supportata (default: Drive).
@@ -27,7 +27,7 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# ── Pipeline infra ────────────────────────────────────────────────────────────
+# â”€â”€ Pipeline infra â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from pipeline.logging_utils import (
     get_structured_logger,
     mask_partial,
@@ -96,73 +96,21 @@ __all__ = [
 ]
 
 
-# ─────────────────────────── Helpers UX ───────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers UX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori).
 
     Args:
-        msg: Messaggio da visualizzare all’utente.
+        msg: Messaggio da visualizzare allâ€™utente.
 
     Restituisce:
-        La risposta inserita dall’utente, già normalizzata con ``strip()``.
+        La risposta inserita dallâ€™utente, giÃ  normalizzata con ``strip()``.
     """
     return input(msg).strip()
 
 
-# ───────────────────────────── Core: ingest locale ───────────────────────────
-def _copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
-    """
-    Copia ricorsivamente i PDF da `src_dir` in `raw_dir`, mantenendo la struttura
-    delle sottocartelle e sanitizzando i nomi dei file. Se `src_dir == raw_dir`, non fa nulla.
-
-    Sicurezza:
-      - Path-safety STRONG: ogni destinazione è validata con `ensure_within(raw_dir, ...)`.
-
-    Args:
-        src_dir: Cartella sorgente dei PDF.
-        raw_dir: Cartella RAW del cliente (destinazione).
-        logger: Logger strutturato.
-
-    Restituisce:
-        int: Numero di PDF effettivamente copiati.
-
-    Raises:
-        ConfigError: se `src_dir` non esiste o non è una directory.
-    """
-    # Delegato a semantic.api per evitare duplicazioni
-    return copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
-
-
-# ──────────────────────────────── CSV (Fase 1) ───────────────────────────────
-
-
-def _emit_tags_csv(raw_dir: Path, csv_path: Path, logger: Any) -> int:
-    """
-    Emette un CSV compatibile con la pipeline:
-      - relative_path: path POSIX relativo alla BASE, prefissato con 'raw/...'
-      - suggested_tags: euristica da path + filename
-      - entities, keyphrases, score, sources: colonne placeholder per compatibilità
-
-    Scrittura atomica tramite `safe_write_text`.
-
-    Args:
-        raw_dir: Cartella RAW da cui leggere i PDF.
-        csv_path: Percorso completo del CSV di output.
-        logger: Logger strutturato.
-
-    Restituisce:
-        int: Numero di righe (PDF) scritte nel CSV (escluso header).
-    """
-    # Delegato a semantic.tags_extractor per evitare duplicazioni
-    from semantic.tags_extractor import emit_tags_csv as _emit
-    return _emit(raw_dir, csv_path, logger)
-
-
-# =============================
-# Scansione RAW -> DB (schema v2)
-# =============================
-
-
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Core: ingest locale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Sezione helper duplicati rimossa (copy/CSV delegati)
 def compute_sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -234,7 +182,7 @@ def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict:
 
 
 # =============================
-# NLP → DB (doc_terms, terms, folder_terms)
+# NLP â†’ DB (doc_terms, terms, folder_terms)
 # =============================
 # Import locali nel corpo delle funzioni per evitare E402 (ordine import)
 
@@ -307,7 +255,7 @@ def run_nlp_to_db(
             saved_items += len(top_items)
             processed += 1
         if i % 100 == 0:
-            print(f"[NLP] Processati {i} documenti…")
+            print(f"[NLP] Processati {i} documentiâ€¦")
 
     # Aggregazione per cartella: somma grezza poi normalizzazione max=1
     from nlp.nlp_keywords import topn_by_folder  # import locale prima dell'uso
@@ -393,7 +341,7 @@ def run_nlp_to_db(
     }
 
 
-# ───────────────────────────── Validatore YAML ───────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Validatore YAML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
 
@@ -407,7 +355,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         Dizionario Python ottenuto dal contenuto del file, oppure {} se vuoto.
 
     Raises:
-        ConfigError: se il file non esiste, non è leggibile o contiene errori di parsing.
+        ConfigError: se il file non esiste, non Ã¨ leggibile o contiene errori di parsing.
     """
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
@@ -422,18 +370,18 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 
 def _validate_tags_reviewed(data: dict) -> dict:
     """
-    Valida la struttura già caricata da `tags_reviewed.yaml`.
+    Valida la struttura giÃ  caricata da `tags_reviewed.yaml`.
 
     La funzione applica regole sintattiche e semantiche minime:
     - Presenza dei campi di intestazione: `version`, `reviewed_at`, `keep_only_listed`, `tags`.
     - `tags` deve essere una lista di dizionari.
     - Per ogni elemento di `tags`:
-        * `name`: stringa non vuota, lunga ≤ 80 caratteri (oltre → warning), senza caratteri proibiti
-          (/ \\ : * ? " < > |), e non duplicata in modalità case-insensitive.
+        * `name`: stringa non vuota, lunga â‰¤ 80 caratteri (oltre â†’ warning), senza caratteri proibiti
+          (/ \\ : * ? " < > |), e non duplicata in modalitÃ  case-insensitive.
         * `action`: una tra `keep`, `drop`, oppure `merge_into:<canonical>` con `<canonical>` non vuoto.
         * `synonyms`: lista (se presente), con soli elementi stringa non vuoti.
         * `notes`: stringa (se presente).
-    - Se `keep_only_listed=True` e la lista `tags` è vuota, viene emesso un warning.
+    - Se `keep_only_listed=True` e la lista `tags` Ã¨ vuota, viene emesso un warning.
 
     Args:
         data: Dizionario Python ottenuto dal parsing di `tags_reviewed.yaml`.
@@ -447,7 +395,7 @@ def _validate_tags_reviewed(data: dict) -> dict:
     errors, warnings = [], []
 
     if not isinstance(data, dict):
-        errors.append("Il file YAML non è una mappa (dict) alla radice.")
+        errors.append("Il file YAML non Ã¨ una mappa (dict) alla radice.")
         return {"errors": errors, "warnings": warnings}
 
     for k in ("version", "reviewed_at", "keep_only_listed", "tags"):
@@ -464,7 +412,7 @@ def _validate_tags_reviewed(data: dict) -> dict:
     for idx, item in enumerate(data.get("tags", []), start=1):
         ctx = f"tags[{idx}]"
         if not isinstance(item, dict):
-            errors.append(f"{ctx}: elemento non è dict.")
+            errors.append(f"{ctx}: elemento non Ã¨ dict.")
             continue
 
         name = item.get("name")
@@ -502,14 +450,14 @@ def _validate_tags_reviewed(data: dict) -> dict:
         else:
             for si, s in enumerate(syn or [], start=1):
                 if not isinstance(s, str) or not s.strip():
-                    errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
+                    errors.append(f"{ctx}: synonyms[{si}] non Ã¨ stringa valida.")
 
         notes = item.get("notes", "")
         if notes is not None and not isinstance(notes, str):
             errors.append(f"{ctx}: 'notes' deve essere una stringa.")
 
     if data.get("keep_only_listed") and not data.get("tags"):
-        warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
+        warnings.append("keep_only_listed=True ma la lista 'tags' Ã¨ vuota.")
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
@@ -538,9 +486,9 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
       - Logga il risultato in `logs/<...>/pipeline.log`.
 
     Exit codes:
-      - 0 → validazione OK
-      - 1 → errori
-      - 2 → solo avvisi
+      - 0 â†’ validazione OK
+      - 1 â†’ errori
+      - 2 â†’ solo avvisi
 
     Args:
         slug: Identificatore cliente (slug).
@@ -590,7 +538,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     return 0
 
 
-# ────────────────────────────── MAIN orchestratore ───────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MAIN orchestratore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def tag_onboarding_main(
     slug: str,
     *,
@@ -606,7 +554,7 @@ def tag_onboarding_main(
     Flusso:
       1) Recupera i PDF in `raw/` da Google Drive (default) oppure da una cartella locale.
       2) Genera `semantic/tags_raw.csv` con i tag suggeriti (euristica path+filename).
-      3) Checkpoint HiTL: in modalità interattiva chiede conferma per procedere.
+      3) Checkpoint HiTL: in modalitÃ  interattiva chiede conferma per procedere.
       4) Genera gli stub per la revisione semantica e un README operativo in `semantic/`.
 
     Parametri:
@@ -615,7 +563,7 @@ def tag_onboarding_main(
         local_path: Percorso locale dei PDF quando `source="local"`. Se omesso, usa direttamente `raw/` della sandbox.
         non_interactive: Se `True` disabilita i prompt CLI (batch mode).
         proceed_after_csv: In non-interattivo, se `True` prosegue automaticamente anche dopo la generazione del CSV.
-        run_id: ID di correlazione per i log (se non fornito, ne viene creato uno all’entrypoint).
+        run_id: ID di correlazione per i log (se non fornito, ne viene creato uno allâ€™entrypoint).
 
     Eccezioni:
         ConfigError: configurazione mancante/invalidata (es. `drive_raw_folder_id` non presente).
@@ -626,9 +574,9 @@ def tag_onboarding_main(
         - Produce `semantic/tags_raw.csv` e, se confermato, i file stub/README per la revisione semantica.
 
     Note:
-        - L’accesso a Google Drive richiede che il contesto cliente sia stato creato in `pre_onboarding`
+        - Lâ€™accesso a Google Drive richiede che il contesto cliente sia stato creato in `pre_onboarding`
           e che `drive_raw_folder_id` sia presente in `config.yaml`.
-        - Nessuna `sys.exit()` viene chiamata qui: la gestione degli exit code è demandata all’entrypoint CLI.
+        - Nessuna `sys.exit()` viene chiamata qui: la gestione degli exit code Ã¨ demandata allâ€™entrypoint CLI.
     """
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
     slug = ensure_valid_slug(
@@ -663,7 +611,7 @@ def tag_onboarding_main(
         "tag_onboarding", log_file=log_file, context=context, run_id=run_id
     )
 
-    logger.info("🚀 Avvio tag_onboarding", extra={"source": source})
+    logger.info("ðŸš€ Avvio tag_onboarding", extra={"source": source})
 
     # A) DRIVE (default)
     if source == "drive":
@@ -682,7 +630,7 @@ def tag_onboarding_main(
                 redact_logs=getattr(context, "redact_logs", False),
             )
         logger.info(
-            "✅ Download da Drive completato",
+            "âœ… Download da Drive completato",
             extra={"folder_id": mask_partial(drive_raw_folder_id)},
         )
 
@@ -702,9 +650,10 @@ def tag_onboarding_main(
             )
         else:
             with metrics_scope(logger, stage="local_copy", customer=context.slug):
+                # Delegato a semantic.api: evita duplicazioni locali
                 copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
             logger.info(
-                "✅ Copia locale completata",
+                "âœ… Copia locale completata",
                 extra={"count": copied, "raw_tail": tail_path(raw_dir)},
             )
     else:
@@ -712,9 +661,10 @@ def tag_onboarding_main(
 
     # Fase 1: CSV in semantic/
     with metrics_scope(logger, stage="emit_csv", customer=context.slug):
+        # Delegato a semantic.api: emissione CSV e README tagging
         csv_path = build_tags_csv(context, logger, slug=slug)
     logger.info(
-        "⚠️  Controlla la lista keyword",
+        "âš ï¸  Controlla la lista keyword",
         extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
     )
 
@@ -736,12 +686,12 @@ def tag_onboarding_main(
         write_tagging_readme(semantic_dir, logger)
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
     logger.info(
-        "✅ Arricchimento semantico completato",
+        "âœ… Arricchimento semantico completato",
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
     )
 
 
-# ─────────────────────────────────── CLI ─────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CLI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _parse_args() -> argparse.Namespace:
     """Costruisce e restituisce il parser CLI per `tag_onboarding`.
 
@@ -771,7 +721,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--local-path",
         type=str,
-        help="Percorso locale sorgente dei PDF. Se omesso con --source=local, userà direttamente output/<slug>/raw.",
+        help="Percorso locale sorgente dei PDF. Se omesso con --source=local, userÃ  direttamente output/<slug>/raw.",
     )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     p.add_argument(
@@ -790,7 +740,7 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--raw-dir", type=str, help="Percorso della cartella raw/")
     p.add_argument("--db", type=str, help="Percorso del DB SQLite (tags.db)")
-    # NLP → DB
+    # NLP â†’ DB
     p.add_argument(
         "--nlp",
         action="store_true",
@@ -827,17 +777,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    """Entrypoint CLI dell’orchestratore `tag_onboarding`.
+    """Entrypoint CLI dellâ€™orchestratore `tag_onboarding`.
 
     Flusso:
       - Parsing degli argomenti da CLI tramite `_parse_args()`.
       - Generazione `run_id` univoco per i log strutturati.
       - Validazione iniziale dello `slug` (interattiva o batch).
-      - Branch speciale: `--validate-only` → chiama direttamente `validate_tags_reviewed`.
+      - Branch speciale: `--validate-only` â†’ chiama direttamente `validate_tags_reviewed`.
       - Altrimenti esegue `tag_onboarding_main` con i parametri scelti.
 
     Exit codes:
-      - 0 → esecuzione completata senza errori.
+      - 0 â†’ esecuzione completata senza errori.
       - Da `EXIT_CODES` in caso di eccezioni note (`ConfigError`, `PipelineError`).
       - 1 (default) per eccezioni non mappate.
     """
@@ -848,7 +798,7 @@ if __name__ == "__main__":
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error(
-            "Errore: in modalità non interattiva è richiesto --slug (o slug posizionale)."
+            "Errore: in modalitÃ  non interattiva Ã¨ richiesto --slug (o slug posizionale)."
         )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
@@ -876,7 +826,7 @@ if __name__ == "__main__":
         print(f"Indicizzazione completata: {stats['folders']} cartelle, {stats['documents']} PDF")
         sys.exit(0)
 
-    # NLP → DB
+    # NLP â†’ DB
     if getattr(args, "nlp", False):
         base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
         raw_dir = Path(args.raw_dir) if args.raw_dir else (base_dir / "raw")
@@ -916,3 +866,5 @@ if __name__ == "__main__":
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
         logger.error(str(e))
         sys.exit(EXIT_CODES.get(type(e).__name__, 1))
+
+# Sezione helper duplicati rimossa (copy/CSV delegati)

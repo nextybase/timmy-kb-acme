@@ -221,3 +221,20 @@ mds = _fallback_markdown_from_raw(raw, book)
 for p in mds:
     print(p.name)
 ```
+
+---
+
+## API Semantica (Copy/CSV)
+
+Per evitare duplicazioni, gli orchestratori e gli script locali devono usare esclusivamente le API pubbliche in `semantic.api` per le operazioni di ingest locale e generazione CSV:
+
+- Copia PDF locali in RAW: `semantic.api.copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger)`
+- Emissione CSV dei tag grezzi: `semantic.api.build_tags_csv(context, logger, *, slug)`
+
+Note operative
+- Le funzioni applicano path‑safety e scritture atomiche; non usare helper locali o import diretti da `semantic.tags_extractor` fuori da `src/semantic/`.
+- In `tag_onboarding_main` i call‑site sono già delegati a queste API.
+
+Pre-commit
+- È presente un hook locale che impedisce l’introduzione di definizioni locali `_emit_tags_csv`/`_copy_local_pdfs_to_raw` e l’uso diretto di `semantic.tags_extractor` fuori da `src/semantic/`.
+- Esegui: `pre-commit install --hook-type pre-commit --hook-type pre-push`

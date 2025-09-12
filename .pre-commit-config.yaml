@@ -24,15 +24,21 @@ repos:
 
   - repo: local
     hooks:
+      - id: no-dup-ingest-csv
+        name: forbid local emit/copy helpers (use semantic.api)
+        entry: python tools/dev/check_no_local_emit_or_copy.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: qa-safe
         name: qa-safe (black/flake8/mypy se presenti)
-        entry: python -m tools.dev.qa_safe
+        entry: python tools/dev/qa_safe.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
-        entry: python -m tools.dev.qa_safe --with-tests
+        entry: python tools/dev/qa_safe.py --with-tests
         language: system
         pass_filenames: false
         stages: [pre-push]

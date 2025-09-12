@@ -210,6 +210,16 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 
 ---
 
+## Ingest/CSV — Best Practice
+
+- Usa esclusivamente le API pubbliche in semantic.api:
+ - copy_local_pdfs_to_raw(src_dir, raw_dir, logger) per copiare PDF locali in raw/.
+ - build_tags_csv(context, logger, *, slug) per generare semantic/tags_raw.csv (+ README tagging).
+- Evita helper locali e import diretti da semantic.tags_extractor fuori da src/semantic/.
+- Un hook pre-commit (no-dup-ingest-csv) previene regressioni su duplicazioni/usi non consentiti.
+
+---
+
 ## Note operative
 
 - La preview richiede Docker; se assente viene saltata.
