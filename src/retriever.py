@@ -118,8 +118,21 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
         )
 
     # 4) Ordinamento e top-k
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    out = scored[: max(0, int(params.k))]
+    k = max(0, int(params.k))
+    n = len(scored)
+    if k == 0:
+        out: List[Dict] = []
+    elif k >= n:
+        # Comportamento invariato: ordina tutto quando k >= n
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        out = scored
+    else:
+        # Selezione efficiente top-k con tie-break deterministico sull'ordine di arrivo
+        import heapq
+
+        tuples = [(-item["score"], idx, item) for idx, item in enumerate(scored)]
+        best = heapq.nsmallest(k, tuples)
+        out = [it[2] for it in best]
 
     dt = (time.time() - t0) * 1000
     LOGGER.info(
