@@ -11,7 +11,7 @@
 4) **onboarding_full** → preflight (solo `.md` in `book/`) → **push GitHub**.
 
 ### Gating in UI
-La tab **Semantica** compare **solo dopo** il download RAW locale (Drive → `raw/`).  
+La tab **Semantica** compare **solo dopo** il download RAW locale (Drive → `raw/`).
 Preview Docker: start/stop con nome container sicuro e validazione porta.
 
 ### SSoT dei tag

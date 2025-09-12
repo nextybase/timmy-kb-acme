@@ -97,10 +97,10 @@ Consiglio: in CI mantieni il default (no push/drive); in ambienti controllati ab
 
 ### Elenco dei file di test e come lanciarli
 
-1. `tests/conftest.py`  
+1. `tests/conftest.py`
    Supporto: rende il repo importabile durante i test (aggiunge root e `src/` al `sys.path`). Non si esegue da solo.
 
-2. `tests/test_unit_tags_validator.py`  
+2. `tests/test_unit_tags_validator.py`
    Copre il validatore di `tags_reviewed.yaml` (`_validate_tags_reviewed` in `src/tag_onboarding.py`): campi obbligatori, duplicati case-insensitive, caratteri illegali, `merge_into` senza target.
 
    ```powershell
@@ -110,14 +110,14 @@ Consiglio: in CI mantieni il default (no push/drive); in ambienti controllati ab
    pytest tests\test_unit_tags_validator.py::test_validate_ok_minimal -ra
    ```
 
-3. `tests/test_unit_emit_tags_csv.py`  
+3. `tests/test_unit_emit_tags_csv.py`
    Copre l'emissione CSV (`_emit_tags_csv`): header corretto, percorsi POSIX prefissati `raw/`, scrittura atomica.
 
    ```powershell
    pytest tests\test_unit_emit_tags_csv.py -ra
    ```
 
-4. `tests/test_smoke_dummy_e2e.py` (slow)  
+4. `tests/test_smoke_dummy_e2e.py` (slow)
    Smoke end-to-end: `pre -> dummy -> tag (local) -> semantic (no preview)` con assert minimi sui file generati.
    - Prerequisito: genera prima l'utente dummy (`py src/tools/gen_dummy_kb.py --slug <slug>`).
 
@@ -128,7 +128,7 @@ Consiglio: in CI mantieni il default (no push/drive); in ambienti controllati ab
    pytest -ra -k "dummy_e2e"
    ```
 
-5. (Opzionale) `tests/test_contract_defaults.py`  
+5. (Opzionale) `tests/test_contract_defaults.py`
    Verifica che `tag_onboarding_main` abbia `source` default = `drive`.
 
    ```powershell

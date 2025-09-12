@@ -1,6 +1,6 @@
 ﻿# Onboarding UI    guida aggiornata
 
-Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni. 
+Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni.
 
 > In sintesi: la UI è una app **Streamlit** con tre step operativi    **Configurazione**, **Drive**, **Semantica**    e opzionale **Preview Docker (HonKit)**. Alcune funzioni degradano con *fallback* se i moduli di pipeline non sono disponibili.
 
@@ -378,26 +378,3 @@ Suggerimenti operativi
 - Le funzioni interne con underscore di `src/semantic_onboarding.py` sono deprecate e non più supportate in UI.
 - Usare la facade pubblica `semantic.api` per import stabili: `get_paths`, `load_reviewed_vocab`, `convert_markdown`, `enrich_frontmatter`, `write_summary_and_readme`.
 - Le chiamate agli underscore generano `DeprecationWarning` a runtime per favorire la migrazione.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

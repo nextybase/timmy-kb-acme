@@ -6,13 +6,13 @@ Usiamo Codex come coding agent per accelerare sviluppo, refactoring e manutenzio
 ---
 
 ## Installazione e attivazione in VS Code
-1. Installa l’estensione Codex dal Marketplace di VS Code.  
+1. Installa l’estensione Codex dal Marketplace di VS Code.
 2. Aggiungi il pannello Codex nell’editor e scegli la modalità di approvazione:
    - **Agent (default):** può leggere file, proporre e applicare modifiche ed eseguire comandi nella working directory.
    - **Chat:** solo conversazione/pianificazione.
    - **Agent (Full Access):** include accesso rete e meno prompt di conferma — usare con cautela.
 
-Puoi autenticarti con l’account ChatGPT (piani Plus/Pro/Team/Enterprise) oppure con API key.  
+Puoi autenticarti con l’account ChatGPT (piani Plus/Pro/Team/Enterprise) oppure con API key.
 **Nota OS:** su Windows l’esperienza migliore è tramite WSL; l’estensione è pienamente supportata su macOS e Linux.
 
 ---
@@ -104,4 +104,3 @@ Gli agenti sostengono decisioni e operatività con evidenze (test, metriche, KPI
 - Codex CLI open‑source (configurazione `~/.codex`, MCP, AGENTS.md, sandbox e approvals).
 - MCP con Agents SDK di OpenAI (attacco server, filtraggio tool).
 - Che cos’è AGENTS.md (formato e priorità “file più vicino”).
-

@@ -93,8 +93,8 @@ def sqlite_summary(db):
     for r in cur.execute(
         """
         SELECT f.path, t.canonical, printf('%.3f',ft.weight) AS weight, ft.status
-        FROM folder_terms ft 
-        JOIN terms t ON t.id=ft.term_id 
+        FROM folder_terms ft
+        JOIN terms t ON t.id=ft.term_id
         JOIN folders f ON f.id=ft.folder_id
         ORDER BY f.path, ft.weight DESC LIMIT 20
     """

@@ -2,7 +2,7 @@
 
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
-> **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.  
+> **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
 
 Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica (gli helper interni/ex-CLI sono deprecati).
@@ -10,8 +10,8 @@ Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica 
 ---
 
 ## Prerequisiti
-- **Python >= 3.11**  
-- (Opz.) **Docker** per preview HonKit  
+- **Python >= 3.11**
+- (Opz.) **Docker** per preview HonKit
 - (Default Drive) **Service Account JSON** e `DRIVE_ID`
 
 Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAULT_BRANCH`, `LOG_REDACTION`, `YAML_STRUCTURE_FILE`.
@@ -23,9 +23,9 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
    ```bash
    streamlit run onboarding_ui.py
    ```
-2. Inserisci **Slug cliente** e **Nome cliente** (UI si sblocca).  
-3. Tab **Drive**: crea struttura, genera README, poi **Scarica PDF** su `raw/`.  
-4. Tab **Semantica**: **Converti**  **Arricchisci**  **README & SUMMARY**.  
+2. Inserisci **Slug cliente** e **Nome cliente** (UI si sblocca).
+3. Tab **Drive**: crea struttura, genera README, poi **Scarica PDF** su `raw/`.
+4. Tab **Semantica**: **Converti**  **Arricchisci**  **README & SUMMARY**.
 5. (Opz.) Avvia **Preview Docker**.
 
 Note Drive nella UI:
@@ -71,20 +71,13 @@ output/timmy-kb-<slug>/
 ---
 
 ## Note operative
-- **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.  
-- Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.  
+- **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.
+- Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` è attivo.
 
 ---
 
 ## Troubleshooting essenziale
-- `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).  
-- PDF non scaricati in UI  assicurati di aver prima **generato i README** in `raw/` e di avere permessi Drive corretti.  
+- `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).
+- PDF non scaricati in UI  assicurati di aver prima **generato i README** in `raw/` e di avere permessi Drive corretti.
 - Preview non parte  verifica Docker e porta libera.
-
-
-
-
-
-
-

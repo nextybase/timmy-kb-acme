@@ -2,7 +2,7 @@
 
 Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi end-to-end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo è mantenere coerenza, riuso e sicurezza I/O (path-safety + scritture atomiche).
 
-> Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).  
+> Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).
 > Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
@@ -126,6 +126,6 @@ output/
 ## Versioning
 
 Questa pagina documenta la release 1.7.0. Cambi chiave rispetto alla 1.6.0:
-- Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive → Semantica).  
-- Sezione “Download contenuti su raw/” nel tab Drive (pull PDF da Drive → locale).  
+- Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive → Semantica).
+- Sezione “Download contenuti su raw/” nel tab Drive (pull PDF da Drive → locale).
 - Rifiniture di compatibilità Pylance/Streamlit e hardening path/atomiche.

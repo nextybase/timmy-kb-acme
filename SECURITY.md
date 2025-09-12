@@ -1,6 +1,6 @@
 # Sicurezza – Timmy-KB
 
-## 📌 Segnalazione vulnerabilità 
+## 📌 Segnalazione vulnerabilità
 Se scopri una vulnerabilità di sicurezza in **Timmy-KB**, ti chiediamo di **non** aprire una issue pubblica.
 
 Invece, invia una segnalazione **privata** al team di manutenzione tramite:
@@ -33,4 +33,3 @@ Il team si impegna a rispondere entro **72 ore** dalla ricezione della segnalazi
 
 ## 📜 Riconoscimenti
 Gli utenti che segnalano in buona fede una vulnerabilità e collaborano alla sua risoluzione possono essere citati nella sezione *Security Acknowledgements* del progetto (su richiesta).
-

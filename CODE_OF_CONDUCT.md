@@ -2,7 +2,7 @@
 
 ## Il nostro impegno
 
-Noi, come membri, collaboratori e responsabili di questo progetto, ci impegniamo a rendere la partecipazione alla nostra comunità un’esperienza priva di molestie per tutti, indipendentemente da età, dimensioni corporee, disabilità visibili o invisibili, etnia, caratteristiche sessuali, identità ed espressione di genere, livello di esperienza, istruzione, stato socio-economico, nazionalità, aspetto fisico, razza, religione o identità e orientamento sessuale. 
+Noi, come membri, collaboratori e responsabili di questo progetto, ci impegniamo a rendere la partecipazione alla nostra comunità un’esperienza priva di molestie per tutti, indipendentemente da età, dimensioni corporee, disabilità visibili o invisibili, etnia, caratteristiche sessuali, identità ed espressione di genere, livello di esperienza, istruzione, stato socio-economico, nazionalità, aspetto fisico, razza, religione o identità e orientamento sessuale.
 
 Ci impegniamo ad agire e interagire in modo che si contribuisca a creare una comunità aperta, accogliente, diversificata, inclusiva e sana.
 
@@ -34,7 +34,7 @@ Questo Codice di Condotta si applica all’interno di tutti gli spazi della comu
 
 ## Applicazione
 
-I casi di comportamento abusivo, molesto o comunque inaccettabile possono essere segnalati contattando i responsabili del progetto all’indirizzo: [INSERIRE EMAIL].  
+I casi di comportamento abusivo, molesto o comunque inaccettabile possono essere segnalati contattando i responsabili del progetto all’indirizzo: [INSERIRE EMAIL].
 Tutte le denunce saranno esaminate e indagate in modo tempestivo ed equo.
 
 Tutti i responsabili della comunità sono tenuti a rispettare la privacy e la sicurezza di chi segnala un incidente.

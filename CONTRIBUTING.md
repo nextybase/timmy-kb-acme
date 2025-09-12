@@ -1,10 +1,10 @@
-# Contributing — Timmy-KB 
+# Contributing — Timmy-KB
 
 Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al codice o alla documentazione deve mantenere **coerenza, stabilità e tracciabilità**. Le regole qui indicate sono vincolanti per pull request, issue e revisioni.
 
 ---
 
-## 1) Workflow 
+## 1) Workflow
 
 - **Branch model**: sviluppo su branch dedicati, PR verso `main`.
 - **Naming branch**: `feature/<slug>`, `fix/<slug>`, `docs/<slug>`.
@@ -60,4 +60,3 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 - In caso di dubbio, aprire prima una **discussion**.
 - Le modifiche devono essere **retro‑compatibili** salvo pianificato diversamente.
 - La qualità del codice e la coerenza con le guide valgono quanto la funzionalità stessa.
-

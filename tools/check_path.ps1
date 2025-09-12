@@ -11,4 +11,3 @@ $user -split ';' | Where-Object { $_ -like '*"*' } | ForEach-Object { Write-Host
 Write-Host ""
 Write-Host "Effective PATH entries with quotes (current shell):"
 $env:Path -split ';' | Where-Object { $_ -like '*"*' } | ForEach-Object { Write-Host " - $_" }
-
