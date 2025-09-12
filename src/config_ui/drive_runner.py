@@ -159,9 +159,9 @@ def _drive_list_pdfs(service: Any, parent_id: str) -> List[Dict[str, str]]:
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
     """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
     try:
-        from reportlab.lib.pagesizes import A4  # type: ignore
-        from reportlab.pdfgen import canvas  # type: ignore
-        from reportlab.lib.units import cm  # type: ignore
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
@@ -203,7 +203,7 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
 
 def _drive_upload_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
     """Carica un file (bytes) in una cartella Drive."""
-    from googleapiclient.http import MediaIoBaseUpload  # type: ignore[import-not-found]
+    from googleapiclient.http import MediaIoBaseUpload
 
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
     body = {"name": name, "parents": [parent_id], "mimeType": mime}
@@ -363,6 +363,8 @@ def download_raw_from_drive_with_progress(
     written: List[Path] = []
 
     if on_progress:
+        assert on_progress is not None
+        progress_cb: Callable[[int, int, str], None] = on_progress
         # Pre-scan: raccogli lista file per folder e calcola total una sola volta
         by_folder: Dict[str, List[Dict[str, str]]] = {}
         name_map: Dict[str, str] = {}
@@ -406,12 +408,12 @@ def download_raw_from_drive_with_progress(
                     ):
                         log.info("raw.download.skip.exists", extra={"file_path": str(dest)})
                         done += 1
-                        on_progress(done, total, label)
+                        progress_cb(done, total, label)
                 except OSError:
                     pass
 
         # Adapter di progress: intercetta i log del downloader pipeline
-        class _ProgressHandler(logging.Handler):  # type: ignore[misc]
+        class _ProgressHandler(logging.Handler):
             def __init__(self, *, total: int, start_done: int, label_map: Dict[str, str]):
                 super().__init__(level=logging.INFO)
                 self.total = total
@@ -425,7 +427,7 @@ def download_raw_from_drive_with_progress(
                         label = self.label_map.get(str(path), str(path) if path else "-")
                         self.done += 1
                         try:
-                            on_progress(self.done, self.total, label)
+                            progress_cb(self.done, self.total, label)
                         except Exception:
                             pass
                 except Exception:
@@ -467,8 +469,8 @@ def download_raw_from_drive_with_progress(
         # Per mantenere la semantica del ritorno (lista dei file scritti in questo run),
         # eseguiamo un pre-scan delle dimensioni locali e un post-scan per individuare i cambiamenti.
         # 1) Pre-scan
-        pre_sizes: Dict[str, int] = {}
-        candidates: List[Path] = []
+        pre_sizes_noprog: Dict[str, int] = {}
+        candidates_noprog: List[Path] = []
         for folder in raw_subfolders:
             folder_name = folder["name"]
             folder_id = folder["id"]
@@ -481,12 +483,12 @@ def download_raw_from_drive_with_progress(
                 if not safe_name.lower().endswith(".pdf"):
                     safe_name += ".pdf"
                 dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
-                candidates.append(dest)
+                candidates_noprog.append(dest)
                 if dest.exists():
                     try:
-                        pre_sizes[str(dest)] = dest.stat().st_size
+                        pre_sizes_noprog[str(dest)] = dest.stat().st_size
                     except OSError:
-                        pre_sizes[str(dest)] = -1
+                        pre_sizes_noprog[str(dest)] = -1
 
         # 2) Download via pipeline
         download_drive_pdfs_to_local(
@@ -499,12 +501,12 @@ def download_raw_from_drive_with_progress(
         )
 
         # 3) Post-scan: costruisci lista dei file nuovi/aggiornati
-        for dest in candidates:
+        for dest in candidates_noprog:
             try:
                 size_now = dest.stat().st_size
             except OSError:
                 continue
-            size_prev = pre_sizes.get(str(dest), None)
+            size_prev = pre_sizes_noprog.get(str(dest), None)
             if size_prev is None or size_prev != size_now:
                 written.append(dest)
 

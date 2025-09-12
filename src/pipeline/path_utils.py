@@ -35,7 +35,7 @@ import unicodedata
 from contextlib import contextmanager
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple, Iterator, TextIO
 
 import yaml
 
@@ -153,7 +153,7 @@ def open_for_read(
     *,
     encoding: str = "utf-8",
     newline: str | None = None,
-):
+) -> Iterator[TextIO]:
     """
     Helper ergonomico: apre in lettura un file entro il perimetro `base` in modo sicuro.
 

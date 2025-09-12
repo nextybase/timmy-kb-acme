@@ -18,8 +18,7 @@ repos:
           - types-PyYAML
           - types-requests
         args:
-          - --ignore-missing-imports
-          - --strict
+          - --config-file=mypy.ini
 
   - repo: local
     hooks:
