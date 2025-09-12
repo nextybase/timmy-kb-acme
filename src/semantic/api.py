@@ -96,16 +96,7 @@ def convert_markdown(
         logger.warning(
             "convert_files_to_structured_markdown non disponibile: uso fallback minimale"
         )
-        # Fallback minimale: per ogni cartella diretta in raw/ crea <cartella>.md con placeholder
-        for cat in sorted([d for d in raw_dir.iterdir() if d.is_dir()], key=lambda d: d.name.lower()):
-            md_file = book_dir / f"{cat.name}.md"
-            try:
-                ensure_within(book_dir, md_file)
-                title = re.sub(r"[_\\/\-]+", " ", cat.name).strip() or cat.name
-                safe_write_text(md_file, f"# {title}\n\n(Contenuti da {cat.name}/)\n", encoding="utf-8", atomic=True)
-            except Exception:
-                continue
-        return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+        return _fallback_markdown_from_raw(raw_dir, book_dir)
 
     # Compat firma: prova con kwargs opzionali
     try:
@@ -130,6 +121,31 @@ def convert_markdown(
     except TypeError:
         _convert_md(cast(ClientContextType, context))  # type: ignore[misc]
 
+    return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+
+
+def _fallback_markdown_from_raw(raw_dir: Path, book_dir: Path) -> List[Path]:
+    """Genera Markdown placeholder da sottocartelle in raw/.
+
+    Per ogni directory di primo livello in `raw_dir` crea un file `<nome>.md`
+    in `book_dir` con un titolo derivato e un riferimento alla cartella origine.
+
+    Ritorna la lista dei Markdown presenti in `book_dir` (ordinati e relativi a `book_dir`).
+    """
+    book_dir.mkdir(parents=True, exist_ok=True)
+    for cat in sorted([d for d in raw_dir.iterdir() if d.is_dir()], key=lambda d: d.name.lower()):
+        md_file = book_dir / f"{cat.name}.md"
+        try:
+            ensure_within(book_dir, md_file)
+            title = re.sub(r"[_\\/\-]+", " ", cat.name).strip() or cat.name
+            safe_write_text(
+                md_file,
+                f"# {title}\n\n(Contenuti da {cat.name}/)\n",
+                encoding="utf-8",
+                atomic=True,
+            )
+        except Exception:
+            continue
     return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
 
 
