@@ -377,6 +377,7 @@ def index_markdown_to_db(
     slug: str,
     scope: str = "book",
     embeddings_client: _EmbeddingsClient,
+    db_path: Path | None = None,
 ) -> int:
     """Indicizza i Markdown in `book/` nel DB locale (SQLite) con chunk + embedding.
 
@@ -436,7 +437,7 @@ def index_markdown_to_db(
                 meta_dict=meta,
                 chunks=[text],
                 embeddings=[list(emb)],
-                db_path=None,
+                db_path=db_path,
             )
         except Exception as e:
             logger.warning(

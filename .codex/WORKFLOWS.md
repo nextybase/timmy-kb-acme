@@ -21,3 +21,28 @@ Preview Docker: start/stop con nome container sicuro e validazione porta.
 ### Invarianti
 - **Idempotenza** (rilanci sicuri), **path‑safety** (tutte le write passano da util dedicate),
 - **Logging con redazione** dove richiesto; **portabilità** Win/Linux.
+
+## API Semantiche Additive (v1)
+
+Queste funzioni estendono la pipeline semantica senza cambiare i flussi UI/CLI. Sono idempotenti, offline e rispettano la path‑safety (SSoT) con scritture atomiche.
+
+- build_mapping_from_vision(context, logger, slug) -> Path:
+  genera `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`.
+  Input: vision YAML. Output: mapping normalizzato. Errori chiari, nessuna rete.
+
+- build_tags_csv(context, logger, slug) -> Path:
+  scandisce `raw/` (PDF) e produce `semantic/tags_raw.csv` (euristica conservativa) + `README_TAGGING.md`.
+  Idempotente; CSV con header esteso: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
+
+- build_markdown_book(context, logger, slug) -> list[Path]:
+  converte RAW→Markdown (uno `.md` per cartella di primo livello) e garantisce `README.md`/`SUMMARY.md` in `book/`.
+  Se presente il vocabolario consolidato (`semantic/tags.db`), arricchisce i frontmatter (title/tags). Fallback minimale se i repo util non sono disponibili.
+
+- index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path=None) -> int:
+  indicizza i `.md` in SQLite (un chunk per file, embedding via `embeddings_client`).
+  Meta: `{file: <name>}`; versione giornaliera `YYYYMMDD`. Parametro `db_path` per storage isolato nei test.
+
+Invarianti comuni
+- Path‑safety: `pipeline.path_utils.ensure_within(...)` su output (e input dove sensato).
+- Scritture atomiche: `pipeline.file_utils.safe_write_text/bytes`.
+- Logging strutturato via `pipeline.logging_utils.get_structured_logger`.

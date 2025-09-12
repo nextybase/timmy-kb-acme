@@ -142,6 +142,8 @@ Checkpoint HiTL — se confermato (o `--proceed`), Fase 2 genera `README_TAGGING
 Rem: vedi snippet Python sopra per invocazioni headless.
 
 Nota per la UI: l'interfaccia Streamlit usa `semantic.api` come strato pubblico e stabile per tutta la logica semantica (niente dipendenza da helper interni).
+
+Riferimento rapido alle nuove API additive (v1): vedi la sezione "API Semantiche Additive (v1)" in `.codex/WORKFLOWS.md`.
 ```
 
 - Conversione PDF -> Markdown in `book/`.

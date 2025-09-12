@@ -30,11 +30,17 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
     (book / "A.md").write_text("# A\ncontenuto uno", encoding="utf-8")
     (book / "B.md").write_text("# B\ncontenuto due", encoding="utf-8")
 
+    dbp = tmp_path / "db.sqlite"
     inserted = index_markdown_to_db(
-        _ctx(base), logging.getLogger("test"), slug="x", scope="book", embeddings_client=_DummyEmbeddings()
+        _ctx(base),
+        logging.getLogger("test"),
+        slug="x",
+        scope="book",
+        embeddings_client=_DummyEmbeddings(),
+        db_path=dbp,
     )
     assert inserted >= 2
 
     # Recupera alcuni candidati e verifica che arrivino dal DB
-    cands = list(fetch_candidates("x", "book", limit=10))
+    cands = list(fetch_candidates("x", "book", limit=10, db_path=dbp))
     assert len(cands) >= 2
