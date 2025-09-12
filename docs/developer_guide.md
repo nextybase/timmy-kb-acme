@@ -190,3 +190,34 @@ text = read_text_safe(book_dir, md_path)
 with open_for_read(semantic_dir, csv_path) as f:
     rows = f.read().splitlines()
 ```
+
+---
+
+## Helper di fallback per Markdown
+
+In `semantic.api` è disponibile l'helper interno:
+
+- `_fallback_markdown_from_raw(raw_dir: Path, book_dir: Path) -> list[Path]`
+
+Scopo e comportamento:
+- Viene usato automaticamente da `convert_markdown(...)` quando le utilità di conversione
+  avanzata non sono disponibili (ad es. `_convert_md is None`).
+- Per ogni sottocartella di primo livello in `raw_dir` genera un file Markdown
+  placeholder `<nome>.md` in `book_dir` con:
+  - titolo derivato dal nome cartella (normalizzato rimuovendo `_-/` consecutivi);
+  - contenuto placeholder: `# <Titolo>\n\n(Contenuti da <cartella>/)\n`.
+- Applica path‑safety SSoT: valida ogni destinazione con `ensure_within(book_dir, md_file)`
+  e scrive con `safe_write_text(..., atomic=True)`.
+- Ritorna la lista dei `.md` presenti in `book_dir`, ordinata tramite `sorted_paths(..., base=book_dir)`.
+
+Esempio d’uso diretto (solo per test/local tooling):
+```python
+from pathlib import Path
+from semantic.api import _fallback_markdown_from_raw
+
+raw = Path('output/timmy-kb-acme/raw')
+book = Path('output/timmy-kb-acme/book')
+mds = _fallback_markdown_from_raw(raw, book)
+for p in mds:
+    print(p.name)
+```
