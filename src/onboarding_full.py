@@ -20,9 +20,9 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional, List, TYPE_CHECKING, Callable, Any, cast
+from typing import Optional, TYPE_CHECKING, Callable, Any, cast
 
-from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import (
     PipelineError,
     ConfigError,
@@ -60,7 +60,7 @@ except Exception:
 
 # Solo per type-checking: Protocol del contesto richiesto da github_utils
 if TYPE_CHECKING:  # pragma: no cover - solo analisi statica
-    from pipeline.github_utils import _SupportsContext  # type: ignore  # noqa: F401
+    from pipeline.github_utils import _SupportsContext  # noqa: F401
 
 
 # ---------- Helpers UX ----------
@@ -69,87 +69,7 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
-# ---------- Preflight book/ (senza cancellazioni) ----------
-_ALLOWED_SPECIAL = {".ds_store"}  # piccoli artefatti innocui
-
-# File di builder tollerati in book/ per supportare la preview (non rimossi)
-_ALLOWED_BUILDER_FILES = {
-    "book.json",
-    "package.json",
-    "package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-}
-
-# Sottodirectory sotto book/ da ignorare completamente (preview/build cache)
-_IGNORED_SUBDIRS_UNDER_BOOK = {"_book", "node_modules", ".cache", ".tmp", ".git"}
-
-
-def _is_under_ignored_subdir(book_dir: Path, p: Path) -> bool:
-    """True se p si trova sotto una delle sottodirectory ignorate di book/."""
-    try:
-        rel = p.relative_to(book_dir)
-    except ValueError:
-        return False
-    parts = rel.parts
-    return bool(parts) and parts[0].lower() in _IGNORED_SUBDIRS_UNDER_BOOK
-
-
-def _violations_in_book(book_dir: Path) -> List[Path]:
-    """Individua i file non consentiti presenti in book/."""
-    bad: List[Path] = []
-    for p in book_dir.rglob("*"):
-        if not p.is_file():
-            continue
-        # ignora build/preview cache sotto book/
-        if _is_under_ignored_subdir(book_dir, p):
-            continue
-
-        name = p.name.lower()
-        # consenti markdown e placeholder
-        if name.endswith(".md") or name.endswith(".md.fp"):
-            continue
-        # consenti file speciali innocui e builder artifacts
-        if name in _ALLOWED_SPECIAL or name in _ALLOWED_BUILDER_FILES:
-            continue
-
-        bad.append(p)
-    return bad
-
-
-def _preflight_book_dir(base_dir: Path, logger: logging.Logger) -> None:
-    """Preflight di book/ per garantire il contratto 'solo .md'."""
-    book_dir = base_dir / "book"
-    ensure_within(base_dir, book_dir)
-    if not book_dir.exists():
-        raise PipelineError(f"Cartella book/ non trovata: {book_dir}")
-
-    logger.info("Preflight book/", extra={"book": str(book_dir)})
-
-    bad = _violations_in_book(book_dir)
-    if bad:
-        examples: List[str] = []
-        for p in bad[:5]:
-            try:
-                rel = p.relative_to(base_dir).as_posix()
-            except Exception:
-                rel = str(p)
-            examples.append(rel)
-        raise PipelineError(
-            "Violazione contratto: in book/ devono esserci solo file .md "
-            "(i placeholder .md.fp sono tollerati). "
-            f"Trovati {len(bad)} non-md, es: {examples}. "
-            "Sposta risorse non-md altrove (es. assets/) o convertile."
-        )
-
-    # log informativo se esistono directory ignorate
-    for sub in sorted(_IGNORED_SUBDIRS_UNDER_BOOK):
-        d = book_dir / sub
-        if d.exists():
-            logger.info(
-                f"Directory {sub}/ presente in book/: ignorata nel preflight/push.",
-                extra={"dir_tail": tail_path(d)},
-            )
+# ---------- Preflight book/ (delegato al nuovo adapter) ----------
 
 
 # ---------- Push GitHub (util repo, no fallback) ----------

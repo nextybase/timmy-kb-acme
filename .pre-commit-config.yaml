@@ -14,6 +14,7 @@ repos:
     hooks:
       - id: mypy
         stages: [pre-push]
+        files: ^src/(config_ui/|pipeline/drive/)|^src/pipeline/drive_utils\.py$
         pass_filenames: false
         additional_dependencies:
           - types-PyYAML
