@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -82,13 +82,16 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
     t0 = time.time()
 
     # 1) Embedding della query
+    t_emb0 = time.time()
     q_vecs = embeddings_client.embed_texts([params.query])
+    t_emb_ms = (time.time() - t_emb0) * 1000.0
     if not q_vecs or not q_vecs[0]:
         LOGGER.warning("Empty query embedding; returning no results")
         return []
     qv = q_vecs[0]
 
     # 2) Caricamento candidati dal DB
+    t_fetch0 = time.time()
     cands = list(
         fetch_candidates(
             params.project_slug,
@@ -97,6 +100,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
             db_path=params.db_path,
         )
     )
+    t_fetch_ms = (time.time() - t_fetch0) * 1000.0
     LOGGER.debug(
         "Fetched %d candidates for %s/%s",
         len(cands),
@@ -139,11 +143,164 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
         )
         out = [it[0] for it in best]
 
-    dt = (time.time() - t0) * 1000
-    LOGGER.info(
-        "search(): k=%s candidates=%s took=%.1fms",
-        params.k,
-        len(cands),
-        dt,
-    )
+    dt = (time.time() - t0) * 1000.0
+    t_score_sort_ms = max(0.0, dt - t_emb_ms - t_fetch_ms)
+    try:
+        LOGGER.info(
+            "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms",
+            params.k,
+            len(cands),
+            params.candidate_limit,
+            dt,
+            t_emb_ms,
+            t_fetch_ms,
+            t_score_sort_ms,
+        )
+    except Exception:
+        # Fallback logging ultra-compatibile
+        LOGGER.info(
+            "search(): k=%s candidates=%s took=%.1fms",
+            params.k,
+            len(cands),
+            dt,
+        )
     return out
+
+
+def with_config_candidate_limit(params: QueryParams, config: Optional[Dict]) -> QueryParams:
+    """Ritorna una copia di `params` applicando `candidate_limit` da config se opportuno.
+
+    Precedenza implementata:
+      - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal default del dataclass),
+        NON viene sovrascritto.
+      - Se è rimasto al default, e il config contiene `retriever.candidate_limit` valido (>0),
+        viene applicato.
+
+    Nota: se il chiamante imposta esplicitamente il valore uguale al default (4000), questa funzione
+    non può distinguerlo dal caso “non impostato” e applicherà il config. In tal caso, evitare di
+    chiamare questa funzione oppure passare un valore diverso dal default per esprimere l’intento.
+    """
+    try:
+        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
+    except Exception:
+        default_lim = 4000
+
+    # Se il caller ha cambiato il limite, non toccare
+    if int(params.candidate_limit) != int(default_lim):
+        try:
+            LOGGER.info(
+                "limit.source=explicit",
+                extra={"limit": int(params.candidate_limit)},
+            )
+        except Exception:
+            pass
+        return params
+
+    cfg = config or {}
+    try:
+        retr = cfg.get("retriever") or {}
+        cfg_lim_raw = retr.get("candidate_limit")
+        cfg_lim = int(cfg_lim_raw) if cfg_lim_raw is not None else None
+    except Exception:
+        cfg_lim = None
+
+    if cfg_lim is not None and cfg_lim > 0:
+        try:
+            LOGGER.info("limit.source=config", extra={"limit": int(cfg_lim)})
+        except Exception:
+            pass
+        return replace(params, candidate_limit=int(cfg_lim))
+    try:
+        LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
+    except Exception:
+        pass
+    return params
+
+
+def choose_limit_for_budget(budget_ms: int) -> int:
+    """Euristica: mappa il budget di latenza (ms) su candidate_limit.
+
+    Soglie (raffinate dopo una prima calibrazione interna):
+    - <= 180ms  -> 1000
+    - <= 280ms  -> 2000
+    - <= 420ms  -> 4000
+    - >  420ms  -> 8000
+
+    Nota: questi valori sono un punto di partenza e vanno verificati
+    su dataset reali. Usa `src/tools/retriever_calibrate.py` per affinare
+    ulteriormente e aggiorna qui le soglie se necessario.
+    """
+    try:
+        b = int(budget_ms)
+    except Exception:
+        b = 0
+    if b <= 0:
+        return 4000
+    if b <= 180:
+        return 1000
+    if b <= 280:
+        return 2000
+    if b <= 420:
+        return 4000
+    return 8000
+
+
+def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryParams:
+    """Applica candidate_limit da config, con supporto auto by budget se abilitato.
+
+    Precedenza:
+      - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
+      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 -> usa choose_limit_for_budget.
+      - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
+      - Fallback: lascia il default del dataclass.
+    """
+    try:
+        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
+    except Exception:
+        default_lim = 4000
+
+    if int(params.candidate_limit) != int(default_lim):
+        try:
+            LOGGER.info(
+                "limit.source=explicit",
+                extra={"limit": int(params.candidate_limit)},
+            )
+        except Exception:
+            pass
+        return params
+
+    cfg = config or {}
+    retr = dict(cfg.get("retriever") or {})
+    auto = bool(retr.get("auto_by_budget", False))
+    budget = 0
+    try:
+        budget = int(retr.get("latency_budget_ms", 0) or 0)
+    except Exception:
+        budget = 0
+    if auto and budget > 0:
+        chosen = choose_limit_for_budget(budget)
+        try:
+            LOGGER.info(
+                "limit.source=auto_by_budget",
+                extra={"budget_ms": int(budget), "limit": int(chosen)},
+            )
+        except Exception:
+            pass
+        return replace(params, candidate_limit=chosen)
+
+    try:
+        raw = retr.get("candidate_limit")
+        lim = int(raw) if raw is not None else None
+    except Exception:
+        lim = None
+    if lim and lim > 0:
+        try:
+            LOGGER.info("limit.source=config", extra={"limit": int(lim)})
+        except Exception:
+            pass
+        return replace(params, candidate_limit=int(lim))
+    try:
+        LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
+    except Exception:
+        pass
+    return params

@@ -35,9 +35,8 @@ import unicodedata
 from contextlib import contextmanager
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple, Iterator, TextIO
+from typing import Callable, Iterable, List, Optional, Tuple, Iterator, TextIO, BinaryIO
 
-import yaml
 
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger
@@ -101,9 +100,7 @@ def ensure_within(base: Path, target: Path) -> None:
         base_r = Path(base).resolve()
         tgt_r = Path(target).resolve()
     except Exception as e:
-        raise ConfigError(
-            f"Impossibile risolvere i path: {e}", file_path=str(target)
-        ) from e
+        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
 
     try:
         tgt_r.relative_to(base_r)
@@ -172,6 +169,38 @@ def open_for_read(
             pass
 
 
+@contextmanager
+def open_for_read_bytes_selfguard(p: Path) -> Iterator[BinaryIO]:
+    """
+    Apre un file in lettura binaria applicando una guardia di path-safety locale.
+
+    Regola: il path risolto deve restare sotto la propria directory padre.
+    Impedisce traversal via symlink o componenti "..".
+
+    Args:
+        p: Path del file da leggere (binario).
+
+    Ritorna:
+        Context manager che fornisce un handle binario sicuro.
+
+    Raises:
+        ConfigError: se la risoluzione fallisce, se il path esce dalla dir padre
+        o se l'apertura del file fallisce.
+    """
+    safe_p = ensure_within_and_resolve(p.parent, p)
+    try:
+        f = safe_p.open("rb")
+    except Exception as e:  # pragma: no cover
+        raise ConfigError(f"Errore apertura file: {e}", file_path=str(safe_p)) from e
+    try:
+        yield f
+    finally:
+        try:
+            f.close()
+        except Exception:
+            pass
+
+
 def read_text_safe(base: Path, p: Path, *, encoding: str = "utf-8") -> str:
     """Legge l'intero contenuto testo applicando path-safety (wrapper comodo)."""
     safe_p = ensure_within_and_resolve(base, p)
@@ -197,11 +226,10 @@ def _load_slug_regex() -> str:
         try:
             if cfg_path.exists():
                 from pipeline.yaml_utils import yaml_read
+
                 cfg = yaml_read(cfg_path.parent, cfg_path) or {}
                 pattern = cfg.get("slug_regex", default_regex)
-                return (
-                    pattern if isinstance(pattern, str) and pattern else default_regex
-                )
+                return pattern if isinstance(pattern, str) and pattern else default_regex
         except Exception as e:
             _logger.error(
                 "Errore caricamento config slug_regex",
@@ -215,9 +243,7 @@ def clear_slug_regex_cache() -> None:
     try:
         _load_slug_regex.cache_clear()
     except Exception as e:
-        _logger.error(
-            "Errore nel reset della cache slug_regex", extra={"error": str(e)}
-        )
+        _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -241,9 +267,7 @@ def is_valid_slug(slug: str) -> bool:
 def validate_slug(slug: str) -> str:
     """Valida lo slug e alza un'eccezione di dominio in caso di non conformità."""
     if not is_valid_slug(slug):
-        raise InvalidSlug(
-            f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug
-        )
+        raise InvalidSlug(f"Slug '{slug}' non valido secondo le regole configurate.", slug=slug)
     return slug
 
 
@@ -261,9 +285,7 @@ def normalize_path(path: Path) -> Path:
         return Path(path)
 
 
-def sanitize_filename(
-    name: str, max_length: int = 100, *, replacement: str = "_"
-) -> str:
+def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
     """
     Pulisce un nome file per l’uso su filesystem.
 
@@ -401,6 +423,7 @@ __all__ = [
     "ensure_within",  # SSoT guardia STRONG
     "ensure_within_and_resolve",  # guardia LETTURA + resolve
     "open_for_read",  # helper ergonomico context manager
+    "open_for_read_bytes_selfguard",  # helper ergonomico binario (self-guard)
     "read_text_safe",  # helper ergonomico testo
     "clear_slug_regex_cache",  # reset cache regex
     "is_valid_slug",

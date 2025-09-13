@@ -171,6 +171,34 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ---
 
+## [1.10.0] - 2025-09-13
+### Added
+- Infra/Retriever: metriche leggere in `src/retriever.py::search` (embed_ms, fetch_ms, score+sort_ms, total_ms).
+- Tools: script di calibrazione `src/tools/retriever_calibrate.py` per misurare latenza vs `candidate_limit` (+ opzionale dump top-k JSONL).
+- UI: sezione Sidebar "Ricerca (retriever)" con box apri/chiudi per `candidate_limit` e "budget di latenza"; salvataggio atomico in `config.yaml` (`retriever.candidate_limit`, `latency_budget_ms`).
+
+### Changed
+- Sicurezza letture: `src/tag_onboarding.py::compute_sha256` ora usa wrapper di lettura binaria con path-safety (`open_for_read_bytes_selfguard`).
+- Lint: aggiunto `import json` in `src/tag_onboarding.py` e pulizia import inutilizzati.
+
+### Removed
+- Semantica: rimossi tutti i fallback in `src/semantic/api.py`:
+  - Eliminata `_fallback_markdown_from_raw` (nessuna generazione placeholder dei `.md`).
+  - `write_summary_and_readme` non usa più `ensure_readme_summary` (niente fallback automatico su README/SUMMARY);
+    ora tenta i generatori e solleva in caso di errori.
+- Drive: rimossi placeholder/stub in `src/pipeline/drive_utils.py` (niente `MediaIoBaseDownload` placeholder, niente stub su `download_drive_pdfs_to_local`).
+
+### Breaking
+- `semantic.api` richiede ora le utilità reali di contenuto (`pipeline.content_utils`) e fallisce senza fallback:
+  - `convert_markdown` richiede PDF presenti in `raw/` e il convertitore disponibile.
+  - `write_summary_and_readme` solleva se i generatori falliscono (nessun fallback a contenuti di comodo).
+- `pipeline.drive_utils` esegue import "hard" di `googleapiclient` e dei moduli Drive:
+  - In assenza di `google-api-python-client` l'import del modulo fallisce con `ImportError` esplicito.
+  - I test sono stati aggiornati per accettare/skip in ambienti senza la dipendenza.
+
+### Notes
+- I pochi fallback cosmetici di UI (es. favicon mancante, rerun sperimentale) restano per comodità e non impattano le API.
+- Suite aggiornata: 70 passed, 1 skipped (symlink su Windows).
 ## 1.6.0  2025-08-29  Interfaccia Streamlit
 
 ### Added

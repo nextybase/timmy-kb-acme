@@ -30,6 +30,8 @@ from pipeline.context import ClientContext  # noqa: E402
 from pipeline.config_utils import (  # noqa: E402
     bump_n_ver_if_needed,
     set_data_ver_today,
+    get_client_config,
+    update_config_with_drive_ids,
 )
 
 # Preview adapters (HonKit) opzionali
@@ -57,30 +59,24 @@ from config_ui.drive_runner import (  # noqa: E402
 from ui.landing_slug import render_landing_slug  # type: ignore  # noqa: E402
 
 # -----------------------------------------------------------------------------
-# Import funzioni Semantica (opzionali, con fallback)
+# Import funzioni Semantica (obbligatorie)
 # -----------------------------------------------------------------------------
-try:
-    # Facade pubblica stabile per la UI
-    from semantic.api import (  # type: ignore
-        get_paths as sem_get_paths,
-        load_reviewed_vocab as sem_load_vocab,
-        convert_markdown as sem_convert,
-        enrich_frontmatter as sem_enrich,
-        write_summary_and_readme as sem_write_md,
-    )
-except Exception:  # pragma: no cover
-    sem_get_paths = sem_load_vocab = sem_convert = sem_enrich = sem_write_md = None  # type: ignore
+from semantic.api import (
+    get_paths as sem_get_paths,
+    load_reviewed_vocab as sem_load_vocab,
+    convert_markdown as sem_convert,
+    enrich_frontmatter as sem_enrich,
+    write_summary_and_readme as sem_write_md,
+)
 
 # -----------------------------------------------------------------------------
-# Import Finanza (opzionale)
+# Import Finanza (obbligatorio)
 # -----------------------------------------------------------------------------
-try:
-    from finance.api import (
-        import_csv as fin_import_csv,
-        summarize_metrics as fin_summarize,
-    )
-except Exception:  # pragma: no cover
-    fin_import_csv = fin_summarize = None  # type: ignore
+from finance.api import (
+    import_csv as fin_import_csv,
+    summarize_metrics as fin_summarize,
+)
+
 # -----------------------------------------------------------------------------
 # Streamlit (UI)
 # -----------------------------------------------------------------------------
@@ -360,6 +356,22 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
     st.caption(
         "Crea la struttura su Drive a partire dal mapping rivisto e genera i README nelle sottocartelle di `raw/`."
     )
+
+    # Banner dipendenze Drive (googleapiclient)
+    try:
+        from googleapiclient.http import MediaIoBaseDownload as _chk  # type: ignore
+
+        _ = _chk  # silence unused
+        dep_ok = True
+    except Exception:
+        dep_ok = False
+    if not dep_ok:
+        st.warning(
+            "Funzionalità Drive non disponibili: dipendenza mancante `google-api-python-client`.\n"
+            "Installa il pacchetto e riavvia la UI. Esempio: `pip install google-api-python-client`.",
+            icon="⚠️",
+        )
+        return
 
     # Preflight Drive: mostra env e verifica accesso
     with st.expander("Preflight Drive", expanded=False):
@@ -711,7 +723,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                     st.exception(e)
 
         running = bool(st.session_state.get("sem_preview_container"))
-        _pill = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        _pill = (
+            "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        )
         st.markdown(f"**Preview Docker:** {_pill}", unsafe_allow_html=True)
         st.markdown("**4) Preview Docker (HonKit)**")
         with st.container(border=True):
@@ -837,7 +851,9 @@ def main() -> None:
     try:
         _fav = ROOT / "assets" / "ico-next.png"
         if _fav.exists():
-            st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide", page_icon=str(_fav))
+            st.set_page_config(
+                page_title="NeXT - Onboarding UI", layout="wide", page_icon=str(_fav)
+            )
         else:
             st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
     except Exception:
@@ -944,6 +960,7 @@ def main() -> None:
                 _logo = ROOT / "assets" / "next-logo.png"
                 if _logo.exists():
                     import base64 as _b64
+
                     _data = _logo.read_bytes()
                     _b64 = _b64.b64encode(_data).decode("ascii")
                     st.markdown(
@@ -972,6 +989,98 @@ def main() -> None:
                 _safe_streamlit_rerun()
 
             # (Dataset section rimossa su richiesta)
+
+            # Box apri/chiudi: Impostazioni Ricerca (retriever)
+            with st.expander("Ricerca (retriever)", expanded=False):
+                try:
+                    ctx = _ensure_context(slug, log)
+                    cfg = get_client_config(ctx) or {}
+                except Exception:
+                    cfg = {}
+
+                # Lettura valori correnti con fallback sicuri
+                retr = dict(cfg.get("retriever") or {})
+                try:
+                    current_limit = int(retr.get("candidate_limit", 4000) or 4000)
+                except Exception:
+                    current_limit = 4000
+                try:
+                    current_budget = int(retr.get("latency_budget_ms", 0) or 0)
+                except Exception:
+                    current_budget = 0
+                auto_flag = bool(retr.get("auto_by_budget", False))
+
+                st.caption(
+                    "Imposta il limite candidati per il ranking. Valori più alti aumentano la latenza."
+                )
+                new_limit = st.number_input(
+                    "candidate_limit",
+                    min_value=500,
+                    max_value=20000,
+                    step=500,
+                    value=int(current_limit),
+                    help="Numero massimo di candidati da considerare (default: 4000).",
+                    key="inp_retr_limit",
+                )
+                new_budget = st.number_input(
+                    "budget di latenza (ms)",
+                    min_value=0,
+                    max_value=10000,
+                    step=50,
+                    value=int(current_budget),
+                    help="0 = disabilitato. Usato solo come riferimento operativo.",
+                    key="inp_retr_budget",
+                )
+                new_auto = st.toggle(
+                    "Auto per budget",
+                    value=bool(auto_flag),
+                    help="Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget.",
+                    key="tgl_retr_auto",
+                )
+
+                # Mostra limite stimato quando auto attivo
+                if bool(new_auto) and int(new_budget) > 0:
+                    try:
+                        # Import locale per evitare costi a import-time
+                        from src.retriever import choose_limit_for_budget as _clfb  # type: ignore
+
+                        est = _clfb(int(new_budget))
+                    except Exception:
+                        est = None
+                    if est:
+                        st.caption(f"Limite stimato in base al budget: {int(est)}")
+
+                colL, colR = st.columns([1, 1])
+                with colL:
+                    if st.button("Salva impostazioni retriever", key="btn_save_retriever"):
+                        try:
+                            # Clamp esplicito e merge non distruttivo
+                            lim = max(500, min(20000, int(new_limit)))
+                            bud = max(0, min(10000, int(new_budget)))
+                            try:
+                                ctx = _ensure_context(slug, log)
+                                cfg = get_client_config(ctx) or {}
+                            except Exception:
+                                cfg = {}
+                            retr_prev = dict(cfg.get("retriever") or {})
+                            retr_prev.update(
+                                {
+                                    "candidate_limit": lim,
+                                    "latency_budget_ms": bud,
+                                    "auto_by_budget": bool(new_auto),
+                                }
+                            )
+                            update_config_with_drive_ids(
+                                ctx, updates={"retriever": retr_prev}, logger=log
+                            )
+                            _mark_modified_and_bump_once(slug, log)
+                            st.success("Impostazioni salvate nel config del cliente.")
+                        except Exception as e:
+                            st.exception(e)
+                with colR:
+                    st.caption(
+                        "Suggerimento: calibra con 1000/2000/4000 e scegli il più piccolo che rispetta il budget."
+                    )
 
             # Note block rimosso
 
@@ -1099,10 +1208,14 @@ def main() -> None:
         if raw_ready or st.session_state.get("raw_downloaded"):
             _render_semantic_tab(log, slug)
         else:
-            st.info("Per abilitare la sezione Semantica scarica prima i PDF in raw/ dalla sezione Drive.")
+            st.info(
+                "Per abilitare la sezione Semantica scarica prima i PDF in raw/ dalla sezione Drive."
+            )
     elif section == "Preview":
         running = bool(st.session_state.get("sem_preview_container"))
-        _pill = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        _pill = (
+            "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+        )
         st.markdown(f"**Preview Docker:** {_pill}", unsafe_allow_html=True)
         with st.container(border=True):
             preview_port = st.number_input(
@@ -1114,18 +1227,23 @@ def main() -> None:
                 key="inp_sem_port_preview_only",
             )
             from typing import Optional as _Opt
+
             def _docker_safe(name: _Opt[str]) -> str:
                 import re as _re
+
                 s = (name or "").strip()
                 if not s:
                     return s
                 s = _re.sub(r"[^a-zA-Z0-9_.-]", "-", s)
                 s = s.strip("-._") or s
                 return s
+
             def _default_container(slug_val: str) -> str:
                 import re as _re
+
                 safe = _re.sub(r"[^a-zA-Z0-9_.-]+", "-", (slug_val or "kb")).strip("-") or "kb"
                 return f"gitbook-{safe}"
+
             with st.expander("Avanzate", expanded=False):
                 current_default = _default_container(slug)
                 container_name_raw = st.text_input(

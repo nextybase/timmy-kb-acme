@@ -7,18 +7,24 @@ import pytest
 
 
 def test_import_drive_utils_no_bom() -> None:
-    """Il modulo deve potersi importare 'a freddo' (niente BOM/encoding strani)."""
+    """Import drive_utils o fallisce chiaramente se mancano dipendenze."""
     importlib.invalidate_caches()
-    mod = importlib.import_module("pipeline.drive_utils")
+    try:
+        mod = importlib.import_module("pipeline.drive_utils")
+    except ImportError as e:
+        assert "google" in str(e).lower() or "drive" in str(e).lower()
+        return
     assert isinstance(mod, types.ModuleType)
-    # sanity: il modulo ha una docstring e un __all__ significativo
     assert mod.__doc__ is not None and len(mod.__doc__) > 0
     assert hasattr(mod, "__all__")
 
 
 def test_reexports_present() -> None:
-    """Controlla che i simboli pubblici dichiarati siano realmente presenti."""
-    mod = importlib.import_module("pipeline.drive_utils")
+    """Controlla i simboli pubblici solo quando il modulo è importabile."""
+    try:
+        mod = importlib.import_module("pipeline.drive_utils")
+    except ImportError:
+        pytest.skip("googleapiclient non installato: modulo non importabile (no fallback)")
     expected = {
         "MIME_FOLDER",
         "MIME_PDF",
@@ -38,18 +44,11 @@ def test_reexports_present() -> None:
     assert not missing, f"Simboli mancanti nella facciata drive_utils: {missing}"
 
 
-def test_media_iobase_download_placeholder_behavior() -> None:
-    """
-    Se la dipendenza `google-api-python-client` non è installata,
-    la classe riesportata deve essere un placeholder che solleva ImportError all'uso.
-    Se è installata, verifichiamo solo che il simbolo esista (niente istanziazione).
-    """
-    mod = importlib.import_module("pipeline.drive_utils")
+def test_media_iobase_download_importable_or_skip() -> None:
+    """Con hard import, se la dipendenza manca il modulo non è importabile: skip in quel caso."""
+    try:
+        mod = importlib.import_module("pipeline.drive_utils")
+    except ImportError:
+        pytest.skip("googleapiclient non installato: modulo non importabile (no fallback)")
     cls = getattr(mod, "MediaIoBaseDownload", None)
     assert cls is not None
-
-    # Caso placeholder: il nome classe è quello definito nel file della facciata.
-    if getattr(cls, "__name__", "") == "_MediaIoBaseDownloadPlaceholder":
-        with pytest.raises(ImportError):
-            # Parametri arbitrari: il placeholder deve comunque sollevare.
-            cls(object(), object())

@@ -10,19 +10,12 @@ from pipeline.constants import REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError  # type: ignore
 from pipeline.file_utils import safe_write_text  # type: ignore
 from pipeline.path_utils import ensure_within, sorted_paths  # type: ignore
-
-# Content utils opzionali (compat con varianti di firma)
-try:  # pragma: no cover - opzionale a runtime
-    from pipeline.content_utils import (
-        convert_files_to_structured_markdown as _convert_md,
-    )  # type: ignore
-    from pipeline.content_utils import generate_readme_markdown as _gen_readme
-    from pipeline.content_utils import generate_summary_markdown as _gen_summary
-    from pipeline.content_utils import validate_markdown_dir as _validate_md
-except Exception:  # pragma: no cover - opzionale a runtime
-    _convert_md = _gen_summary = _gen_readme = _validate_md = None  # type: ignore
-
-from adapters.content_fallbacks import ensure_readme_summary  # type: ignore
+from pipeline.content_utils import (
+    convert_files_to_structured_markdown as _convert_md,
+)
+from pipeline.content_utils import generate_readme_markdown as _gen_readme
+from pipeline.content_utils import generate_summary_markdown as _gen_summary
+from pipeline.content_utils import validate_markdown_dir as _validate_md
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 from semantic.tags_extractor import (
     emit_tags_csv as _emit_tags_csv,
@@ -64,9 +57,7 @@ def get_paths(slug: str) -> Dict[str, Path]:
     }
 
 
-def load_reviewed_vocab(
-    base_dir: Path, logger: logging.Logger
-) -> Dict[str, Dict[str, Set[str]]]:
+def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
     """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT).
 
     Note:
@@ -90,17 +81,10 @@ def convert_markdown(
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
-    local_pdfs = [
-        p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"
-    ]
-    if not local_pdfs and _convert_md is not None:
+    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    if not local_pdfs:
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
     book_dir.mkdir(parents=True, exist_ok=True)
-    if _convert_md is None:
-        logger.warning(
-            "convert_files_to_structured_markdown non disponibile: uso fallback minimale"
-        )
-        return _fallback_markdown_from_raw(raw_dir, book_dir)
 
     # Compat firma: prova con kwargs opzionali
     try:
@@ -123,33 +107,8 @@ def convert_markdown(
         else:
             _convert_md(ctxp)  # type: ignore[misc]
     except TypeError:
-        _convert_md(cast(ClientContextType, context))  # type: ignore[misc]
+        _convert_md(cast(ClientContextType, context))
 
-    return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
-
-
-def _fallback_markdown_from_raw(raw_dir: Path, book_dir: Path) -> List[Path]:
-    """Genera Markdown placeholder da sottocartelle in raw/.
-
-    Per ogni directory di primo livello in `raw_dir` crea un file `<nome>.md`
-    in `book_dir` con un titolo derivato e un riferimento alla cartella origine.
-
-    Ritorna la lista dei Markdown presenti in `book_dir` (ordinati e relativi a `book_dir`).
-    """
-    book_dir.mkdir(parents=True, exist_ok=True)
-    for cat in sorted([d for d in raw_dir.iterdir() if d.is_dir()], key=lambda d: d.name.lower()):
-        md_file = book_dir / f"{cat.name}.md"
-        try:
-            ensure_within(book_dir, md_file)
-            title = re.sub(r"[_\\/\-]+", " ", cat.name).strip() or cat.name
-            safe_write_text(
-                md_file,
-                f"# {title}\n\n(Contenuti da {cat.name}/)\n",
-                encoding="utf-8",
-                atomic=True,
-            )
-        except Exception:
-            continue
     return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
 
 
@@ -162,6 +121,7 @@ def enrich_frontmatter(
 ) -> List[Path]:
     """Arricchisce i frontmatter dei Markdown con title e tag canonici."""
     from pipeline.path_utils import read_text_safe
+
     paths = get_paths(slug)
     book_dir = paths["book"]
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
@@ -174,9 +134,7 @@ def enrich_frontmatter(
         try:
             text = read_text_safe(book_dir, md, encoding="utf-8")
         except OSError as e:
-            logger.warning(
-                "Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)}
-            )
+            logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
             continue
         meta, body = _parse_frontmatter(text)
         new_meta = _merge_frontmatter(meta, title=title, tags=tags)
@@ -187,46 +145,36 @@ def enrich_frontmatter(
             ensure_within(book_dir, md)
             safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
             touched.append(md)
-            logger.info(
-                "Frontmatter arricchito", extra={"file_path": str(md), "tags": tags}
-            )
+            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
         except OSError as e:
-            logger.warning(
-                "Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)}
-            )
+            logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
     return touched
 
 
 def write_summary_and_readme(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> None:
-    """Garantisce la generazione/validazione di SUMMARY.md e README.md sotto book/."""
+    """Genera e valida SUMMARY.md e README.md sotto book/ (senza fallback).
+
+    Tenta entrambe le generazioni; se una fallisce, solleva al termine
+    con un messaggio aggregato (nessun fallback implicito).
+    """
     ctxp = cast(ClientContextType, context)
-    if _gen_summary is not None:
-        try:
-            _gen_summary(ctxp)  # type: ignore[misc]
-            logger.info("SUMMARY.md scritto (repo util)")
-        except Exception as e:
-            logger.warning(
-                "generate_summary_markdown fallita; procedo con fallback",
-                extra={"error": str(e)},
-            )
-    if _gen_readme is not None:
-        try:
-            _gen_readme(ctxp)  # type: ignore[misc]
-            logger.info("README.md scritto (repo util)")
-        except Exception as e:
-            logger.warning(
-                "generate_readme_markdown fallita; potrei usare il fallback",
-                extra={"error": str(e)},
-            )
-    ensure_readme_summary(context, logger)
-    if _validate_md is not None:
-        try:
-            _validate_md(ctxp)  # type: ignore[misc]
-            logger.info("Validazione directory MD OK")
-        except Exception as e:
-            logger.warning("Validazione directory MD fallita", extra={"error": str(e)})
+    errors: list[str] = []
+    try:
+        _gen_summary(ctxp)
+        logger.info("SUMMARY.md scritto")
+    except Exception as e:  # pragma: no cover - comportamento aggregato
+        errors.append(f"summary: {e}")
+    try:
+        _gen_readme(ctxp)
+        logger.info("README.md scritto")
+    except Exception as e:  # pragma: no cover
+        errors.append(f"readme: {e}")
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    _validate_md(ctxp)
+    logger.info("Validazione directory MD OK")
 
 
 def build_mapping_from_vision(
@@ -251,12 +199,11 @@ def build_mapping_from_vision(
     ensure_within(config_dir, mapping_path)
     ensure_within(config_dir, vision_yaml)
     if not vision_yaml.exists():
-        raise ConfigError(
-            f"Vision YAML non trovato: {vision_yaml}", file_path=str(vision_yaml)
-        )
+        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}", file_path=str(vision_yaml))
 
     try:
         from pipeline.yaml_utils import yaml_read  # type: ignore
+
         raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
     except Exception as e:
         raise ConfigError(
@@ -316,12 +263,11 @@ def build_mapping_from_vision(
     config_dir.mkdir(parents=True, exist_ok=True)
     try:
         import yaml  # type: ignore
+
         safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
         safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
     except Exception as e:
-        raise ConfigError(
-            f"Scrittura mapping fallita: {e}", file_path=str(mapping_path)
-        ) from e
+        raise ConfigError(f"Scrittura mapping fallita: {e}", file_path=str(mapping_path)) from e
 
     logger.info(
         "vision.mapping.built",
@@ -333,9 +279,7 @@ def build_mapping_from_vision(
     return mapping_path
 
 
-def build_tags_csv(
-    context: ClientContextType, logger: logging.Logger, *, slug: str
-) -> Path:
+def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Scansiona RAW e genera `semantic/tags_raw.csv` in modo deterministico.
 
     Azioni:
@@ -426,6 +370,7 @@ def index_markdown_to_db(
         return 0
 
     from pipeline.path_utils import read_text_safe
+
     contents: list[str] = []
     rel_paths: list[str] = []
     for f in files:
@@ -467,11 +412,11 @@ def index_markdown_to_db(
                 db_path=db_path,
             )
         except Exception as e:
-            logger.warning(
-                "Inserimento DB fallito", extra={"file": rel_name, "error": str(e)}
-            )
+            logger.warning("Inserimento DB fallito", extra={"file": rel_name, "error": str(e)})
             continue
-    logger.info("Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)})
+    logger.info(
+        "Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)}
+    )
     return inserted_total
 
 
@@ -514,9 +459,7 @@ def _dump_frontmatter(meta: Dict) -> str:
         import yaml  # type: ignore
 
         return (
-            "---\n"
-            + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()
-            + "\n---\n"
+            "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
         )
     except Exception:
         lines = ["---"]
@@ -530,9 +473,7 @@ def _dump_frontmatter(meta: Dict) -> str:
         return "\n".join(lines)
 
 
-def _merge_frontmatter(
-    existing: Dict, *, title: Optional[str], tags: List[str]
-) -> Dict:
+def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str]) -> Dict:
     meta = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title

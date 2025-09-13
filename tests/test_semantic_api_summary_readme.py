@@ -29,7 +29,7 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
         },
     )
 
-    calls = {"summary": 0, "readme": 0, "validate": 0, "fallback": 0}
+    calls = {"summary": 0, "readme": 0, "validate": 0}
 
     def _summary_stub(ctx):
         calls["summary"] += 1
@@ -40,23 +40,17 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     def _validate_stub(ctx):
         calls["validate"] += 1
 
-    def _fallback_stub(context, logger):
-        calls["fallback"] += 1
-
     # Patch optional generators and validator to our stubs
     monkeypatch.setattr(sapi, "_gen_summary", _summary_stub, raising=False)
     monkeypatch.setattr(sapi, "_gen_readme", _readme_stub, raising=False)
     monkeypatch.setattr(sapi, "_validate_md", _validate_stub, raising=False)
-    monkeypatch.setattr(sapi, "ensure_readme_summary", _fallback_stub, raising=True)
 
     sapi.write_summary_and_readme(DummyCtx(), logging.getLogger("test"), slug="x")
 
-    assert calls == {"summary": 1, "readme": 1, "validate": 1, "fallback": 1}
+    assert calls == {"summary": 1, "readme": 1, "validate": 1}
 
 
-def test_write_summary_and_readme_generators_fail_but_fallback_runs(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True)
@@ -72,7 +66,7 @@ def test_write_summary_and_readme_generators_fail_but_fallback_runs(
         },
     )
 
-    calls = {"summary": 0, "readme": 0, "validate": 0, "fallback": 0}
+    calls = {"summary": 0, "readme": 0, "validate": 0}
 
     def _summary_stub(ctx):
         calls["summary"] += 1
@@ -85,17 +79,16 @@ def test_write_summary_and_readme_generators_fail_but_fallback_runs(
     def _validate_stub(ctx):
         calls["validate"] += 1
 
-    def _fallback_stub(context, logger):
-        calls["fallback"] += 1
-
     monkeypatch.setattr(sapi, "_gen_summary", _summary_stub, raising=False)
     monkeypatch.setattr(sapi, "_gen_readme", _readme_stub, raising=False)
     monkeypatch.setattr(sapi, "_validate_md", _validate_stub, raising=False)
-    monkeypatch.setattr(sapi, "ensure_readme_summary", _fallback_stub, raising=True)
 
-    sapi.write_summary_and_readme(DummyCtx(), logging.getLogger("test"), slug="x")
+    import pytest
 
-    # Generators attempted and failed; fallback still invoked; validate still called
+    with pytest.raises(RuntimeError):
+        sapi.write_summary_and_readme(DummyCtx(), logging.getLogger("test"), slug="x")
+
+    # Generators attempted e hanno sollevato
     assert calls["summary"] == 1 and calls["readme"] == 1
-    assert calls["fallback"] == 1
-    assert calls["validate"] == 1
+    # Nessun fallback; validazione non raggiunta
+    assert calls["validate"] == 0

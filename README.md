@@ -20,7 +20,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
    Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e può avviare la preview Docker (HonKit).
 
 4. Onboarding Full (Push)
-   Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati), garantisce i fallback README/SUMMARY e pubblica su GitHub.
+   Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati), genera/valida `README.md` e `SUMMARY.md` e pubblica su GitHub.
 
 > SSoT dei tag: la fonte unica è il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
 
@@ -102,6 +102,48 @@ Avvio:
 streamlit run onboarding_ui.py
 ```
 Guida completa: `docs/guida_ui.md`.
+
+---
+
+## Sezione UI: Ricerca (retriever)
+
+Nella sidebar è presente un box apri/chiudi "Ricerca (retriever)" che consente di configurare:
+- `candidate_limit`: massimo numero di candidati caricati dal DB prima del ranking (min 500, max 20000). Valori più alti aumentano la latenza.
+- `budget di latenza (ms)`: indicazione del budget desiderato (0 = disabilitato). Usato solo se attivi l’auto.
+- `Auto per budget`: se attivo, il sistema sceglie automaticamente un `candidate_limit` in base al budget (euristica interna; calibrabile).
+
+Le impostazioni sono salvate nel `config.yaml` del cliente sotto la chiave `retriever`:
+```yaml
+retriever:
+  candidate_limit: 4000
+  latency_budget_ms: 300
+  auto_by_budget: false
+```
+
+Uso a codice (API): passa dalle utilità del retriever per applicare i valori da config con la precedenza giusta:
+```python
+from src.retriever import QueryParams, with_config_or_budget
+
+params = QueryParams(db_path=..., project_slug=..., scope=..., query="...", k=8)
+cfg = get_client_config(context)  # dal tuo ClientContext
+params = with_config_or_budget(params, cfg)
+results = search(params, embeddings_client)
+```
+
+Note: il retriever logga tempi di fase (embed/fetch/score+sort/total) per facilitare la calibrazione.
+
+---
+
+## Dipendenze Drive
+
+Le funzionalità Drive richiedono `google-api-python-client`. Se la dipendenza non è installata:
+- l’import del modulo `pipeline.drive_utils` fallisce con `ImportError` esplicito;
+- la UI mostra un banner nella sezione Drive con le istruzioni per l’installazione.
+
+Installazione:
+```bash
+pip install google-api-python-client
+```
 
 ---
 

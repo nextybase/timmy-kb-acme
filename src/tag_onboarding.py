@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import argparse
 import re
+import json
 import sys
 import time
 import uuid
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
 # â”€â”€ Pipeline infra â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from pipeline.logging_utils import (
@@ -45,9 +46,8 @@ from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
 from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
 from pipeline.path_utils import (
     ensure_valid_slug,
-    sanitize_filename,
-    sorted_paths,
     ensure_within,  # STRONG guard SSoT
+    open_for_read_bytes_selfguard,
 )
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from semantic.api import copy_local_pdfs_to_raw, build_tags_csv
@@ -113,7 +113,7 @@ def _prompt(msg: str) -> str:
 # Sezione helper duplicati rimossa (copy/CSV delegati)
 def compute_sha256(path: Path) -> str:
     h = hashlib.sha256()
-    with path.open("rb") as f:
+    with open_for_read_bytes_selfguard(path) as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
@@ -361,6 +361,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
     try:
         from pipeline.yaml_utils import yaml_read
+
         return yaml_read(path.parent, path) or {}
     except (OSError,) as e:
         raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path))
