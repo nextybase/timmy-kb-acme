@@ -17,6 +17,9 @@
 *.json text eol=lf
 *.ini text eol=lf
 *.toml text eol=lf
+*.ipynb text eol=lf
+*.csv   text eol=lf
+*.sql   text eol=lf
 
 # Treat binaries as binary
 *.png binary

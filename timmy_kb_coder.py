@@ -25,7 +25,7 @@ import importlib.util
 import logging
 import os
 from pathlib import Path
-from typing import cast
+from typing import cast, Dict, Any
 
 import streamlit as st
 
@@ -33,10 +33,14 @@ from semantic.types import EmbeddingsClient
 from src.ingest import OpenAIEmbeddings
 from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
-from src.retriever import QueryParams, search
+from src.retriever import QueryParams, search_with_config  # <-- usa la facade
 from src.vscode_bridge import read_response, write_request
 
-# Optional: load .env without try/except/pass (avoids flake8-bandit S110)
+# Config repo (per leggere config.yaml se disponibile)
+from pipeline.context import ClientContext
+from pipeline.config_utils import get_client_config
+
+# Optional: load .env senza try/except/pass (evita flake8-bandit S110)
 if importlib.util.find_spec("dotenv") is not None:  # pragma: no cover - optional dependency
     from dotenv import load_dotenv  # type: ignore
 
@@ -80,6 +84,17 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
         return None
 
 
+def _load_client_cfg(slug: str) -> Dict[str, Any]:
+    """Carica il config cliente (output/timmy-kb-<slug>/config/config.yaml) se esiste, altrimenti {}."""
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        cfg = get_client_config(ctx) or {}
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception as e:
+        LOGGER.info("Config cliente non disponibile per slug=%s: %s", slug, e)
+        return {}
+
+
 def main() -> None:
     _ensure_startup()
     st.set_page_config(page_title="Timmy KB Coder", layout="wide")
@@ -116,7 +131,9 @@ def main() -> None:
                     k=8,
                     candidate_limit=4000,
                 )
-                retrieved = search(params, emb_client)
+                # carica (se c'è) il config del cliente per allineare candidate_limit/budget
+                cfg = _load_client_cfg(project_slug)
+                retrieved = search_with_config(params, cfg, emb_client)
             except Exception as e:  # pragma: no cover - mostra feedback in UI
                 LOGGER.exception("Errore nella ricerca: %s", e)
                 st.error(f"Errore nella ricerca: {e}")
