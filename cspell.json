@@ -127,6 +127,12 @@
     "tipistica",
     "allowlistati",
     "sottoalbero",
+    "committa",
+    "httplib",
+    "fpdf",
+    "reportlab",
+    "tiktoken",
+    "numpy",
     "PYTHONUTF"
   ],
   "ignoreRegExpList": [
