@@ -1,8 +1,14 @@
+# src/retriever.py
 """Utility di ricerca basata su embedding per la Timmy KB.
 
 Funzioni esposte:
 - cosine(a, b) -> float
 - search(params, embeddings_client) -> list[dict]
+- with_config_candidate_limit(params, config) -> params
+- choose_limit_for_budget(budget_ms) -> int
+- with_config_or_budget(params, config) -> params
+- search_with_config(params, config, embeddings_client) -> list[dict]   <-- NEW
+- preview_effective_candidate_limit(params, config) -> (limit:int, source:str, budget_ms:int)  <-- NEW
 
 Design:
 - Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
@@ -17,7 +23,7 @@ import math
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from semantic.types import EmbeddingsClient
 
@@ -305,3 +311,77 @@ def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryP
     except Exception:
         pass
     return params
+
+
+# ---------------- NEW: Facade per wiring reale + preview per la UI ----------------
+
+
+def search_with_config(
+    params: QueryParams,
+    config: Optional[Dict],
+    embeddings_client: EmbeddingsClient,
+) -> List[Dict]:
+    """Esegue `with_config_or_budget(...)` e poi `search(...)`.
+
+    Uso consigliato nei call-site reali per garantire che il limite effettivo
+    sia allineato a config/budget e che i log `limit.source=...` vengano emessi.
+
+    Esempio:
+        params = QueryParams(db_path=None, project_slug="acme", scope="kb", query=q)
+        results = search_with_config(params, cfg, embeddings)
+    """
+    effective = with_config_or_budget(params, config)
+    return search(effective, embeddings_client)
+
+
+def preview_effective_candidate_limit(
+    params: QueryParams,
+    config: Optional[Dict],
+) -> Tuple[int, str, int]:
+    """Calcola il `candidate_limit` effettivo **senza** mutare `params` e **senza** loggare.
+
+    Ritorna (limit, source, budget_ms) dove `source` ∈ {"explicit","auto_by_budget","config","default"}.
+    Utile per la UI per mostrare un'etichetta tipo: "Limite stimato: N".
+    """
+    try:
+        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
+    except Exception:
+        default_lim = 4000
+
+    # 1) Esplicito
+    if int(params.candidate_limit) != int(default_lim):
+        return int(params.candidate_limit), "explicit", 0
+
+    cfg = config or {}
+    retr = dict(cfg.get("retriever") or {})
+    # 2) Auto by budget
+    try:
+        auto = bool(retr.get("auto_by_budget", False))
+        budget_ms = int(retr.get("latency_budget_ms", 0) or 0)
+    except Exception:
+        auto = False
+        budget_ms = 0
+    if auto and budget_ms > 0:
+        return choose_limit_for_budget(budget_ms), "auto_by_budget", budget_ms
+    # 3) Config
+    try:
+        raw = retr.get("candidate_limit")
+        lim = int(raw) if raw is not None else None
+    except Exception:
+        lim = None
+    if lim and lim > 0:
+        return int(lim), "config", 0
+    # 4) Default
+    return int(default_lim), "default", 0
+
+
+__all__ = [
+    "QueryParams",
+    "cosine",
+    "search",
+    "with_config_candidate_limit",
+    "choose_limit_for_budget",
+    "with_config_or_budget",
+    "search_with_config",  # NEW
+    "preview_effective_candidate_limit",  # NEW
+]

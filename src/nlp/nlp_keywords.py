@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, DefaultDict, Dict, Iterable, List, Tuple, TypedDict
+from typing import Any, DefaultDict, Dict, Iterable, List, Tuple, TypedDict, Optional
 from collections import Counter, defaultdict
+from functools import lru_cache
 
 
 class ClusterGroup(TypedDict):
@@ -21,47 +22,111 @@ def _require(module: str, help_msg: str) -> Any:
         raise RuntimeError(help_msg) from e
 
 
+def _as_str(val: Any) -> str:
+    """Converte in stringa in modo robusto (utile per API che tipizzano come 'object')."""
+    if isinstance(val, str):
+        return val
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            return val.decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+    return "" if val is None else str(val)
+
+
 def extract_text_from_pdf(path: str) -> str:
     """
-    Legge TUTTO il testo dal PDF con pypdf.
-    Se fallisce, alza RuntimeError con messaggio 'Installare pypdf'.
+    Legge TUTTO il testo dal PDF.
+    Strategia:
+      - prova con pypdf, se non disponibile fa fallback su PyMuPDF (fitz).
+    Se entrambe mancano, alza RuntimeError con istruzioni d'installazione.
     """
+    # Tentativo 1: pypdf
+    PdfReader = None
     try:
-        from pypdf import PdfReader
+        from pypdf import PdfReader as _PdfReader  # type: ignore
+
+        PdfReader = _PdfReader
+    except Exception:
+        PdfReader = None
+
+    if PdfReader is not None:
+        try:
+            reader = PdfReader(path)  # type: ignore[misc]
+            texts: List[str] = []
+            for p in getattr(reader, "pages", []) or []:
+                try:
+                    t: str = p.extract_text() or ""
+                except Exception:
+                    t = ""
+                if t:
+                    texts.append(t)
+            return "\n".join(texts)
+        except Exception as e:  # pragma: no cover
+            raise RuntimeError(
+                "Errore lettura PDF con pypdf; assicurarsi che il file sia valido o usa PyMuPDF"
+            ) from e
+
+    # Tentativo 2: PyMuPDF (fitz)
+    try:
+        import fitz  # PyMuPDF
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare pypdf") from e
+        raise RuntimeError("Installare pypdf oppure PyMuPDF (fitz)") from e
 
     try:
-        reader = PdfReader(path)
+        doc = fitz.open(path)
         texts: List[str] = []
-        for p in getattr(reader, "pages", []) or []:
+        for page in doc:
             try:
-                t = p.extract_text() or ""
+                # Usa getattr per evitare errori di type-checking / differenze di API
+                getter = getattr(page, "get_text", None)
+                if callable(getter):
+                    t: str = _as_str(getter())
+                else:
+                    getter_old = getattr(page, "getText", None)  # compat vecchie versioni
+                    t: str = _as_str(getter_old("text")) if callable(getter_old) else ""
             except Exception:
                 t = ""
             if t:
                 texts.append(t)
+        doc.close()
         return "\n".join(texts)
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
-            "Errore lettura PDF; assicurarsi che il file sia valido e installare pypdf"
+            "Errore lettura PDF; assicurarsi che il file sia valido e che PyMuPDF funzioni"
         ) from e
 
 
+@lru_cache(maxsize=4)
 def _load_spacy(lang: str = "it") -> Any:
+    """
+    Carica spaCy con fallback:
+      - it: prima 'it_core_news_md', poi 'it_core_news_sm'
+      - en: prima 'en_core_web_md', poi 'en_core_web_sm'
+    """
     try:
         import spacy
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
-            "Installare spaCy: pip install spacy e il modello (es. it_core_news_md)"
+            "Installare spaCy: pip install spacy e il modello (es. it_core_news_sm)"
         ) from e
-    model = "it_core_news_md" if lang.startswith("it") else "en_core_web_md"
-    try:
-        return spacy.load(model)
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError(
-            f"Modello spaCy mancante: installa '{model}' (es. python -m spacy download {model})"
-        ) from e
+
+    if lang.startswith("it"):
+        models = ["it_core_news_md", "it_core_news_sm"]
+    else:
+        models = ["en_core_web_md", "en_core_web_sm"]
+
+    last_err: Optional[Exception] = None
+    for model in models:
+        try:
+            return spacy.load(model)
+        except Exception as e:
+            last_err = e
+            continue
+    raise RuntimeError(
+        f"Modello spaCy mancante: installa uno tra {', '.join(models)} "
+        f"(es. python -m spacy download {models[-1]})"
+    ) from last_err
 
 
 def normalize_phrase(s: str) -> str:
@@ -138,6 +203,13 @@ def yake_scores(text: str, top_k: int = 30, lang: str = "it") -> List[Tuple[str,
     return out
 
 
+@lru_cache(maxsize=8)
+def _load_st_model(model_name: str) -> Any:
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(model_name)
+
+
 def keybert_scores(
     text: str,
     candidates: Iterable[str],
@@ -149,7 +221,7 @@ def keybert_scores(
     Ritorna lista (phrase, score in 0..1).
     """
     try:
-        from sentence_transformers import SentenceTransformer
+        _ = __import__("sentence_transformers")
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare sentence-transformers") from e
     try:
@@ -157,7 +229,7 @@ def keybert_scores(
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare scikit-learn") from e
 
-    model = SentenceTransformer(model_name)
+    model = _load_st_model(model_name)
     cands = list({c for c in candidates if c and len(c) >= 3})
     if not cands:
         return []
@@ -248,7 +320,7 @@ def cluster_synonyms(
     Clustra per embedding basandosi su soglia di similarità (connected components).
     """
     try:
-        from sentence_transformers import SentenceTransformer
+        _ = __import__("sentence_transformers")
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare sentence-transformers") from e
     try:
@@ -261,7 +333,7 @@ def cluster_synonyms(
     # Normalizza prima del clustering
     phrases: List[str] = [normalize_phrase(p) for p, _ in phrases_scores]
     scores: Dict[str, float] = {normalize_phrase(p): float(s) for p, s in phrases_scores}
-    model = SentenceTransformer(model_name)
+    model = _load_st_model(model_name)
     emb = model.encode(phrases, normalize_embeddings=True)
     sim = cosine_similarity(emb, emb)
 

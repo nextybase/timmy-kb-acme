@@ -133,6 +133,8 @@
     "reportlab",
     "tiktoken",
     "numpy",
+    "fitz",
+    "scikit",
     "PYTHONUTF"
   ],
   "ignoreRegExpList": [
