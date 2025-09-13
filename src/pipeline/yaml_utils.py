@@ -13,7 +13,6 @@ replica qui la sola guardia di lettura necessaria.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict, Tuple
 

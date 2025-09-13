@@ -77,15 +77,38 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return dot / math.sqrt(na * nb)
 
 
+def _validate_params(params: QueryParams) -> None:
+    """Validazioni minime (fail-fast, senza fallback)."""
+    if not params.project_slug.strip():
+        raise ValueError("project_slug vuoto")
+    if not params.scope.strip():
+        raise ValueError("scope vuoto")
+    if params.candidate_limit < 0:
+        raise ValueError("candidate_limit negativo")
+    if params.k < 0:
+        raise ValueError("k negativo")
+
+
 def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dict]:
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
     1) Ottiene l'embedding di `params.query` tramite `embeddings_client.embed_texts([str])`.
     2) Carica al massimo `params.candidate_limit` candidati per `(project_slug, scope)`.
-    3) Calcola la similarità coseno e ordina i candidati per score decrescente.
+    3) Calcola la similarità coseno e ordina i candidati per score decrescente con tie-break deterministico.
     4) Restituisce i top-`params.k` in forma di lista di dict: {content, meta, score}.
     """
+    _validate_params(params)
+
+    # Soft-fail per input non utili
+    if params.k == 0:
+        return []
+    if not params.query.strip():
+        LOGGER.warning("query vuota dopo strip; ritorno []")
+        return []
+    if params.candidate_limit == 0:
+        return []
+
     t0 = time.time()
 
     # 1) Embedding della query
@@ -108,14 +131,9 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
         )
     )
     t_fetch_ms = (time.time() - t_fetch0) * 1000.0
-    LOGGER.debug(
-        "Fetched %d candidates for %s/%s",
-        len(cands),
-        params.project_slug,
-        params.scope,
-    )
+    n = len(cands)
 
-    # 3) Scoring (on-the-fly)
+    # 3) Scoring (on-the-fly) con indice per tie-break deterministico
     def _iter_scored():
         for idx, c in enumerate(cands):
             emb = c.get("embedding") or []
@@ -129,47 +147,50 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
                 idx,
             )
 
-    # 4) Ordinamento e top-k
+    # 4) Ordinamento e top-k con tie-break deterministico (score desc, idx asc)
     k = max(0, int(params.k))
-    n = len(cands)
-    if k == 0:
+    if k == 0 or n == 0:
         out: List[Dict] = []
-    elif k >= n:
-        # Comportamento invariato: ordina tutto quando k >= n
-        scored_list = [item for item, _ in _iter_scored()]
-        scored_list.sort(key=lambda x: x["score"], reverse=True)
-        out = scored_list
     else:
-        # Selezione efficiente top-k con tie-break deterministico sull'ordine di arrivo
-        import heapq
-
-        best = heapq.nlargest(
-            k,
-            _iter_scored(),
-            key=lambda t: (t[0]["score"], -t[1]),  # score desc, idx asc
-        )
-        out = [it[0] for it in best]
+        scored = list(_iter_scored())
+        scored_sorted = sorted(scored, key=lambda t: (-t[0]["score"], t[1]))
+        if k >= n:
+            out = [item for item, _ in scored_sorted]
+        else:
+            out = [item for item, _ in scored_sorted[:k]]
 
     dt = (time.time() - t0) * 1000.0
     t_score_sort_ms = max(0.0, dt - t_emb_ms - t_fetch_ms)
+
+    # Logging metriche (campi chiave + timing)
     try:
+        LOGGER.info(
+            "retriever.metrics",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "k": int(params.k),
+                "candidate_limit": int(params.candidate_limit),
+                "candidates": int(n),
+                "ms": {
+                    "total": float(dt),
+                    "embed": float(t_emb_ms),
+                    "fetch": float(t_fetch_ms),
+                    "score_sort": float(t_score_sort_ms),
+                },
+            },
+        )
+    except Exception:
+        # Fallback di logging compatibile (solo messaggio)
         LOGGER.info(
             "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms",
             params.k,
-            len(cands),
+            n,
             params.candidate_limit,
             dt,
             t_emb_ms,
             t_fetch_ms,
             t_score_sort_ms,
-        )
-    except Exception:
-        # Fallback logging ultra-compatibile
-        LOGGER.info(
-            "search(): k=%s candidates=%s took=%.1fms",
-            params.k,
-            len(cands),
-            dt,
         )
     return out
 
@@ -195,10 +216,7 @@ def with_config_candidate_limit(params: QueryParams, config: Optional[Dict]) -> 
     # Se il caller ha cambiato il limite, non toccare
     if int(params.candidate_limit) != int(default_lim):
         try:
-            LOGGER.info(
-                "limit.source=explicit",
-                extra={"limit": int(params.candidate_limit)},
-            )
+            LOGGER.info("limit.source=explicit", extra={"limit": int(params.candidate_limit)})
         except Exception:
             pass
         return params
@@ -268,10 +286,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryP
 
     if int(params.candidate_limit) != int(default_lim):
         try:
-            LOGGER.info(
-                "limit.source=explicit",
-                extra={"limit": int(params.candidate_limit)},
-            )
+            LOGGER.info("limit.source=explicit", extra={"limit": int(params.candidate_limit)})
         except Exception:
             pass
         return params

@@ -17,11 +17,6 @@ import argparse
 from pathlib import Path
 from typing import Dict, Any
 
-try:
-    import yaml  # type: ignore
-except Exception as e:  # pragma: no cover
-    raise SystemExit("PyYAML non disponibile: installa 'pyyaml'.") from e
-
 from storage.tags_store import derive_db_path_from_yaml_path, save_tags_reviewed
 
 

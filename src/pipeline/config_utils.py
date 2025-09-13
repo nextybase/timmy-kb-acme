@@ -1,12 +1,12 @@
 # src/pipeline/config_utils.py
 """
-Configurazione cliente – utilities (SSoT + path-safety).
+Configurazione cliente e utilities (SSoT + path-safety).
 
 Cosa fa questo file
 -------------------
 Centralizza le utilità di configurazione per la pipeline Timmy-KB:
 
-- `Settings`: modello Pydantic per le variabili d’ambiente critiche (Drive, GitHub, ecc.),
+- `Settings`: modello Pydantic per le variabili ambiente critiche (Drive, GitHub, ecc.),
   con validazione dei campi essenziali e presenza dello `slug`.
 - `write_client_config_file(context, config) -> Path`: serializza e salva **atomicamente**
   `config.yaml` nella sandbox del cliente usando `safe_write_text` (backup `.bak` incluso).
@@ -21,8 +21,8 @@ Centralizza le utilità di configurazione per la pipeline Timmy-KB:
 Linee guida implementative
 --------------------------
 - **SSoT scritture**: tutte le write passano da `pipeline.file_utils.safe_write_text`.
-- **Path-safety STRONG**: prima di scrivere all’interno della sandbox, validiamo con `ensure_within(...)`.
-- **Niente prompt/exit**: l’orchestrazione (I/O utente e gestione exit code) è demandata ai caller.
+- **Path-safety STRONG**: prima di scrivere nella sandbox, validiamo con `ensure_within(...)`.
+- **Niente prompt/exit**: orchestrazione (I/O utente e gestione exit code) demandata ai caller.
 """
 
 from __future__ import annotations
@@ -168,17 +168,7 @@ def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> 
 #  Lettura configurazione cliente
 # ----------------------------------------------------------
 def get_client_config(context: ClientContext) -> Dict[str, Any]:
-    """Restituisce il contenuto del `config.yaml` dal contesto.
-
-    Args:
-        context: Contesto del cliente, con `config_path` valorizzato.
-
-    Restituisce:
-        Il contenuto del config come `dict` (o `{}` se il file è vuoto).
-
-    Raises:
-        ConfigError: se il file non esiste o in caso di errore di lettura/parsing.
-    """
+    """Restituisce il contenuto del `config.yaml` dal contesto."""
     if context.config_path is None:
         raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
     if not context.config_path.exists():
@@ -187,7 +177,9 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
         from pipeline.path_utils import ensure_within_and_resolve
         from pipeline.yaml_utils import yaml_read
 
-        return yaml_read(context.config_path.parent, context.config_path) or {}
+        # Path-safety anche in LETTURA
+        safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+        return yaml_read(safe_cfg_path.parent, safe_cfg_path) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
 
@@ -198,14 +190,7 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
 def validate_preonboarding_environment(
     context: ClientContext, base_dir: Optional[Path] = None
 ) -> None:
-    """Verifica la coerenza minima dell'ambiente prima del pre-onboarding.
-
-    STEP 1: presenza/validità di `config.yaml`.
-    STEP 2: verifica/creazione directory critiche (es. `logs/`).
-
-    Raises:
-        PreOnboardingValidationError: per config mancante/non valida o YAML malformato.
-    """
+    """Verifica la coerenza minima dell'ambiente prima del pre-onboarding."""
     base_dir = base_dir or context.base_dir
     if base_dir is None or context.config_path is None:
         raise PipelineError(
@@ -221,7 +206,9 @@ def validate_preonboarding_environment(
         from pipeline.path_utils import ensure_within_and_resolve
         from pipeline.yaml_utils import yaml_read
 
-        cfg = yaml_read(context.config_path.parent, context.config_path)
+        # Path-safety in LETTURA
+        safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+        cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
         raise PreOnboardingValidationError(

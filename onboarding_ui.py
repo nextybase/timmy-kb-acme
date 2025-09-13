@@ -1,4 +1,4 @@
-# onboarding_ui.py
+# flake8: noqa: E402
 from __future__ import annotations
 
 import logging
@@ -61,7 +61,7 @@ from ui.landing_slug import render_landing_slug  # type: ignore  # noqa: E402
 # -----------------------------------------------------------------------------
 # Import funzioni Semantica (obbligatorie)
 # -----------------------------------------------------------------------------
-from semantic.api import (
+from semantic.api import (  # noqa: E402
     get_paths as sem_get_paths,
     load_reviewed_vocab as sem_load_vocab,
     convert_markdown as sem_convert,
@@ -72,7 +72,7 @@ from semantic.api import (
 # -----------------------------------------------------------------------------
 # Import Finanza (obbligatorio)
 # -----------------------------------------------------------------------------
-from finance.api import (
+from finance.api import (  # noqa: E402
     import_csv as fin_import_csv,
     summarize_metrics as fin_summarize,
 )
@@ -161,7 +161,7 @@ def _safe_streamlit_rerun() -> None:
 # Componenti UI
 # =============================================================================
 def _mark_modified_and_bump_once(
-    slug: str, log: logging.Logger, *, context: Optional[object] = None
+    slug: str, log: logging.Logger, *, context: Optional[ClientContext] = None
 ) -> None:
     """Segna la sessione come modificata e fa bump N_VER una sola volta.
 
@@ -248,7 +248,7 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
 
     with col2:
         st.caption("Modifica voci (una alla volta).")
-        # Accordion per-voce con widget con key UNIVOCHE (l'expander non supporta 'key' in alcune versioni)
+        # Accordion per-voce con widget con key UNIVOCHE
         for idx, cat_key in enumerate(sorted(cats.keys(), key=str)):
             meta = cats.get(cat_key, {})
             with st.expander(cat_key, expanded=False):
@@ -354,7 +354,8 @@ def _render_config_tab(log: logging.Logger, slug: str, client_name: str) -> None
 def _render_drive_tab(log: logging.Logger, slug: str) -> None:
     st.subheader("Drive")
     st.caption(
-        "Crea la struttura su Drive a partire dal mapping rivisto e genera i README nelle sottocartelle di `raw/`."
+        "Crea la struttura su Drive a partire dal mapping rivisto e genera i README "
+        "nelle sottocartelle di `raw/`."
     )
 
     # Banner dipendenze Drive (googleapiclient)
@@ -367,8 +368,12 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
         dep_ok = False
     if not dep_ok:
         st.warning(
-            "Funzionalità Drive non disponibili: dipendenza mancante `google-api-python-client`.\n"
-            "Installa il pacchetto e riavvia la UI. Esempio: `pip install google-api-python-client`.",
+            (
+                "Funzionalità Drive non disponibili: dipendenza mancante "
+                "`google-api-python-client`.\n"
+                "Installa il pacchetto e riavvia la UI. Esempio: "
+                "`pip install google-api-python-client`."
+            ),
             icon="⚠️",
         )
         return
@@ -430,8 +435,10 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
             except FileNotFoundError as e:
                 st.error(
-                    "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
-                    "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                    (
+                        "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
+                        "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                    )
                 )
                 st.caption(f"Dettagli: {e}")
             except Exception as e:
@@ -452,15 +459,17 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                 _mark_modified_and_bump_once(slug, log)
             except FileNotFoundError as e:
                 st.error(
-                    "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
-                    "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                    (
+                        "Mapping non trovato per questo cliente. Apri la tab 'Configurazione', "
+                        "verifica/modifica il mapping e premi 'Salva mapping rivisto', poi riprova."
+                    )
                 )
                 st.caption(f"Dettagli: {e}")
             except Exception as e:
                 st.exception(e)
 
     # -------------------------------------------------------------------------
-    # Nuova sezione: download PDF da Drive ? raw/ (visibile SOLO dopo i README)
+    # Nuova sezione: download PDF da Drive → raw/ (visibile SOLO dopo i README)
     # -------------------------------------------------------------------------
     if st.session_state.get("drive_readmes_done"):
         st.markdown("---")
@@ -474,7 +483,10 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
             ):
                 if download_raw_from_drive is None:
                     st.error(
-                        "Funzione di download non disponibile: aggiornare 'config_ui.drive_runner'."
+                        (
+                            "Funzione di download non disponibile: aggiornare "
+                            "'config_ui.drive_runner'."
+                        )
                     )
                 else:
                     try:
@@ -482,7 +494,9 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                         prog = st.progress(0)
                         status = st.empty()
                         try:
-                            from config_ui.drive_runner import download_raw_from_drive_with_progress  # type: ignore
+                            from config_ui.drive_runner import (  # type: ignore
+                                download_raw_from_drive_with_progress,
+                            )
 
                             def _pcb(done: int, total: int, label: str) -> None:
                                 pct = int((done * 100) / (total or 1))
@@ -497,7 +511,8 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                             res = download_raw_from_drive(slug=slug)  # type: ignore[misc]
                         count = len(res) if hasattr(res, "__len__") else None
                         st.success(
-                            f"Download completato{f' ({count} file)' if count is not None else ''}."
+                            "Download completato"
+                            f"{f' ({count} file)' if count is not None else ''}."
                         )
                         log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                         st.session_state["raw_downloaded"] = True
@@ -537,25 +552,23 @@ def _render_drive_tab(log: logging.Logger, slug: str) -> None:
                     st.exception(e)
         with c2:
             st.write(
-                (
-                    "La struttura delle cartelle   stata creata su Drive; "
-                    "popolarne il contenuto seguendo le indicazioni del file README presente in ogni "
-                    "cartella per proseguire con la procedura"
-                )
+                "La struttura delle cartelle è stata creata su Drive; "
+                "popolarne il contenuto seguendo le indicazioni del file README presente "
+                "in ogni cartella per proseguire con la procedura."
             )
 
 
 # =============================================================================
-# Tab: Semantica (RAW ? BOOK + frontmatter + README/SUMMARY + preview)
+# Tab: Semantica (RAW → BOOK + frontmatter + README/SUMMARY + preview)
 # =============================================================================
-def _ensure_context(slug: str, log: logging.Logger) -> object:
+def _ensure_context(slug: str, log: logging.Logger) -> ClientContext:
     # Nessun prompt da UI; env non obbligatorio per operazioni locali
     return ClientContext.load(
         slug=slug,
         interactive=False,
         require_env=False,
         run_id=None,
-    )  # type: ignore[no-any-return]
+    )
 
 
 def _render_finance_tab(log: logging.Logger, slug: str) -> None:
@@ -568,9 +581,10 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
         _ensure_within = None  # type: ignore
         _safe_write_bytes = None  # type: ignore
 
-    st.subheader("Finanza (CSV ? finance.db)")
+    st.subheader("Finanza (CSV → finance.db)")
     st.caption(
-        "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
+        "Ingestione opzionale di metriche numeriche in un DB SQLite separato "
+        "(`semantic/finance.db`)."
     )
     if fin_import_csv is None or fin_summarize is None:
         st.warning(
@@ -606,7 +620,10 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
                     tmp_csv.write_bytes(data)
                 res = fin_import_csv(base, tmp_csv)  # type: ignore[misc]
                 st.success(
-                    f"Import OK - righe: {res.get('rows', 0)}  in {res.get('db', str(sem_dir / 'finance.db'))}"
+                    "Import OK - righe: {rows}  in {db}".format(
+                        rows=res.get("rows", 0),
+                        db=res.get("db", str(sem_dir / "finance.db")),
+                    )
                 )
                 log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
                 # Versioning: bump N_VER una sola volta per sessione
@@ -633,9 +650,10 @@ def _render_finance_tab(log: logging.Logger, slug: str) -> None:
 
 
 def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
-    st.subheader("Semantica (RAW ? BOOK)")
+    st.subheader("Semantica (RAW → BOOK)")
     st.caption(
-        "Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. Preview Docker opzionale."
+        "Converte i PDF in Markdown, arricchisce i frontmatter e genera README/SUMMARY. "
+        "Preview Docker opzionale."
     )
 
     # Guardie minime su dipendenze
@@ -654,7 +672,7 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     with colA:
         st.markdown("<div class='next-card'>", unsafe_allow_html=True)
-        st.markdown("**1) Conversione RAW ? BOOK**")
+        st.markdown("**1) Conversione RAW → BOOK**")
         st.caption("Converte i PDF in Markdown (cartella book/).")
         if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
             try:
@@ -685,7 +703,9 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                 try:
                     base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
                     vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
-                    touched: List[Path] = sem_enrich(context, log, vocab, slug=slug)  # type: ignore[misc]
+                    touched: List[Path] = sem_enrich(  # type: ignore[misc]
+                        context, log, vocab, slug=slug
+                    )
                     st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
                     log.info(
                         {
@@ -740,7 +760,6 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
             )
 
             # Avanzate: container_name opzionale
-
             def _docker_safe(name: Optional[str]) -> str:
                 import re as _re
 
@@ -785,9 +804,8 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                             container_name=st.session_state.get("sem_container_name"),
                         )  # type: ignore[misc]
                         st.session_state["sem_preview_container"] = cname
-                        st.success(
-                            f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})"
-                        )
+                        url = f"http://127.0.0.1:{int(preview_port)}"
+                        st.success(f"Preview avviata su {url} (container: {cname})")
                         log.info(
                             {
                                 "event": "preview_started",
@@ -805,7 +823,8 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
                             for k in ("docker", "daemon", "not running", "cannot connect")
                         ):
                             st.warning(
-                                "Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."
+                                "Docker non risulta attivo. Avvia Docker Desktop "
+                                "e riprova ad avviare la preview."
                             )
                             log.warning(
                                 "Preview non avviata: Docker non attivo",
@@ -839,7 +858,8 @@ def _render_semantic_tab(log: logging.Logger, slug: str) -> None:
 
     st.divider()
     st.caption(
-        "Nota: questo step **non** usa Google Drive n  esegue push su GitHub; lavora su disco locale e preview."
+        "Nota: questo step **non** usa Google Drive né esegue push su GitHub; "
+        "lavora su disco locale ed espone una preview."
     )
 
 
@@ -944,7 +964,7 @@ def main() -> None:
                     pass
                 _request_shutdown(log)
         if not locked:
-            return  # finch  non   lockato, non mostrare altro
+            return  # finché non è lockato, non mostrare altro
 
     # Da qui in poi la UI completa
     slug = st.session_state.get("slug", "")
@@ -964,7 +984,10 @@ def main() -> None:
                     _data = _logo.read_bytes()
                     _b64 = _b64.b64encode(_data).decode("ascii")
                     st.markdown(
-                        f"<img src='data:image/png;base64,{_b64}' alt='NeXT' style='width:100%;height:auto;display:block;' />",
+                        (
+                            "<img src='data:image/png;base64,{data}' alt='NeXT' "
+                            "style='width:100%;height:auto;display:block;' />"
+                        ).format(data=_b64),
                         unsafe_allow_html=True,
                     )
             except Exception:
@@ -988,17 +1011,17 @@ def main() -> None:
                 st.session_state["active_section"] = _choice
                 _safe_streamlit_rerun()
 
-            # (Dataset section rimossa su richiesta)
-
             # Box apri/chiudi: Impostazioni Ricerca (retriever)
             with st.expander("Ricerca (retriever)", expanded=False):
+                # 1) Provo a leggere il config, ma prima rendo certo il tipo di ctx
+                cfg: Dict[str, Any] = {}
                 try:
-                    ctx = _ensure_context(slug, log)
-                    cfg = get_client_config(ctx) or {}
+                    _ctx_read = _ensure_context(slug, log)
+                    cfg = get_client_config(_ctx_read) or {}
                 except Exception:
                     cfg = {}
 
-                # Lettura valori correnti con fallback sicuri
+                # 2) Estrai i valori attuali con fallback sicuri
                 retr = dict(cfg.get("retriever") or {})
                 try:
                     current_limit = int(retr.get("candidate_limit", 4000) or 4000)
@@ -1034,7 +1057,10 @@ def main() -> None:
                 new_auto = st.toggle(
                     "Auto per budget",
                     value=bool(auto_flag),
-                    help="Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget.",
+                    help=(
+                        "Se attivo, il sistema sceglie automaticamente candidate_limit "
+                        "in base al budget."
+                    ),
                     key="tgl_retr_auto",
                 )
 
@@ -1057,12 +1083,16 @@ def main() -> None:
                             # Clamp esplicito e merge non distruttivo
                             lim = max(500, min(20000, int(new_limit)))
                             bud = max(0, min(10000, int(new_budget)))
+
+                            # Creo SEMPRE un ClientContext “fresh”
+                            ctx = _ensure_context(slug, log)
+                            cfg_now = {}
                             try:
-                                ctx = _ensure_context(slug, log)
-                                cfg = get_client_config(ctx) or {}
+                                cfg_now = get_client_config(ctx) or {}
                             except Exception:
-                                cfg = {}
-                            retr_prev = dict(cfg.get("retriever") or {})
+                                pass
+
+                            retr_prev = dict((cfg_now.get("retriever") or {}))
                             retr_prev.update(
                                 {
                                     "candidate_limit": lim,
@@ -1079,10 +1109,9 @@ def main() -> None:
                             st.exception(e)
                 with colR:
                     st.caption(
-                        "Suggerimento: calibra con 1000/2000/4000 e scegli il più piccolo che rispetta il budget."
+                        "Suggerimento: calibra con 1000/2000/4000 e scegli il più piccolo che "
+                        "rispetta il budget."
                     )
-
-            # Note block rimosso
 
             # Pulsante CAMBIA CLIENTE (torna alla landing, non chiude il processo)
             if st.button("Cambia cliente", key="btn_close_sidebar"):
@@ -1111,7 +1140,7 @@ def main() -> None:
                 ),
             ):
                 slug_local = slug
-                with st.spinner("Generazione dummy in corso "):
+                with st.spinner("Generazione dummy in corso…"):
                     try:
                         log.info({"event": "ui_dummy_generate_start", "slug": slug_local})
                         proc = subprocess.run(
@@ -1166,14 +1195,12 @@ def main() -> None:
     st.title("NeXT Onboarding")
     _render_header_after_lock(log, slug, client_name)
 
-    # Tabs: Semantica nascosta finch  non abbiamo scaricato i PDF su raw/
+    # Tabs: Semantica nascosta finché non abbiamo scaricato i PDF su raw/
     tabs_labels: List[str] = ["Configurazione", "Drive"]
     if st.session_state.get("client_locked"):
         tabs_labels.append("Finanza")
 
-    # Sblocca la tab "Semantica" se:
-    # - la UI ha appena scaricato i PDF (flag di sessione), oppure
-    # - esiste la cartella raw/ locale del cliente con almeno un PDF (stato reale)
+    # Sblocca la tab "Semantica"
     raw_ready = bool(st.session_state.get("raw_ready"))
     if not raw_ready:
         try:
@@ -1181,11 +1208,9 @@ def main() -> None:
                 raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
                 if raw_dir.exists():
                     try:
-                        # pronto se ci sono PDF in raw/ (ricorsivo)
                         has_pdfs = any(raw_dir.rglob("*.pdf"))
                     except Exception:
                         has_pdfs = False
-                    # in alternativa, considera pronto se esiste il CSV generato nella fase tag
                     has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
                     raw_ready = bool(has_pdfs or has_csv)
         except Exception:
@@ -1268,9 +1293,8 @@ def main() -> None:
                         container_name=st.session_state.get("sem_container_name"),
                     )
                     st.session_state["sem_preview_container"] = cname
-                    st.success(
-                        f"Preview avviata su http://127.0.0.1:{int(preview_port)}  (container: {cname})"
-                    )
+                    url = f"http://127.0.0.1:{int(preview_port)}"
+                    st.success(f"Preview avviata su {url} (container: {cname})")
                 except Exception as e:
                     st.exception(e)
             if st.button(

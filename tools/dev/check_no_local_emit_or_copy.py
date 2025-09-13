@@ -7,8 +7,6 @@ Fail-fast su helper duplicati per ingest/CSV:
 Scopo: forzare l'uso di `semantic.api` come SSoT.
 """
 from __future__ import annotations
-
-import sys
 from pathlib import Path
 
 

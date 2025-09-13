@@ -116,6 +116,7 @@ def safe_write_text(
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
 
     # Modalità atomica: temp + replace
+    tmp_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -141,7 +142,7 @@ def safe_write_text(
     except Exception as e:
         # Proviamo a rimuovere il temp se esiste
         try:
-            if "tmp_path" in locals() and tmp_path.exists():
+            if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
@@ -177,6 +178,7 @@ def safe_write_bytes(
         except Exception as e:
             raise ConfigError(f"Scrittura file (bytes) fallita: {e}", file_path=str(path)) from e
 
+    tmp_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="wb",
@@ -195,7 +197,7 @@ def safe_write_bytes(
         _fsync_dir_best_effort(path.parent)
     except Exception as e:
         try:
-            if "tmp_path" in locals() and tmp_path.exists():
+            if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
         except Exception:
             pass

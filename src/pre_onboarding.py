@@ -3,7 +3,7 @@
 """
 Orchestratore della fase di **pre-onboarding** per Timmy-KB.
 
-ResponsabilitÃ :
+Responsabilità:
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
@@ -113,7 +113,7 @@ def bootstrap_semantic_templates(
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
     - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
 
-    Nota: se vuoi retro-compatibilitÃ , puoi duplicare anche in semantic/semantic_mapping.yaml.
+    Nota: se vuoi retro-compatibilità, puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
     if context.base_dir is None:
         raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
@@ -167,7 +167,7 @@ def bootstrap_semantic_templates(
             safe_write_text(mapping_dst, payload, atomic=True)
             logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
 
-        # (Opzionale) retro-compatibilitÃ : mantieni anche semantic_mapping.yaml
+        # (Opzionale) retro-compatibilità : mantieni anche semantic_mapping.yaml
         legacy = semantic_dir / "semantic_mapping.yaml"
         if not legacy.exists():
             try:
@@ -229,7 +229,7 @@ def _prepare_context_and_logger(
     )
     if not require_env:
         logger.info(
-            "ModalitÃ  offline: variabili d'ambiente esterne non richieste (require_env=False)."
+            "Modalità offline: variabili d'ambiente esterne non richieste (require_env=False)."
         )
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("Avvio pre-onboarding")
@@ -478,7 +478,7 @@ def pre_onboarding_main(
     yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
 
     if dry_run:
-        logger.info("ModalitÃ  dry-run: salto operazioni su Google Drive.")
+        logger.info("Modalità dry-run: salto operazioni su Google Drive.")
         logger.info("Pre-onboarding locale completato (dry-run).")
         return
 
@@ -501,12 +501,12 @@ def _parse_args() -> argparse.ArgumentParser:
     Opzioni:
         slug_pos: Argomento posizionale per lo slug cliente.
         --slug: Slug cliente (alternativa al posizionale).
-        --name: Nome cliente (es. â€œACME Srlâ€).
+        --name: Nome cliente (es. ACME Srl).
         --non-interactive: Esecuzione senza prompt.
         --dry-run: Esegue solo la parte locale e salta Google Drive.
 
     Restituisce:
-        argparse.ArgumentParser: parser configurato (non ancora â€œparsedâ€).
+        argparse.ArgumentParser: parser configurato (non ancora parsed).
     """
     p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
@@ -529,7 +529,7 @@ if __name__ == "__main__":
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error(
-            "Errore: in modalitÃ  non interattiva Ã¨ richiesto --slug (o slug posizionale)."
+            "Errore: in modalità non interattiva Ã¨ richiesto --slug (o slug posizionale)."
         )
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:

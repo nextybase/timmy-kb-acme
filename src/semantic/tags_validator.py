@@ -2,29 +2,7 @@
 # src/semantic/tags_validator.py
 # -*- coding: utf-8 -*-
 """
-Validatore per `tags_reviewed.yaml` – Timmy-KB
-
-Cosa fa il modulo
------------------
-- `load_yaml(path) -> dict`
-  Carica in modo sicuro un file YAML e restituisce un dict ({} se vuoto). Solleva
-  `ConfigError` se PyYAML non è disponibile, il file non esiste o il parsing fallisce.
-
-- `validate_tags_reviewed(data: dict) -> dict`
-  Valida la struttura logica di `tags_reviewed.yaml` (campi obbligatori, tipi,
-  vincoli su nomi/tag/azioni). Ritorna un dizionario con `errors`, `warnings`
-  e `count`.
-
-- `write_validation_report(report_path, result, logger) -> None`
-  Scrive in modo **atomico** il report JSON della validazione a `report_path`,
-  applicando guard-rail **STRONG** con `ensure_within` e propagando un
-  `ConfigError` in caso di I/O o path non sicuro.
-
-Sicurezza & I/O
----------------
-- Nessuna interazione utente (niente `print()`/`input()`).
-- Path-safety: `ensure_within` prima di scritture su disco.
-- Scritture atomiche con `safe_write_text`.
+Validatore per `tags_reviewed.yaml`
 """
 from __future__ import annotations
 
@@ -33,16 +11,12 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within
-
-try:
-    import yaml  # PyYAML
-except Exception:  # pragma: no cover
-    yaml = None  # type: ignore[assignment]
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.yaml_utils import yaml_read
 
 __all__ = ["load_yaml", "validate_tags_reviewed", "write_validation_report"]
 
@@ -52,23 +26,20 @@ _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 def load_yaml(path: Path) -> Dict[str, Any]:
     """
     Carica un file YAML e restituisce un dict ({} su file vuoto).
-
     Solleva:
-        ConfigError: se PyYAML non è disponibile, se il file non esiste
-                     o se il parsing fallisce.
+        ConfigError: se il file non esiste o se la lettura/parsing fallisce.
     """
-    if yaml is None:
-        raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path))
-    from pipeline.yaml_utils import yaml_read
+    base = Path(".").resolve()
+    candidate = Path(path).resolve()
+    safe_path = ensure_within_and_resolve(base, candidate)  # (base, p)
 
-    path = Path(path)
-    if not path.exists():
-        raise ConfigError("File YAML non trovato.", file_path=str(path))
+    if not safe_path.exists():
+        raise ConfigError("File YAML non trovato.", file_path=str(safe_path))
     try:
-        data = yaml_read(path.parent, path) or {}
+        data = yaml_read(base, safe_path) or {}  # <-- passa anche base
         return data if isinstance(data, dict) else {}
-    except Exception as e:
-        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)) from e
+    except Exception as e:  # pragma: no cover
+        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(safe_path)) from e
 
 
 def validate_tags_reviewed(data: dict) -> dict:
@@ -76,10 +47,10 @@ def validate_tags_reviewed(data: dict) -> dict:
     Valida la struttura di `tags_reviewed.yaml`.
 
     Ritorna:
-        dict con chiavi: errors (list[str]), warnings (list[str]), count (int, opzionale)
+        dict con chiavi: errors (list[str]), warnings (list[str]), count (int)
     """
-    errors: list[str] = []
-    warnings: list[str] = []
+    errors: List[str] = []
+    warnings: List[str] = []
 
     if not isinstance(data, dict):
         errors.append("Il file YAML non è una mappa (dict) alla radice.")
@@ -118,7 +89,7 @@ def validate_tags_reviewed(data: dict) -> dict:
         names_seen_ci.add(name_ci)
 
         action = item.get("action")
-        if not isinstance(action, str) or not action:
+        if not isinstance(action, str) or not action.strip():
             errors.append(f"{ctx}: 'action' mancante.")
         else:
             act = action.strip().lower()
@@ -152,20 +123,12 @@ def validate_tags_reviewed(data: dict) -> dict:
 def write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     """
     Scrive il report JSON della validazione in modo atomico con path-safety.
-
-    Args:
-        report_path: percorso del file JSON da generare.
-        result: dizionario con il risultato della validazione.
-        logger: logger strutturato.
-
-    Raises:
-        ConfigError: su problemi di path-safety o I/O bloccanti.
     """
     report_path = Path(report_path).resolve()
-    # Path-safety forte: il file deve stare sotto la sua directory (anti path traversal)
     try:
-        ensure_within(report_path.parent, report_path)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
+        # Guard forte + normalizzazione del path
+        safe_path = ensure_within_and_resolve(report_path.parent, report_path)
+        safe_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         raise ConfigError(
             f"Percorso output non sicuro: {report_path} ({e})",
@@ -178,12 +141,15 @@ def write_validation_report(report_path: Path, result: dict, logger: logging.Log
     }
     try:
         safe_write_text(
-            report_path,
+            safe_path,
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
             atomic=True,
         )
     except Exception as e:
-        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(report_path)) from e
+        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(safe_path)) from e
 
-    logger.info("Report validazione scritto", extra={"file_path": str(report_path)})
+    try:
+        logger.info("Report validazione scritto", extra={"file_path": str(safe_path)})
+    except Exception:
+        logger.info("Report validazione scritto: %s", str(safe_path))

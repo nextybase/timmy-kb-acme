@@ -30,8 +30,6 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import yaml
-
 from .env_utils import compute_redact_flag, get_bool, get_env_var
 from .exceptions import ConfigError, InvalidSlug
 from .file_utils import safe_write_text

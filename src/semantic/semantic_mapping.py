@@ -23,8 +23,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
-import yaml
-
 from pipeline.constants import SEMANTIC_MAPPING_FILE
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger

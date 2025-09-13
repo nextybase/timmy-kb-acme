@@ -18,13 +18,25 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Protocol
 
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import is_safe_subpath
 from semantic.semantic_mapping import load_semantic_mapping
-from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
+
+
+class _Ctx(Protocol):
+    """Protocol locale: unisce i campi usati qui e da `load_semantic_mapping`."""
+
+    # richiesti da questo modulo
+    base_dir: Path
+    md_dir: Path
+    slug: Optional[str]
+
+    # richiesti da load_semantic_mapping (vedi src/semantic/semantic_mapping.py)
+    config_dir: Optional[Path]
+    repo_root_dir: Optional[Path]
 
 
 def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None) -> List[Path]:
@@ -41,6 +53,7 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
             "Contesto incompleto: md_dir/base_dir mancanti",
             slug=getattr(context, "slug", None),
         )
+    # is_safe_subpath(path, base)
     if not is_safe_subpath(context.md_dir, context.base_dir):
         raise PipelineError(
             f"Path non sicuro: {context.md_dir}",

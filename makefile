@@ -61,7 +61,7 @@ qa-safe:
 	  echo "[qa-safe] mypy non installato: skip"; \
 	fi
 
-# Variante completa che include i test, ma sempre in modalita degradabile
+# Variante completa che include i test, ma sempre in modo degradabile
 ci-safe: qa-safe
 	@if command -v pytest >/dev/null 2>&1; then \
 	  echo "[ci-safe] pytest"; pytest -ra; \
