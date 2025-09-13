@@ -48,6 +48,10 @@ openai==1.40.0
 tiktoken==0.7.0
 numpy==1.26.4
 
-# === Post-install raccomandato ===
 # Scarica il modello italiano piccolo per spaCy:
-#   python -m spacy download it_core_news_sm
+python -m spacy download it_core_news_sm
+
+# Dipendenze Drive (pin espliciti per build ripetibili)
+google-auth==2.34.0
+httplib2==0.22.0
+requests-oauthlib==2.0.0

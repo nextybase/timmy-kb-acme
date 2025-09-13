@@ -15,9 +15,8 @@ e mantiene la compatibilità con il monolite precedente.
   Idempotente: se la cartella esiste sotto `parent_id` riusa l'ID, altrimenti la crea.
 
 - create_drive_structure_from_yaml(service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
-  Costruisce ricorsivamente l’albero di cartelle remoto partendo da uno YAML:
-  supporta sia il formato legacy (`root_folders`) sia un mapping moderno {nome: sottoalbero}.
-  Ritorna una mappa nome→id; per compat aggiunge alias "RAW"/"raw" e "YAML"/"yaml" **solo** nel risultato.
+  Costruisce ricorsivamente l’albero di cartelle remoto partendo da uno YAML nel **formato moderno**
+  (mapping {nome: sottoalbero}). Ritorna una mappa nome→ID.
 
 - upload_config_to_drive_folder(service, context, parent_id, *, redact_logs=False) -> str
   Carica (sostituzione sicura) `config.yaml` nella cartella cliente su Drive. Se presente
@@ -151,37 +150,23 @@ def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
     """
     Normalizza la struttura YAML della gerarchia remota in un **mapping annidato**.
 
-    Formati supportati (compat col monolite):
-    1) **Moderno**: dict con chiavi qualsiasi (es. RAW/YAML o categorie libere)
-    2) **Legacy**: dict con chiave `root_folders` che è una **lista** di oggetti:
-       - Ogni oggetto: { name: "<cartella>", subfolders: [ ... ] } ricorsivo
-    3) **Fallback permissivo**: se è un dict ma non contiene né RAW/YAML né root_folders,
-       viene usato così com'è (nessun errore).
-
-    Ritorna un dict annidato pronto per `_create_remote_tree_from_mapping`.
+    Formati supportati:
+    1) **Moderno**: dict con chiavi qualsiasi (es. RAW/YAML o categorie libere).
+       Il formato legacy con `root_folders` **non è supportato** in v1.8.0.
+    2) **Fallback permissivo**: se è un dict che non contiene RAW/YAML, viene usato
+       così com'è (nessun errore).
     """
     if isinstance(data, dict):
-        # v1.8.0: formato legacy non supportato
+        # v1.8.0: formato legacy NON supportato
         if "root_folders" in data:
-            raise ConfigError("Formato legacy 'root_folders' non supportato in v1.8.0.")
-        # Legacy con root_folders lista
-        if isinstance(data.get("root_folders"), list):
-
-            def to_map(items: List[dict]) -> Dict[str, Any]:
-                out: Dict[str, Any] = {}
-                for it in items:
-                    name = it.get("name")
-                    subs = it.get("subfolders") or []
-                    if not name:
-                        continue
-                    out[str(name)] = to_map(subs) if subs else {}
-                return out
-
-            return to_map(data["root_folders"])
+            raise ConfigError(
+                "Formato legacy 'root_folders' non supportato in v1.8.0. "
+                "Fornire un mapping {nome: sottoalbero} moderno."
+            )
         # Moderno/generico: accetta il dict così com'è
         return data
 
-    raise ConfigError("Struttura YAML non valida: atteso un mapping o un root_folders:list.")
+    raise ConfigError("Struttura YAML non valida: atteso un mapping (dict).")
 
 
 # ------------------------------- API: Cartelle/Albero -----------------------------
@@ -272,6 +257,7 @@ def _create_remote_tree_from_mapping(
                 )
                 result[leaf_name] = leaf_id
         else:
+            # foglia vuota / valore non strutturato: nessuna sotto-cartella
             pass
 
     return result
@@ -287,10 +273,10 @@ def create_drive_structure_from_yaml(
     """
     Crea la struttura di cartelle remota a partire da un file YAML.
 
-    Comportamento:
-    - NON forza la creazione di `RAW`/`YAML`: usa la mappatura risultante (moderna o legacy).
-    - Ritorna una mappa nome→ID; se compaiono `raw`/`RAW` o `yaml`/`YAML`,
-      aggiunge gli alias corrispondenti **solo nel risultato** (nessuna cartella extra).
+    Comportamento (v1.8.0):
+    - Accetta solo struttura **moderna**: mapping {nome: sottoalbero}; il formato legacy
+      con `root_folders` non è supportato.
+    - Ritorna una mappa nome→ID. Nessun alias aggiunto.
     """
     if not os.path.isfile(str(yaml_path)):
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
