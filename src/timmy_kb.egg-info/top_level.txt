@@ -1,5 +1,0 @@
-adapters
-config_ui
-pipeline
-semantic
-tools

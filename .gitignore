@@ -65,3 +65,5 @@ qodana.sarif.json
 /semantic/
 /=
 /=3.11
+*.egg-info/
+src/timmy_kb.egg-info/
