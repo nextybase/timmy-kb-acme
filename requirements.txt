@@ -49,7 +49,7 @@ tiktoken==0.7.0
 numpy==1.26.4
 
 # Scarica il modello italiano piccolo per spaCy:
-python -m spacy download it_core_news_md
+# py -m spacy download it_core_news_md
 
 # Dipendenze Drive
 google-auth==2.34.0
