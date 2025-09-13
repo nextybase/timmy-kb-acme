@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import sqlite3
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from pipeline.path_utils import ensure_within
 

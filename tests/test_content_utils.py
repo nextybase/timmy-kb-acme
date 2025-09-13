@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-import shutil
+
 import pytest
 
 from pipeline.content_utils import (
     convert_files_to_structured_markdown,
-    generate_summary_markdown,
     generate_readme_markdown,
+    generate_summary_markdown,
     validate_markdown_dir,
 )
 from pipeline.exceptions import PipelineError

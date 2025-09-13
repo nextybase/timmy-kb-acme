@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
-from .store import import_csv as _import_csv, summarize_metrics as _summarize_metrics
+from .store import import_csv as _import_csv
+from .store import summarize_metrics as _summarize_metrics
 
 __all__ = ["import_csv", "summarize_metrics"]
 

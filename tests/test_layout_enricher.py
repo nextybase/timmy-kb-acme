@@ -3,11 +3,11 @@
 import pytest
 
 from src.semantic.layout_enricher import (
-    suggest_layout,
-    merge_non_distruttivo,
-    validate_yaml_schema,
     Constraints,
+    merge_non_distruttivo,
+    suggest_layout,
     to_kebab,
+    validate_yaml_schema,
 )
 
 

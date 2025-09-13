@@ -42,26 +42,23 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Protocol, runtime_checkable, Mapping, Iterable, Any, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, runtime_checkable
 
 from github import Github
 from github.GithubException import GithubException
 
-from pipeline.logging_utils import redact_secrets, get_structured_logger
-from pipeline.exceptions import PipelineError, ForcePushError, PushError
-from pipeline.path_utils import (
-    is_safe_subpath,
-    ensure_within,
-    sorted_paths,
-)  # sicurezza path + ordinamento deterministico
-from pipeline.env_utils import (
-    get_env_var,  # 🔐 env resolver (no masking qui)
-    is_branch_allowed_for_force,  # ✅ allow-list branch per force push
-    get_force_allowed_branches,  # ✅ per log/errore esplicativo
-)
 from pipeline.constants import DEFAULT_GIT_BRANCH_ENV_KEYS
-from pipeline.proc_utils import run_cmd, CmdError  # ✅ timeout/retry wrapper
-
+from pipeline.env_utils import get_env_var  # 🔐 env resolver (no masking qui)
+from pipeline.env_utils import get_force_allowed_branches  # ✅ per log/errore esplicativo
+from pipeline.env_utils import is_branch_allowed_for_force  # ✅ allow-list branch per force push
+from pipeline.exceptions import ForcePushError, PipelineError, PushError
+from pipeline.logging_utils import get_structured_logger, redact_secrets
+from pipeline.path_utils import (  # sicurezza path + ordinamento deterministico
+    ensure_within,
+    is_safe_subpath,
+    sorted_paths,
+)
+from pipeline.proc_utils import CmdError, run_cmd  # ✅ timeout/retry wrapper
 
 # Logger di modulo (fallback); nei flussi reali useremo quello contestualizzato
 logger: logging.Logger = get_structured_logger("pipeline.github_utils")

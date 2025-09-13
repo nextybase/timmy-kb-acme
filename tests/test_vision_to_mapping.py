@@ -1,5 +1,5 @@
-from pathlib import Path
 import logging
+from pathlib import Path
 
 
 def _ctx(base_dir: Path):
@@ -47,6 +47,7 @@ uvp:
 
 def test_build_mapping_from_vision_raises_without_yaml(tmp_path):
     import pytest
+
     from semantic.api import build_mapping_from_vision
 
     base = tmp_path / "output" / "timmy-kb-x"

@@ -20,40 +20,40 @@ Note architetturali:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
+import logging
+import shutil
 import sys
 import uuid
-import shutil
-import logging
-import datetime as _dt
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 
-from pipeline.logging_utils import (
-    get_structured_logger,
-    mask_partial,
-    tail_path,
-    mask_id_map,
-    mask_updates,
-    metrics_scope,
-)
-from pipeline.exceptions import PipelineError, ConfigError, EXIT_CODES
-from pipeline.context import ClientContext
 from pipeline.config_utils import (
     get_client_config,
-    write_client_config_file,
     update_config_with_drive_ids,
+    write_client_config_file,
 )
+from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
+from pipeline.context import ClientContext
 from pipeline.drive_utils import (
-    get_drive_service,
     create_drive_folder,
     create_drive_structure_from_yaml,
-    upload_config_to_drive_folder,
     create_local_base_structure,
+    get_drive_service,
+    upload_config_to_drive_folder,
 )
 from pipeline.env_utils import get_env_var
-from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
+from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
+from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT per scritture atomiche
+from pipeline.logging_utils import (
+    get_structured_logger,
+    mask_id_map,
+    mask_partial,
+    mask_updates,
+    metrics_scope,
+    tail_path,
+)
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
-from pipeline.file_utils import safe_write_text, safe_write_bytes  # SSoT per scritture atomiche
 
 
 def _prompt(msg: str) -> str:

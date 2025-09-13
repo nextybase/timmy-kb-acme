@@ -180,14 +180,11 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
         ConfigError: se il file non esiste o in caso di errore di lettura/parsing.
     """
     if context.config_path is None:
-        raise PipelineError(
-            "Contesto incompleto: config_path mancante", slug=context.slug
-        )
+        raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
     try:
         from pipeline.path_utils import ensure_within_and_resolve
-
         from pipeline.yaml_utils import yaml_read
 
         return yaml_read(context.config_path.parent, context.config_path) or {}
@@ -218,13 +215,10 @@ def validate_preonboarding_environment(
 
     if not context.config_path.exists():
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
-        raise PreOnboardingValidationError(
-            f"Config cliente non trovato: {context.config_path}"
-        )
+        raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
     try:
         from pipeline.path_utils import ensure_within_and_resolve
-
         from pipeline.yaml_utils import yaml_read
 
         cfg = yaml_read(context.config_path.parent, context.config_path)
@@ -243,9 +237,7 @@ def validate_preonboarding_environment(
     missing = [k for k in required_keys if k not in cfg]
     if missing:
         logger.error(f"❗ Chiavi obbligatorie mancanti in config: {missing}")
-        raise PreOnboardingValidationError(
-            f"Chiavi obbligatorie mancanti in config: {missing}"
-        )
+        raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
     logs_dir = (base_dir / "logs").resolve()
@@ -357,9 +349,7 @@ __all__ = [
 # ----------------------------------------------------------
 #  Versioning helpers (N_VER / DATA_VER)
 # ----------------------------------------------------------
-def bump_n_ver_if_needed(
-    context: ClientContext, logger: logging.Logger | None = None
-) -> None:
+def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None = None) -> None:
     """Incrementa N_VER di 1 nel config del cliente.
 
     Nota: la logica "if needed" è demandata al chiamante (UI tiene un flag di sessione)
@@ -385,9 +375,7 @@ def bump_n_ver_if_needed(
     update_config_with_drive_ids(context, updates={"N_VER": new_val}, logger=log)
 
 
-def set_data_ver_today(
-    context: ClientContext, logger: logging.Logger | None = None
-) -> None:
+def set_data_ver_today(context: ClientContext, logger: logging.Logger | None = None) -> None:
     """Imposta DATA_VER alla data odierna (YYYY-MM-DD) nel config del cliente.
 
     Viene tipicamente chiamata alla chiusura della UI, solo se nella sessione ci sono

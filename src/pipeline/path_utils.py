@@ -35,8 +35,7 @@ import unicodedata
 from contextlib import contextmanager
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple, Iterator, TextIO, BinaryIO
-
+from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, TextIO, Tuple
 
 from .exceptions import ConfigError, InvalidSlug
 from .logging_utils import get_structured_logger

@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+
 from src.semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
 
 

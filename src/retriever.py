@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 from semantic.types import EmbeddingsClient
+
 from .kb_db import fetch_candidates
 
 LOGGER = logging.getLogger("timmy_kb.retriever")

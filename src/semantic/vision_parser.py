@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from pipeline.path_utils import ensure_within
 from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 
 
 def _read_pdf_text(pdf_path: Path) -> str:

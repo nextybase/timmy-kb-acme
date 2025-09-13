@@ -6,7 +6,7 @@ from typing import Optional
 
 import pytest
 
-from pipeline.exceptions import PipelineError, InputDirectoryMissing
+from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
 
 

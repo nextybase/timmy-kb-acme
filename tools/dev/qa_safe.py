@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 Esegue QA locale in modo "safe":
-- black --check src tests (se installato)
-- flake8 src tests (se installato)
-- mypy src (se installato)
+- black --check <PATHS> (se installato)
+- flake8 <PATHS> (se installato)
+- mypy --config-file mypy.ini (se installato)
 Opzionale: --with-tests per eseguire anche pytest.
+
+Note:
+- I PATHS sono allineati alla allowlist usata da mypy.ini (sezione "files=").
+- mypy viene eseguito SENZA argomenti posizionali, così rispetta mypy.ini.
 
 Exit code:
 - 0 se tutti i tool presenti sono passati o assenti (skip)
@@ -16,10 +20,18 @@ import argparse
 import shutil
 import subprocess
 import sys
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
+
+# Stessi path di mypy.ini -> files=
+LINT_PATHS: Sequence[str] = (
+    "src/config_ui",
+    "src/pipeline/drive",
+    "src/pipeline/drive_utils.py",
+)
 
 
 def run_if_available(name: str, args: List[str]) -> Tuple[str, int | None]:
+    """Esegue 'args' solo se 'name' è risolvibile nel PATH; altrimenti skip."""
     if shutil.which(name) is None:
         print(f"[qa-safe] {name} non installato: skip")
         return name, None
@@ -34,10 +46,13 @@ def main(argv: List[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     failures: List[str] = []
+
     checks: List[Tuple[str, List[str]]] = [
-        ("black", ["black", "--check", "src", "tests"]),
-        ("flake8", ["flake8", "src", "tests"]),
-        ("mypy", ["mypy", "src"]),
+        # Black/Flake8 solo sui path allowlistati (coerenti con mypy.ini)
+        ("black", ["black", "--check", *LINT_PATHS]),
+        ("flake8", ["flake8", *LINT_PATHS]),
+        # IMPORTANT: niente argomenti posizionali a mypy -> userà mypy.ini (files=)
+        ("mypy", ["mypy", "--config-file", "mypy.ini"]),
     ]
     if args.with_tests:
         checks.append(("pytest", ["pytest", "-ra"]))

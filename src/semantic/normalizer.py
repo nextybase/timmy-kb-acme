@@ -24,7 +24,7 @@ Note d’implementazione
 
 from __future__ import annotations
 
-from typing import Dict, Any, List, Mapping, Iterable
+from typing import Any, Dict, Iterable, List, Mapping
 
 
 def _to_lc(s: Any) -> str:

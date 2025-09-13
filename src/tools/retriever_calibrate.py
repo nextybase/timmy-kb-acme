@@ -15,10 +15,10 @@ Note:
 from __future__ import annotations
 
 import argparse
+import json
 import statistics as stats
 import time
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import List, Sequence, Tuple
 

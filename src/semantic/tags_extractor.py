@@ -31,22 +31,17 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import re
 import shutil
-import logging
 from pathlib import Path
 from typing import List
 
-from pipeline.path_utils import (
-    is_safe_subpath,  # SOFT: pre-check booleano per shortlist/letture
-    ensure_within,  # STRONG: SSoT per write/delete
-    normalize_path,
-    sanitize_filename,
-    sorted_paths,
-)
-from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.exceptions import PipelineError  # eccezione tipizzata per la pipeline
-
+from pipeline.file_utils import safe_write_text  # scritture atomiche
+from pipeline.path_utils import ensure_within  # STRONG: SSoT per write/delete
+from pipeline.path_utils import is_safe_subpath  # SOFT: pre-check booleano per shortlist/letture
+from pipeline.path_utils import normalize_path, sanitize_filename, sorted_paths
 
 __all__ = ["copy_local_pdfs_to_raw", "emit_tags_csv"]
 

@@ -15,6 +15,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 

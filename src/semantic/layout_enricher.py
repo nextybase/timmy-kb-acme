@@ -1,12 +1,11 @@
 # src/semantic/layout_enricher.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
 import re
 import unicodedata
 from collections import Counter
-
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Tuple
 
 # ============================
 # Types & Constraints Handling

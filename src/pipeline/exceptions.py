@@ -1,8 +1,8 @@
 # src/pipeline/exceptions.py
 from __future__ import annotations
 
-from typing import Optional, Any
 from pathlib import Path
+from typing import Any, Optional
 
 """
 Eccezioni di dominio per la pipeline NeXT/Timmy.

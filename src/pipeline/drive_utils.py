@@ -6,7 +6,7 @@ Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
 Obiettivo
 ---------
 - Mantenere **invariata** l'API pubblica storica (`pipeline.drive_utils.*`) delegando
-  Implementazione ai moduli interni suddivisi:
+  l'implementazione ai moduli interni suddivisi:
   - `pipeline.drive.client`   → client e primitive di lettura/elenco
   - `pipeline.drive.upload`   → creazione/albero/upload e struttura locale
   - `pipeline.drive.download` → download dei contenuti (PDF, ecc.)
@@ -43,43 +43,34 @@ Redazione/Logging:
 """
 
 from __future__ import annotations
-from typing import Any
-from pathlib import Path
+
+# ------------------------ Classe MediaIoBaseDownload (hard import) ------------------
+from googleapiclient.http import MediaIoBaseDownload as MediaIoBaseDownload
 
 # ---------------------------------- Costanti MIME ----------------------------------
 # Esporta direttamente le costanti (nessun fallback)
-from .constants import GDRIVE_FOLDER_MIME as MIME_FOLDER, PDF_MIME_TYPE as MIME_PDF
-
-# ------------------------ Classe MediaIoBaseDownload (hard import) ------------------
-from googleapiclient.http import MediaIoBaseDownload as MediaIoBaseDownload  # type: ignore
-
-
-# ----------------------------- Import espliciti (statici) --------------------------
+from .constants import GDRIVE_FOLDER_MIME as MIME_FOLDER
+from .constants import PDF_MIME_TYPE as MIME_PDF
 
 # Client/lettura (Drive v3)
-from .drive.client import (
-    get_drive_service,
-    list_drive_files,
-    get_file_metadata,
-    _retry,  # export interno per test avanzati
-)
+from .drive.client import _retry  # export interno per test avanzati
+from .drive.client import get_drive_service, get_file_metadata, list_drive_files
+
+# Download (hard import)
+from .drive.download import download_drive_pdfs_to_local
 
 # Creazione/albero/upload/struttura locale
 from .drive.upload import (
     create_drive_folder,
     create_drive_structure_from_yaml,
-    upload_config_to_drive_folder,
-    delete_drive_file,
     create_local_base_structure,
+    delete_drive_file,
+    upload_config_to_drive_folder,
 )
-
-# Download (hard import)
-from .drive.download import download_drive_pdfs_to_local
-
 
 # ----------------------------- Superficie pubblica ---------------------------------
 
-__all__ = [
+__all__: list[str] = [
     # costanti/compat test
     "MIME_FOLDER",
     "MIME_PDF",

@@ -21,8 +21,8 @@ def _ctx(base_dir: Path):
 
 
 def test_index_markdown_to_db_inserts_rows(tmp_path):
-    from semantic.api import index_markdown_to_db
     from kb_db import fetch_candidates
+    from semantic.api import index_markdown_to_db
 
     base = tmp_path / "output" / "timmy-kb-x"
     book = base / "book"

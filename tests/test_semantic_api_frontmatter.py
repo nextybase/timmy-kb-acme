@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Dict, Set
 
 from semantic.api import (
-    _parse_frontmatter,
-    _dump_frontmatter,
-    _merge_frontmatter,
     _build_inverse_index,
+    _dump_frontmatter,
     _guess_tags_for_name,
+    _merge_frontmatter,
+    _parse_frontmatter,
 )
 
 

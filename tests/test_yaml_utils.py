@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 import os
+from pathlib import Path
+
 import pytest
 
-from src.pipeline.yaml_utils import yaml_read, clear_yaml_cache
 from src.pipeline.exceptions import ConfigError
+from src.pipeline.yaml_utils import clear_yaml_cache, yaml_read
 
 
 def test_yaml_read_ok(tmp_path: Path) -> None:

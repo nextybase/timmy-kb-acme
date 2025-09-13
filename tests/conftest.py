@@ -1,9 +1,10 @@
 # tests/conftest.py
-import sys
 import faulthandler
 import subprocess
+import sys
 from pathlib import Path
-from typing import Mapping, Dict
+from typing import Dict, Mapping
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]  # repo root

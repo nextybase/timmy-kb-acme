@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, cast
+from typing import Any, Dict, cast
 
-from pipeline.path_utils import (
-    ensure_within,
-    to_kebab as _to_kebab,
-    ensure_within_and_resolve as _ensure_within_and_resolve,
-)
 from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve as _ensure_within_and_resolve
+from pipeline.path_utils import to_kebab as _to_kebab
 
 
 def to_kebab(s: str) -> str:

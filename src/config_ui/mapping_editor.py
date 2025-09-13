@@ -2,15 +2,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import (
-    ensure_within_and_resolve,
-    safe_write_text_compat,
-    yaml_load,
-    yaml_dump,
-    to_kebab,  # SSoT per la normalizzazione in kebab-case
-)
+from .utils import to_kebab  # SSoT per la normalizzazione in kebab-case
+from .utils import ensure_within_and_resolve, safe_write_text_compat, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
     "context",

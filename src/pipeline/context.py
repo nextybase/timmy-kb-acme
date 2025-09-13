@@ -205,18 +205,14 @@ class ClientContext:
     # =============================== Helper interni (Fase 1) ===============================
 
     @staticmethod
-    def _init_logger(
-        logger: Optional[logging.Logger], run_id: Optional[str]
-    ) -> logging.Logger:
+    def _init_logger(logger: Optional[logging.Logger], run_id: Optional[str]) -> logging.Logger:
         """Istanzia (o riusa) il logger strutturato dell'applicazione."""
         if logger is not None:
             return logger
         return get_structured_logger(__name__, run_id=run_id)
 
     @staticmethod
-    def _compute_repo_root_dir(
-        slug: str, env_vars: Dict[str, Any], logger: logging.Logger
-    ) -> Path:
+    def _compute_repo_root_dir(slug: str, env_vars: Dict[str, Any], logger: logging.Logger) -> Path:
         """Determina la root del workspace cliente.
 
         Priorità:
@@ -227,17 +223,13 @@ class ClientContext:
         if env_root:
             try:
                 root = Path(str(env_root)).expanduser().resolve()
-                logger.info(
-                    "repo_root_dir impostato da ENV", extra={"repo_root_dir": str(root)}
-                )
+                logger.info("repo_root_dir impostato da ENV", extra={"repo_root_dir": str(root)})
                 return root
             except Exception as e:
                 raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root} ({e})")
 
         # Project root = this file → ../../
-        default_root = (
-            Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        )
+        default_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
         return default_root
 
     @staticmethod
@@ -264,9 +256,7 @@ class ClientContext:
                 extra={"slug": slug, "file_path": str(config_path)},
             )
             # Template dal progetto
-            template_config = (
-                Path(__file__).resolve().parents[2] / "config" / "config.yaml"
-            )
+            template_config = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
             if not template_config.exists():
                 raise ConfigError(
                     f"Template config.yaml globale non trovato: {template_config}",
@@ -276,9 +266,7 @@ class ClientContext:
             # Copia sicura (atomica) del contenuto (path-safety anche in LETTURA)
             from .path_utils import read_text_safe
 
-            payload = read_text_safe(
-                template_config.parent, template_config, encoding="utf-8"
-            )
+            payload = read_text_safe(template_config.parent, template_config, encoding="utf-8")
             safe_write_text(config_path, payload, encoding="utf-8", atomic=True)
 
         return config_path
@@ -291,9 +279,7 @@ class ClientContext:
 
             settings = yaml_read(config_path.parent, config_path) or {}
         except Exception as e:  # pragma: no cover
-            raise ConfigError(
-                f"Errore lettura config cliente: {e}", file_path=config_path
-            ) from e
+            raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path) from e
 
         logger.info("Config cliente caricata", extra={"file_path": str(config_path)})
         return settings
@@ -308,20 +294,14 @@ class ClientContext:
 
         # Richieste (se require_env=True)
         if require_env:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var(
-                "SERVICE_ACCOUNT_FILE", required=True
-            )
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", required=True)
             env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", required=True)
         else:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var(
-                "SERVICE_ACCOUNT_FILE", default=None
-            )
+            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
             env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
 
         # Opzionali utili
-        env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var(
-            "DRIVE_PARENT_FOLDER_ID", default=None
-        )
+        env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
         env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)

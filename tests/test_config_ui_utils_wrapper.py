@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 import os
+from pathlib import Path
+
 import pytest
 
-from src.config_ui.utils import ensure_within_and_resolve
 from pipeline.exceptions import ConfigError
+from src.config_ui.utils import ensure_within_and_resolve
 
 
 def test_wrapper_resolves_within_base(tmp_path: Path):

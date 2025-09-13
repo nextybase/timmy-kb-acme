@@ -19,38 +19,27 @@ Punti chiave:
 from __future__ import annotations
 
 import argparse
-import re
 import json
+import logging
+import re
 import sys
 import time
 import uuid
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+from pipeline.config_utils import get_client_config
+from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
+from pipeline.context import ClientContext
+from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
+from pipeline.file_utils import safe_write_text  # scritture atomiche
 
 # â”€â”€ Pipeline infra â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-from pipeline.logging_utils import (
-    get_structured_logger,
-    mask_partial,
-    tail_path,
-    metrics_scope,
-)
-from pipeline.exceptions import (
-    PipelineError,
-    ConfigError,
-    EXIT_CODES,
-)
-from pipeline.context import ClientContext
-from pipeline.config_utils import get_client_config
-from pipeline.drive_utils import get_drive_service, download_drive_pdfs_to_local
-from pipeline.constants import LOGS_DIR_NAME, LOG_FILE_NAME
-from pipeline.path_utils import (
-    ensure_valid_slug,
-    ensure_within,  # STRONG guard SSoT
-    open_for_read_bytes_selfguard,
-)
-from pipeline.file_utils import safe_write_text  # scritture atomiche
-from semantic.api import copy_local_pdfs_to_raw, build_tags_csv
+from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
+from pipeline.path_utils import ensure_within  # STRONG guard SSoT
+from pipeline.path_utils import ensure_valid_slug, open_for_read_bytes_selfguard
+from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
 
 # Stub/README tagging centralizzati
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
@@ -61,33 +50,30 @@ try:
 except Exception:
     yaml = None
 
+import hashlib
+
 # --- Storage v2 (DB: folders/documents) ---
 from storage.tags_store import (
+    add_term_alias,
+    clear_doc_terms,
     ensure_schema_v2,
     get_conn,
-    upsert_folder,
-    upsert_document,
-    list_documents,
-    has_doc_terms,
-    clear_doc_terms,
     get_documents_by_folder,
-    upsert_term,
-    add_term_alias,
+    has_doc_terms,
+    list_documents,
+    upsert_document,
+    upsert_folder,
     upsert_folder_term,
+    upsert_term,
 )
-
-import hashlib
 
 try:
     from pypdf import PdfReader  # type: ignore
 except Exception:  # pragma: no cover
     PdfReader = None  # type: ignore
 
-from storage.tags_store import (
-    derive_db_path_from_yaml_path,
-    load_tags_reviewed as load_tags_reviewed_db,
-)
-
+from storage.tags_store import derive_db_path_from_yaml_path
+from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 
 __all__ = [
     "tag_onboarding_main",
@@ -234,10 +220,10 @@ def run_nlp_to_db(
         # import lazy per evitare E402
         from nlp.nlp_keywords import (
             extract_text_from_pdf,
+            fuse_and_dedup,
+            keybert_scores,
             spacy_candidates,
             yake_scores,
-            keybert_scores,
-            fuse_and_dedup,
         )
 
         text = extract_text_from_pdf(str(pdf_path))

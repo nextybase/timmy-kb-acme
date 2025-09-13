@@ -58,9 +58,7 @@ def load_yaml(path: Path) -> Dict[str, Any]:
                      o se il parsing fallisce.
     """
     if yaml is None:
-        raise ConfigError(
-            "PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path)
-        )
+        raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.", file_path=str(path))
     from pipeline.yaml_utils import yaml_read
 
     path = Path(path)
@@ -70,9 +68,7 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         data = yaml_read(path.parent, path) or {}
         return data if isinstance(data, dict) else {}
     except Exception as e:
-        raise ConfigError(
-            f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)
-        ) from e
+        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(path)) from e
 
 
 def validate_tags_reviewed(data: dict) -> dict:
@@ -114,15 +110,11 @@ def validate_tags_reviewed(data: dict) -> dict:
         if len(name_stripped) > 80:
             warnings.append(f"{ctx}: 'name' troppo lungo (>80).")
         if _INVALID_CHARS_RE.search(name_stripped):
-            errors.append(
-                f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |)."
-            )
+            errors.append(f"{ctx}: 'name' contiene caratteri non permessi (/ \\ : * ? \" < > |).")
 
         name_ci = name_stripped.lower()
         if name_ci in names_seen_ci:
-            errors.append(
-                f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'."
-            )
+            errors.append(f"{ctx}: 'name' duplicato (case-insensitive): '{name_stripped}'.")
         names_seen_ci.add(name_ci)
 
         action = item.get("action")
@@ -157,9 +149,7 @@ def validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def write_validation_report(
-    report_path: Path, result: dict, logger: logging.Logger
-) -> None:
+def write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
     """
     Scrive il report JSON della validazione in modo atomico con path-safety.
 
@@ -194,8 +184,6 @@ def write_validation_report(
             atomic=True,
         )
     except Exception as e:
-        raise ConfigError(
-            f"Errore scrittura report: {e}", file_path=str(report_path)
-        ) from e
+        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(report_path)) from e
 
     logger.info("Report validazione scritto", extra={"file_path": str(report_path)})

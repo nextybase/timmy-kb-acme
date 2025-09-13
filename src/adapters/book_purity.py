@@ -88,7 +88,5 @@ def ensure_book_purity(context: Any, logger: logging.Logger) -> None:
             except Exception:
                 rels.append(p.name)
         logger.error("book.purity.fail", extra={"count": len(bad)})
-        raise PipelineError(
-            "File non consentiti in book/: " + ", ".join(sorted(rels))
-        )
+        raise PipelineError("File non consentiti in book/: " + ", ".join(sorted(rels)))
     logger.info("book.purity.ok", extra={"book": str(book_dir)})

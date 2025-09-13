@@ -10,12 +10,10 @@ import logging
 from pathlib import Path
 from typing import Dict, Set
 
-from pipeline.path_utils import ensure_within
 from pipeline.exceptions import ConfigError
-from storage.tags_store import (
-    derive_db_path_from_yaml_path,
-    load_tags_reviewed as load_tags_reviewed_db,
-)
+from pipeline.path_utils import ensure_within
+from storage.tags_store import derive_db_path_from_yaml_path
+from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 
 __all__ = ["load_reviewed_vocab"]
 

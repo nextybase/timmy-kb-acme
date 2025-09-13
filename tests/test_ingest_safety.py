@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Sequence
+
 import pytest
 
 import src.ingest as ingest
@@ -9,7 +10,9 @@ from pipeline.exceptions import ConfigError
 
 
 class FakeEmb:
-    def embed_texts(self, texts: Sequence[str], *, model: str | None = None) -> Sequence[Sequence[float]]:
+    def embed_texts(
+        self, texts: Sequence[str], *, model: str | None = None
+    ) -> Sequence[Sequence[float]]:
         return [[0.0] * 3 for _ in texts]
 
 

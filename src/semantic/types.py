@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, Sequence, runtime_checkable
 
-
 __all__ = ["Vector", "EmbeddingsClient", "ClientContextProtocol"]
 
 

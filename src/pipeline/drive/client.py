@@ -26,23 +26,22 @@ Note d’uso:
 from __future__ import annotations
 
 import os
-import time
 import random
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Generator, cast
+import time
 from collections import defaultdict
-from contextvars import ContextVar
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, Dict, Generator, List, Optional, cast
 
+from google.oauth2.service_account import Credentials  # type: ignore[import-not-found]
 from googleapiclient.discovery import build  # type: ignore[import-not-found]
 from googleapiclient.errors import HttpError  # type: ignore[import-not-found]
-from google.oauth2.service_account import Credentials  # type: ignore[import-not-found]
 
+from ..env_utils import get_env_var  # ✅ centralizzazione ENV
 from ..exceptions import ConfigError
 from ..logging_utils import get_structured_logger
-from ..env_utils import get_env_var  # ✅ centralizzazione ENV
 
 # Logger a livello di modulo per aderire alle convenzioni di logging strutturato del repo.
 logger = get_structured_logger("pipeline.drive.client")

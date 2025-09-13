@@ -35,6 +35,7 @@ Dipendenze
 """
 
 from __future__ import annotations
+
 import os
 import tempfile
 from pathlib import Path
@@ -42,10 +43,9 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from googleapiclient.http import MediaIoBaseDownload
 
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
 from pipeline.path_utils import ensure_within, sanitize_filename
-from pipeline.exceptions import PipelineError, ConfigError
-
 
 # MIME costanti basilari (allineate alla facciata)
 MIME_FOLDER = "application/vnd.google-apps.folder"

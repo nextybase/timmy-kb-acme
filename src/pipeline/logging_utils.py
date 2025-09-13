@@ -36,9 +36,8 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Mapping, Union
-from typing import Type, Literal
 from types import TracebackType
+from typing import Any, Literal, Mapping, Optional, Type, Union
 
 # ---------------------------------------------
 # Redazione (API semplice usata dai moduli)

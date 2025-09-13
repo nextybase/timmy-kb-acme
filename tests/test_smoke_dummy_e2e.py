@@ -1,7 +1,8 @@
+import subprocess
 import sys
 import uuid
-import subprocess
 from pathlib import Path
+
 import pytest
 
 PY = sys.executable

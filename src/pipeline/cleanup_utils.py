@@ -16,10 +16,10 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-from pipeline.logging_utils import get_structured_logger
 from pipeline.exceptions import PipelineError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within  # SSoT guardia STRONG
 from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 

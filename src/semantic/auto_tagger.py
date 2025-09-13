@@ -36,6 +36,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
+
 from .config import SemanticConfig
 
 __all__ = [

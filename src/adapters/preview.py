@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional, Any
+from typing import Any, Optional
 
 from pipeline.exceptions import ConfigError
 from pipeline.gitbook_preview import run_gitbook_docker_preview, stop_container_safely

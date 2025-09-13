@@ -17,22 +17,18 @@ Linee guida applicate:
 """
 from __future__ import annotations
 
-import os
 import json
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
-from pipeline.logging_utils import redact_secrets, get_structured_logger
-from pipeline.exceptions import PipelineError, PreviewError
-from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
-from pipeline.file_utils import safe_write_text  # ✅ scritture atomiche (SSoT)
+from pipeline.constants import BOOK_JSON_NAME, HONKIT_DOCKER_IMAGE, PACKAGE_JSON_NAME
 from pipeline.env_utils import get_int
-from pipeline.proc_utils import run_cmd, CmdError, wait_for_port
-from pipeline.constants import (
-    BOOK_JSON_NAME,
-    PACKAGE_JSON_NAME,
-    HONKIT_DOCKER_IMAGE,
-)
+from pipeline.exceptions import PipelineError, PreviewError
+from pipeline.file_utils import safe_write_text  # ✅ scritture atomiche (SSoT)
+from pipeline.logging_utils import get_structured_logger, redact_secrets
+from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
+from pipeline.proc_utils import CmdError, run_cmd, wait_for_port
 
 # Default consolidati (evitiamo hard-code sparsi)
 _DEFAULT_HOST_PREVIEW_PORT = 4000

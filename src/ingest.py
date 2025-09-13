@@ -17,9 +17,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, List, Optional, Sequence
 
-from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
-from .kb_db import insert_chunks
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
+
+from .kb_db import insert_chunks
 
 LOGGER = logging.getLogger("timmy_kb.ingest")
 

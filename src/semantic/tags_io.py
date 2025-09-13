@@ -135,13 +135,9 @@ def write_tags_review_stub_from_csv(
                     break
 
     except FileNotFoundError as e:
-        raise ConfigError(
-            f"CSV dei tag non trovato: {e}", file_path=str(csv_path)
-        ) from e
+        raise ConfigError(f"CSV dei tag non trovato: {e}", file_path=str(csv_path)) from e
     except Exception as e:
-        raise ConfigError(
-            f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)
-        ) from e
+        raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
 
     # Persistenza su SQLite (stesso dict dell'originario YAML)
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -153,9 +149,7 @@ def write_tags_review_stub_from_csv(
         "version": "1",
         "reviewed_at": time.strftime("%Y-%m-%d"),
         "keep_only_listed": True,
-        "tags": [
-            {"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested
-        ],
+        "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],
     }
     save_tags_reviewed_db(db_path, data)
     logger.info(

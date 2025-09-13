@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pipeline.exceptions import PipelineError, ConfigError
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.path_utils import ensure_within  # SSoT path-safety
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti

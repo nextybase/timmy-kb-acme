@@ -27,9 +27,7 @@ from semantic.semantic_mapping import load_semantic_mapping
 from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
 
-def _list_markdown_files(
-    context: _Ctx, logger: Optional[logging.Logger] = None
-) -> List[Path]:
+def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None) -> List[Path]:
     """Ritorna la lista ordinata dei file markdown nella directory md_dir del contesto.
 
     Raises:
@@ -38,10 +36,7 @@ def _list_markdown_files(
     """
     logger = logger or get_structured_logger("semantic.files", context=context)
     # Fail-fast esplicito su campi richiesti
-    if (
-        getattr(context, "md_dir", None) is None
-        or getattr(context, "base_dir", None) is None
-    ):
+    if getattr(context, "md_dir", None) is None or getattr(context, "base_dir", None) is None:
         raise PipelineError(
             "Contesto incompleto: md_dir/base_dir mancanti",
             slug=getattr(context, "slug", None),
@@ -160,9 +155,7 @@ def extract_semantic_concepts(
     return extracted_data
 
 
-def enrich_markdown_folder(
-    context: _Ctx, logger: Optional[logging.Logger] = None
-) -> None:
+def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = None) -> None:
     """Orchestratore dell'arricchimento semantico (placeholder per step futuri).
 
     Raises:

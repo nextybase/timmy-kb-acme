@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from src.retriever import (
     QueryParams,
+    choose_limit_for_budget,
     with_config_candidate_limit,
     with_config_or_budget,
-    choose_limit_for_budget,
 )
 
 

@@ -5,6 +5,7 @@ Verifica:
 - pass-through dei parametri via QueryParams verso fetch_candidates
 - compatibilità con EmbeddingsClient (protocollo) e top-k
 """
+
 from __future__ import annotations
 
 from pathlib import Path

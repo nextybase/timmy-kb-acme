@@ -5,16 +5,16 @@ import argparse
 import logging
 import sys
 
-# from pathlib import Path
-
 from pipeline.context import ClientContext  # type: ignore
 from semantic.api import (
-    get_paths,
     convert_markdown,
-    enrich_frontmatter,
+    enrich_frontmatter,  # type: ignore
+    get_paths,
     write_summary_and_readme,
-)  # type: ignore
+)
 from semantic.vocab_loader import load_reviewed_vocab  # type: ignore
+
+# from pathlib import Path
 
 
 def main() -> int:

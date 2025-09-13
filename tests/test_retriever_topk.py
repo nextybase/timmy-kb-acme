@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Sequence
-import math
 
 import src.retriever as retr
 from src.retriever import QueryParams

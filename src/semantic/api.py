@@ -1,36 +1,34 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/semantic/api.py
+
 from __future__ import annotations
 
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
-from pipeline.constants import OUTPUT_DIR_NAME  # type: ignore
-from pipeline.constants import REPO_NAME_PREFIX
-from pipeline.exceptions import ConfigError  # type: ignore
-from pipeline.file_utils import safe_write_text  # type: ignore
-from pipeline.path_utils import ensure_within, sorted_paths  # type: ignore
-from pipeline.content_utils import (
-    convert_files_to_structured_markdown as _convert_md,
-)
+from kb_db import insert_chunks as _insert_chunks
+from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
+from pipeline.content_utils import convert_files_to_structured_markdown as _convert_md
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
-from semantic.tags_extractor import (
-    emit_tags_csv as _emit_tags_csv,
-    copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw,
-)
+from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within, sorted_paths
+from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
+from semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
-from kb_db import insert_chunks as _insert_chunks
+from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 
 # Tipi: a compile-time usiamo il tipo concreto per matchare le firme interne,
 # a runtime restiamo decoupled con il Protocol strutturale.
 if TYPE_CHECKING:
-    from pipeline.context import ClientContext as ClientContextType  # type: ignore
+    from pipeline.context import ClientContext as ClientContextType
 else:
-    from semantic.types import ClientContextProtocol as ClientContextType  # type: ignore
+    from semantic.types import ClientContextProtocol as ClientContextType
 
 __all__ = [
     "get_paths",
@@ -58,25 +56,58 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT).
+    """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT)."""
+    return cast(Dict[str, Dict[str, Set[str]]], _load_reviewed_vocab(base_dir, logger))
 
-    Note:
-    - La fonte canonica è il DB SQLite sotto `semantic/` (es. `tags.db`).
-    - Lo YAML legacy (`tags_reviewed.yaml`) può esistere per migrazione/authoring,
-      ma a runtime si legge dal DB per coerenza e tracciabilità.
-    """
-    return _load_reviewed_vocab(base_dir, logger)
+
+# ---------- Shim che soddisfa ClientContextProtocol con Path non opzionali ----------
+class _CtxShim:
+    base_dir: Path
+    raw_dir: Path
+    md_dir: Path
+    slug: str
+
+    def __init__(self, *, base_dir: Path, raw_dir: Path, md_dir: Path, slug: str) -> None:
+        self.base_dir = base_dir
+        self.raw_dir = raw_dir
+        self.md_dir = md_dir
+        self.slug = slug
+
+
+def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Path, Path]:
+    paths = get_paths(slug)
+    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
+    raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
+    md_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
+    return base_dir, raw_dir, md_dir
+
+
+def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
+    """Chiama convert_files_to_structured_markdown adattandosi alla firma reale senza far intervenire Pylance."""
+    try:
+        import inspect
+
+        params = inspect.signature(func).parameters
+    except Exception:
+        params = {}
+
+    try:
+        if "md_dir" in params:
+            func(ctx, md_dir=md_dir)  # func è Any → Pylance non effettua type-check della call
+        else:
+            func(ctx)
+    except TypeError:
+        # Estremo fallback per versioni legacy
+        func(ctx)
 
 
 def convert_markdown(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
     """Converte i PDF in raw/ in Markdown sotto book/ (via content_utils se disponibili)."""
-    # Preferisci i percorsi dal contesto se presenti, altrimenti convenzione SSoT
-    paths = get_paths(slug)
-    base_dir = getattr(context, "base_dir", None) or paths["base"]
-    raw_dir = getattr(context, "raw_dir", None) or paths["raw"]
-    book_dir = getattr(context, "md_dir", None) or paths["book"]
+    # Risolvi percorsi con Path non opzionali
+    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
+
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
@@ -86,28 +117,9 @@ def convert_markdown(
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
     book_dir.mkdir(parents=True, exist_ok=True)
 
-    # Compat firma: prova con kwargs opzionali
-    try:
-        import inspect  # local to avoid import-time cost
-
-        kwargs = {}
-        try:
-            sig = inspect.signature(_convert_md)
-            params = sig.parameters
-            if "skip_if_unchanged" in params:
-                kwargs["skip_if_unchanged"] = None
-            if "max_workers" in params:
-                kwargs["max_workers"] = None
-        except Exception:
-            kwargs = {"skip_if_unchanged": None, "max_workers": None}
-
-        ctxp = cast(ClientContextType, context)
-        if kwargs:
-            _convert_md(ctxp, **kwargs)  # type: ignore[misc]
-        else:
-            _convert_md(ctxp)  # type: ignore[misc]
-    except TypeError:
-        _convert_md(cast(ClientContextType, context))
+    # Adatta la chiamata a convert_files_to_structured_markdown senza kwargs non tipizzati
+    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
+    _call_convert_md(_convert_md, shim, book_dir)
 
     return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
 
@@ -129,7 +141,7 @@ def enrich_frontmatter(
     inv = _build_inverse_index(vocab)
     for md in mds:
         name = md.name
-        title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip() or "Documento"
+        title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
             text = read_text_safe(book_dir, md, encoding="utf-8")
@@ -154,47 +166,36 @@ def enrich_frontmatter(
 def write_summary_and_readme(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> None:
-    """Genera e valida SUMMARY.md e README.md sotto book/ (senza fallback).
+    """Genera e valida SUMMARY.md e README.md sotto book/ (senza fallback)."""
+    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
+    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
-    Tenta entrambe le generazioni; se una fallisce, solleva al termine
-    con un messaggio aggregato (nessun fallback implicito).
-    """
-    ctxp = cast(ClientContextType, context)
     errors: list[str] = []
     try:
-        _gen_summary(ctxp)
+        _gen_summary(shim)
         logger.info("SUMMARY.md scritto")
     except Exception as e:  # pragma: no cover - comportamento aggregato
         errors.append(f"summary: {e}")
     try:
-        _gen_readme(ctxp)
+        _gen_readme(shim)
         logger.info("README.md scritto")
     except Exception as e:  # pragma: no cover
         errors.append(f"readme: {e}")
     if errors:
         raise RuntimeError("; ".join(errors))
-    _validate_md(ctxp)
+    _validate_md(shim)
     logger.info("Validazione directory MD OK")
 
 
 def build_mapping_from_vision(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> Path:
-    """Genera/aggiorna `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`.
-
-    Regole e scopo:
-    - Non introduce dipendenze di rete; parsing deterministico del vision YAML.
-    - Mappa liste e sezioni note in un mapping {concept: [keywords...]}, pronto per evoluzioni GPT future.
-    - Idempotente: rilanci sicuri con scrittura atomica; nessun side-effect fuori perimetro cliente.
-    - UI e interfacce pubbliche: additive (nuova API), nessuna rottura.
-    """
-    # Preferisci base_dir dal contesto, fallback alla convenzione SSoT
-    base_dir = getattr(context, "base_dir", None) or get_paths(slug)["base"]
+    """Genera/aggiorna `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`."""
+    base_dir = cast(Path, getattr(context, "base_dir", None) or get_paths(slug)["base"])
     config_dir = base_dir / "config"
     mapping_path = config_dir / "semantic_mapping.yaml"
     vision_yaml = config_dir / "vision_statement.yaml"
 
-    # Path-safety e precondizioni minime
     ensure_within(base_dir, config_dir)
     ensure_within(config_dir, mapping_path)
     ensure_within(config_dir, vision_yaml)
@@ -202,7 +203,7 @@ def build_mapping_from_vision(
         raise ConfigError(f"Vision YAML non trovato: {vision_yaml}", file_path=str(vision_yaml))
 
     try:
-        from pipeline.yaml_utils import yaml_read  # type: ignore
+        from pipeline.yaml_utils import yaml_read
 
         raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
     except Exception as e:
@@ -217,7 +218,6 @@ def build_mapping_from_vision(
             return [val.strip()]
         return []
 
-    # Estrai sezioni note in concetti semplici; dedup case-insensitive preservando ordine
     mapping: dict[str, list[str]] = {}
     sections: list[tuple[str, object]] = [
         ("ethical_framework", raw.get("ethical_framework")),
@@ -229,7 +229,6 @@ def build_mapping_from_vision(
         ("ethics_governance_tools", raw.get("ethics_governance_tools")),
         ("stakeholders_impact", raw.get("stakeholders_impact")),
     ]
-    # goals
     goals = raw.get("goals") or {}
     if isinstance(goals, dict):
         sections.append(("goals_general", (goals.get("general") or [])))
@@ -253,7 +252,6 @@ def build_mapping_from_vision(
         if norm:
             mapping[concept] = norm
 
-    # Serializza mapping (anche se vuoto: preferiamo fallire chiaramente)
     if not mapping:
         raise ConfigError(
             "Vision YAML non contiene sezioni utili per il mapping.",
@@ -262,7 +260,7 @@ def build_mapping_from_vision(
 
     config_dir.mkdir(parents=True, exist_ok=True)
     try:
-        import yaml  # type: ignore
+        import yaml
 
         safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
         safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
@@ -270,74 +268,45 @@ def build_mapping_from_vision(
         raise ConfigError(f"Scrittura mapping fallita: {e}", file_path=str(mapping_path)) from e
 
     logger.info(
-        "vision.mapping.built",
-        extra={
-            "file_path": str(mapping_path),
-            "concepts": len(mapping),
-        },
+        "vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)}
     )
     return mapping_path
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
-    """Scansiona RAW e genera `semantic/tags_raw.csv` in modo deterministico.
-
-    Azioni:
-    - Emette `tags_raw.csv` sotto `semantic/` usando euristiche conservative su path/filename.
-    - Scrive/aggiorna un README tagging rapido in `semantic/`.
-    - Idempotente e con path-safety SSoT; no rete.
-    """
+    """Scansiona RAW e genera `semantic/tags_raw.csv` in modo deterministico."""
     paths = get_paths(slug)
-    base_dir = getattr(context, "base_dir", None) or paths["base"]
-    raw_dir = getattr(context, "raw_dir", None) or paths["raw"]
+    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
+    raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
     semantic_dir = base_dir / "semantic"
     csv_path = semantic_dir / "tags_raw.csv"
 
-    # Path-safety
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, semantic_dir)
     ensure_within(semantic_dir, csv_path)
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    # Genera CSV tag grezzi
     count = _emit_tags_csv(raw_dir, csv_path, logger)
     logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
-    # README tagging
     _write_tagging_readme(semantic_dir, logger)
     return csv_path
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
-    """Wrapper pubblico: copia PDF locali dentro RAW riusando l'implementazione semantica.
-
-    Mantiene semantica e path-safety dell'helper interno.
-    """
+    """Wrapper pubblico: copia PDF locali dentro RAW riusando l'implementazione semantica."""
     return _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
 
 
 def build_markdown_book(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> list[Path]:
-    """Pipeline RAW → Markdown (uno per cartella) + README/SUMMARY + frontmatter.
-
-    - Converte i PDF in `book/` (un `.md` per cartella di primo livello) via content_utils.
-    - Garantisce `README.md` e `SUMMARY.md` in `book/`.
-    - Arricchisce i frontmatter con title/tags usando il vocabolario consolidato su SQLite (se presente).
-    - Idempotente; nessuna rete.
-    """
-    # 1) Conversione RAW → Markdown (riuso content_utils)
+    """Pipeline RAW → Markdown (uno per cartella) + README/SUMMARY + frontmatter."""
     mds = convert_markdown(context, logger, slug=slug)
-
-    # 2) Fallback README/SUMMARY
     write_summary_and_readme(context, logger, slug=slug)
-
-    # 3) Arricchimento frontmatter con vocab (se disponibile)
     paths = get_paths(slug)
     vocab = load_reviewed_vocab(paths["base"], logger)
     if vocab:
         enrich_frontmatter(context, logger, vocab, slug=slug)
-
-    # Ritorna i file di contenuto generati (esclude README/SUMMARY)
     return mds
 
 
@@ -350,17 +319,10 @@ def index_markdown_to_db(
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
 ) -> int:
-    """Indicizza i Markdown in `book/` nel DB locale (SQLite) con chunk + embedding.
-
-    Regole:
-    - Un chunk per file (implementazione minimale; estendibile a chunking per heading).
-    - Meta: {"file": name} e path relativo a `book/`.
-    - Version: stringa YYYYMMDD (giorno), per rotazione semplice.
-    - Path-safety SSoT, idempotente lato DB (nessuna de-duplicazione automatica).
-    """
+    """Indicizza i Markdown in `book/` nel DB locale (SQLite) con chunk + embedding."""
     paths = get_paths(slug)
-    base_dir = getattr(context, "base_dir", None) or paths["base"]
-    book_dir = getattr(context, "md_dir", None) or paths["book"]
+    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
+    book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
     ensure_within(base_dir, book_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
 
@@ -431,11 +393,11 @@ def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set
     return inv
 
 
-def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
+def _parse_frontmatter(md_text: str) -> Tuple[Dict[str, Any], str]:
     if not md_text.startswith("---"):
         return {}, md_text
     try:
-        import yaml  # type: ignore
+        import yaml
     except Exception:
         return {}, md_text
     try:
@@ -449,14 +411,14 @@ def _parse_frontmatter(md_text: str) -> Tuple[Dict, str]:
         meta = yaml.safe_load(header) or {}
         if not isinstance(meta, dict):
             return {}, md_text
-        return meta, body
+        return cast(Dict[str, Any], meta), body
     except Exception:
         return {}, md_text
 
 
-def _dump_frontmatter(meta: Dict) -> str:
+def _dump_frontmatter(meta: Dict[str, Any]) -> str:
     try:
-        import yaml  # type: ignore
+        import yaml
 
         return (
             "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
@@ -473,8 +435,10 @@ def _dump_frontmatter(meta: Dict) -> str:
         return "\n".join(lines)
 
 
-def _merge_frontmatter(existing: Dict, *, title: Optional[str], tags: List[str]) -> Dict:
-    meta = dict(existing or {})
+def _merge_frontmatter(
+    existing: Dict[str, Any], *, title: Optional[str], tags: List[str]
+) -> Dict[str, Any]:
+    meta: Dict[str, Any] = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title
     if tags:

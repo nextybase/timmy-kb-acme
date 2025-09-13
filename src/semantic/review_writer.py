@@ -39,11 +39,11 @@ from __future__ import annotations
 
 import datetime as _dt
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
+from pipeline.exceptions import ConfigError  # <- coerenza contract errori
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
-from pipeline.exceptions import ConfigError  # <- coerenza contract errori
 
 try:
     import yaml

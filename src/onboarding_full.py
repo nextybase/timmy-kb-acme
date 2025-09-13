@@ -20,29 +20,19 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, Callable, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from pipeline.logging_utils import get_structured_logger
-from pipeline.exceptions import (
-    PipelineError,
-    ConfigError,
-    EXIT_CODES,
-    PushError,
-)
+from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
-from pipeline.constants import (
-    OUTPUT_DIR_NAME,
-    LOGS_DIR_NAME,
-    LOG_FILE_NAME,
-    REPO_NAME_PREFIX,
-)
-from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
 from pipeline.env_utils import get_env_var  # env "puro"
+from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
+from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
-    from semantic.api import write_summary_and_readme as _write_summary_and_readme
     from adapters.book_purity import ensure_book_purity as _ensure_book_purity
+    from semantic.api import write_summary_and_readme as _write_summary_and_readme
 except Exception as e:
     raise ConfigError(
         "Adapter mancante o non importabile: "

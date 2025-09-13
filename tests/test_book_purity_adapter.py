@@ -1,5 +1,5 @@
-from pathlib import Path
 import logging
+from pathlib import Path
 
 
 def _ctx(base_dir: Path, md_sub: str = "book"):
@@ -43,6 +43,7 @@ def test_book_purity_allows_builder_and_ignores_caches(tmp_path):
 
 def test_book_purity_raises_on_disallowed_files(tmp_path):
     import pytest
+
     from adapters.book_purity import ensure_book_purity
 
     base = tmp_path / "out" / "timmy-kb-x"

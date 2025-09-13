@@ -118,9 +118,7 @@ def main(argv: List[str]) -> int:
             rel = f.as_posix()
         except Exception:
             rel = str(f)
-        if not (
-            "src/pipeline/" in rel or "src/semantic/" in rel or "src/adapters/" in rel
-        ):
+        if not ("src/pipeline/" in rel or "src/semantic/" in rel or "src/adapters/" in rel):
             continue
         issues = check_file(f)
         for ln, col, msg in issues:

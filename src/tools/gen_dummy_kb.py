@@ -68,9 +68,7 @@ try:
     from semantic.config import load_semantic_config
     from semantic.normalizer import normalize_tags
     from semantic.tags_io import write_tagging_readme as _write_tagging_readme
-    from semantic.tags_io import (
-        write_tags_review_stub_from_csv as _write_review_stub_from_csv,
-    )
+    from semantic.tags_io import write_tags_review_stub_from_csv as _write_review_stub_from_csv
 
     try:
         from finance.api import import_csv as _fin_import_csv  # type: ignore
@@ -100,9 +98,7 @@ def _read_yaml_required(p: Path) -> Dict[str, Any]:
     return data
 
 
-def _write_text_in_base(
-    base: Path, path: Path, content: str, *, overwrite: bool
-) -> None:
+def _write_text_in_base(base: Path, path: Path, content: str, *, overwrite: bool) -> None:
     """Scrittura atomica testo, con guardia STRONG sul perimetro base."""
     path = path.resolve()
     base = base.resolve()
@@ -113,9 +109,7 @@ def _write_text_in_base(
     safe_write_text(path, content, encoding="utf-8", atomic=True)
 
 
-def _write_bytes_in_base(
-    base: Path, path: Path, data: bytes, *, overwrite: bool
-) -> None:
+def _write_bytes_in_base(base: Path, path: Path, data: bytes, *, overwrite: bool) -> None:
     """Scrittura atomica bytes, con guardia STRONG sul perimetro base."""
     path = path.resolve()
     base = base.resolve()
@@ -195,9 +189,7 @@ startxref
 # Builders mapping/config
 # ---------------------------------------------------------------------
 def _yaml_dump_context(slug: str, client_name: str) -> Dict[str, Any]:
-    return {
-        "context": {"slug": slug, "client_name": client_name, "created_at": _now_date()}
-    }
+    return {"context": {"slug": slug, "client_name": client_name, "created_at": _now_date()}}
 
 
 def _yaml_dump_semantic_tagger_defaults() -> Dict[str, Any]:
@@ -466,9 +458,7 @@ def build_dummy_kb(
         )
 
     # 6) genera PDF SOLO per RAW
-    created_pdfs = _emit_pdfs_from_pdf_dummy(
-        base, raw_dir, pdf_dummy, slug, overwrite=overwrite
-    )
+    created_pdfs = _emit_pdfs_from_pdf_dummy(base, raw_dir, pdf_dummy, slug, overwrite=overwrite)
     if logger:
         logger.info(
             "PDF dummy generati",
@@ -511,9 +501,7 @@ def build_dummy_kb(
 
     # README_TAGGING e stub reviewed -> genera DB SQLite minimale (tags.db)
     try:
-        _write_tagging_readme(
-            semantic_dir, logger or get_structured_logger("gen_dummy_kb")
-        )
+        _write_tagging_readme(semantic_dir, logger or get_structured_logger("gen_dummy_kb"))
         _write_review_stub_from_csv(
             semantic_dir,
             tags_csv_path,
@@ -527,9 +515,7 @@ def build_dummy_kb(
             )
     except Exception as e:
         if logger:
-            logger.warning(
-                "Impossibile generare stub reviewed/DB", extra={"error": str(e)}
-            )
+            logger.warning("Impossibile generare stub reviewed/DB", extra={"error": str(e)})
 
     # (Opz.) Finanza: genera un CSV minimo e importalo in semantic/finance.db
     try:
@@ -554,9 +540,7 @@ def build_dummy_kb(
                 )
     except Exception as e:
         if logger:
-            logger.warning(
-                "Import finanza fallito (opzionale)", extra={"error": str(e)}
-            )
+            logger.warning("Import finanza fallito (opzionale)", extra={"error": str(e)})
 
     if logger:
         logger.info(
@@ -582,18 +566,14 @@ def _parse_args() -> argparse.Namespace:
         required=False,
         help="Cartella di output in cui creare la sandbox (es. temp dir di pytest)",
     )
-    p.add_argument(
-        "--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)"
-    )
+    p.add_argument("--slug", type=str, default=DEFAULT_SLUG, help="Slug cliente (default: dummy)")
     p.add_argument(
         "--name",
         type=str,
         default=DEFAULT_CLIENT_NAME,
         help="Nome cliente (default: Cliente Dummy)",
     )
-    p.add_argument(
-        "--overwrite", action="store_true", help="Sovrascrive file già esistenti"
-    )
+    p.add_argument("--overwrite", action="store_true", help="Sovrascrive file già esistenti")
     return p.parse_args()
 
 
@@ -640,9 +620,7 @@ def main() -> int:
         try:
             ensure_within(base, log_file)
             log_file.parent.mkdir(parents=True, exist_ok=True)
-            logger = get_structured_logger(
-                "gen_dummy_kb", log_file=log_file, run_id=run_id
-            )
+            logger = get_structured_logger("gen_dummy_kb", log_file=log_file, run_id=run_id)
         except Exception:
             logger = early_logger  # fallback
 

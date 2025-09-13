@@ -1,11 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/nlp/nlp_keywords.py
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple, Dict
 import re
 import unicodedata
+from typing import Any, DefaultDict, Dict, Iterable, List, Tuple, TypedDict
+from collections import Counter, defaultdict
 
 
-def _require(module: str, help_msg: str):
+class ClusterGroup(TypedDict):
+    canonical: str
+    synonyms: List[str]
+    members: List[Tuple[str, float]]
+
+
+def _require(module: str, help_msg: str) -> Any:
     try:
         return __import__(module)
     except Exception as e:  # pragma: no cover
@@ -18,13 +27,13 @@ def extract_text_from_pdf(path: str) -> str:
     Se fallisce, alza RuntimeError con messaggio 'Installare pypdf'.
     """
     try:
-        from pypdf import PdfReader  # type: ignore
+        from pypdf import PdfReader
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare pypdf") from e
 
     try:
         reader = PdfReader(path)
-        texts = []
+        texts: List[str] = []
         for p in getattr(reader, "pages", []) or []:
             try:
                 t = p.extract_text() or ""
@@ -39,9 +48,9 @@ def extract_text_from_pdf(path: str) -> str:
         ) from e
 
 
-def _load_spacy(lang: str = "it"):
+def _load_spacy(lang: str = "it") -> Any:
     try:
-        import spacy  # type: ignore
+        import spacy
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
             "Installare spaCy: pip install spacy e il modello (es. it_core_news_md)"
@@ -92,7 +101,7 @@ def spacy_candidates(text: str, lang: str = "it", max_ngram: int = 4) -> List[st
     # proper nouns (and simple n-grams up to max_ngram)
     tokens = [t for t in doc if not (t.is_punct or t.is_space)]
     for i in range(len(tokens)):
-        # single proper noun
+        # single proper noun or noun
         if tokens[i].pos_ in {"PROPN", "NOUN"} and not tokens[i].is_stop:
             s = tokens[i].text.strip()
             if len(s) >= 3:
@@ -116,7 +125,7 @@ def yake_scores(text: str, top_k: int = 30, lang: str = "it") -> List[Tuple[str,
     Converti in punteggio normalizzato 0..1 dove 1 è migliore (es. score_yake = 1 / (1 + raw)).
     """
     try:
-        import yake  # type: ignore
+        import yake
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare yake") from e
 
@@ -140,11 +149,13 @@ def keybert_scores(
     Ritorna lista (phrase, score in 0..1).
     """
     try:
-        from sentence_transformers import SentenceTransformer  # type: ignore
+        from sentence_transformers import SentenceTransformer
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare sentence-transformers") from e
-
-    from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
+    try:
+        from sklearn.metrics.pairwise import cosine_similarity
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError("Installare scikit-learn") from e
 
     model = SentenceTransformer(model_name)
     cands = list({c for c in candidates if c and len(c) >= 3})
@@ -153,7 +164,7 @@ def keybert_scores(
     emb_doc = model.encode([text or ""], normalize_embeddings=True)
     emb_c = model.encode(cands, normalize_embeddings=True)
     sims = cosine_similarity(emb_c, emb_doc)[:, 0]
-    pairs = list(zip(cands, sims.tolist()))
+    pairs: List[Tuple[str, float]] = list(zip(cands, sims.tolist()))
     pairs.sort(key=lambda x: x[1], reverse=True)
     return pairs[:top_k]
 
@@ -177,8 +188,6 @@ def fuse_and_dedup(
         return bool(min_len <= len(s) <= max_len and bool(re.search(r"[a-z0-9]", s)))
 
     # Normalizza chiavi, ma conserva la forma più frequente come display
-    from collections import Counter, defaultdict
-
     spacy_norm = [normalize_phrase(s) for s in cand_spacy if s]
     spacy_set = set(spacy_norm)
 
@@ -193,7 +202,7 @@ def fuse_and_dedup(
     kb_map: Dict[str, float] = _to_norm_map(sc_keybert)
 
     # Conta frequenza delle forme originali per ciascun normalizzato
-    forms: Dict[str, Counter] = defaultdict(Counter)
+    forms: DefaultDict[str, Counter[str]] = defaultdict(Counter)
     for s in cand_spacy:
         n = normalize_phrase(s)
         forms[n][s] += 1
@@ -234,35 +243,37 @@ def cluster_synonyms(
     phrases_scores: List[Tuple[str, float]],
     model_name: str = "all-MiniLM-L6-v2",
     sim_thr: float = 0.82,
-) -> List[dict]:
+) -> List[ClusterGroup]:
     """
     Clustra per embedding basandosi su soglia di similarità (connected components).
     """
     try:
-        from sentence_transformers import SentenceTransformer  # type: ignore
+        from sentence_transformers import SentenceTransformer
     except Exception as e:  # pragma: no cover
         raise RuntimeError("Installare sentence-transformers") from e
-
-    from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
+    try:
+        from sklearn.metrics.pairwise import cosine_similarity
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError("Installare scikit-learn") from e
 
     if not phrases_scores:
         return []
     # Normalizza prima del clustering
-    phrases = [normalize_phrase(p) for p, _ in phrases_scores]
-    scores = {p: float(s) for p, s in phrases_scores}
+    phrases: List[str] = [normalize_phrase(p) for p, _ in phrases_scores]
+    scores: Dict[str, float] = {normalize_phrase(p): float(s) for p, s in phrases_scores}
     model = SentenceTransformer(model_name)
     emb = model.encode(phrases, normalize_embeddings=True)
     sim = cosine_similarity(emb, emb)
 
     n = len(phrases)
-    visited = [False] * n
+    visited: List[bool] = [False] * n
     clusters: List[List[int]] = []
 
     for i in range(n):
         if visited[i]:
             continue
-        comp = []
-        stack = [i]
+        comp: List[int] = []
+        stack: List[int] = [i]
         visited[i] = True
         while stack:
             j = stack.pop()
@@ -273,9 +284,11 @@ def cluster_synonyms(
                     stack.append(k)
         clusters.append(comp)
 
-    out: List[dict] = []
+    out: List[ClusterGroup] = []
     for comp in clusters:
-        members = [(phrases[idx], scores.get(phrases[idx], 0.0)) for idx in comp]
+        members: List[Tuple[str, float]] = [
+            (phrases[idx], scores.get(phrases[idx], 0.0)) for idx in comp
+        ]
         # canonical: frase con score più alto
         canonical = max(members, key=lambda x: x[1])[0]
         synonyms = [p for p, _ in members if p != canonical]

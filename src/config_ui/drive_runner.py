@@ -6,27 +6,26 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-# Import locali (dev UI)
-from .mapping_editor import (
-    split_mapping,
-    load_tags_reviewed,
-    mapping_to_raw_structure,
-    write_raw_structure_yaml,
-)
-from .utils import to_kebab, ensure_within_and_resolve  # SSoT normalizzazione + path-safety
-
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
-from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.drive_utils import (
-    get_drive_service,
     create_drive_folder,
     create_drive_structure_from_yaml,
-    upload_config_to_drive_folder,
     download_drive_pdfs_to_local,
+    get_drive_service,
+    upload_config_to_drive_folder,
 )
+from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.path_utils import sanitize_filename
 
+# Import locali (dev UI)
+from .mapping_editor import (
+    load_tags_reviewed,
+    mapping_to_raw_structure,
+    split_mapping,
+    write_raw_structure_yaml,
+)
+from .utils import ensure_within_and_resolve, to_kebab  # SSoT normalizzazione + path-safety
 
 # ===== Logger =================================================================
 
@@ -160,8 +159,8 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
     """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
     try:
         from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
         from reportlab.lib.units import cm
+        from reportlab.pdfgen import canvas
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
@@ -298,7 +297,7 @@ def emit_readmes_for_raw(
     return uploaded
 
 
-# ===== Download PDF da Drive â†’ raw/ locale ====================================
+# ===== Download PDF da Drive → raw/ locale ====================================
 
 
 def download_raw_from_drive(
@@ -358,13 +357,12 @@ def download_raw_from_drive_with_progress(
     base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    # Dipendenza opzionale gestita dai moduli pipeline: non necessaria qui
-
     written: List[Path] = []
 
     if on_progress:
-        assert on_progress is not None
+        # progress_cb: on_progress è già non-None qui
         progress_cb: Callable[[int, int, str], None] = on_progress
+
         # Pre-scan: raccogli lista file per folder e calcola total una sola volta
         by_folder: Dict[str, List[Dict[str, str]]] = {}
         name_map: Dict[str, str] = {}
@@ -404,17 +402,21 @@ def download_raw_from_drive_with_progress(
                 # Conta subito gli skip deterministici (stessa size e no overwrite)
                 try:
                     if (
-                        dest.exists() and not overwrite and remote_size > 0 and dest.stat().st_size == remote_size
+                        dest.exists()
+                        and not overwrite
+                        and remote_size > 0
+                        and dest.stat().st_size == remote_size
                     ):
                         log.info("raw.download.skip.exists", extra={"file_path": str(dest)})
                         done += 1
                         progress_cb(done, total, label)
                 except OSError:
-                    pass
+                    # Non interrompere il flusso per errori di stat() su Windows
+                    log.debug("pre-scan.stat.failed", extra={"file_path": str(dest)}, exc_info=True)
 
         # Adapter di progress: intercetta i log del downloader pipeline
         class _ProgressHandler(logging.Handler):
-            def __init__(self, *, total: int, start_done: int, label_map: Dict[str, str]):
+            def __init__(self, *, total: int, start_done: int, label_map: Dict[str, str]) -> None:
                 super().__init__(level=logging.INFO)
                 self.total = total
                 self.done = start_done
@@ -422,17 +424,27 @@ def download_raw_from_drive_with_progress(
 
             def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
                 try:
-                    if record.name == "pipeline.drive.download" and record.getMessage() == "download.ok":
-                        path = getattr(record, "file_path", None) or record.__dict__.get("file_path")
+                    if (
+                        record.name == "pipeline.drive.download"
+                        and record.getMessage() == "download.ok"
+                    ):
+                        path = getattr(record, "file_path", None) or record.__dict__.get(
+                            "file_path"
+                        )
                         label = self.label_map.get(str(path), str(path) if path else "-")
                         self.done += 1
                         try:
                             progress_cb(self.done, self.total, label)
                         except Exception:
-                            pass
+                            # Non deve mai spezzare il logging della pipeline
+                            logging.getLogger("config_ui.drive_runner").debug(
+                                "progress.callback.failed", exc_info=True
+                            )
                 except Exception:
-                    # L'handler non deve mai spezzare il logging
-                    pass
+                    # Evita try/except/pass silenziosi: traccia in debug
+                    logging.getLogger("config_ui.drive_runner").debug(
+                        "progress.emit.failed", exc_info=True
+                    )
 
         dl_logger = get_structured_logger("pipeline.drive.download", context=ctx)
         ph = _ProgressHandler(total=total, start_done=done, label_map=label_map)
@@ -461,14 +473,7 @@ def download_raw_from_drive_with_progress(
                 written.append(dest)
     else:
         # Nessun progress: singolo passaggio senza pre-scan
-        for folder in raw_subfolders:
-            folder_name = folder["name"]
-            folder_id = folder["id"]
-        # Delegazione al downloader della pipeline per ridurre duplicazioni
-        # e rispettare le policy atomiche/I-O centralizzate.
-        # Per mantenere la semantica del ritorno (lista dei file scritti in questo run),
-        # eseguiamo un pre-scan delle dimensioni locali e un post-scan per individuare i cambiamenti.
-        # 1) Pre-scan
+        # Pre-scan
         pre_sizes_noprog: Dict[str, int] = {}
         candidates_noprog: List[Path] = []
         for folder in raw_subfolders:
@@ -490,7 +495,7 @@ def download_raw_from_drive_with_progress(
                     except OSError:
                         pre_sizes_noprog[str(dest)] = -1
 
-        # 2) Download via pipeline
+        # Download via pipeline
         download_drive_pdfs_to_local(
             svc,
             raw_id,
@@ -500,7 +505,7 @@ def download_raw_from_drive_with_progress(
             redact_logs=bool(getattr(ctx, "redact_logs", False)),
         )
 
-        # 3) Post-scan: costruisci lista dei file nuovi/aggiornati
+        # Post-scan: costruisci lista dei file nuovi/aggiornati
         for dest in candidates_noprog:
             try:
                 size_now = dest.stat().st_size

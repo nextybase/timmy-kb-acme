@@ -3,6 +3,7 @@ from pathlib import Path
 
 def test_download_with_progress_adapter(monkeypatch, tmp_path):
     import logging
+
     # Evita 'src.' nel nome modulo per non duplicare path in mypy
     import config_ui.drive_runner as dr
 
@@ -12,14 +13,18 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
         redact_logs = False
         env = {"DRIVE_ID": "PARENT"}
 
-    monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(
+        dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())})
+    )
 
     # Fake Drive service and helpers
     class Svc:
         pass
 
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: Svc())
-    monkeypatch.setattr(dr, "create_drive_folder", lambda svc, name, parent_id, redact_logs=False: "CFID")
+    monkeypatch.setattr(
+        dr, "create_drive_folder", lambda svc, name, parent_id, redact_logs=False: "CFID"
+    )
 
     # _drive_list_folders: CFID -> [raw], RAW -> [cat-a, cat-b]
     def fake_list_folders(service, parent_id):
@@ -47,7 +52,16 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
     monkeypatch.setattr(dr, "_drive_list_pdfs", fake_list_pdfs)
 
     # Fake downloader: emette log "download.ok" per doc2 e doc3
-    def fake_downloader(service, remote_root_folder_id, local_root_dir, *, progress, context, redact_logs, chunk_size=8388608):
+    def fake_downloader(
+        service,
+        remote_root_folder_id,
+        local_root_dir,
+        *,
+        progress,
+        context,
+        redact_logs,
+        chunk_size=8388608,
+    ):
         lg = logging.getLogger("pipeline.drive.download")
         lg.propagate = False
         # Scrivi i file come farebbe il downloader reale, poi emetti i log

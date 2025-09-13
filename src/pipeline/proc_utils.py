@@ -22,14 +22,14 @@ Note:
 
 from __future__ import annotations
 
-from typing import Sequence, Mapping, Optional, Callable
+import logging
 import os
-import time
 import shlex
 import socket
 import subprocess
-import logging
+import time
 from pathlib import Path
+from typing import Callable, Mapping, Optional, Sequence
 
 from .env_utils import get_int
 from .logging_utils import redact_secrets
