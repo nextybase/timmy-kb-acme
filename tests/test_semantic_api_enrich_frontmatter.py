@@ -1,9 +1,10 @@
+# tests/test_semantic_api_enrich_frontmatter.py
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Set
+from typing import Any, Dict, Set, cast
 
 import semantic.api as sapi
 
@@ -45,7 +46,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     }
 
     touched = sapi.enrich_frontmatter(
-        DummyCtx(),
+        cast(Any, DummyCtx()),  # bypass nominal type; context non usato dalla funzione
         logging.getLogger("test"),
         vocab,
         slug="e2e",

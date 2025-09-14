@@ -1,5 +1,8 @@
+# tests/test_semantic_index_markdown_db.py
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 
 class _DummyEmbeddings:
@@ -8,16 +11,21 @@ class _DummyEmbeddings:
         return [[float(len(t) % 5), 1.0, 0.5] for t in texts]
 
 
-def _ctx(base_dir: Path):
-    class C:
-        pass
+@dataclass
+class C:
+    base_dir: Path
+    raw_dir: Path
+    md_dir: Path
+    slug: str
 
-    c = C()
-    c.base_dir = base_dir
-    c.raw_dir = base_dir / "raw"
-    c.md_dir = base_dir / "book"
-    c.slug = "x"
-    return c
+
+def _ctx(base_dir: Path) -> C:
+    return C(
+        base_dir=base_dir,
+        raw_dir=base_dir / "raw",
+        md_dir=base_dir / "book",
+        slug="x",
+    )
 
 
 def test_index_markdown_to_db_inserts_rows(tmp_path):
@@ -32,7 +40,7 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
 
     dbp = tmp_path / "db.sqlite"
     inserted = index_markdown_to_db(
-        _ctx(base),
+        cast(Any, _ctx(base)),  # bypass nominal type di ClientContext
         logging.getLogger("test"),
         slug="x",
         scope="book",

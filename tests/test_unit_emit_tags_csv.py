@@ -1,18 +1,9 @@
+# tests/test_unit_emit_tags_csv.py
 import csv
+import logging
 from pathlib import Path
 
 from src.semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
-
-
-class _DummyLogger:
-    def info(self, *a, **kw):
-        pass
-
-    def warning(self, *a, **kw):
-        pass
-
-    def debug(self, *a, **kw):
-        pass
 
 
 def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
@@ -27,7 +18,8 @@ def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
     csv_path = sem / "tags_raw.csv"
-    written = _emit_tags_csv(raw, csv_path, _DummyLogger())
+    # Passa un logger reale per soddisfare la signature (logging.Logger)
+    written = _emit_tags_csv(raw, csv_path, logging.getLogger("test"))
     assert written == 2
     assert csv_path.exists()
 

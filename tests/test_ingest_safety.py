@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Sequence
-
-import pytest
-
 import src.ingest as ingest
-from pipeline.exceptions import ConfigError
 
 
 class FakeEmb:

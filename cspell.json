@@ -217,7 +217,9 @@
     "minversion",
     "maxfail",
     "asctime",
-    "filterwarnings"
+    "filterwarnings",
+    "configerror",
+    "cfid"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

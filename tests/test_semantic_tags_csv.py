@@ -1,11 +1,18 @@
+# tests/test_semantic_tags_csv.py
+# cspell:ignore rels
 import csv
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 
 def _ctx(base_dir: Path):
     class C:
-        pass
+        # Attributi dichiarati per soddisfare Pylance
+        base_dir: Path
+        raw_dir: Path
+        md_dir: Path
+        slug: str
 
     c = C()
     c.base_dir = base_dir
@@ -25,7 +32,8 @@ def test_build_tags_csv_from_raw(tmp_path):
     (raw / "HR" / "Policies" / "Welcome Packet.pdf").write_bytes(b"%PDF-1.4\n")
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
-    csv_path = build_tags_csv(_ctx(base), logging.getLogger("test"), slug="x")
+    # cast(Any, …): bypass del nominal type (ClientContext) mantenendo invariata la logica
+    csv_path = build_tags_csv(cast(Any, _ctx(base)), logging.getLogger("test"), slug="x")
     assert csv_path.exists()
     assert csv_path.parent == sem
 

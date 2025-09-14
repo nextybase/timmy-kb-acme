@@ -29,7 +29,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from semantic.types import EmbeddingsClient
 
 from .kb_db import fetch_candidates
-from errors import RetrieverError  # modulo comune degli errori
+from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 
 LOGGER = logging.getLogger("timmy_kb.retriever")
 

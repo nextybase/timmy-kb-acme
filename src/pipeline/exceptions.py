@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/exceptions.py
 from __future__ import annotations
 
@@ -5,22 +6,30 @@ from pathlib import Path
 from typing import Any, Optional
 
 """
-Eccezioni di dominio per la pipeline NeXT/Timmy.
+Eccezioni SSoT per NeXT/Timmy.
 
-Cosa trovi qui (ruoli principali):
-- `PipelineError`: base class di tutte le eccezioni di dominio (no I/O, no exit).
+Ruoli principali:
+- `TimmyError`: base per errori applicativi “generici” fuori pipeline (es. retriever).
+- `PipelineError`: base per eccezioni di dominio della pipeline (no I/O, no exit).
 - Sottoclassi tipizzate per aree funzionali: Drive*, ConversionError, PushError,
   ForcePushError (governance), ConfigError, PreviewError, EnrichmentError,
-  SemanticMappingError, PreOnboardingValidationError.
-- Quick win per input/slug: InputDirectoryMissing, InputFileMissing, InvalidSlug.
-- `EXIT_CODES`: tabella centralizzata per la mappatura orchestratori → sys.exit.
-- (Opz.) `exit_code_for(exc)`: helper di comodo per ottenere il codice.
+  SemanticMappingError, PreOnboardingValidationError, ecc.
+- Quick win input/slug: InputDirectoryMissing, InputFileMissing, InvalidSlug.
+- `EXIT_CODES` + `exit_code_for`: tabella centralizzata per orchestratori.
 
 Linee guida:
-- Nessuna classe esegue I/O o termina il processo.
-- I messaggi includono contesto “safe” in `__str__` (slug, tail(file), mask id).
+- Nessuna eccezione fa I/O o termina il processo.
+- I messaggi includono contesto “safe” in __str__ (slug, tail(file), mask id).
 - Se non esiste una tipizzata adatta → usa `PipelineError`.
 """
+
+# ---------------------------------------------------------------------------
+# Basi
+# ---------------------------------------------------------------------------
+
+
+class TimmyError(Exception):
+    """Base per errori applicativi Timmy/NeXT non legati alla pipeline."""
 
 
 class PipelineError(Exception):
@@ -78,6 +87,20 @@ class PipelineError(Exception):
             context_parts.append(f"run_id={self.run_id}")
         context_info = f" [{' | '.join(context_parts)}]" if context_parts else ""
         return f"{base_msg}{context_info}"
+
+
+# ---------------------------------------------------------------------------
+# Errori applicativi extra-pipeline
+# ---------------------------------------------------------------------------
+
+
+class RetrieverError(ValueError, TimmyError):
+    """Errore di validazione/uso del retriever (parametri, limiti, ecc.)."""
+
+
+# ---------------------------------------------------------------------------
+# Errori tipizzati di pipeline
+# ---------------------------------------------------------------------------
 
 
 class DriveDownloadError(PipelineError):
@@ -141,16 +164,16 @@ class SemanticMappingError(PipelineError):
 
 
 class PreOnboardingValidationError(PipelineError):
-    """Errore di validazione durante la fase di pre-onboarding (config, env, file)."""
+    """Errore di validazione nella fase di pre-onboarding (config, env, file)."""
 
     pass
 
 
-# === Quick win: eccezioni tipizzate per I/O input e slug =====================
+# --- Quick win: I/O input e slug ---------------------------------------------
 
 
 class InputDirectoryMissing(PipelineError):
-    """Directory di input attesa ma assente (es. raw/ o sottocartella richieste)."""
+    """Directory di input attesa ma assente (es. raw/ o sottocartella richiesta)."""
 
     pass
 
@@ -168,9 +191,9 @@ class InvalidSlug(PipelineError):
 
 
 # ---------------------------------------------------------------------------
-# Mappa centralizzata dei codici di uscita (nessun I/O, no side effects)
-# Gli orchestratori useranno questa tabella per sys.exit() coerenti.
+# Exit codes centralizzati (nessun side-effect)
 # ---------------------------------------------------------------------------
+
 EXIT_CODES = {
     "PipelineError": 1,
     "ConfigError": 2,
@@ -188,12 +211,17 @@ EXIT_CODES = {
 
 
 def exit_code_for(exc: BaseException) -> int:
-    """Restituisce il codice di uscita per un'eccezione (fallback a PipelineError=1)."""
+    """Restituisce il codice di uscita per un’eccezione (fallback a PipelineError=1)."""
     return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["PipelineError"])
 
 
 __all__ = [
+    # basi
+    "TimmyError",
     "PipelineError",
+    # extra-pipeline
+    "RetrieverError",
+    # pipeline
     "DriveDownloadError",
     "DriveUploadError",
     "ConversionError",
@@ -208,6 +236,7 @@ __all__ = [
     "InputDirectoryMissing",
     "InputFileMissing",
     "InvalidSlug",
+    # exit codes
     "EXIT_CODES",
     "exit_code_for",
 ]

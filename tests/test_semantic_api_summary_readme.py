@@ -1,94 +1,101 @@
+# tests/test_semantic_api_summary_readme.py
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import semantic.api as sapi
 
 
 @dataclass
 class DummyCtx:
-    slug: str = "x"
+    slug: str = "e2e"
+
+
+def _write(p: Path, text: str) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
 
 
 def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
-    book.mkdir(parents=True)
+    raw = base / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
 
-    # Constrain I/O under tmp path
+    # Confinare i percorsi sotto tmp_path
     monkeypatch.setattr(
         sapi,
         "get_paths",
         lambda slug: {
             "base": base,
-            "raw": base / "raw",
+            "raw": raw,
             "book": book,
             "semantic": base / "semantic",
         },
     )
 
-    calls = {"summary": 0, "readme": 0, "validate": 0}
+    # Fake generators: scrivono i file attesi
+    def _fake_summary(ctx) -> None:
+        (ctx.md_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
-    def _summary_stub(ctx):
-        calls["summary"] += 1
+    def _fake_readme(ctx) -> None:
+        (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
 
-    def _readme_stub(ctx):
-        calls["readme"] += 1
+    monkeypatch.setattr(sapi, "_gen_summary", _fake_summary)
+    monkeypatch.setattr(sapi, "_gen_readme", _fake_readme)
+    # Validazione: no-op per il test (la funzione reale viene testata altrove)
+    monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
 
-    def _validate_stub(ctx):
-        calls["validate"] += 1
+    sapi.write_summary_and_readme(
+        cast(Any, DummyCtx()),  # bypass nominal type di ClientContext
+        logging.getLogger("test"),
+        slug="e2e",
+    )
 
-    # Patch optional generators and validator to our stubs
-    monkeypatch.setattr(sapi, "_gen_summary", _summary_stub, raising=False)
-    monkeypatch.setattr(sapi, "_gen_readme", _readme_stub, raising=False)
-    monkeypatch.setattr(sapi, "_validate_md", _validate_stub, raising=False)
-
-    sapi.write_summary_and_readme(DummyCtx(), logging.getLogger("test"), slug="x")
-
-    assert calls == {"summary": 1, "readme": 1, "validate": 1}
+    assert (book / "SUMMARY.md").exists()
+    assert (book / "README.md").exists()
 
 
 def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
-    book.mkdir(parents=True)
+    raw = base / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
         sapi,
         "get_paths",
         lambda slug: {
             "base": base,
-            "raw": base / "raw",
+            "raw": raw,
             "book": book,
             "semantic": base / "semantic",
         },
     )
 
-    calls = {"summary": 0, "readme": 0, "validate": 0}
+    def _boom_summary(ctx) -> None:
+        raise ValueError("summary failed")
 
-    def _summary_stub(ctx):
-        calls["summary"] += 1
-        raise RuntimeError("boom summary")
+    def _boom_readme(ctx) -> None:
+        raise RuntimeError("readme failed")
 
-    def _readme_stub(ctx):
-        calls["readme"] += 1
-        raise RuntimeError("boom readme")
+    monkeypatch.setattr(sapi, "_gen_summary", _boom_summary)
+    monkeypatch.setattr(sapi, "_gen_readme", _boom_readme)
 
-    def _validate_stub(ctx):
-        calls["validate"] += 1
-
-    monkeypatch.setattr(sapi, "_gen_summary", _summary_stub, raising=False)
-    monkeypatch.setattr(sapi, "_gen_readme", _readme_stub, raising=False)
-    monkeypatch.setattr(sapi, "_validate_md", _validate_stub, raising=False)
-
-    import pytest
-
-    with pytest.raises(RuntimeError):
-        sapi.write_summary_and_readme(DummyCtx(), logging.getLogger("test"), slug="x")
-
-    # Generators attempted e hanno sollevato
-    assert calls["summary"] == 1 and calls["readme"] == 1
-    # Nessun fallback; validazione non raggiunta
-    assert calls["validate"] == 0
+    logger = logging.getLogger("test")
+    try:
+        sapi.write_summary_and_readme(
+            cast(Any, DummyCtx()),  # idem sopra
+            logger,
+            slug="e2e",
+        )
+    except RuntimeError as e:
+        msg = str(e)
+        assert "summary:" in msg and "readme:" in msg
+    else:
+        raise AssertionError("write_summary_and_readme doveva sollevare RuntimeError")

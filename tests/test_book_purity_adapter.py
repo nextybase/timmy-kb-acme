@@ -1,10 +1,14 @@
+# tests/test_book_purity_adapter.py
 import logging
 from pathlib import Path
 
 
 def _ctx(base_dir: Path, md_sub: str = "book"):
     class Ctx:
-        pass
+        # Tipi dichiarati per soddisfare Pylance (attributi noti)
+        slug: str
+        base_dir: Path
+        md_dir: Path
 
     c = Ctx()
     c.slug = "dummy"

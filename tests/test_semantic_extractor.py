@@ -1,8 +1,9 @@
+# tests/test_semantic_extractor.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, cast
 
 import pytest
 
@@ -36,14 +37,14 @@ def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
     (md / "c.txt").write_text("X", encoding="utf-8")
 
     ctx = DummyCtx(base_dir=base, md_dir=md)
-    files = _list_markdown_files(ctx)
+    files = _list_markdown_files(cast(Any, ctx))
     assert [p.name for p in files] == ["a.md", "b.md"]
 
 
 def test__list_markdown_files_missing_fields_raises() -> None:
     # Missing md_dir/base_dir -> PipelineError
     with pytest.raises(PipelineError):
-        _ = _list_markdown_files(DummyCtx(base_dir=None, md_dir=None))
+        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=None, md_dir=None)))
 
 
 def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
@@ -53,7 +54,7 @@ def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
     md_outside = tmp_path / "outside"
     md_outside.mkdir()
     with pytest.raises(PipelineError):
-        _ = _list_markdown_files(DummyCtx(base_dir=base, md_dir=md_outside))
+        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md_outside)))
 
 
 def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
@@ -62,7 +63,7 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
     base.mkdir()
     # md does not exist
     with pytest.raises(InputDirectoryMissing):
-        _ = _list_markdown_files(DummyCtx(base_dir=base, md_dir=md))
+        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
 
 
 def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
@@ -87,7 +88,7 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     )
 
     ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
-    out = extract_semantic_concepts(ctx)
+    out = extract_semantic_concepts(cast(Any, ctx))
 
     # For conceptA: first-hit policy per file ->
     # - one.md contains both 'foo' and 'bar' -> first in mapping order is 'foo'
@@ -121,7 +122,7 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
 
     # Set threshold lower than big file size but higher than small
-    out = extract_semantic_concepts(ctx, max_scan_bytes=1024)
+    out = extract_semantic_concepts(cast(Any, ctx), max_scan_bytes=1024)
     assert out["concept"] == [{"file": "small.md", "keyword": "alpha"}]
 
 
@@ -140,5 +141,5 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(
     monkeypatch.setattr(se, "load_semantic_mapping", lambda context, logger=None: {})
 
     ctx = DummyCtx(slug="s3", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
-    out = extract_semantic_concepts(ctx)
+    out = extract_semantic_concepts(cast(Any, ctx))
     assert out == {}

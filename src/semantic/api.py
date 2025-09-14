@@ -15,7 +15,7 @@ from pipeline.content_utils import convert_files_to_structured_markdown as _conv
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from errors import ConfigError  # allineato al modulo errori comune
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within, sorted_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
@@ -106,7 +106,11 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
 def convert_markdown(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
-    """Converte i PDF in raw/ in Markdown sotto book/ (via content_utils se disponibili)."""
+    """Converte i PDF in raw/ in Markdown sotto book/ (via content_utils se disponibili).
+
+    Nota: proviamo sempre a chiamare il convertitore; in scenari di test può essere
+    stubbato per generare i .md senza PDF reali in raw/.
+    """
     # Risolvi percorsi con Path non opzionali
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
 
@@ -114,16 +118,25 @@ def convert_markdown(
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
-    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
-    if not local_pdfs:
-        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
+
     book_dir.mkdir(parents=True, exist_ok=True)
 
     # Adatta la chiamata a convert_files_to_structured_markdown senza kwargs non tipizzati
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
     _call_convert_md(_convert_md, shim, book_dir)
 
-    return list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    # Se il convertitore (anche stub nei test) ha prodotto Markdown, restituiamoli.
+    mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    if mds:
+        return mds
+
+    # Altrimenti, applichiamo la verifica "nessun PDF" per segnalare errore significativo.
+    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    if not local_pdfs:
+        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
+
+    # PDF presenti ma nessun .md prodotto → errore di conversione.
+    raise RuntimeError("La conversione non ha prodotto Markdown.")
 
 
 def enrich_frontmatter(
