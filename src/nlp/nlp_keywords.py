@@ -76,20 +76,41 @@ def extract_text_from_pdf(path: str) -> str:
     try:
         doc = fitz.open(path)
         texts: List[str] = []
-        for page in doc:
+        try:
+            for page in doc:
+                try:
+                    # Preferisci la modalità esplicita "text" per coerenza tra versioni;
+                    # se non supportata, ricadi su chiamata senza argomenti o sulla vecchia API.
+                    getter = getattr(page, "get_text", None)
+                    if callable(getter):
+                        try:
+                            t: str = _as_str(getter("text"))
+                        except TypeError:
+                            try:
+                                t = _as_str(getter())
+                            except Exception:
+                                t = ""
+                    else:
+                        getter_old = getattr(page, "getText", None)  # compat vecchie versioni
+                        if callable(getter_old):
+                            try:
+                                t = _as_str(getter_old("text"))
+                            except TypeError:
+                                try:
+                                    t = _as_str(getter_old())
+                                except Exception:
+                                    t = ""
+                        else:
+                            t = ""
+                except Exception:
+                    t = ""
+                if t:
+                    texts.append(t)
+        finally:
             try:
-                # Usa getattr per evitare errori di type-checking / differenze di API
-                getter = getattr(page, "get_text", None)
-                if callable(getter):
-                    t: str = _as_str(getter())
-                else:
-                    getter_old = getattr(page, "getText", None)  # compat vecchie versioni
-                    t: str = _as_str(getter_old("text")) if callable(getter_old) else ""
+                doc.close()
             except Exception:
-                t = ""
-            if t:
-                texts.append(t)
-        doc.close()
+                pass
         return "\n".join(texts)
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
