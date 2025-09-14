@@ -7,12 +7,12 @@ Funzioni esposte:
 - with_config_candidate_limit(params, config) -> params
 - choose_limit_for_budget(budget_ms) -> int
 - with_config_or_budget(params, config) -> params
-- search_with_config(params, config, embeddings_client) -> list[dict]   <-- NEW
-- preview_effective_candidate_limit(params, config) -> (limit:int, source:str, budget_ms:int)  <-- NEW
+- search_with_config(params, config, embeddings_client) -> list[dict]
+- preview_effective_candidate_limit(params, config) -> (limit:int, source:str, budget_ms:int)
 
 Design:
 - Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
-- Calcola la similarità coseno in Python su tutti i candidati.
+- Calcola la similarità coseno in Python sui candidati.
 - Restituisce i top-k come dict con: content, meta, score.
 """
 
@@ -22,12 +22,14 @@ import logging
 import math
 import time
 from dataclasses import dataclass, replace
+from heapq import nlargest
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from semantic.types import EmbeddingsClient
 
 from .kb_db import fetch_candidates
+from errors import RetrieverError  # modulo comune degli errori
 
 LOGGER = logging.getLogger("timmy_kb.retriever")
 
@@ -80,13 +82,34 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
 def _validate_params(params: QueryParams) -> None:
     """Validazioni minime (fail-fast, senza fallback)."""
     if not params.project_slug.strip():
-        raise ValueError("project_slug vuoto")
+        raise RetrieverError("project_slug vuoto")
     if not params.scope.strip():
-        raise ValueError("scope vuoto")
+        raise RetrieverError("scope vuoto")
     if params.candidate_limit < 0:
-        raise ValueError("candidate_limit negativo")
+        raise RetrieverError("candidate_limit negativo")
     if params.k < 0:
-        raise ValueError("k negativo")
+        raise RetrieverError("k negativo")
+
+
+def _score_candidates(
+    qv: Sequence[float],
+    cands: Sequence[Dict],
+) -> Iterable[Tuple[Dict, int]]:
+    """Produce coppie (item_dict, idx) con score coseno e indice per tie-break.
+
+    L'item_dict ha le chiavi: content, meta, score (float).
+    Il tie-break deterministico usa l'indice di enumerazione (idx ascendente).
+    """
+    for idx, c in enumerate(cands):
+        sim = cosine(qv, c.get("embedding") or [])
+        yield (
+            {
+                "content": c["content"],
+                "meta": c.get("meta", {}),
+                "score": float(sim),
+            },
+            idx,
+        )
 
 
 def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dict]:
@@ -133,31 +156,22 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
     t_fetch_ms = (time.time() - t_fetch0) * 1000.0
     n = len(cands)
 
-    # 3) Scoring (on-the-fly) con indice per tie-break deterministico
-    def _iter_scored():
-        for idx, c in enumerate(cands):
-            emb = c.get("embedding") or []
-            sim = cosine(qv, emb)
-            yield (
-                {
-                    "content": c["content"],
-                    "meta": c.get("meta", {}),
-                    "score": float(sim),
-                },
-                idx,
-            )
+    # 3) Scoring (generator) con indice per tie-break deterministico
+    scored_iter = _score_candidates(qv, cands)
 
     # 4) Ordinamento e top-k con tie-break deterministico (score desc, idx asc)
     k = max(0, int(params.k))
     if k == 0 or n == 0:
         out: List[Dict] = []
     else:
-        scored = list(_iter_scored())
-        scored_sorted = sorted(scored, key=lambda t: (-t[0]["score"], t[1]))
         if k >= n:
+            # Caso semplice: ordina tutto
+            scored_sorted = sorted(scored_iter, key=lambda t: (-t[0]["score"], t[1]))
             out = [item for item, _ in scored_sorted]
         else:
-            out = [item for item, _ in scored_sorted[:k]]
+            # Ottimizzazione O(n log k) mantenendo l'ordinamento finale deterministico
+            topk = nlargest(k, scored_iter, key=lambda t: (t[0]["score"], -t[1]))
+            out = [item for item, _ in sorted(topk, key=lambda t: (-t[0]["score"], t[1]))]
 
     dt = (time.time() - t0) * 1000.0
     t_score_sort_ms = max(0.0, dt - t_emb_ms - t_fetch_ms)
@@ -328,7 +342,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryP
     return params
 
 
-# ---------------- NEW: Facade per wiring reale + preview per la UI ----------------
+# ---------------- Facade per wiring reale + preview per la UI ----------------
 
 
 def search_with_config(
@@ -391,12 +405,13 @@ def preview_effective_candidate_limit(
 
 
 __all__ = [
+    "RetrieverError",  # re-export dall'omonimo modulo
     "QueryParams",
     "cosine",
     "search",
     "with_config_candidate_limit",
     "choose_limit_for_budget",
     "with_config_or_budget",
-    "search_with_config",  # NEW
-    "preview_effective_candidate_limit",  # NEW
+    "search_with_config",
+    "preview_effective_candidate_limit",
 ]

@@ -4,6 +4,22 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [Unreleased]
+
+### Added
+- Creato nuovo modulo `pipeline.errors` per centralizzare la gerarchia di eccezioni comuni (`TimmyError`, `ConfigError`, `RetrieverError`, `PreviewError`, `PushError`).
+
+### Changed
+- `retriever.py`: sostituiti i `ValueError` con `RetrieverError` tipizzata.
+- Refactor del calcolo dello scoring:
+  - estratta funzione `_score_candidates`.
+  - introdotto uso di `heapq.nlargest` per ottimizzare il recupero dei top-k.
+- Logging invariato, mantenuto tie-break deterministico (score desc, idx asc).
+
+### Tests
+- Aggiunto test di proprietà per verificare la monotonicità di `choose_limit_for_budget`.
+
+
 ## [fix] - 2025-09-14
 
 ### Changed

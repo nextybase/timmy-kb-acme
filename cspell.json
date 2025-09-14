@@ -210,6 +210,9 @@
     "hasattr",
     "getattr",
     "testabilità",
+    "heapq",
+    "nlargest",
+    "monotonicità",
     "PYTHONUTF"
   ],
   "ignoreRegExpList": [
