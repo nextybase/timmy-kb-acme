@@ -1,0 +1,44 @@
+# tests/test_semantic_api_convert_md.py
+from __future__ import annotations
+
+from pathlib import Path
+import pytest
+
+from src.semantic.api import _call_convert_md, _CtxShim
+
+
+def _ctx(
+    base: Path = Path("."),
+    raw: Path = Path("."),
+    md: Path = Path("book"),
+) -> _CtxShim:
+    return _CtxShim(base_dir=base, raw_dir=raw, md_dir=md, slug="x")
+
+
+def test_call_convert_md_raises_on_non_callable() -> None:
+    with pytest.raises(RuntimeError, match="not callable"):
+        _call_convert_md(object(), _ctx(), Path("book"))
+
+
+def test_call_convert_md_calls_without_md_dir() -> None:
+    called = {"ok": False}
+
+    def f(ctx):
+        assert isinstance(ctx, _CtxShim)
+        called["ok"] = True
+
+    _call_convert_md(f, _ctx(), Path("book"))
+    assert called["ok"] is True
+
+
+def test_call_convert_md_calls_with_md_dir_kw() -> None:
+    called = {"ok": False, "md": None}
+
+    def f(ctx, *, md_dir: Path):
+        assert isinstance(ctx, _CtxShim)
+        called["ok"] = True
+        called["md"] = md_dir
+
+    _call_convert_md(f, _ctx(md=Path("book")), Path("book"))
+    assert called["ok"] is True
+    assert called["md"] == Path("book")

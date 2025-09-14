@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import re
+import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
@@ -14,7 +15,7 @@ from pipeline.content_utils import convert_files_to_structured_markdown as _conv
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from pipeline.exceptions import ConfigError
+from errors import ConfigError  # allineato al modulo errori comune
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within, sorted_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
@@ -83,22 +84,23 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 
 def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
-    """Chiama convert_files_to_structured_markdown adattandosi alla firma reale senza far intervenire Pylance."""
-    try:
-        import inspect
+    """Invoca la conversione Markdown con binding esplicito e fail-fast su target non callable.
 
-        params = inspect.signature(func).parameters
-    except Exception:
-        params = {}
+    - Se la funzione accetta `md_dir`, lo passa come keyword.
+    - Nessun catch generico: eventuali TypeError reali di binding/implementazione devono emergere.
+    """
+    if not callable(func):
+        raise RuntimeError("convert_md target is not callable")
 
-    try:
-        if "md_dir" in params:
-            func(ctx, md_dir=md_dir)  # func è Any → Pylance non effettua type-check della call
-        else:
-            func(ctx)
-    except TypeError:
-        # Estremo fallback per versioni legacy
-        func(ctx)
+    sig = inspect.signature(func)
+    params = sig.parameters
+    kwargs: Dict[str, Any] = {}
+    if "md_dir" in params:
+        kwargs["md_dir"] = md_dir
+
+    bound = sig.bind_partial(ctx, **kwargs)
+    bound.apply_defaults()
+    func(*bound.args, **bound.kwargs)
 
 
 def convert_markdown(
@@ -200,16 +202,14 @@ def build_mapping_from_vision(
     ensure_within(config_dir, mapping_path)
     ensure_within(config_dir, vision_yaml)
     if not vision_yaml.exists():
-        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}", file_path=str(vision_yaml))
+        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}")
 
     try:
         from pipeline.yaml_utils import yaml_read
 
         raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
     except Exception as e:
-        raise ConfigError(
-            f"Errore lettura/parsing vision YAML: {e}", file_path=str(vision_yaml)
-        ) from e
+        raise ConfigError(f"Errore lettura/parsing vision YAML ({vision_yaml}): {e}") from e
 
     def _as_list(val: object) -> list[str]:
         if isinstance(val, list):
@@ -253,10 +253,7 @@ def build_mapping_from_vision(
             mapping[concept] = norm
 
     if not mapping:
-        raise ConfigError(
-            "Vision YAML non contiene sezioni utili per il mapping.",
-            file_path=str(vision_yaml),
-        )
+        raise ConfigError(f"Vision YAML non contiene sezioni utili per il mapping ({vision_yaml}).")
 
     config_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -265,7 +262,7 @@ def build_mapping_from_vision(
         safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
         safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
     except Exception as e:
-        raise ConfigError(f"Scrittura mapping fallita: {e}", file_path=str(mapping_path)) from e
+        raise ConfigError(f"Scrittura mapping fallita ({mapping_path}): {e}") from e
 
     logger.info(
         "vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)}

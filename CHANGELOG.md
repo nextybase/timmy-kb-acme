@@ -6,6 +6,16 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ## [Unreleased]
 
+### Tests
+- Aggiunta suite per `semantic.api._call_convert_md` (fail-fast su non-callable, binding firma, supporto `md_dir` kw).
+- Aggiunti test di validazione `retriever` (slug/scope/k/candidate_limit) ed early-return (query vuota, k=0, candidate_limit=0).
+- Aggiunti test di scoring: tie-break deterministico e gestione `embedding` mancante.
+- Aggiunti test di configurazione: precedenze `with_config_candidate_limit` / `with_config_or_budget`, mappatura `choose_limit_for_budget`, proprietà di monotonicità per budget > 0 e caso sentinella budget=0.
+- Uniformati gli import dei test a `from src...`, stub `EmbeddingsClient` compatibile con Protocol, fix PEP8/Flake8 (E302/E402/F811/F401/W293).
+
+
+## [Unreleased]
+
 ### Added
 - Creato nuovo modulo `pipeline.errors` per centralizzare la gerarchia di eccezioni comuni (`TimmyError`, `ConfigError`, `RetrieverError`, `PreviewError`, `PushError`).
 
