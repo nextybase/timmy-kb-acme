@@ -1,5 +1,4 @@
-﻿---
-repos:
+﻿repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
@@ -8,6 +7,12 @@ repos:
       - id: trailing-whitespace
       - id: mixed-line-ending
         args: [--fix=lf]
+
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        stages: [pre-commit]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.11.2
@@ -24,13 +29,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: black-fix
-        name: black (auto-format)
-        entry: python -m black
-        language: system
-        types: [python]
-        pass_filenames: true
-        stages: [pre-commit]
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
         entry: python tools/dev/check_no_local_emit_or_copy.py

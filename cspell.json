@@ -204,6 +204,12 @@
     "lpdw",
     "intptr",
     "settingchange",
+    "modularizzata",
+    "dellutente",
+    "sottoprocedure",
+    "hasattr",
+    "getattr",
+    "testabilità",
     "PYTHONUTF"
   ],
   "ignoreRegExpList": [

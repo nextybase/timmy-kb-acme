@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import open_for_read  # path-safe reader anchored to a root
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -104,16 +104,15 @@ def summarize(conn: sqlite3.Connection) -> List[Tuple[str, int]]:
 
 
 def import_csv(base_dir: Path, csv_path: Path) -> Dict[str, Any]:
-    """Importa CSV di metriche in semantic/finance.db
+    """Importa CSV di metriche in `semantic/finance.db`.
 
-    CSV atteso: metric, period, value, [unit], [currency], [note], [canonical_term]
+    CSV atteso: ``metric, period, value, [unit], [currency], [note], [canonical_term]``
+
+    Sicurezza percorsi: il CSV viene aperto tramite `open_for_read(sem_dir, csv_path, ...)`,
+    che impedisce traversal al di fuori di `base_dir/semantic`.
     """
     base_dir = Path(base_dir).resolve()
-    csv_path = Path(csv_path).resolve()
-    sem_dir = base_dir / "semantic"
-
-    # Consenti lettura CSV solo sotto semantic/
-    ensure_within(sem_dir, csv_path)
+    sem_dir = (base_dir / "semantic").resolve()
 
     db_path = sem_dir / "finance.db"
     conn = get_conn(db_path)
@@ -122,7 +121,8 @@ def import_csv(base_dir: Path, csv_path: Path) -> Dict[str, Any]:
     created = 0
     updated = 0
 
-    with csv_path.open("r", encoding="utf-8", newline="") as f:
+    # Apertura path-safe ancorata a sem_dir
+    with open_for_read(sem_dir, csv_path, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             metric = (row.get("metric") or "").strip()
@@ -132,14 +132,18 @@ def import_csv(base_dir: Path, csv_path: Path) -> Dict[str, Any]:
             currency = (row.get("currency") or "").strip() or None
             note = (row.get("note") or "").strip() or None
             canonical = (row.get("canonical_term") or "").strip()
+
             if not metric or not period or not value_s:
                 continue
+
             try:
                 val = float(value_s.replace(",", "."))
             except Exception:
                 continue
+
             mid = upsert_metric(conn, metric, unit)
-            # prova insert/update e conta
+
+            # Verifica se è una creazione o un update
             before = conn.execute(
                 "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
                 (mid, period),
@@ -149,12 +153,15 @@ def import_csv(base_dir: Path, csv_path: Path) -> Dict[str, Any]:
                 "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
                 (mid, period),
             ).fetchone()
+
             if before is None and after is not None:
                 created += 1
             else:
                 updated += 1
+
             if canonical:
                 link_metric_to_canonical(conn, mid, canonical)
+
     conn.commit()
     return {"db": str(db_path), "rows": created, "updated": updated}
 
