@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List
 
 __all__ = [
     "load_tags_reviewed",
@@ -93,16 +94,15 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
       "version": str,
       "reviewed_at": str,
       "keep_only_listed": bool,
-      "tags": [ {"name": str, "action": str, "synonyms": [str,...], "note": str|None}, ... ]
+      "tags": [{"name": str, "action": str, "synonyms": [str,...], "note": str|None}, ... ]
     }
-    Se il DB è assente o vuoto, ritorna la struttura minima di default.
+    Se il DB e' assente o vuoto, ritorna la struttura minima di default.
     """
     dbp = Path(db_path)
     if not dbp.parent.exists():
         dbp.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(dbp)
-    try:
+    with closing(sqlite3.connect(dbp)) as conn:
         _ensure_schema(conn)
 
         # meta
@@ -122,13 +122,12 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
         cur = conn.execute(
             "SELECT id, name, action, note FROM tags ORDER BY name COLLATE NOCASE ASC"
         )
-        tag_rows = cur.fetchall()
-        for tid, name, action, note in tag_rows:
-            scur = conn.execute(
+        for tid, name, action, note in cur.fetchall():
+            syns_cur = conn.execute(
                 "SELECT alias FROM tag_synonyms WHERE tag_id=? ORDER BY pos ASC, alias COLLATE NOCASE ASC",
                 (tid,),
             )
-            syns = [str(r[0]) for r in scur.fetchall()]
+            syns = [str(r[0]) for r in syns_cur.fetchall()]
             tags.append(
                 {
                     "name": str(name),
@@ -144,87 +143,69 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
             "keep_only_listed": bool(keep_only_listed),
             "tags": tags,
         }
-    finally:
-        conn.close()
 
 
 def save_tags_reviewed(db_path: str, data: Dict[str, Any]) -> None:
     """Persiste in SQLite (upsert) lo stesso dict precedentemente scritto in YAML."""
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(dbp)
-    try:
-        _ensure_schema(conn)
-        conn.execute("BEGIN")
+    with closing(sqlite3.connect(dbp)) as conn:
+        try:
+            _ensure_schema(conn)
+            conn.execute("BEGIN")
 
-        # Upsert meta (id=1)
-        version = str((data or {}).get("version") or "2")
-        reviewed_at = str((data or {}).get("reviewed_at") or _now_iso())
-        keep_only_listed = _to_int((data or {}).get("keep_only_listed", False))
-        conn.execute(
-            (
-                "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) "
-                "VALUES(1, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET "
-                "version=excluded.version, reviewed_at=excluded.reviewed_at, "
-                "keep_only_listed=excluded.keep_only_listed"
-            ),
-            (version, reviewed_at, keep_only_listed),
-        )
-
-        # Rebuild tags and synonyms from incoming data (idempotent and simple)
-        conn.execute("DELETE FROM tag_synonyms")
-        conn.execute("DELETE FROM tags")
-
-        items = (data or {}).get("tags") or []
-        if not isinstance(items, list):
-            items = []
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name", "")).strip()
-            if not name:
-                continue
-            action = str(item.get("action", "")).strip()
-            note = item.get("note")
-            note_val = None if note is None else str(note)
-            cur = conn.execute(
-                "INSERT INTO tags(name, action, note) VALUES(?, ?, ?)", (name, action, note_val)
+            # Upsert meta (id=1)
+            version = str((data or {}).get("version") or "2")
+            reviewed_at = str((data or {}).get("reviewed_at") or _now_iso())
+            keep_only_listed = _to_int((data or {}).get("keep_only_listed", False))
+            conn.execute(
+                (
+                    "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) "
+                    "VALUES(1, ?, ?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET "
+                    "version=excluded.version, reviewed_at=excluded.reviewed_at, "
+                    "keep_only_listed=excluded.keep_only_listed"
+                ),
+                (version, reviewed_at, keep_only_listed),
             )
-            tid = cur.lastrowid
-            syns = item.get("synonyms") or []
-            try:
-                for pos, alias in enumerate([str(s) for s in syns if str(s).strip()], start=0):
-                    conn.execute(
-                        "INSERT OR IGNORE INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
-                        (tid, alias, pos),
-                    )
-            except TypeError:
-                # non-iterable synonyms; ignore
-                pass
 
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+            # Rebuild tags and synonyms from incoming data
+            conn.execute("DELETE FROM tag_synonyms")
+            conn.execute("DELETE FROM tags")
 
+            items = (data or {}).get("tags") or []
+            if not isinstance(items, list):
+                items = []
 
-# ------------------------------
-# v2 Schema management/migration
-# ------------------------------
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name", "")).strip()
+                if not name:
+                    continue
+                action = str(item.get("action", "")).strip()
+                note_val = item.get("note")
+                cur = conn.execute(
+                    "INSERT INTO tags(name, action, note) VALUES(?, ?, ?)",
+                    (name, action, None if note_val is None else str(note_val)),
+                )
+                tid = cur.lastrowid
+                syns = item.get("synonyms") or []
+                try:
+                    for pos, alias in enumerate(
+                        [str(s).strip() for s in syns if str(s).strip()], start=0
+                    ):
+                        conn.execute(
+                            "INSERT OR IGNORE INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
+                            (tid, alias, pos),
+                        )
+                except TypeError:
+                    pass
 
-_V2_TABLES = [
-    "folders",
-    "documents",
-    "terms",
-    "term_aliases",
-    "doc_terms",
-    "folder_terms",
-    "edit_log",
-]
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
 
 def _create_v2_tables(conn: sqlite3.Connection) -> None:
@@ -288,6 +269,17 @@ def _create_v2_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+_V2_TABLES = [
+    "folders",
+    "documents",
+    "terms",
+    "term_aliases",
+    "doc_terms",
+    "folder_terms",
+    "edit_log",
+]
+
+
 def ensure_schema_v2(db_path: str) -> None:
     """Ensure the DB has v1 base schema and all v2 tables and indexes.
 
@@ -295,17 +287,15 @@ def ensure_schema_v2(db_path: str) -> None:
     """
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(dbp)
-    try:
-        conn.execute("BEGIN")
-        _ensure_schema(conn)
-        _create_v2_tables(conn)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    with closing(sqlite3.connect(dbp)) as conn:
+        try:
+            conn.execute("BEGIN")
+            _ensure_schema(conn)
+            _create_v2_tables(conn)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
 
 def migrate_to_v2(db_path: str) -> None:
@@ -315,63 +305,58 @@ def migrate_to_v2(db_path: str) -> None:
     """
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(dbp)
-    try:
-        _ensure_schema(conn)
-        # Detect missing tables
-        cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN (%s)"
-            % (",".join(["?"] * len(_V2_TABLES))),
-            _V2_TABLES,
-        )
-        present = {r[0] for r in cur.fetchall()}
-        missing = [t for t in _V2_TABLES if t not in present]
-
-        conn.execute("BEGIN")
-        _create_v2_tables(conn)
-
-        if missing:
-            # Upsert meta to version '2' (preserve other fields where possible)
-            cur = conn.execute("SELECT version, reviewed_at, keep_only_listed FROM meta WHERE id=1")
-            row = cur.fetchone()
-            if row is None:
-                version = "2"
-                reviewed_at = _now_iso()
-                keep_only_listed = 0
-            else:
-                # keep existing reviewed_at/keep_only_listed
-                version = "2"
-                reviewed_at = str(row[1])
-                keep_only_listed = _to_int(row[2])
-            conn.execute(
-                "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) VALUES(1, ?, ?, ?)"
-                " ON CONFLICT(id) DO UPDATE SET version=excluded.version",
-                (version, reviewed_at, keep_only_listed),
+    with closing(sqlite3.connect(dbp)) as conn:
+        try:
+            _ensure_schema(conn)
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN (%s)"
+                % (",".join(["?"] * len(_V2_TABLES))),
+                _V2_TABLES,
             )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+            present = {r[0] for r in cur.fetchall()}
+            missing = [t for t in _V2_TABLES if t not in present]
+
+            conn.execute("BEGIN")
+            _create_v2_tables(conn)
+
+            if missing:
+                cur = conn.execute(
+                    "SELECT version, reviewed_at, keep_only_listed FROM meta WHERE id=1"
+                )
+                row = cur.fetchone()
+                if row is None:
+                    version = "2"
+                    reviewed_at = _now_iso()
+                    keep_only_listed = 0
+                else:
+                    version = "2"
+                    reviewed_at = str(row[1])
+                    keep_only_listed = _to_int(row[2])
+                conn.execute(
+                    "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) VALUES(1, ?, ?, ?)"
+                    " ON CONFLICT(id) DO UPDATE SET version=excluded.version",
+                    (version, reviewed_at, keep_only_listed),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
 
-# ------------------------------
-# v2 CRUD helpers (no pipeline usage yet)
-# ------------------------------
-
-
-def get_conn(db_path: str) -> sqlite3.Connection:
+@contextmanager
+def get_conn(db_path: str) -> Iterator[sqlite3.Connection]:
     """Ritorna una connessione con row_factory=sqlite3.Row e FK abilitate."""
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(dbp)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
-# ----- folders/documents -----
 def upsert_folder(conn: sqlite3.Connection, path: str, parent_path: str | None = None) -> int:
     parent_id = None
     if parent_path:
@@ -497,7 +482,7 @@ def list_term_aliases(conn: sqlite3.Connection, term_id: int) -> list[str]:
 def save_doc_terms(
     conn: sqlite3.Connection, document_id: int, items: list[tuple[str, float, str]]
 ) -> None:
-    """items = [(phrase, score, method)] → upsert su doc_terms"""
+    """items = [(phrase, score, method)] -> upsert su doc_terms"""
     conn.execute("BEGIN")
     try:
         for phrase, score, method in items or []:
@@ -647,11 +632,11 @@ if __name__ == "__main__":  # pragma: no cover
 
     path = "output/dev/semantic/tags.db"
     ensure_schema_v2(path)
-    conn = get_conn(path)
-    f = upsert_folder(conn, "raw/marketing")
-    d = upsert_document(conn, f, "brochure.pdf", None, 12)
-    t = upsert_term(conn, "brand identity")
-    add_term_alias(conn, t, "identità di marca")
-    save_doc_terms(conn, d, [("brand identity", 0.86, "yake")])
-    upsert_folder_term(conn, f, t, 1.23, "keep", None)
-    print(get_folder_terms(conn, f, "keep", 10))
+    with get_conn(path) as conn:
+        f = upsert_folder(conn, "raw/marketing")
+        d = upsert_document(conn, f, "brochure.pdf", None, 12)
+        t = upsert_term(conn, "brand identity")
+        add_term_alias(conn, t, "identita' di marca")
+        save_doc_terms(conn, d, [("brand identity", 0.86, "yake")])
+        upsert_folder_term(conn, f, t, 1.23, "keep", None)
+        print(get_folder_terms(conn, f, "keep", 10))

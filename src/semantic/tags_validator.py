@@ -110,9 +110,11 @@ def validate_tags_reviewed(data: dict) -> dict:
                 if not isinstance(s, str) or not s.strip():
                     errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
 
-        notes = item.get("notes", "")
-        if notes is not None and not isinstance(notes, str):
-            errors.append(f"{ctx}: 'notes' deve essere una stringa.")
+        if "notes" in item:
+            errors.append(f"{ctx}: Chiave non supportata: 'notes'. Usa 'note'.")
+        note_val = item.get("note")
+        if note_val is not None and not isinstance(note_val, str):
+            errors.append(f"{ctx}: 'note' deve essere una stringa.")
 
     if data.get("keep_only_listed") and not data.get("tags"):
         warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")

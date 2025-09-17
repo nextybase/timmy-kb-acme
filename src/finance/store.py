@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from pipeline.path_utils import open_for_read  # path-safe reader anchored to a root
 
@@ -36,11 +37,15 @@ CREATE TABLE IF NOT EXISTS metric_term_links(
 """
 
 
-def get_conn(db_path: Path) -> sqlite3.Connection:
+@contextmanager
+def get_conn(db_path: Path) -> Iterator[sqlite3.Connection]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -115,63 +120,65 @@ def import_csv(base_dir: Path, csv_path: Path) -> Dict[str, Any]:
     sem_dir = (base_dir / "semantic").resolve()
 
     db_path = sem_dir / "finance.db"
-    conn = get_conn(db_path)
-    ensure_schema(conn)
-
     created = 0
     updated = 0
 
-    # Apertura path-safe ancorata a sem_dir
-    with open_for_read(sem_dir, csv_path, encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            metric = (row.get("metric") or "").strip()
-            period = (row.get("period") or "").strip()
-            value_s = (row.get("value") or "").strip()
-            unit = (row.get("unit") or "").strip() or None
-            currency = (row.get("currency") or "").strip() or None
-            note = (row.get("note") or "").strip() or None
-            canonical = (row.get("canonical_term") or "").strip()
+    with get_conn(db_path) as conn:
+        ensure_schema(conn)
 
-            if not metric or not period or not value_s:
-                continue
+        # Apertura path-safe ancorata a sem_dir
+        with open_for_read(sem_dir, csv_path, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                metric = (row.get("metric") or "").strip()
+                period = (row.get("period") or "").strip()
+                value_s = (row.get("value") or "").strip()
+                unit = (row.get("unit") or "").strip() or None
+                currency = (row.get("currency") or "").strip() or None
+                note = (row.get("note") or "").strip() or None
+                canonical = (row.get("canonical_term") or "").strip()
 
-            try:
-                val = float(value_s.replace(",", "."))
-            except Exception:
-                continue
+                if not metric or not period or not value_s:
+                    continue
 
-            mid = upsert_metric(conn, metric, unit)
+                try:
+                    val = float(value_s.replace(",", "."))
+                except Exception:
+                    continue
 
-            # Verifica se è una creazione o un update
-            before = conn.execute(
-                "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
-                (mid, period),
-            ).fetchone()
-            upsert_observation(conn, mid, period, val, currency, note)
-            after = conn.execute(
-                "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
-                (mid, period),
-            ).fetchone()
+                mid = upsert_metric(conn, metric, unit)
 
-            if before is None and after is not None:
-                created += 1
-            else:
-                updated += 1
+                # Verifica se e' una creazione o un update
+                before = conn.execute(
+                    "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
+                    (mid, period),
+                ).fetchone()
+                upsert_observation(conn, mid, period, val, currency, note)
+                after = conn.execute(
+                    "SELECT 1 FROM observations WHERE metric_id=? AND period=?",
+                    (mid, period),
+                ).fetchone()
 
-            if canonical:
-                link_metric_to_canonical(conn, mid, canonical)
+                if before is None and after is not None:
+                    created += 1
+                else:
+                    updated += 1
 
-    conn.commit()
+                if canonical:
+                    link_metric_to_canonical(conn, mid, canonical)
+
+        conn.commit()
+
     return {"db": str(db_path), "rows": created, "updated": updated}
 
 
 def summarize_metrics(base_dir: Path) -> List[Tuple[str, int]]:
     sem_dir = Path(base_dir).resolve() / "semantic"
     db_path = sem_dir / "finance.db"
-    conn = get_conn(db_path)
-    ensure_schema(conn)
-    return summarize(conn)
+    with get_conn(db_path) as conn:
+        ensure_schema(conn)
+        result = summarize(conn)
+    return result
 
 
 __all__ = [

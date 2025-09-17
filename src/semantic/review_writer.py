@@ -20,7 +20,7 @@ review:
   - name: "ai"
     action: "keep"           # keep | drop | merge_into:<canonical>
     synonyms: []             # eventuali sinonimi che vuoi mantenere
-    notes: ""                # spazio per chiarimenti
+    note: ""                 # spazio per chiarimenti
     examples:                # dove l'abbiamo trovato (subset)
       - "raw/organizzazione/piano_ai.pdf"
       - "raw/glossario/ai_definizioni.pdf"
@@ -117,7 +117,7 @@ def write_review_stub(
                 "name": tag,
                 "action": "keep",  # keep | drop | merge_into:<canonical>
                 "synonyms": [],  # puoi popolare qui sinonimi utili
-                "notes": "",
+                "note": "",
                 "examples": tag_examples[tag],
             }
         )

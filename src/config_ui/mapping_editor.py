@@ -17,7 +17,7 @@ MAPPING_RESERVED = {
     "defaults",
     "settings",
     "about",
-    "notes",
+    "note",
 }
 
 # -------- Caricamento mapping di default (da config/) --------
