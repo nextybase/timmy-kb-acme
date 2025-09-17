@@ -55,18 +55,29 @@ class QueryParams:
     candidate_limit: int = 4000
 
 
-def cosine(a: Sequence[float], b: Sequence[float]) -> float:
+# --------------------------- SSoT per il default limite ---------------------------
+
+
+def _default_candidate_limit() -> int:
+    """Singola fonte di verità del default per candidate_limit (evita drift)."""
+    try:
+        default_val = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
+        return int(default_val) if default_val is not None else 4000
+    except Exception:
+        return 4000
+
+
+# ----------------------------------- Similarità -----------------------------------
+
+
+def cosine(a: Iterable[float], b: Iterable[float]) -> float:
     """Calcola la similarità coseno tra due vettori numerici.
 
-    Ritorna 0.0 se uno dei vettori è vuoto o se le norme sono nulle.
-    Se le lunghezze differiscono, confronta sul minimo comune.
+    Caratteristiche:
+    - Iterator-safe: non assume slicing/indicizzazione; non alloca copie.
+    - Se una norma è 0 o uno dei due è vuoto, restituisce 0.0.
+    - In caso di lunghezze diverse, zip tronca al minimo comune.
     """
-    if not a or not b:
-        return 0.0
-    if len(a) != len(b):
-        n = min(len(a), len(b))
-        a = a[:n]
-        b = b[:n]
     dot = 0.0
     na = 0.0
     nb = 0.0
@@ -74,9 +85,11 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
         dot += x * y
         na += x * x
         nb += y * y
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / math.sqrt(na * nb)
+    denom = math.sqrt(na) * math.sqrt(nb)
+    return 0.0 if denom == 0.0 else (dot / denom)
+
+
+# --------------------------------- Validazioni ------------------------------------
 
 
 def _validate_params(params: QueryParams) -> None:
@@ -222,10 +235,7 @@ def with_config_candidate_limit(params: QueryParams, config: Optional[Dict]) -> 
     non può distinguerlo dal caso “non impostato” e applicherà il config. In tal caso, evitare di
     chiamare questa funzione oppure passare un valore diverso dal default per esprimere l’intento.
     """
-    try:
-        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
-    except Exception:
-        default_lim = 4000
+    default_lim = _default_candidate_limit()
 
     # Se il caller ha cambiato il limite, non toccare
     if int(params.candidate_limit) != int(default_lim):
@@ -274,7 +284,7 @@ def choose_limit_for_budget(budget_ms: int) -> int:
     except Exception:
         b = 0
     if b <= 0:
-        return 4000
+        return _default_candidate_limit()
     if b <= 180:
         return 1000
     if b <= 280:
@@ -293,10 +303,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryP
       - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
       - Fallback: lascia il default del dataclass.
     """
-    try:
-        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
-    except Exception:
-        default_lim = 4000
+    default_lim = _default_candidate_limit()
 
     if int(params.candidate_limit) != int(default_lim):
         try:
@@ -372,10 +379,7 @@ def preview_effective_candidate_limit(
     Ritorna (limit, source, budget_ms) dove `source` ∈ {"explicit","auto_by_budget","config","default"}.
     Utile per la UI per mostrare un'etichetta tipo: "Limite stimato: N".
     """
-    try:
-        default_lim = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
-    except Exception:
-        default_lim = 4000
+    default_lim = _default_candidate_limit()
 
     # 1) Esplicito
     if int(params.candidate_limit) != int(default_lim):

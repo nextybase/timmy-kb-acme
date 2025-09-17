@@ -4,6 +4,30 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+## [fix] — 2025-09-17
+
+### Security
+- **Path-safety in lettura**: `src/semantic/vocab_loader.py` ora usa `ensure_within_and_resolve(...)` e opera sul path *risolto*. Questo impedisce traversal via `..`/symlink e allinea il modulo alle coding rules. Nessuna modifica all’API pubblica.
+
+### Refactor & Reliability
+- **SSoT `candidate_limit`**: introdotta `_default_candidate_limit()` in `src/retriever.py` come singola fonte di verità (eliminata la duplicazione del valore di default). Aggiornate:
+  - `with_config_candidate_limit(...)`
+  - `with_config_or_budget(...)`
+  - `preview_effective_candidate_limit(...)`
+- **`cosine(...)` iterator-safe**: riscritta per lavorare su iterabili senza slicing/indicizzazione, supportando `deque` e sequenze non indicizzabili. Stessa semantica su vettori di pari lunghezza e gestione norme nulle.
+
+### Tests
+- **Nuovi unit test** (`tests/test_retriever_unit.py`):
+  - `cosine` con `deque`, lunghezze diverse e norme nulle.
+  - Precedenze `candidate_limit` (esplicito/config/auto_by_budget/default) incl. `preview_effective_candidate_limit`.
+- **Esito suite**: 104 passed, 1 skipped (symlink non supportati su Windows).
+
+### Note per gli sviluppatori
+- Nessun breaking change su API/CLI.
+- Micro-ottimizzazione memoria su `cosine` (niente slice/copie).
+- Consigliato eseguire i hook `pre-commit` per garantire allineamento lint/typecheck.
+
+
 ## [Unreleased]
 
 ### Tests

@@ -1,7 +1,12 @@
+# src/semantic/vocab_loader.py
 """Loader del vocabolario canonico (SSoT) da SQLite.
 
 Espone:
 - load_reviewed_vocab(base_dir, logger) -> dict: {canonical: {"aliases": set[str]}}
+
+Note sicurezza (lettura):
+- Usare sempre `ensure_within_and_resolve(base, target)` per prevenire traversal (../, symlink).
+- Il path YAML legacy viene solo usato per derivare il path del DB tramite storage.tags_store.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from pathlib import Path
 from typing import Dict, Set
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within_and_resolve
 from storage.tags_store import derive_db_path_from_yaml_path
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 
@@ -21,22 +26,23 @@ __all__ = ["load_reviewed_vocab"]
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
     """Carica il vocabolario consolidato da `semantic/tags.db` (YAML solo legacy).
 
-    Sicurezza path: consente letture solo sotto `base_dir/semantic`.
+    Sicurezza path: consente letture solo sotto `base_dir/semantic` e risolve il path YAML legacy.
     Ritorna un mapping con alias normalizzati per ogni canonical.
     """
-    tags_path = base_dir / "semantic" / "tags_reviewed.yaml"
+    raw_yaml_path = base_dir / "semantic" / "tags_reviewed.yaml"
     try:
-        ensure_within(base_dir / "semantic", tags_path)
+        # Resolve + guard in lettura: ritorna il path YAML già normalizzato
+        safe_yaml_path = ensure_within_and_resolve(base_dir / "semantic", raw_yaml_path)
     except ConfigError:
         logger.warning(
             "tags_reviewed.yaml fuori da semantic/: skip lettura",
-            extra={"file_path": str(tags_path)},
+            extra={"file_path": str(raw_yaml_path)},
         )
         return {}
 
     try:
         # DB derivato dal percorso YAML legacy (compat con storage.tags_store)
-        db_path = derive_db_path_from_yaml_path(tags_path)
+        db_path = derive_db_path_from_yaml_path(safe_yaml_path)
         data = load_tags_reviewed_db(db_path) or {}
         items = data.get("tags", []) or []
 
@@ -78,11 +84,11 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     except (OSError, AttributeError) as e:
         logger.warning(
             "Impossibile leggere tags dal DB",
-            extra={"file_path": str(tags_path), "error": str(e)},
+            extra={"file_path": str(raw_yaml_path), "error": str(e)},
         )
     except (ValueError, TypeError) as e:
         logger.warning(
             "Impossibile parsare dati tags dal DB",
-            extra={"file_path": str(tags_path), "error": str(e)},
+            extra={"file_path": str(raw_yaml_path), "error": str(e)},
         )
     return {}
