@@ -195,15 +195,27 @@ def run_nlp_to_db(
 
         # Per risalire al path assoluto del PDF: usare folders.path (tipo 'raw/..')
         def abs_path_for(doc: dict) -> Path:
-            row = conn.execute("SELECT path FROM folders WHERE id=?", (doc["id"],)).fetchone()  # type: ignore[index]
-            folder_db_path = str(row[0]) if row else "raw"
-            suffix = (
-                folder_db_path[4:].lstrip("/")
-                if folder_db_path.startswith("raw")
-                else folder_db_path
-            )
-            suffix_path = Path(*([p for p in suffix.split("/") if p])) if suffix else Path()
-            return (raw_dir / suffix_path) / doc["filename"]  # type: ignore[index]
+            folder_id = None
+            if "folder_id" in doc and doc["folder_id"] is not None:
+                try:
+                    folder_id = int(doc["folder_id"])  # type: ignore[index]
+                except (TypeError, ValueError):
+                    folder_id = None
+            folder_db_path = Path("raw")
+            if folder_id is not None:
+                row = conn.execute("SELECT path FROM folders WHERE id=?", (folder_id,)).fetchone()
+                if row is not None and row[0]:
+                    folder_db_path = Path(str(row[0]))
+            folder_parts = folder_db_path.parts
+            if folder_parts and folder_parts[0] == "raw":
+                folder_parts = folder_parts[1:]
+            folder_fs_path = raw_dir.joinpath(*folder_parts)
+            if folder_id is not None and not folder_fs_path.exists():
+                log.warning(
+                    "NLP skip: cartella non trovata",
+                    extra={"folder_id": folder_id, "folder_path": str(folder_fs_path)},
+                )
+            return folder_fs_path / doc["filename"]  # type: ignore[index]
 
         for i, doc in enumerate(docs, start=1):
             doc_id = int(doc["id"])  # type: ignore[index]
@@ -273,6 +285,11 @@ def run_nlp_to_db(
                 maxv = 1.0
             norm_items = [(p, (w / maxv)) for p, w in phrase_agg.items()]
             norm_items = topn_by_folder(norm_items, k=int(topk_folder))
+            for phrase, weight in norm_items:
+                weight_f = float(weight)
+                prev = phrase_global.get(phrase)
+                if prev is None or weight_f > prev:
+                    phrase_global[phrase] = weight_f
             folder_stats[fid] = norm_items
             # log di aggregazione cartella
             log.debug("Aggregazione cartella", extra={"folder_id": fid, "terms": len(norm_items)})

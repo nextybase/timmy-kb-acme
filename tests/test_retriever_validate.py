@@ -30,13 +30,25 @@ class DummyEmbeddings:
         raise AssertionError("embed_texts should not be called on invalid params")
 
 
+class HappyEmbeddings:
+    """Embeddings stub per i casi validi: restituisce un singolo vettore."""
+
+    def embed_texts(
+        self,
+        texts: Sequence[str],
+        *,
+        model: str | None = None,
+    ) -> list[list[float]]:
+        return [[1.0]]
+
+
 def _params(
     *,
     project_slug: str = "acme",
     scope: str = "kb",
     query: str = "q",
     k: int = 1,
-    candidate_limit: int = 1,
+    candidate_limit: int = r.MIN_CANDIDATE_LIMIT,
 ):
     """Costruttore tipizzato per evitare dict Any→str|int|None che confondono Pylance."""
     return QueryParams(
@@ -62,6 +74,28 @@ def test_validate_params_empty_scope() -> None:
 def test_validate_params_negative_candidate_limit() -> None:
     with pytest.raises(RetrieverError, match="candidate_limit"):
         search(_params(candidate_limit=-1), DummyEmbeddings())
+
+
+def test_validate_params_candidate_limit_too_low() -> None:
+    with pytest.raises(RetrieverError, match="candidate_limit"):
+        search(_params(candidate_limit=r.MIN_CANDIDATE_LIMIT - 1), DummyEmbeddings())
+
+
+def test_validate_params_candidate_limit_too_high() -> None:
+    with pytest.raises(RetrieverError, match="candidate_limit"):
+        search(_params(candidate_limit=r.MAX_CANDIDATE_LIMIT + 1), DummyEmbeddings())
+
+
+def test_validate_params_candidate_limit_min_ok(monkeypatch) -> None:
+    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: [])
+    out = search(_params(candidate_limit=r.MIN_CANDIDATE_LIMIT), HappyEmbeddings())
+    assert out == []
+
+
+def test_validate_params_candidate_limit_max_ok(monkeypatch) -> None:
+    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: [])
+    out = search(_params(candidate_limit=r.MAX_CANDIDATE_LIMIT), HappyEmbeddings())
+    assert out == []
 
 
 def test_validate_params_negative_k() -> None:

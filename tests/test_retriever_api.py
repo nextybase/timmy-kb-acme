@@ -57,7 +57,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
         scope="Timmy",
         query="hello",
         k=2,
-        candidate_limit=5,
+        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
     )
     emb = FakeEmb()
 
@@ -69,7 +69,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     assert seen == {
         "project_slug": "acme",
         "scope": "Timmy",
-        "limit": 5,
+        "limit": retr.MIN_CANDIDATE_LIMIT,
         "db_path": tmp_path / "kb.sqlite",
     }
     # top-k rispettato e shape dell'output

@@ -243,7 +243,8 @@
     "retrocompat",
     "isort",
     "faҫade",
-    "retrocompatibile"
+    "retrocompatibile",
+    "feedface"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

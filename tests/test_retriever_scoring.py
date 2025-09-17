@@ -43,14 +43,24 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
 
     # k >= n → ordina tutto; atteso: A, B, C
     params_all = QueryParams(
-        db_path=None, project_slug="acme", scope="kb", query="q", k=10, candidate_limit=10
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="q",
+        k=10,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
     )
     out_all = search(params_all, embeddings)
     assert [x["content"] for x in out_all] == ["A", "B", "C"]
 
     # k < n (branch nlargest) → atteso: A, B
     params_top2 = QueryParams(
-        db_path=None, project_slug="acme", scope="kb", query="q", k=2, candidate_limit=10
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="q",
+        k=2,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
     )
     out_top2 = search(params_top2, embeddings)
     assert [x["content"] for x in out_top2] == ["A", "B"]
@@ -66,7 +76,12 @@ def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
 
     params = QueryParams(
-        db_path=None, project_slug="acme", scope="kb", query="q", k=2, candidate_limit=10
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="q",
+        k=2,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
     )
     out = search(params, embeddings)
     # "ok" deve venire prima di "no-emb" (score 1.0 vs 0.0)

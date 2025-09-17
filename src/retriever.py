@@ -92,14 +92,25 @@ def cosine(a: Iterable[float], b: Iterable[float]) -> float:
 # --------------------------------- Validazioni ------------------------------------
 
 
+MIN_CANDIDATE_LIMIT = 500
+MAX_CANDIDATE_LIMIT = 20000
+
+
 def _validate_params(params: QueryParams) -> None:
-    """Validazioni minime (fail-fast, senza fallback)."""
+    """Validazioni minime (fail-fast, senza fallback). Range candidato: 500-20000 inclusi."""
     if not params.project_slug.strip():
         raise RetrieverError("project_slug vuoto")
     if not params.scope.strip():
         raise RetrieverError("scope vuoto")
     if params.candidate_limit < 0:
         raise RetrieverError("candidate_limit negativo")
+    if (
+        0 < params.candidate_limit < MIN_CANDIDATE_LIMIT
+        or params.candidate_limit > MAX_CANDIDATE_LIMIT
+    ):
+        raise RetrieverError(
+            f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, {MAX_CANDIDATE_LIMIT}]"
+        )
     if params.k < 0:
         raise RetrieverError("k negativo")
 
