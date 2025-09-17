@@ -64,3 +64,14 @@ def test_guess_tags_for_name_handles_compound_and_aliases():
     assert _guess_tags_for_name("building-a-data-set-guide.md", vocab) == ["data"]
     # Nessun match su sottostringa interna (es. 'ai' in 'braided')
     assert _guess_tags_for_name("braided_patterns.md", vocab) == []
+
+
+def test_guess_tags_for_name_handles_punctuated_terms():
+    vocab = {
+        "c++": {"aliases": set()},
+        "ml/ops": {"aliases": {"ml ops"}},
+        "data+": {"aliases": {"data plus"}},
+    }
+    assert _guess_tags_for_name("intro-to-c++.md", vocab) == ["c++"]
+    assert _guess_tags_for_name("guide-ml-ops.md", vocab) == ["ml/ops"]
+    assert _guess_tags_for_name("data-plus-overview.md", vocab) == ["data+"]

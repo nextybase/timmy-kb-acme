@@ -5,12 +5,11 @@ from pathlib import Path
 import logging
 from typing import Any, cast
 
+import pytest
 import semantic.api as sapi
 
 
 class DummyCtx:
-    """Contesto minimale con md_dir custom per verificare l’override."""
-
     def __init__(self, base: Path, md: Path, raw: Path):
         self.base_dir = base
         self.md_dir = md
@@ -21,12 +20,11 @@ class DummyCtx:
 def test_enrich_frontmatter_respects_md_dir_override(tmp_path: Path):
     base = tmp_path / "kb"
     raw = base / "raw"
-    md_custom = tmp_path / "custom_book"
+    md_custom = base / "custom_book"  # sottocartella di base (safe)
     base.mkdir()
     raw.mkdir()
     md_custom.mkdir()
 
-    # Prepara un file markdown minimale in md_custom
     md_file = md_custom / "doc_ai.md"
     md_file.write_text("Contenuto senza frontmatter", encoding="utf-8")
 
@@ -34,12 +32,29 @@ def test_enrich_frontmatter_respects_md_dir_override(tmp_path: Path):
     logger = logging.getLogger("test")
 
     vocab = {"ai": {"aliases": {"artificial intelligence"}}}
-
-    # cast(Any, ...) per evitare l'errore Pylance sul tipo nominale di ClientContext
     touched = sapi.enrich_frontmatter(cast(Any, ctx), logger, vocab, slug="ctx-test")
-
-    # Deve aver arricchito il file nel md_custom, non nel path default "book"
     assert md_file in touched
     text = md_file.read_text(encoding="utf-8")
-    assert "---" in text  # frontmatter presente
+    assert "---" in text
     assert "ai" in text or "tags:" in text
+
+
+def test_enrich_frontmatter_rejects_md_dir_outside_base(tmp_path: Path):
+    base = tmp_path / "kb"
+    raw = base / "raw"
+    # md_dir fratello della sandbox → deve fallire per path-safety
+    md_outside = tmp_path / "custom_book"
+    base.mkdir()
+    raw.mkdir()
+    md_outside.mkdir()
+
+    md_file = md_outside / "doc_ai.md"
+    md_file.write_text("Contenuto", encoding="utf-8")
+
+    ctx = DummyCtx(base=base, md=md_outside, raw=raw)
+    logger = logging.getLogger("test")
+
+    # L'eccezione specifica dipende dall'implementazione di ensure_within;
+    # lasciamo intentionally generico per compat.
+    with pytest.raises(Exception):
+        sapi.enrich_frontmatter(cast(Any, ctx), logger, {"ai": {"aliases": set()}}, slug="ctx-test")

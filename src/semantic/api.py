@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/api.py
-
 from __future__ import annotations
 
 import logging
@@ -15,7 +14,7 @@ from pipeline.content_utils import convert_files_to_structured_markdown as _conv
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from pipeline.exceptions import ConfigError, ConversionError  # <-- tipizzate
+from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within, sorted_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
@@ -24,8 +23,6 @@ from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 
-# Tipi: a compile-time usiamo il tipo concreto per matchare le firme interne,
-# a runtime restiamo decoupled con il Protocol strutturale.
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
 else:
@@ -46,7 +43,6 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    """Percorsi base/raw/book/semantic per uno slug cliente (formato SSoT)."""
     base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
     return {
         "base": base_dir,
@@ -57,11 +53,9 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    """Wrapper pubblico: carica il vocabolario canonico da SQLite (SSoT)."""
     return cast(Dict[str, Dict[str, Set[str]]], _load_reviewed_vocab(base_dir, logger))
 
 
-# ---------- Shim che soddisfa ClientContextProtocol con Path non opzionali ----------
 class _CtxShim:
     base_dir: Path
     raw_dir: Path
@@ -84,21 +78,13 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 
 def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
-    """Invoca la conversione Markdown con binding esplicito e fail-fast su target non callable.
-
-    - Se la funzione accetta `md_dir`, lo passa come keyword.
-    - Nessun catch generico: eventuali TypeError reali di binding/implementazione devono emergere.
-    """
     if not callable(func):
-        # eccezione tipizzata con contesto
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
-
     sig = inspect.signature(func)
     params = sig.parameters
     kwargs: Dict[str, Any] = {}
     if "md_dir" in params:
         kwargs["md_dir"] = md_dir
-
     bound = sig.bind_partial(ctx, **kwargs)
     bound.apply_defaults()
     func(*bound.args, **bound.kwargs)
@@ -107,40 +93,24 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
 def convert_markdown(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> List[Path]:
-    """Converte i PDF in raw/ in Markdown sotto book/ (via content_utils se disponibili).
-
-    Nota: proviamo sempre a chiamare il convertitore; in scenari di test può essere
-    stubbato per generare i .md senza PDF reali in raw/.
-    """
-    # Risolvi percorsi con Path non opzionali
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
-
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
         raise ConfigError(
             f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir
         )
-
     book_dir.mkdir(parents=True, exist_ok=True)
-
-    # Adatta la chiamata a convert_files_to_structured_markdown senza kwargs non tipizzati
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
     _call_convert_md(_convert_md, shim, book_dir)
-
-    # Se il convertitore (anche stub nei test) ha prodotto Markdown, restituiamoli.
     mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
     if mds:
         return mds
-
-    # Altrimenti, applichiamo la verifica "nessun PDF" per segnalare errore significativo.
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
     if not local_pdfs:
         raise ConfigError(
             f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir
         )
-
-    # PDF presenti ma nessun .md prodotto → errore di conversione tipizzato.
     raise ConversionError("La conversione non ha prodotto Markdown.", slug=slug, file_path=book_dir)
 
 
@@ -151,11 +121,12 @@ def enrich_frontmatter(
     *,
     slug: str,
 ) -> List[Path]:
-    """Arricchisce i frontmatter dei Markdown con title e tag canonici."""
     from pipeline.path_utils import read_text_safe
 
-    # Usa i path dal CONTEXT (rispetta ClientContextProtocol)
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
+    # ✅ ripristino path-safety: l'override deve comunque ricadere sotto base_dir
+    ensure_within(base_dir, book_dir)
+
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
@@ -189,7 +160,6 @@ def enrich_frontmatter(
 def write_summary_and_readme(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> None:
-    """Genera e valida SUMMARY.md e README.md sotto book/ (senza fallback)."""
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
@@ -197,7 +167,7 @@ def write_summary_and_readme(
     try:
         _gen_summary(shim)
         logger.info("SUMMARY.md scritto")
-    except Exception as e:  # pragma: no cover - comportamento aggregato
+    except Exception as e:  # pragma: no cover
         errors.append(f"summary: {e}")
     try:
         _gen_readme(shim)
@@ -205,7 +175,6 @@ def write_summary_and_readme(
     except Exception as e:  # pragma: no cover
         errors.append(f"readme: {e}")
     if errors:
-        # errore tipizzato per orchestratori/EXIT_CODES
         raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
     _validate_md(shim)
     logger.info("Validazione directory MD OK")
@@ -214,7 +183,6 @@ def write_summary_and_readme(
 def build_mapping_from_vision(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> Path:
-    """Genera/aggiorna `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`."""
     base_dir = cast(Path, getattr(context, "base_dir", None) or get_paths(slug)["base"])
     config_dir = base_dir / "config"
     mapping_path = config_dir / "semantic_mapping.yaml"
@@ -305,7 +273,6 @@ def build_mapping_from_vision(
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
-    """Scansiona RAW e genera `semantic/tags_raw.csv` in modo deterministico."""
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
@@ -324,14 +291,12 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
-    """Wrapper pubblico: copia PDF locali dentro RAW riusando l'implementazione semantica."""
     return _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
 
 
 def build_markdown_book(
     context: ClientContextType, logger: logging.Logger, *, slug: str
 ) -> list[Path]:
-    """Pipeline RAW → Markdown (uno per cartella) + README/SUMMARY + frontmatter."""
     mds = convert_markdown(context, logger, slug=slug)
     write_summary_and_readme(context, logger, slug=slug)
     paths = get_paths(slug)
@@ -350,7 +315,6 @@ def index_markdown_to_db(
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
 ) -> int:
-    """Indicizza i Markdown in `book/` nel DB locale (SQLite) con chunk + embedding."""
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
@@ -379,6 +343,8 @@ def index_markdown_to_db(
         logger.info("Nessun contenuto valido da indicizzare", extra={"book": str(book_dir)})
         return 0
 
+    from datetime import datetime as _dt
+
     vecs = embeddings_client.embed_texts(contents)
     if not vecs or len(vecs) != len(contents):
         logger.warning(
@@ -386,8 +352,6 @@ def index_markdown_to_db(
             extra={"count": len(vecs) if vecs else 0},
         )
         return 0
-
-    from datetime import datetime as _dt
 
     version = _dt.utcnow().strftime("%Y%m%d")
     inserted_total = 0
@@ -413,7 +377,6 @@ def index_markdown_to_db(
     return inserted_total
 
 
-# ---- Helpers interni (copiati da semantic_onboarding, senza side effects CLI) ----
 def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
     inv: Dict[str, Set[str]] = {}
     for canon, meta in (vocab or {}).items():
@@ -467,7 +430,6 @@ def _dump_frontmatter(meta: Dict[str, Any]) -> str:
 
 
 def _as_list_str(x: Any) -> list[str]:
-    """Normalizza un campo tags generico in una lista di stringhe pulite."""
     if x is None:
         return []
     if isinstance(x, str):
@@ -482,7 +444,6 @@ def _as_list_str(x: Any) -> list[str]:
             if s:
                 out.append(s)
         return out
-    # qualunque altro tipo (numero, oggetto) → stringa se non vuota
     s = str(x).strip()
     return [s] if s else []
 
@@ -500,13 +461,24 @@ def _merge_frontmatter(
     return meta
 
 
+def _term_to_pattern(term: str) -> re.Pattern[str]:
+    """
+    Costruisce un pattern robusto a confini parola *semantici*:
+    - lookaround espliciti: (?<!\\w) ... (?!\\w) per includere token con punteggiatura (c++, ml/ops, data+)
+    - re.escape(term) per i simboli
+    - spazi del termine mappati in \\s+ per tollerare separatori multipli
+    """
+    esc = re.escape(term.strip().lower())
+    esc = esc.replace(r"\ ", r"\s+")
+    return re.compile(rf"(?<!\w){esc}(?!\w)")
+
+
 def _guess_tags_for_name(
     name_like_path: str,
     vocab: Dict[str, Dict[str, Set[str]]],
     *,
     inv: Optional[Dict[str, Set[str]]] = None,
 ) -> List[str]:
-    """Esegue matching a confine di parola per ridurre i falsi positivi."""
     if not vocab:
         return []
     if inv is None:
@@ -518,7 +490,7 @@ def _guess_tags_for_name(
     for term, canon_set in inv.items():
         if not term:
             continue
-        # match su confini di parola; es. 'ai' non matcha 'finance'
-        if re.search(rf"\b{re.escape(term)}\b", s):
+        pat = _term_to_pattern(term)
+        if pat.search(s):
             found.update(canon_set)
     return sorted(found)
