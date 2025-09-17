@@ -230,7 +230,20 @@
     "clientcontext",
     "monkeypatchare",
     "monkeypatchati",
-    "redef"
+    "redef",
+    "domcontentloaded",
+    "lockata",
+    "locka",
+    "triggera",
+    "precreate",
+    "deque",
+    "pyrightconfig",
+    "splitlines",
+    "facilitatori",
+    "retrocompat",
+    "isort",
+    "faҫade",
+    "retrocompatibile"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

@@ -1,4 +1,4 @@
-# Architettura - Timmy-KB (v1.8.1)
+# Architettura - Timmy-KB (v1.9.1)
 
 Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi end-to-end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo è mantenere coerenza, riuso e sicurezza I/O (path-safety + scritture atomiche).
 
@@ -125,7 +125,7 @@ output/
 
 ## Versioning
 
-Questa pagina documenta la release 1.7.0. Cambi chiave rispetto alla 1.6.0:
-- Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive → Semantica).
-- Sezione “Download contenuti su raw/” nel tab Drive (pull PDF da Drive → locale).
-- Rifiniture di compatibilità Pylance/Streamlit e hardening path/atomiche.
+Questa pagina documenta la release 1.9.1. Per il dettaglio delle differenze rispetto alla 1.9.0 consulta CHANGELOG.md (voce 2025-09-17). I punti salienti da tenere a mente:
+- Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive -> Semantica).
+- Sezione "Download contenuti su raw/" nel tab Drive (pull PDF da Drive -> locale).
+- Rifiniture di compatibilita' Pylance/Streamlit e hardening path/atomiche.

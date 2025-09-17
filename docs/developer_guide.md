@@ -68,16 +68,16 @@ py src/tag_onboarding.py --slug acme --proceed
 
 # 3) Conversione + enrichment + README/SUMMARY (+ preview opz.)
 py - <<PY
-from semantic.api import get_paths, convert_markdown, enrich_frontmatter, write_summary_and_readme
 from pipeline.context import ClientContext
+from semantic.api import convert_markdown, enrich_frontmatter, write_summary_and_readme
+from semantic.vocab_loader import load_reviewed_vocab
 import logging
 slug = 'acme'
 ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
 log = logging.getLogger('semantic.manual')
 convert_markdown(ctx, log, slug=slug)
-base = get_paths(slug)['base']
-from semantic.vocab_loader import load_reviewed_vocab
-# Nota: load_reviewed_vocab usa DB SQLite come SSoT; lo YAML serve solo come locator retrocompat
+# Preferisci il SSoT dei path dal contesto, evitando fallback legacy
+base = ctx.base_dir
 vocab = load_reviewed_vocab(base, log)
 enrich_frontmatter(ctx, log, vocab, slug=slug)
 write_summary_and_readme(ctx, log, slug=slug)
@@ -118,6 +118,7 @@ Dettagli: [architecture.md](architecture.md).
 - **Logging**: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
 - **I/O**: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
 - **Naming**: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
+- **Path SSoT**: negli esempi evita chiamate dirette a `semantic.api.get_paths`; usa `ClientContext` (`ctx.base_dir`) come fonte primaria.
 
 ---
 
@@ -130,6 +131,30 @@ Dettagli: [architecture.md](architecture.md).
 - I test non richiedono credenziali reali (Drive/Git mockati).
 - Verifica invarianti: solo `.md` in `book/`; `README.md`/`SUMMARY.md` sempre presenti.
 - Windows/Linux supportati; occhio a path POSIX nei CSV.
+
+### Smoke tests aggiunti (UI & E2E)
+
+#### Streamlit – Tab Finanza (headless)
+Esegue la UI in modalità headless con Playwright, crea un workspace locale coerente con `REPO_ROOT_DIR`, carica un CSV di esempio e verifica la generazione di `semantic/finance.db`.
+
+```bash
+python scripts/smoke_streamlit_finance.py
+```
+**Note**
+- Selettori robusti su sidebar e radio “Finanza”. L’upload viene effettuato nel container del bottone *Importa in finance.db* per evitare mismatch tra rerun.
+- Screenshot diagnostici salvati in temp in caso di failure.
+- La UI gestisce internamente l’assenza file (bottone sempre abilitato, gating nell’handler).
+
+#### End-to-end orchestratore (senza GitHub)
+Verifica l’intera catena: pre-onboarding ➜ import CSV ➜ `onboarding_full_main`, con `REPO_ROOT_DIR` isolato e **push GitHub disabilitato** (token rimossi dall’ambiente).
+
+```bash
+python scripts/smoke_e2e.py --slug smoke
+```
+**Cosa valida**
+- Creazione struttura cliente (`base_dir`, `raw/`, `semantic/`, `config/`, `logs/`).
+- Import di `semantic/finance.db` da CSV.
+- Esecuzione orchestratore; eventuali log in `logs/` sono opzionali nello smoke.
 
 ---
 
@@ -221,5 +246,5 @@ Pre-commit
 
 ---
 
-> **Versione**: 2025-09-17
-> **Stato**: Allineata al codice corrente, rimosse parti legacy, aggiunta comparativa CLI vs UI.
+> **Versione**: 1.9.1 (2025-09-17)
+> **Stato**: Allineata al codice corrente; esempi aggiornati a `ClientContext` come SSoT dei path; aggiunte sezioni di **Smoke testing** (UI Streamlit & E2E).

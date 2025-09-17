@@ -4,6 +4,19 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 > **Nota metodologica:** ogni nuova sezione deve descrivere chiaramente il contesto delle modifiche (Added, Changed, Fixed, Security, ecc.), specificando file e funzioni interessate. Gli aggiornamenti devono essere allineati con la documentazione (`docs/`) e riflessi in README/User Guide/Developer Guide quando impattano la UX o le API pubbliche. Le versioni MINOR/MAJOR vanno accompagnate da note di migrazione.
 
+---
+
+## 2025-09-17 — Smoke tests UI & E2E
+
+### Added
+- `scripts/smoke_streamlit_finance.py`: smoke headless della tab **Finanza** (Streamlit + Playwright). Pre-crea il workspace sotto `REPO_ROOT_DIR`, carica un CSV di esempio e verifica la generazione di `semantic/finance.db`. Selettori robusti (sidebar, radio “Finanza”, upload nel container del bottone target) e screenshot diagnostici in caso di failure.
+- `scripts/smoke_e2e.py`: smoke **end-to-end** (pre_onboarding ➜ import finanza ➜ orchestratore). Isola `REPO_ROOT_DIR` in temp, importa un CSV in `finance.db`, esegue `onboarding_full_main` con **push GitHub disabilitato** via env (`TIMMY_NO_GITHUB=1`, `SKIP_GITHUB_PUSH=1`) e valida output (log opzionale).
+
+### Changed
+- UI Finanza: bottone “Importa in finance.db” sempre abilitato, con **gating nell’handler** se il file è assente → niente race tra upload e rerun Streamlit durante i test.
+
+---
+
 ## [fix] — 2025-09-17
 
 ### Security

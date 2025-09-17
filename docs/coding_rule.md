@@ -1,4 +1,4 @@
-﻿# Timmy-KB - Coding Rules (v1.9.0)
+﻿# Timmy-KB - Coding Rules (v1.9.1)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
