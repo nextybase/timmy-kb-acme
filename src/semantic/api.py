@@ -15,7 +15,7 @@ from pipeline.content_utils import convert_files_to_structured_markdown as _conv
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, ConversionError  # <-- tipizzate
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within, sorted_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
@@ -90,7 +90,8 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
     - Nessun catch generico: eventuali TypeError reali di binding/implementazione devono emergere.
     """
     if not callable(func):
-        raise RuntimeError("convert_md target is not callable")
+        # eccezione tipizzata con contesto
+        raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
 
     sig = inspect.signature(func)
     params = sig.parameters
@@ -117,7 +118,9 @@ def convert_markdown(
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
-        raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}")
+        raise ConfigError(
+            f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir
+        )
 
     book_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,10 +136,12 @@ def convert_markdown(
     # Altrimenti, applichiamo la verifica "nessun PDF" per segnalare errore significativo.
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
     if not local_pdfs:
-        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}")
+        raise ConfigError(
+            f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir
+        )
 
-    # PDF presenti ma nessun .md prodotto → errore di conversione.
-    raise RuntimeError("La conversione non ha prodotto Markdown.")
+    # PDF presenti ma nessun .md prodotto → errore di conversione tipizzato.
+    raise ConversionError("La conversione non ha prodotto Markdown.", slug=slug, file_path=book_dir)
 
 
 def enrich_frontmatter(
@@ -149,14 +154,17 @@ def enrich_frontmatter(
     """Arricchisce i frontmatter dei Markdown con title e tag canonici."""
     from pipeline.path_utils import read_text_safe
 
-    paths = get_paths(slug)
-    book_dir = paths["book"]
+    # Usa i path dal CONTEXT (rispetta ClientContextProtocol)
+    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
+
     for md in mds:
         name = md.name
-        title = re.sub(r"[_\\/\-]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
+        title = (
+            re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
+        )
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
             text = read_text_safe(book_dir, md, encoding="utf-8")
@@ -197,7 +205,8 @@ def write_summary_and_readme(
     except Exception as e:  # pragma: no cover
         errors.append(f"readme: {e}")
     if errors:
-        raise RuntimeError("; ".join(errors))
+        # errore tipizzato per orchestratori/EXIT_CODES
+        raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
     _validate_md(shim)
     logger.info("Validazione directory MD OK")
 
@@ -215,14 +224,20 @@ def build_mapping_from_vision(
     ensure_within(config_dir, mapping_path)
     ensure_within(config_dir, vision_yaml)
     if not vision_yaml.exists():
-        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}")
+        raise ConfigError(
+            f"Vision YAML non trovato: {vision_yaml}", slug=slug, file_path=vision_yaml
+        )
 
     try:
         from pipeline.yaml_utils import yaml_read
 
         raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
     except Exception as e:
-        raise ConfigError(f"Errore lettura/parsing vision YAML ({vision_yaml}): {e}") from e
+        raise ConfigError(
+            f"Errore lettura/parsing vision YAML ({vision_yaml}): {e}",
+            slug=slug,
+            file_path=vision_yaml,
+        ) from e
 
     def _as_list(val: object) -> list[str]:
         if isinstance(val, list):
@@ -266,7 +281,11 @@ def build_mapping_from_vision(
             mapping[concept] = norm
 
     if not mapping:
-        raise ConfigError(f"Vision YAML non contiene sezioni utili per il mapping ({vision_yaml}).")
+        raise ConfigError(
+            f"Vision YAML non contiene sezioni utili per il mapping ({vision_yaml}).",
+            slug=slug,
+            file_path=vision_yaml,
+        )
 
     config_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -275,7 +294,9 @@ def build_mapping_from_vision(
         safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
         safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
     except Exception as e:
-        raise ConfigError(f"Scrittura mapping fallita ({mapping_path}): {e}") from e
+        raise ConfigError(
+            f"Scrittura mapping fallita ({mapping_path}): {e}", slug=slug, file_path=mapping_path
+        ) from e
 
     logger.info(
         "vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)}
@@ -445,6 +466,27 @@ def _dump_frontmatter(meta: Dict[str, Any]) -> str:
         return "\n".join(lines)
 
 
+def _as_list_str(x: Any) -> list[str]:
+    """Normalizza un campo tags generico in una lista di stringhe pulite."""
+    if x is None:
+        return []
+    if isinstance(x, str):
+        s = x.strip()
+        return [s] if s else []
+    if isinstance(x, (list, tuple, set)):
+        out: list[str] = []
+        for it in x:
+            if it is None:
+                continue
+            s = str(it).strip()
+            if s:
+                out.append(s)
+        return out
+    # qualunque altro tipo (numero, oggetto) → stringa se non vuota
+    s = str(x).strip()
+    return [s] if s else []
+
+
 def _merge_frontmatter(
     existing: Dict[str, Any], *, title: Optional[str], tags: List[str]
 ) -> Dict[str, Any]:
@@ -452,7 +494,9 @@ def _merge_frontmatter(
     if title and not meta.get("title"):
         meta["title"] = title
     if tags:
-        meta["tags"] = sorted(set((meta.get("tags") or []) + tags))
+        left = _as_list_str(meta.get("tags"))
+        merged = sorted(set(left + list(tags)))
+        meta["tags"] = merged
     return meta
 
 
@@ -462,14 +506,19 @@ def _guess_tags_for_name(
     *,
     inv: Optional[Dict[str, Set[str]]] = None,
 ) -> List[str]:
+    """Esegue matching a confine di parola per ridurre i falsi positivi."""
     if not vocab:
         return []
     if inv is None:
         inv = _build_inverse_index(vocab)
     s = name_like_path.lower()
-    s = re.sub(r"[_\\/\-\s]+", " ", s)
+    s = re.sub(r"[_\/\-\s]+", " ", s)
+
     found: Set[str] = set()
     for term, canon_set in inv.items():
-        if term and term in s:
+        if not term:
+            continue
+        # match su confini di parola; es. 'ai' non matcha 'finance'
+        if re.search(rf"\b{re.escape(term)}\b", s):
             found.update(canon_set)
     return sorted(found)

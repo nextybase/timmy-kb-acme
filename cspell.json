@@ -219,7 +219,11 @@
     "asctime",
     "filterwarnings",
     "configerror",
-    "cfid"
+    "cfid",
+    "stubbato",
+    "matcha",
+    "dedups",
+    "sottostringa"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

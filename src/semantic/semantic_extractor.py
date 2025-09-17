@@ -3,11 +3,11 @@
 Modulo per l'estrazione e l'arricchimento semantico dei documenti markdown
 nella pipeline Timmy-KB.
 
-Refactor v1.0.5 (Blocco B):
-- Coerenza guardie: se il mapping è vuoto → warning e short-circuit (no I/O inutile).
-- Lettura file: soglia opzionale `max_scan_bytes` per evitare scan costosi; se superata,
-  logghiamo una micro-nota e saltiamo il file.
-- Nessun cambio di contratto per i call-site esistenti (nuovo parametro solo keyword).
+Refactor v1.0.6 (Blocco C):
+- Matching keyword a **confine di parola** per ridurre falsi positivi (es. 'ai' non
+  matcha 'finance'); sostituisce il precedente substring matching.
+- Conservata la semantica esistente: short-circuit su mapping vuoto, soglia opzionale
+  max_scan_bytes, primo hit per file, dedup case-insensitive delle keyword.
 
 Assunzioni:
 - Il mapping è **canonico** {concept: [keywords...]} (normalizzato da semantic_mapping).
@@ -17,6 +17,7 @@ Assunzioni:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
 
@@ -125,6 +126,11 @@ def extract_semantic_concepts(
             seen_lowers.add(kl)
             norm_kws.append((kl, k))
 
+        # Precompila pattern a confine di parola per efficienza
+        patterns: List[tuple[re.Pattern[str], str]] = [
+            (re.compile(rf"\b{re.escape(kl)}\b"), orig) for kl, orig in norm_kws
+        ]
+
         matches: List[Dict[str, str]] = []
         for file in markdown_files:
             try:
@@ -153,7 +159,12 @@ def extract_semantic_concepts(
                 content_l = content.lower()
 
                 # Early-exit: registra solo la prima keyword che fa match per file
-                hit = next((orig for kl, orig in norm_kws if kl in content_l), None)
+                hit = None
+                for pat, orig in patterns:
+                    if pat.search(content_l):
+                        hit = orig
+                        break
+
                 if hit:
                     matches.append({"file": file.name, "keyword": hit})
             except Exception as e:

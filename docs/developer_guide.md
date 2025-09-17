@@ -1,26 +1,26 @@
-﻿# Timmy-KB - Developer Guide (v1.8.1)
+# Timmy-KB - Developer Guide (v1.9.1)
 
-Questa guida Ã¨ per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualitÃ .
+Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
-> Avvio interfaccia: `streamlit run onboarding_ui.py` â€” vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Integrazione con Codex
 
 Per velocizzare sviluppo, refactor e manutenzione del progetto puoi usare **Codex** come coding agent direttamente in VS Code.
-Lâ€™integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre lâ€™approccio Human-in-the-Loop.
-Trovi la guida completa, con configurazione e scenari dâ€™uso, qui: [Codex Integrazione](codex_integrazione.md).
+L’integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre l’approccio Human-in-the-Loop.
+Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integrazione](codex_integrazione.md).
 
 ---
 
 ## Principi architetturali
 - **Separazione dei ruoli**: orchestratori = UX/CLI e controllo flusso; moduli `pipeline/*` e `semantic/*` = logica pura senza I/O interattivo.
 - **Idempotenza**: le operazioni possono essere ripetute senza effetti collaterali. Scritture **atomiche**.
-- **Path-safety**: ogni I/O passa da SSoT (`ensure_within`, `sanitize_filename`).
+- **Path-safety**: ogni I/O passa da SSoT (`ensure_within`, `ensure_within_and_resolve`, `sanitize_filename`).
 - **Configurazione esplicita**: variabili d'ambiente lette tramite `ClientContext`; niente valori magici sparsi.
-- **Logging strutturato** con redazione automatica se `LOG_REDACTION` Ã¨ attivo.
+- **Logging strutturato** con redazione automatica se `LOG_REDACTION` è attivo.
 
 Vedi anche: [Coding Rules](coding_rule.md) e [Architecture](architecture.md).
 
@@ -67,7 +67,6 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME"
 py src/tag_onboarding.py --slug acme --proceed
 
 # 3) Conversione + enrichment + README/SUMMARY (+ preview opz.)
-Esempio headless via semantic.api (consigliato):
 py - <<PY
 from semantic.api import get_paths, convert_markdown, enrich_frontmatter, write_summary_and_readme
 from pipeline.context import ClientContext
@@ -78,6 +77,7 @@ log = logging.getLogger('semantic.manual')
 convert_markdown(ctx, log, slug=slug)
 base = get_paths(slug)['base']
 from semantic.vocab_loader import load_reviewed_vocab
+# Nota: load_reviewed_vocab usa DB SQLite come SSoT; lo YAML serve solo come locator retrocompat
 vocab = load_reviewed_vocab(base, log)
 enrich_frontmatter(ctx, log, vocab, slug=slug)
 write_summary_and_readme(ctx, log, slug=slug)
@@ -94,14 +94,12 @@ streamlit run onboarding_ui.py
 ```
 Guida completa: [docs/guida_ui.md](guida_ui.md).
 
-Nota API: la UI importa le funzioni semantiche dalla facade pubblica `semantic.api` (non dagli underscore di `semantic_onboarding`). Gli orchestratori CLI restano invariati.
-
 ---
 
 ## Struttura progetto (promemoria)
 ```
 src/
-  adapters/         # preview HonKit, fallback contenuti
+  adapters/         # preview HonKit
   pipeline/         # path/file/log/config/github/drive utils, context, eccezioni
   semantic/         # tagging I/O, validator, enrichment
   pre_onboarding.py | tag_onboarding.py | onboarding_full.py (semantica via semantic.api)
@@ -111,12 +109,12 @@ Dettagli: [architecture.md](architecture.md).
 
 ---
 
-## QualitÃ  & DX
+## Qualità & DX
 - **Type-safety**: preferisci firme esplicite e `Optional[...]` solo dove serve; evita `Any` nei moduli core.
 - **Pylance/typing**: quando import opzionali possono essere `None`, usa il *narrowing* pattern:
   - wrapper `_require_callable(fn, name)` per funzioni opzionali;
   - controlli `if x is None: raise RuntimeError(...)` per oggetti/moduli opzionali.
-- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se câ€™Ã¨ l'alternativa stabile.
+- **Streamlit**: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c’è l'alternativa stabile.
 - **Logging**: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
 - **I/O**: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
 - **Naming**: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
@@ -138,7 +136,7 @@ Dettagli: [architecture.md](architecture.md).
 ## Drive & sicurezza
 - Non inserire credenziali nel repo; usa file JSON localmente e variabili d'ambiente.
 - Ogni upload/download passa tramite le API alto livello in `pipeline/drive_utils.py`.
-- Per il download via UI Ã¨ esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
+- Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
 
 ---
 
@@ -153,7 +151,7 @@ Dettagli: [architecture.md](architecture.md).
 - Pull request piccole, atomic commit, messaggi chiari.
 - Aggiungi/aggiorna i test quando modifichi comportamenti.
 - Mantieni la documentazione allineata (README + docs/).
-- Evita duplicazioni: riusa utilitÃ  esistenti (SSoT) prima di introdurne di nuove.
+- Evita duplicazioni: riusa utilità esistenti (SSoT) prima di introdurne di nuove.
 
 ---
 
@@ -169,15 +167,14 @@ Dettagli: [architecture.md](architecture.md).
 
 ### Type checking
 - `make type` esegue `mypy` su `src/`.
-- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento Ã¨ configurato da `pyrightconfig.json`.
-
+- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento è configurato da `pyrightconfig.json`.
 
 ---
 
 ## Path-Safety Lettura (Aggiornamento)
 - Per tutte le letture di file utente (Markdown, CSV, YAML) in pipeline/* e semantic/* usa
-  pipeline.path_utils.ensure_within_and_resolve(base, p) per ottenere un path risolto e sicuro.
-- È vietato usare direttamente open() o Path.read_text() su input esterni senza passare dal wrapper.
+  `pipeline.path_utils.ensure_within_and_resolve(base, p)` per ottenere un path risolto e sicuro.
+- È vietato usare direttamente `open()` o `Path.read_text()` su input esterni senza passare dal wrapper.
 
 Esempi d'uso
 ```python
@@ -193,37 +190,6 @@ with open_for_read(semantic_dir, csv_path) as f:
 
 ---
 
-## Helper di fallback per Markdown
-
-In `semantic.api` è disponibile l'helper interno:
-
-- `_fallback_markdown_from_raw(raw_dir: Path, book_dir: Path) -> list[Path]`
-
-Scopo e comportamento:
-- Viene usato automaticamente da `convert_markdown(...)` quando le utilità di conversione
-  avanzata non sono disponibili (ad es. `_convert_md is None`).
-- Per ogni sottocartella di primo livello in `raw_dir` genera un file Markdown
-  placeholder `<nome>.md` in `book_dir` con:
-  - titolo derivato dal nome cartella (normalizzato rimuovendo `_-/` consecutivi);
-  - contenuto placeholder: `# <Titolo>\n\n(Contenuti da <cartella>/)\n`.
-- Applica path‑safety SSoT: valida ogni destinazione con `ensure_within(book_dir, md_file)`
-  e scrive con `safe_write_text(..., atomic=True)`.
-- Ritorna la lista dei `.md` presenti in `book_dir`, ordinata tramite `sorted_paths(..., base=book_dir)`.
-
-Esempio d’uso diretto (solo per test/local tooling):
-```python
-from pathlib import Path
-from semantic.api import _fallback_markdown_from_raw
-
-raw = Path('output/timmy-kb-acme/raw')
-book = Path('output/timmy-kb-acme/book')
-mds = _fallback_markdown_from_raw(raw, book)
-for p in mds:
-    print(p.name)
-```
-
----
-
 ## API Semantica (Copy/CSV)
 
 Per evitare duplicazioni, gli orchestratori e gli script locali devono usare esclusivamente le API pubbliche in `semantic.api` per le operazioni di ingest locale e generazione CSV:
@@ -232,9 +198,28 @@ Per evitare duplicazioni, gli orchestratori e gli script locali devono usare esc
 - Emissione CSV dei tag grezzi: `semantic.api.build_tags_csv(context, logger, *, slug)`
 
 Note operative
-- Le funzioni applicano path‑safety e scritture atomiche; non usare helper locali o import diretti da `semantic.tags_extractor` fuori da `src/semantic/`.
-- In `tag_onboarding_main` i call‑site sono già delegati a queste API.
+- Le funzioni applicano path-safety e scritture atomiche; non usare helper locali o import diretti da `semantic.tags_extractor` fuori da `src/semantic/`.
+- In `tag_onboarding_main` i call-site sono già delegati a queste API.
 
 Pre-commit
 - È presente un hook locale che impedisce l’introduzione di definizioni locali `_emit_tags_csv`/`_copy_local_pdfs_to_raw` e l’uso diretto di `semantic.tags_extractor` fuori da `src/semantic/`.
 - Esegui: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+
+---
+
+## Tabella comparativa: Orchestratori vs UI
+| Aspetto             | Orchestratori (CLI)                           | UI (Streamlit)                               |
+|---------------------|-----------------------------------------------|---------------------------------------------|
+| Entry point         | `pre_onboarding.py`, `tag_onboarding.py`, `onboarding_full.py` | `onboarding_ui.py` con tre tab (Config, Drive, Semantica) |
+| Destinatari         | Sviluppatori / run batch / CI                 | Utenti operativi / facilitatori              |
+| Controllo           | Script sequenziali, parametri CLI             | Interazione step-by-step con stato UI        |
+| Config              | YAML + variabili ENV                          | Editor mapping + Drive provisioning          |
+| Semantica           | `semantic.api.*` invocato da script           | `semantic.api.*` invocato dalla UI           |
+| Preview             | Da script `adapters/preview` (opzionale)      | Bottoni UI (start/stop container)            |
+| Requisiti extra     | Token GitHub per `onboarding_full`            | Docker per preview; credenziali Drive        |
+| Retrocompat         | Mirroring mapping YAML (in `pre_onboarding`)  | Mapping YAML solo come input storico         |
+
+---
+
+> **Versione**: 2025-09-17
+> **Stato**: Allineata al codice corrente, rimosse parti legacy, aggiunta comparativa CLI vs UI.

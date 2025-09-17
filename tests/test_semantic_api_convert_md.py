@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import pytest
 
+from pipeline.exceptions import ConversionError
 from src.semantic.api import _call_convert_md, _CtxShim
 
 
@@ -16,7 +17,8 @@ def _ctx(
 
 
 def test_call_convert_md_raises_on_non_callable() -> None:
-    with pytest.raises(RuntimeError, match="not callable"):
+    # ora solleva ConversionError con contesto (slug/file_path), non RuntimeError
+    with pytest.raises(ConversionError, match="not callable"):
         _call_convert_md(object(), _ctx(), Path("book"))
 
 

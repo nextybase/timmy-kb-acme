@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 import semantic.api as sapi
+from pipeline.exceptions import ConversionError
 
 
 @dataclass
@@ -88,14 +90,11 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     monkeypatch.setattr(sapi, "_gen_readme", _boom_readme)
 
     logger = logging.getLogger("test")
-    try:
+    with pytest.raises(ConversionError) as exc:
         sapi.write_summary_and_readme(
             cast(Any, DummyCtx()),  # idem sopra
             logger,
             slug="e2e",
         )
-    except RuntimeError as e:
-        msg = str(e)
-        assert "summary:" in msg and "readme:" in msg
-    else:
-        raise AssertionError("write_summary_and_readme doveva sollevare RuntimeError")
+    # Il messaggio aggrega gli errori dei generatori
+    assert "summary:" in str(exc.value) and "readme:" in str(exc.value)
