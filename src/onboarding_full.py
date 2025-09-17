@@ -108,19 +108,26 @@ def onboarding_full_main(
         slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger
     )
 
-    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
-    log_dir = base_dir / LOGS_DIR_NAME
-    log_file = log_dir / LOG_FILE_NAME
-    ensure_within(base_dir, log_dir)
-    ensure_within(log_dir, log_file)
-    log_dir.mkdir(parents=True, exist_ok=True)
-
+    # Carica il contesto PRIMA di determinare i path, per rispettare override (es. REPO_ROOT_DIR)
     context: ClientContext = ClientContext.load(
         slug=slug,
         interactive=not non_interactive,
         require_env=False,
         run_id=run_id,
     )
+
+    # Preferisci i path dal contesto; fallback deterministico solo se assenti
+    ctx_base = getattr(context, "base_dir", None)
+    base_dir: Path = (
+        cast(Path, ctx_base)
+        if ctx_base is not None
+        else (Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}")
+    )
+    log_dir = base_dir / LOGS_DIR_NAME
+    log_file = log_dir / LOG_FILE_NAME
+    ensure_within(base_dir, log_dir)
+    ensure_within(log_dir, log_file)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = get_structured_logger(
         "onboarding_full", log_file=log_file, context=context, run_id=run_id

@@ -4,12 +4,39 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from finance.api import (
-    import_csv as fin_import_csv,
-    summarize_metrics as fin_summarize,
-)
+
+def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
+    """
+    Determina la base_dir del workspace cliente privilegiando ClientContext
+    (che rispetta override come REPO_ROOT_DIR). Fallback a semantic.api.get_paths
+    solo se necessario per non rompere la UI in ambienti minimi.
+    """
+    # 1) Prova ClientContext
+    try:
+        from pipeline.context import ClientContext  # import lazy
+
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        base_dir = getattr(ctx, "base_dir", None)
+        if isinstance(base_dir, Path):
+            return base_dir
+        # Alcuni contesti storici esponevano solo raw_dir: risalgo al parent
+        raw_dir = getattr(ctx, "raw_dir", None)
+        if isinstance(raw_dir, Path):
+            return raw_dir.parent
+    except Exception:
+        pass
+
+    # 2) Fallback: semantic.api.get_paths (opzionale)
+    try:
+        from semantic.api import get_paths as sem_get_paths
+
+        base = sem_get_paths(slug)["base"]
+        return base if isinstance(base, Path) else Path(str(base))
+    except Exception:
+        # 3) Ultimo fallback: legacy locale
+        return Path("output") / f"timmy-kb-{slug}"
 
 
 def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
@@ -19,10 +46,13 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     Dipendenze runtime:
       - finance.api.import_csv
       - finance.api.summarize_metrics
-      - semantic.api.get_paths
+      - (opzionale) semantic.api.get_paths  ← usata solo come fallback
     """
     # Import lazy (evita side-effects a import-time del modulo)
-    from semantic.api import get_paths as sem_get_paths
+    from finance.api import (
+        import_csv as fin_import_csv,
+        summarize_metrics as fin_summarize,
+    )
 
     # Opzionale: scrittura atomica se disponibile
     try:
@@ -41,15 +71,8 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     # Colonna A: uploader + import
     # ——————————————————————————————————————————————————————————
     with colA:
-        # ✅ Prova a recuperare il base_dir dal ClientContext, con fallback a get_paths(...)
-        from pipeline.context import ClientContext
-
-        ctx_base: Path | None = None
-        try:
-            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-            ctx_base = getattr(ctx, "base_dir", None)
-        except Exception:
-            ctx_base = None
+        # Base dir coerente con ClientContext (override inclusi)
+        base_dir: Path = _resolve_base_dir(slug, log)
 
         file = st.file_uploader(
             "Carica CSV: metric, period, value, [unit], [currency], [note], [canonical_term]",
@@ -63,8 +86,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
             disabled=(file is None),
         ):
             try:
-                base = ctx_base or sem_get_paths(slug)["base"]  # Path del workspace cliente
-                sem_dir: Path = base / "semantic"
+                sem_dir: Path = base_dir / "semantic"
                 sem_dir.mkdir(parents=True, exist_ok=True)
 
                 tmp_name = f"tmp-finance-{st.session_state.get('run_id','run')}.csv"
@@ -76,14 +98,15 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
                 else:
                     tmp_csv.write_bytes(data)
 
-                res: Dict[str, object] = fin_import_csv(base, tmp_csv)
+                res: Dict[str, object] = fin_import_csv(base_dir, tmp_csv)
                 st.success(
                     "Import OK - righe: {rows}  in {db}".format(
                         rows=res.get("rows", 0),
                         db=res.get("db", str(sem_dir / "finance.db")),
                     )
                 )
-                log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
+                if log:
+                    log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
 
                 try:
                     tmp_csv.unlink(missing_ok=True)
@@ -97,8 +120,8 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     # ——————————————————————————————————————————————————————————
     with colB:
         try:
-            base = ctx_base or sem_get_paths(slug)["base"]
-            summary: List[tuple[str, int]] = fin_summarize(base)
+            base_dir = _resolve_base_dir(slug, log)
+            summary: List[tuple[str, int]] = fin_summarize(base_dir)
             if summary:
                 st.caption("Metriche presenti:")
                 st.table(

@@ -226,7 +226,11 @@
     "sottostringa",
     "mlops",
     "tupla",
-    "ctxlike"
+    "ctxlike",
+    "clientcontext",
+    "monkeypatchare",
+    "monkeypatchati",
+    "redef"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

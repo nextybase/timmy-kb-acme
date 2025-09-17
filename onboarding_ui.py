@@ -56,9 +56,8 @@ def main() -> None:
     # Landing (modulo esterno)
     from ui.landing_slug import render_landing_slug  # type: ignore
 
-    # Semantica API
+    # Semantica API (niente get_paths: i path vengono dal ClientContext)
     from semantic.api import (  # type: ignore
-        get_paths as sem_get_paths,
         load_reviewed_vocab as sem_load_vocab,
         convert_markdown as sem_convert,
         enrich_frontmatter as sem_enrich,
@@ -413,24 +412,33 @@ def main() -> None:
                     use_container_width=True,
                 ):
                     try:
-                        if sem_get_paths is not None and slug:
-                            raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
-                            has_pdfs = any(raw_dir.rglob("*.pdf")) if raw_dir.exists() else False
-                            has_csv = (
-                                (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
-                                if raw_dir.exists()
-                                else False
+                        ctx = _ensure_context(slug, log)
+                        raw_dir = getattr(ctx, "raw_dir", None)
+                        # --- base_dir sicuro (no Optional / None) ---
+                        has_pdfs = (
+                            any(raw_dir.rglob("*.pdf")) if (raw_dir and raw_dir.exists()) else False
+                        )
+                        has_csv = False
+                        base_dir_opt = getattr(ctx, "base_dir", None)
+                        if raw_dir and raw_dir.exists():
+                            base_dir_safe = raw_dir.parent
+                        elif isinstance(base_dir_opt, Path):
+                            base_dir_safe = base_dir_opt
+                        else:
+                            base_dir_safe = None
+                        if isinstance(base_dir_safe, Path):
+                            has_csv = (base_dir_safe / "semantic" / "tags_raw.csv").exists()
+                        # ------------------------------------------
+                        st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
+                        st.success(
+                            "Rilevazione completata: "
+                            + (
+                                "PDF trovati o CSV presente."
+                                if st.session_state["raw_ready"]
+                                else "nessun PDF rilevato."
                             )
-                            st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
-                            st.success(
-                                "Rilevazione completata: "
-                                + (
-                                    "PDF trovati o CSV presente."
-                                    if st.session_state["raw_ready"]
-                                    else "nessun PDF rilevato."
-                                )
-                            )
-                            _safe_streamlit_rerun()
+                        )
+                        _safe_streamlit_rerun()
                     except Exception as e:
                         st.exception(e)
             with c2:
@@ -492,21 +500,32 @@ def main() -> None:
                     use_container_width=True,
                 ):
                     try:
-                        base_dir = sem_get_paths(slug)["base"]  # type: ignore[index]
-                        vocab = sem_load_vocab(base_dir, log)  # type: ignore[misc]
-                        touched: List[Path] = sem_enrich(  # type: ignore[misc]
-                            context, log, vocab, slug=slug
-                        )
-                        st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
-                        log.info(
-                            {
-                                "event": "semantic_enrich_done",
-                                "slug": slug,
-                                "run_id": st.session_state.get("run_id"),
-                                "touched": len(touched),
-                            }
-                        )
-                        _mark_modified_and_bump_once(slug, log, context=context)
+                        # Usa il base_dir reale dal ClientContext (override inclusi)
+                        base_dir_opt = getattr(context, "base_dir", None)
+                        raw_dir_opt = getattr(context, "raw_dir", None)
+                        if isinstance(base_dir_opt, Path):
+                            base_dir_safe = base_dir_opt
+                        elif isinstance(raw_dir_opt, Path):
+                            base_dir_safe = raw_dir_opt.parent
+                        else:
+                            base_dir_safe = None
+                        if base_dir_safe is None:
+                            st.error("base_dir non disponibile nel contesto.")
+                        else:
+                            vocab = sem_load_vocab(base_dir_safe, log)  # type: ignore[misc]
+                            touched: List[Path] = sem_enrich(  # type: ignore[misc]
+                                context, log, vocab, slug=slug
+                            )
+                            st.success(f"OK. Frontmatter aggiornati: {len(touched)}")
+                            log.info(
+                                {
+                                    "event": "semantic_enrich_done",
+                                    "slug": slug,
+                                    "run_id": st.session_state.get("run_id"),
+                                    "touched": len(touched),
+                                }
+                            )
+                            _mark_modified_and_bump_once(slug, log, context=context)
                     except Exception as e:
                         st.exception(e)
 
@@ -570,7 +589,9 @@ def main() -> None:
             font-weight: 600 !important;
             border: 1px solid #e5e7eb !important;
         }
-        .stButton > button:hover { filter: brightness(0.98); }
+        .stButton > button:hover {
+            filter: brightness(0.98);
+        }
         .next-card {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
@@ -578,30 +599,60 @@ def main() -> None:
             background: #ffffff;
         }
         .pill {
-            display:inline-block; padding: 4px 12px;
-            border-radius: 9999px; font-weight:600;
-            border:1px solid #f5d98b;
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-weight: 600;
+            border: 1px solid #f5d98b;
         }
-        .pill.off { background:#FEF3C7; color:#6B7280; }
-        .pill.on  { background:#FDE68A; color:#1F2937; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] {
-            display: flex; flex-direction: column; gap: 6px;
+        .pill.off {
+            background: #FEF3C7;
+            color: #6B7280;
         }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label {
-            display:block; padding:8px 12px; border-radius:10px; color:#111827; cursor:pointer;
-            border:1px solid #e5e7eb; background:#ffffff; font-weight:600;
+        .pill.on  {
+            background: #FDE68A;
+            color: #1F2937;
         }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"]
-          > label:hover { background:#FDF6B2; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"]
-          > label > div[role="radio"] { display:none; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"]
-          > label:has(div[role="radio"][aria-checked="true"]) {
-            background:#FDE68A; border:1px solid #f5d98b;
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"] {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
-        [data-testid="stSidebar"] [data-testid="stRadio"] div[role="radio"][aria-checked="true"] {
-            background:#FDE68A; border:1px solid #f5d98b;
-            border-radius:10px; padding:8px 12px; font-weight:700;
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"] > label {
+            display: block;
+            padding: 8px 12px;
+            border-radius: 10px;
+            color: #111827;
+            cursor: pointer;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            font-weight: 600;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"] > label:hover {
+            background: #FDF6B2;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"] > label > div[role="radio"] {
+            display: none;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"]
+        > label:has(div[role="radio"][aria-checked="true"]) {
+            background: #FDE68A;
+            border: 1px solid #f5d98b;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"]
+        div[role="radiogroup"]
+        > label:has(div[role="radio"][aria-checked="true"])
+        div[role="radio"][aria-checked="true"] {
+            background: #FDE68A;
+            border: 1px solid #f5d98b;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-weight: 700;
         }
         </style>
         """,
@@ -853,19 +904,31 @@ def main() -> None:
     st.title("NeXT Onboarding")
     st.markdown(f"**Cliente:** {client_name} | **Slug:** `{slug}`")
 
-    # Gating Semantica
+    # Gating Semantica (usa ClientContext, non sem_get_paths)
     raw_ready = bool(st.session_state.get("raw_ready"))
     if not raw_ready:
         try:
-            if sem_get_paths is not None and slug:
-                raw_dir = sem_get_paths(slug)["raw"]  # type: ignore[index]
-                if raw_dir.exists():
-                    try:
-                        has_pdfs = any(raw_dir.rglob("*.pdf"))
-                    except Exception:
-                        has_pdfs = False
-                    has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
-                    st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
+            ctx = _ensure_context(slug, log)
+            raw_dir = getattr(ctx, "raw_dir", None)
+            if raw_dir and raw_dir.exists():
+                try:
+                    has_pdfs = any(raw_dir.rglob("*.pdf"))
+                except Exception:
+                    has_pdfs = False
+            else:
+                has_pdfs = False
+            # base_dir sicuro
+            has_csv = False
+            base_dir_opt = getattr(ctx, "base_dir", None)
+            if raw_dir and raw_dir.exists():
+                base_dir_safe = raw_dir.parent
+            elif isinstance(base_dir_opt, Path):
+                base_dir_safe = base_dir_opt
+            else:
+                base_dir_safe = None
+            if isinstance(base_dir_safe, Path):
+                has_csv = (base_dir_safe / "semantic" / "tags_raw.csv").exists()
+            st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
         except Exception:
             pass
 

@@ -11,18 +11,37 @@ try:
 except Exception as e:  # pragma: no cover
     raise RuntimeError("Streamlit non disponibile per la landing UI.") from e
 
-# Facade semantica (opzionale)
+# Facade semantica (fallback opzionale)
 _SemGetPaths = Callable[[str], Dict[str, Path]]
 try:  # pragma: no cover - opzionale in ambienti minimi
     from semantic.api import get_paths as _sem_get_paths  # type: ignore[import-not-found]
 
-    _sem_get_paths = _sem_get_paths  # satisfy linters about redefinition
+    _sem_get_paths = _sem_get_paths  # satisfy linters
 except Exception:  # pragma: no cover
     _sem_get_paths = None  # type: ignore[assignment]
 
 
 def _base_dir_for(slug: str) -> Path:
-    """Calcola la base directory per lo slug, preferendo semantic.api se disponibile."""
+    """
+    Calcola la base directory per lo slug.
+    Precede ClientContext (override inclusi, es. REPO_ROOT_DIR).
+    Fallback a semantic.api.get_paths solo se necessario.
+    """
+    # 1) Prova ClientContext
+    try:
+        from pipeline.context import ClientContext
+
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        base = getattr(ctx, "base_dir", None)
+        if isinstance(base, Path):
+            return base
+        raw_dir = getattr(ctx, "raw_dir", None)
+        if isinstance(raw_dir, Path):
+            return raw_dir.parent
+    except Exception:
+        pass
+
+    # 2) Prova semantic.api.get_paths
     if _sem_get_paths is not None and slug:
         try:
             paths = _sem_get_paths(slug)  # type: ignore[misc]
@@ -30,6 +49,8 @@ def _base_dir_for(slug: str) -> Path:
             return base if isinstance(base, Path) else Path(str(base))
         except Exception:
             pass
+
+    # 3) Fallback legacy
     return Path("output") / f"timmy-kb-{slug}"
 
 
@@ -40,7 +61,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     """
     st.markdown("<div style='height: 6vh'></div>", unsafe_allow_html=True)
 
-    # Banner in alto a destra (landing)
+    # Banner in alto a destra
     try:
         ROOT = Path(__file__).resolve().parents[2]
         _logo = ROOT / "assets" / "next-logo.png"
@@ -61,7 +82,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     except Exception:
         pass
 
-    # Input slug centrato (unico elemento iniziale)
+    # Input slug centrato
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         slug: str = (
@@ -84,7 +105,6 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     if base_dir.exists():
         client_name: str = slug
         try:
-            # Carica config se presente per recuperare il nome
             from pipeline.config_utils import get_client_config
             from pipeline.context import ClientContext
 
@@ -98,14 +118,13 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         st.session_state["client_name"] = client_name
         st.session_state["client_locked"] = True
         st.session_state["active_section"] = "Configurazione"
-        # Allinea comportamento al caso B: forza un rerun per pulire la landing
         try:
             st.rerun()
         except Exception:
             pass
         return True, slug, client_name
 
-    # Caso B: workspace NON esiste → chiedi Nome + upload PDF e crea workspace
+    # Caso B: workspace nuovo → Nome + PDF
     st.caption("Nuovo cliente rilevato.")
     client_name: str = (
         st.text_input(
