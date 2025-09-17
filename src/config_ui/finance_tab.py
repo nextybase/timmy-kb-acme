@@ -1,8 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/config_ui/finance_tab.py
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from finance.api import (
     import_csv as fin_import_csv,
@@ -39,6 +41,16 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     # Colonna A: uploader + import
     # ——————————————————————————————————————————————————————————
     with colA:
+        # ✅ Prova a recuperare il base_dir dal ClientContext, con fallback a get_paths(...)
+        from pipeline.context import ClientContext
+
+        ctx_base: Path | None = None
+        try:
+            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+            ctx_base = getattr(ctx, "base_dir", None)
+        except Exception:
+            ctx_base = None
+
         file = st.file_uploader(
             "Carica CSV: metric, period, value, [unit], [currency], [note], [canonical_term]",
             type=["csv"],
@@ -51,7 +63,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
             disabled=(file is None),
         ):
             try:
-                base = sem_get_paths(slug)["base"]  # Path del workspace cliente
+                base = ctx_base or sem_get_paths(slug)["base"]  # Path del workspace cliente
                 sem_dir: Path = base / "semantic"
                 sem_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,8 +97,8 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     # ——————————————————————————————————————————————————————————
     with colB:
         try:
-            base = sem_get_paths(slug)["base"]
-            summary: List[Tuple[str, int]] = fin_summarize(base)
+            base = ctx_base or sem_get_paths(slug)["base"]
+            summary: List[tuple[str, int]] = fin_summarize(base)
             if summary:
                 st.caption("Metriche presenti:")
                 st.table(

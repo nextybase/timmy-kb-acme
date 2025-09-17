@@ -27,7 +27,7 @@ def main() -> None:
     import streamlit as st
 
     from pipeline.env_utils import compute_redact_flag
-    from pipeline.logging_utils import get_structured_logger
+    from pipeline.logging_utils import get_structured_logger  # fix import
     from pipeline.context import ClientContext
     from pipeline.config_utils import (
         bump_n_ver_if_needed,
@@ -865,37 +865,23 @@ def main() -> None:
                     except Exception:
                         has_pdfs = False
                     has_csv = (raw_dir.parent / "semantic" / "tags_raw.csv").exists()
-                    raw_ready = bool(has_pdfs or has_csv)
+                    st.session_state["raw_ready"] = bool(has_pdfs or has_csv)
         except Exception:
-            raw_ready = False
+            pass
 
-    # Navigazione (sidebar-driven)
-    section = cast(
-        str,
-        st.session_state.get("active_section")
-        or st.session_state.get("nav_section")
-        or "Configurazione",
-    )
-    if section == "Configurazione":
+    # Sidebar Menù → sezioni
+    active = cast(str, st.session_state.get("active_section") or "Configurazione")
+    if active == "Configurazione":
         _render_config_tab(log, slug, client_name)
-    elif section == "Drive":
+    elif active == "Drive":
         _render_drive_tab(log, slug)
-    elif section == "Finanza":
+    elif active == "Finanza":
         render_finance_tab(st=st, log=log, slug=slug)
-    elif section == "Semantica":
-        if raw_ready or st.session_state.get("raw_downloaded"):
-            _render_semantic_tab(log, slug)
-        else:
-            st.info(
-                "Per abilitare la sezione Semantica scarica prima i PDF in raw/ dalla sezione Drive."
-            )
-    elif section == "Preview":
-        try:
-            ctx_prev = _ensure_context(slug, log)
-        except Exception as e:
-            st.exception(e)
-        else:
-            render_preview_controls(st=st, context=ctx_prev, log=log, slug=slug)
+    elif active == "Semantica":
+        _render_semantic_tab(log, slug)
+    elif active == "Preview":
+        # Il tab Preview è interamente nel modulo estratto
+        pass
 
 
 if __name__ == "__main__":

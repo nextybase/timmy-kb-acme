@@ -72,8 +72,14 @@ class _CtxShim:
 def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Path, Path]:
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
-    raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
-    md_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
+    raw_dir = cast(
+        Path,
+        getattr(context, "raw_dir", None) or (base_dir / "raw"),
+    )
+    md_dir = cast(
+        Path,
+        getattr(context, "md_dir", None) or (base_dir / "book"),
+    )
     return base_dir, raw_dir, md_dir
 
 
@@ -124,7 +130,7 @@ def enrich_frontmatter(
     from pipeline.path_utils import read_text_safe
 
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
-    # ✅ ripristino path-safety: l'override deve comunque ricadere sotto base_dir
+    # ✅ path-safety: l'override deve comunque ricadere sotto base_dir
     ensure_within(base_dir, book_dir)
 
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
@@ -299,8 +305,11 @@ def build_markdown_book(
 ) -> list[Path]:
     mds = convert_markdown(context, logger, slug=slug)
     write_summary_and_readme(context, logger, slug=slug)
-    paths = get_paths(slug)
-    vocab = load_reviewed_vocab(paths["base"], logger)
+
+    # ✅ preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
+    ctx_base = cast(Path, getattr(context, "base_dir", None))
+    base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
+    vocab = load_reviewed_vocab(base_dir, logger)
     if vocab:
         enrich_frontmatter(context, logger, vocab, slug=slug)
     return mds
@@ -462,11 +471,11 @@ def _merge_frontmatter(
 
 
 def _term_to_pattern(term: str) -> re.Pattern[str]:
-    """
+    r"""
     Costruisce un pattern robusto a confini parola *semantici*:
-    - lookaround espliciti: (?<!\\w) ... (?!\\w) per includere token con punteggiatura (c++, ml/ops, data+)
+    - lookaround espliciti: (?<!\w) ... (?!\w) per includere token con punteggiatura (c++, ml/ops, data+)
     - re.escape(term) per i simboli
-    - spazi del termine mappati in \\s+ per tollerare separatori multipli
+    - spazi del termine mappati in \s+ per tollerare separatori multipli
     """
     esc = re.escape(term.strip().lower())
     esc = esc.replace(r"\ ", r"\s+")

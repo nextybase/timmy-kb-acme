@@ -1,42 +1,149 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/semantic_headless.py
 from __future__ import annotations
 
 import argparse
 import logging
-import sys
+from pathlib import Path
+from typing import Dict, List, TYPE_CHECKING
 
-from pipeline.context import ClientContext  # type: ignore
 from semantic.api import (
     convert_markdown,
-    enrich_frontmatter,  # type: ignore
+    enrich_frontmatter,
     get_paths,
+    load_reviewed_vocab,
     write_summary_and_readme,
 )
-from semantic.vocab_loader import load_reviewed_vocab  # type: ignore
 
-# from pathlib import Path
+__all__ = ["build_markdown_headless"]
+
+# Tipi compatibili con semantic.api:
+# - in fase di type checking usiamo la classe concreta
+# - a runtime usiamo il Protocol per evitare dipendenze hard
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext as _ClientContext
+else:
+    from semantic.types import ClientContextProtocol as _ClientContext
 
 
-def main() -> int:
-    p = argparse.ArgumentParser(
-        description="Semantic headless via semantic.api (convert/enrich/write)"
-    )
-    p.add_argument("--slug", required=True)
-    p.add_argument("--no-preview", action="store_true", help="Ignorato (compat)")
-    p.add_argument("--non-interactive", action="store_true", help="Ignorato (compat)")
-    args = p.parse_args()
+def build_markdown_headless(
+    ctx: _ClientContext,
+    log: logging.Logger,
+    *,
+    slug: str,
+) -> Dict[str, object]:
+    """
+    Esegue la pipeline semantica in modalità headless (senza prompt/UI):
 
-    slug = args.slug.strip()
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-    log = logging.getLogger("semantic.headless")
+      1) convert_markdown -> genera .md in book/
+      2) load_reviewed_vocab -> carica vocabolario canonico da base/semantic
+      3) enrich_frontmatter -> arricchisce i frontmatter con titoli e tag
+      4) write_summary_and_readme -> genera SUMMARY.md e README.md e valida
+    """
+    # 1) Conversione PDF -> Markdown
+    converted: List[Path] = convert_markdown(ctx, log, slug=slug)
 
-    convert_markdown(ctx, log, slug=slug)
-    base = get_paths(slug)["base"]
+    # 2) Caricamento vocabolario canonico: usa ctx.base_dir se presente, altrimenti get_paths(...)
+    ctx_base = getattr(ctx, "base_dir", None)
+    base = ctx_base if isinstance(ctx_base, Path) else get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base, log) or {}
-    enrich_frontmatter(ctx, log, vocab, slug=slug)
+
+    # 3) Arricchimento frontmatter (opzionale se vocab vuoto)
+    enriched: List[Path] = []
+    if vocab:
+        enriched = enrich_frontmatter(ctx, log, vocab, slug=slug)
+
+    # 4) SUMMARY.md + README.md + validazione directory MD
     write_summary_and_readme(ctx, log, slug=slug)
+
+    return {
+        "converted": converted,
+        "enriched": enriched,
+        "summary_readme": True,
+    }
+
+
+# ---------------------------
+# CLI minimale per i test e l'uso da shell
+# ---------------------------
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        prog="semantic_headless",
+        description="Esegue la build semantica (RAW -> BOOK) in modalità headless.",
+    )
+    p.add_argument("--slug", required=True, help="Identificativo cliente (slug).")
+    p.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Disabilita prompt interattivi (modalità batch/CI).",
+    )
+    # Opzione legacy/ignorable per compatibilità con i test
+    p.add_argument(
+        "--no-preview",
+        action="store_true",
+        help="Compatibilità: non avvia alcuna preview (opzione ignorata).",
+    )
+    p.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Livello di logging su stderr.",
+    )
+    return p.parse_args()
+
+
+def _setup_logger(level: str) -> logging.Logger:
+    # Logger semplice, senza emoji (evita UnicodeEncodeError su Windows/cp1252)
+    logger = logging.getLogger("semantic_headless")
+    if logger.handlers:
+        # Evita handler duplicati se richiamato più volte
+        return logger
+    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+    h = logging.StreamHandler()
+    fmt = logging.Formatter("%(levelname)s %(name)s | %(message)s")
+    h.setFormatter(fmt)
+    logger.addHandler(h)
+    logger.propagate = False
+    return logger
+
+
+def _safe_len_seq(obj: object) -> int:
+    """Restituisce len(obj) solo se obj è una lista/tupla, altrimenti 0 (type-safe per Pylance)."""
+    if isinstance(obj, (list, tuple)):
+        return len(obj)
     return 0
 
 
+def main() -> int:
+    args = _parse_args()
+    log = _setup_logger(args.log_level)
+
+    try:
+        # Carichiamo il contesto concreto quando disponibile a runtime
+        from pipeline.context import ClientContext
+
+        ctx = ClientContext.load(
+            slug=args.slug,
+            interactive=not bool(args.non_interactive),
+            require_env=False,
+            run_id=None,
+        )
+    except Exception as e:
+        log.error(f"Impossibile caricare il ClientContext: {e}")
+        return 2
+
+    try:
+        res = build_markdown_headless(ctx, log, slug=args.slug)
+        conv = _safe_len_seq(res.get("converted"))
+        enr = _safe_len_seq(res.get("enriched"))
+        log.info(f"Conversione completata: {conv} md, frontmatter aggiornati: {enr}")
+        return 0
+    except Exception as e:
+        log.error(f"Errore durante la build semantica: {e}")
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
