@@ -15,7 +15,7 @@ import logging
 from glob import glob
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence, cast
 
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
@@ -28,12 +28,12 @@ LOGGER = logging.getLogger("timmy_kb.ingest")
 def _read_text_file(base_dir: Path, p: Path) -> Optional[str]:
     try:
         # Prova prima con UTF-8
-        return read_text_safe(base_dir, p, encoding="utf-8")
+        return cast(str, read_text_safe(base_dir, p, encoding="utf-8"))
     except UnicodeDecodeError:
         # Fallback su codifiche comuni (senza continue in except)
         for enc in ("utf-16", "latin-1"):
             try:
-                return read_text_safe(base_dir, p, encoding=enc)
+                return cast(str, read_text_safe(base_dir, p, encoding=enc))
             except (UnicodeDecodeError, OSError):
                 LOGGER.debug("Fallback di codifica fallito per %s con %s", p, enc)
         LOGGER.warning("Impossibile leggere file di testo: %s", p)
@@ -43,7 +43,7 @@ def _read_text_file(base_dir: Path, p: Path) -> Optional[str]:
 def _is_binary(base_dir: Path, path: Path) -> bool:
     try:
         ensure_within(base_dir, path)
-        safe_p = ensure_within_and_resolve(base_dir, path)
+        safe_p = cast(Path, ensure_within_and_resolve(base_dir, path))
         with safe_p.open("rb") as f:
             chunk = f.read(1024)
         if b"\0" in chunk:
@@ -57,9 +57,9 @@ def _is_binary(base_dir: Path, path: Path) -> bool:
 
 def _try_import_tiktoken() -> ModuleType | None:
     try:
-        import tiktoken  # type: ignore
+        import tiktoken
 
-        return tiktoken
+        return cast(ModuleType, tiktoken)
     except Exception:
         return None
 
@@ -88,12 +88,12 @@ def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -
     return chunks
 
 
-class OpenAIEmbeddings(EmbeddingsClient):
+class OpenAIEmbeddings:
     """Client semplice per calcolare embedding tramite API openai>=1.x."""
 
     def __init__(self: "OpenAIEmbeddings", model: str = "text-embedding-3-small") -> None:
         try:
-            from openai import OpenAI  # type: ignore
+            from openai import OpenAI
         except Exception as e:  # pragma: no cover - errore di import
             raise RuntimeError("Pacchetto openai non disponibile. Installa openai>=1.x") from e
         self._OpenAI = OpenAI
@@ -108,7 +108,7 @@ class OpenAIEmbeddings(EmbeddingsClient):
     ) -> Sequence[Sequence[float]]:
         # Uniformiamo a Sequence[str] e supportiamo il parametro keyword-only `model`
         if not texts:
-            return []
+            return cast(Sequence[Sequence[float]], [])
         mdl = model or self._model
         resp = self._client.embeddings.create(model=mdl, input=list(texts))
         return [d.embedding for d in resp.data]
@@ -119,7 +119,7 @@ def ingest_path(
     scope: str,
     path: str,
     version: str,
-    meta: Dict,
+    meta: dict[str, Any],
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
     base_dir: Optional[Path] = None,
@@ -137,20 +137,22 @@ def ingest_path(
     if text is None:
         return 0
     chunks: List[str] = _chunk_text(text)
-    client = embeddings_client or OpenAIEmbeddings()
+    client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
     vectors_seq = client.embed_texts(chunks)
 
     # Converte in List[List[float]] per compatibilità con insert_chunks
     vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
 
-    inserted = insert_chunks(
-        project_slug=project_slug,
-        scope=scope,
-        path=str(p),
-        version=version,
-        meta_dict=meta,
-        chunks=chunks,
-        embeddings=vectors,
+    inserted = int(
+        insert_chunks(
+            project_slug=project_slug,
+            scope=scope,
+            path=str(p),
+            version=version,
+            meta_dict=meta,
+            chunks=chunks,
+            embeddings=vectors,
+        )
     )
     LOGGER.info(
         "ingest_path: %s -> %d chunk salvati per progetto=%s scope=%s",
@@ -167,9 +169,9 @@ def ingest_folder(
     scope: str,
     folder_glob: str,
     version: str,
-    meta: Dict,
+    meta: dict[str, Any],
     embeddings_client: Optional[EmbeddingsClient] = None,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Ingest di tutti i file .md/.txt che corrispondono al glob indicato.
 
     Restituisce un dizionario di riepilogo con i conteggi: {files, chunks}.

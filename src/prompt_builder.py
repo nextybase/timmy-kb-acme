@@ -12,13 +12,13 @@ design comments, modular and production-ready code.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List
+from typing import Any
 
 LOGGER = logging.getLogger("timmy_kb.prompt_builder")
 
 
-def _format_retrieved(retrieved: List[Dict]) -> str:
-    parts: List[str] = []
+def _format_retrieved(retrieved: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
     for i, item in enumerate(retrieved, start=1):
         content = item.get("content", "").strip()
         score = item.get("score")
@@ -32,9 +32,11 @@ def _format_retrieved(retrieved: List[Dict]) -> str:
     return "\n\n".join(parts)
 
 
-def build_prompt(next_premise: str, coding_rules: str, task: str, retrieved: List[Dict]) -> str:
+def build_prompt(
+    next_premise: str, coding_rules: str, task: str, retrieved: list[dict[str, Any]]
+) -> str:
     """Compose the final prompt for the coding agent."""
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# Timmy KB Coder — Request")
 
     if next_premise.strip():

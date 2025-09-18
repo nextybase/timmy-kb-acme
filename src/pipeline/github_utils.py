@@ -77,7 +77,7 @@ class _SupportsContext(Protocol):
 
     slug: str
     md_dir: Path
-    env: dict
+    env: dict[str, Any]
     base_dir: Path
 
 
@@ -86,18 +86,27 @@ class _SupportsContext(Protocol):
 # ----------------------------
 def _resolve_default_branch(context: _SupportsContext) -> str:
     """Risoluzione branch di default con fallback a 'main' (SSoT: DEFAULT_GIT_BRANCH_ENV_KEYS)."""
-    # 1) variabili nel contesto (preferite)
     if getattr(context, "env", None):
         for key in DEFAULT_GIT_BRANCH_ENV_KEYS:
-            br = context.env.get(key)
-            if br:
-                return br
-    # 2) variabili d'ambiente tramite resolver centralizzato
+            value = context.env.get(key)
+            if isinstance(value, str):
+                candidate = value.strip()
+                if candidate:
+                    return candidate
+            elif value is not None:
+                candidate = str(value).strip()
+                if candidate:
+                    return candidate
     for key in DEFAULT_GIT_BRANCH_ENV_KEYS:
-        br = get_env_var(key, default=None, required=False)
-        if br:
-            return br
-    # 3) fallback sicuro
+        value = get_env_var(key, default=None, required=False)
+        if isinstance(value, str):
+            candidate = value.strip()
+            if candidate:
+                return candidate
+        elif value is not None:
+            candidate = str(value).strip()
+            if candidate:
+                return candidate
     return "main"
 
 
@@ -129,13 +138,13 @@ def _sanitize_env(
 
 
 def _run(
-    cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, op: str = "git"
+    cmd: list[str], *, cwd: Path | None = None, env: dict[str, Any] | None = None, op: str = "git"
 ) -> None:
     """Helper compatibile che delega a run_cmd (con capture attivo per tail diagnostici)."""
     run_cmd(cmd, cwd=str(cwd) if cwd else None, env=env, capture=True, logger=logger, op=op)
 
 
-def _git_status_porcelain(cwd: Path, env: dict | None = None) -> str:
+def _git_status_porcelain(cwd: Path, env: dict[str, Any] | None = None) -> str:
     """Ritorna l'output di `git status --porcelain`."""
     cp = run_cmd(
         ["git", "status", "--porcelain"],
@@ -148,7 +157,7 @@ def _git_status_porcelain(cwd: Path, env: dict | None = None) -> str:
     return cp.stdout or ""
 
 
-def _git_rev_parse(ref: str, cwd: Path, env: dict | None = None) -> str:
+def _git_rev_parse(ref: str, cwd: Path, env: dict[str, Any] | None = None) -> str:
     """Ritorna lo SHA (full) per un ref (es. HEAD, origin/main)."""
     cp = run_cmd(
         ["git", "rev-parse", ref],
@@ -175,7 +184,7 @@ def _mask_ack(tag: str) -> str:
 # ----------------------------
 def _collect_md_files(book_dir: Path) -> list[Path]:
     """Seleziona file .md validi (no .bak), ricorsivamente, con ordinamento deterministico."""
-    md_files = sorted_paths(
+    md_iter = sorted_paths(
         (
             f
             for f in book_dir.rglob("*.md")
@@ -183,11 +192,11 @@ def _collect_md_files(book_dir: Path) -> list[Path]:
         ),
         base=book_dir,
     )
-    return md_files
+    return list(md_iter)
 
 
 def _ensure_or_create_repo(
-    gh: Github, user, repo_name: str, *, logger: logging.Logger, redact_logs: bool
+    gh: Github, user: Any, repo_name: str, *, logger: logging.Logger, redact_logs: bool
 ) -> Any:
     """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente.
 
@@ -235,7 +244,7 @@ def _copy_md_tree(md_files: Sequence[Path], book_dir: Path, dst_root: Path) -> N
         shutil.copy2(f, dst)
 
 
-def _stage_and_commit(tmp_dir: Path, env: dict | None, *, commit_msg: str) -> bool:
+def _stage_and_commit(tmp_dir: Path, env: dict[str, Any] | None, *, commit_msg: str) -> bool:
     """Esegue add/commit se ci sono modifiche. Ritorna True se ha committato, False se no-op."""
     _run(["git", "add", "-A"], cwd=tmp_dir, env=env, op="git add")
     status = _git_status_porcelain(tmp_dir, env=env)
@@ -261,7 +270,7 @@ def _stage_and_commit(tmp_dir: Path, env: dict | None, *, commit_msg: str) -> bo
 
 def _push_with_retry(
     tmp_dir: Path,
-    env: dict | None,
+    env: dict[str, Any] | None,
     default_branch: str,
     *,
     logger: logging.Logger,
@@ -300,7 +309,7 @@ def _push_with_retry(
 
 def _force_push_with_lease(
     tmp_dir: Path,
-    env: dict | None,
+    env: dict[str, Any] | None,
     default_branch: str,
     force_ack: str,
     *,

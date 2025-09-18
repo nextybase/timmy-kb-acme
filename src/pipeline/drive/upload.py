@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from googleapiclient.errors import HttpError
+
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive/upload.py
 """
@@ -39,14 +43,11 @@ e mantiene la compatibilità con il monolite precedente.
   qui si assume che gli orchestratori abbiano validato i perimetri di scrittura.
 """
 
-from __future__ import annotations
-
 import os
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
 
-from googleapiclient.errors import HttpError  # type: ignore
 
 from ..constants import OUTPUT_DIR_NAME
 from ..exceptions import ConfigError, DriveUploadError
@@ -415,7 +416,7 @@ def upload_config_to_drive_folder(
 
     # Lazy import: disponibile solo se effettivamente carichiamo il file
     try:
-        from googleapiclient.http import MediaFileUpload  # type: ignore
+        from googleapiclient.http import MediaFileUpload
     except Exception as e:  # noqa: BLE001
         raise DriveUploadError(
             "Dipendenza mancante per upload su Drive: google-api-python-client. "

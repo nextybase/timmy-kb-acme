@@ -139,6 +139,12 @@ class ConfigError(PipelineError):
     pass
 
 
+class PathTraversalError(ConfigError):
+    """Path traversal rilevato rispetto al perimetro consentito."""
+
+    pass
+
+
 class CleanupError(PipelineError):
     """Errore durante la pulizia della cartella di output."""
 
@@ -228,6 +234,7 @@ __all__ = [
     "PushError",
     "ForcePushError",
     "ConfigError",
+    "PathTraversalError",
     "CleanupError",
     "PreviewError",
     "EnrichmentError",

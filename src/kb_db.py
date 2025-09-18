@@ -18,7 +18,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Any, Iterator, Optional
 
 LOGGER = logging.getLogger("timmy_kb.kb_db")
 
@@ -89,9 +89,9 @@ def insert_chunks(
     scope: str,
     path: str,
     version: str,
-    meta_dict: Dict,
-    chunks: List[str],
-    embeddings: List[List[float]],
+    meta_dict: dict[str, Any],
+    chunks: list[str],
+    embeddings: list[list[float]],
     db_path: Optional[Path] = None,
 ) -> int:
     """Inserisce righe (chunk + embedding). Restituisce il numero di righe inserite.
@@ -137,7 +137,7 @@ def fetch_candidates(
     scope: str,
     limit: int = 64,
     db_path: Optional[Path] = None,
-) -> Iterator[Dict]:
+) -> Iterator[dict[str, Any]]:
     """Restituisce (iterator) i candidati per (project_slug, scope).
 
     Ogni dict prodotto contiene: content (str), meta (dict), embedding (list[float]).

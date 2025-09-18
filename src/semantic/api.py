@@ -290,14 +290,14 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
     ensure_within(semantic_dir, csv_path)
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    count = _emit_tags_csv(raw_dir, csv_path, logger)
+    count = int(_emit_tags_csv(raw_dir, csv_path, logger))
     logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
     _write_tagging_readme(semantic_dir, logger)
     return csv_path
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
-    return _copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
+    return int(_copy_local_pdfs_to_raw(src_dir, raw_dir, logger))
 
 
 def build_markdown_book(

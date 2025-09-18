@@ -1,4 +1,4 @@
-# src/config_ui/utils.py
+# src/ui/utils/core.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,7 +33,10 @@ def yaml_load(path: Path) -> Dict[str, Any]:
     from pipeline.yaml_utils import yaml_read
 
     p = Path(path)
-    return yaml_read(p.parent, p) or {}
+    data = yaml_read(p.parent, p)
+    if not isinstance(data, dict):
+        return {}
+    return cast(Dict[str, Any], data)
 
 
 def yaml_dump(data: Dict[str, Any]) -> str:

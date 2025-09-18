@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.exceptions import ConfigError
-from src.config_ui.utils import ensure_within_and_resolve
+from src.ui.utils import ensure_within_and_resolve
 
 
 def test_wrapper_resolves_within_base(tmp_path: Path):

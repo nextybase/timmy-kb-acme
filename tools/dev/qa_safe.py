@@ -24,7 +24,7 @@ from typing import List, Sequence, Tuple
 
 # Stessi path di mypy.ini -> files=
 LINT_PATHS: Sequence[str] = (
-    "src/config_ui",
+    "src/ui",
     "src/pipeline/drive",
     "src/pipeline/drive_utils.py",
 )

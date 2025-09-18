@@ -1,4 +1,4 @@
-﻿# src/config_ui/drive_runner.py
+# src/ui/services/drive_runner.py
 from __future__ import annotations
 
 import io
@@ -19,20 +19,20 @@ from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.path_utils import sanitize_filename
 
 # Import locali (dev UI)
-from .mapping_editor import (
+from ui.components.mapping_editor import (
     load_tags_reviewed,
     mapping_to_raw_structure,
     split_mapping,
     write_raw_structure_yaml,
 )
-from .utils import ensure_within_and_resolve, to_kebab  # SSoT normalizzazione + path-safety
+from ui.utils import ensure_within_and_resolve, to_kebab  # SSoT normalizzazione + path-safety
 
 # ===== Logger =================================================================
 
 
 def _get_logger(context: Optional[object] = None) -> Any:
     """Ritorna un logger strutturato del modulo pipeline.logging_utils."""
-    return get_structured_logger("config_ui.drive_runner", context=context)
+    return get_structured_logger("ui.services.drive_runner", context=context)
 
 
 # ===== Creazione struttura Drive da mapping ===================================
@@ -297,7 +297,7 @@ def emit_readmes_for_raw(
     return uploaded
 
 
-# ===== Download PDF da Drive → raw/ locale ====================================
+# ===== Download PDF da Drive -> raw/ locale ====================================
 
 
 def download_raw_from_drive(
@@ -360,7 +360,7 @@ def download_raw_from_drive_with_progress(
     written: List[Path] = []
 
     if on_progress:
-        # progress_cb: on_progress è già non-None qui
+        # progress_cb: on_progress is guaranteed non-None here
         progress_cb: Callable[[int, int, str], None] = on_progress
 
         # Pre-scan: raccogli lista file per folder e calcola total una sola volta
@@ -437,12 +437,12 @@ def download_raw_from_drive_with_progress(
                             progress_cb(self.done, self.total, label)
                         except Exception:
                             # Non deve mai spezzare il logging della pipeline
-                            logging.getLogger("config_ui.drive_runner").debug(
+                            logging.getLogger("ui.services.drive_runner").debug(
                                 "progress.callback.failed", exc_info=True
                             )
                 except Exception:
                     # Evita try/except/pass silenziosi: traccia in debug
-                    logging.getLogger("config_ui.drive_runner").debug(
+                    logging.getLogger("ui.services.drive_runner").debug(
                         "progress.emit.failed", exc_info=True
                     )
 

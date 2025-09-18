@@ -37,7 +37,7 @@ from functools import lru_cache  # caching per slug regex
 from pathlib import Path
 from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, TextIO, Tuple
 
-from .exceptions import ConfigError, InvalidSlug
+from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
 
 # Logger di modulo
@@ -82,64 +82,36 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
         return False
 
 
-def ensure_within(base: Path, target: Path) -> None:
-    """
-    Guardia STRONG: garantisce che `target` risieda sotto `base` una volta risolti i path.
-    Solleva ConfigError se la condizione non è rispettata o se la risoluzione fallisce.
-
-    Args:
-        base: directory radice consentita.
-        target: path del file/dir da validare.
-
-    Note:
-        - SSoT per sicurezza write/copy/delete.
-        - Non restituire boolean: solleva eccezioni su casi non conformi.
-    """
+def _resolve_and_check(base: Path | str, candidate: Path | str) -> Path:
+    """Resolve base and candidate paths and ensure the candidate stays within base."""
     try:
-        base_r = Path(base).resolve()
-        tgt_r = Path(target).resolve()
-    except Exception as e:
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(target)) from e
-
-    try:
-        tgt_r.relative_to(base_r)
-    except Exception:
+        base_resolved = Path(base).resolve()
+        candidate_resolved = Path(candidate).resolve()
+    except Exception as exc:
         raise ConfigError(
-            f"Path traversal rilevato: {tgt_r} non è sotto {base_r}",
-            file_path=str(target),
-        )
-
-
-def ensure_within_and_resolve(base: Path, p: Path) -> Path:
-    """
-    Path-safety per LETTURA: risolve `p` e garantisce che il path risultante ricada sotto `base`.
-
-    Restituisce il path risolto pronto all'uso (per `open`, `read_text`, ecc.).
-
-    Args:
-        base: Directory perimetrale consentita (radice sandbox o directory attesa).
-        p: Path da risolvere e validare.
-
-    Returns:
-        Path risolto (assoluto) se la validazione ha esito positivo.
-
-    Raises:
-        ConfigError: se la risoluzione fallisce o se il path risultante non ricade in `base`.
-    """
-    try:
-        base_r = Path(base).resolve()
-        p_r = Path(p).resolve()
-    except Exception as e:  # pragma: no cover - fallback di sicurezza
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(p)) from e
+            f"Unable to resolve paths: {exc}",
+            file_path=str(candidate),
+        ) from exc
 
     try:
-        p_r.relative_to(base_r)
-    except Exception:
-        raise ConfigError(
-            f"Path di lettura non consentito: {p_r} non è sotto {base_r}",
-            file_path=str(p),
-        )
-    return p_r
+        candidate_resolved.relative_to(base_resolved)
+    except Exception as exc:
+        raise PathTraversalError(
+            f"Path traversal detected: {candidate_resolved} is not under {base_resolved}",
+            file_path=str(candidate),
+        ) from exc
+
+    return candidate_resolved
+
+
+def ensure_within(base: Path | str, target: Path | str) -> None:
+    """Strong guard that validates the target stays within the base perimeter."""
+    _resolve_and_check(base, target)
+
+
+def ensure_within_and_resolve(base: Path | str, candidate: Path | str) -> Path:
+    """Resolve a candidate path ensuring it remains within the base perimeter."""
+    return _resolve_and_check(base, candidate)
 
 
 @contextmanager

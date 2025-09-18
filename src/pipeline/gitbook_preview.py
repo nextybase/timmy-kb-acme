@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from pipeline.constants import BOOK_JSON_NAME, HONKIT_DOCKER_IMAGE, PACKAGE_JSON_NAME
 from pipeline.env_utils import get_int
@@ -42,7 +42,7 @@ def _maybe_redact(text: str, redact: bool) -> str:
     return redact_secrets(text) if (redact and text) else text
 
 
-def _resolve_ports(context, explicit_host_port: Optional[int]) -> Tuple[int, int]:
+def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int, int]:
     """Risoluzione porte (host e container) con precedenza:
     host: 1) parametro → 2) env PREVIEW_PORT → 3) context.config.preview_port → 4) default
     container: 1) env HONKIT_PORT → 2) context.config.honkit_port → 3) default
@@ -333,7 +333,7 @@ def stop_container_safely(container_name: str) -> None:
 # Entry point modulo (no prompt)
 # ----------------------------
 def run_gitbook_docker_preview(
-    context,
+    context: Any,
     port: Optional[int] = None,
     container_name: str = "honkit_preview",
     wait_on_exit: bool = False,  # default non-interattivo

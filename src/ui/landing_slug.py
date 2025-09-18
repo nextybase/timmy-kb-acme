@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple, TYPE_CHECKING, cast
 
 try:
     import streamlit as st
@@ -12,13 +12,19 @@ except Exception as e:  # pragma: no cover
     raise RuntimeError("Streamlit non disponibile per la landing UI.") from e
 
 # Facade semantica (fallback opzionale)
+
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
+
+if TYPE_CHECKING:
+    from semantic.api import get_paths as _RuntimeGetPaths
+
 _SemGetPaths = Callable[[str], Dict[str, Path]]
 try:  # pragma: no cover - opzionale in ambienti minimi
-    from semantic.api import get_paths as _sem_get_paths  # type: ignore[import-not-found]
-
-    _sem_get_paths = _sem_get_paths  # satisfy linters
+    from semantic.api import get_paths as _get_paths
 except Exception:  # pragma: no cover
-    _sem_get_paths = None  # type: ignore[assignment]
+    _sem_get_paths: Optional[_SemGetPaths] = None
+else:
+    _sem_get_paths = cast(_SemGetPaths, _get_paths)
 
 
 def _base_dir_for(slug: str) -> Path:
@@ -44,7 +50,7 @@ def _base_dir_for(slug: str) -> Path:
     # 2) Prova semantic.api.get_paths
     if _sem_get_paths is not None and slug:
         try:
-            paths = _sem_get_paths(slug)  # type: ignore[misc]
+            paths = _sem_get_paths(slug)
             base = paths["base"]
             return base if isinstance(base, Path) else Path(str(base))
         except Exception:
@@ -68,7 +74,9 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         if _logo.exists():
             import base64 as _b64
 
-            _data = _logo.read_bytes()
+            logo_path = ensure_within_and_resolve(ROOT, _logo)
+            with open_for_read_bytes_selfguard(logo_path) as logo_file:
+                _data = logo_file.read()
             _enc = _b64.b64encode(_data).decode("ascii")
             img_html = (
                 "<img src='data:image/png;base64,"
@@ -126,7 +134,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
 
     # Caso B: workspace nuovo → Nome + PDF
     st.caption("Nuovo cliente rilevato.")
-    client_name: str = (
+    client_name = (
         st.text_input(
             "Nome cliente",
             value=st.session_state.get("client_name", ""),

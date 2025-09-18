@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, DefaultDict, Dict, Iterable, List, Tuple, TypedDict, Optional
+from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Tuple, TypedDict, cast
 from collections import Counter, defaultdict
 from functools import lru_cache
 
@@ -41,33 +41,34 @@ def extract_text_from_pdf(path: str) -> str:
       - prova con pypdf, se non disponibile fa fallback su PyMuPDF (fitz).
     Se entrambe mancano, alza RuntimeError con istruzioni d'installazione.
     """
-    # Tentativo 1: pypdf
-    PdfReader = None
+    PdfReader: Any | None = None
     try:
-        from pypdf import PdfReader as _PdfReader  # type: ignore
+        import importlib
 
-        PdfReader = _PdfReader
+        pypdf_module = importlib.import_module("pypdf")
+        maybe_reader = getattr(pypdf_module, "PdfReader", None)
+        if callable(maybe_reader):
+            PdfReader = maybe_reader
     except Exception:
         PdfReader = None
 
     if PdfReader is not None:
         try:
-            reader = PdfReader(path)  # type: ignore[misc]
-            texts: List[str] = []
-            for p in getattr(reader, "pages", []) or []:
+            reader = cast(Any, PdfReader)(path)
+            collected: list[str] = []
+            for page in getattr(reader, "pages", []) or []:
                 try:
-                    t: str = p.extract_text() or ""
+                    text = page.extract_text() or ""
                 except Exception:
-                    t = ""
-                if t:
-                    texts.append(t)
-            return "\n".join(texts)
+                    text = ""
+                if text:
+                    collected.append(text)
+            return "\n".join(collected)
         except Exception as e:  # pragma: no cover
             raise RuntimeError(
                 "Errore lettura PDF con pypdf; assicurarsi che il file sia valido o usa PyMuPDF"
             ) from e
 
-    # Tentativo 2: PyMuPDF (fitz)
     try:
         import fitz  # PyMuPDF
     except Exception as e:  # pragma: no cover
@@ -75,43 +76,41 @@ def extract_text_from_pdf(path: str) -> str:
 
     try:
         doc = fitz.open(path)
-        texts: List[str] = []
+        collected = []
         try:
             for page in doc:
                 try:
-                    # Preferisci la modalità esplicita "text" per coerenza tra versioni;
-                    # se non supportata, ricadi su chiamata senza argomenti o sulla vecchia API.
                     getter = getattr(page, "get_text", None)
                     if callable(getter):
                         try:
-                            t: str = _as_str(getter("text"))
+                            text = _as_str(getter("text"))
                         except TypeError:
                             try:
-                                t = _as_str(getter())
+                                text = _as_str(getter())
                             except Exception:
-                                t = ""
+                                text = ""
                     else:
-                        getter_old = getattr(page, "getText", None)  # compat vecchie versioni
+                        getter_old = getattr(page, "getText", None)
                         if callable(getter_old):
                             try:
-                                t = _as_str(getter_old("text"))
+                                text = _as_str(getter_old("text"))
                             except TypeError:
                                 try:
-                                    t = _as_str(getter_old())
+                                    text = _as_str(getter_old())
                                 except Exception:
-                                    t = ""
+                                    text = ""
                         else:
-                            t = ""
+                            text = ""
                 except Exception:
-                    t = ""
-                if t:
-                    texts.append(t)
+                    text = ""
+                if text:
+                    collected.append(text)
         finally:
             try:
                 doc.close()
             except Exception:
                 pass
-        return "\n".join(texts)
+        return "\n".join(collected)
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
             "Errore lettura PDF; assicurarsi che il file sia valido e che PyMuPDF funzioni"

@@ -5,7 +5,7 @@ import sqlite3
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Iterator
 
 __all__ = [
     "load_tags_reviewed",
@@ -86,7 +86,7 @@ def derive_db_path_from_yaml_path(p: str | Path) -> str:
     return str(pp.parent / "tags.db")
 
 
-def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
+def load_tags_reviewed(db_path: str) -> dict[str, Any]:
     """Ritorna un dict con la stessa struttura del file YAML legacy.
 
     Struttura:
@@ -118,7 +118,7 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
             keep_only_listed = _to_bool(row[2])
 
         # tags
-        tags: List[Dict[str, Any]] = []
+        tags: list[dict[str, Any]] = []
         cur = conn.execute(
             "SELECT id, name, action, note FROM tags ORDER BY name COLLATE NOCASE ASC"
         )
@@ -145,7 +145,7 @@ def load_tags_reviewed(db_path: str) -> Dict[str, Any]:
         }
 
 
-def save_tags_reviewed(db_path: str, data: Dict[str, Any]) -> None:
+def save_tags_reviewed(db_path: str, data: dict[str, Any]) -> None:
     """Persiste in SQLite (upsert) lo stesso dict precedentemente scritto in YAML."""
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
@@ -417,12 +417,12 @@ def upsert_document(
         raise
 
 
-def get_folder_by_path(conn: sqlite3.Connection, path: str) -> dict | None:
+def get_folder_by_path(conn: sqlite3.Connection, path: str) -> dict[str, Any] | None:
     row = conn.execute("SELECT id, path, parent_id FROM folders WHERE path=?", (path,)).fetchone()
     return dict(row) if row else None
 
 
-def list_folders(conn: sqlite3.Connection) -> list[dict]:
+def list_folders(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     cur = conn.execute("SELECT id, path, parent_id FROM folders ORDER BY path")
     return [dict(r) for r in cur.fetchall()]
 
@@ -462,7 +462,7 @@ def add_term_alias(conn: sqlite3.Connection, term_id: int, alias: str) -> None:
 
 def get_term_by_canonical(
     conn: sqlite3.Connection, canonical: str, lang: str = "it"
-) -> dict | None:
+) -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT id, canonical, lang FROM terms WHERE canonical=? AND lang=?",
         (canonical, lang),
@@ -561,8 +561,8 @@ def log_edit(
     entity: str,
     entity_id: str,
     action: str,
-    before: dict | None,
-    after: dict | None,
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
     ts: str,
 ) -> None:
     conn.execute("BEGIN")
@@ -586,14 +586,14 @@ def log_edit(
 
 
 # ----- documents helpers -----
-def list_documents(conn: sqlite3.Connection) -> list[dict]:
+def list_documents(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     cur = conn.execute(
         "SELECT id, folder_id, filename, sha256, pages FROM documents ORDER BY id ASC"
     )
     return [dict(r) for r in cur.fetchall()]
 
 
-def get_document_by_id(conn: sqlite3.Connection, document_id: int) -> dict | None:
+def get_document_by_id(conn: sqlite3.Connection, document_id: int) -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT id, folder_id, filename, sha256, pages FROM documents WHERE id=?",
         (document_id,),

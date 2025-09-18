@@ -27,7 +27,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional, cast
 
 # --- Pipeline infra / Semantic orchestrators ---
 from pipeline.config_utils import get_client_config
@@ -38,13 +38,14 @@ from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
 from pipeline.path_utils import ensure_within  # STRONG guard SSoT
+from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.path_utils import ensure_valid_slug, open_for_read_bytes_selfguard
 from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 
 # --- Storage v2 (DB: folders/documents) ---
+import storage.tags_store as tags_store
 from storage.tags_store import (
-    add_term_alias,
     clear_doc_terms,
     ensure_schema_v2,
     get_conn,
@@ -60,14 +61,10 @@ from storage.tags_store import (
 from storage.tags_store import derive_db_path_from_yaml_path
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 
+yaml: Any | None
 try:
-    from pypdf import PdfReader  # type: ignore
+    import yaml
 except Exception:  # pragma: no cover
-    PdfReader = None  # type: ignore
-
-try:
-    import yaml  # type: ignore
-except Exception:
     yaml = None
 
 _INVALID_CHARS_RE = re.compile(r"[\/:*?\"<>|]")
@@ -95,10 +92,18 @@ def compute_sha256(path: Path) -> str:
 
 
 def get_pdf_pages(path: Path) -> int | None:
-    if PdfReader is None:
+    try:
+        import importlib
+
+        module = importlib.import_module("pypdf")
+        pdf_reader = getattr(module, "PdfReader", None)
+    except Exception:  # pragma: no cover
+        return None
+    if pdf_reader is None:
         return None
     try:
-        return len(PdfReader(str(path)).pages)  # type: ignore
+        reader = cast(Any, pdf_reader)(str(path))
+        return len(getattr(reader, "pages", []) or [])
     except Exception:
         return None
 
@@ -110,12 +115,7 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
     # Normalizza e verifica che folder_path ricada sotto raw_dir (guard forte)
     raw_dir = Path(raw_dir).resolve()
     folder_path = Path(folder_path).resolve()
-    try:
-        ensure_within(raw_dir, folder_path)
-    except Exception:
-        # `ensure_within` è un guard: se non solleva, è OK.
-        pass
-
+    ensure_within(raw_dir, folder_path)
     rel = folder_path.relative_to(raw_dir)
     # Inserisci/aggiorna la root logica 'raw'
     parent_id: Optional[int] = upsert_folder(conn, "raw", None)
@@ -137,7 +137,7 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
     return parent_id
 
 
-def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict:
+def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict[str, int]:
     raw_dir = Path(raw_dir)
     ensure_schema_v2(db_path)
 
@@ -161,7 +161,7 @@ def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict:
                 upsert_document(conn, folder_id, path.name, sha256, pages)
                 docs_count += 1
 
-    stats = {"folders": folders_count, "documents": docs_count}
+    stats: dict[str, int] = {"folders": folders_count, "documents": docs_count}
     log.info("Indicizzazione RAW completata", extra=stats)
     return stats
 
@@ -184,7 +184,7 @@ def run_nlp_to_db(
     model: str = "paraphrase-multilingual-MiniLM-L12-v2",
     rebuild: bool = False,
     only_missing: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     ensure_schema_v2(db_path)
     log = logging.getLogger("tag_onboarding")
 
@@ -194,11 +194,12 @@ def run_nlp_to_db(
         saved_items = 0
 
         # Per risalire al path assoluto del PDF: usare folders.path (tipo 'raw/..')
-        def abs_path_for(doc: dict) -> Path:
-            folder_id = None
-            if "folder_id" in doc and doc["folder_id"] is not None:
+        def abs_path_for(doc: dict[str, Any]) -> Path:
+            folder_id: int | None = None
+            folder_id_raw = doc.get("folder_id")
+            if folder_id_raw is not None:
                 try:
-                    folder_id = int(doc["folder_id"])  # type: ignore[index]
+                    folder_id = int(folder_id_raw)
                 except (TypeError, ValueError):
                     folder_id = None
             folder_db_path = Path("raw")
@@ -215,16 +216,29 @@ def run_nlp_to_db(
                     "NLP skip: cartella non trovata",
                     extra={"folder_id": folder_id, "folder_path": str(folder_fs_path)},
                 )
-            return folder_fs_path / doc["filename"]  # type: ignore[index]
+            filename_val = doc.get("filename")
+            if not isinstance(filename_val, str) or not filename_val.strip():
+                raise ValueError("filename mancante o non valido")
+            candidate = folder_fs_path / filename_val
+            return cast(Path, ensure_within_and_resolve(raw_dir, candidate))
 
         for i, doc in enumerate(docs, start=1):
-            doc_id = int(doc["id"])  # type: ignore[index]
+            doc_id_raw = cast(Any, doc.get("id"))
+            try:
+                doc_id = int(doc_id_raw)
+            except (TypeError, ValueError):
+                log.warning("ID documento non valido", extra={"doc": doc})
+                continue
             if only_missing and has_doc_terms(conn, doc_id):
                 continue
             if rebuild:
                 clear_doc_terms(conn, doc_id)
 
-            pdf_path = abs_path_for(doc)
+            try:
+                pdf_path = abs_path_for(doc)
+            except ValueError:
+                log.warning("NLP skip: filename non valido", extra={"doc": doc})
+                continue
             if not pdf_path.exists():
                 log.warning("NLP skip: file non trovato", extra={"file_path": str(pdf_path)})
                 continue
@@ -319,7 +333,7 @@ def run_nlp_to_db(
             terms_count += 1
             phrase_to_tid[canon] = tid
             for al in cl.get("synonyms", []) or []:
-                add_term_alias(conn, tid, al)
+                tags_store.add_term_alias(conn, tid, al)
                 alias_count += 1
                 phrase_to_tid[al] = tid
 
@@ -361,7 +375,7 @@ def run_nlp_to_db(
         }
 
 
-def _load_yaml(path: Path) -> Dict[str, Any]:
+def _load_yaml(path: Path) -> dict[str, Any]:
     """Carica e parse un file YAML in modo sicuro."""
     if yaml is None:
         raise ConfigError("PyYAML non disponibile: installa 'pyyaml'.")
@@ -370,14 +384,13 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 
         return yaml_read(path.parent, path) or {}
     except (OSError,) as e:
-        raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path))
-    except (ValueError, TypeError, yaml.YAMLError) as e:  # type: ignore[attr-defined]
-        raise ConfigError(f"Impossibile parsare YAML: {path} ({e})", file_path=str(path))
+        raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path)) from e
 
 
-def _validate_tags_reviewed(data: dict) -> dict:
+def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     """Valida la struttura già caricata da `tags_reviewed.yaml`."""
-    errors, warnings = [], []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     if not isinstance(data, dict):
         errors.append("Il file YAML non è una mappa (dict) alla radice.")
@@ -449,7 +462,9 @@ def _validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def _write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
+def _write_validation_report(
+    report_path: Path, result: dict[str, Any], logger: logging.Logger
+) -> None:
     ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

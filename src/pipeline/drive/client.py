@@ -1,3 +1,9 @@
+from __future__ import annotations
+
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive/client.py
 """
@@ -23,8 +29,6 @@ Note d’uso:
 - La policy di retry/metriche è centralizzata qui ed è riutilizzata anche da upload/download via `_retry(...)`.
 """
 
-from __future__ import annotations
-
 import os
 import random
 import time
@@ -35,9 +39,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, cast
 
-from google.oauth2.service_account import Credentials  # type: ignore[import-not-found]
-from googleapiclient.discovery import build  # type: ignore[import-not-found]
-from googleapiclient.errors import HttpError  # type: ignore[import-not-found]
 
 from ..env_utils import get_env_var  # ✅ centralizzazione ENV
 from ..exceptions import ConfigError
@@ -200,7 +201,13 @@ def _retry(
                 m.last_error = str(e)[:300]
                 # Proviamo a leggere lo status HTTP se c'è
                 try:
-                    m.last_status = int(e.resp.status)  # type: ignore[attr-defined]
+                    resp = getattr(e, "resp", None)
+                    if resp is None:
+                        raise AttributeError("missing resp")
+                    status_val = getattr(resp, "status", None)
+                    if status_val is None:
+                        raise AttributeError("missing status")
+                    m.last_status = int(status_val)
                 except Exception:
                     m.last_status = getattr(e, "status", None)
 

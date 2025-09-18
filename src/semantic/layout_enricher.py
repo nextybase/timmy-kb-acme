@@ -5,7 +5,7 @@ import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple, cast
 
 # ============================
 # Types & Constraints Handling
@@ -253,11 +253,11 @@ def _map_tokens_to_topics(tokens: List[str], semantic_map: Dict[str, Tuple[str, 
 
     mapped: List[str] = []
     seen = set()
-    for t in tokens:
-        canon = inv_index.get(t, None)
-        if canon and canon not in seen:
-            mapped.append(canon)
-            seen.add(canon)
+    for token in tokens:
+        maybe_canon = inv_index.get(token)
+        if maybe_canon and maybe_canon not in seen:
+            mapped.append(maybe_canon)
+            seen.add(maybe_canon)
     return mapped
 
 
@@ -450,7 +450,7 @@ def _sorted_dict(d: Dict[str, Any]) -> Dict[str, Any]:
 
 def _deep_copy(d: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(d, dict):
-        return d  # type: ignore[return-value]
+        return cast(Dict[str, Any], d)
     out: Dict[str, Any] = {}
     for k, v in d.items():
         out[k] = _deep_copy(v) if isinstance(v, dict) else v

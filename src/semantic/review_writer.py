@@ -39,16 +39,19 @@ from __future__ import annotations
 
 import datetime as _dt
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from pipeline.exceptions import ConfigError  # <- coerenza contract errori
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 
+yaml_module: Any | None = None
 try:
-    import yaml
+    import yaml as _yaml
+
+    yaml_module = _yaml
 except Exception:  # pragma: no cover
-    yaml = None  # degradazione controllata: il chiamante può gestire l'assenza
+    yaml_module = None  # degradazione controllata: il chiamante pu? gestire l'assenza
 
 
 def _now_utc_iso() -> str:
@@ -89,7 +92,7 @@ def write_review_stub(
       - yaml_path: destinazione del file YAML
       - overwrite: se False e il file esiste, non fa nulla
     """
-    if yaml is None:
+    if yaml_module is None:
         # Cambio: ConfigError al posto di RuntimeError per coerenza con orchestratori/EXIT_CODES
         raise ConfigError(
             "PyYAML non disponibile: impossibile scrivere lo YAML di review.",
@@ -139,5 +142,6 @@ def write_review_stub(
     }
 
     # Dump su buffer e commit atomico
-    payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    yaml_api = cast(Any, yaml_module)
+    payload = yaml_api.safe_dump(data, allow_unicode=True, sort_keys=False)
     safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)

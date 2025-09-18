@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# src/config_ui/finance_tab.py
+# src/ui/tabs/finance.py
 from __future__ import annotations
 
 import logging

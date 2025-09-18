@@ -15,7 +15,7 @@ Added
 - src/semantic_headless.py — CLI minimale per convert → enrich → README/SUMMARY via façade
 
 Changed
-- src/config_ui/utils.py ora delega a pipeline (ensure_within, safe_write_text, to_kebab)
+- src/ui/utils/core.py ora delega a pipeline (ensure_within, safe_write_text, to_kebab)
 - Log console ASCII‑only (rimozione emoji/simboli)
 - config/cartelle_raw.yaml in formato moderno
 

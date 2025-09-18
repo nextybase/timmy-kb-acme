@@ -11,7 +11,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -23,7 +23,7 @@ __all__ = ["load_yaml", "validate_tags_reviewed", "write_validation_report"]
 _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
 
-def load_yaml(path: Path) -> Dict[str, Any]:
+def load_yaml(path: Path) -> dict[str, Any]:
     """
     Carica un file YAML e restituisce un dict ({} su file vuoto).
     Solleva:
@@ -42,15 +42,15 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(safe_path)) from e
 
 
-def validate_tags_reviewed(data: dict) -> dict:
+def validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     """
     Valida la struttura di `tags_reviewed.yaml`.
 
     Ritorna:
         dict con chiavi: errors (list[str]), warnings (list[str]), count (int)
     """
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     if not isinstance(data, dict):
         errors.append("Il file YAML non è una mappa (dict) alla radice.")
@@ -122,7 +122,9 @@ def validate_tags_reviewed(data: dict) -> dict:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def write_validation_report(report_path: Path, result: dict, logger: logging.Logger) -> None:
+def write_validation_report(
+    report_path: Path, result: dict[str, Any], logger: logging.Logger
+) -> None:
     """
     Scrive il report JSON della validazione in modo atomico con path-safety.
     """

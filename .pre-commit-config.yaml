@@ -29,6 +29,12 @@
 
   - repo: local
     hooks:
+      - id: forbid-unsafe-file-reads
+        name: Forbid unsafe file reads (open/read_text/read_bytes) outside path_utils/tests/scripts
+        entry: python tools/dev/check_no_unsafe_reads.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
         entry: python tools/dev/check_no_local_emit_or_copy.py

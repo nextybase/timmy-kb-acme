@@ -71,7 +71,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 ### Changed
 - `onboarding_ui.py`: spostato bootstrap e import dentro `main()` per evitare side-effects a import time (niente più E402); tipizzazione migliorata (`ClientContext`), helpers centralizzati per logging/redaction, uso di `sys.executable` nei subprocess, salvataggio impostazioni retriever via `get_client_config`/`update_config_with_drive_ids`.
-- UI modularizzata: estratti i moduli `src/config_ui/finance_tab.py` e `src/config_ui/preview_tab.py`; la UI ora importa e usa questi componenti.
+- UI modularizzata: estratti i moduli `src/ui/tabs/finance.py` e `src/ui/tabs/preview.py`; la UI ora importa e usa questi componenti.
 
 ### Security
 - `finance.api.import_csv`: path-safety rafforzata usando `open_for_read(sem_dir, csv_path, encoding="utf-8", newline="")` (previene path traversal); rimosse chiamate ridondanti a `ensure_within`.
@@ -122,7 +122,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
   - Introdotto helper `_mark_modified_and_bump_once` per centralizzare il bump versione (N_VER) e il flag `modified`, rimuovendo duplicazioni.
   - Sblocco tab “Semantica” ottimizzato: cache di `raw_ready` in sessione per evitare scansioni FS ripetute; aggiunto pulsante “Rileva PDF in raw/” per aggiornare lo stato senza nuovo download.
   - Generazione README su Drive ora chiama `emit_readmes_for_raw(..., ensure_structure=True)` per garantire la struttura quando necessario.
-- Runner Drive (`src/config_ui/drive_runner.py`):
+- Runner Drive (`src/ui/services/drive_runner.py`):
   - Evitata ricreazione non necessaria della struttura in `emit_readmes_for_raw` con nuovo parametro `ensure_structure` (default: False) e lookup della cartella `raw/` via listing.
   - De-duplicazione download: `download_raw_from_drive` delega alla variante con progress (`download_raw_from_drive_with_progress` con `on_progress=None`).
   - Pre-scan delle liste Drive eseguito solo se serve la barra di avanzamento; in caso semplice, singolo passaggio per ridurre le chiamate API.
@@ -132,7 +132,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Vision parser placeholder: `semantic/vision_parser.pdf_to_vision_yaml()` genera `config/vision_statement.yaml` dal PDF `config/VisionStatement.pdf` durante il nuovo onboarding (UI slug-first).
 
 ### Removed
-- Rimosso il parser legacy `src/config_ui/vision_parser.py` e il vecchio flusso `semantic/vision.yaml`. Il file canonico ora è `config/vision_statement.yaml`.
+- Rimosso il parser legacy `src/semantic/vision_parser.py` e il vecchio flusso `semantic/vision.yaml`. Il file canonico ora è `config/vision_statement.yaml`.
 
 ### Fixed
 - UI: normalizzati caratteri e simboli (“→”, accenti) in titoli e didascalie.
@@ -179,7 +179,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - src/semantic_headless.py (CLI minimale) per conversione/enrichment/README&SUMMARY via façade.
 
 ### Changed
-- src/config_ui/utils.py ora delega alle utility pipeline (ensure_within, safe_write_text, to_kebab).
+- src/ui/utils.py ora delega alle utility pipeline (ensure_within, safe_write_text, to_kebab).
 - Log ASCII-only per messaggi console; rimossi emoji/simboli non ASCII.
 - config/cartelle_raw.yaml convertito al formato moderno.
 - Refactor leggibilità `content_utils`: estratti helper puri e `__all__` per API chiara.
@@ -232,22 +232,22 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Added
 - Nuovo task **CILite** in `tools/dev/tasks.ps1` per esecuzione rapida di check locali:
   `black --check`, `flake8`, `pytest -k 'unit or content_utils' -ra`.
-  Include opzionalmente `mypy -p config_ui`.
+  Include opzionalmente `mypy -p ui`.
 
 ### Changed
-- Pulizia e tipizzazione modulo **config_ui**:
+- Pulizia e tipizzazione modulo **ui**:
   - Rimossi `# type: ignore` inutilizzati.
   - Annotazioni `Optional`/`Callable` per i compat (`_repo_ensure_within`, `_repo_safe_write_text`).
   - Stub logger `_Stub` annotato con `Any` e ritorno `None`.
   - Funzioni helper (`_get_logger`, `_drive_list_folders`, `_drive_upload_bytes`, ecc.) con firme tipizzate.
   - Soppressione mirata `# type: ignore[import-untyped]` per import `MediaIoBaseUpload/Download`.
 
-- **pyproject.toml**: override `[[tool.mypy.overrides]]` per `config_ui.*` con `follow_imports = "skip"`, cosÃ¬ mypy non scende in pipeline/* durante l'analisi mirata.
+- **pyproject.toml**: override `[[tool.mypy.overrides]]` per `ui.*` con `follow_imports = "skip"`, cosÃ¬ mypy non scende in pipeline/* durante l'analisi mirata.
 
 ### Fixed
 - **flake8**: portato a 0 errori (inclusi wrapping docstring lunghi).
 - **pytest (unit + content_utils)**: ora **13 test passati / 10 deselezionati**, tutto verde.
-- **mypy -p config_ui**: azzerati gli errori locali, residui confinati ai pacchetti `pipeline/*`.
+- **mypy -p ui**: azzerati gli errori locali, residui confinati ai pacchetti `pipeline/*`.
 
 ---
 
@@ -338,7 +338,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 ### Changed
 - **Nasconde `context` nella UI**: l'anteprima/edit non mostra `context: {slug, client_name, created_at}`.
 - **Requisiti avvio:** per procedere servono **slug** e **nome cliente**.
-- **Normalizzazione chiavi centralizzata:** introdotta `to_kebab()` in `src/config_ui/utils.py` e riuso in tutta la UI.
+- **Normalizzazione chiavi centralizzata:** introdotta `to_kebab()` in `src/ui/utils/core.py` e riuso in tutta la UI.
 - **Logger coerente**: uso di `get_structured_logger(..., context=...)` anche nei runner, con redazione attiva via `compute_redact_flag`.
 
 ### Fixed
@@ -396,7 +396,7 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 - Editor ad albero della vecchia `cartelle_raw.yaml` da interfaccia.
 
 ### Internal
-- Introdotto package **`src/config_ui/`** che separa la logica dallUI:
+- Introdotto package **`src/ui/`** che separa la logica dallUI:
   - `utils.py` (path-safety `ensure_within_and_resolve`, scritture atomiche `safe_write_text_compat`, `yaml_load/dump`, `to_kebab`, estrazione PDF);
   - `mapping_editor.py` (split/build/validate mapping, persistenza `tags_reviewed.yaml`, derivazione struttura `raw/`);
   - `vision_parser.py` (parser O/V/M e writer `vision.yaml`);

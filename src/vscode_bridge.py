@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, read_text_safe
 
 LOGGER = logging.getLogger("timmy_kb.vscode_bridge")
 
@@ -50,9 +50,9 @@ def read_response() -> Optional[str]:
     p = BASE / "last_response.md"
     if p.exists():
         try:
-            content = p.read_text(encoding="utf-8")
+            content = read_text_safe(BASE, p)
             LOGGER.info("Response read from %s", p)
-            return content
+            return str(content) if content is not None else None
         except Exception as e:
             LOGGER.exception("Error reading response %s: %s", p, e)
             return None

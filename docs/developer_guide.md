@@ -161,7 +161,7 @@ python scripts/smoke_e2e.py --slug smoke
 ## Drive & sicurezza
 - Non inserire credenziali nel repo; usa file JSON localmente e variabili d'ambiente.
 - Ogni upload/download passa tramite le API alto livello in `pipeline/drive_utils.py`.
-- Per il download via UI è esposta `config_ui.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
+- Per il download via UI è esposta `ui.services.drive_runner.download_raw_from_drive` (scritture atomiche, path-safety).
 
 ---
 

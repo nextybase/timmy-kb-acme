@@ -2,15 +2,29 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, TYPE_CHECKING, cast
 
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within
+
+if TYPE_CHECKING:
+
+    from pipeline.path_utils import ensure_within
+
+yaml_module: Any | None = None
+try:
+    import yaml as _yaml
+
+    yaml_module = _yaml
+except Exception:  # pragma: no cover
+    yaml_module = None
 
 
 def _read_pdf_text(pdf_path: Path) -> str:
     try:  # lazy import to avoid hard dependency at import time
-        from PyPDF2 import PdfReader  # type: ignore
+        import importlib
+
+        module = importlib.import_module("PyPDF2")
+        PdfReader = getattr(module, "PdfReader")
     except Exception as e:  # pragma: no cover
         raise RuntimeError("PyPDF2 non disponibile: impossibile estrarre testo dal PDF.") from e
 
@@ -150,11 +164,10 @@ def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
     base_dir = out_yaml_path.parent.parent if out_yaml_path.name else out_yaml_path.parent
     ensure_within(base_dir, out_yaml_path)
 
-    try:
-        import yaml  # type: ignore
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Libreria YAML non disponibile") from e
+    if yaml_module is None:
+        raise RuntimeError("Libreria YAML non disponibile")
 
-    content = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+    yaml_api = cast(Any, yaml_module)
+    content = yaml_api.safe_dump(payload, allow_unicode=True, sort_keys=False)
     safe_write_text(out_yaml_path, content, encoding="utf-8", atomic=True)
     return out_yaml_path

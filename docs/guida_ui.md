@@ -23,6 +23,7 @@ streamlit run onboarding_ui.py
 # Windows
 py -m streamlit run onboarding_ui.py
 ```
+> Nota: dal refactor 2025-09 `onboarding_ui.py` è un wrapper sottile che richiama `ui.app.main()`. La logica completa vive in `src/ui/app.py` (pacchetto `ui`).
 Alla prima apertura, la **landing** chiede `slug` e `nome cliente`. Quando entrambi sono valorizzati, la UI si "sblocca" e salva lo stato in sessione. Il pulsante **Chiudi UI** termina il processo Streamlit in modo pulito.
 
 ---
@@ -45,7 +46,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - Opzione di **normalizzazione chiavi** (kebab-case)
 - Salvataggio puntuale o integrale
 
-**Funzioni (modulo `config_ui.mapping_editor`)**:
+**Funzioni (modulo `ui.components.mapping_editor`)**:
 - `load_default_mapping()` / `load_tags_reviewed()`
 - `split_mapping(mapping)`
 - `validate_categories(cats)`
@@ -63,7 +64,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - Pulsante extra: "Rileva PDF in raw/" aggiorna lo stato senza download
 - **Vision**: upload di `VisionStatement.pdf` → generazione automatica di `vision_statement.yaml` (schema stabile)
 
-**Funzioni (`config_ui.drive_runner`)**:
+**Funzioni (`ui.services.drive_runner`)**:
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
 - `emit_readmes_for_raw(slug, ensure_structure=True)`
 - `download_raw_from_drive_with_progress(slug)` o `download_raw_from_drive(slug)`
@@ -133,8 +134,8 @@ output/
 ---
 
 ## 11) API surface
-- **config_ui.mapping_editor**: `load_default_mapping`, `load_tags_reviewed`, `split_mapping`, `validate_categories`, `build_mapping`, `save_tags_reviewed`
-- **config_ui.drive_runner**: `build_drive_from_mapping`, `emit_readmes_for_raw`, `download_raw_from_drive_with_progress`, `download_raw_from_drive`
+- **ui.components.mapping_editor**: `load_default_mapping`, `load_tags_reviewed`, `split_mapping`, `validate_categories`, `build_mapping`, `save_tags_reviewed`
+- **ui.services.drive_runner**: `build_drive_from_mapping`, `emit_readmes_for_raw`, `download_raw_from_drive_with_progress`, `download_raw_from_drive`
 - **semantic.api**: `get_paths`, `load_reviewed_vocab`, `convert_markdown`, `enrich_frontmatter`, `write_summary_and_readme`
 - **adapters.preview**: `start_preview`, `stop_preview`
 

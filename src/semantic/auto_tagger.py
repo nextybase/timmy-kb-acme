@@ -32,7 +32,7 @@ import io
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Iterable, Mapping
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
@@ -61,14 +61,14 @@ def _is_meaningful_token(tok: str) -> bool:
     return True
 
 
-def _tokenize_filename(name: str) -> List[str]:
+def _tokenize_filename(name: str) -> list[str]:
     """Tokenizza il nome file (senza estensione) in lowercase."""
     base = name.rsplit(".", 1)[0]
     toks = [t.strip().lower() for t in _SPLIT_RE.split(base)]
     return [t for t in toks if _is_meaningful_token(t)]
 
 
-def _path_segments(rel_from_raw: Path) -> List[str]:
+def _path_segments(rel_from_raw: Path) -> list[str]:
     """Estrae segmenti di cartella (lowercase) dal path relativo alla RAW."""
     parts = [p.strip().lower() for p in rel_from_raw.parent.as_posix().split("/") if p.strip()]
     return [p for p in parts if _is_meaningful_token(p)]
@@ -80,7 +80,7 @@ def _score_and_rank(
     *,
     stop: Iterable[str],
     top_k: int,
-) -> Tuple[List[str], Dict[str, float]]:
+) -> tuple[list[str], dict[str, float]]:
     """
     Combina tag da path e filename con uno scoring semplicissimo (path > filename).
     - path: peso 1.0
@@ -88,42 +88,41 @@ def _score_and_rank(
     Deduplica preservando l'ordine di “forza” (path prima).
     """
     stopset = set(s.strip().lower() for s in (stop or []) if s)
-    weights: Dict[str, float] = {}
+    weights: dict[str, float] = {}
 
-    ordered: List[Tuple[str, float]] = []
+    ordered: list[tuple[str, float]] = []
 
-    def add_tokens(tokens: Iterable[str], w: float):
-        for t in tokens:
-            t = t.strip().lower()
+    def add_tokens(tokens: Iterable[str], weight: float) -> None:
+        for token in tokens:
+            t = token.strip().lower()
             if not t or t in stopset:
                 continue
             if t not in weights:
                 weights[t] = 0.0
-                ordered.append((t, w))
-            weights[t] += w
+                ordered.append((t, weight))
+            weights[t] += weight
 
     add_tokens(path_tags, 1.0)
     add_tokens(file_tags, 0.6)
 
-    # Ordina per peso desc, poi per ordine di comparsa (tie-break deterministico)
-    order_index = {t: i for i, (t, _) in enumerate(ordered)}
-    ranked = sorted(weights.items(), key=lambda kv: (-kv[1], order_index[kv[0]]))
+    order_index = {tag: index for index, (tag, _) in enumerate(ordered)}
+    ranked = sorted(weights.items(), key=lambda item: (-item[1], order_index[item[0]]))
 
-    tags = [t for t, _ in ranked[: max(1, int(top_k))]]
+    tags = [tag for tag, _ in ranked[: max(1, int(top_k))]]
     return tags, weights
 
 
 def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
     """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
     if not raw_dir.exists():
-        return []
+        return
     yield from sorted(raw_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
 
 
 # ------------------------------ API principali ------------------------------- #
 
 
-def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str, Dict[str, Any]]:
+def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
     """
     Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename.
 
@@ -145,7 +144,7 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str,
     # STRONG guard: RAW deve essere sotto la sandbox del cliente
     ensure_within(base_dir, raw_dir)
 
-    candidates: Dict[str, Dict[str, Any]] = {}
+    candidates: dict[str, dict[str, Any]] = {}
 
     for pdf_path in _iter_pdf_files(raw_dir):
         try:
@@ -178,7 +177,7 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> Dict[str,
     return candidates
 
 
-def render_tags_csv(candidates: Dict[str, Dict[str, Any]], csv_path: Path) -> None:
+def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path) -> None:
     """
     Scrive `tags_raw.csv` (esteso) con colonne:
       relative_path | suggested_tags | entities | keyphrases | score | sources
@@ -199,7 +198,7 @@ def render_tags_csv(candidates: Dict[str, Dict[str, Any]], csv_path: Path) -> No
     )
 
     for rel_path, meta in sorted(candidates.items()):
-        tags = [str(t).strip().lower() for t in (meta.get("tags") or []) if str(t).strip()]
+        tags = [str(tag).strip().lower() for tag in (meta.get("tags") or []) if str(tag).strip()]
         ents = meta.get("entities") or []
         keys = meta.get("keyphrases") or []
         score = meta.get("score") or {}

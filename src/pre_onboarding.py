@@ -345,7 +345,7 @@ def ensure_local_workspace_for_ui(
 
         # Genera YAML strutturato del Vision Statement (placeholder parser)
         try:
-            from semantic.vision_parser import pdf_to_vision_yaml  # type: ignore
+            from semantic.vision_parser import pdf_to_vision_yaml
 
             out_yaml = cfg_dir / "vision_statement.yaml"
             ensure_within(context.base_dir, out_yaml)

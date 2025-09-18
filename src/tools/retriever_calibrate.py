@@ -25,11 +25,11 @@ import statistics as stats
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import Any, List, Sequence, Tuple, cast
 
 from src.ingest import OpenAIEmbeddings  # client embeddings reale (no fallback)
 from src.kb_db import get_db_path
-from src.pipeline.path_utils import ensure_within_and_resolve as _ensure_within
+from src.pipeline.path_utils import ensure_within_and_resolve as _ensure_within, read_text_safe
 from src.pipeline.yaml_utils import yaml_read
 from src.retriever import QueryParams, search, with_config_or_budget
 
@@ -57,7 +57,8 @@ class _EmbeddingsClient:
     def embed_texts(
         self, texts: Sequence[str], *, model: str | None = None
     ) -> Sequence[Sequence[float]]:
-        return self._real.embed_texts(texts, model=model)
+        embedded = self._real.embed_texts(texts, model=model)
+        return [list(map(float, seq)) for seq in embedded]
 
 
 def _load_queries(qfile: Path) -> List[str]:
@@ -65,14 +66,16 @@ def _load_queries(qfile: Path) -> List[str]:
     qfile = _ensure_within(base, qfile.resolve())
     if not qfile.exists():
         raise SystemExit(f"File queries non trovato: {qfile}")
-    content = qfile.read_text(encoding="utf-8", errors="strict")
+    content = read_text_safe(base, qfile)
+    if not isinstance(content, str):
+        raise SystemExit(f"Contenuto non testuale nel file: {qfile}")
     queries = [ln.strip() for ln in content.splitlines() if ln.strip()]
     if not queries:
         raise SystemExit(f"Nessuna query valida nel file: {qfile}")
     return queries
 
 
-def _load_client_config(project_slug: str) -> dict:
+def _load_client_config(project_slug: str) -> dict[str, Any]:
     """
     Carica output/timmy-kb-<slug>/config/config.yaml.
     Nessun fallback: solleva se mancante.
@@ -81,12 +84,15 @@ def _load_client_config(project_slug: str) -> dict:
     cfg_path = _ensure_within(Path(".").resolve(), cfg_path.resolve())
     if not cfg_path.exists():
         raise FileNotFoundError(f"Config cliente non trovato: {cfg_path}")
-    return yaml_read(path=cfg_path)  # type: ignore
+    data = yaml_read(cfg_path.parent, cfg_path) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Config cliente non valido: {cfg_path}")
+    return cast(dict[str, Any], data)
 
 
 def _apply_policy_with_config(params: QueryParams, project_slug: str) -> QueryParams:
     cfg = _load_client_config(project_slug)
-    return with_config_or_budget(params, cfg)  # type: ignore[arg-type]
+    return with_config_or_budget(params, cfg)
 
 
 def _run_once(
@@ -187,7 +193,7 @@ def main() -> None:
     )
 
     rows: List[Tuple[int, float, float]] = []  # (limit, mean_ms, p95_ms)
-    json_rows: list[dict] = []
+    json_rows: list[dict[str, Any]] = []
 
     for limit in limits:
         samples: List[float] = []

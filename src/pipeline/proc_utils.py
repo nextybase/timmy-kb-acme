@@ -29,7 +29,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 from .env_utils import get_int
 from .logging_utils import redact_secrets
@@ -141,7 +141,7 @@ def run_cmd(
     redactor: Optional[Callable[[str], str]] = None,
     logger: Optional[logging.Logger] = None,
     op: Optional[str] = None,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[Any]:
     """
     Esegue un comando di sistema con timeout, retry con backoff e redazione sicura.
 

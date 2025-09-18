@@ -63,7 +63,11 @@ try:
     from pipeline.logging_utils import get_structured_logger, tail_path
 
     # pipeline (path-safety + atomic I/O + logging)
-    from pipeline.path_utils import ensure_within, read_text_safe
+    from pipeline.path_utils import (
+        ensure_within,
+        ensure_within_and_resolve,
+        open_for_read_bytes_selfguard,
+    )
     from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
     from semantic.config import load_semantic_config
     from semantic.normalizer import normalize_tags
@@ -71,9 +75,9 @@ try:
     from semantic.tags_io import write_tags_review_stub_from_csv as _write_review_stub_from_csv
 
     try:
-        from finance.api import import_csv as _fin_import_csv  # type: ignore
+        from finance.api import import_csv as _fin_import_csv
     except Exception:  # pragma: no cover
-        _fin_import_csv = None  # type: ignore
+        _fin_import_csv = None
 except Exception as e:
     raise RuntimeError(
         "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e 'src/pipeline' "
@@ -85,16 +89,17 @@ except Exception as e:
 # Utilità base
 # ---------------------------------------------------------------------
 def _read_yaml_required(p: Path) -> Dict[str, Any]:
-    if not p.exists():
-        raise RuntimeError(f"File YAML mancante: {p}")
+    safe_path = ensure_within_and_resolve(p.parent, p)
+    if not safe_path.exists():
+        raise RuntimeError(f"File YAML mancante: {safe_path}")
     try:
         from pipeline.yaml_utils import yaml_read
 
-        data = yaml_read(p.parent, p) or {}
+        data = yaml_read(safe_path.parent, safe_path) or {}
     except Exception as e:
-        raise RuntimeError(f"Errore lettura YAML {p}: {e}")
+        raise RuntimeError(f"Errore lettura YAML {safe_path}: {e}")
     if not isinstance(data, dict):
-        raise RuntimeError(f"Formato YAML non valido (atteso mapping/dict): {p}")
+        raise RuntimeError(f"Formato YAML non valido (atteso mapping/dict): {safe_path}")
     return data
 
 
@@ -383,9 +388,14 @@ def build_dummy_kb(
                 "pdf_dummy": str(TEMPLATE_PDF_DUMMY),
             },
         )
-    cartelle = _read_yaml_required(TEMPLATE_CARTELLE_RAW)
-    pdf_dummy = _read_yaml_required(TEMPLATE_PDF_DUMMY)
-    mapping_template = _read_yaml_required(TEMPLATE_MAPPING)
+    template_cartelle_path = ensure_within_and_resolve(CONFIG_DIR, TEMPLATE_CARTELLE_RAW)
+    template_pdf_path = ensure_within_and_resolve(CONFIG_DIR, TEMPLATE_PDF_DUMMY)
+    template_mapping_path = ensure_within_and_resolve(CONFIG_DIR, TEMPLATE_MAPPING)
+    cartelle = _read_yaml_required(template_cartelle_path)
+    with open_for_read_bytes_selfguard(template_cartelle_path) as cartelle_file:
+        cartelle_bytes = cartelle_file.read()
+    pdf_dummy = _read_yaml_required(template_pdf_path)
+    mapping_template = _read_yaml_required(template_mapping_path)
 
     # 2) destinazione sandbox
     base = (OUTPUT_ROOT / f"timmy-kb-{slug}").resolve()
@@ -425,7 +435,7 @@ def build_dummy_kb(
     _write_bytes_in_base(
         base,
         semantic_dir / "cartelle_raw.yaml",
-        TEMPLATE_CARTELLE_RAW.read_bytes(),
+        cartelle_bytes,
         overwrite=overwrite,
     )
     if logger:
@@ -475,16 +485,18 @@ def build_dummy_kb(
     cfg = load_semantic_config(base)
 
     candidates = extract_semantic_candidates(cfg.raw_dir, cfg)
+    cand_len: int | None
     try:
-        cand_len = len(candidates)  # type: ignore[arg-type]
+        cand_len = len(candidates)
     except Exception:
         cand_len = None
     if logger:
         logger.info("Candidati estratti", extra={"count": cand_len})
 
     candidates_norm = normalize_tags(candidates, cfg.mapping)
+    norm_len: int | None
     try:
-        norm_len = len(candidates_norm)  # type: ignore[arg-type]
+        norm_len = len(candidates_norm)
     except Exception:
         norm_len = None
     tags_csv_path = cfg.semantic_dir / "tags_raw.csv"
@@ -528,14 +540,14 @@ def build_dummy_kb(
                 "market_share,2024H1,0.123,, ,quota-mercato\n",
             ]
             _write_text_in_base(base, fin_csv, "".join(fin_rows), overwrite=True)
-            res = _fin_import_csv(base, fin_csv)  # type: ignore[misc]
+            res = _fin_import_csv(base, fin_csv)
             if logger:
                 logger.info(
                     "Finanza: import CSV",
                     extra={
                         "csv": str(fin_csv),
-                        "rows": res.get("rows"),
-                        "db": res.get("db"),
+                        "rows": getattr(res, "rows", None) if res is not None else None,
+                        "db": getattr(res, "db", None) if res is not None else None,
                     },
                 )
     except Exception as e:
@@ -581,24 +593,25 @@ def main() -> int:
     args = _parse_args()
     # Fallback: forza stdout/stderr UTF-8 per console Windows (evita UnicodeEncodeError)
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        stdout_reconf = getattr(sys.stdout, "reconfigure", None)
+        stderr_reconf = getattr(sys.stderr, "reconfigure", None)
+        if not callable(stdout_reconf) or not callable(stderr_reconf):
+            raise AttributeError("reconfigure not callable")
+        stdout_reconf(encoding="utf-8", errors="replace")
+        stderr_reconf(encoding="utf-8", errors="replace")
     except Exception:
         try:
             import io as _io
 
-            sys.stdout = _io.TextIOWrapper(
-                getattr(sys.stdout, "buffer", sys.stdout),
-                encoding="utf-8",
-                errors="replace",
-            )  # type: ignore[assignment]
-            sys.stderr = _io.TextIOWrapper(
-                getattr(sys.stderr, "buffer", sys.stderr),
-                encoding="utf-8",
-                errors="replace",
-            )  # type: ignore[assignment]
+            buffer_out = getattr(sys.stdout, "buffer", None)
+            if isinstance(buffer_out, _io.BufferedWriter):
+                sys.stdout = _io.TextIOWrapper(buffer_out, encoding="utf-8", errors="replace")
+            buffer_err = getattr(sys.stderr, "buffer", None)
+            if isinstance(buffer_err, _io.BufferedWriter):
+                sys.stderr = _io.TextIOWrapper(buffer_err, encoding="utf-8", errors="replace")
         except Exception:
             pass
+
     # Override dinamico della root di output solo se passato da CLI
     if getattr(args, "out", None):
         from pathlib import Path as _Path

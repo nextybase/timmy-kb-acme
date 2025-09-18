@@ -1,11 +1,16 @@
-﻿# src/config_ui/mapping_editor.py
+# src/ui/components/mapping_editor.py
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
-from .utils import to_kebab  # SSoT per la normalizzazione in kebab-case
-from .utils import ensure_within_and_resolve, safe_write_text_compat, yaml_dump, yaml_load
+from ui.utils.core import (
+    ensure_within_and_resolve,
+    safe_write_text_compat,
+    to_kebab,
+    yaml_dump,
+    yaml_load,
+)
 
 MAPPING_RESERVED = {
     "context",
@@ -25,11 +30,12 @@ MAPPING_RESERVED = {
 
 def load_default_mapping() -> Dict[str, Any]:
     """Carica config/default_semantic_mapping.yaml a partire dalla root repo."""
-    repo_root = Path(__file__).resolve().parents[2]  # .../src/config_ui -> .../src -> repo
+    repo_root = Path(__file__).resolve().parents[3]  # .../src/ui/components -> .../src -> repo
     path = repo_root / "config" / "default_semantic_mapping.yaml"
     if not path.is_file():
         raise FileNotFoundError(f"Mapping default non trovato: {path}")
-    return yaml_load(path)
+    data = yaml_load(path)
+    return cast(Dict[str, Any], data)
 
 
 # -------- Split/Build/Validate (editor) --------
@@ -123,9 +129,9 @@ def save_tags_reviewed(
     slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output"
 ) -> Path:
     base_root = Path(base_root)
-    client_root = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
-    sem_dir = ensure_within_and_resolve(client_root, client_root / "semantic")
-    path = ensure_within_and_resolve(sem_dir, sem_dir / "tags_reviewed.yaml")
+    client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
+    sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
+    path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "tags_reviewed.yaml")
     safe_write_text_compat(path, yaml_dump(mapping))
     return path
 
@@ -138,13 +144,14 @@ def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[s
     Carica il mapping rivisto del cliente (formato unico: 'tags_reviewed.yaml').
     """
     base_root = Path(base_root)
-    sem_dir = ensure_within_and_resolve(
+    sem_dir: Path = ensure_within_and_resolve(
         base_root / f"timmy-kb-{slug}",
         base_root / f"timmy-kb-{slug}" / "semantic",
     )
     path = sem_dir / "tags_reviewed.yaml"
     if path.is_file():
-        return yaml_load(path)
+        data = yaml_load(path)
+        return cast(Dict[str, Any], data)
     raise FileNotFoundError(f"Mapping non trovato: {path}.")
 
 
@@ -170,10 +177,10 @@ def write_raw_structure_yaml(
     Scrive un YAML sintetico della struttura RAW in semantic/_raw_from_mapping.yaml (locale).
     """
     base_root = Path(base_root)
-    sem_dir = ensure_within_and_resolve(
+    sem_dir: Path = ensure_within_and_resolve(
         base_root / f"timmy-kb-{slug}",
         base_root / f"timmy-kb-{slug}" / "semantic",
     )
-    path = ensure_within_and_resolve(sem_dir, sem_dir / "_raw_from_mapping.yaml")
+    path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "_raw_from_mapping.yaml")
     safe_write_text_compat(path, yaml_dump(structure))
     return path

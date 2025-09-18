@@ -1,6 +1,6 @@
 def test__drive_list_pdfs_paginates(monkeypatch):
     # Importa il modulo target (senza prefisso 'src.' per evitare duplicati mypy)
-    import config_ui.drive_runner as dr
+    import ui.services.drive_runner as dr
 
     # Costruisce un finto service con paginazione su due pagine
     calls = {"count": 0}

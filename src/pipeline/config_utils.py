@@ -31,11 +31,18 @@ import logging
 import shutil
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional, TYPE_CHECKING, cast
 
 import yaml
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings as PydanticBaseSettings
+from pydantic import Field
+
+if TYPE_CHECKING:
+
+    class _BaseSettings:
+        def model_post_init(self, __context: Any) -> None: ...
+
+else:
+    from pydantic_settings import BaseSettings as _BaseSettings
 
 from pipeline.constants import BACKUP_SUFFIX, CONFIG_DIR_NAME, CONFIG_FILE_NAME
 from pipeline.context import ClientContext
@@ -50,11 +57,11 @@ logger = get_structured_logger("pipeline.config_utils")
 # ----------------------------------------------------------
 #  Modello pydantic per configurazione cliente
 # ----------------------------------------------------------
-class Settings(PydanticBaseSettings):
+class Settings(_BaseSettings):
     """Modello di configurazione cliente per pipeline Timmy-KB.
 
     Le variabili sono risolte dall'ambiente (.env/processo) tramite Pydantic.
-    I campi critici vengono validati nel validator `check_critical`.
+    I campi critici vengono validati al termine dell'inizializzazione del modello.
 
     Attributi (principali):
         DRIVE_ID: ID dello Shared Drive (critico).
@@ -68,106 +75,78 @@ class Settings(PydanticBaseSettings):
         DEBUG: Flag di debug (default: False).
     """
 
-    # Parametri Google Drive
-    DRIVE_ID: str = Field(..., env="DRIVE_ID")  # type: ignore[call-arg]
-    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")  # type: ignore[call-arg]
-    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")  # type: ignore[call-arg]
+    DRIVE_ID: str = Field(..., env="DRIVE_ID")
+    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")
+    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")
     DRIVE_ROOT_ID: Optional[str] = Field(
         None,
-        env="DRIVE_ROOT_ID",  # type: ignore[call-arg]
         description="ID cartella radice cliente su Google Drive",
     )
-
-    # Parametri GitHub/GitBook
-    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN")  # type: ignore[call-arg]
-    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")  # type: ignore[call-arg]
-
-    # Identificativo cliente e log
+    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN")
+    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")
+    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
+    DEBUG: bool = Field(False, env="DEBUG")
     slug: Optional[str] = None
-    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")  # type: ignore[call-arg]
-    DEBUG: bool = Field(False, env="DEBUG")  # type: ignore[call-arg]
 
-    @model_validator(mode="after")
-    def check_critical(self) -> "Settings":
-        """Valida la presenza dei parametri critici e dello slug.
-
-        Raises:
-            ValueError: se una variabile critica è mancante o se `slug` è assente.
-        """
-        required = ["DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"]
-        for key in required:
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"):
             if not getattr(self, key, None):
                 logger.error(f"Parametro critico '{key}' mancante!")
                 raise ValueError(f"Parametro critico '{key}' mancante!")
-
         if not self.slug:
             logger.error("Parametro 'slug' mancante! Usare ClientContext.load(slug).")
             raise ValueError("Parametro 'slug' mancante!")
-
-        return self
 
 
 # ----------------------------------------------------------
 #  Scrittura configurazione cliente su file YAML
 # ----------------------------------------------------------
-def write_client_config_file(context: ClientContext, config: Dict[str, Any]) -> Path:
-    """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT).
-
-    Strategia:
-      - Crea `config/` se assente.
-      - Se esiste già un config, crea backup `<config.yaml>.bak`.
-      - Serializza YAML e scrive con `safe_write_text(..., atomic=True)`.
-
-    Args:
-        context: Contesto del cliente (fornisce perimetro sandbox).
-        config: Dizionario di configurazione.
-
-    Restituisce:
-        Path al file `config.yaml` scritto.
-
-    Raises:
-        ConfigError: in caso di errore I/O.
-    """
-    # Fail-fast esplicito su campi richiesti del contesto
-    if context.output_dir is None or context.base_dir is None:
+def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> Path:
+    """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT)."""
+    output_dir = context.output_dir
+    base_dir = context.base_dir
+    if output_dir is None or base_dir is None:
         raise PipelineError(
             "Contesto incompleto: output_dir/base_dir mancanti",
             slug=context.slug,
         )
-    config_dir = context.output_dir / CONFIG_DIR_NAME
+    output_dir = cast(Path, output_dir)
+    base_dir = cast(Path, base_dir)
+
+    config_dir = output_dir / CONFIG_DIR_NAME
     config_path = config_dir / CONFIG_FILE_NAME
 
-    # path-safety
     config_dir.mkdir(parents=True, exist_ok=True)
-    ensure_within(context.base_dir, config_dir)
-    ensure_within(context.base_dir, config_path)
+    ensure_within(base_dir, config_dir)
+    ensure_within(base_dir, config_path)
 
-    # Backup eventuale file esistente
     if config_path.exists():
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
         shutil.copy(config_path, backup_path)
         logger.info(
-            "📝 Backup config esistente",
+            "Backup config creato",
             extra={"slug": context.slug, "file_path": str(backup_path)},
         )
 
+    config_to_dump: dict[str, Any] = dict(config)
     try:
-        payload = yaml.safe_dump(config or {}, allow_unicode=True, sort_keys=False)
-        safe_write_text(config_path, payload, encoding="utf-8", atomic=True)
-    except Exception as e:
-        raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
+        yaml_dump = yaml.safe_dump(config_to_dump, sort_keys=False, allow_unicode=True)
+        safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
+    except Exception as exc:
+        raise ConfigError(f"Errore scrittura config {config_path}: {exc}") from exc
 
     logger.info(
-        "📄 Config cliente salvato",
+        "Config cliente salvato",
         extra={"slug": context.slug, "file_path": str(config_path)},
     )
-    return config_path
+    return cast(Path, config_path)
 
 
 # ----------------------------------------------------------
 #  Lettura configurazione cliente
 # ----------------------------------------------------------
-def get_client_config(context: ClientContext) -> Dict[str, Any]:
+def get_client_config(context: ClientContext) -> dict[str, Any]:
     """Restituisce il contenuto del `config.yaml` dal contesto."""
     if context.config_path is None:
         raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
@@ -179,7 +158,10 @@ def get_client_config(context: ClientContext) -> Dict[str, Any]:
 
         # Path-safety anche in LETTURA
         safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
-        return yaml_read(safe_cfg_path.parent, safe_cfg_path) or {}
+        data = yaml_read(safe_cfg_path.parent, safe_cfg_path) or {}
+        if not isinstance(data, dict):
+            raise ConfigError("Config YAML non valido.")
+        return cast(dict[str, Any], data)
     except Exception as e:
         raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
 
@@ -270,7 +252,7 @@ def safe_write_file(file_path: Path, content: str) -> None:
 # ----------------------------------------------------------
 def update_config_with_drive_ids(
     context: ClientContext,
-    updates: dict,
+    updates: dict[str, Any],
     logger: logging.Logger | None = None,
 ) -> None:
     """Aggiorna il file `config.yaml` del cliente con i valori forniti.
@@ -288,7 +270,8 @@ def update_config_with_drive_ids(
             "Contesto incompleto: config_path/base_dir mancanti",
             slug=context.slug,
         )
-    config_path = context.config_path
+    config_path = cast(Path, context.config_path)
+    base_dir = cast(Path, context.base_dir)
 
     if not config_path.exists():
         raise ConfigError(f"Config file non trovato: {config_path}")
@@ -303,15 +286,17 @@ def update_config_with_drive_ids(
     try:
         from pipeline.yaml_utils import yaml_read
 
-        config_data = yaml_read(config_path.parent, config_path) or {}
+        config_raw = yaml_read(config_path.parent, config_path) or {}
     except Exception as e:
         raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
 
-    # Aggiorna solo le chiavi passate
+    if not isinstance(config_raw, dict):
+        raise ConfigError("Config YAML non valido.")
+    config_data: dict[str, Any] = dict(config_raw)
     config_data.update(updates or {})
 
     # Scrittura sicura (atomica) + path-safety
-    ensure_within(context.base_dir, config_path)
+    ensure_within(base_dir, config_path)
     try:
         yaml_dump = yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)

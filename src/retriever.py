@@ -21,10 +21,10 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass, replace
+from dataclasses import MISSING, dataclass, replace
 from heapq import nlargest
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Iterable, Optional, Sequence
 
 from semantic.types import EmbeddingsClient
 
@@ -59,11 +59,18 @@ class QueryParams:
 
 
 def _default_candidate_limit() -> int:
-    """Singola fonte di verità del default per candidate_limit (evita drift)."""
+    """Singola fonte di verita del default per candidate_limit (evita drift)."""
+    field = QueryParams.__dataclass_fields__.get("candidate_limit")
+    if field is None:
+        return 4000
+    default_val = field.default
+    if isinstance(default_val, int):
+        return default_val
+    if default_val is None or default_val is MISSING:
+        return 4000
     try:
-        default_val = QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
-        return int(default_val) if default_val is not None else 4000
-    except Exception:
+        return int(str(default_val))
+    except (TypeError, ValueError):
         return 4000
 
 
@@ -117,8 +124,8 @@ def _validate_params(params: QueryParams) -> None:
 
 def _score_candidates(
     qv: Sequence[float],
-    cands: Sequence[Dict],
-) -> Iterable[Tuple[Dict, int]]:
+    cands: Sequence[dict[str, Any]],
+) -> Iterable[tuple[dict[str, Any], int]]:
     """Produce coppie (item_dict, idx) con score coseno e indice per tie-break.
 
     L'item_dict ha le chiavi: content, meta, score (float).
@@ -136,7 +143,7 @@ def _score_candidates(
         )
 
 
-def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dict]:
+def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dict[str, Any]]:
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
@@ -186,7 +193,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
     # 4) Ordinamento e top-k con tie-break deterministico (score desc, idx asc)
     k = max(0, int(params.k))
     if k == 0 or n == 0:
-        out: List[Dict] = []
+        out: list[dict[str, Any]] = []
     else:
         if k >= n:
             # Caso semplice: ordina tutto
@@ -233,7 +240,9 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> List[Dic
     return out
 
 
-def with_config_candidate_limit(params: QueryParams, config: Optional[Dict]) -> QueryParams:
+def with_config_candidate_limit(
+    params: QueryParams, config: Optional[dict[str, Any]]
+) -> QueryParams:
     """Ritorna una copia di `params` applicando `candidate_limit` da config se opportuno.
 
     Precedenza implementata:
@@ -305,7 +314,7 @@ def choose_limit_for_budget(budget_ms: int) -> int:
     return 8000
 
 
-def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryParams:
+def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]]) -> QueryParams:
     """Applica candidate_limit da config, con supporto auto by budget se abilitato.
 
     Precedenza:
@@ -365,9 +374,9 @@ def with_config_or_budget(params: QueryParams, config: Optional[Dict]) -> QueryP
 
 def search_with_config(
     params: QueryParams,
-    config: Optional[Dict],
+    config: Optional[dict[str, Any]],
     embeddings_client: EmbeddingsClient,
-) -> List[Dict]:
+) -> list[dict[str, Any]]:
     """Esegue `with_config_or_budget(...)` e poi `search(...)`.
 
     Uso consigliato nei call-site reali per garantire che il limite effettivo
@@ -383,8 +392,8 @@ def search_with_config(
 
 def preview_effective_candidate_limit(
     params: QueryParams,
-    config: Optional[Dict],
-) -> Tuple[int, str, int]:
+    config: Optional[dict[str, Any]],
+) -> tuple[int, str, int]:
     """Calcola il `candidate_limit` effettivo **senza** mutare `params` e **senza** loggare.
 
     Ritorna (limit, source, budget_ms) dove `source` ∈ {"explicit","auto_by_budget","config","default"}.

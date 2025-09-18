@@ -46,7 +46,7 @@ Questo file non va versionato nel repo: resta locale al tuo ambiente.
 
 ## AGENTS.md per cartelle strategiche
 - **docs/AGENTS.md:** regole per coerenza documentazione (lingua ITA, cSpell attivo, frontmatter e glossario, comandi `make docs`).
-- **src/config_ui/AGENTS.md:** vincoli per componenti di interfaccia (es. `onboarding_ui.py`); build e test controllati, riscritture solo atomiche.
+- **src/ui/AGENTS.md:** vincoli per componenti di interfaccia (es. `onboarding_ui.py`); build e test controllati, riscritture solo atomiche.
 - **src/pipeline/AGENTS.md:** tutela dei flussi e delle orchestrazioni, regole sui prompt, nessuna modifica invasiva ai workflow.
 - **src/semantic/AGENTS.md:** principio “DB first”: SQLite come SSoT per i tag; YAML ammesso solo in modalità legacy con nota di migrazione.
 - **tests/AGENTS.md:** convenzioni per test (pytest), naming `test_*.py`, fixture leggere, niente I/O o rete nei unit test, uso di stub/fake, esiti deterministici, soglia minima di coverage.

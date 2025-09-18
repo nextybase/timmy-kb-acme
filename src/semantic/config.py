@@ -21,12 +21,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Optional, cast
 
+yaml: Any | None
 try:
     import yaml  # PyYAML è già usato nel repo
 except Exception:  # pragma: no cover
-    yaml = None  # type: ignore[assignment]  # degrado: usa solo default/overrides
+    yaml = None  # degrado: usa solo default/overrides
 
 
 __all__ = ["SemanticConfig", "load_semantic_config"]
@@ -34,7 +35,7 @@ __all__ = ["SemanticConfig", "load_semantic_config"]
 
 # ----------------------------- Defaults hardcoded ----------------------------- #
 
-_DEFAULTS = {
+_DEFAULTS: dict[str, Any] = {
     "lang": "it",  # it|en|auto
     "max_pages": 5,  # numero di pagine lette per PDF
     "top_k": 10,  # massimo numero di tag proposti per documento
@@ -46,7 +47,7 @@ _DEFAULTS = {
 }
 
 # Chiavi accettate nella sezione semantic_tagger / semantic_defaults
-_ALLOWED_KEYS: Set[str] = set(_DEFAULTS.keys())
+_ALLOWED_KEYS: set[str] = set(_DEFAULTS.keys())
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ class SemanticConfig:
     ner: bool = True
     keyphrases: bool = True
     embeddings: bool = False
-    stop_tags: Set[str] = field(default_factory=set)
+    stop_tags: set[str] = field(default_factory=set)
 
     # Riferimenti utili per l'orchestrazione
     base_dir: Path = Path(".")  # output/timmy-kb-<slug> (resolve in load)
@@ -67,13 +68,13 @@ class SemanticConfig:
     raw_dir: Path = Path("raw")  # base_dir / "raw" (resolve in load)
 
     # Mapping completo (cliente-specifico) caricato da semantic_mapping.yaml
-    mapping: Dict[str, Any] = field(default_factory=dict)
+    mapping: dict[str, Any] = field(default_factory=dict)
 
 
 # ----------------------------- Helpers YAML ---------------------------------- #
 
 
-def _safe_load_yaml(p: Path) -> Dict[str, Any]:
+def _safe_load_yaml(p: Path) -> dict[str, Any]:
     """
     Carica YAML come dict. Se il file o PyYAML non ci sono, ritorna {}.
     Non solleva eccezioni: il chiamante ha già fallback robusti.
@@ -103,13 +104,44 @@ def _coerce_bool(x: Any, default: bool) -> bool:
     return default
 
 
-def _normalize_tagger_section(d: Dict[str, Any]) -> Dict[str, Any]:
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_str(value: Any, default: str) -> str:
+    if isinstance(value, str):
+        candidate = value.strip()
+        return candidate or default
+    return default
+
+
+def _coerce_stop_tags(value: Any) -> set[str]:
+    result: set[str] = set()
+    if isinstance(value, (list, set, tuple)):
+        for item in value:
+            candidate = str(item).strip().lower()
+            if candidate:
+                result.add(candidate)
+    return result
+
+
+def _normalize_tagger_section(d: dict[str, Any]) -> dict[str, Any]:
     """
     Tiene solo le chiavi ammesse e forza i tipi principali.
     """
     if not d:
         return {}
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for k, v in d.items():
         if k not in _ALLOWED_KEYS:
             continue
@@ -136,7 +168,7 @@ def _normalize_tagger_section(d: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     """
     Merge superficiale: b sovrascrive a.
     """
@@ -149,7 +181,7 @@ def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_semantic_config(
-    base_dir: Path, *, overrides: Optional[Dict[str, Any]] = None
+    base_dir: Path, *, overrides: Optional[dict[str, Any]] = None
 ) -> SemanticConfig:
     """
     Carica la configurazione semantica per il cliente sotto `base_dir`.
@@ -166,7 +198,7 @@ def load_semantic_config(
     raw_dir = (base_dir / "raw").resolve()
 
     # 1) Defaults hardcoded
-    acc = dict(_DEFAULTS)
+    acc: dict[str, Any] = dict(_DEFAULTS)
 
     # 2) config.yaml → semantic_defaults
     config_yaml = (base_dir / "config" / "config.yaml").resolve()
@@ -186,22 +218,30 @@ def load_semantic_config(
     overrides_norm = _normalize_tagger_section(overrides or {})
     acc = _merge(acc, overrides_norm)
 
-    # Normalizza stop_tags in set lowercase
-    stop_tags = set(s.lower().strip() for s in (acc.get("stop_tags") or []) if str(s).strip())
+    stop_tags = _coerce_stop_tags(acc.get("stop_tags", _DEFAULTS["stop_tags"]))
+    if not stop_tags:
+        stop_tags = _coerce_stop_tags(_DEFAULTS["stop_tags"])
 
-    # Costruisci l’oggetto finale (percorsi risolti con .resolve())
+    lang = _coerce_str(acc.get("lang"), cast(str, _DEFAULTS["lang"]))
+    max_pages = _coerce_int(acc.get("max_pages"), cast(int, _DEFAULTS["max_pages"]))
+    top_k = _coerce_int(acc.get("top_k"), cast(int, _DEFAULTS["top_k"]))
+    score_min = _coerce_float(acc.get("score_min"), cast(float, _DEFAULTS["score_min"]))
+    ner = _coerce_bool(acc.get("ner"), cast(bool, _DEFAULTS["ner"]))
+    keyphrases = _coerce_bool(acc.get("keyphrases"), cast(bool, _DEFAULTS["keyphrases"]))
+    embeddings = _coerce_bool(acc.get("embeddings"), cast(bool, _DEFAULTS["embeddings"]))
+
     cfg = SemanticConfig(
-        lang=acc.get("lang", _DEFAULTS["lang"]),
-        max_pages=int(acc.get("max_pages", _DEFAULTS["max_pages"])),
-        top_k=int(acc.get("top_k", _DEFAULTS["top_k"])),
-        score_min=float(acc.get("score_min", _DEFAULTS["score_min"])),
-        ner=bool(acc.get("ner", _DEFAULTS["ner"])),
-        keyphrases=bool(acc.get("keyphrases", _DEFAULTS["keyphrases"])),
-        embeddings=bool(acc.get("embeddings", _DEFAULTS["embeddings"])),
+        lang=lang,
+        max_pages=max_pages,
+        top_k=top_k,
+        score_min=score_min,
+        ner=ner,
+        keyphrases=keyphrases,
+        embeddings=embeddings,
         stop_tags=stop_tags,
         base_dir=base_dir,
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,
-        mapping=mapping_all if isinstance(mapping_all, dict) else {},
+        mapping=mapping_all,
     )
     return cfg

@@ -5,7 +5,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
     import logging
 
     # Evita 'src.' nel nome modulo per non duplicare path in mypy
-    import config_ui.drive_runner as dr
+    import ui.services.drive_runner as dr
 
     # Fake ClientContext
     class Ctx:

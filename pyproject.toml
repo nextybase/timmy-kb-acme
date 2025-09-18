@@ -47,7 +47,7 @@ addopts = "-ra"
 pythonpath = ["."]
 
 [[tool.mypy.overrides]]
-module = "config_ui.*"
+module = "ui.*"
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
