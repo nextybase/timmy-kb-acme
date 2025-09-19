@@ -836,23 +836,25 @@ Tutte le modifiche rilevanti a questo progetto saranno documentate in questo fil
 
 
 ## [1.9.2] - 2025-09-19
+## [1.9.2] - 2025-09-19
 
 ### Added
-- Content pipeline: supporto ai PDF nel root di
-aw/ con generazione file aggregato in ook/ (es.
-aw.md).
-- Test: copertura per PDF root, cleanup orfani in ook/, percent-encoding nel SUMMARY, writer CSV harden e vocab loader fail-closed.
+- Content pipeline: supporto ai PDF nel root di `raw/` con generazione file aggregato in `book/` (es. `raw.md`).
+- Test: copertura per PDF in root, cleanup orfani in `book/`, percent-encoding nel SUMMARY, writer CSV hardened e vocab loader fail-closed.
 
 ### Changed
-- pipeline.content_utils:
-  - convert_files_to_structured_markdown: traccia i file generati e rimuove .md orfani in ook/ (idempotente, path-safe).
-  - generate_summary_markdown: percent-encoding dei link (label leggibile, link encoded) per gestire spazi/caratteri speciali.
-- semantic.auto_tagger.render_tags_csv: firma aggiornata con *, base_dir; path-safety forte via ensure_within_and_resolve + ensure_within; scrittura atomica. Call-site aggiornati in src/tools/gen_dummy_kb.py.
-- semantic.vocab_loader.load_reviewed_vocab: SSoT “fail-closed” su 	ags.db:
-  - se manca il DB → ConfigError con istruzioni operative;
+- `pipeline.content_utils`:
+  - `convert_files_to_structured_markdown`: traccia i file generati e rimuove `.md` orfani in `book/` (idempotente, path-safe).
+  - `generate_summary_markdown`: percent-encoding dei link (label leggibile, link encoded) per gestire spazi/caratteri speciali.
+- `semantic.auto_tagger.render_tags_csv`: firma aggiornata con `*, base_dir`; path-safety forte via `ensure_within_and_resolve` + `ensure_within`; scrittura atomica. Call-site aggiornati in `src/tools/gen_dummy_kb.py` e `semantic.api`.
+- `semantic.vocab_loader.load_reviewed_vocab`: SSoT “fail-closed” su `tags.db`:
+  - se manca il DB → `ConfigError` con istruzioni operative;
   - se il DB è vuoto → warning esplicito;
   - se valido → info con conteggio canonicals.
-- Documentazione aggiornata (README, Architecture, Developer/User Guide, UI Guide, Coding Rules, Versioning/Push policy) a v1.9.2.
+
+### Deprecated
+- `semantic.tags_extractor.emit_tags_csv` deprecato. Usare `semantic.api.build_tags_csv(...)` oppure il writer low-level `semantic.auto_tagger.render_tags_csv(..., base_dir=...)`.
 
 ### Notes
+- Nessun breaking sulle API pubbliche; migliorata la sicurezza I/O e la UX con messaggi espliciti.
 - Nessun breaking sulle API pubbliche; migliorata la sicurezza I/O e la UX con messaggi espliciti.
