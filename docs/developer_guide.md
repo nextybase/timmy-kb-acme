@@ -226,6 +226,25 @@ Note operative
 - Le funzioni applicano path-safety e scritture atomiche; non usare helper locali o import diretti da `semantic.tags_extractor` fuori da `src/semantic/`.
 - In `tag_onboarding_main` i call-site sono già delegati a queste API.
 
+### Writer CSV (low-level) — Contratto `base_dir`
+- Per tool/script interni che usano direttamente il writer del tagger:
+  - Firma aggiornata: `semantic.auto_tagger.render_tags_csv(candidates, csv_path, *, base_dir)`
+  - Path-safety forte:
+    - `safe_csv_path = ensure_within_and_resolve(base_dir, csv_path)`
+    - `ensure_within(safe_csv_path.parent, safe_csv_path)`
+    - Scrittura atomica con `safe_write_text(..., atomic=True)`
+- Comportamento: se `csv_path` esce dal perimetro `base_dir` viene sollevata `PathTraversalError`.
+- Esempio minimo:
+  ```python
+  from pathlib import Path
+  from semantic.auto_tagger import render_tags_csv
+
+  base = Path("output/timmy-kb-acme")
+  csv_path = base / "semantic" / "tags_raw.csv"
+  render_tags_csv(candidates, csv_path, base_dir=base)
+  ```
+- Preferenza: per orchestratori/CI usa la facade `semantic.api.build_tags_csv(...)`, che incapsula già path-safety e side-effects.
+
 Pre-commit
 - È presente un hook locale che impedisce l’introduzione di definizioni locali `_emit_tags_csv`/`_copy_local_pdfs_to_raw` e l’uso diretto di `semantic.tags_extractor` fuori da `src/semantic/`.
 - Esegui: `pre-commit install --hook-type pre-commit --hook-type pre-push`
