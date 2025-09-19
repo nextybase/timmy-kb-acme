@@ -15,6 +15,14 @@ jobs:
         run: |
           python -m pip install -U pip wheel
           pip install black flake8 flake8-bugbear flake8-annotations flake8-bandit flake8-print mypy pytest pytest-cov
+      - name: Docs UTF-8/accents normalization check
+        run: |
+          python tools/fix_mojibake.py
+          if ! git diff --quiet; then
+            echo "::error::Documentation contains mojibake or non-normalized characters. Run tools/fix_mojibake.py and commit the changes.";
+            git --no-pager diff -- docs README.md | sed -n '1,200p';
+            exit 1;
+          fi
       - name: Black (check)
         run: black --check src tests
       - name: Flake8
