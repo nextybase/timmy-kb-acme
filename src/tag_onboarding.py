@@ -29,6 +29,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional, cast
 
+# --- Storage v2 (DB: folders/documents) ---
+import storage.tags_store as tags_store
+
 # --- Pipeline infra / Semantic orchestrators ---
 from pipeline.config_utils import get_client_config
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
@@ -38,28 +41,24 @@ from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
 from pipeline.path_utils import ensure_within  # STRONG guard SSoT
-from pipeline.path_utils import ensure_within_and_resolve
-from pipeline.path_utils import ensure_valid_slug, open_for_read_bytes_selfguard
+from pipeline.path_utils import (
+    ensure_valid_slug,
+    ensure_within_and_resolve,
+    open_for_read_bytes_selfguard,
+)
 from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
-
-# --- Storage v2 (DB: folders/documents) ---
-import storage.tags_store as tags_store
 from storage.tags_store import (
     clear_doc_terms,
+    derive_db_path_from_yaml_path,
     ensure_schema_v2,
     get_conn,
     get_documents_by_folder,
     has_doc_terms,
     list_documents,
-    upsert_document,
-    upsert_folder,
-    upsert_folder_term,
-    upsert_term,
 )
-
-from storage.tags_store import derive_db_path_from_yaml_path
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
+from storage.tags_store import upsert_document, upsert_folder, upsert_folder_term, upsert_term
 
 yaml: Any | None
 try:
@@ -383,7 +382,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         from pipeline.yaml_utils import yaml_read
 
         return yaml_read(path.parent, path) or {}
-    except (OSError,) as e:
+    except OSError as e:
         raise ConfigError(f"Impossibile leggere YAML: {path} ({e})", file_path=str(path)) from e
 
 

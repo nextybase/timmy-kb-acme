@@ -19,7 +19,7 @@ target-version = ["py311"]
 
 [tool.flake8]
 max-line-length = 100
-extend-ignore = ["E203", "W503"]
+extend-ignore = ["E203"]
 select = ["E","F","W","B","ANN","T20"]  # T20 = no print()
 per-file-ignores = ["tests/*:S101"]
 
@@ -57,3 +57,27 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "github.*"
 ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["timmy_kb"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = ["venv", ".venv"]
+
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E203", "ANN201", "ANN202", "ANN204", "T201", "B009", "B010", "B023", "B033", "B904", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S603", "S404", "T201", "B017"]
+"src/tools/*" = ["T201", "S110"]
+"src/tag_onboarding.py" = ["E501", "T201", "S608"]
+"src/pipeline/drive/upload.py" = ["S110"]
+"src/pipeline/file_utils.py" = ["S110"]
+"src/pipeline/path_utils.py" = ["S110"]
+"src/pipeline/yaml_utils.py" = ["S110"]

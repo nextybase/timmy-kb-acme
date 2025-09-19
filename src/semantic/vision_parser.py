@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
 
@@ -24,7 +24,7 @@ def _read_pdf_text(pdf_path: Path) -> str:
         import importlib
 
         module = importlib.import_module("PyPDF2")
-        PdfReader = getattr(module, "PdfReader")
+        PdfReader = module.PdfReader
     except Exception as e:  # pragma: no cover
         raise RuntimeError("PyPDF2 non disponibile: impossibile estrarre testo dal PDF.") from e
 

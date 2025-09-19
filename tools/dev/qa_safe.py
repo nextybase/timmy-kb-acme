@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Esegue QA locale in modo "safe":
+- isort --check-only <PATHS> (se installato)
 - black --check <PATHS> (se installato)
-- flake8 <PATHS> (se installato)
+- ruff check <PATHS> (se installato)
 - mypy --config-file mypy.ini (se installato)
 Opzionale: --with-tests per eseguire anche pytest.
 
 Note:
-- I PATHS sono allineati alla allowlist usata da mypy.ini (sezione "files=").
+- I PATHS sono allineati ai target standard del progetto (src/ e tests/).
 - mypy viene eseguito SENZA argomenti posizionali, così rispetta mypy.ini.
 
 Exit code:
@@ -22,11 +23,10 @@ import subprocess
 import sys
 from typing import List, Sequence, Tuple
 
-# Stessi path di mypy.ini -> files=
+# Percorsi standard per linting e formattazione
 LINT_PATHS: Sequence[str] = (
-    "src/ui",
-    "src/pipeline/drive",
-    "src/pipeline/drive_utils.py",
+    "src",
+    "tests",
 )
 
 
@@ -48,10 +48,9 @@ def main(argv: List[str] | None = None) -> int:
     failures: List[str] = []
 
     checks: List[Tuple[str, List[str]]] = [
-        # Black/Flake8 solo sui path allowlistati (coerenti con mypy.ini)
+        ("isort", ["isort", "--check-only", *LINT_PATHS]),
         ("black", ["black", "--check", *LINT_PATHS]),
-        ("flake8", ["flake8", *LINT_PATHS]),
-        # IMPORTANT: niente argomenti posizionali a mypy -> userà mypy.ini (files=)
+        ("ruff", ["ruff", "check", *LINT_PATHS]),
         ("mypy", ["mypy", "--config-file", "mypy.ini"]),
     ]
     if args.with_tests:

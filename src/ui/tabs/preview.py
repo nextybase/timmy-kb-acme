@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     # Solo per type-checking; evita import runtime e side-effects
@@ -36,7 +36,8 @@ def render_preview_controls(
     """
     # Import runtime degli adapter (possono non essere disponibili)
     try:
-        from adapters.preview import start_preview as _start_preview, stop_preview as _stop_preview
+        from adapters.preview import start_preview as _start_preview
+        from adapters.preview import stop_preview as _stop_preview
 
         start_preview: Optional[Callable[..., str]] = _start_preview
         stop_preview: Optional[Callable[..., None]] = _stop_preview

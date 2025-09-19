@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+
 import semantic.api as sapi
 from pipeline.exceptions import ConversionError
 

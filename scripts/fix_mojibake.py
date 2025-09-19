@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
-
 
 # Sequenze note -> sostituzioni desiderate
 REPLACEMENTS: Dict[str, str] = {

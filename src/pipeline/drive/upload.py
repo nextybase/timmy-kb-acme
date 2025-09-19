@@ -48,7 +48,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
 
-
 from ..constants import OUTPUT_DIR_NAME
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
@@ -336,12 +335,12 @@ def _resolve_local_config_path(context: Any) -> Path:
                 candidates.append(str(cand))
 
     if hasattr(context, "config_dir"):
-        dir_path = getattr(context, "config_dir")
+        dir_path = context.config_dir
         if dir_path:
             candidates.append(os.path.join(str(dir_path), "config.yaml"))
 
     if hasattr(context, "client_dir"):
-        base = getattr(context, "client_dir")
+        base = context.client_dir
         if base:
             candidates.append(os.path.join(str(base), "config", "config.yaml"))
 
@@ -517,17 +516,17 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
 
     if not hasattr(context, "raw_dir"):
         try:
-            setattr(context, "raw_dir", raw_dir)
+            context.raw_dir = raw_dir
         except Exception:
             pass
     if not hasattr(context, "book_dir"):
         try:
-            setattr(context, "book_dir", book_dir)
+            context.book_dir = book_dir
         except Exception:
             pass
     if not hasattr(context, "config_dir"):
         try:
-            setattr(context, "config_dir", cfg_dir)
+            context.config_dir = cfg_dir
         except Exception:
             pass
 

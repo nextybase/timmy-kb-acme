@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Tuple, TypedDict, cast
 from collections import Counter, defaultdict
 from functools import lru_cache
+from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Tuple, TypedDict, cast
 
 
 class ClusterGroup(TypedDict):
@@ -256,7 +256,7 @@ def keybert_scores(
     emb_doc = model.encode([text or ""], normalize_embeddings=True)
     emb_c = model.encode(cands, normalize_embeddings=True)
     sims = cosine_similarity(emb_c, emb_doc)[:, 0]
-    pairs: List[Tuple[str, float]] = list(zip(cands, sims.tolist()))
+    pairs: List[Tuple[str, float]] = list(zip(cands, sims.tolist(), strict=False))
     pairs.sort(key=lambda x: x[1], reverse=True)
     return pairs[:top_k]
 

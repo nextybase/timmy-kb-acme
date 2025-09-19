@@ -1,7 +1,7 @@
 # tools/e2e_smoke_test.py
 import argparse
-import subprocess
 import sqlite3
+import subprocess
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent

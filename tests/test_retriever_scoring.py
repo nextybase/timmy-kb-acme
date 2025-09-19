@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from src.retriever import QueryParams, search
 import src.retriever as r
+from src.retriever import QueryParams, search
 
 
 class EmbedOne:

@@ -39,7 +39,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, cast
 
-
 from ..env_utils import get_env_var  # ✅ centralizzazione ENV
 from ..exceptions import ConfigError
 from ..logging_utils import get_structured_logger
@@ -268,7 +267,7 @@ def _resolve_service_account_file(context: Any) -> str:
         if hasattr(context, attr):
             candidates.append(getattr(context, attr))
     # Mappa env nel contesto (se esiste)
-    if hasattr(context, "env") and isinstance(getattr(context, "env"), dict):
+    if hasattr(context, "env") and isinstance(context.env, dict):
         sa: Optional[str] = cast(Optional[str], context.env.get("SERVICE_ACCOUNT_FILE"))
         candidates.append(sa)
     # Variabile d'ambiente letta tramite resolver centralizzato

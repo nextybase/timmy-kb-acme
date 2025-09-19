@@ -2,9 +2,9 @@
 # src/semantic/api.py
 from __future__ import annotations
 
+import inspect
 import logging
 import re
-import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
@@ -364,7 +364,7 @@ def index_markdown_to_db(
 
     version = _dt.utcnow().strftime("%Y%m%d")
     inserted_total = 0
-    for text, rel_name, emb in zip(contents, rel_paths, vecs):
+    for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
         meta = {"file": rel_name}
         try:
             inserted_total += _insert_chunks(

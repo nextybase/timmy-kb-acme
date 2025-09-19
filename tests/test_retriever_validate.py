@@ -5,12 +5,12 @@ from typing import Sequence
 
 import pytest
 
-from src.retriever import (
-    QueryParams,
-    search,
-    RetrieverError,
-)  # <— usa la stessa classe del modulo sotto test
 import src.retriever as r
+from src.retriever import (  # <— usa la stessa classe del modulo sotto test
+    QueryParams,
+    RetrieverError,
+    search,
+)
 
 
 class DummyEmbeddings:

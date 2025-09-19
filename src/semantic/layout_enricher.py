@@ -226,7 +226,6 @@ def _extract_keywords(text: str, min_len: int = 4, top_k: int = 24) -> List[str]
         "al",
         "ai",
         "agli",
-        "agli",
     }
     # split su non-ltr
     raw = re.split(r"[^A-Za-zÀ-ÖØ-öø-ÿ0-9_]+", text)

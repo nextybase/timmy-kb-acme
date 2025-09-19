@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Any, cast
+from typing import Any, Optional, cast
 
 import pytest
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from storage.tags_store import derive_db_path_from_yaml_path, save_tags_reviewed
 

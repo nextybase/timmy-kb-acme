@@ -26,10 +26,10 @@ from heapq import nlargest
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 from semantic.types import EmbeddingsClient
 
 from .kb_db import fetch_candidates
-from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 
 LOGGER = logging.getLogger("timmy_kb.retriever")
 
@@ -88,7 +88,7 @@ def cosine(a: Iterable[float], b: Iterable[float]) -> float:
     dot = 0.0
     na = 0.0
     nb = 0.0
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         dot += x * y
         na += x * x
         nb += y * y

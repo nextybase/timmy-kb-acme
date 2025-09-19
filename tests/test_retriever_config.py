@@ -52,7 +52,7 @@ def test_choose_limit_for_budget_is_monotonic_for_positive_budgets() -> None:
     budgets = list(range(1, 1001, 5))
     limits = [choose_limit_for_budget(b) for b in budgets]
     assert all(
-        curr >= prev for prev, curr in zip(limits, limits[1:])
+        curr >= prev for prev, curr in zip(limits, limits[1:], strict=False)
     ), "choose_limit_for_budget deve essere non decrescente per budget > 0"
 
 

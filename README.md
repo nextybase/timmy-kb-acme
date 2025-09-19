@@ -171,14 +171,14 @@ py src/pre_onboarding.py [--slug <id>] [--name <nome>] [--non-interactive] [--dr
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-- Hook pre-commit: esegue un controllo "safe" (black/flake8/mypy se presenti). Degrada con skip se gli strumenti non sono installati.
+- Hook pre-commit: esegue un controllo "safe" (isort/black/ruff/mypy se presenti). Degrada con skip se gli strumenti non sono installati.
 
 - Hook pre-push: esegue `qa-safe --with-tests` (pytest se presente) e un mypy mirato (vedi `.pre-commit-config.yaml`).
 
 - Esecuzione manuale dei check "safe":
 
 ```bash
-make qa-safe   # black/flake8/mypy (se presenti)
+make qa-safe   # isort/black/ruff/mypy (se presenti)
 make ci-safe   # qa-safe + pytest (se presente)
 ```
 ---

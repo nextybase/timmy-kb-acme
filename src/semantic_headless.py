@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List
 
 from semantic.api import (
     convert_markdown,

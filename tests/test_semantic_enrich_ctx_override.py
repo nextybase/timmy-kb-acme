@@ -1,11 +1,12 @@
 # tests/test_semantic_enrich_ctx_override.py
 from __future__ import annotations
 
-from pathlib import Path
 import logging
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
+
 import semantic.api as sapi
 
 

@@ -4,8 +4,7 @@ from __future__ import annotations
 from typing import Dict, Set
 
 # Testiamo helper interni (consapevolmente) per coprire le regressioni:
-from src.semantic.api import _as_list_str, _merge_frontmatter, _guess_tags_for_name
-
+from src.semantic.api import _as_list_str, _guess_tags_for_name, _merge_frontmatter
 
 # ------------------------------ Frontmatter: normalizzazione tag ------------------------------
 

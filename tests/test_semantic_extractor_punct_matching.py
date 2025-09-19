@@ -1,8 +1,8 @@
 # tests/test_semantic_extractor_punct_matching.py
 from __future__ import annotations
 
-from pathlib import Path
 import logging
+from pathlib import Path
 from typing import Optional
 
 from semantic.semantic_extractor import extract_semantic_concepts

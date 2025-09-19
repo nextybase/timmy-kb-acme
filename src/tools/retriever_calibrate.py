@@ -29,7 +29,8 @@ from typing import Any, List, Sequence, Tuple, cast
 
 from src.ingest import OpenAIEmbeddings  # client embeddings reale (no fallback)
 from src.kb_db import get_db_path
-from src.pipeline.path_utils import ensure_within_and_resolve as _ensure_within, read_text_safe
+from src.pipeline.path_utils import ensure_within_and_resolve as _ensure_within
+from src.pipeline.path_utils import read_text_safe
 from src.pipeline.yaml_utils import yaml_read
 from src.retriever import QueryParams, search, with_config_or_budget
 

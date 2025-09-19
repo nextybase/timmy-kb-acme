@@ -4,16 +4,17 @@
 # - SSoT/precedenza candidate_limit
 #   (with_config_candidate_limit / with_config_or_budget / preview_effective_candidate_limit)
 
-from collections import deque
 import math
+from collections import deque
+
 import pytest
 
 from src.retriever import (
     QueryParams,
     cosine,
+    preview_effective_candidate_limit,
     with_config_candidate_limit,
     with_config_or_budget,
-    preview_effective_candidate_limit,
 )
 
 # ----------------------------- Test cosine (iterator-safe) -----------------------------

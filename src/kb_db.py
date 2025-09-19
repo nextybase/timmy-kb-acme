@@ -113,7 +113,7 @@ def insert_chunks(
             json.dumps(vec, ensure_ascii=False),
             now,
         )
-        for chunk, vec in zip(chunks, embeddings)
+        for chunk, vec in zip(chunks, embeddings, strict=False)
     ]
     with connect(db_path) as con:
         cur = con.executemany(

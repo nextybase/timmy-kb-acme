@@ -13,7 +13,10 @@ except Exception as e:  # pragma: no cover
 
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
 
-CLIENT_CONTEXT_ERROR_MSG = "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+CLIENT_CONTEXT_ERROR_MSG = (
+    "ClientContext non disponibile. Esegui "
+    "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+)
 
 
 def _base_dir_for(slug: str) -> Path:

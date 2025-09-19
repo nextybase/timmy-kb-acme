@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 FORBIDDEN = (".write_text(", ".write_bytes(")
 
 

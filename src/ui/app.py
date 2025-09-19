@@ -26,44 +26,42 @@ def main() -> None:
 
     import streamlit as st
 
-    from pipeline.env_utils import compute_redact_flag
-    from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
-    from pipeline.logging_utils import get_structured_logger  # fix import
-    from pipeline.context import ClientContext
     from pipeline.config_utils import (
         bump_n_ver_if_needed,
-        set_data_ver_today,
         get_client_config,
+        set_data_ver_today,
         update_config_with_drive_ids,
     )
+    from pipeline.context import ClientContext
+    from pipeline.env_utils import compute_redact_flag
+    from pipeline.logging_utils import get_structured_logger  # fix import
+    from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
+
+    # Semantica API (niente get_paths: i path vengono dal ClientContext)
+    from semantic.api import convert_markdown as sem_convert
+    from semantic.api import enrich_frontmatter as sem_enrich
+    from semantic.api import load_reviewed_vocab as sem_load_vocab
+    from semantic.api import write_summary_and_readme as sem_write_md
 
     # UI/Config helpers
     from ui.components.mapping_editor import (
+        build_mapping,
         load_default_mapping,
         load_tags_reviewed,
         save_tags_reviewed,
         split_mapping,
-        build_mapping,
         validate_categories,
     )
-    from ui.services.drive_runner import (
-        build_drive_from_mapping,
-        emit_readmes_for_raw,
-        download_raw_from_drive,
-    )
-    from ui.tabs.finance import render_finance_tab
-    from ui.tabs.preview import render_preview_controls
 
     # Landing (modulo esterno)
     from ui.landing_slug import render_landing_slug
-
-    # Semantica API (niente get_paths: i path vengono dal ClientContext)
-    from semantic.api import (
-        load_reviewed_vocab as sem_load_vocab,
-        convert_markdown as sem_convert,
-        enrich_frontmatter as sem_enrich,
-        write_summary_and_readme as sem_write_md,
+    from ui.services.drive_runner import (
+        build_drive_from_mapping,
+        download_raw_from_drive,
+        emit_readmes_for_raw,
     )
+    from ui.tabs.finance import render_finance_tab
+    from ui.tabs.preview import render_preview_controls
 
     # =========================================================================
     # Helpers (chiudono su import locali)

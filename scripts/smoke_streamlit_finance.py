@@ -49,10 +49,8 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
       - (opzionale) semantic.api.get_paths  ← usata solo come fallback
     """
     # Import lazy (evita side-effects a import-time del modulo)
-    from finance.api import (
-        import_csv as fin_import_csv,
-        summarize_metrics as fin_summarize,
-    )
+    from finance.api import import_csv as fin_import_csv
+    from finance.api import summarize_metrics as fin_summarize
 
     # Opzionale: scrittura atomica se disponibile
     try:

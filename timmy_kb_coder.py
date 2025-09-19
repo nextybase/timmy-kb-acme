@@ -25,20 +25,20 @@ import importlib.util
 import logging
 import os
 from pathlib import Path
-from typing import cast, Dict, Any
+from typing import Any, Dict, cast
 
 import streamlit as st
 
+from pipeline.config_utils import get_client_config
+
+# Config repo (per leggere config.yaml se disponibile)
+from pipeline.context import ClientContext
 from semantic.types import EmbeddingsClient
 from src.ingest import OpenAIEmbeddings
 from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
 from src.retriever import QueryParams, search_with_config  # <-- usa la facade
 from src.vscode_bridge import read_response, write_request
-
-# Config repo (per leggere config.yaml se disponibile)
-from pipeline.context import ClientContext
-from pipeline.config_utils import get_client_config
 
 # Optional: load .env senza try/except/pass (evita flake8-bandit S110)
 if importlib.util.find_spec("dotenv") is not None:  # pragma: no cover - optional dependency

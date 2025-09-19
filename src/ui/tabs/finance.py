@@ -12,7 +12,10 @@ def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     Determina la base_dir del workspace cliente privilegiando ClientContext.
     ClientContext è lo SSoT per i path: in caso di indisponibilità si segnala l'errore.
     """
-    error_msg = "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+    error_msg = (
+        "ClientContext non disponibile. Esegui "
+        "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+    )
 
     try:
         from pipeline.context import ClientContext  # import lazy
@@ -45,10 +48,8 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
       - pipeline.context.ClientContext (per i path del workspace)
     """
     # Import lazy (evita side-effects a import-time del modulo)
-    from finance.api import (
-        import_csv as fin_import_csv,
-        summarize_metrics as fin_summarize,
-    )
+    from finance.api import import_csv as fin_import_csv
+    from finance.api import summarize_metrics as fin_summarize
 
     # Opzionale: scrittura atomica se disponibile
     try:
