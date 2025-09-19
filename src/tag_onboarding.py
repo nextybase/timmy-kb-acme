@@ -40,9 +40,9 @@ from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
 from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
-from pipeline.path_utils import ensure_within  # STRONG guard SSoT
-from pipeline.path_utils import (
+from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
+    ensure_within,
     ensure_within_and_resolve,
     open_for_read_bytes_selfguard,
 )
