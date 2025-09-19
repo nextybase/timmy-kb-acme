@@ -1,4 +1,4 @@
-﻿# Timmy-KB - Coding Rules (v1.9.1)
+# Timmy-KB - Coding Rules (v1.9.1)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -16,6 +16,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - **Contratti condivisi**: per funzioni che richiedono solo `base_dir/raw_dir/md_dir/slug`, usa `semantic.types.ClientContextProtocol` invece di protocolli locali duplicati.
 - **No side-effects a import-time**: nessun I/O o lettura di env vars a livello di modulo.
 - **Adotta nuove dipendenze in modo controllato**: prima di aggiungere una nuova libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e presenza di alternative già adottate.
+
 ---
 
 ## Struttura & naming
@@ -44,7 +45,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Type check rapidi:
   - **Mypy**: `make type`
   - **Pyright**: `make type-pyright` (richiede `pyright` nel PATH oppure `npx`)
-- **Linting automatico su CI**: ogni PR/build deve passare linting (`black`, `ruff`, `isort`, ecc).
+- **Linting automatico su CI**: ogni PR/build deve passare linting (**Black**, **Ruff** e **isort**). _Nota_: **Ruff** è il linter principale del repo e ingloba molte regole di **Flake8**; dove negli standard Codex compare “Flake8”, consideralo allineato a Ruff. Le regole di base restano: rispetto del line-length e **lint verde** in CI.
 
 ---
 

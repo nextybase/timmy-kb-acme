@@ -136,25 +136,34 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
     return parent_id
 
 
-def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict[str, int]:
-    raw_dir = Path(raw_dir)
-    ensure_schema_v2(db_path)
+def scan_raw_to_db(
+    raw_dir: str | Path,
+    db_path: str | Path,
+    *,
+    base_dir: Path | None = None,
+) -> dict[str, int]:
+    base_dir_path = (
+        Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
+    )
+    raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
+    db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
+    ensure_schema_v2(str(db_path_path))
 
     folders_count = 0
     docs_count = 0
     log = logging.getLogger("tag_onboarding")
 
-    with get_conn(db_path) as conn:
+    with get_conn(str(db_path_path)) as conn:
         # registra root 'raw'
         upsert_folder(conn, "raw", None)
 
-        for path in raw_dir.rglob("*"):
+        for path in raw_dir_path.rglob("*"):
             if path.is_dir():
-                upsert_folder_chain(conn, raw_dir, path)
+                upsert_folder_chain(conn, raw_dir_path, path)
                 folders_count += 1
                 continue
             if path.is_file() and path.suffix.lower() == ".pdf":
-                folder_id = upsert_folder_chain(conn, raw_dir, path.parent)
+                folder_id = upsert_folder_chain(conn, raw_dir_path, path.parent)
                 sha256 = compute_sha256(path)
                 pages = get_pdf_pages(path)
                 upsert_document(conn, folder_id, path.name, sha256, pages)
@@ -173,9 +182,10 @@ def scan_raw_to_db(raw_dir: str | Path, db_path: str) -> dict[str, int]:
 
 def run_nlp_to_db(
     slug: str,
-    raw_dir: Path,
-    db_path: str,
+    raw_dir: Path | str,
+    db_path: str | Path,
     *,
+    base_dir: Path | None = None,
     lang: str = "it",
     topn_doc: int = 20,
     topk_folder: int = 30,
@@ -184,10 +194,15 @@ def run_nlp_to_db(
     rebuild: bool = False,
     only_missing: bool = False,
 ) -> dict[str, Any]:
-    ensure_schema_v2(db_path)
+    base_dir_path = (
+        Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
+    )
+    raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
+    db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
+    ensure_schema_v2(str(db_path_path))
     log = logging.getLogger("tag_onboarding")
 
-    with get_conn(db_path) as conn:
+    with get_conn(str(db_path_path)) as conn:
         docs = list_documents(conn)
         processed = 0
         saved_items = 0
@@ -209,7 +224,7 @@ def run_nlp_to_db(
             folder_parts = folder_db_path.parts
             if folder_parts and folder_parts[0] == "raw":
                 folder_parts = folder_parts[1:]
-            folder_fs_path = raw_dir.joinpath(*folder_parts)
+            folder_fs_path = raw_dir_path.joinpath(*folder_parts)
             if folder_id is not None and not folder_fs_path.exists():
                 log.warning(
                     "NLP skip: cartella non trovata",
@@ -219,7 +234,7 @@ def run_nlp_to_db(
             if not isinstance(filename_val, str) or not filename_val.strip():
                 raise ValueError("filename mancante o non valido")
             candidate = folder_fs_path / filename_val
-            return cast(Path, ensure_within_and_resolve(raw_dir, candidate))
+            return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
 
         for i, doc in enumerate(docs, start=1):
             doc_id_raw = cast(Any, doc.get("id"))
@@ -479,41 +494,56 @@ def _write_validation_report(
 
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    """
-    Valida `semantic/tags_reviewed.yaml` per un dato cliente.
+    """Valida `semantic/tags_reviewed.yaml` sfruttando il contesto cliente."""
+    context = ClientContext.load(
+        slug=slug,
+        interactive=False,
+        require_env=False,
+        run_id=run_id,
+        stage="validate",
+    )
 
-    Effetti:
-      - Scrive `semantic/tags_review_validation.json` con esito, errori e avvisi.
-      - Logga il risultato in `logs/<...>/pipeline.log`.
+    base_attr = getattr(context, "base_dir", None) or getattr(context, "repo_root_dir", None)
+    if base_attr is None:
+        base_attr = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+    base_dir = Path(base_attr).resolve()
 
-    Exit codes:
-      - 0 → validazione OK
-      - 1 → errori
-      - 2 → solo avvisi
-    """
-    base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-    semantic_dir = base_dir / "semantic"
-    yaml_path = semantic_dir / "tags_reviewed.yaml"
-    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    try:
-        ensure_within(base_dir, log_file)
-    except ConfigError:
-        pass
-    logger = get_structured_logger("tag_onboarding.validate", log_file=log_file, run_id=run_id)
+    semantic_attr = getattr(context, "semantic_dir", None)
+    semantic_candidate = (
+        Path(semantic_attr) if semantic_attr is not None else (base_dir / "semantic")
+    )
+    semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
 
-    # Controlla esistenza DB; se manca, comportati come prima (errore)
-    db_path = derive_db_path_from_yaml_path(yaml_path)
-    if not Path(db_path).exists():
+    yaml_candidate = semantic_dir / "tags_reviewed.yaml"
+    yaml_path = ensure_within_and_resolve(semantic_dir, yaml_candidate)
+
+    report_candidate = semantic_dir / "tags_review_validation.json"
+    report_path = ensure_within_and_resolve(semantic_dir, report_candidate)
+
+    db_candidate = Path(derive_db_path_from_yaml_path(yaml_path))
+    db_path = ensure_within_and_resolve(base_dir, db_candidate)
+
+    log_dir = ensure_within_and_resolve(base_dir, base_dir / LOGS_DIR_NAME)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = ensure_within_and_resolve(log_dir, log_dir / LOG_FILE_NAME)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logger = get_structured_logger(
+        "tag_onboarding.validate",
+        log_file=log_file,
+        context=context,
+        run_id=run_id,
+    )
+
+    if not db_path.exists():
         logger.error(
             "Tags DB non trovato",
-            extra={"file_path": str(db_path), "file_path_tail": tail_path(Path(db_path))},
+            extra={"file_path": str(db_path), "file_path_tail": tail_path(db_path)},
         )
         return 1
 
     try:
-        data = load_tags_reviewed_db(db_path)
+        data = load_tags_reviewed_db(str(db_path))
         result = _validate_tags_reviewed(data)
-        report_path = semantic_dir / "tags_review_validation.json"
         _write_validation_report(report_path, result, logger)
     except ConfigError as e:
         logger.error(str(e))
@@ -532,7 +562,6 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     return 0
 
 
-# ───────────────────────────── MAIN orchestratore ────────────────────────────────────────────────
 def tag_onboarding_main(
     slug: str,
     *,
@@ -657,6 +686,42 @@ def tag_onboarding_main(
 
 
 # ───────────────────────────── CLI ───────────────────────────────────────────────────────────────
+
+
+def _resolve_cli_paths(
+    context: ClientContext,
+    *,
+    raw_override: str | None,
+    db_override: str | None,
+) -> tuple[Path, Path, Path, Path]:
+    """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
+    base_attr = getattr(context, "base_dir", None) or getattr(context, "repo_root_dir", None)
+    if base_attr is None:
+        base_candidate = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{context.slug}"
+    else:
+        base_candidate = Path(base_attr)
+    base_dir = base_candidate.resolve()
+
+    raw_attr = Path(raw_override) if raw_override else getattr(context, "raw_dir", None)
+    if raw_attr is None:
+        raw_candidate = base_dir / "raw"
+    else:
+        raw_candidate = Path(raw_attr)
+
+    semantic_attr = getattr(context, "semantic_dir", None)
+    if semantic_attr is None:
+        semantic_candidate = base_dir / "semantic"
+    else:
+        semantic_candidate = Path(semantic_attr)
+
+    raw_dir = ensure_within_and_resolve(base_dir, raw_candidate)
+    semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
+    db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
+    db_path = ensure_within_and_resolve(base_dir, db_candidate)
+
+    return base_dir, raw_dir, db_path, semantic_dir
+
+
 def _parse_args() -> argparse.Namespace:
     """Costruisce e restituisce il parser CLI per `tag_onboarding`."""
     p = argparse.ArgumentParser(
@@ -758,24 +823,43 @@ if __name__ == "__main__":
 
     # Scansione RAW -> DB (schema v2)
     if getattr(args, "scan_raw", False):
-        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        raw_dir = Path(args.raw_dir) if args.raw_dir else (base_dir / "raw")
-        db_path = str(Path(args.db)) if args.db else str(base_dir / "semantic" / "tags.db")
-        stats = scan_raw_to_db(raw_dir, db_path)
-        log = get_structured_logger("tag_onboarding", run_id=run_id)
+        ctx = ClientContext.load(
+            slug=slug,
+            interactive=False,
+            require_env=False,
+            run_id=run_id,
+            stage="scan_raw",
+        )
+        base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            ctx,
+            raw_override=args.raw_dir,
+            db_override=args.db,
+        )
+        stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
+        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
         log.info("Indicizzazione completata", extra=stats)
         sys.exit(0)
 
     # NLP → DB
     if getattr(args, "nlp", False):
-        base_dir = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        raw_dir = Path(args.raw_dir) if args.raw_dir else (base_dir / "raw")
-        db_path = str(Path(args.db)) if args.db else str(base_dir / "semantic" / "tags.db")
+        ctx = ClientContext.load(
+            slug=slug,
+            interactive=False,
+            require_env=False,
+            run_id=run_id,
+            stage="nlp",
+        )
+        base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            ctx,
+            raw_override=args.raw_dir,
+            db_override=args.db,
+        )
         lang = args.lang if args.lang != "auto" else "it"
         stats = run_nlp_to_db(
             slug,
             raw_dir,
             db_path,
+            base_dir=base_dir,
             lang=lang,
             topn_doc=int(args.topn_doc),
             topk_folder=int(args.topk_folder),
@@ -784,7 +868,7 @@ if __name__ == "__main__":
             rebuild=bool(args.rebuild),
             only_missing=bool(args.only_missing),
         )
-        log = get_structured_logger("tag_onboarding", run_id=run_id)
+        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
         log.info("NLP pipeline terminata", extra=stats)
         sys.exit(0)
 

@@ -1,4 +1,9 @@
-from src.tag_onboarding import run_nlp_to_db
+from types import SimpleNamespace
+
+import pytest
+
+from pipeline.exceptions import PathTraversalError
+from src.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
 from storage.tags_store import upsert_document, upsert_folder
@@ -111,3 +116,51 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
     assert term_rows
     assert alias_rows
     assert folder_term_rows
+
+
+def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
+    base_dir = tmp_path / "client"
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True)
+    db_outside = tmp_path.parent / "outside" / "tags.db"
+
+    with pytest.raises(PathTraversalError):
+        run_nlp_to_db("demo", raw_dir, db_outside, base_dir=base_dir)
+
+
+def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
+    base_dir = tmp_path / "client-sandbox"
+    raw_dir = base_dir / "custom-raw"
+    semantic_dir = base_dir / "semantic-data"
+    raw_dir.mkdir(parents=True)
+    semantic_dir.mkdir(parents=True)
+    ctx = SimpleNamespace(
+        slug="acme",
+        base_dir=base_dir,
+        raw_dir=raw_dir,
+        semantic_dir=semantic_dir,
+        repo_root_dir=None,
+    )
+
+    resolved_base, resolved_raw, db_path, resolved_semantic = _resolve_cli_paths(
+        ctx,
+        raw_override=None,
+        db_override=None,
+    )
+
+    assert resolved_base == base_dir.resolve()
+    assert resolved_raw == raw_dir.resolve()
+    assert resolved_semantic == semantic_dir.resolve()
+    assert db_path == (semantic_dir / "tags.db").resolve()
+
+    outside_raw = tmp_path / "elsewhere" / "raw"
+    with pytest.raises(PathTraversalError):
+        _resolve_cli_paths(ctx, raw_override=str(outside_raw), db_override=None)
+
+    inside_db = semantic_dir / "custom.db"
+    _, _, custom_db_path, _ = _resolve_cli_paths(
+        ctx,
+        raw_override=None,
+        db_override=str(inside_db),
+    )
+    assert custom_db_path == inside_db.resolve()
