@@ -9,34 +9,30 @@ from typing import Any, Dict, List, Optional
 
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     """
-    Determina la base_dir del workspace cliente privilegiando ClientContext
-    (che rispetta override come REPO_ROOT_DIR). Fallback a semantic.api.get_paths
-    solo se necessario per non rompere la UI in ambienti minimi.
+    Determina la base_dir del workspace cliente privilegiando ClientContext.
+    ClientContext è lo SSoT per i path: in caso di indisponibilità si segnala l'errore.
     """
-    # 1) Prova ClientContext
+    error_msg = "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+
     try:
         from pipeline.context import ClientContext  # import lazy
+    except Exception as exc:
+        raise RuntimeError(error_msg) from exc
 
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-        base_dir = getattr(ctx, "base_dir", None)
-        if isinstance(base_dir, Path):
-            return base_dir
-        # Alcuni contesti storici esponevano solo raw_dir: risalgo al parent
-        raw_dir = getattr(ctx, "raw_dir", None)
-        if isinstance(raw_dir, Path):
-            return raw_dir.parent
-    except Exception:
-        pass
-
-    # 2) Fallback: semantic.api.get_paths (opzionale)
     try:
-        from semantic.api import get_paths as sem_get_paths
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+    except Exception as exc:
+        raise RuntimeError(error_msg) from exc
 
-        base = sem_get_paths(slug)["base"]
-        return base if isinstance(base, Path) else Path(str(base))
-    except Exception:
-        # 3) Ultimo fallback: legacy locale
-        return Path("output") / f"timmy-kb-{slug}"
+    base_dir = getattr(ctx, "base_dir", None)
+    if isinstance(base_dir, Path):
+        return base_dir
+
+    raw_dir = getattr(ctx, "raw_dir", None)
+    if isinstance(raw_dir, Path):
+        return raw_dir.parent
+
+    raise RuntimeError(error_msg)
 
 
 def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
@@ -46,7 +42,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     Dipendenze runtime:
       - finance.api.import_csv
       - finance.api.summarize_metrics
-      - (opzionale) semantic.api.get_paths  ← usata solo come fallback
+      - pipeline.context.ClientContext (per i path del workspace)
     """
     # Import lazy (evita side-effects a import-time del modulo)
     from finance.api import (
@@ -75,10 +71,11 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
         base_dir: Path = _resolve_base_dir(slug, log)
 
         file = st.file_uploader(
-            "Carica CSV: metric, period, value, [unit], [currency], [note], [canonical_term]",
+            "Carica CSV: metric, period, value, [unit], [currency], [canonical_term]",
             type=["csv"],
             accept_multiple_files=False,
         )
+        st.caption("Schema CSV: metric, period, value, [unit], [currency], [canonical_term]")
         if st.button(
             "Importa in finance.db",
             key="btn_fin_import",

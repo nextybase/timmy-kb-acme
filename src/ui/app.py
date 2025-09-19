@@ -22,7 +22,7 @@ def main() -> None:
     import os
     import subprocess
     from types import SimpleNamespace
-    from typing import Any, Dict, List, Optional, cast
+    from typing import Any, Dict, Optional, cast
 
     import streamlit as st
 
@@ -50,7 +50,6 @@ def main() -> None:
         build_drive_from_mapping,
         emit_readmes_for_raw,
         download_raw_from_drive,
-        download_raw_from_drive_with_progress,
     )
     from ui.tabs.finance import render_finance_tab
     from ui.tabs.preview import render_preview_controls

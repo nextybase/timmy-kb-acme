@@ -4,60 +4,42 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple, TYPE_CHECKING, cast
+from typing import Optional, Tuple
 
 try:
     import streamlit as st
 except Exception as e:  # pragma: no cover
     raise RuntimeError("Streamlit non disponibile per la landing UI.") from e
 
-# Facade semantica (fallback opzionale)
-
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
 
-if TYPE_CHECKING:
-    from semantic.api import get_paths as _RuntimeGetPaths
-
-_SemGetPaths = Callable[[str], Dict[str, Path]]
-try:  # pragma: no cover - opzionale in ambienti minimi
-    from semantic.api import get_paths as _get_paths
-except Exception:  # pragma: no cover
-    _sem_get_paths: Optional[_SemGetPaths] = None
-else:
-    _sem_get_paths = cast(_SemGetPaths, _get_paths)
+CLIENT_CONTEXT_ERROR_MSG = "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
 
 
 def _base_dir_for(slug: str) -> Path:
     """
-    Calcola la base directory per lo slug.
-    Precede ClientContext (override inclusi, es. REPO_ROOT_DIR).
-    Fallback a semantic.api.get_paths solo se necessario.
+    Calcola la base directory per lo slug usando esclusivamente ClientContext.
+    ClientContext è lo SSoT per i path: in caso di indisponibilità si segnala l'errore.
     """
-    # 1) Prova ClientContext
     try:
         from pipeline.context import ClientContext
+    except Exception as exc:
+        raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
+    try:
         ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-        base = getattr(ctx, "base_dir", None)
-        if isinstance(base, Path):
-            return base
-        raw_dir = getattr(ctx, "raw_dir", None)
-        if isinstance(raw_dir, Path):
-            return raw_dir.parent
-    except Exception:
-        pass
+    except Exception as exc:
+        raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
-    # 2) Prova semantic.api.get_paths
-    if _sem_get_paths is not None and slug:
-        try:
-            paths = _sem_get_paths(slug)
-            base = paths["base"]
-            return base if isinstance(base, Path) else Path(str(base))
-        except Exception:
-            pass
+    base = getattr(ctx, "base_dir", None)
+    if isinstance(base, Path):
+        return base
 
-    # 3) Fallback legacy
-    return Path("output") / f"timmy-kb-{slug}"
+    raw_dir = getattr(ctx, "raw_dir", None)
+    if isinstance(raw_dir, Path):
+        return raw_dir.parent
+
+    raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG)
 
 
 def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
@@ -107,10 +89,15 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     if not slug:
         return False, "", ""
 
-    base_dir = _base_dir_for(slug)
+    base_dir: Optional[Path] = None
+    base_dir_error: Optional[str] = None
+    try:
+        base_dir = _base_dir_for(slug)
+    except RuntimeError as err:
+        base_dir_error = str(err)
 
     # Caso A: workspace esistente → carica nome da config se presente
-    if base_dir.exists():
+    if base_dir is not None and base_dir.exists():
         client_name: str = slug
         try:
             from pipeline.config_utils import get_client_config
@@ -131,6 +118,9 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         except Exception:
             pass
         return True, slug, client_name
+
+    if base_dir_error:
+        st.caption(base_dir_error)
 
     # Caso B: workspace nuovo → Nome + PDF
     st.caption("Nuovo cliente rilevato.")
@@ -167,12 +157,26 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             _ = ensure_local_workspace_for_ui(
                 slug, client_name=client_name, vision_statement_pdf=pdf_bytes
             )
+            refreshed_base_dir: Optional[Path] = None
+            try:
+                refreshed_base_dir = _base_dir_for(slug)
+            except RuntimeError as err:
+                if log:
+                    log.error(
+                        {
+                            "event": "ui_landing_workspace_created_ctx_missing",
+                            "slug": slug,
+                            "error": str(err),
+                        }
+                    )
+                st.error(str(err))
+                return False, slug, client_name
             if log:
                 log.info(
                     {
                         "event": "ui_landing_workspace_created",
                         "slug": slug,
-                        "base": str(base_dir),
+                        "base": str(refreshed_base_dir) if refreshed_base_dir is not None else "",
                     }
                 )
 

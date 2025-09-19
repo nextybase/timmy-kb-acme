@@ -5,6 +5,8 @@ import importlib
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 
 def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) -> None:
     """
@@ -37,22 +39,19 @@ def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) ->
     assert str(base_dir).startswith(str(repo_root))
 
 
-def test_base_dir_for_fallbacks(monkeypatch: Any) -> None:
+def test_base_dir_for_runtime_error(monkeypatch: Any) -> None:
     """
-    In assenza di ClientContext valido, _base_dir_for deve
-    cadere su sem_get_paths o, in ultima istanza, sul path legacy.
+    In assenza di ClientContext valido, _base_dir_for deve sollevare RuntimeError
+    segnalando la mancanza del contesto.
     """
     mod = importlib.import_module("src.ui.landing_slug")
 
-    # 1) Patch ClientContext.load per fallire
     monkeypatch.setattr(
         "pipeline.context.ClientContext.load",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("no ctx")),
     )
 
-    # 2) Patch sem_get_paths per dare un path noto
-    dummy_sem_path = Path("/tmp/sem-slug")
-    monkeypatch.setattr(mod, "_sem_get_paths", lambda slug: {"base": dummy_sem_path})
+    with pytest.raises(RuntimeError) as excinfo:
+        mod._base_dir_for("sem-slug")
 
-    base_dir = mod._base_dir_for("sem-slug")
-    assert base_dir == dummy_sem_path
+    assert "ClientContext" in str(excinfo.value)
