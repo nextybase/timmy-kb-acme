@@ -34,6 +34,7 @@ import json
 import logging
 import re
 import shutil
+import warnings
 from pathlib import Path
 from typing import List
 
@@ -141,6 +142,33 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     - STRONG (SSoT): ensure_within(base_dir, csv_path[.parent]) prima di scrivere.
     - Scrittura atomica del CSV via safe_write_text.
     """
+    # Deprecation shim: delega al writer hardened con path-safety forte
+    from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
+    from semantic.auto_tagger import render_tags_csv as _render_tags_csv
+    from semantic.config import load_semantic_config as _load_semantic_config
+
+    warnings.warn(
+        (
+            "emit_tags_csv è deprecato; usa semantic.api.build_tags_csv oppure "
+            "semantic.auto_tagger.render_tags_csv(..., base_dir=...)."
+        ),
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    raw_dir = normalize_path(raw_dir)
+    csv_path = normalize_path(csv_path)
+    base_dir = raw_dir.parent.resolve()
+    ensure_within(base_dir, csv_path.parent)
+    ensure_within(base_dir, csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg = _load_semantic_config(base_dir)
+    candidates = _extract_candidates(raw_dir, cfg)
+    _render_tags_csv(candidates, csv_path, base_dir=base_dir)
+    logger.info(
+        "Tag grezzi (estesi) generati",
+        extra={"file_path": str(csv_path), "count": len(candidates)},
+    )
+    return len(candidates)
     raw_dir = normalize_path(raw_dir)
     csv_path = normalize_path(csv_path)
     base_dir = raw_dir.parent  # output/timmy-kb-<slug>

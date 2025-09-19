@@ -215,7 +215,7 @@ with open_for_read(semantic_dir, csv_path) as f:
 
 ---
 
-## API Semantica (Copy/CSV)
+## API Semantica (Copy/CSV)\n\nNota: semantic.tags_extractor.emit_tags_csv è deprecato. Usa semantic.api.build_tags_csv(...) oppure il writer low-level semantic.auto_tagger.render_tags_csv(..., base_dir=...).
 
 Per evitare duplicazioni, gli orchestratori e gli script locali devono usare esclusivamente le API pubbliche in `semantic.api` per le operazioni di ingest locale e generazione CSV:
 
