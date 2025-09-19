@@ -1,6 +1,5 @@
 # src/semantic/review_writer.py
-"""
-Generatore dello stub di revisione dei tag.
+"""Generatore dello stub di revisione dei tag.
 
 Scopo
 -----
@@ -58,13 +57,9 @@ def _now_utc_iso() -> str:
     return _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def _unique_tags_with_examples(
-    candidates: Dict[str, Dict[str, Any]], max_examples: int = 5
-) -> Dict[str, List[str]]:
-    """
-    Estrae l'insieme dei tag unici dal corpus e un piccolo campione di documenti
-    in cui ciascun tag compare (per aiutare la revisione).
-    """
+def _unique_tags_with_examples(candidates: Dict[str, Dict[str, Any]], max_examples: int = 5) -> Dict[str, List[str]]:
+    """Estrae l'insieme dei tag unici dal corpus e un piccolo campione di documenti in cui ciascun
+    tag compare (per aiutare la revisione)."""
     tag_examples: Dict[str, List[str]] = {}
     for rel_path, meta in candidates.items():
         tags = list(meta.get("tags") or [])
@@ -84,8 +79,7 @@ def write_review_stub(
     *,
     overwrite: bool = False,
 ) -> None:
-    """
-    Scrive lo stub `tags_reviewed.yaml`.
+    """Scrive lo stub `tags_reviewed.yaml`.
 
     Parametri:
       - candidates_norm: dict dei candidati normalizzati (relative_path -> meta)

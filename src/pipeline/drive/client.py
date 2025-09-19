@@ -26,7 +26,7 @@ Superficie pubblica (usata tramite il facade `pipeline.drive_utils`):
 
 Note d’uso:
 - Nessun `print()`; tutta la diagnostica passa dal logging strutturato del repo.
-- La policy di retry/metriche è centralizzata qui ed è riutilizzata anche da upload/download via `_retry(...)`.
+- Policy retry/metriche centralizzata, riutilizzata da upload/download via `_retry(...)`.
 """
 
 import os
@@ -63,9 +63,7 @@ class _DriveRetryMetrics:
     """
 
     retries_total: int = 0
-    retries_by_error: Dict[str, int] = field(
-        default_factory=lambda: cast(Dict[str, int], defaultdict(int))
-    )
+    retries_by_error: Dict[str, int] = field(default_factory=lambda: cast(Dict[str, int], defaultdict(int)))
     backoff_total_ms: int = 0
     last_error: Optional[str] = None
     last_status: Optional[int | str] = None
@@ -81,15 +79,12 @@ class _DriveRetryMetrics:
 
 
 # ContextVar che ospita le metriche correnti (thread-safe).
-_METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar(
-    "drive_metrics_ctx", default=None
-)
+_METRICS_CTX: ContextVar[Optional[_DriveRetryMetrics]] = ContextVar("drive_metrics_ctx", default=None)
 
 
 @contextmanager
 def drive_metrics_scope() -> Generator[_DriveRetryMetrics, None, None]:
-    """
-    Context manager per attivare la raccolta metriche dei retry Drive in un blocco.
+    """Context manager per attivare la raccolta metriche dei retry Drive in un blocco.
 
     Esempio:
         with drive_metrics_scope():
@@ -105,7 +100,10 @@ def drive_metrics_scope() -> Generator[_DriveRetryMetrics, None, None]:
 
 
 def get_retry_metrics() -> Dict[str, Any]:
-    """Ritorna uno snapshot (dict) delle metriche correnti. Se non attive, dict vuoto."""
+    """Ritorna uno snapshot (dict) delle metriche correnti.
+
+    Se non attive, dict vuoto.
+    """
     m = _METRICS_CTX.get()
     return m.as_dict() if m is not None else {}
 
@@ -115,8 +113,7 @@ class _RetryBudgetExceeded(RuntimeError):
 
 
 def _is_retryable_error(err: Exception) -> bool:
-    """
-    Valuta se un'eccezione è transiente e merita un nuovo tentativo.
+    """Valuta se un'eccezione è transiente e merita un nuovo tentativo.
 
     Criteri:
     - HttpError 5xx e 429 (Too Many Requests) → retry.
@@ -155,8 +152,7 @@ def _retry(
     max_total_sleep_s: float = 20.0,
     op_name: str = "drive-op",
 ) -> Any:
-    """
-    Esegue `op()` con backoff esponenziale + jitter, rispettando un budget massimo.
+    """Esegue `op()` con backoff esponenziale + jitter, rispettando un budget massimo.
 
     Comportamento:
     - Ritenta eccezioni transienti (HttpError 5xx/429 e errori di rete comuni).
@@ -249,8 +245,7 @@ def _retry(
 
 
 def _resolve_service_account_file(context: Any) -> str:
-    """
-    Risolve il percorso assoluto del file JSON del service account.
+    """Risolve il percorso assoluto del file JSON del service account.
 
     Ordine di ricerca:
       1) `context.service_account_file`
@@ -287,8 +282,7 @@ def _resolve_service_account_file(context: Any) -> str:
 
 
 def get_drive_service(context: Any) -> Any:
-    """
-    Costruisce e restituisce un client Google Drive v3 usando un service account.
+    """Costruisce e restituisce un client Google Drive v3 usando un service account.
 
     Args:
         context: oggetto tipo ClientContext. Deve fornire info sul file di credenziali.
@@ -336,8 +330,7 @@ def list_drive_files(
     fields: str = "nextPageToken, files(id, name, mimeType, size, md5Checksum)",
     page_size: int = 1000,
 ) -> Generator[Dict[str, Any], None, None]:
-    """
-    Elenca file/cartelle sotto una cartella Drive (gestisce Shared Drives, paging, retry).
+    """Elenca file/cartelle sotto una cartella Drive (gestisce Shared Drives, paging, retry).
 
     Args:
         service: client Drive v3.
@@ -387,8 +380,7 @@ def get_file_metadata(
     *,
     fields: str = "id, name, mimeType, size, md5Checksum",
 ) -> Dict[str, Any]:
-    """
-    Recupera metadati minimi per un file su Drive.
+    """Recupera metadati minimi per un file su Drive.
 
     Args:
         service: client Drive v3.

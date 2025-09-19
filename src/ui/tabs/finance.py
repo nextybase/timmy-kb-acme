@@ -8,13 +8,12 @@ from typing import Any, Dict, List, Optional
 
 
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
-    """
-    Determina la base_dir del workspace cliente privilegiando ClientContext.
+    """Determina la base_dir del workspace cliente privilegiando ClientContext.
+
     ClientContext è lo SSoT per i path: in caso di indisponibilità si segnala l'errore.
     """
     error_msg = (
-        "ClientContext non disponibile. Esegui "
-        "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+        "ClientContext non disponibile. Esegui " "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
     )
 
     try:
@@ -39,8 +38,7 @@ def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
 
 
 def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
-    """
-    Tab Finanza (CSV → finance.db), estratta da onboarding_ui.py.
+    """Tab Finanza (CSV → finance.db), estratta da onboarding_ui.py.
 
     Dipendenze runtime:
       - finance.api.import_csv
@@ -58,9 +56,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
         safe_write_bytes = None  # fallback
 
     st.subheader("Finanza (CSV → finance.db)")
-    st.caption(
-        "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
-    )
+    st.caption((("Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`).")))
 
     colA, colB = st.columns([1, 1], gap="large")
 

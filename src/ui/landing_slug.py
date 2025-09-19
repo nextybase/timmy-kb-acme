@@ -14,14 +14,13 @@ except Exception as e:  # pragma: no cover
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
 
 CLIENT_CONTEXT_ERROR_MSG = (
-    "ClientContext non disponibile. Esegui "
-    "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+    "ClientContext non disponibile. Esegui " "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
 )
 
 
 def _base_dir_for(slug: str) -> Path:
-    """
-    Calcola la base directory per lo slug usando esclusivamente ClientContext.
+    """Calcola la base directory per lo slug usando esclusivamente ClientContext.
+
     ClientContext è lo SSoT per i path: in caso di indisponibilità si segnala l'errore.
     """
     try:
@@ -157,9 +156,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             from pre_onboarding import ensure_local_workspace_for_ui
 
             pdf_bytes = pdf.getvalue() if pdf is not None else None
-            _ = ensure_local_workspace_for_ui(
-                slug, client_name=client_name, vision_statement_pdf=pdf_bytes
-            )
+            _ = ensure_local_workspace_for_ui(slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
             refreshed_base_dir: Optional[Path] = None
             try:
                 refreshed_base_dir = _base_dir_for(slug)

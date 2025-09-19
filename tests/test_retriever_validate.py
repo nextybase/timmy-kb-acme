@@ -6,11 +6,7 @@ from typing import Sequence
 import pytest
 
 import src.retriever as r
-from src.retriever import (  # <— usa la stessa classe del modulo sotto test
-    QueryParams,
-    RetrieverError,
-    search,
-)
+from src.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 
 class DummyEmbeddings:

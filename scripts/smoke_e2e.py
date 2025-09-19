@@ -47,9 +47,7 @@ def main() -> int:
     finance_api = importlib.import_module("finance.api")
     pipeline_context = importlib.import_module("pipeline.context")
 
-    parser = argparse.ArgumentParser(
-        description="Smoke E2E: REPO_ROOT_DIR + orchestratore + finanza"
-    )
+    parser = argparse.ArgumentParser(description="Smoke E2E: REPO_ROOT_DIR + orchestratore + finanza")
     parser.add_argument("--slug", default="smoke", help="Slug cliente per il test (default: smoke)")
     parser.add_argument(
         "--repo-root",
@@ -59,9 +57,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # 1) REPO_ROOT_DIR isolato
-    repo_root = (
-        Path(args.repo_root) if args.repo_root else Path(tempfile.mkdtemp(prefix="next-smoke-"))
-    )
+    repo_root = Path(args.repo_root) if args.repo_root else Path(tempfile.mkdtemp(prefix="next-smoke-"))
     os.environ["REPO_ROOT_DIR"] = str(repo_root)
 
     slug = args.slug
@@ -73,14 +69,10 @@ def main() -> int:
     # 2) Workspace minimo via pre_onboarding.ensure_local_workspace_for_ui
     print("[2/4] Creo workspace locale minimo…")
     pdf_bytes = _tiny_pdf_bytes()
-    _ = pre_onboarding.ensure_local_workspace_for_ui(
-        slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes
-    )
+    _ = pre_onboarding.ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
 
     # Conferma base_dir dal ClientContext (SSoT dei path)
-    ctx: Any = pipeline_context.ClientContext.load(
-        slug=slug, interactive=False, require_env=False, run_id="smoke"
-    )
+    ctx: Any = pipeline_context.ClientContext.load(slug=slug, interactive=False, require_env=False, run_id="smoke")
     base_dir = getattr(ctx, "base_dir", None)
     if not isinstance(base_dir, Path):
         raw_dir = getattr(ctx, "raw_dir", None)

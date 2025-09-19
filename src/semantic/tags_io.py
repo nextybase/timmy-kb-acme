@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # src/semantic/tags_io.py
 # -*- coding: utf-8 -*-
-"""
-I/O utility per il flusso di tagging (cartella `semantic/`) – Timmy-KB
+"""I/O utility per il flusso di tagging (cartella `semantic/`) – Timmy-KB.
 
 Cosa fa il modulo
 -----------------
@@ -10,10 +9,10 @@ Cosa fa il modulo
   Crea/aggiorna un README rapido per il processo HiTL di tagging.
   Scrittura atomica e guard-rail STRONG sull'output.
 
-- `write_tags_review_stub_from_csv(semantic_dir, csv_path, logger, top_n=100) -> Path`
-  Genera uno stub (ora in SQLite) a partire da `tags_raw.csv`:
+- `write_tags_review_stub_from_csv(semantic_dir, csv_path, logger, top_n=120) -> Path`
+  Genera uno stub (persistito in SQLite) a partire da `tags_raw.csv`:
   deduplica e normalizza i suggerimenti (lowercase) fino a `top_n`.
-  Lettura consentita solo se il CSV è sotto `semantic_dir` (validazione con `ensure_within`).
+  Lettura consentita solo se il CSV è sotto `semantic_dir` (guardia `ensure_within`).
 
 Sicurezza & I/O
 ---------------
@@ -21,15 +20,15 @@ Sicurezza & I/O
 - Path-safety: `ensure_within` per output e per vincolare il CSV alla sandbox.
 - Scritture atomiche con `safe_write_text` (solo per README).
 """
+
 from __future__ import annotations
 
 import csv
 import logging
 import time
 from pathlib import Path
-from typing import List
 
-from pipeline.exceptions import ConfigError  # per completezza nelle firme/eccezioni
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 from storage.tags_store import derive_db_path_from_yaml_path
@@ -39,28 +38,18 @@ __all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
 
 
 def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
-    """
-    Crea/aggiorna il README rapido per il flusso di tagging nel folder `semantic_dir`.
-    Scrittura atomica + guardia path.
-
-    Args:
-        semantic_dir: Directory in cui generare il README_TAGGING.
-        logger: Logger strutturato.
-
-    Restituisce:
-        Path del file README_TAGGING generato.
-    """
+    """Crea/aggiorna il README rapido per il flusso di tagging in `semantic_dir`."""
     semantic_dir = Path(semantic_dir).resolve()
     semantic_dir.mkdir(parents=True, exist_ok=True)
+
     out = semantic_dir / "README_TAGGING.md"
-    ensure_within(semantic_dir, out)  # guardia anti path traversal
+    ensure_within(semantic_dir, out)
 
     content = (
         "# Tag Onboarding (HiTL) – Guida rapida\n\n"
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
-        "2. Compila `tags_reviewed.yaml` (keep/drop/merge).\n"
-        "3. Quando pronto, crea/aggiorna `tags_reviewed.yaml` con i tag canonici + sinonimi.\n"
-        "\n"
+        "2. Approva/filtra i tag (keep/drop/merge) e prepara la revisione.\n"
+        "3. Procedi con lo stub di revisione per i tag canonici e i sinonimi.\n\n"
         "Nota: `tags_raw.csv` usa lo schema esteso "
         "`relative_path | suggested_tags | entities | keyphrases | score | sources`.\n"
     )
@@ -73,37 +62,27 @@ def write_tags_review_stub_from_csv(
     semantic_dir: Path,
     csv_path: Path,
     logger: logging.Logger,
-    top_n: int = 100,
+    top_n: int = 120,
 ) -> Path:
-    """
-    Genera uno stub di revisione a partire dai suggerimenti in `tags_raw.csv` e lo salva in SQLite.
+    """Genera uno stub di revisione a partire da `tags_raw.csv` e lo salva in SQLite.
 
     Compatibilità:
     - Preferisce lo schema esteso con header `suggested_tags`.
-    - Se assente, degrada a formato legacy a 2 colonne: [relative_path, suggested_tags].
+    - Se assente, degrada al formato legacy a 2 colonne: [relative_path, suggested_tags].
 
     Regole:
-    - Usa tutti i suggerimenti (split su ',') normalizzati in lowercase e deduplicati preservando l'ordine.
+    - Usa tutti i suggerimenti (split su ',') in lowercase e deduplicati preservando l'ordine.
     - Si ferma quando ha raccolto `top_n` tag unici.
-    - Path-safety: garantita su file di input/output; lettura CSV consentita solo se sotto `semantic_dir`.
-
-    Args:
-        semantic_dir: Directory `semantic/` in cui scrivere il DB.
-        csv_path: Percorso al CSV dei tag grezzi.
-        logger: Logger strutturato.
-        top_n: Numero massimo di tag unici da includere.
-
-    Returns:
-        Path del database `tags.db` generato/aggiornato.
+    - Lettura CSV consentita solo se il file è sotto `semantic_dir`.
     """
     semantic_dir = Path(semantic_dir).resolve()
     csv_path = Path(csv_path)
 
-    # Consenti la lettura solo di CSV dentro semantic/: harden per evitare scan errati
-    from pipeline.path_utils import open_for_read
+    # Consenti la lettura solo di CSV dentro semantic/: hardening
+    from pipeline.path_utils import open_for_read  # import locale
 
-    suggested: List[str] = []
-    seen = set()
+    suggested: list[str] = []
+    seen: set[str] = set()
 
     try:
         with open_for_read(semantic_dir, csv_path, encoding="utf-8") as f:
@@ -123,7 +102,6 @@ def write_tags_review_stub_from_csv(
                 if idx_suggestions >= len(row):
                     continue
                 raw_field = row[idx_suggestions] or ""
-                # split su virgola, trim e normalizza lowercase
                 tokens = [t.strip().lower() for t in raw_field.split(",") if t.strip()]
                 for tok in tokens:
                     if tok not in seen:
@@ -139,14 +117,14 @@ def write_tags_review_stub_from_csv(
     except Exception as e:
         raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
 
-    # Persistenza su SQLite (stesso dict dell'originario YAML)
+    # Persistenza su SQLite (usiamo lo stesso dict logico del vecchio YAML)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     ensure_within(semantic_dir, yaml_path)
     db_path = derive_db_path_from_yaml_path(yaml_path)
 
     data = {
-        "version": "1",
+        "version": "2",
         "reviewed_at": time.strftime("%Y-%m-%d"),
         "keep_only_listed": True,
         "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],

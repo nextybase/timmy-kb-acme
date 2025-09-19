@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/logging_utils.py
-"""
-Logging strutturato per Timmy-KB.
+"""Logging strutturato per Timmy-KB.
 
 Obiettivi:
-- Logger **idempotente**, con filtri di **contesto** (slug, run_id) e **redazione** attivabili da `context.redact_logs`.
+- Logger **idempotente**, con filtri di **contesto** (slug, run_id) e **redazione**
+  I filtri sono attivabili da `context.redact_logs`.
 - Niente `print`: tutti i moduli usano logging strutturato (console + opzionale file).
 - Utilità di **masking** coerenti per ID, percorsi e aggiornamenti di config.
 
@@ -14,7 +14,8 @@ Formato di output (console/file):
 
 Indice funzioni principali (ruolo):
 - `get_structured_logger(name, *, context=None, log_file=None, run_id=None, level=INFO)`:
-    istanzia un logger con handler console (sempre) e file (opzionale), aggiunge i filtri di contesto e redazione.
+    istanzia un logger con handler console (sempre) e file (opzionale),
+    aggiunge i filtri di contesto e redazione.
 - `metrics_scope(logger, *, stage, customer=None)`:
     context manager leggero che logga start/end/fail di una microfase.
 - `redact_secrets(msg)`:
@@ -25,8 +26,8 @@ Indice funzioni principali (ruolo):
     coda compatta di un path per log.
 
 Linee guida implementative:
-- **Redazione centralizzata**: se `context.redact_logs` è True, il filtro applica la redazione ai messaggi
-  e a campi extra sensibili (`GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, ecc.).
+- **Redazione centralizzata**: se `context.redact_logs` è True, il filtro applica la redazione
+  ai messaggi e a campi extra sensibili (`GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, ecc.).
 - **Idempotenza**: chiamate ripetute a `get_structured_logger` non creano handler duplicati.
 """
 
@@ -206,8 +207,7 @@ def get_structured_logger(
     run_id: Optional[str] = None,
     level: int = logging.INFO,
 ) -> logging.Logger:
-    """
-    Restituisce un logger configurato e idempotente.
+    """Restituisce un logger configurato e idempotente.
 
     Parametri:
         name:     nome del logger (es. 'pre_onboarding').
@@ -268,8 +268,7 @@ def get_structured_logger(
 # Metriche leggere (helper opzionale)
 # ---------------------------------------------
 class metrics_scope:
-    """
-    Context manager leggero per misurare micro-fasi e loggare in modo uniforme.
+    """Context manager leggero per misurare micro-fasi e loggare in modo uniforme.
 
     Esempio:
         with metrics_scope(logger, stage="drive_upload", customer=context.slug):

@@ -59,9 +59,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
         safe_write_bytes = None  # fallback
 
     st.subheader("Finanza (CSV → finance.db)")
-    st.caption(
-        "Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`)."
-    )
+    st.caption("Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`).")
 
     colA, colB = st.columns([1, 1], gap="large")
 

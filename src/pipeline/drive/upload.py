@@ -18,7 +18,8 @@ e mantiene la compatibilità con il monolite precedente.
 - create_drive_folder(service, name, parent_id=None, *, redact_logs=False) -> str
   Idempotente: se la cartella esiste sotto `parent_id` riusa l'ID, altrimenti la crea.
 
-- create_drive_structure_from_yaml(service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
+- create_drive_structure_from_yaml
+  (service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
   Costruisce ricorsivamente l’albero di cartelle remoto partendo da uno YAML nel **formato moderno**
   (mapping {nome: sottoalbero}). Ritorna una mappa nome→ID.
 
@@ -78,11 +79,9 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _list_existing_folder_by_name(
-    service: Any, parent_id: Optional[str], name: str
-) -> Optional[str]:
-    """
-    Ritorna l'ID di una cartella già esistente con `name` sotto `parent_id`, se presente.
+def _list_existing_folder_by_name(service: Any, parent_id: Optional[str], name: str) -> Optional[str]:
+    """Ritorna l'ID di una cartella già esistente con `name` sotto `parent_id`, se presente.
+
     Se `parent_id` è None, cerca a livello "root" dell'utente/service account.
     """
     base = "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
@@ -110,8 +109,8 @@ def _list_existing_folder_by_name(
 
 
 def _create_folder(service: Any, name: str, parent_id: Optional[str]) -> str:
-    """
-    Crea una cartella su Drive e ritorna l'ID.
+    """Crea una cartella su Drive e ritorna l'ID.
+
     Non esegue lookup: la responsabilità di idempotenza è nel chiamante.
     """
     body: Dict[str, Any] = {"name": name, "mimeType": _FOLDER_MIME}
@@ -147,8 +146,7 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
 
 
 def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
-    """
-    Normalizza la struttura YAML della gerarchia remota in un **mapping annidato**.
+    """Normalizza la struttura YAML della gerarchia remota in un **mapping annidato**.
 
     Formati supportati:
     1) **Moderno**: dict con chiavi qualsiasi (es. RAW/YAML o categorie libere).
@@ -179,8 +177,7 @@ def create_drive_folder(
     *,
     redact_logs: bool = False,
 ) -> str:
-    """
-    Crea (idempotente) una cartella `name` sotto `parent_id` e ne ritorna l'ID.
+    """Crea (idempotente) una cartella `name` sotto `parent_id` e ne ritorna l'ID.
 
     Regole:
     - Se una cartella con lo stesso nome esiste già sotto `parent_id`, riusa l'ID esistente.
@@ -233,8 +230,8 @@ def _create_remote_tree_from_mapping(
     redact_logs: bool = False,
     result: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
-    """
-    Crea ricorsivamente un albero di cartelle da una mappatura {nome: sottoalbero}.
+    """Crea ricorsivamente un albero di cartelle da una mappatura {nome: sottoalbero}.
+
     Ritorna/aggiorna un dizionario `result` con {nome_livello: id} per i nodi creati.
     """
     if result is None:
@@ -246,15 +243,11 @@ def _create_remote_tree_from_mapping(
         result[name] = folder_id
 
         if isinstance(subtree, dict):
-            _create_remote_tree_from_mapping(
-                service, folder_id, subtree, redact_logs=redact_logs, result=result
-            )
+            _create_remote_tree_from_mapping(service, folder_id, subtree, redact_logs=redact_logs, result=result)
         elif isinstance(subtree, (list, tuple)):
             for leaf in subtree:
                 leaf_name = sanitize_filename(str(leaf))
-                leaf_id = create_drive_folder(
-                    service, leaf_name, folder_id, redact_logs=redact_logs
-                )
+                leaf_id = create_drive_folder(service, leaf_name, folder_id, redact_logs=redact_logs)
                 result[leaf_name] = leaf_id
         else:
             # foglia vuota / valore non strutturato: nessuna sotto-cartella
@@ -270,8 +263,7 @@ def create_drive_structure_from_yaml(
     *,
     redact_logs: bool = False,
 ) -> Dict[str, str]:
-    """
-    Crea la struttura di cartelle remota a partire da un file YAML.
+    """Crea la struttura di cartelle remota a partire da un file YAML.
 
     Comportamento (v1.8.0):
     - Accetta solo struttura **moderna**: mapping {nome: sottoalbero}; il formato legacy
@@ -292,9 +284,7 @@ def create_drive_structure_from_yaml(
     mapping = _normalize_yaml_structure(data)
 
     result: Dict[str, str] = {}
-    _create_remote_tree_from_mapping(
-        service, client_folder_id, mapping, redact_logs=redact_logs, result=result
-    )
+    _create_remote_tree_from_mapping(service, client_folder_id, mapping, redact_logs=redact_logs, result=result)
 
     # v1.8.0: nessun alias nel risultato
 
@@ -312,12 +302,9 @@ def create_drive_structure_from_yaml(
 
 
 def _resolve_local_config_path(context: Any) -> Path:
-    """
-    Risolve il percorso locale del file `config.yaml` secondo convenzioni note.
+    """Risolve il percorso locale del file `config.yaml` secondo convenzioni note.
 
-    Ordine tentativi (conservativo):
-    1) attributi diretti sul contesto
-    2) <config_dir>/config.yaml
+    Ordine tentativi (conservativo): 1) attributi diretti sul contesto 2) <config_dir>/config.yaml
     3) <client_dir>/config/config.yaml
     """
     candidates = []
@@ -384,19 +371,13 @@ def upload_config_to_drive_folder(
     *,
     redact_logs: bool = False,
 ) -> str:
-    """
-    Carica il file `config.yaml` nella cartella cliente (sostituzione sicura se esiste).
-    """
+    """Carica il file `config.yaml` nella cartella cliente (sostituzione sicura se esiste)."""
     if not parent_id:
         raise DriveUploadError("Parent ID mancante per upload config.")
 
     # Logger contestualizzato + redazione auto-derivata dal contesto (come in download.py)
-    local_logger = (
-        get_structured_logger("pipeline.drive.upload", context=context) if context else logger
-    )
-    redact_logs = bool(
-        redact_logs or (getattr(context, "redact_logs", False) if context is not None else False)
-    )
+    local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
+    redact_logs = bool(redact_logs or (getattr(context, "redact_logs", False) if context is not None else False))
 
     local_config = _resolve_local_config_path(context)
     if not local_config.is_file():
@@ -426,11 +407,7 @@ def upload_config_to_drive_folder(
     body = {"name": "config.yaml", "parents": [parent_id]}
 
     def _call() -> Any:
-        return (
-            service.files()
-            .create(body=body, media_body=media, fields="id", supportsAllDrives=True)
-            .execute()
-        )
+        return service.files().create(body=body, media_body=media, fields="id", supportsAllDrives=True).execute()
 
     try:
         resp = cast(Dict[str, Any], _retry(_call, op_name="files.create.config"))
@@ -475,8 +452,7 @@ def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]
 
 
 def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str]]) -> None:
-    """
-    Crea la struttura LOCALE di base in modo **permissivo**.
+    """Crea la struttura LOCALE di base in modo **permissivo**.
 
     Comportamento:
     - Determina una base directory:
@@ -488,9 +464,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
     - Idempotente.
     """
     # Logger contestualizzato per uniformità con gli orchestratori
-    local_logger = (
-        get_structured_logger("pipeline.drive.upload", context=context) if context else logger
-    )
+    local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
 
     slug = getattr(context, "slug", "client")
     base: Optional[Path] = None
@@ -506,9 +480,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
     _ensure_dir(base)
 
     raw_dir = Path(getattr(context, "raw_dir", base / "raw")).resolve()
-    book_dir = Path(
-        getattr(context, "book_dir", getattr(context, "md_dir", base / "book"))
-    ).resolve()
+    book_dir = Path(getattr(context, "book_dir", getattr(context, "md_dir", base / "book"))).resolve()
     cfg_dir = Path(getattr(context, "config_dir", base / "config")).resolve()
 
     for d in (raw_dir, book_dir, cfg_dir):
@@ -563,7 +535,10 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
 
 
 def delete_drive_file(service: Any, file_id: str) -> None:
-    """Elimina un file per ID. Non solleva se il file non esiste (404)."""
+    """Elimina un file per ID.
+
+    Non solleva se il file non esiste (404).
+    """
     if not file_id:
         return
     _delete_file_hard(service, file_id)

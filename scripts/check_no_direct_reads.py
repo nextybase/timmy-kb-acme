@@ -33,19 +33,11 @@ def _iter_py_files(paths: Iterable[Path]) -> Iterable[Path]:
 
 def _get_mode_from_call(call: ast.Call) -> str | None:
     # Positional second arg
-    if (
-        len(call.args) >= 2
-        and isinstance(call.args[1], ast.Constant)
-        and isinstance(call.args[1].value, str)
-    ):
+    if len(call.args) >= 2 and isinstance(call.args[1], ast.Constant) and isinstance(call.args[1].value, str):
         return call.args[1].value
     # Keyword arg 'mode'
     for kw in call.keywords or []:
-        if (
-            kw.arg == "mode"
-            and isinstance(kw.value, ast.Constant)
-            and isinstance(kw.value.value, str)
-        ):
+        if kw.arg == "mode" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
             return kw.value.value
     return None
 
@@ -105,11 +97,7 @@ def check_file(path: Path) -> List[Tuple[int, int, str]]:
 
 
 def main(argv: List[str]) -> int:
-    args = (
-        [Path(a) for a in argv]
-        if argv
-        else [Path("src/pipeline"), Path("src/semantic"), Path("src/adapters")]
-    )
+    args = [Path(a) for a in argv] if argv else [Path("src/pipeline"), Path("src/semantic"), Path("src/adapters")]
     files = list(_iter_py_files(args))
     exit_code = 0
     for f in files:

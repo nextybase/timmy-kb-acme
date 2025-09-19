@@ -248,3 +248,9 @@ Pre-commit
 
 > **Versione**: 1.9.1 (2025-09-17)
 > **Stato**: Allineata al codice corrente; esempi aggiornati a `ClientContext` come SSoT dei path; aggiunte sezioni di **Smoke testing** (UI Streamlit & E2E).
+
+## Security and Compliance
+
+- Esegui `make sbom` per generare SBOM CycloneDX (stampa `sbom.json`).
+- Il target usa `tools/sbom.sh`; assicurati che `cyclonedx-py` (cyclonedx-bom) sia installato nel venv.
+- Secret scanning: `pre-commit run gitleaks --all-files` utilizza `.gitleaks.toml` come configurazione minima.

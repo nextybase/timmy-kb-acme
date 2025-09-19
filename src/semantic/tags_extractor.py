@@ -1,13 +1,13 @@
 # src/semantic/tags_extractor.py
 # -*- coding: utf-8 -*-
-"""
-Estrattore tag per PDF "raw" + utilità di ingest locale (Timmy-KB).
+"""Estrattore tag per PDF "raw" + utilità di ingest locale (Timmy-KB).
 
 Cosa fa il modulo
 -----------------
 - `copy_local_pdfs_to_raw(src_dir, raw_dir, logger) -> int`
   Copia in modo sicuro i PDF da una sorgente locale dentro `raw/`, con:
-  * path-safety (SOFT: `is_safe_subpath` per shortlist/letture; STRONG: `ensure_within` prima di ogni write),
+  * path-safety (SOFT: `is_safe_subpath` per shortlist/letture),
+  * path-safety (STRONG: `ensure_within` prima di ogni write),
   * idempotenza semplice (skip se esiste ed ha stessa dimensione),
   * logging strutturato e propagazione di errori aggregati tramite `PipelineError`.
 
@@ -47,8 +47,7 @@ __all__ = ["copy_local_pdfs_to_raw", "emit_tags_csv"]
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
-    """
-    Copia PDF da sorgente locale in raw/, con path-safety e idempotenza semplice.
+    """Copia PDF da sorgente locale in raw/, con path-safety e idempotenza semplice.
 
     Regole:
     - SOFT: is_safe_subpath() per filtrare rapidamente path sospetti.
@@ -169,9 +168,7 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
         entities = "[]"
         keyphrases = "[]"
         score = "{}"
-        sources = json.dumps(
-            {"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False
-        )
+        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
 
         rows.append(
             [
@@ -198,7 +195,5 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
 
     safe_write_text(csv_path, data, encoding="utf-8", atomic=True)
 
-    logger.info(
-        "Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)}
-    )
+    logger.info("Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)})
     return len(rows)

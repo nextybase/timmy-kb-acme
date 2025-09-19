@@ -1,5 +1,4 @@
-"""
-Tests for retriever.search API.
+"""Tests for retriever.search API.
 
 Verifica:
 - pass-through dei parametri via QueryParams verso fetch_candidates

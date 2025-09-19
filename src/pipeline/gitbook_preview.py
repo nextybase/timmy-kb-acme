@@ -1,6 +1,5 @@
 # src/pipeline/gitbook_preview.py
-"""
-Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
+"""Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
 
 Cosa fa:
 - Garantisce la presenza di `book.json` e `package.json` minimi (idempotente).
@@ -44,6 +43,7 @@ def _maybe_redact(text: str, redact: bool) -> str:
 
 def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int, int]:
     """Risoluzione porte (host e container) con precedenza:
+
     host: 1) parametro → 2) env PREVIEW_PORT → 3) context.config.preview_port → 4) default
     container: 1) env HONKIT_PORT → 2) context.config.honkit_port → 3) default
     """
@@ -88,9 +88,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
 
     # Validazioni
     if not (1 <= int(host_port) <= 65535):
-        raise PreviewError(
-            f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None)
-        )
+        raise PreviewError(f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None))
     if not (1 <= int(container_port) <= 65535):
         raise PreviewError(
             f"Porta container non valida per preview: {container_port}",
@@ -103,9 +101,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
 # ----------------------------
 # Helpers idempotenti di setup
 # ----------------------------
-def ensure_book_json(
-    md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False
-) -> None:
+def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un book.json minimo se mancante (idempotente)."""
     book_json_path = Path(md_dir) / BOOK_JSON_NAME
     try:
@@ -122,9 +118,7 @@ def ensure_book_json(
         data = {"title": "preview", "plugins": []}
         try:
             # ✅ scrittura atomica
-            safe_write_text(
-                book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
-            )
+            safe_write_text(book_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
             logger.info(
                 _maybe_redact("book.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(book_json_path)},
@@ -142,9 +136,7 @@ def ensure_book_json(
         )
 
 
-def ensure_package_json(
-    md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False
-) -> None:
+def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un package.json minimo se mancante (idempotente)."""
     package_json_path = Path(md_dir) / PACKAGE_JSON_NAME
     try:
@@ -168,9 +160,7 @@ def ensure_package_json(
         }
         try:
             # ✅ scrittura atomica
-            safe_write_text(
-                package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True
-            )
+            safe_write_text(package_json_path, json.dumps(data, indent=2), encoding="utf-8", atomic=True)
             logger.info(
                 _maybe_redact("package.json generato", redact_logs),
                 extra={"slug": slug, "file_path": str(package_json_path)},
@@ -197,9 +187,7 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
     try:
         ensure_within(md_dir, md_dir / "README.md")  # validazione che vincola a md_dir
     except Exception as e:
-        raise PreviewError(
-            f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir
-        )
+        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
@@ -217,9 +205,7 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
     ]
     try:
         run_cmd(cmd, op="docker run build", logger=logger)
-        logger.info(
-            _maybe_redact("Build statica HonKit completata.", redact_logs), extra={"slug": slug}
-        )
+        logger.info(_maybe_redact("Build statica HonKit completata.", redact_logs), extra={"slug": slug})
     except CmdError as e:
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
 
@@ -238,9 +224,7 @@ def run_container_detached(
     try:
         ensure_within(md_dir, md_dir / "README.md")
     except Exception as e:
-        raise PreviewError(
-            f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir
-        )
+        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
 
     md_output_path = Path(md_dir).resolve()
     cmd = [
@@ -299,19 +283,13 @@ def run_container_detached(
             raise PreviewError(f"Errore 'honkit serve' (bg): {e2}", slug=slug)
 
 
-def wait_until_ready(
-    host: str, port: int, *, timeout_s: Optional[int], slug: Optional[str], redact_logs: bool
-) -> None:
+def wait_until_ready(host: str, port: int, *, timeout_s: Optional[int], slug: Optional[str], redact_logs: bool) -> None:
     """Attende che la porta sia raggiungibile entro `timeout_s` secondi."""
-    tout = float(
-        timeout_s if timeout_s is not None else (get_int("PREVIEW_READY_TIMEOUT", 30) or 30)
-    )
+    tout = float(timeout_s if timeout_s is not None else (get_int("PREVIEW_READY_TIMEOUT", 30) or 30))
     try:
         wait_for_port(host, int(port), timeout=tout, logger=logger)
     except TimeoutError as e:
-        raise PreviewError(
-            f"Preview non raggiungibile su {host}:{port} entro {tout:.0f}s", slug=slug
-        ) from e
+        raise PreviewError(f"Preview non raggiungibile su {host}:{port} entro {tout:.0f}s", slug=slug) from e
 
 
 def stop_container_safely(container_name: str) -> None:
@@ -340,8 +318,7 @@ def run_gitbook_docker_preview(
     *,
     redact_logs: bool = False,  # redazione opt-in dei messaggi di log
 ) -> None:
-    """
-    Avvia la preview GitBook/HonKit in Docker.
+    """Avvia la preview GitBook/HonKit in Docker.
 
     Precedenza porte:
       - Host: parametro `port` → env `PREVIEW_PORT` → `context.config.preview_port` → default 4000.
@@ -350,7 +327,7 @@ def run_gitbook_docker_preview(
     Comportamento:
       - Genera `book.json` e `package.json` minimi se mancanti.
       - Esegue `honkit build` in container.
-      - Avvia `honkit serve` mappando la porta locale (con passaggio di `--port` al processo nel container).
+      - Avvia `honkit serve`, mappa porta locale (passaggio di `--port` al processo nel container).
       - Nessun prompt: interazione/decisione è responsabilità degli orchestratori.
 
     Args:

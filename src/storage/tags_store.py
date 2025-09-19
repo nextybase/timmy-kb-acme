@@ -81,7 +81,11 @@ def _now_iso() -> str:
 
 
 def derive_db_path_from_yaml_path(p: str | Path) -> str:
-    """Dato il path YAML (es. semantic/tags_reviewed.yaml), ritorna il path DB adiacente 'tags.db'."""
+    """Dato il path YAML (es.
+
+    `semantic/tags_reviewed.yaml`), ritorna il path DB
+    adiacente `tags.db`.
+    """
     pp = Path(p)
     return str(pp.parent / "tags.db")
 
@@ -96,7 +100,7 @@ def load_tags_reviewed(db_path: str) -> dict[str, Any]:
       "keep_only_listed": bool,
       "tags": [{"name": str, "action": str, "synonyms": [str,...], "note": str|None}, ... ]
     }
-    Se il DB e' assente o vuoto, ritorna la struttura minima di default.
+    Se il DB è assente o vuoto, ritorna la struttura minima di default.
     """
     dbp = Path(db_path)
     if not dbp.parent.exists():
@@ -119,12 +123,10 @@ def load_tags_reviewed(db_path: str) -> dict[str, Any]:
 
         # tags
         tags: list[dict[str, Any]] = []
-        cur = conn.execute(
-            "SELECT id, name, action, note FROM tags ORDER BY name COLLATE NOCASE ASC"
-        )
+        cur = conn.execute("SELECT id, name, action, note FROM tags ORDER BY name COLLATE NOCASE ASC")
         for tid, name, action, note in cur.fetchall():
             syns_cur = conn.execute(
-                "SELECT alias FROM tag_synonyms WHERE tag_id=? ORDER BY pos ASC, alias COLLATE NOCASE ASC",
+                ("SELECT alias FROM tag_synonyms WHERE tag_id=? " "ORDER BY pos ASC, alias COLLATE NOCASE ASC"),
                 (tid,),
             )
             syns = [str(r[0]) for r in syns_cur.fetchall()]
@@ -192,11 +194,9 @@ def save_tags_reviewed(db_path: str, data: dict[str, Any]) -> None:
                 tid = cur.lastrowid
                 syns = item.get("synonyms") or []
                 try:
-                    for pos, alias in enumerate(
-                        [str(s).strip() for s in syns if str(s).strip()], start=0
-                    ):
+                    for pos, alias in enumerate([str(s).strip() for s in syns if str(s).strip()], start=0):
                         conn.execute(
-                            "INSERT OR IGNORE INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
+                            ("INSERT OR IGNORE INTO tag_synonyms(tag_id, alias, pos) " "VALUES(?, ?, ?)"),
                             (tid, alias, pos),
                         )
                 except TypeError:
@@ -320,9 +320,7 @@ def migrate_to_v2(db_path: str) -> None:
             _create_v2_tables(conn)
 
             if missing:
-                cur = conn.execute(
-                    "SELECT version, reviewed_at, keep_only_listed FROM meta WHERE id=1"
-                )
+                cur = conn.execute("SELECT version, reviewed_at, keep_only_listed FROM meta WHERE id=1")
                 row = cur.fetchone()
                 if row is None:
                     version = "2"
@@ -333,8 +331,11 @@ def migrate_to_v2(db_path: str) -> None:
                     reviewed_at = str(row[1])
                     keep_only_listed = _to_int(row[2])
                 conn.execute(
-                    "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) VALUES(1, ?, ?, ?)"
-                    " ON CONFLICT(id) DO UPDATE SET version=excluded.version",
+                    (
+                        "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) "
+                        "VALUES(1, ?, ?, ?) "
+                        "ON CONFLICT(id) DO UPDATE SET version=excluded.version"
+                    ),
                     (version, reviewed_at, keep_only_listed),
                 )
             conn.commit()
@@ -366,7 +367,7 @@ def upsert_folder(conn: sqlite3.Connection, path: str, parent_path: str | None =
             conn.execute("BEGIN")
             try:
                 conn.execute(
-                    "INSERT INTO folders(path, parent_id) VALUES(?, NULL) ON CONFLICT(path) DO NOTHING",
+                    ("INSERT INTO folders(path, parent_id) VALUES(?, NULL) " "ON CONFLICT(path) DO NOTHING"),
                     (parent_path,),
                 )
                 conn.commit()
@@ -402,8 +403,12 @@ def upsert_document(
     conn.execute("BEGIN")
     try:
         conn.execute(
-            "INSERT INTO documents(folder_id, filename, sha256, pages) VALUES(?, ?, ?, ?) "
-            "ON CONFLICT(folder_id, filename) DO UPDATE SET sha256=excluded.sha256, pages=excluded.pages",
+            (
+                "INSERT INTO documents(folder_id, filename, sha256, pages) "
+                "VALUES(?, ?, ?, ?) "
+                "ON CONFLICT(folder_id, filename) DO UPDATE SET "
+                "sha256=excluded.sha256, pages=excluded.pages"
+            ),
             (folder_id, filename, sha256, pages),
         )
         rid = conn.execute(
@@ -460,9 +465,7 @@ def add_term_alias(conn: sqlite3.Connection, term_id: int, alias: str) -> None:
         raise
 
 
-def get_term_by_canonical(
-    conn: sqlite3.Connection, canonical: str, lang: str = "it"
-) -> dict[str, Any] | None:
+def get_term_by_canonical(conn: sqlite3.Connection, canonical: str, lang: str = "it") -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT id, canonical, lang FROM terms WHERE canonical=? AND lang=?",
         (canonical, lang),
@@ -479,16 +482,18 @@ def list_term_aliases(conn: sqlite3.Connection, term_id: int) -> list[str]:
 
 
 # ----- doc_terms -----
-def save_doc_terms(
-    conn: sqlite3.Connection, document_id: int, items: list[tuple[str, float, str]]
-) -> None:
-    """items = [(phrase, score, method)] -> upsert su doc_terms"""
+def save_doc_terms(conn: sqlite3.Connection, document_id: int, items: list[tuple[str, float, str]]) -> None:
+    """Items = [(phrase, score, method)] -> upsert su doc_terms."""
     conn.execute("BEGIN")
     try:
         for phrase, score, method in items or []:
             conn.execute(
-                "INSERT INTO doc_terms(document_id, phrase, score, method) VALUES(?, ?, ?, ?) "
-                "ON CONFLICT(document_id, phrase) DO UPDATE SET score=excluded.score, method=excluded.method",
+                (
+                    "INSERT INTO doc_terms(document_id, phrase, score, method) "
+                    "VALUES(?, ?, ?, ?) "
+                    "ON CONFLICT(document_id, phrase) DO UPDATE SET "
+                    "score=excluded.score, method=excluded.method"
+                ),
                 (document_id, phrase, float(score), method),
             )
         conn.commit()
@@ -539,9 +544,7 @@ def get_folder_terms(
     return [(str(r[0]), float(r[1])) for r in cur.fetchall()]
 
 
-def set_folder_term_status(
-    conn: sqlite3.Connection, folder_id: int, term_id: int, status: str
-) -> None:
+def set_folder_term_status(conn: sqlite3.Connection, folder_id: int, term_id: int, status: str) -> None:
     conn.execute("BEGIN")
     try:
         conn.execute(
@@ -568,7 +571,10 @@ def log_edit(
     conn.execute("BEGIN")
     try:
         conn.execute(
-            "INSERT INTO edit_log(actor, entity, entity_id, action, before, after, ts) VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (
+                "INSERT INTO edit_log(actor, entity, entity_id, action, before, after, ts) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)"
+            ),
             (
                 actor,
                 entity,
@@ -587,9 +593,7 @@ def log_edit(
 
 # ----- documents helpers -----
 def list_documents(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    cur = conn.execute(
-        "SELECT id, folder_id, filename, sha256, pages FROM documents ORDER BY id ASC"
-    )
+    cur = conn.execute("SELECT id, folder_id, filename, sha256, pages FROM documents ORDER BY id ASC")
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -602,9 +606,7 @@ def get_document_by_id(conn: sqlite3.Connection, document_id: int) -> dict[str, 
 
 
 def has_doc_terms(conn: sqlite3.Connection, document_id: int) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM doc_terms WHERE document_id=? LIMIT 1", (document_id,)
-    ).fetchone()
+    row = conn.execute("SELECT 1 FROM doc_terms WHERE document_id=? LIMIT 1", (document_id,)).fetchone()
     return bool(row)
 
 
@@ -629,7 +631,6 @@ def get_documents_by_folder(conn: sqlite3.Connection, folder_id: int) -> list[in
 
 
 if __name__ == "__main__":  # pragma: no cover
-
     path = "output/dev/semantic/tags.db"
     ensure_schema_v2(path)
     with get_conn(path) as conn:

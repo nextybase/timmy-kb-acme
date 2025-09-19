@@ -38,9 +38,7 @@ def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
         "nlp.nlp_keywords.keybert_scores",
         lambda text, candidates, model_name, top_k: [("alpha", 0.8)],
     )
-    monkeypatch.setattr(
-        "nlp.nlp_keywords.fuse_and_dedup", lambda text, cand_spa, sc_y, sc_kb: [("alpha", 0.7)]
-    )
+    monkeypatch.setattr("nlp.nlp_keywords.fuse_and_dedup", lambda text, cand_spa, sc_y, sc_kb: [("alpha", 0.7)])
     monkeypatch.setattr("nlp.nlp_keywords.topn_by_folder", lambda items, k: items[:k])
     monkeypatch.setattr("nlp.nlp_keywords.cluster_synonyms", lambda items, model_name, sim_thr: [])
 
@@ -78,9 +76,7 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
 
     monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", lambda path: "alpha beta")
     monkeypatch.setattr("nlp.nlp_keywords.spacy_candidates", lambda text, lang: ["alpha", "beta"])
-    monkeypatch.setattr(
-        "nlp.nlp_keywords.yake_scores", lambda text, top_k, lang: [("alpha", 0.9), ("beta", 0.4)]
-    )
+    monkeypatch.setattr("nlp.nlp_keywords.yake_scores", lambda text, top_k, lang: [("alpha", 0.9), ("beta", 0.4)])
     monkeypatch.setattr(
         "nlp.nlp_keywords.keybert_scores",
         lambda text, candidates, model_name, top_k: [("alpha", 0.8), ("beta", 0.3)],

@@ -85,9 +85,7 @@ def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
     env = dict(os.environ)
     env["REPO_ROOT_DIR"] = str(client_dir)
     existing_path = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        str(stub_root) if not existing_path else f"{stub_root}{os.pathsep}{existing_path}"
-    )
+    env["PYTHONPATH"] = str(stub_root) if not existing_path else f"{stub_root}{os.pathsep}{existing_path}"
 
     repo_root = Path(__file__).resolve().parents[1]
 

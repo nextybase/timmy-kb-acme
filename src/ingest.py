@@ -1,5 +1,4 @@
-"""
-Utility di ingestion per Timmy KB.
+"""Utility di ingestion per Timmy KB.
 
 Funzioni:
 - ingest_path(project_slug, scope, path, version, meta)
@@ -124,7 +123,10 @@ def ingest_path(
     *,
     base_dir: Optional[Path] = None,
 ) -> int:
-    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
+    (
+        """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero"
+        "di chunk."""
+    )
     p = Path(path)
     base = Path(base_dir) if base_dir is not None else p.parent
     if not p.exists() or not p.is_file():

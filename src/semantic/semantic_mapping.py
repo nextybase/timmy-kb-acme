@@ -1,11 +1,10 @@
 # src/semantic/semantic_mapping.py
-"""
-Modulo per la gestione del file di mapping semantico nella pipeline Timmy-KB.
+"""Modulo per la gestione del file di mapping semantico nella pipeline Timmy-KB.
 
 Refactor v1.0.5 (Blocco B):
 - Path-safety STRONG: validazione con `ensure_within(...)` sia per il mapping cliente
   che per il fallback.
-- Fallback sicuro: il default è risolto rispetto a `context.repo_root_dir / "config" / "default_semantic_mapping.yaml"`.
+- Fallback sicuro: `context.repo_root_dir / "config" / "default_semantic_mapping.yaml"`.
 - Logger: nessun logger a livello di modulo; viene creato dentro le funzioni.
 - Normalizzazione mapping robusta (compat con varianti legacy).
 
@@ -38,8 +37,7 @@ class _Ctx(Protocol):
 
 
 def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
-    """
-    Converte il mapping grezzo in un dizionario {concept: [keywords, ...]}.
+    """Converte il mapping grezzo in un dizionario {concept: [keywords, ...]}.
 
     Regole:
     - Se il valore è una lista -> usala come keywords
@@ -83,11 +81,8 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
     return norm
 
 
-def load_semantic_mapping(
-    context: _Ctx, logger: Optional[logging.Logger] = None
-) -> Dict[str, List[str]]:
-    """
-    Carica e normalizza il mapping semantico per il cliente corrente.
+def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
+    """Carica e normalizza il mapping semantico per il cliente corrente.
 
     Restituisce:
         dict[str, list[str]]: mapping canonico {concept: [keywords...]}
@@ -138,9 +133,7 @@ def load_semantic_mapping(
             f"❌ Errore lettura/parsing mapping: {e}",
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
-        raise PipelineError(
-            f"Errore lettura mapping: {e}", slug=context.slug, file_path=mapping_path
-        )
+        raise PipelineError(f"Errore lettura mapping: {e}", slug=context.slug, file_path=mapping_path)
 
     # 3) fallback se vuoto/non valido
     if not mapping:
@@ -149,9 +142,7 @@ def load_semantic_mapping(
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
         # Risoluzione sicura del fallback rispetto alla root del repo
-        repo_root: Path = (
-            getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
-        )
+        repo_root: Path = getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
         repo_config_dir = repo_root / "config"
         default_path = repo_config_dir / "default_semantic_mapping.yaml"
         try:

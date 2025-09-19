@@ -9,10 +9,8 @@ import pytest
 
 
 def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) -> None:
-    """
-    _base_dir_for deve preferire ClientContext (che rispetta REPO_ROOT_DIR)
-    rispetto a semantic.api.get_paths.
-    """
+    """_base_dir_for deve preferire ClientContext (che rispetta REPO_ROOT_DIR) rispetto a
+    semantic.api.get_paths."""
     repo_root = tmp_path / "repo-root"
     repo_root.mkdir()
 
@@ -40,10 +38,8 @@ def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) ->
 
 
 def test_base_dir_for_runtime_error(monkeypatch: Any) -> None:
-    """
-    In assenza di ClientContext valido, _base_dir_for deve sollevare RuntimeError
-    segnalando la mancanza del contesto.
-    """
+    """In assenza di ClientContext valido, _base_dir_for deve sollevare RuntimeError segnalando la
+    mancanza del contesto."""
     mod = importlib.import_module("src.ui.landing_slug")
 
     monkeypatch.setattr(

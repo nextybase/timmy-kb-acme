@@ -58,12 +58,8 @@ def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     # Genera README/SUMMARY minimi
     monkeypatch.setattr(sapi, "_convert_md", _fake_convert)
-    monkeypatch.setattr(
-        sapi, "_gen_summary", lambda ctx: _write(ctx.md_dir / "SUMMARY.md", "# Summary\n")
-    )
-    monkeypatch.setattr(
-        sapi, "_gen_readme", lambda ctx: _write(ctx.md_dir / "README.md", "# Readme\n")
-    )
+    monkeypatch.setattr(sapi, "_gen_summary", lambda ctx: _write(ctx.md_dir / "SUMMARY.md", "# Summary\n"))
+    monkeypatch.setattr(sapi, "_gen_readme", lambda ctx: _write(ctx.md_dir / "README.md", "# Readme\n"))
     monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
 
     # Vocabolario non vuoto per attivare enrich_frontmatter

@@ -55,20 +55,14 @@ def main() -> None:
 
     # Landing (modulo esterno)
     from ui.landing_slug import render_landing_slug
-    from ui.services.drive_runner import (
-        build_drive_from_mapping,
-        download_raw_from_drive,
-        emit_readmes_for_raw,
-    )
+    from ui.services.drive_runner import build_drive_from_mapping, download_raw_from_drive, emit_readmes_for_raw
     from ui.tabs.finance import render_finance_tab
     from ui.tabs.preview import render_preview_controls
 
     # =========================================================================
     # Helpers (chiudono su import locali)
     # =========================================================================
-    def _safe_compute_redact_flag(
-        env: Optional[Dict[str, str]] = None, level: str = "INFO"
-    ) -> bool:
+    def _safe_compute_redact_flag(env: Optional[Dict[str, str]] = None, level: str = "INFO") -> bool:
         env = env or dict(os.environ)
         try:
             return bool(compute_redact_flag(env, level))
@@ -216,9 +210,7 @@ def main() -> None:
                         except Exception as e:
                             st.exception(e)
 
-            st.caption(
-                "Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali."
-            )
+            st.caption((("Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali.")))
 
         colSx, colDx = st.columns([1, 1])
         with colSx:
@@ -292,15 +284,11 @@ def main() -> None:
             st.write(f"SERVICE_ACCOUNT_FILE: {_mask_path(saf)}")
             st.write(f"DRIVE_ID: {_mask_id(did)}")
 
-            if st.button(
-                "Verifica credenziali Drive", key="btn_drive_preflight", use_container_width=True
-            ):
+            if st.button("Verifica credenziali Drive", key="btn_drive_preflight", use_container_width=True):
                 try:
                     from pipeline.drive_utils import get_drive_service
 
-                    ctx = ClientContext.load(
-                        slug=slug, interactive=False, require_env=True, run_id=None
-                    )
+                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
                     svc = get_drive_service(ctx)
                     _ = svc.about().get(fields="user").execute()
                     st.success("OK: credenziali e accesso Drive verificati.")
@@ -373,34 +361,26 @@ def main() -> None:
                     use_container_width=True,
                 ):
                     if download_raw_from_drive is None:
-                        st.error(
-                            "Funzione di download non disponibile: aggiornare 'ui.services.drive_runner'."
-                        )
+                        st.error((("Funzione di download non disponibile: aggiornare 'ui.services.drive_runner'.")))
                     else:
                         try:
                             prog = st.progress(0)
                             status = st.empty()
                             try:
-                                from ui.services.drive_runner import (
-                                    download_raw_from_drive_with_progress,
-                                )
+                                from ui.services.drive_runner import download_raw_from_drive_with_progress
 
                                 def _pcb(done: int, total: int, label: str) -> None:
                                     pct = int((done * 100) / max(total, 1))
                                     prog.progress(pct)
                                     status.markdown(f"{pct}% - {label}")
 
-                                res = download_raw_from_drive_with_progress(
-                                    slug=slug, on_progress=_pcb
-                                )
+                                res = download_raw_from_drive_with_progress(slug=slug, on_progress=_pcb)
                             except Exception:
                                 res = download_raw_from_drive(slug=slug)
                             count = len(res) if hasattr(res, "__len__") else None
                             msg_tail = f" ({count} file)" if count is not None else ""
                             st.success(f"Download completato{msg_tail}.")
-                            log.info(
-                                {"event": "drive_raw_downloaded", "slug": slug, "count": count}
-                            )
+                            log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                             st.session_state["raw_downloaded"] = True
                             st.session_state["raw_ready"] = True
                             _safe_streamlit_rerun()
@@ -416,9 +396,7 @@ def main() -> None:
                         ctx = _ensure_context(slug, log)
                         raw_dir = getattr(ctx, "raw_dir", None)
                         # --- base_dir sicuro (no Optional / None) ---
-                        has_pdfs = (
-                            any(raw_dir.rglob("*.pdf")) if (raw_dir and raw_dir.exists()) else False
-                        )
+                        has_pdfs = any(raw_dir.rglob("*.pdf")) if (raw_dir and raw_dir.exists()) else False
                         has_csv = False
                         base_dir_opt = getattr(ctx, "base_dir", None)
                         if raw_dir and raw_dir.exists():
@@ -456,9 +434,7 @@ def main() -> None:
         )
 
         if any(x is None for x in (sem_convert, sem_enrich, sem_write_md, sem_load_vocab)):
-            st.error(
-                "Modulo semantic.api non disponibile o import parziale. Verificare l'ambiente."
-            )
+            st.error("Modulo semantic.api non disponibile o import parziale. Verificare l'ambiente.")
             return
 
         try:
@@ -473,9 +449,7 @@ def main() -> None:
             st.markdown("<div class='next-card'>", unsafe_allow_html=True)
             st.markdown("**1) Conversione RAW → BOOK**")
             st.caption("Converte i PDF in Markdown (cartella book/).")
-            if st.button(
-                "Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True
-            ):
+            if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
                 try:
                     mds = sem_convert(context, log, slug=slug)
                     st.success(f"OK. File Markdown in book/: {len(mds)}")
@@ -688,9 +662,7 @@ def main() -> None:
                 use_container_width=True,
             ):
                 try:
-                    log.info(
-                        {"event": "ui_exit_requested", "slug": st.session_state.get("slug", "-")}
-                    )
+                    log.info({"event": "ui_exit_requested", "slug": st.session_state.get("slug", "-")})
                 except Exception:
                     pass
                 _request_shutdown(log)
@@ -768,9 +740,7 @@ def main() -> None:
                     current_budget = 0
                 auto_flag = bool(retr.get("auto_by_budget", False))
 
-                st.caption(
-                    "Imposta il limite candidati per il ranking. Valori più alti aumentano la latenza."
-                )
+                st.caption((("Imposta il limite candidati per il ranking. Valori più alti aumentano la latenza.")))
                 new_limit = st.number_input(
                     "candidate_limit",
                     min_value=500,
@@ -792,7 +762,7 @@ def main() -> None:
                 new_auto = st.toggle(
                     "Auto per budget",
                     value=bool(auto_flag),
-                    help="Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget.",
+                    help=(("Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget.")),
                     key="tgl_retr_auto",
                 )
 
@@ -826,17 +796,13 @@ def main() -> None:
                                     "auto_by_budget": bool(new_auto),
                                 }
                             )
-                            update_config_with_drive_ids(
-                                ctx, updates={"retriever": retr_prev}, logger=log
-                            )
+                            update_config_with_drive_ids(ctx, updates={"retriever": retr_prev}, logger=log)
                             _mark_modified_and_bump_once(slug, log)
                             st.success("Impostazioni salvate nel config del cliente.")
                         except Exception as e:
                             st.exception(e)
                 with colR:
-                    st.caption(
-                        "Suggerimento: calibra con 1000/2000/4000 e scegline il più piccolo che rispetta il budget."
-                    )
+                    st.caption((("Calibra con 1000/2000/4000 e scegline il più piccolo che rispetta il budget.")))
 
             # Tools
             st.subheader("Tools")

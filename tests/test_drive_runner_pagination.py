@@ -14,17 +14,13 @@ def test__drive_list_pdfs_paginates(monkeypatch):
             if self.page_token is None:
                 # Prima pagina
                 return {
-                    "files": [
-                        {"id": "id1", "name": "A.pdf", "mimeType": "application/pdf", "size": "10"}
-                    ],
+                    "files": [{"id": "id1", "name": "A.pdf", "mimeType": "application/pdf", "size": "10"}],
                     "nextPageToken": "T2",
                 }
             else:
                 # Seconda pagina (finale)
                 return {
-                    "files": [
-                        {"id": "id2", "name": "B.pdf", "mimeType": "application/pdf", "size": "20"}
-                    ],
+                    "files": [{"id": "id2", "name": "B.pdf", "mimeType": "application/pdf", "size": "20"}],
                 }
 
     class FakeFiles:

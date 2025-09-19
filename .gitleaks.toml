@@ -1,0 +1,4 @@
+[[rules]]
+ description = 'Allowlisted placeholder for generated files'
+ id = 'allow-generated'
+ regex = 'PLACEHOLDER'

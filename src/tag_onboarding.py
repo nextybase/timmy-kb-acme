@@ -29,15 +29,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional, cast
 
-# --- Storage v2 (DB: folders/documents) ---
 import storage.tags_store as tags_store
-
-# --- Pipeline infra / Semantic orchestrators ---
 from pipeline.config_utils import get_client_config
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
-from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError
+from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
 from pipeline.path_utils import (  # STRONG guard SSoT
@@ -67,7 +64,7 @@ try:
 except Exception:  # pragma: no cover
     yaml = None
 
-_INVALID_CHARS_RE = re.compile(r"[\/:*?\"<>|]")
+_INVALID_CHARS_RE = re.compile(r'[\/:*?"<>|]')
 __all__ = [
     "tag_onboarding_main",
     "validate_tags_reviewed",
@@ -75,15 +72,15 @@ __all__ = [
 ]
 
 
-# ───────────────────────────── Helpers UX ────────────────────────────────────────────────────────
+# ───────────────────────────── Helpers UX ─────────────────────────────────────────────
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
 
 
-# ───────────────────────────── Core: ingest locale ──────────────────────────────────────────────
-# Sezione helper duplicati rimossa (copy/CSV delegati)
+# ───────────────────────────── Core: ingest locale ───────────────────────────────────
 def compute_sha256(path: Path) -> str:
+    """SHA-256 streaming del file (chunk 8 KiB) con guardie di lettura sicure."""
     h = hashlib.sha256()
     with open_for_read_bytes_selfguard(path) as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -92,6 +89,7 @@ def compute_sha256(path: Path) -> str:
 
 
 def get_pdf_pages(path: Path) -> int | None:
+    """Prova a contare le pagine PDF usando pypdf, se disponibile."""
     try:
         import importlib
 
@@ -109,14 +107,17 @@ def get_pdf_pages(path: Path) -> int | None:
 
 
 def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
-    """Crea (se mancano) tutte le cartelle dalla root logica 'raw' fino a `folder_path`.
+    """Crea (se mancano) tutte le cartelle da 'raw' fino a `folder_path`.
+
     Ritorna l'ID della cartella terminale.
     """
-    # Normalizza e verifica che folder_path ricada sotto raw_dir (guard forte)
+    # Normalizza e verifica che folder_path sia sotto raw_dir (guard forte)
     raw_dir = Path(raw_dir).resolve()
     folder_path = Path(folder_path).resolve()
     ensure_within(raw_dir, folder_path)
+
     rel = folder_path.relative_to(raw_dir)
+
     # Inserisci/aggiorna la root logica 'raw'
     parent_id: Optional[int] = upsert_folder(conn, "raw", None)
     current_db_path = "raw"
@@ -130,10 +131,7 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
         parent_id = upsert_folder(conn, current_db_path, parent_db_path)
 
     if parent_id is None:
-        raise PipelineError(
-            "upsert_folder_chain: parent_id non determinato",
-            file_path=str(folder_path),
-        )
+        raise PipelineError("upsert_folder_chain: parent_id non determinato", file_path=str(folder_path))
     return parent_id
 
 
@@ -143,9 +141,8 @@ def scan_raw_to_db(
     *,
     base_dir: Path | None = None,
 ) -> dict[str, int]:
-    base_dir_path = (
-        Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
-    )
+    """Indicizza cartelle e PDF di `raw/` dentro il DB (schema v2)."""
+    base_dir_path = Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
     raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
     db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
     ensure_schema_v2(str(db_path_path))
@@ -175,12 +172,7 @@ def scan_raw_to_db(
     return stats
 
 
-# =============================
-# NLP → DB (doc_terms, terms, folder_terms)
-# =============================
-# Import locali nel corpo delle funzioni per evitare E402 (ordine import)
-
-
+# ============================= NLP → DB (doc_terms / terms / folder_terms) =======================
 def run_nlp_to_db(
     slug: str,
     raw_dir: Path | str,
@@ -195,9 +187,8 @@ def run_nlp_to_db(
     rebuild: bool = False,
     only_missing: bool = False,
 ) -> dict[str, Any]:
-    base_dir_path = (
-        Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
-    )
+    """Esegue estrazione keyword, clustering e aggregazione per cartella."""
+    base_dir_path = Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
     raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
     db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
     ensure_schema_v2(str(db_path_path))
@@ -217,23 +208,28 @@ def run_nlp_to_db(
                     folder_id = int(folder_id_raw)
                 except (TypeError, ValueError):
                     folder_id = None
+
             folder_db_path = Path("raw")
             if folder_id is not None:
                 row = conn.execute("SELECT path FROM folders WHERE id=?", (folder_id,)).fetchone()
                 if row is not None and row[0]:
                     folder_db_path = Path(str(row[0]))
+
             folder_parts = folder_db_path.parts
             if folder_parts and folder_parts[0] == "raw":
                 folder_parts = folder_parts[1:]
             folder_fs_path = raw_dir_path.joinpath(*folder_parts)
+
             if folder_id is not None and not folder_fs_path.exists():
                 log.warning(
                     "NLP skip: cartella non trovata",
                     extra={"folder_id": folder_id, "folder_path": str(folder_fs_path)},
                 )
+
             filename_val = doc.get("filename")
             if not isinstance(filename_val, str) or not filename_val.strip():
                 raise ValueError("filename mancante o non valido")
+
             candidate = folder_fs_path / filename_val
             return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
 
@@ -244,6 +240,7 @@ def run_nlp_to_db(
             except (TypeError, ValueError):
                 log.warning("ID documento non valido", extra={"doc": doc})
                 continue
+
             if only_missing and has_doc_terms(conn, doc_id):
                 continue
             if rebuild:
@@ -281,11 +278,12 @@ def run_nlp_to_db(
                 _save_dt(conn, doc_id, top_items)
                 saved_items += len(top_items)
                 processed += 1
+
             if i % 100 == 0:
                 log.info("NLP progress", extra={"processed": i, "documents": len(docs)})
 
         # Aggregazione per cartella: somma grezza poi normalizzazione max=1
-        from nlp.nlp_keywords import topn_by_folder  # import locale prima dell'uso
+        from nlp.nlp_keywords import topn_by_folder  # import locale
 
         folders = conn.execute("SELECT id, path FROM folders ORDER BY id").fetchall()
         phrase_global: dict[str, float] = {}
@@ -296,31 +294,31 @@ def run_nlp_to_db(
             doc_ids = get_documents_by_folder(conn, fid)
             if not doc_ids:
                 continue
-            q = (
-                "SELECT phrase, score FROM doc_terms WHERE document_id IN ("
-                + ",".join(["?"] * len(doc_ids))
-                + ")"
-            )
+            q = "SELECT phrase, score FROM doc_terms WHERE document_id IN (" + ",".join(["?"] * len(doc_ids)) + ")"
             rows = conn.execute(q, tuple(doc_ids)).fetchall()
+
             phrase_agg: dict[str, float] = {}
             for r in rows:
                 ph = str(r[0])
                 sc = float(r[1])
                 phrase_agg[ph] = phrase_agg.get(ph, 0.0) + sc
+
             if not phrase_agg:
                 continue
+
             maxv = max(phrase_agg.values()) if phrase_agg else 1.0
             if maxv <= 0:
                 maxv = 1.0
             norm_items = [(p, (w / maxv)) for p, w in phrase_agg.items()]
             norm_items = topn_by_folder(norm_items, k=int(topk_folder))
+
             for phrase, weight in norm_items:
                 weight_f = float(weight)
                 prev = phrase_global.get(phrase)
                 if prev is None or weight_f > prev:
                     phrase_global[phrase] = weight_f
             folder_stats[fid] = norm_items
-            # log di aggregazione cartella
+
             log.debug("Aggregazione cartella", extra={"folder_id": fid, "terms": len(norm_items)})
 
         # Clustering globale per frasi
@@ -330,9 +328,7 @@ def run_nlp_to_db(
         clusters = cluster_synonyms(global_list, model_name=model, sim_thr=float(cluster_thr))
         if clusters:
             aliases = sum(max(0, len(c.get("synonyms", []) or [])) for c in clusters)
-            avg_size = sum(len(c.get("members", []) or []) for c in clusters) / max(
-                1, len(clusters)
-            )
+            avg_size = sum(len(c.get("members", []) or []) for c in clusters) / max(1, len(clusters))
             log.info(
                 "Cluster calcolati",
                 extra={"k": len(clusters), "avg_size": avg_size, "aliases": aliases},
@@ -352,7 +348,7 @@ def run_nlp_to_db(
                 alias_count += 1
                 phrase_to_tid[al] = tid
 
-        # Map folder items to canonical term_id e salva in folder_terms (aggregato per term)
+        # Map folder items to canonical term_id e salva in folder_terms
         folder_terms_count = 0
         for fid, items in folder_stats.items():
             term_agg: dict[int, float] = {}
@@ -361,9 +357,8 @@ def run_nlp_to_db(
                 if tid is None:
                     continue
                 term_agg[tid] = term_agg.get(tid, 0.0) + float(w)
-            log.debug(
-                "Aggregazione termini per folder", extra={"folder_id": fid, "terms": len(term_agg)}
-            )
+
+            log.debug("Aggregazione termini per folder", extra={"folder_id": fid, "terms": len(term_agg)})
             for tid, weight in sorted(term_agg.items(), key=lambda kv: kv[1], reverse=True):
                 upsert_folder_term(conn, fid, tid, float(weight), status="keep", note=None)
                 folder_terms_count += 1
@@ -449,9 +444,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
         else:
             act = action.strip().lower()
             if act not in ("keep", "drop") and not act.startswith("merge_into:"):
-                errors.append(
-                    f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>."
-                )
+                errors.append(f"{ctx}: 'action' non valida: '{action}'. " "Usa keep|drop|merge_into:<canonical>.")
             if act.startswith("merge_into:"):
                 target = act.split(":", 1)[1].strip()
                 if not target:
@@ -477,9 +470,8 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def _write_validation_report(
-    report_path: Path, result: dict[str, Any], logger: logging.Logger
-) -> None:
+def _write_validation_report(report_path: Path, result: dict[str, Any], logger: logging.Logger) -> None:
+    """Scrive report JSON della validazione con timestamp ISO UTC."""
     ensure_within(report_path.parent, report_path)
     payload = {
         "validated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -510,9 +502,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     base_dir = Path(base_attr).resolve()
 
     semantic_attr = getattr(context, "semantic_dir", None)
-    semantic_candidate = (
-        Path(semantic_attr) if semantic_attr is not None else (base_dir / "semantic")
-    )
+    semantic_candidate = Path(semantic_attr) if semantic_attr is not None else (base_dir / "semantic")
     semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
 
     yaml_candidate = semantic_dir / "tags_reviewed.yaml"
@@ -574,9 +564,7 @@ def tag_onboarding_main(
 ) -> None:
     """Orchestratore della fase di *Tag Onboarding*."""
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
-    slug = ensure_valid_slug(
-        slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger
-    )
+    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
     # Context + logger coerenti con orchestratori
     context: ClientContext = ClientContext.load(
@@ -602,9 +590,7 @@ def tag_onboarding_main(
     log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
     ensure_within(base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger(
-        "tag_onboarding", log_file=log_file, context=context, run_id=run_id
-    )
+    logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
     logger.info("Avvio tag_onboarding", extra={"source": source})
 
@@ -640,9 +626,7 @@ def tag_onboarding_main(
             )
         src_dir = Path(local_path).expanduser().resolve()
         if src_dir == raw_dir.expanduser().resolve():
-            logger.info(
-                "Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)}
-            )
+            logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
         else:
             with metrics_scope(logger, stage="local_copy", customer=context.slug):
                 # Delegato a semantic.api: evita duplicazioni locali
@@ -670,7 +654,7 @@ def tag_onboarding_main(
             return
     else:
         cont = _prompt(
-            "Controlla e approva i tag generati. Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
+            "Controlla e approva i tag generati. " "Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
         ).lower()
         if cont != "y":
             logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
@@ -686,9 +670,7 @@ def tag_onboarding_main(
     )
 
 
-# ───────────────────────────── CLI ───────────────────────────────────────────────────────────────
-
-
+# ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
 def _resolve_cli_paths(
     context: ClientContextProtocol | ClientContext,
     *,
@@ -725,21 +707,21 @@ def _resolve_cli_paths(
 
 def _parse_args() -> argparse.Namespace:
     """Costruisce e restituisce il parser CLI per `tag_onboarding`."""
-    p = argparse.ArgumentParser(
-        description="Tag onboarding (copertura PDF + CSV + checkpoint HiTL + stub semantico)"
-    )
+    p = argparse.ArgumentParser(description=("Tag onboarding (copertura PDF + CSV + checkpoint HiTL + stub semantico)"))
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
     p.add_argument(
         "--source",
         choices=("drive", "local"),
-        default="drive",  # default Drive
-        help="Sorgente PDF (default: drive). Usa --source=local per lavorare da una cartella locale.",
+        default="drive",
+        help=("Sorgente PDF (default: drive). Usa --source=local per lavorare da una " "cartella locale."),
     )
     p.add_argument(
         "--local-path",
         type=str,
-        help="Percorso locale sorgente dei PDF. Se omesso con --source=local, userà direttamente output/<slug>/raw.",
+        help=(
+            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userà " "direttamente output/<slug>/raw."
+        ),
     )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     p.add_argument(
@@ -754,15 +736,18 @@ def _parse_args() -> argparse.Namespace:
     )
     # Scansione RAW -> DB (opzionale)
     p.add_argument(
-        "--scan-raw", action="store_true", help="Indicizza cartelle e PDF di raw/ nel DB"
+        "--scan-raw",
+        action="store_true",
+        help="Indicizza cartelle e PDF di raw/ nel DB",
     )
     p.add_argument("--raw-dir", type=str, help="Percorso della cartella raw/")
     p.add_argument("--db", type=str, help="Percorso del DB SQLite (tags.db)")
+
     # NLP → DB
     p.add_argument(
         "--nlp",
         action="store_true",
-        help="Esegue estrazione keyword e popolamento DB (doc_terms/terms/folder_terms)",
+        help="Estrae keyword e popola DB (doc_terms/terms/folder_terms)",
     )
     p.add_argument(
         "--lang",
@@ -786,10 +771,14 @@ def _parse_args() -> argparse.Namespace:
         help="Modello SentenceTransformer",
     )
     p.add_argument(
-        "--rebuild", action="store_true", help="Ricostruisce doc_terms cancellando quelli esistenti"
+        "--rebuild",
+        action="store_true",
+        help="Ricostruisce doc_terms cancellando quelli esistenti",
     )
     p.add_argument(
-        "--only-missing", action="store_true", help="Processa solo documenti senza doc_terms"
+        "--only-missing",
+        action="store_true",
+        help="Processa solo documenti senza doc_terms",
     )
     return p.parse_args()
 
@@ -802,10 +791,8 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error(
-            "Errore: in modo non interattivo viene richiesto --slug (o slug posizionale)."
-        )
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
+        early_logger.error("Errore: in modo non interattivo viene richiesto --slug (o slug posizionale).")
+        sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
 
     try:
         slug = ensure_valid_slug(
@@ -814,8 +801,8 @@ if __name__ == "__main__":
             prompt=_prompt,
             logger=early_logger,
         )
-    except ConfigError:
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
+    except ConfigError as exc:
+        sys.exit(exit_code_for(exc))
 
     # Ramo di sola validazione
     if args.validate_only:
@@ -883,9 +870,15 @@ if __name__ == "__main__":
             run_id=run_id,
         )
         sys.exit(0)
-    except (ConfigError, PipelineError) as e:
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except PipelineError as exc:
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
-        logger.error(str(e))
-        sys.exit(EXIT_CODES.get(type(e).__name__, 1))
+        logger.error(str(exc))
+        sys.exit(exit_code_for(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger = get_structured_logger("tag_onboarding", run_id=run_id)
+        logger.error(f"Errore non gestito: {exc}")
+        sys.exit(exit_code_for(PipelineError(str(exc))))
 
 # Sezione helper duplicati rimossa (copy/CSV delegati)

@@ -81,8 +81,8 @@ def _score_and_rank(
     stop: Iterable[str],
     top_k: int,
 ) -> tuple[list[str], dict[str, float]]:
-    """
-    Combina tag da path e filename con uno scoring semplicissimo (path > filename).
+    """Combina tag da path e filename con uno scoring semplicissimo (path > filename).
+
     - path: peso 1.0
     - filename: peso 0.6
     Deduplica preservando l'ordine di “forza” (path prima).
@@ -123,8 +123,7 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
 
 
 def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
-    """
-    Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename.
+    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename.
 
     Ritorna:
       {
@@ -178,9 +177,8 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str,
 
 
 def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path) -> None:
-    """
-    Scrive `tags_raw.csv` (esteso) con colonne:
-      relative_path | suggested_tags | entities | keyphrases | score | sources
+    """Scrive `tags_raw.csv` (esteso) con colonne: relative_path | suggested_tags | entities |
+    keyphrases | score | sources.
 
     Note:
     - Scrittura **atomica** tramite buffer + `safe_write_text(..., atomic=True)`.
@@ -193,9 +191,7 @@ def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path)
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(
-        ["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"]
-    )
+    writer.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
 
     for rel_path, meta in sorted(candidates.items()):
         tags = [str(tag).strip().lower() for tag in (meta.get("tags") or []) if str(tag).strip()]

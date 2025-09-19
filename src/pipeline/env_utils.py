@@ -1,6 +1,5 @@
 # src/pipeline/env_utils.py
-"""
-Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
+"""Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
 
 Cosa fa questo modulo (ruoli e funzioni principali):
 - Caricamento `.env` dalla root del progetto (se presente).
@@ -64,8 +63,7 @@ def get_env_var(
     default: Optional[str] = None,
     required: bool = False,
 ) -> Optional[str]:
-    """
-    Recupera una variabile d'ambiente.
+    """Recupera una variabile d'ambiente.
 
     Args:
         key: nome della variabile.
@@ -134,9 +132,7 @@ def get_int(
 # ================================
 
 
-def _val_from(
-    env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None
-) -> Optional[str]:
+def _val_from(env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None) -> Optional[str]:
     """Legge prima da `env` (se dict-like), poi da `os.environ`."""
     if env is not None and isinstance(env, Mapping) and key in env:
         v = env.get(key)
@@ -145,9 +141,7 @@ def _val_from(
 
 
 def _has_sensitive_credentials(env: Mapping[str, Any] | None) -> bool:
-    """
-    True se sono presenti credenziali/percorsi sensibili che suggeriscono redazione log.
-    """
+    """True se sono presenti credenziali/percorsi sensibili che suggeriscono redazione log."""
     keys = (
         "GITHUB_TOKEN",
         "SERVICE_ACCOUNT_FILE",
@@ -169,8 +163,7 @@ def _truthy(val: Any) -> bool:
 
 
 def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") -> bool:
-    """
-    Calcola il flag di redazione log in modo deterministico (nessun masking qui).
+    """Calcola il flag di redazione log in modo deterministico (nessun masking qui).
 
     Regole:
     - LOG_REDACTION=on/always/true  → redazione ON
@@ -195,11 +188,7 @@ def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") 
 
     env_name = (_val_from(env, "ENV", "dev") or "dev").strip().lower()
     ci_val = _val_from(env, "CI", "0")
-    auto_on = (
-        (env_name in {"prod", "production", "ci"})
-        or _truthy(ci_val)
-        or _has_sensitive_credentials(env)
-    )
+    auto_on = (env_name in {"prod", "production", "ci"}) or _truthy(ci_val) or _has_sensitive_credentials(env)
 
     redact = explicit if explicit is not None else auto_on
 
@@ -214,9 +203,8 @@ def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") 
 
 
 def get_force_allowed_branches(context: Any | None = None) -> list[str]:
-    """
-    Legge l'allow-list dei branch per il force push dalla variabile:
-      GIT_FORCE_ALLOWED_BRANCHES=main,release/*
+    """Legge l'allow-list dei branch per il force push dalla variabile:
+    GIT_FORCE_ALLOWED_BRANCHES=main,release/*
 
     - Supporta lista separata da virgole e/o newline.
     - Precedenza: `context.env` (se presente), poi `os.environ`.
@@ -237,11 +225,8 @@ def get_force_allowed_branches(context: Any | None = None) -> list[str]:
     return patterns
 
 
-def is_branch_allowed_for_force(
-    branch: str, context: Any | None = None, *, allow_if_unset: bool = True
-) -> bool:
-    """
-    Verifica se `branch` è consentito per il force push.
+def is_branch_allowed_for_force(branch: str, context: Any | None = None, *, allow_if_unset: bool = True) -> bool:
+    """Verifica se `branch` è consentito per il force push.
 
     Restituisce:
         True se almeno un pattern combacia (fnmatch), altrimenti False.

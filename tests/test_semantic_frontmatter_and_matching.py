@@ -34,7 +34,8 @@ def test_merge_frontmatter_handles_scalar_tuple_and_dedups_sorted():
     assert merged3["tags"] == ["a"]
 
 
-# ------------------------------ Boundary matching (riduzione falsi positivi) ------------------------------
+# ------------------------------ Boundary matching (riduzione falsi positivi)
+# ------------------------------
 
 
 def _vocab() -> Dict[str, Dict[str, Set[str]]]:

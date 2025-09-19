@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/cleanup_utils.py
-"""
-Utility di pulizia per la pipeline Timmy-KB.
+"""Utility di pulizia per la pipeline Timmy-KB.
 
 Ruolo:
 - Fornire funzioni *pure* di cleanup senza interazione utente né terminazioni del processo.
@@ -28,9 +27,8 @@ logger = get_structured_logger("pipeline.cleanup_utils")
 
 
 def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
-    """
-    Rimozione directory con log e senza eccezioni verso l'alto.
-    Ritorna True se la directory è stata rimossa o non esisteva.
+    """Rimozione directory con log e senza eccezioni verso l'alto. Ritorna True se la directory è
+    stata rimossa o non esisteva.
 
     Nota: usa il logger passato (contestualizzato) così i log portano slug/run_id.
     """
@@ -39,9 +37,7 @@ def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
             shutil.rmtree(target, ignore_errors=False)
             log.info("🧹 Rimossa directory", extra={"file_path": str(target)})
         else:
-            log.info(
-                "ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)}
-            )
+            log.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)})
         return True
     except Exception as e:
         log.warning(
@@ -56,8 +52,7 @@ def clean_push_leftovers(
     *,
     logger_name: str = "pipeline.cleanup_utils",
 ) -> Dict[str, Any]:
-    """
-    Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali di push.
+    """Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali di push.
 
     Attualmente:
     - elimina `.git` eventualmente presente sotto `context.md_dir` (book/),

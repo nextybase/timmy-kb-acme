@@ -4,12 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
-from src.retriever import (
-    QueryParams,
-    choose_limit_for_budget,
-    with_config_candidate_limit,
-    with_config_or_budget,
-)
+from src.retriever import QueryParams, choose_limit_for_budget, with_config_candidate_limit, with_config_or_budget
 
 
 def test_with_config_candidate_limit_precedence() -> None:
@@ -122,7 +117,4 @@ def test_with_config_or_budget_fallback_default() -> None:
     # default senza config → resta il default del dataclass
     p = _typed_params()
     out = with_config_or_budget(p, None)
-    assert (
-        out.candidate_limit
-        == QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]
-    )
+    assert out.candidate_limit == QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]

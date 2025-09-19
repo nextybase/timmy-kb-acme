@@ -37,8 +37,7 @@ def main() -> int:
         # Matches found -> fail with guidance.
         sys.stdout.write(proc.stdout)
         sys.stdout.write(
-            "\nFound potentially unsafe file reads. "
-            "Use ensure_within_and_resolve()/open_for_read/read_text_safe.\n"
+            "\nFound potentially unsafe file reads. " "Use ensure_within_and_resolve()/open_for_read/read_text_safe.\n"
         )
         return 1
     if proc.returncode == 1 and not proc.stdout and not proc.stderr:

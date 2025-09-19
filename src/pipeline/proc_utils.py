@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/proc_utils.py
-"""
-Utility robuste e riutilizzabili per eseguire comandi di sistema con timeout, retry,
-backoff ed eventi di logging strutturato. Sostituisce l'uso diretto di `subprocess.run`
-nei moduli della pipeline (es. preview HonKit via Docker, git push, ecc.).
+"""Utility robuste e riutilizzabili per eseguire comandi di sistema con timeout, retry, backoff ed
+eventi di logging strutturato. Sostituisce l'uso diretto di `subprocess.run` nei moduli della
+pipeline (es. preview HonKit via Docker, git push, ecc.).
 
 Funzionalità principali
 -----------------------
@@ -113,8 +112,8 @@ def _merge_env(base: Mapping[str, str], extra: Optional[Mapping[str, str]]) -> M
 
 
 def _default_timeout_for(op: Optional[str]) -> int:
-    """
-    Timeout di default (secondi) basato sull'operazione.
+    """Timeout di default (secondi) basato sull'operazione.
+
     - Docker: DOCKER_CMD_TIMEOUT (default 90)
     - Git:    GIT_CMD_TIMEOUT    (default 120)
     - Altro:  PROC_CMD_TIMEOUT   (default 60)
@@ -142,8 +141,7 @@ def run_cmd(
     logger: Optional[logging.Logger] = None,
     op: Optional[str] = None,
 ) -> subprocess.CompletedProcess[Any]:
-    """
-    Esegue un comando di sistema con timeout, retry con backoff e redazione sicura.
+    """Esegue un comando di sistema con timeout, retry con backoff e redazione sicura.
 
     Args:
         cmd: comando (lista argv o stringa shell-like).
@@ -305,8 +303,8 @@ def wait_for_port(
     interval: float = 0.5,
     logger: Optional[logging.Logger] = None,
 ) -> None:
-    """
-    Attende che una porta TCP sia raggiungibile entro `timeout` secondi.
+    """Attende che una porta TCP sia raggiungibile entro `timeout` secondi.
+
     Solleva `TimeoutError` se la porta non risponde in tempo.
     """
     deadline = time.time() + float(timeout)
@@ -324,20 +322,14 @@ def wait_for_port(
 
     # timeout
     if logger:
-        logger.error(
-            "wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout}
-        )
-    raise TimeoutError(
-        f"Porta non raggiungibile: {host}:{port} entro {timeout}s; last={last_exc!r}"
-    )
+        logger.error("wait_for_port.timeout", extra={"host": host, "port": port, "timeout_s": timeout})
+    raise TimeoutError(f"Porta non raggiungibile: {host}:{port} entro {timeout}s; last={last_exc!r}")
 
 
 # ----------------------------- Docker helpers --------------------------------------
 
 
-def docker_available(
-    *, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None
-) -> bool:
+def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Optional[float] = None) -> bool:
     """Ritorna True se `docker` è invocabile e risponde a `docker --version`."""
     try:
         run_cmd(
@@ -357,9 +349,7 @@ def docker_available(
 
 def _docker_rm_force(name: str, *, logger: Optional[logging.Logger] = None) -> None:
     try:
-        run_cmd(
-            ["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f"
-        )
+        run_cmd(["docker", "rm", "-f", name], retries=0, capture=True, logger=logger, op="docker rm -f")
     except CmdError:
         # Best-effort
         if logger:
@@ -393,10 +383,10 @@ def run_docker_preview(
     container_name: str = "honkit_preview",
     retries: int = 1,
     logger: Optional[logging.Logger] = None,
-    redact_logs: bool = False,  # mantenuto per firma coerente con i call-site; non logghiamo segreti qui
+    redact_logs: bool = False,  # mantenuto per firma coerente con i call-site;
 ) -> None:
-    """
-    Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
+    """Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
+
     - Usa l'immagine `honkit/honkit`.
     - Monta `md_dir` in /app.
     - Espone :4000 dalla container su `port` host.
@@ -487,10 +477,11 @@ def run_docker_preview(
         raise CmdError(str(e), cmd=["docker", "run", "..."], op="docker honkit serve")
 
 
-def stop_docker_preview(
-    container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None
-) -> None:
-    """Tenta lo stop + remove del container di preview. Best-effort (non solleva)."""
+def stop_docker_preview(container_name: str = "honkit_preview", *, logger: Optional[logging.Logger] = None) -> None:
+    """Tenta lo stop + remove del container di preview.
+
+    Best-effort (non solleva).
+    """
     try:
         run_cmd(
             ["docker", "stop", container_name],

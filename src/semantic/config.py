@@ -1,6 +1,5 @@
 # src/semantic/config.py
-"""
-Loader della configurazione semantica cliente-specifica.
+"""Loader della configurazione semantica cliente-specifica.
 
 Scopo
 -----
@@ -12,7 +11,7 @@ Restituire un oggetto `SemanticConfig` che unisce:
 
 Ordine di precedenza (alto -> basso)
 ------------------------------------
-overrides  >  semantic_mapping.yaml:semantic_tagger  >  config.yaml:semantic_defaults  >  defaults hardcoded
+overrides>semantic_mapping.yaml:semantic_tagger>config.yaml:semantic_defaults>defaults hardcoded
 
 N.B. Modulo "puro": nessun I/O interattivo, nessun sys.exit(), nessun logger richiesto.
 """
@@ -75,8 +74,9 @@ class SemanticConfig:
 
 
 def _safe_load_yaml(p: Path) -> dict[str, Any]:
-    """
-    Carica YAML come dict. Se il file o PyYAML non ci sono, ritorna {}.
+    """Carica YAML come dict.
+
+    Se il file o PyYAML non ci sono, ritorna {}.
     Non solleva eccezioni: il chiamante ha già fallback robusti.
     """
     if not p or yaml is None:
@@ -136,9 +136,7 @@ def _coerce_stop_tags(value: Any) -> set[str]:
 
 
 def _normalize_tagger_section(d: dict[str, Any]) -> dict[str, Any]:
-    """
-    Tiene solo le chiavi ammesse e forza i tipi principali.
-    """
+    """Tiene solo le chiavi ammesse e forza i tipi principali."""
     if not d:
         return {}
     out: dict[str, Any] = {}
@@ -180,11 +178,8 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 # ----------------------------- API pubblica ---------------------------------- #
 
 
-def load_semantic_config(
-    base_dir: Path, *, overrides: Optional[dict[str, Any]] = None
-) -> SemanticConfig:
-    """
-    Carica la configurazione semantica per il cliente sotto `base_dir`.
+def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
+    """Carica la configurazione semantica per il cliente sotto `base_dir`.
 
     Parametri:
       - base_dir: Path della sandbox cliente, es. output/timmy-kb-<slug>

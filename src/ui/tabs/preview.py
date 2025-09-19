@@ -29,8 +29,7 @@ def render_preview_controls(
     log: logging.Logger,
     slug: str,
 ) -> None:
-    """
-    Controlli Preview Docker (HonKit), estratti da onboarding_ui.py.
+    """Controlli Preview Docker (HonKit), estratti da onboarding_ui.py.
 
     Importa gli adapter in modo lazy per evitare dipendenze hard a import-time.
     """
@@ -99,12 +98,9 @@ def render_preview_controls(
                     )
                 except Exception as e:
                     msg = str(e)
-                    if any(
-                        k in msg.lower()
-                        for k in ("docker", "daemon", "not running", "cannot connect")
-                    ):
+                    if any(k in msg.lower() for k in ("docker", "daemon", "not running", "cannot connect")):
                         st.warning(
-                            "Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."
+                            (("Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."))
                         )
                         log.warning("Preview non avviata: Docker non attivo", extra={"error": msg})
                     else:

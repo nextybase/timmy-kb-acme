@@ -30,7 +30,8 @@ def ensure_book_purity(context: Any, logger: logging.Logger) -> None:
     """Garantisce che `book/` contenga solo file consentiti.
 
     - Consentiti: `*.md` (e placeholder `*.md.fp`).
-    - Consentiti builder: `book.json`, `package.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`.
+    - Consentiti builder: `book.json`, `package.json`,
+      `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`.
     - Ignorati: `_book/`, `node_modules/`, `.cache/`, `.tmp/`, `.git/`.
     - Consentito speciale: `.DS_Store`.
 
@@ -51,9 +52,7 @@ def ensure_book_purity(context: Any, logger: logging.Logger) -> None:
         book_dir = repo_root / "book"
         ensure_within(repo_root, book_dir)
     else:
-        raise ConfigError(
-            "Contesto privo di percorsi utili: servono md_dir o base_dir o repo_root_dir."
-        )
+        raise ConfigError("Contesto privo di percorsi utili: servono md_dir o base_dir o repo_root_dir.")
 
     if not book_dir.exists() or not book_dir.is_dir():
         raise ConfigError(f"Cartella book/ non trovata: {book_dir}")

@@ -55,9 +55,7 @@ def _write_vision_yaml(config_dir: Path) -> Path:
             },
         },
     }
-    vision_yaml.write_text(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=True), encoding="utf-8"
-    )
+    vision_yaml.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=True), encoding="utf-8")
     return vision_yaml
 
 

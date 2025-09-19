@@ -33,9 +33,7 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
         raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir)
 
     if not context.md_dir.exists() or not context.md_dir.is_dir():
-        raise InputDirectoryMissing(
-            f"Directory markdown non valida: {context.md_dir}", slug=context.slug
-        )
+        raise InputDirectoryMissing(f"Directory markdown non valida: {context.md_dir}", slug=context.slug)
 
     files = sorted(context.md_dir.glob("*.md"))
     logger.info(

@@ -1,28 +1,32 @@
 # src/pipeline/config_utils.py
-"""
-Configurazione cliente e utilities (SSoT + path-safety).
+"""Configurazione cliente e utilities (SSoT + path-safety).
 
 Cosa fa questo file
 -------------------
 Centralizza le utilità di configurazione per la pipeline Timmy-KB:
 
-- `Settings`: modello Pydantic per le variabili ambiente critiche (Drive, GitHub, ecc.),
-  con validazione dei campi essenziali e presenza dello `slug`.
-- `write_client_config_file(context, config) -> Path`: serializza e salva **atomicamente**
-  `config.yaml` nella sandbox del cliente usando `safe_write_text` (backup `.bak` incluso).
-- `get_client_config(context) -> dict`: legge e deserializza `config.yaml` dal contesto (errore se assente/malformato).
-- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di ambiente
-  (config valido e cartelle chiave come `logs/`).
-- `safe_write_file(file_path, content)`: **wrapper legacy** che scrive testo in modo atomico
-  passando da `safe_write_text`. Per nuovo codice, usare direttamente `safe_write_text`.
-- `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale su `config.yaml`
-  con backup `.bak` e scrittura atomica.
+- `Settings`: modello Pydantic per le variabili ambiente critiche (Drive, GitHub,
+  ecc.), con validazione dei campi essenziali e presenza dello `slug`.
+- `write_client_config_file(context, config) -> Path`: serializza e salva
+  **atomicamente** `config.yaml` nella sandbox del cliente usando `safe_write_text`
+  (backup `.bak` incluso).
+- `get_client_config(context) -> dict`: legge e deserializza `config.yaml` dal
+  contesto (errore se assente/malformato).
+- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di
+  ambiente (config valido e cartelle chiave come `logs/`).
+- `safe_write_file(file_path, content)`: **wrapper legacy** che scrive testo in modo
+  atomico passando da `safe_write_text`. Per nuovo codice, usare direttamente
+  `safe_write_text`.
+- `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale
+  su `config.yaml` con backup `.bak` e scrittura atomica.
 
 Linee guida implementative
 --------------------------
 - **SSoT scritture**: tutte le write passano da `pipeline.file_utils.safe_write_text`.
-- **Path-safety STRONG**: prima di scrivere nella sandbox, validiamo con `ensure_within(...)`.
-- **Niente prompt/exit**: orchestrazione (I/O utente e gestione exit code) demandata ai caller.
+- **Path-safety STRONG**: prima di scrivere nella sandbox, validiamo con
+  `ensure_within(...)`.
+- **Niente prompt/exit**: orchestrazione (I/O utente e gestione exit code) demandata
+  ai caller.
 """
 
 from __future__ import annotations
@@ -34,15 +38,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 import yaml
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 if TYPE_CHECKING:
 
     class _BaseSettings:
         def model_post_init(self, __context: Any) -> None: ...
 
+    class _SettingsConfigDict:  # shim per type checking
+        pass
+
 else:
-    from pydantic_settings import BaseSettings as _BaseSettings
+    from pydantic_settings import (  # type: ignore
+        BaseSettings as _BaseSettings,
+        SettingsConfigDict as _SettingsConfigDict,
+    )
 
 from pipeline.constants import BACKUP_SUFFIX, CONFIG_DIR_NAME, CONFIG_FILE_NAME
 from pipeline.context import ClientContext
@@ -75,21 +85,35 @@ class Settings(_BaseSettings):
         DEBUG: Flag di debug (default: False).
     """
 
-    DRIVE_ID: str = Field(..., env="DRIVE_ID")
-    SERVICE_ACCOUNT_FILE: str = Field(..., env="SERVICE_ACCOUNT_FILE")
-    BASE_DRIVE: Optional[str] = Field(None, env="BASE_DRIVE")
+    # pydantic-settings v2: usare validation_alias per mappare env name
+    DRIVE_ID: str = Field(validation_alias=AliasChoices("DRIVE_ID"))
+    SERVICE_ACCOUNT_FILE: str = Field(validation_alias=AliasChoices("SERVICE_ACCOUNT_FILE"))
+    BASE_DRIVE: Optional[str] = Field(default=None, validation_alias=AliasChoices("BASE_DRIVE"))
     DRIVE_ROOT_ID: Optional[str] = Field(
-        None,
+        default=None,
         description="ID cartella radice cliente su Google Drive",
+        validation_alias=AliasChoices("DRIVE_ROOT_ID"),
     )
-    GITHUB_TOKEN: str = Field(..., env="GITHUB_TOKEN")
-    GITBOOK_TOKEN: Optional[str] = Field(None, env="GITBOOK_TOKEN")
-    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
-    DEBUG: bool = Field(False, env="DEBUG")
+    GITHUB_TOKEN: str = Field(validation_alias=AliasChoices("GITHUB_TOKEN"))
+    GITBOOK_TOKEN: Optional[str] = Field(default=None, validation_alias=AliasChoices("GITBOOK_TOKEN"))
+    LOG_LEVEL: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL"))
+    DEBUG: bool = Field(default=False, validation_alias=AliasChoices("DEBUG"))
     slug: Optional[str] = None
 
+    # Config per pydantic-settings v2
+    if not TYPE_CHECKING:
+        model_config: _SettingsConfigDict = _SettingsConfigDict(
+            env_prefix="",
+        )
+
     def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
+        # pyright/pylance: ok, chiamiamo super se esiste
+        try:
+            super().model_post_init(__context)  # type: ignore[misc]
+        except Exception:
+            # compat, nessuna azione se la super non definisce model_post_init
+            pass
+
         for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"):
             if not getattr(self, key, None):
                 logger.error(f"Parametro critico '{key}' mancante!")
@@ -169,9 +193,7 @@ def get_client_config(context: ClientContext) -> dict[str, Any]:
 # ----------------------------------------------------------
 #  Validazione pre-onboarding (coerenza minima ambiente)
 # ----------------------------------------------------------
-def validate_preonboarding_environment(
-    context: ClientContext, base_dir: Optional[Path] = None
-) -> None:
+def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None) -> None:
     """Verifica la coerenza minima dell'ambiente prima del pre-onboarding."""
     base_dir = base_dir or context.base_dir
     if base_dir is None or context.config_path is None:
@@ -193,9 +215,7 @@ def validate_preonboarding_environment(
         cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
     except Exception as e:
         logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
-        raise PreOnboardingValidationError(
-            f"Errore lettura config {context.config_path}: {e}"
-        ) from e
+        raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
 
     if not isinstance(cfg, dict):
         logger.error("Config YAML non valido o vuoto.")
@@ -324,9 +344,10 @@ __all__ = [
 def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None = None) -> None:
     """Incrementa N_VER di 1 nel config del cliente.
 
-    Nota: la logica "if needed" è demandata al chiamante (UI tiene un flag di sessione)
-    per garantire un solo incremento per sessione. Questa funzione è idempotente a
-    livello di singola invocazione: legge il valore corrente (default 0) e scrive +1.
+    Nota: la logica "if needed" è demandata al chiamante (UI tiene un flag di
+    sessione) per garantire un solo incremento per sessione. Questa funzione è
+    idempotente a livello di singola invocazione: legge il valore corrente
+    (default 0) e scrive +1.
     """
     log = logger or globals().get("logger")
     cfg = get_client_config(context) or {}
@@ -350,8 +371,8 @@ def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None =
 def set_data_ver_today(context: ClientContext, logger: logging.Logger | None = None) -> None:
     """Imposta DATA_VER alla data odierna (YYYY-MM-DD) nel config del cliente.
 
-    Viene tipicamente chiamata alla chiusura della UI, solo se nella sessione ci sono
-    state modifiche. Rimuove eventuali flag temporanei (nessun flag gestito qui).
+    Viene tipicamente chiamata alla chiusura della UI, solo se nella sessione ci
+    sono state modifiche. Rimuove eventuali flag temporanei (nessun flag gestito qui).
     """
     log = logger or globals().get("logger")
     today = date.today().isoformat()

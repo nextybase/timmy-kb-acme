@@ -1,5 +1,4 @@
-"""
-Utility centralizzata per la lettura YAML sicura e uniforme.
+"""Utility centralizzata per la lettura YAML sicura e uniforme.
 
 Obiettivi
 - Path-safety: valida che il file sia sotto una base consentita (fail-closed).

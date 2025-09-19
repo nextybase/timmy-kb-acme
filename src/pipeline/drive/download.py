@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive/download.py
-"""
-Download da Google Drive → sandbox locale (RAW) con commit **atomico**.
+"""Download da Google Drive → sandbox locale (RAW) con commit **atomico**.
 
 Cosa fa
 -------
@@ -108,9 +107,7 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
 
 
 def _ensure_dest(base_dir: Path, local_root_dir: Path, rel_parts: List[str], filename: str) -> Path:
-    """
-    Prepara il path di destinazione garantendo path-safety STRONG e creazione directory.
-    """
+    """Prepara il path di destinazione garantendo path-safety STRONG e creazione directory."""
     # Cartella destinazione = local_root_dir / rel_parts...
     dest_dir = (local_root_dir.joinpath(*rel_parts)).resolve()
     ensure_within(base_dir, dest_dir)
@@ -130,11 +127,11 @@ def _download_one_pdf_atomic(
     logger: Any,
     progress: bool = False,
 ) -> None:
-    """
-    Scarica un singolo PDF in maniera **atomica**:
-      - scrive su file temporaneo nello stesso folder
-      - flush + fsync
-      - os.replace() sul path finale
+    """Scarica un singolo PDF in maniera **atomica**:
+
+    - scrive su file temporaneo nello stesso folder
+    - flush + fsync
+    - os.replace() sul path finale
     """
     # Request media
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
@@ -176,8 +173,7 @@ def download_drive_pdfs_to_local(
     redact_logs: bool = False,
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
 ) -> int:
-    """
-    Scarica ricorsivamente **solo i PDF** da una cartella Drive verso `local_root_dir`.
+    """Scarica ricorsivamente **solo i PDF** da una cartella Drive verso `local_root_dir`.
 
     Args:
         service: client Drive v3 già autenticato (googleapiclient).

@@ -183,9 +183,7 @@ def test__ensure_safe_propagates_non_configerror(monkeypatch, dummy_kb):
     from pipeline import content_utils as cu
 
     # Patch ensure_within per sollevare un errore NON di dominio (es. ValueError)
-    monkeypatch.setattr(
-        cu, "ensure_within", lambda base, target: (_ for _ in ()).throw(ValueError("boom"))
-    )
+    monkeypatch.setattr(cu, "ensure_within", lambda base, target: (_ for _ in ()).throw(ValueError("boom")))
 
     ctx = _mk_ctx(dummy_kb)
     ctx.md_dir.mkdir(parents=True, exist_ok=True)

@@ -32,7 +32,10 @@ def _ensure_dirs() -> None:
 
 
 def write_request(prompt: str) -> str:
-    """Scrive il prompt nei file last_request e history. Ritorna il path del file scritto."""
+    """Scrive il prompt nei file last_request e history.
+
+    Ritorna il path del file scritto.
+    """
     _ensure_dirs()
     last_path = BASE / "last_request.prompt"
     ensure_within(BASE, last_path)

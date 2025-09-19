@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/tags_validator.py
 # -*- coding: utf-8 -*-
-"""
-Validatore per `tags_reviewed.yaml`
-"""
+"""Validatore per `tags_reviewed.yaml`"""
 from __future__ import annotations
 
 import json
@@ -24,8 +22,8 @@ _INVALID_CHARS_RE = re.compile(r'[\/\\:\*\?"<>\|]')
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
-    """
-    Carica un file YAML e restituisce un dict ({} su file vuoto).
+    """Carica un file YAML e restituisce un dict ({} su file vuoto).
+
     Solleva:
         ConfigError: se il file non esiste o se la lettura/parsing fallisce.
     """
@@ -43,8 +41,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 
 def validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    Valida la struttura di `tags_reviewed.yaml`.
+    """Valida la struttura di `tags_reviewed.yaml`.
 
     Ritorna:
         dict con chiavi: errors (list[str]), warnings (list[str]), count (int)
@@ -94,9 +91,7 @@ def validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
         else:
             act = action.strip().lower()
             if act not in ("keep", "drop") and not act.startswith("merge_into:"):
-                errors.append(
-                    f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>."
-                )
+                errors.append(f"{ctx}: 'action' non valida: '{action}'. Usa keep|drop|merge_into:<canonical>.")
             if act.startswith("merge_into:"):
                 target = act.split(":", 1)[1].strip()
                 if not target:
@@ -122,12 +117,8 @@ def validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
 
-def write_validation_report(
-    report_path: Path, result: dict[str, Any], logger: logging.Logger
-) -> None:
-    """
-    Scrive il report JSON della validazione in modo atomico con path-safety.
-    """
+def write_validation_report(report_path: Path, result: dict[str, Any], logger: logging.Logger) -> None:
+    """Scrive il report JSON della validazione in modo atomico con path-safety."""
     report_path = Path(report_path).resolve()
     try:
         # Guard forte + normalizzazione del path

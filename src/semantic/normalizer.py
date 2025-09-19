@@ -1,7 +1,6 @@
 # src/semantic/normalizer.py
-"""
-Modulo per normalizzare i tag proposti dall'auto_tagger sulla base delle regole
-definite nel mapping cliente (semantic_mapping.yaml).
+"""Modulo per normalizzare i tag proposti dall'auto_tagger sulla base delle regole definite nel
+mapping cliente (semantic_mapping.yaml).
 
 Scopo
 -----
@@ -19,7 +18,7 @@ Ordine di applicazione
 Note d’implementazione
 ----------------------
 - Tutti i confronti sono case-insensitive: normalizziamo a lowercase sia chiavi sia valori.
-- `synonyms` accetta sia lista che singolo valore: viene sempre coerzionato a lista di stringhe lower.
+- `synonyms` accetta sia lista che singolo valore: viene coerzionato a lista di stringhe lower.
 """
 
 from __future__ import annotations
@@ -76,9 +75,7 @@ def _normalize_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
                 canonical_map[alias_l] = canon_l
 
     # rules.drop: [tag1, tag2, ...]
-    drops_set = set(
-        _coerce_list_str(rules_raw.get("drop")) if isinstance(rules_raw, Mapping) else []
-    )
+    drops_set = set(_coerce_list_str(rules_raw.get("drop")) if isinstance(rules_raw, Mapping) else [])
 
     # rules.merge_into: {alias: target}
     merge_into_map: Dict[str, str] = {}
@@ -100,7 +97,8 @@ def _normalize_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _apply_synonyms(tag: str, synonyms_map: Mapping[str, Iterable[str]]) -> str:
-    """Se `tag` è presente tra i sinonimi di un canonico, ritorna il canonico, altrimenti il tag stesso."""
+    """Se `tag` è presente tra i sinonimi di un canonico, ritorna il canonico, altrimenti il tag
+    stesso."""
     for canon, syns in synonyms_map.items():
         # syns è già lower/trim
         if tag in syns:
@@ -112,8 +110,7 @@ def normalize_tags(
     candidates: Dict[str, Dict[str, Any]],
     mapping: Dict[str, Any],
 ) -> Dict[str, Dict[str, Any]]:
-    """
-    Applica regole di normalizzazione ai tag candidati.
+    """Applica regole di normalizzazione ai tag candidati.
 
     Parametri:
       - candidates: dict del tipo {

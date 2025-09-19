@@ -96,16 +96,12 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
     func(*bound.args, **bound.kwargs)
 
 
-def convert_markdown(
-    context: ClientContextType, logger: logging.Logger, *, slug: str
-) -> List[Path]:
+def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
     if not raw_dir.exists():
-        raise ConfigError(
-            f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir
-        )
+        raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
     _call_convert_md(_convert_md, shim, book_dir)
@@ -114,9 +110,7 @@ def convert_markdown(
         return mds
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
     if not local_pdfs:
-        raise ConfigError(
-            f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir
-        )
+        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
     raise ConversionError("La conversione non ha prodotto Markdown.", slug=slug, file_path=book_dir)
 
 
@@ -139,9 +133,7 @@ def enrich_frontmatter(
 
     for md in mds:
         name = md.name
-        title = (
-            re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
-        )
+        title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
         tags = _guess_tags_for_name(name, vocab, inv=inv)
         try:
             text = read_text_safe(book_dir, md, encoding="utf-8")
@@ -163,9 +155,7 @@ def enrich_frontmatter(
     return touched
 
 
-def write_summary_and_readme(
-    context: ClientContextType, logger: logging.Logger, *, slug: str
-) -> None:
+def write_summary_and_readme(context: ClientContextType, logger: logging.Logger, *, slug: str) -> None:
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
@@ -186,9 +176,7 @@ def write_summary_and_readme(
     logger.info("Validazione directory MD OK")
 
 
-def build_mapping_from_vision(
-    context: ClientContextType, logger: logging.Logger, *, slug: str
-) -> Path:
+def build_mapping_from_vision(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     base_dir = cast(Path, getattr(context, "base_dir", None) or get_paths(slug)["base"])
     config_dir = base_dir / "config"
     mapping_path = config_dir / "semantic_mapping.yaml"
@@ -198,9 +186,7 @@ def build_mapping_from_vision(
     ensure_within(config_dir, mapping_path)
     ensure_within(config_dir, vision_yaml)
     if not vision_yaml.exists():
-        raise ConfigError(
-            f"Vision YAML non trovato: {vision_yaml}", slug=slug, file_path=vision_yaml
-        )
+        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}", slug=slug, file_path=vision_yaml)
 
     try:
         from pipeline.yaml_utils import yaml_read
@@ -268,13 +254,9 @@ def build_mapping_from_vision(
         safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
         safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
     except Exception as e:
-        raise ConfigError(
-            f"Scrittura mapping fallita ({mapping_path}): {e}", slug=slug, file_path=mapping_path
-        ) from e
+        raise ConfigError(f"Scrittura mapping fallita ({mapping_path}): {e}", slug=slug, file_path=mapping_path) from e
 
-    logger.info(
-        "vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)}
-    )
+    logger.info("vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)})
     return mapping_path
 
 
@@ -300,9 +282,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return int(_copy_local_pdfs_to_raw(src_dir, raw_dir, logger))
 
 
-def build_markdown_book(
-    context: ClientContextType, logger: logging.Logger, *, slug: str
-) -> list[Path]:
+def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
     mds = convert_markdown(context, logger, slug=slug)
     write_summary_and_readme(context, logger, slug=slug)
 
@@ -380,9 +360,7 @@ def index_markdown_to_db(
         except Exception as e:
             logger.warning("Inserimento DB fallito", extra={"file": rel_name, "error": str(e)})
             continue
-    logger.info(
-        "Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)}
-    )
+    logger.info("Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)})
     return inserted_total
 
 
@@ -423,9 +401,7 @@ def _dump_frontmatter(meta: Dict[str, Any]) -> str:
     try:
         import yaml
 
-        return (
-            "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
-        )
+        return "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
     except Exception:
         lines = ["---"]
         if "title" in meta:
@@ -457,9 +433,7 @@ def _as_list_str(x: Any) -> list[str]:
     return [s] if s else []
 
 
-def _merge_frontmatter(
-    existing: Dict[str, Any], *, title: Optional[str], tags: List[str]
-) -> Dict[str, Any]:
+def _merge_frontmatter(existing: Dict[str, Any], *, title: Optional[str], tags: List[str]) -> Dict[str, Any]:
     meta: Dict[str, Any] = dict(existing or {})
     if title and not meta.get("title"):
         meta["title"] = title
@@ -471,9 +445,9 @@ def _merge_frontmatter(
 
 
 def _term_to_pattern(term: str) -> re.Pattern[str]:
-    r"""
-    Costruisce un pattern robusto a confini parola *semantici*:
-    - lookaround espliciti: (?<!\w) ... (?!\w) per includere token con punteggiatura (c++, ml/ops, data+)
+    r"""Costruisce un pattern robusto a confini parola *semantici*:
+
+    - lookaround espliciti: (?<!\w) ... (?!\w) token con punteggiatura (c++, ml/ops, data+)
     - re.escape(term) per i simboli
     - spazi del termine mappati in \s+ per tollerare separatori multipli
     """

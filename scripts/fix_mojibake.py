@@ -93,11 +93,7 @@ def iter_files(root: Path, exts: Iterable[str]) -> Iterable[Path]:
     exts_l = {e.lower() for e in exts}
     for dirpath, dirnames, filenames in os.walk(root):
         # prune excluded dirs
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if (d not in EXCLUDE_DIRS and not d.startswith(".")) or d == ".codex"
-        ]
+        dirnames[:] = [d for d in dirnames if (d not in EXCLUDE_DIRS and not d.startswith(".")) or d == ".codex"]
         for name in filenames:
             p = Path(dirpath) / name
             if p.suffix.lower() in exts_l:
@@ -161,9 +157,7 @@ def main() -> None:
             if args.apply:
                 fp.write_text(fixed, encoding="utf-8", newline="\n")
 
-    print(
-        f"Scansionati: {total_files} file. Modificati: {changed_files}. Sostituzioni: {total_changes}."
-    )
+    print(f"Scansionati: {total_files} file. Modificati: {changed_files}. Sostituzioni: {total_changes}.")
     if details:
         print("\nDettagli (prime 50):")
         for line in details[:50]:

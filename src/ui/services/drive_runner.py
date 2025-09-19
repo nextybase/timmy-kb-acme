@@ -229,9 +229,9 @@ def emit_readmes_for_raw(
     require_env: bool = True,
     ensure_structure: bool = False,
 ) -> Dict[str, str]:
-    """
-    Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback) con:
-      - ambito (titolo), descrizione, esempi
+    """Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback) con:
+
+    - ambito (titolo), descrizione, esempi
     Upload in ciascuna sottocartella. Ritorna {category_name -> file_id}
     """
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
@@ -264,9 +264,7 @@ def emit_readmes_for_raw(
         raw_id = name_to_id.get("raw")
 
     if not raw_id:
-        raise RuntimeError(
-            "Cartella 'raw' non trovata/creata. Esegui 'Crea/aggiorna struttura Drive' e riprova."
-        )
+        raise RuntimeError("Cartella 'raw' non trovata/creata. Esegui 'Crea/aggiorna struttura Drive' e riprova.")
 
     # sottocartelle RAW
     subfolders = _drive_list_folders(svc, raw_id)
@@ -308,9 +306,8 @@ def download_raw_from_drive(
     overwrite: bool = False,
     logger: Optional[logging.Logger] = None,
 ) -> List[Path]:
-    """
-    Scarica i PDF presenti nelle sottocartelle di 'raw/' su Drive nella struttura locale:
-      output/timmy-kb-<slug>/raw/<categoria>/<file>.pdf
+    """Scarica i PDF presenti nelle sottocartelle di 'raw/' su Drive nella struttura locale:
+    output/timmy-kb-<slug>/raw/<categoria>/<file>.pdf.
 
     Ritorna la lista dei percorsi scritti localmente.
     """
@@ -401,12 +398,7 @@ def download_raw_from_drive_with_progress(
                         pre_sizes[str(dest)] = -1
                 # Conta subito gli skip deterministici (stessa size e no overwrite)
                 try:
-                    if (
-                        dest.exists()
-                        and not overwrite
-                        and remote_size > 0
-                        and dest.stat().st_size == remote_size
-                    ):
+                    if dest.exists() and not overwrite and remote_size > 0 and dest.stat().st_size == remote_size:
                         log.info("raw.download.skip.exists", extra={"file_path": str(dest)})
                         done += 1
                         progress_cb(done, total, label)
@@ -424,13 +416,8 @@ def download_raw_from_drive_with_progress(
 
             def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
                 try:
-                    if (
-                        record.name == "pipeline.drive.download"
-                        and record.getMessage() == "download.ok"
-                    ):
-                        path = getattr(record, "file_path", None) or record.__dict__.get(
-                            "file_path"
-                        )
+                    if record.name == "pipeline.drive.download" and record.getMessage() == "download.ok":
+                        path = getattr(record, "file_path", None) or record.__dict__.get("file_path")
                         label = self.label_map.get(str(path), str(path) if path else "-")
                         self.done += 1
                         try:
@@ -442,9 +429,7 @@ def download_raw_from_drive_with_progress(
                             )
                 except Exception:
                     # Evita try/except/pass silenziosi: traccia in debug
-                    logging.getLogger("ui.services.drive_runner").debug(
-                        "progress.emit.failed", exc_info=True
-                    )
+                    logging.getLogger("ui.services.drive_runner").debug("progress.emit.failed", exc_info=True)
 
         dl_logger = get_structured_logger("pipeline.drive.download", context=ctx)
         ph = _ProgressHandler(total=total, start_done=done, label_map=label_map)

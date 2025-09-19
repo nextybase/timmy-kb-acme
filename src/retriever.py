@@ -8,7 +8,8 @@ Funzioni esposte:
 - choose_limit_for_budget(budget_ms) -> int
 - with_config_or_budget(params, config) -> params
 - search_with_config(params, config, embeddings_client) -> list[dict]
-- preview_effective_candidate_limit(params, config) -> (limit:int, source:str, budget_ms:int)
+- preview_effective_candidate_limit(params, config)
+  -> (limit:int, source:str, budget_ms:int)
 
 Design:
 - Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
@@ -39,7 +40,8 @@ class QueryParams:
     """Parametri strutturati per la ricerca.
 
     Note:
-    - `db_path`: percorso del DB SQLite; se None, usa il default interno di `fetch_candidates`.
+    - `db_path`: percorso del DB SQLite; se None, usa il default interno di
+      `fetch_candidates`.
     - `project_slug`: progetto/spazio logico da cui recuperare i candidati.
     - `scope`: sotto-spazio o ambito (es. sezione o agente).
     - `query`: testo naturale da embeddare e confrontare con i candidati.
@@ -59,7 +61,7 @@ class QueryParams:
 
 
 def _default_candidate_limit() -> int:
-    """Singola fonte di verita del default per candidate_limit (evita drift)."""
+    """Singola fonte di verità del default per candidate_limit (evita drift)."""
     field = QueryParams.__dataclass_fields__.get("candidate_limit")
     if field is None:
         return 4000
@@ -104,20 +106,18 @@ MAX_CANDIDATE_LIMIT = 20000
 
 
 def _validate_params(params: QueryParams) -> None:
-    """Validazioni minime (fail-fast, senza fallback). Range candidato: 500-20000 inclusi."""
+    """Validazioni minime (fail-fast, senza fallback).
+
+    Range candidato: 500-20000 inclusi.
+    """
     if not params.project_slug.strip():
         raise RetrieverError("project_slug vuoto")
     if not params.scope.strip():
         raise RetrieverError("scope vuoto")
     if params.candidate_limit < 0:
         raise RetrieverError("candidate_limit negativo")
-    if (
-        0 < params.candidate_limit < MIN_CANDIDATE_LIMIT
-        or params.candidate_limit > MAX_CANDIDATE_LIMIT
-    ):
-        raise RetrieverError(
-            f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, {MAX_CANDIDATE_LIMIT}]"
-        )
+    if 0 < params.candidate_limit < MIN_CANDIDATE_LIMIT or params.candidate_limit > MAX_CANDIDATE_LIMIT:
+        raise RetrieverError(f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, " f"{MAX_CANDIDATE_LIMIT}]")
     if params.k < 0:
         raise RetrieverError("k negativo")
 
@@ -128,8 +128,8 @@ def _score_candidates(
 ) -> Iterable[tuple[dict[str, Any], int]]:
     """Produce coppie (item_dict, idx) con score coseno e indice per tie-break.
 
-    L'item_dict ha le chiavi: content, meta, score (float).
-    Il tie-break deterministico usa l'indice di enumerazione (idx ascendente).
+    L'item_dict ha le chiavi: content, meta, score (float). Il tie-break deterministico
+    usa l'indice di enumerazione (idx ascendente).
     """
     for idx, c in enumerate(cands):
         sim = cosine(qv, c.get("embedding") or [])
@@ -147,10 +147,14 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
-    1) Ottiene l'embedding di `params.query` tramite `embeddings_client.embed_texts([str])`.
-    2) Carica al massimo `params.candidate_limit` candidati per `(project_slug, scope)`.
-    3) Calcola la similarità coseno e ordina i candidati per score decrescente con tie-break deterministico.
-    4) Restituisce i top-`params.k` in forma di lista di dict: {content, meta, score}.
+    1) Ottiene l'embedding di `params.query` tramite
+       `embeddings_client.embed_texts([str])`.
+    2) Carica al massimo `params.candidate_limit` candidati per
+       `(project_slug, scope)`.
+    3) Calcola similarità coseno e ordina per score decrescente con tie-break
+       deterministico.
+    4) Restituisce i top-`params.k` in forma di lista di dict:
+       {content, meta, score}.
     """
     _validate_params(params)
 
@@ -200,7 +204,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
             scored_sorted = sorted(scored_iter, key=lambda t: (-t[0]["score"], t[1]))
             out = [item for item, _ in scored_sorted]
         else:
-            # Ottimizzazione O(n log k) mantenendo l'ordinamento finale deterministico
+            # O(n log k) mantenendo ordinamento finale deterministico
             topk = nlargest(k, scored_iter, key=lambda t: (t[0]["score"], -t[1]))
             out = [item for item, _ in sorted(topk, key=lambda t: (-t[0]["score"], t[1]))]
 
@@ -228,7 +232,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     except Exception:
         # Fallback di logging compatibile (solo messaggio)
         LOGGER.info(
-            "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms",
+            ("search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms " "fetch=%.1fms score+sort=%.1fms"),
             params.k,
             n,
             params.candidate_limit,
@@ -241,19 +245,21 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
 
 
 def with_config_candidate_limit(
-    params: QueryParams, config: Optional[dict[str, Any]]
+    params: QueryParams,
+    config: Optional[dict[str, Any]],
 ) -> QueryParams:
-    """Ritorna una copia di `params` applicando `candidate_limit` da config se opportuno.
+    """Ritorna una copia applicando `candidate_limit` da config se opportuno.
 
-    Precedenza implementata:
-      - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal default del dataclass),
-        NON viene sovrascritto.
-      - Se è rimasto al default, e il config contiene `retriever.candidate_limit` valido (>0),
-        viene applicato.
+    Precedenza:
+      - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal
+        default del dataclass), NON viene sovrascritto.
+      - Se è rimasto al default, e il config contiene `retriever.candidate_limit`
+        valido (>0), viene applicato.
 
-    Nota: se il chiamante imposta esplicitamente il valore uguale al default (4000), questa funzione
-    non può distinguerlo dal caso “non impostato” e applicherà il config. In tal caso, evitare di
-    chiamare questa funzione oppure passare un valore diverso dal default per esprimere l’intento.
+    Nota: se il chiamante imposta esplicitamente il valore uguale al default
+    (4000), questa funzione non può distinguerlo dal caso “non impostato” e
+    applicherà il config. In tal caso, evitare questa funzione oppure passare un
+    valore diverso dal default per esprimere l’intento.
     """
     default_lim = _default_candidate_limit()
 
@@ -289,15 +295,14 @@ def with_config_candidate_limit(
 def choose_limit_for_budget(budget_ms: int) -> int:
     """Euristica: mappa il budget di latenza (ms) su candidate_limit.
 
-    Soglie (raffinate dopo una prima calibrazione interna):
+    Soglie:
     - <= 180ms  -> 1000
     - <= 280ms  -> 2000
     - <= 420ms  -> 4000
     - >  420ms  -> 8000
 
-    Nota: questi valori sono un punto di partenza e vanno verificati
-    su dataset reali. Usa `src/tools/retriever_calibrate.py` per affinare
-    ulteriormente e aggiorna qui le soglie se necessario.
+    Nota: valori iniziali; verificare su dataset reali. Vedi
+    `src/tools/retriever_calibrate.py` per calibrazione futura.
     """
     try:
         b = int(budget_ms)
@@ -319,7 +324,8 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
 
     Precedenza:
       - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
-      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 -> usa choose_limit_for_budget.
+      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 ->
+        usa choose_limit_for_budget.
       - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
       - Fallback: lascia il default del dataclass.
     """
@@ -394,10 +400,11 @@ def preview_effective_candidate_limit(
     params: QueryParams,
     config: Optional[dict[str, Any]],
 ) -> tuple[int, str, int]:
-    """Calcola il `candidate_limit` effettivo **senza** mutare `params` e **senza** loggare.
+    """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
 
-    Ritorna (limit, source, budget_ms) dove `source` ∈ {"explicit","auto_by_budget","config","default"}.
-    Utile per la UI per mostrare un'etichetta tipo: "Limite stimato: N".
+    Ritorna (limit, source, budget_ms) dove `source` ∈
+    {"explicit", "auto_by_budget", "config", "default"}.
+    Utile per la UI per mostrare un’etichetta: "Limite stimato: N".
     """
     default_lim = _default_candidate_limit()
 
@@ -429,7 +436,7 @@ def preview_effective_candidate_limit(
 
 
 __all__ = [
-    "RetrieverError",  # re-export dall'omonimo modulo
+    "RetrieverError",  # re-export
     "QueryParams",
     "cosine",
     "search",

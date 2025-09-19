@@ -4,13 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from ui.utils.core import (
-    ensure_within_and_resolve,
-    safe_write_text_compat,
-    to_kebab,
-    yaml_dump,
-    yaml_load,
-)
+from ui.utils.core import ensure_within_and_resolve, safe_write_text_compat, to_kebab, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
     "context",
@@ -42,8 +36,8 @@ def load_default_mapping() -> Dict[str, Any]:
 
 
 def split_mapping(root: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
-    """
-    Ritorna (categorie_editabili, blob_riservato).
+    """Ritorna (categorie_editabili, blob_riservato).
+
     Categorie = {cat: {"ambito": str, "descrizione": str, "esempio": List[str]}}
     """
     reserved = {k: v for k, v in root.items() if k in MAPPING_RESERVED}
@@ -91,9 +85,7 @@ def build_mapping(
     return out
 
 
-def validate_categories(
-    categories: Dict[str, Dict[str, Any]], *, normalize_keys: bool
-) -> Optional[str]:
+def validate_categories(categories: Dict[str, Dict[str, Any]], *, normalize_keys: bool) -> Optional[str]:
     seen = set()
     for k in categories.keys():
         kk = to_kebab(k) if normalize_keys else k.strip()
@@ -125,9 +117,7 @@ def items_to_examples(items: List[Dict[str, str]]) -> List[str]:
 # ---- Persistenza del mapping rivisto ----
 
 
-def save_tags_reviewed(
-    slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output"
-) -> Path:
+def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
     base_root = Path(base_root)
     client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
@@ -140,9 +130,7 @@ def save_tags_reviewed(
 
 
 def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
-    """
-    Carica il mapping rivisto del cliente (formato unico: 'tags_reviewed.yaml').
-    """
+    """Carica il mapping rivisto del cliente (formato unico: 'tags_reviewed.yaml')."""
     base_root = Path(base_root)
     sem_dir: Path = ensure_within_and_resolve(
         base_root / f"timmy-kb-{slug}",
@@ -156,26 +144,20 @@ def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[s
 
 
 def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Converte il mapping categorie -> struttura cartelle in formato moderno:
-      { 'raw': {categoria_kebab: {} ...}, 'contrattualistica': {} }
+    """Converte il mapping categorie -> struttura cartelle in formato moderno:
+
+    { 'raw': {categoria_kebab: {} ...}, 'contrattualistica': {} }
     """
     cats, _ = split_mapping(mapping)
-    raw_children: Dict[str, Dict[str, Any]] = {
-        to_kebab(k): {} for k in sorted(cats.keys(), key=lambda x: to_kebab(x))
-    }
+    raw_children: Dict[str, Dict[str, Any]] = {to_kebab(k): {} for k in sorted(cats.keys(), key=lambda x: to_kebab(x))}
     return {
         "raw": raw_children,
         "contrattualistica": {},
     }
 
 
-def write_raw_structure_yaml(
-    slug: str, structure: Dict[str, Any], *, base_root: Path | str = "output"
-) -> Path:
-    """
-    Scrive un YAML sintetico della struttura RAW in semantic/_raw_from_mapping.yaml (locale).
-    """
+def write_raw_structure_yaml(slug: str, structure: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
+    """Scrive un YAML sintetico della struttura RAW in semantic/_raw_from_mapping.yaml (locale)."""
     base_root = Path(base_root)
     sem_dir: Path = ensure_within_and_resolve(
         base_root / f"timmy-kb-{slug}",

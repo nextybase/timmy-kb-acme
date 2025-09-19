@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/constants.py
-"""
-Single Source of Truth (SSoT) per i **nomi di directory/file** e per alcuni **MIME type**
-usati in tutta la pipeline Timmy-KB.
+"""Single Source of Truth (SSoT) per i **nomi di directory/file** e per alcuni **MIME type** usati
+in tutta la pipeline Timmy-KB.
 
 Perché qui:
 - Riduce i "magic string" dispersi nel codice.

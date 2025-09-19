@@ -7,13 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
-from semantic.api import (
-    convert_markdown,
-    enrich_frontmatter,
-    get_paths,
-    load_reviewed_vocab,
-    write_summary_and_readme,
-)
+from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 
 __all__ = ["build_markdown_headless"]
 
@@ -32,13 +26,11 @@ def build_markdown_headless(
     *,
     slug: str,
 ) -> Dict[str, object]:
-    """
-    Esegue la pipeline semantica in modalità headless (senza prompt/UI):
+    """Esegue la pipeline semantica in modalità headless (senza prompt/UI):
 
-      1) convert_markdown -> genera .md in book/
-      2) load_reviewed_vocab -> carica vocabolario canonico da base/semantic
-      3) enrich_frontmatter -> arricchisce i frontmatter con titoli e tag
-      4) write_summary_and_readme -> genera SUMMARY.md e README.md e valida
+    1) convert_markdown -> genera .md in book/ 2) load_reviewed_vocab -> carica vocabolario canonico
+    da base/semantic 3) enrich_frontmatter -> arricchisce i frontmatter con titoli e tag 4)
+    write_summary_and_readme -> genera SUMMARY.md e README.md e valida
     """
     # 1) Conversione PDF -> Markdown
     converted: List[Path] = convert_markdown(ctx, log, slug=slug)

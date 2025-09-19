@@ -47,17 +47,15 @@ class Result:
 
 
 class _EmbeddingsClient:
-    """
-    Adattatore minimo verso il client embeddings reale.
+    """Adattatore minimo verso il client embeddings reale.
+
     Non fa fallback: se il backend non è configurato, fallisce a import-time.
     """
 
     def __init__(self) -> None:
         self._real = OpenAIEmbeddings()
 
-    def embed_texts(
-        self, texts: Sequence[str], *, model: str | None = None
-    ) -> Sequence[Sequence[float]]:
+    def embed_texts(self, texts: Sequence[str], *, model: str | None = None) -> Sequence[Sequence[float]]:
         embedded = self._real.embed_texts(texts, model=model)
         return [list(map(float, seq)) for seq in embedded]
 
@@ -77,8 +75,8 @@ def _load_queries(qfile: Path) -> List[str]:
 
 
 def _load_client_config(project_slug: str) -> dict[str, Any]:
-    """
-    Carica output/timmy-kb-<slug>/config/config.yaml.
+    """Carica output/timmy-kb-<slug>/config/config.yaml.
+
     Nessun fallback: solleva se mancante.
     """
     cfg_path = Path("output") / f"timmy-kb-{project_slug}" / "config" / "config.yaml"
@@ -106,9 +104,7 @@ def _run_once(
     apply_cfg: bool,
 ) -> Tuple[Result, int]:
     client = _EmbeddingsClient()
-    params = QueryParams(
-        db_path=db_path, project_slug=project, scope=scope, query=query, k=k, candidate_limit=limit
-    )
+    params = QueryParams(db_path=db_path, project_slug=project, scope=scope, query=query, k=k, candidate_limit=limit)
     if apply_cfg:
         params = _apply_policy_with_config(params, project)
 
@@ -163,10 +159,7 @@ def main() -> None:
     ap.add_argument(
         "--apply-config",
         action="store_true",
-        help=(
-            "Applica `with_config_or_budget` usando "
-            "output/timmy-kb-<slug>/config/config.yaml (no fallback)"
-        ),
+        help=("Applica `with_config_or_budget` usando " "output/timmy-kb-<slug>/config/config.yaml (no fallback)"),
     )
     ap.add_argument(
         "--json",
@@ -253,10 +246,7 @@ def main() -> None:
         threshold = min_p95 * 1.10
         candidates = [limit for limit, _, p95 in rows if p95 <= threshold]
         suggested = min(candidates) if candidates else min(limit for limit, *_ in rows)
-        print(
-            "Suggerimento: candidate_limit={s} "
-            "(p95 entro +10% del minimo osservato)".format(s=suggested)
-        )
+        print("Suggerimento: candidate_limit={s} " "(p95 entro +10% del minimo osservato)".format(s=suggested))
         if args.json:
             payload = {
                 "project": args.project,

@@ -35,8 +35,8 @@ def _as_str(val: Any) -> str:
 
 
 def extract_text_from_pdf(path: str) -> str:
-    """
-    Legge TUTTO il testo dal PDF.
+    """Legge TUTTO il testo dal PDF.
+
     Strategia:
       - prova con pypdf, se non disponibile fa fallback su PyMuPDF (fitz).
     Se entrambe mancano, alza RuntimeError con istruzioni d'installazione.
@@ -65,9 +65,7 @@ def extract_text_from_pdf(path: str) -> str:
                     collected.append(text)
             return "\n".join(collected)
         except Exception as e:  # pragma: no cover
-            raise RuntimeError(
-                "Errore lettura PDF con pypdf; assicurarsi che il file sia valido o usa PyMuPDF"
-            ) from e
+            raise RuntimeError("Errore lettura PDF con pypdf; assicurarsi che il file sia valido o usa PyMuPDF") from e
 
     try:
         import fitz  # PyMuPDF
@@ -112,9 +110,7 @@ def extract_text_from_pdf(path: str) -> str:
                 pass
         return "\n".join(collected)
     except Exception as e:  # pragma: no cover
-        raise RuntimeError(
-            "Errore lettura PDF; assicurarsi che il file sia valido e che PyMuPDF funzioni"
-        ) from e
+        raise RuntimeError("Errore lettura PDF; assicurarsi che il file sia valido e che PyMuPDF funzioni") from e
 
 
 @lru_cache(maxsize=4)
@@ -127,9 +123,7 @@ def _load_spacy(lang: str = "it") -> Any:
     try:
         import spacy
     except Exception as e:  # pragma: no cover
-        raise RuntimeError(
-            "Installare spaCy: pip install spacy e il modello (es. it_core_news_sm)"
-        ) from e
+        raise RuntimeError("Installare spaCy: pip install spacy e il modello (es. it_core_news_sm)") from e
 
     if lang.startswith("it"):
         models = ["it_core_news_md", "it_core_news_sm"]
@@ -144,8 +138,7 @@ def _load_spacy(lang: str = "it") -> Any:
             last_err = e
             continue
     raise RuntimeError(
-        f"Modello spaCy mancante: installa uno tra {', '.join(models)} "
-        f"(es. python -m spacy download {models[-1]})"
+        f"Modello spaCy mancante: installa uno tra {', '.join(models)} " f"(es. python -m spacy download {models[-1]})"
     ) from last_err
 
 
@@ -166,10 +159,10 @@ def normalize_phrase(s: str) -> str:
 
 
 def spacy_candidates(text: str, lang: str = "it", max_ngram: int = 4) -> List[str]:
-    """
-    Estrae noun-chunks e proper-nouns (1-4 token) con spaCy.
-    Normalizza (lower, strip punteggiatura), filtra stopword e token troppo corti.
-    Ritorna lista di candidate (non dedup).
+    """Estrae noun-chunks e proper-nouns (1-4 token) con spaCy.
+
+    Normalizza (lower, strip punteggiatura), filtra stopword e token troppo corti. Ritorna lista di
+    candidate (non dedup).
     """
     if not text:
         return []
@@ -205,8 +198,8 @@ def spacy_candidates(text: str, lang: str = "it", max_ngram: int = 4) -> List[st
 
 
 def yake_scores(text: str, top_k: int = 30, lang: str = "it") -> List[Tuple[str, float]]:
-    """
-    Usa YAKE per estrarre (phrase, score) [score più basso = migliore].
+    """Usa YAKE per estrarre (phrase, score) [score più basso = migliore].
+
     Converti in punteggio normalizzato 0..1 dove 1 è migliore (es. score_yake = 1 / (1 + raw)).
     """
     try:
@@ -236,8 +229,8 @@ def keybert_scores(
     model_name: str = "all-MiniLM-L6-v2",
     top_k: int = 30,
 ) -> List[Tuple[str, float]]:
-    """
-    Usa SentenceTransformer per embed del documento e dei candidati; score = cos(doc, cand).
+    """Usa SentenceTransformer per embed del documento e dei candidati; score = cos(doc, cand).
+
     Ritorna lista (phrase, score in 0..1).
     """
     try:
@@ -272,9 +265,7 @@ def fuse_and_dedup(
     min_len: int = 3,
     max_len: int = 80,
 ) -> List[Tuple[str, float]]:
-    """
-    Unifica le sorgenti e calcola uno score ensemble.
-    """
+    """Unifica le sorgenti e calcola uno score ensemble."""
 
     def norm_ok(s: str) -> bool:
         return bool(min_len <= len(s) <= max_len and bool(re.search(r"[a-z0-9]", s)))
@@ -336,9 +327,7 @@ def cluster_synonyms(
     model_name: str = "all-MiniLM-L6-v2",
     sim_thr: float = 0.82,
 ) -> List[ClusterGroup]:
-    """
-    Clustra per embedding basandosi su soglia di similarità (connected components).
-    """
+    """Clustra per embedding basandosi su soglia di similarità (connected components)."""
     try:
         _ = __import__("sentence_transformers")
     except Exception as e:  # pragma: no cover
@@ -378,9 +367,7 @@ def cluster_synonyms(
 
     out: List[ClusterGroup] = []
     for comp in clusters:
-        members: List[Tuple[str, float]] = [
-            (phrases[idx], scores.get(phrases[idx], 0.0)) for idx in comp
-        ]
+        members: List[Tuple[str, float]] = [(phrases[idx], scores.get(phrases[idx], 0.0)) for idx in comp]
         # canonical: frase con score più alto
         canonical = max(members, key=lambda x: x[1])[0]
         synonyms = [p for p, _ in members if p != canonical]

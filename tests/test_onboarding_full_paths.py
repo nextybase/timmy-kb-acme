@@ -9,11 +9,9 @@ import pytest
 
 
 @pytest.mark.parametrize("slug", ["acme"])
-def test_onboarding_full_respects_repo_root_dir(
-    tmp_path: Path, monkeypatch: Any, slug: str
-) -> None:
-    """
-    L'orchestratore deve:
+def test_onboarding_full_respects_repo_root_dir(tmp_path: Path, monkeypatch: Any, slug: str) -> None:
+    """L'orchestratore deve:
+
     - caricare ClientContext PRIMA di determinare i path,
     - creare la cartella logs sotto REPO_ROOT_DIR (override rispettato),
     - non eseguire lavoro esterno durante il test (push / build),
@@ -43,6 +41,5 @@ def test_onboarding_full_respects_repo_root_dir(
     # Assert: la directory logs deve essere stata creata sotto REPO_ROOT_DIR
     log_dir = repo_root / "logs"
     assert log_dir.exists() and log_dir.is_dir(), (
-        "log_dir non creato sotto REPO_ROOT_DIR; "
-        "verifica che onboarding_full_main usi context.base_dir"
+        "log_dir non creato sotto REPO_ROOT_DIR; " "verifica che onboarding_full_main usi context.base_dir"
     )

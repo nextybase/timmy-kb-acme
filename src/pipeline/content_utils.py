@@ -28,9 +28,10 @@ def _titleize(name: str) -> str:
 
 
 def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
-    """
-    Wrapper locale che delega la guardia STRONG a `ensure_within` (SSoT)
-    e restituisce il path risolto. Mantiene la semantica di errore del modulo
+    """Wrapper locale che delega la guardia STRONG a `ensure_within` (SSoT) e restituisce il path
+    risolto.
+
+    Mantiene la semantica di errore del modulo
     convertendo in `PipelineError` per coerenza con i call-site esistenti.
     """
     try:
@@ -46,9 +47,7 @@ def _sorted_pdfs(cat_dir: Path) -> list[Path]:
     return sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
 
 
-def _append_folder_headings(
-    lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]
-) -> None:
+def _append_folder_headings(lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]) -> None:
     for depth, folder in enumerate(folder_parts):
         level = 2 + depth
         key = (depth, folder.lower())
@@ -70,9 +69,10 @@ def _append_pdf_section(lines: list[str], file_stem: str, *, level: int, filenam
 
 
 def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
-    """
-    Verifica che la cartella markdown esista, sia una directory e sia "safe"
-    rispetto a ctx.base_dir. Ritorna il Path risolto se valida.
+    """Verifica che la cartella markdown esista, sia una directory e sia "safe" rispetto a
+    ctx.base_dir.
+
+    Ritorna il Path risolto se valida.
     """
     # Evita passaggi di Path|None a Path(...)
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
@@ -86,8 +86,8 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
 
 
 def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
-    """
-    Crea (o sovrascrive) README.md nella cartella markdown target.
+    """Crea (o sovrascrive) README.md nella cartella markdown target.
+
     I test verificano solo l'esistenza del file.
     """
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
@@ -106,10 +106,8 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
 
 
 def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
-    """
-    Genera SUMMARY.md elencando i .md nella cartella target
-    (escludendo README.md e SUMMARY.md).
-    """
+    """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e
+    SUMMARY.md)."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
     target = _ensure_safe(ctx.base_dir, target_input)
     target.mkdir(parents=True, exist_ok=True)
@@ -122,16 +120,13 @@ def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pa
             continue
         items.append(f"- [{p.stem}]({p.name})")
 
-    safe_write_text(
-        summary, "# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8", atomic=True
-    )
+    safe_write_text(summary, "# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8", atomic=True)
     return summary
 
 
 def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> None:
-    """
-    Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file
-    <categoria>.md dentro md_dir con struttura:
+    """Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file <categoria>.md dentro
+    md_dir con struttura:
 
       - H1: nome categoria (capitalizzato)
       - Heading per ogni livello di sottocartella (H2 = livello 0, H3 = livello 1, ...)

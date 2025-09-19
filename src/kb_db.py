@@ -1,5 +1,4 @@
-"""
-Archivio SQLite leggero per Timmy KB.
+"""Archivio SQLite leggero per Timmy KB.
 
 Espone:
 - insert_chunks(project_slug, scope, path, version, meta_dict, chunks, embeddings)
@@ -126,9 +125,7 @@ def insert_chunks(
         )
         con.commit()
         inserted = cur.rowcount if cur.rowcount is not None else len(rows)
-    LOGGER.info(
-        "Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path
-    )
+    LOGGER.info("Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path)
     return inserted
 
 

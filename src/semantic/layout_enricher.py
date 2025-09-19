@@ -14,8 +14,8 @@ from typing import Any, Dict, Iterable, List, Tuple, cast
 
 @dataclass(frozen=True)
 class Constraints:
-    """
-    Vincoli obbligatori per l'arricchimento semantico.
+    """Vincoli obbligatori per l'arricchimento semantico.
+
     - max_depth: profondità massima consentita (root = 1).
     - allowed_prefixes: prefissi ammessi per i nodi top-level (kebab-case).
     - semantic_mapping: mappa canonico -> sinonimi/varianti per evitare duplicati.
@@ -69,11 +69,9 @@ class Constraints:
 # ============================
 
 
-def suggest_layout(
-    base_yaml: Dict[str, Any], vision_text: str, constraints: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Genera una proposta di struttura YAML (dict) coerente con il Vision Statement.
+def suggest_layout(base_yaml: Dict[str, Any], vision_text: str, constraints: Dict[str, Any]) -> Dict[str, Any]:
+    """Genera una proposta di struttura YAML (dict) coerente con il Vision Statement.
+
     - Funzione pura: nessun I/O, nessun accesso a rete o env.
     - Non modifica base_yaml: restituisce SOLO la proposta aggiuntiva.
     - Applica normalizzazione kebab-case, ordinamento deterministico,
@@ -236,10 +234,10 @@ def _extract_keywords(text: str, min_len: int = 4, top_k: int = 24) -> List[str]
 
 
 def _map_tokens_to_topics(tokens: List[str], semantic_map: Dict[str, Tuple[str, ...]]) -> List[str]:
-    """
-    Mappa i token a categorie canoniche usando semantic_map.
-    Se un token corrisponde a canonico o a un suo sinonimo, associa al canonico.
-    Mantiene l'ordine per frequenza d'apparizione (approssimata).
+    """Mappa i token a categorie canoniche usando semantic_map.
+
+    Se un token corrisponde a canonico o a un suo sinonimo, associa al canonico. Mantiene l'ordine
+    per frequenza d'apparizione (approssimata).
     """
     if not tokens:
         return []
@@ -261,8 +259,8 @@ def _map_tokens_to_topics(tokens: List[str], semantic_map: Dict[str, Tuple[str, 
 
 
 def _select_top_level_topics(topics: List[str], allowed_prefixes: Tuple[str, ...]) -> List[str]:
-    """
-    Se allowed_prefixes è non vuoto, filtra i topics per prefisso ammesso.
+    """Se allowed_prefixes è non vuoto, filtra i topics per prefisso ammesso.
+
     Altrimenti, restituisce i topics così come sono.
     """
     if not allowed_prefixes:
@@ -276,9 +274,7 @@ def _first_token(kebab: str) -> str:
 
 
 def _get_branch(tree: Dict[str, Any], path: List[str]) -> Dict[str, Any] | None:
-    """
-    Recupera il sotto-dizionario alla path (se esiste ed è dict), altrimenti None.
-    """
+    """Recupera il sotto-dizionario alla path (se esiste ed è dict), altrimenti None."""
     cur: Any = tree
     for k in path:
         if not (isinstance(cur, dict) and k in cur):
@@ -306,9 +302,7 @@ def _build_branch(
 
     # Sottotemi: prendi token che iniziano con lo stesso prefisso principale o che contengono il top
     # (approccio conservativo e deterministico, senza ML).
-    subtokens = [
-        t for t in tokens if t != top and (top in t or _first_token(t) == _first_token(top))
-    ]
+    subtokens = [t for t in tokens if t != top and (top in t or _first_token(t) == _first_token(top))]
     # Rendi un set ordinato deterministico
     candidates = []
     seen = set()
@@ -363,9 +357,7 @@ def _validate_node(node: Dict[str, Any], *, depth: int, max_depth: int) -> None:
 
 
 def _enforce_max_nodes(tree: Dict[str, Any], max_nodes: int) -> None:
-    """
-    Garantisce che il numero totale di nodi (dict) non superi max_nodes.
-    """
+    """Garantisce che il numero totale di nodi (dict) non superi max_nodes."""
     count = _count_nodes(tree)
     if count <= max_nodes:
         return
@@ -436,10 +428,8 @@ def _next_alt_key(d: Dict[str, Any], base: str) -> str:
 
 
 def _sorted_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ritorna un nuovo dict ordinato lessicograficamente sulle chiavi,
-    applicato ricorsivamente per stabilità Git.
-    """
+    """Ritorna un nuovo dict ordinato lessicograficamente sulle chiavi, applicato ricorsivamente per
+    stabilità Git."""
     out: Dict[str, Any] = {}
     for k in sorted(d.keys()):
         v = d[k]

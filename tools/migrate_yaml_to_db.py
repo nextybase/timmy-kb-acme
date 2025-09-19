@@ -34,9 +34,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Migrazione tags_reviewed.yaml -> SQLite tags.db")
     ap.add_argument("--yaml", dest="yaml_path", help="Percorso a tags_reviewed.yaml")
     ap.add_argument("--slug", dest="slug", help="Slug cliente (usa base_root/output)")
-    ap.add_argument(
-        "--base-root", dest="base_root", default="output", help="Root output (default: output)"
-    )
+    ap.add_argument("--base-root", dest="base_root", default="output", help="Root output (default: output)")
     args = ap.parse_args()
 
     yaml_path: Path
@@ -44,10 +42,7 @@ def main() -> int:
         yaml_path = Path(args.yaml_path).expanduser().resolve()
     elif args.slug:
         yaml_path = (
-            Path(args.base_root).expanduser().resolve()
-            / f"timmy-kb-{args.slug}"
-            / "semantic"
-            / "tags_reviewed.yaml"
+            Path(args.base_root).expanduser().resolve() / f"timmy-kb-{args.slug}" / "semantic" / "tags_reviewed.yaml"
         )
     else:
         raise SystemExit("Specifica --yaml o --slug.")

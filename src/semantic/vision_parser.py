@@ -114,8 +114,7 @@ def _to_list(body: str) -> List[str]:
 
 
 def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
-    """
-    Estrae testo dal PDF e genera `out_yaml_path` con schema YAML stabile.
+    """Estrae testo dal PDF e genera `out_yaml_path` con schema YAML stabile.
 
     Schema:
       meta.title, vision, mission,

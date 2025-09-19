@@ -1,6 +1,5 @@
 # src/pipeline/context.py
-"""
-ClientContext – contenitore unico di stato e configurazione per Timmy-KB.
+"""ClientContext – contenitore unico di stato e configurazione per Timmy-KB.
 
 Che cosa fa questo modulo (overview):
 - Valida lo slug cliente (`validate_slug`).
@@ -11,21 +10,25 @@ Che cosa fa questo modulo (overview):
 - Carica la configurazione YAML del cliente (`_load_yaml_config`).
 - Raccoglie le variabili d'ambiente necessarie/opzionali (`_load_env`) e calcola
   la policy di redazione log (in `env_utils`).
-- Espone il dataclass `ClientContext.load(...)` che costruisce in modo coerente:
-  percorsi canonici (repo_root_dir, raw_dir, md_dir, log_dir, …), impostazioni, logger, flag runtime.
-- Fornisce utility di tracking e correlazione (`log_error`, `log_warning`, `set_step_status`, `summary`,
-  `with_stage`, `with_run_id`).
+- Espone il dataclass `ClientContext.load(...)` che costruisce in modo coerente
+  percorsi canonici (repo_root_dir, raw_dir, md_dir, log_dir, …), impostazioni,
+  logger e flag runtime.
+- Fornisce utility di tracking e correlazione (`log_error`, `log_warning`,
+  `set_step_status`, `summary`, `with_stage`, `with_run_id`).
 
 Linee guida rispettate:
-- **No I/O interattivo** e **no sys.exit**: gli orchestratori gestiscono UX e termination.
+- **No I/O interattivo** e **no sys.exit**: gli orchestratori gestiscono UX e
+  termination.
 - **Path-safety STRONG**: i path scritti vengono verificati con `ensure_within(...)`.
-- **SSoT** per le scritture: quando si crea il config iniziale si usa `safe_write_text` (atomica).
-- **Compatibilità**: i campi storici (`base_dir`, `output_dir`, ecc.) restano ma derivano da `repo_root_dir`.
+- **SSoT** per le scritture: quando si crea il config iniziale si usa
+  `safe_write_text` (atomica).
+- **Compatibilità**: i campi storici (`base_dir`, `output_dir`, ecc.) restano ma
+  derivano da `repo_root_dir`.
 """
 
 from __future__ import annotations
 
-import logging  # per tipizzare/gestire il logger
+import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,12 +42,12 @@ from .path_utils import validate_slug as _validate_slug
 
 
 def validate_slug(slug: str) -> str:
-    """Valida lo slug delegando a `path_utils.validate_slug` e mappando l'errore di dominio.
+    """Valida lo slug delegando a `path_utils.validate_slug` e mappando l'errore.
 
     Args:
         slug: Identificativo cliente da validare.
 
-    Restituisce:
+    Returns:
         Lo slug originale se valido.
 
     Raises:
@@ -53,7 +56,7 @@ def validate_slug(slug: str) -> str:
     try:
         return _validate_slug(slug)
     except InvalidSlug as e:
-        # Mappa l'eccezione di dominio in ConfigError per coerenza con il resto della pipeline
+        # Mappa l'eccezione di dominio in ConfigError per coerenza con la pipeline
         raise ConfigError(str(e), slug=slug) from e
 
 
@@ -65,7 +68,8 @@ class ClientContext:
     - Identità cliente (`slug`, `client_name`);
     - Percorso radice del workspace cliente **canonico** (`repo_root_dir`) e derivati locali
       (`raw_dir`, `md_dir`, `log_dir`, ...);
-    - Configurazione YAML caricata (in `settings`) e path di riferimento (`config_path`, `mapping_path`);
+    - Configurazione YAML caricata (in `settings`) e path di riferimento
+      (`config_path`, `mapping_path`);
     - Variabili d’ambiente risolte da `.env`/processo (`env`);
     - Flag runtime e strutture di tracking (`error_list`, `warning_list`, `step_status`);
     - Logger strutturato **iniettato** e riutilizzato (no print).
@@ -124,14 +128,14 @@ class ClientContext:
     # Toggle redazione log (calcolato in load())
     redact_logs: bool = False
 
-    # =============================== Caricamento/inizializzazione ===============================
+    # ============================ Caricamento / init ============================
 
     @classmethod
     def load(
         cls,
         slug: str,
         logger: Optional[logging.Logger] = None,
-        interactive: Optional[bool] = None,  # mantenuto per compatibilità, ma ignorato
+        interactive: Optional[bool] = None,  # compat, ignorato
         *,
         require_env: bool = True,
         run_id: Optional[str] = None,
@@ -143,7 +147,8 @@ class ClientContext:
         Pipeline di caricamento:
           1) Valida `slug`.
           2) Carica ENV (richiesto/opzionale) → override `REPO_ROOT_DIR` se presente.
-          3) Determina `repo_root_dir` e garantisce la presenza di `config/config.yaml` (bootstrap se mancante).
+          3) Determina `repo_root_dir` e garantisce la presenza di `config/config.yaml`
+             (bootstrap se mancante).
           4) Carica impostazioni dal YAML.
           5) Calcola `redact_logs` (policy centralizzata).
         """
@@ -153,7 +158,7 @@ class ClientContext:
         # Deprecation notice soft (parametro non più usato qui)
         if interactive is not None:
             _logger.debug(
-                "Parametro 'interactive' è deprecato e viene ignorato; gestire l'I/O utente negli orchestratori.",
+                ("Parametro 'interactive' è deprecato e viene ignorato; " "gestire l'I/O utente negli orchestratori."),
                 extra={"slug": slug},
             )
 
@@ -200,7 +205,7 @@ class ClientContext:
             redact_logs=redact,
         )
 
-    # =============================== Helper interni (Fase 1) ===============================
+    # =============================== Helper interni ===============================
 
     @staticmethod
     def _init_logger(logger: Optional[logging.Logger], run_id: Optional[str]) -> logging.Logger:
@@ -224,7 +229,7 @@ class ClientContext:
                 logger.info("repo_root_dir impostato da ENV", extra={"repo_root_dir": str(root)})
                 return root
             except Exception as e:
-                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root} ({e})")
+                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root} ({e})") from e
 
         # Project root = this file → ../../
         default_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
@@ -232,7 +237,9 @@ class ClientContext:
 
     @staticmethod
     def _ensure_config(repo_root_dir: Path, slug: str, logger: logging.Logger) -> Path:
-        """Assicura la presenza di `config/config.yaml` sotto `repo_root_dir`, creando struttura da template se assente.
+        """Assicura la presenza di `config/config.yaml` sotto `repo_root_dir`.
+
+        Se assente, crea la struttura da template.
 
         Sicurezza:
         - Verifica path con `ensure_within` prima della scrittura.
@@ -286,7 +293,8 @@ class ClientContext:
     def _load_env(*, require_env: bool) -> Dict[str, Any]:
         """Raccoglie variabili d'ambiente rilevanti (richieste/opzionali).
 
-        Nota: qui si legge, non si redige; la policy di redazione è calcolata da `compute_redact_flag`.
+        Nota: qui si legge, non si redige; la policy di redazione è calcolata da
+        `compute_redact_flag`.
         """
         env_vars: Dict[str, Any] = {}
 
@@ -304,7 +312,7 @@ class ClientContext:
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)
-        # NEW: override del root repo (se serve spostare output altrove)
+        # NEW: override del root repo (sposta output altrove)
         env_vars["REPO_ROOT_DIR"] = get_env_var("REPO_ROOT_DIR", default=None)
 
         # Versione booleana di CI per chiamanti legacy
@@ -312,7 +320,7 @@ class ClientContext:
 
         return env_vars
 
-    # -- Utility per tracking stato --
+    # -------------------------- Utility per tracking stato --------------------------
 
     def _get_logger(self) -> logging.Logger:
         """Ritorna il logger del contesto; se assente lo crea in modo lazy e coerente."""
@@ -334,7 +342,10 @@ class ClientContext:
         log.warning(msg, extra={"slug": self.slug})
 
     def set_step_status(self, step: str, status: str) -> None:
-        """Registra lo stato di uno step della pipeline (es. 'download' → 'done')."""
+        """Registra lo stato di uno step della pipeline.
+
+        Esempio: `'download' → 'done'`.
+        """
         log = self._get_logger()
         self.step_status[step] = status
         log.info(
@@ -357,7 +368,7 @@ class ClientContext:
             "repo_root_dir": str(self.repo_root_dir) if self.repo_root_dir else None,
         }
 
-    # -- Utility non-invasive per run_id/stage --
+    # -------------------- Utility non-invasive per run_id / stage --------------------
 
     def with_stage(self, stage: Optional[str]) -> "ClientContext":
         """Ritorna una copia del contesto con `stage` aggiornato (immutability-friendly)."""

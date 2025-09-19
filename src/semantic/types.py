@@ -14,8 +14,8 @@ Vector = Sequence[float]
 class EmbeddingsClient(Protocol):
     """Contratto minimale per un client di embeddings.
 
-    Implementazioni tipiche potrebbero wrappare servizi locali o remoti.
-    L'interfaccia resta volutamente essenziale per ridurre il coupling.
+    Implementazioni tipiche potrebbero wrappare servizi locali o remoti. L'interfaccia resta
+    volutamente essenziale per ridurre il coupling.
     """
 
     def embed_texts(

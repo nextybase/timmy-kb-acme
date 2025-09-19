@@ -65,7 +65,10 @@ class PipelineError(Exception):
 
     @staticmethod
     def _mask_id(val: str, keep: int = 6) -> str:
-        """Maschera l'ID (es. Drive) lasciando solo le ultime `keep` cifre."""
+        """Maschera l'ID (es.
+
+        Drive) lasciando solo le ultime `keep` cifre.
+        """
         try:
             s = str(val)
             if len(s) <= keep:
@@ -179,13 +182,19 @@ class PreOnboardingValidationError(PipelineError):
 
 
 class InputDirectoryMissing(PipelineError):
-    """Directory di input attesa ma assente (es. raw/ o sottocartella richiesta)."""
+    """Directory di input attesa ma assente (es.
+
+    raw/ o sottocartella richiesta).
+    """
 
     pass
 
 
 class InputFileMissing(PipelineError):
-    """File di input atteso ma assente (es. singolo PDF o YAML richiesto)."""
+    """File di input atteso ma assente (es.
+
+    singolo PDF o YAML richiesto).
+    """
 
     pass
 

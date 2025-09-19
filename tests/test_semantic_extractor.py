@@ -126,9 +126,7 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     assert out["concept"] == [{"file": "small.md", "keyword": "alpha"}]
 
 
-def test_extract_semantic_concepts_short_circuits_on_empty_mapping(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     cfg = base / "config"

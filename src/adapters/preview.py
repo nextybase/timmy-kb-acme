@@ -71,8 +71,7 @@ def start_preview(
     port: int = 4000,
     container_name: Optional[str] = None,
 ) -> str:
-    """
-    Avvia la preview HonKit in modalità detached e ritorna il nome del container.
+    """Avvia la preview HonKit in modalità detached e ritorna il nome del container.
 
     Args:
         context: ClientContext o compatibile (richiesti: .slug; opzionale: .redact_logs).
@@ -99,9 +98,7 @@ def start_preview(
             wait_on_exit=False,  # sempre detached per semplicità dell’orchestratore
             redact_logs=redact,
         )
-        logger.info(
-            "Preview avviata", extra={"container": cname, "port": port, "redact_logs": redact}
-        )
+        logger.info("Preview avviata", extra={"container": cname, "port": port, "redact_logs": redact})
         return cname
     except Exception as e:
         hint = _docker_unavailable_hint(str(e))
@@ -111,15 +108,12 @@ def start_preview(
                 extra={"container": cname, "port": port, "error": str(e)},
             )
             raise ConfigError(hint)
-        logger.error(
-            "Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)}
-        )
+        logger.error("Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)})
         raise ConfigError(f"Avvio preview fallito: {e}")
 
 
 def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> None:
-    """
-    Ferma la preview in modo sicuro (best-effort). Non solleva se il container non esiste.
+    """Ferma la preview in modo sicuro (best-effort). Non solleva se il container non esiste.
 
     Args:
         logger: logger strutturato.
@@ -131,9 +125,7 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
 
     # Validazione “soft”: se non valido, log avviso e interrompiamo (best-effort)
     if not _CONTAINER_RE.match(container_name):
-        logger.warning(
-            "Nome container non valido: skip stop_preview.", extra={"container": container_name}
-        )
+        logger.warning("Nome container non valido: skip stop_preview.", extra={"container": container_name})
         return
 
     try:

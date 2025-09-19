@@ -1,6 +1,5 @@
 ﻿# SPDX-License-Identifier: GPL-3.0-or-later
-"""
-Package interno 'drive' (client/download/upload).
+"""Package interno 'drive' (client/download/upload).
 
 âš ï¸ Nota:
 - L'API pubblica resta esposta da `pipeline.drive_utils` (facade/shim).

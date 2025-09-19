@@ -35,9 +35,7 @@ from typing import Any, Dict, List
 try:
     import yaml  # PyYAML è richiesta
 except Exception as e:  # pragma: no cover
-    raise RuntimeError(
-        "PyYAML è richiesta per questo tool. Installa con: pip install pyyaml"
-    ) from e
+    raise RuntimeError("PyYAML è richiesta per questo tool. Installa con: pip install pyyaml") from e
 
 # ---------------------------------------------------------------------
 # Percorsi repository
@@ -63,11 +61,7 @@ try:
     from pipeline.logging_utils import get_structured_logger, tail_path
 
     # pipeline (path-safety + atomic I/O + logging)
-    from pipeline.path_utils import (
-        ensure_within,
-        ensure_within_and_resolve,
-        open_for_read_bytes_selfguard,
-    )
+    from pipeline.path_utils import ensure_within, ensure_within_and_resolve, open_for_read_bytes_selfguard
     from semantic.auto_tagger import extract_semantic_candidates, render_tags_csv
     from semantic.config import load_semantic_config
     from semantic.normalizer import normalize_tags
@@ -80,8 +74,12 @@ try:
         _fin_import_csv = None
 except Exception as e:
     raise RuntimeError(
-        "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e 'src/pipeline' "
-        "e che tu stia eseguendo lo script dalla root del progetto."
+        (
+            (
+                "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e"
+                "'src/pipeline' e che tu stia eseguendo lo script dalla root del progetto."
+            )
+        )
     ) from e
 
 
@@ -222,9 +220,7 @@ def _merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _build_semantic_mapping_yaml(
-    slug: str, client_name: str, template_mapping: Dict[str, Any]
-) -> str:
+def _build_semantic_mapping_yaml(slug: str, client_name: str, template_mapping: Dict[str, Any]) -> str:
     data: Dict[str, Any] = {}
     data = _merge_dicts(data, _yaml_dump_context(slug, client_name))
     data = _merge_dicts(data, _yaml_dump_semantic_tagger_defaults())
@@ -275,9 +271,7 @@ def _build_only_raw(base_dir: Path, spec: Dict[str, Any]) -> None:
     """
     raw_map = spec.get("raw")
     if not isinstance(raw_map, dict):
-        raise RuntimeError(
-            "cartelle_raw.yaml: atteso mapping moderno con chiave 'raw': {raw: {...}}."
-        )
+        raise RuntimeError("cartelle_raw.yaml: atteso mapping moderno con chiave 'raw': {raw: {...}}.")
     raw_base = base_dir / "raw"
     raw_base.mkdir(parents=True, exist_ok=True)
 
@@ -317,15 +311,11 @@ def _emit_pdfs_from_pdf_dummy(
     created: List[Path] = []
     for section, payload in pdf_dummy.items():
         if not isinstance(payload, dict):
-            raise RuntimeError(
-                f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi)."
-            )
+            raise RuntimeError(f"pdf_dummy.yaml: sezione '{section}' non è un mapping (titolo/paragrafi).")
         titolo = str(payload.get("titolo") or section).strip()
         paragrafi = payload.get("paragrafi")
         if not isinstance(paragrafi, list) or not paragrafi:
-            raise RuntimeError(
-                f"pdf_dummy.yaml: sezione '{section}' richiede 'paragrafi: [ ... ]' non vuoto."
-            )
+            raise RuntimeError(f"pdf_dummy.yaml: sezione '{section}' richiede 'paragrafi: [ ... ]' non vuoto.")
 
         if section == "raw":
             dst_dir = raw_dir
@@ -358,9 +348,8 @@ def build_dummy_kb(
     overwrite: bool,
     logger: logging.Logger | None = None,
 ) -> Path:
-    """
-    Costruisce la sandbox *dummy* per un cliente, generando cartelle,
-    file YAML minimi, PDF di test e CSV dei tag.
+    """Costruisce la sandbox *dummy* per un cliente, generando cartelle, file YAML minimi, PDF di
+    test e CSV dei tag.
 
     Args:
         slug: identificatore cliente.
@@ -445,9 +434,7 @@ def build_dummy_kb(
         )
 
     mapping_text = _build_semantic_mapping_yaml(slug, client_name, mapping_template)
-    _write_text_in_base(
-        base, semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite
-    )
+    _write_text_in_base(base, semantic_dir / "semantic_mapping.yaml", mapping_text, overwrite=overwrite)
     if logger:
         logger.info(
             "semantic_mapping.yaml generato",

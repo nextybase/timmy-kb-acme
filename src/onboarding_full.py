@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Onboarding FULL (fase 2): push GitHub e preflight su 'book/'.
+"""Onboarding FULL (fase 2): push GitHub e preflight su 'book/'.
 
 Questo orchestratore:
 - Presuppone che la fase di semantic onboarding sia gia' stata eseguita.
@@ -41,7 +40,8 @@ except Exception as e:
 
 # Push GitHub (wrapper repo) – obbligatorio, senza fallback
 try:
-    # firma: (context, *, github_token: str, do_push=True, force_push=False, force_ack=None, redact_logs=False)
+    # firma: (context, *, github_token: str, do_push=True, force_push=False, force_ack=None,
+    # redact_logs=False)
     from pipeline.github_utils import push_output_to_github as _push_output_to_github
 
     push_output_to_github: Optional[Callable[..., None]] = _push_output_to_github
@@ -66,9 +66,7 @@ def _prompt(msg: str) -> str:
 def _git_push(context: ClientContext, logger: logging.Logger) -> None:
     """Esegue il push su GitHub usando pipeline.github_utils.push_output_to_github."""
     if push_output_to_github is None:
-        raise ConfigError(
-            "push_output_to_github non disponibile: verifica le dipendenze di pipeline.github_utils"
-        )
+        raise ConfigError("push_output_to_github non disponibile: verifica le dipendenze di pipeline.github_utils")
 
     token = get_env_var("GITHUB_TOKEN", required=True)
     if token is None or not str(token).strip():
@@ -104,9 +102,7 @@ def onboarding_full_main(
 ) -> None:
     """Orchestratore della fase Full: preflight book/ e push GitHub."""
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-    slug = ensure_valid_slug(
-        slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger
-    )
+    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
     # Carica il contesto PRIMA di determinare i path, per rispettare override (es. REPO_ROOT_DIR)
     context: ClientContext = ClientContext.load(
@@ -119,9 +115,7 @@ def onboarding_full_main(
     # Preferisci i path dal contesto; fallback deterministico solo se assenti
     ctx_base = getattr(context, "base_dir", None)
     base_dir: Path = (
-        cast(Path, ctx_base)
-        if ctx_base is not None
-        else (Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}")
+        cast(Path, ctx_base) if ctx_base is not None else (Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}")
     )
     log_dir = base_dir / LOGS_DIR_NAME
     log_file = log_dir / LOG_FILE_NAME
@@ -129,9 +123,7 @@ def onboarding_full_main(
     ensure_within(log_dir, log_file)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = get_structured_logger(
-        "onboarding_full", log_file=log_file, context=context, run_id=run_id
-    )
+    logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("Avvio onboarding_full (PUSH GitHub)")
 
     # 1) README/SUMMARY in book/ (senza fallback)
@@ -174,9 +166,7 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error(
-            "Errore: in modalita' non interattiva e' richiesto --slug (o slug posizionale)."
-        )
+        early_logger.error("Errore: in modalita' non interattiva e' richiesto --slug (o slug posizionale).")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
         slug = ensure_valid_slug(

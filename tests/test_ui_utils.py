@@ -30,11 +30,9 @@ def test_wrapper_blocks_outside_base(tmp_path: Path):
 
 
 def test_ui_raw_ready_respects_context_paths(tmp_path: Path):
-    """
-    Verifica (unit) che i path 'raw' e 'semantic' siano coerenti rispetto a un contesto
-    fornito (simula il comportamento della UI che ora usa ClientContext.* invece di
-    interrogare sem_get_paths).
-    """
+    """Verifica (unit) che i path 'raw' e 'semantic' siano coerenti rispetto a un contesto fornito
+    (simula il comportamento della UI che ora usa ClientContext.* invece di interrogare
+    sem_get_paths)."""
     base = tmp_path / "custom-root"
     raw = base / "raw"
     semantic = base / "semantic"

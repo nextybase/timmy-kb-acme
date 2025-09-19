@@ -1,14 +1,15 @@
 # src/pipeline/path_utils.py
-"""
-Utility di gestione path e slug per la pipeline Timmy-KB.
+"""Utility di gestione path e slug per la pipeline Timmy-KB.
 
 Ruolo del modulo (path-safety SSoT + regole di normalizzazione):
 - `is_safe_subpath(path, base) -> bool`
   Guardia **SOFT**: ritorna True/False se `path` ricade sotto `base`. Usare solo come pre-check.
 - `ensure_within(base, target) -> None`
-  Guardia **STRONG**: solleva `ConfigError` se `target` NON ricade sotto `base`. Da usare prima di write/copy/delete.
+  Guardia **STRONG**: solleva `ConfigError` se `target` NON ricade sotto `base`.
+  Da usare prima di write/copy/delete.
 - `_load_slug_regex()` / `clear_slug_regex_cache()`
-  Carica/azzera la regex di validazione slug da `config/config.yaml` (chiave `slug_regex`) con fallback sicuro.
+  Carica/azzera la regex di validazione slug da `config/config.yaml`
+  (chiave `slug_regex`) con fallback sicuro.
 - `is_valid_slug(slug)` / `validate_slug(slug)`
   Valida lo slug; `validate_slug` alza `InvalidSlug` se non conforme.
 - `normalize_path(path) -> Path`
@@ -142,8 +143,7 @@ def open_for_read(
 
 @contextmanager
 def open_for_read_bytes_selfguard(p: Path) -> Iterator[BinaryIO]:
-    """
-    Apre un file in lettura binaria applicando una guardia di path-safety locale.
+    """Apre un file in lettura binaria applicando una guardia di path-safety locale.
 
     Regola: il path risolto deve restare sotto la propria directory padre.
     Impedisce traversal via symlink o componenti "..".
@@ -180,8 +180,7 @@ def read_text_safe(base: Path, p: Path, *, encoding: str = "utf-8") -> str:
 
 @lru_cache(maxsize=1)
 def _load_slug_regex() -> str:
-    """
-    Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
+    """Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
 
     Strategia:
     - Cerca prima `./config/config.yaml` (working dir),
@@ -218,8 +217,7 @@ def clear_slug_regex_cache() -> None:
 
 
 def is_valid_slug(slug: str) -> bool:
-    """
-    Valida lo `slug` secondo la regex di progetto (configurabile via `config/config.yaml`).
+    """Valida lo `slug` secondo la regex di progetto (configurabile via `config/config.yaml`).
 
     Default: minuscole, numeri e trattini (`^[a-z0-9-]+$`).
     """
@@ -243,11 +241,10 @@ def validate_slug(slug: str) -> str:
 
 
 def normalize_path(path: Path) -> Path:
-    """
-    Restituisce il path normalizzato/risolto.
+    """Restituisce il path normalizzato/risolto.
 
-    In caso di errore, ritorna il path originale senza interrompere il flusso
-    e registra l'errore sul logger.
+    In caso di errore, ritorna il path originale senza interrompere il flusso e registra l'errore
+    sul logger.
     """
     try:
         return Path(path).resolve()
@@ -257,8 +254,7 @@ def normalize_path(path: Path) -> Path:
 
 
 def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
-    """
-    Pulisce un nome file per l’uso su filesystem.
+    """Pulisce un nome file per l’uso su filesystem.
 
     Operazioni:
     - normalizzazione Unicode (NFKC)
@@ -324,8 +320,7 @@ def to_kebab(s: str) -> str:
 # Ordinamento deterministico
 # ----------------------------------------
 def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
-    """
-    Restituisce i path ordinati in modo deterministico.
+    """Restituisce i path ordinati in modo deterministico.
 
     Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
     altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
@@ -367,8 +362,8 @@ def ensure_valid_slug(
     prompt: Callable[[str], str],
     logger: logging.Logger,
 ) -> str:
-    """
-    Richiede/valida uno slug secondo le regole configurate (usa validate_slug).
+    """Richiede/valida uno slug secondo le regole configurate (usa validate_slug).
+
     - In non-interactive: solleva ConfigError se slug mancante/invalido.
     - In interactive: ripete il prompt finché non è valido.
     """

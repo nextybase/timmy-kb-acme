@@ -13,18 +13,14 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
         redact_logs = False
         env = {"DRIVE_ID": "PARENT"}
 
-    monkeypatch.setattr(
-        dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())})
-    )
+    monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
 
     # Fake Drive service and helpers
     class Svc:
         pass
 
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: Svc())
-    monkeypatch.setattr(
-        dr, "create_drive_folder", lambda svc, name, parent_id, redact_logs=False: "CFID"
-    )
+    monkeypatch.setattr(dr, "create_drive_folder", lambda svc, name, parent_id, redact_logs=False: "CFID")
 
     # _drive_list_folders: CFID -> [raw], RAW -> [cat-a, cat-b]
     def fake_list_folders(service, parent_id):

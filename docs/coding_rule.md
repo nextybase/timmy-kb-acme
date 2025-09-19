@@ -36,6 +36,10 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 ---
 
+## Linting & Formatting
+- **Ruff** e il linter SSoT: assicura che le regole di flake8/bandit siano replicate in Ruff; se una regola manca, aggiungila in `pyproject.toml` invece di usare flake8 separato.
+- **Black** e **isort** restano obbligatori per formattazione/ordinamento import.
+
 ## Typing & Pylance
 - Per dependency opzionali usa narrowing esplicito:
   - `if fn is None: raise RuntimeError("...")` prima di chiamare funzioni opzionali.

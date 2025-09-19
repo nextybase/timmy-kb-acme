@@ -23,18 +23,12 @@ def _format_retrieved(retrieved: list[dict[str, Any]]) -> str:
         content = item.get("content", "").strip()
         score = item.get("score")
         meta = item.get("meta", {})
-        header = (
-            f"[#{i}] score={score:.3f} meta={meta}"
-            if isinstance(score, (int, float))
-            else f"[#{i}] meta={meta}"
-        )
+        header = f"[#{i}] score={score:.3f} meta={meta}" if isinstance(score, (int, float)) else f"[#{i}] meta={meta}"
         parts.append(f"{header}\n\n{content}")
     return "\n\n".join(parts)
 
 
-def build_prompt(
-    next_premise: str, coding_rules: str, task: str, retrieved: list[dict[str, Any]]
-) -> str:
+def build_prompt(next_premise: str, coding_rules: str, task: str, retrieved: list[dict[str, Any]]) -> str:
     """Compose the final prompt for the coding agent."""
     lines: list[str] = []
     lines.append("# Timmy KB Coder — Request")
@@ -49,9 +43,7 @@ def build_prompt(
     if retrieved:
         lines.append("\n## Retrieved Context")
         lines.append(_format_retrieved(retrieved))
-        lines.append(
-            "\nUse the Retrieved Context micro-citations like [#1], [#2] inline where relevant."
-        )
+        lines.append("\nUse the Retrieved Context micro-citations like [#1], [#2] inline where relevant.")
 
     lines.append("\n## Coding Rules (Web)")
     if coding_rules.strip():
