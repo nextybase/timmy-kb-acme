@@ -48,6 +48,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
 )
 from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
+from semantic.types import ClientContextProtocol
 from storage.tags_store import (
     clear_doc_terms,
     derive_db_path_from_yaml_path,
@@ -689,7 +690,7 @@ def tag_onboarding_main(
 
 
 def _resolve_cli_paths(
-    context: ClientContext,
+    context: ClientContextProtocol | ClientContext,
     *,
     raw_override: str | None,
     db_override: str | None,

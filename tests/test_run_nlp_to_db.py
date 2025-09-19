@@ -1,8 +1,10 @@
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from pipeline.exceptions import PathTraversalError
+from semantic.types import ClientContextProtocol
 from src.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
@@ -134,12 +136,17 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     semantic_dir = base_dir / "semantic-data"
     raw_dir.mkdir(parents=True)
     semantic_dir.mkdir(parents=True)
-    ctx = SimpleNamespace(
-        slug="acme",
-        base_dir=base_dir,
-        raw_dir=raw_dir,
-        semantic_dir=semantic_dir,
-        repo_root_dir=None,
+    ctx = cast(
+        ClientContextProtocol,
+        SimpleNamespace(
+            slug="acme",
+            base_dir=base_dir,
+            raw_dir=raw_dir,
+            semantic_dir=semantic_dir,
+            repo_root_dir=None,
+            redact_logs=False,
+            run_id=None,
+        ),
     )
 
     resolved_base, resolved_raw, db_path, resolved_semantic = _resolve_cli_paths(
