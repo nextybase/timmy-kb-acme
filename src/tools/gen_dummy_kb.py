@@ -487,7 +487,7 @@ def build_dummy_kb(
     except Exception:
         norm_len = None
     tags_csv_path = cfg.semantic_dir / "tags_raw.csv"
-    render_tags_csv(candidates_norm, tags_csv_path)
+    render_tags_csv(candidates_norm, tags_csv_path, base_dir=base)
     if logger:
         logger.info(
             "CSV semantico scritto",

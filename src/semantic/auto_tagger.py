@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
 from .config import SemanticConfig
 
@@ -176,7 +176,12 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str,
     return candidates
 
 
-def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path) -> None:
+def render_tags_csv(
+    candidates: Mapping[str, Mapping[str, Any]],
+    csv_path: Path,
+    *,
+    base_dir: Path,
+) -> None:
     """Scrive `tags_raw.csv` (esteso) con colonne: relative_path | suggested_tags | entities |
     keyphrases | score | sources.
 
@@ -185,9 +190,10 @@ def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path)
     - Ordine deterministico per riga (`sorted(candidates.items())`).
     - JSON serializzati con `sort_keys=True` per stabilizzare il diff.
     """
-    csv_path = Path(csv_path).resolve()
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    ensure_within(csv_path.parent, csv_path)
+    # Path-safety forte: risolvi entro il perimetro base e verifica parent
+    safe_csv_path = ensure_within_and_resolve(base_dir, csv_path)
+    safe_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_within(safe_csv_path.parent, safe_csv_path)
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -211,4 +217,4 @@ def render_tags_csv(candidates: Mapping[str, Mapping[str, Any]], csv_path: Path)
             ]
         )
 
-    safe_write_text(csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
+    safe_write_text(safe_csv_path, buf.getvalue(), encoding="utf-8", atomic=True)
