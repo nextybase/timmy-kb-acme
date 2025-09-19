@@ -28,18 +28,13 @@ Sicurezza & I/O
 """
 from __future__ import annotations
 
-import csv
-import io
-import json
 import logging
-import re
 import shutil
 import warnings
 from pathlib import Path
 from typing import List
 
 from pipeline.exceptions import PipelineError  # eccezione tipizzata per la pipeline
-from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.path_utils import ensure_within  # STRONG: SSoT per write/delete
 from pipeline.path_utils import is_safe_subpath  # SOFT: pre-check booleano per shortlist/letture
 from pipeline.path_utils import normalize_path, sanitize_filename, sorted_paths
@@ -126,10 +121,6 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return copied
 
 
-# split su non-alfanumerici (coerente con altri moduli)
-_SPLIT_RE = re.compile(r"[^\w]+", flags=re.UNICODE)
-
-
 def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
     """
     Heuristica conservativa: per ogni PDF propone keyword grezze
@@ -169,59 +160,3 @@ def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
         extra={"file_path": str(csv_path), "count": len(candidates)},
     )
     return len(candidates)
-    raw_dir = normalize_path(raw_dir)
-    csv_path = normalize_path(csv_path)
-    base_dir = raw_dir.parent  # output/timmy-kb-<slug>
-
-    rows: List[List[str]] = []
-    raw_prefix = "raw"  # percorso base-relativo nel CSV (coerente con altri moduli)
-
-    for pdf in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
-        try:
-            rel_raw = pdf.relative_to(raw_dir).as_posix()
-        except ValueError:
-            rel_raw = pdf.name
-
-        rel_base_posix = f"{raw_prefix}/{rel_raw}".replace("\\", "/")
-
-        parts = [p for p in Path(rel_raw).parts if p]  # parti sotto raw/
-        base_no_ext = Path(parts[-1]).stem if parts else Path(rel_raw).stem
-
-        # Tag candidati:
-        path_tags = {p.lower() for p in parts[:-1]}
-        file_tokens = {tok.lower() for tok in _SPLIT_RE.split(base_no_ext) if tok}
-        candidates = sorted(path_tags.union(file_tokens))
-
-        # colonne “larghe” (compat future-proof)
-        entities = "[]"
-        keyphrases = "[]"
-        score = "{}"
-        sources = json.dumps({"path": list(path_tags), "filename": list(file_tokens)}, ensure_ascii=False)
-
-        rows.append(
-            [
-                rel_base_posix,
-                ", ".join(candidates),
-                entities,
-                keyphrases,
-                score,
-                sources,
-            ]
-        )
-
-    # STRONG (SSoT): autorizza la scrittura nella sandbox cliente
-    ensure_within(base_dir, csv_path.parent)
-    ensure_within(base_dir, csv_path)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Prepara il contenuto CSV in memoria e scrive in modo atomico
-    sio = io.StringIO()
-    w = csv.writer(sio, lineterminator="\n")
-    w.writerow(["relative_path", "suggested_tags", "entities", "keyphrases", "score", "sources"])
-    w.writerows(rows)
-    data = sio.getvalue()
-
-    safe_write_text(csv_path, data, encoding="utf-8", atomic=True)
-
-    logger.info("Tag grezzi (estesi) generati", extra={"file_path": str(csv_path), "count": len(rows)})
-    return len(rows)
