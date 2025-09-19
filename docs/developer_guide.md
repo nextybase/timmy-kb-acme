@@ -1,4 +1,4 @@
-# Timmy-KB - Developer Guide (v1.9.1)
+# Timmy-KB - Developer Guide (v1.9.2)
 
 Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 
@@ -265,7 +265,7 @@ Pre-commit
 
 ---
 
-> **Versione**: 1.9.1 (2025-09-17)
+> **Versione**: 1.9.2 (2025-09-19)
 > **Stato**: Allineata al codice corrente; esempi aggiornati a `ClientContext` come SSoT dei path; aggiunte sezioni di **Smoke testing** (UI Streamlit & E2E).
 
 ## Security and Compliance

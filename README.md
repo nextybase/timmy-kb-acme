@@ -1,4 +1,4 @@
-# Timmy KB - README (v1.9.1)
+# Timmy KB - README (v1.9.2)
 
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
