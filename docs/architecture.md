@@ -70,6 +70,7 @@ Output: commit/push su repo remoto.
   - `semantic/vocab_loader.py`: loader vocabolario canonico da SQLite (`tags.db`).
   - `semantic/tags_io.py`: README_TAGGING e stub revisione da CSV (persistenza su DB).
   - `semantic/api.py`: facade pubblica per la UI.
+  - SSoT DB fail-closed: se `semantic/tags.db` manca il loader solleva `ConfigError` con istruzioni operative; se esiste ma è vuoto emette un `warning` esplicito. Lo YAML `tags_reviewed.yaml` resta solo per migrazione/authoring.
 
 - Storage (SQLite)
   - `storage/tags_store.py`: schema v1/v2, CRUD, migrazioni e helpers (`ensure_schema_v2`, `migrate_to_v2`, ecc.).

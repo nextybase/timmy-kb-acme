@@ -71,7 +71,11 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # 2) Arricchimento frontmatter (vocabolario potrebbe essere vuoto -> no-op)
     base = get_paths(slug)["base"]
-    vocab = load_reviewed_vocab(base, logger)
+    try:
+        vocab = load_reviewed_vocab(base, logger)
+    except Exception:
+        # Nuovo comportamento: se manca tags.db il loader solleva ConfigError -> proceed senza vocab
+        vocab = {}
     touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
     assert isinstance(touched, list)
 
