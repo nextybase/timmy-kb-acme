@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import quote
 
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
@@ -118,7 +119,8 @@ def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pa
         name = p.name.lower()
         if name in {"readme.md", "summary.md"}:
             continue
-        items.append(f"- [{p.stem}]({p.name})")
+        # Percent-encode del link mantenendo la label leggibile
+        items.append(f"- [{p.stem}]({quote(p.name)})")
 
     safe_write_text(summary, "# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8", atomic=True)
     return summary
@@ -149,12 +151,40 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
     if not raw_root.is_dir():
         raise PipelineError(f"Raw path is not a directory: {raw_root}")
 
+    written: set[Path] = set()
+
+    # Gestione PDF presenti direttamente in raw/ (root): file aggregato con nome coerente
+    root_pdfs = sorted((p for p in raw_root.glob("*.pdf")), key=lambda p: p.name.lower())
+    if root_pdfs:
+        root_md = target / f"{raw_root.name}.md"
+        content = _render_category_markdown(raw_root, root_pdfs)
+        safe_write_text(root_md, content + "\n", encoding="utf-8", atomic=True)
+        written.add(root_md)
+
     # categorie = sole directory immediate sotto raw/
     for cat_dir, pdfs in _iter_category_pdfs(raw_root):
         cat_name = cat_dir.name
         md_file = target / f"{cat_name}.md"
         content = _render_category_markdown(cat_dir, pdfs)
         safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
+        written.add(md_file)
+
+    # Cleanup idempotente: rimuovi .md orfani in book/ (escludi README.md e SUMMARY.md)
+    for candidate in target.glob("*.md"):
+        low = candidate.name.lower()
+        if low in {"readme.md", "summary.md"}:
+            continue
+        if candidate not in written:
+            # Guardie di path-safety prima della delete
+            ensure_within(target, candidate)
+            try:
+                candidate.unlink(missing_ok=True)
+            except TypeError:
+                # Compat vecchie versioni: fallback senza missing_ok
+                try:
+                    candidate.unlink()
+                except FileNotFoundError:
+                    pass
 
 
 # -----------------------------

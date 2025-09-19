@@ -134,6 +134,66 @@ def test_generate_readme_unsafe_dir_raises(dummy_kb):
 
 
 # -----------------------------
+# Nuovi test: root PDF + cleanup + percent-encoding SUMMARY
+# -----------------------------
+def test_convert_handles_root_pdfs_in_raw_root(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+
+    # PDF direttamente in raw/
+    _touch_pdf(ctx.raw_dir / "My Doc.pdf")
+    _touch_pdf(ctx.raw_dir / "another.pdf")
+
+    convert_files_to_structured_markdown(ctx)
+
+    raw_md = ctx.md_dir / "raw.md"
+    assert raw_md.exists()
+
+    txt = raw_md.read_text(encoding="utf-8")
+    # Titolo coerente con la cartella raw
+    assert "# Raw" in txt
+    # Sezioni PDF a livello H2 (depth 0)
+    assert "## My Doc" in txt
+    assert "## Another" in txt
+    assert "(Contenuto estratto/conversione da `My Doc.pdf`)" in txt
+
+
+def test_convert_cleanup_orphan_md_idempotent(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+
+    # Orfano preesistente in book/
+    (ctx.md_dir / "old.md").write_text("# Old\n", encoding="utf-8")
+
+    # Crea una categoria valida con un PDF
+    _touch_pdf(ctx.raw_dir / "contratti" / "doc1.pdf")
+
+    convert_files_to_structured_markdown(ctx)
+
+    # L'orfano deve sparire; il nuovo file deve esistere
+    assert not (ctx.md_dir / "old.md").exists()
+    assert (ctx.md_dir / "contratti.md").exists()
+
+    # Idempotenza: riesegui e verifica che nulla cambi (nessuna eccezione)
+    convert_files_to_structured_markdown(ctx)
+    assert (ctx.md_dir / "contratti.md").exists()
+
+
+def test_generate_summary_percent_encodes_links(dummy_kb):
+    ctx = _mk_ctx(dummy_kb)
+    ctx.md_dir.mkdir(parents=True, exist_ok=True)
+
+    # File con spazi e parentesi
+    (ctx.md_dir / "My Report (v1).md").write_text("# R\n", encoding="utf-8")
+    (ctx.md_dir / "alpha.md").write_text("# A\n", encoding="utf-8")
+
+    s = generate_summary_markdown(ctx)
+    s_txt = s.read_text(encoding="utf-8")
+
+    # Label leggibile, link percent-encoded
+    assert "[My Report (v1)](My%20Report%20%28v1%29.md)" in s_txt
+    assert "[alpha](alpha.md)" in s_txt
+
+
+# -----------------------------
 # validate_markdown_dir
 # -----------------------------
 def test_validate_markdown_dir_happy_path(dummy_kb):
