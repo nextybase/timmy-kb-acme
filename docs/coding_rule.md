@@ -3,19 +3,19 @@
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 > Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).
-> Avvio interfaccia: `streamlit run onboarding_ui.py` â€“ vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Principi
-- **SSoT (Single Source of Truth)**: riusa utility giÃ  presenti; evita duplicazioni.
+- **SSoT (Single Source of Truth)**: riusa utility già presenti; evita duplicazioni.
 - **Idempotenza**: ogni step deve poter essere rieseguito senza effetti collaterali.
 - **Path-safety**: nessuna write/copy/rm senza passare da utility di sicurezza.
 - **Fail-fast & messaggi chiari**: errori espliciti e log azionabili.
-- **CompatibilitÃ  cross-platform**: Windows/Linux (path, encoding, newline).
+- **Compatibilità cross-platform**: Windows/Linux (path, encoding, newline).
 - **Contratti condivisi**: per funzioni che richiedono solo `base_dir/raw_dir/md_dir/slug`, usa `semantic.types.ClientContextProtocol` invece di protocolli locali duplicati.
 - **No side-effects a import-time**: nessun I/O o lettura di env vars a livello di modulo.
-- **Adotta nuove dipendenze in modo controllato**: prima di aggiungere una nuova libreria, valuta sicurezza, licenza, maturitÃ , impatto su CI/CD e presenza di alternative giÃ  adottate.
+- **Adotta nuove dipendenze in modo controllato**: prima di aggiungere una nuova libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e presenza di alternative già adottate.
 
 ---
 
@@ -29,7 +29,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ## Python style
 - **Tipizzazione obbligatoria sui moduli core**: annota parametri e ritorni. Usa `Optional[...]` in modo esplicito.
 - **Evita `Any` e i wild import**; mantieni import espliciti e ordinati.
-- **Funzioni corte, una responsabilitÃ **; preferisci pure functions dove possibile.
+- **Funzioni corte, una responsabilità**; preferisci pure functions dove possibile.
 - **No side-effects in import** (es. no I/O top-level).
 - **Estrai helper privati (SRP)** se una funzione supera ~40-50 righe o mescola traversal/rendering/I/O.
 - **Aggiorna le docstring** delle funzioni core. Preferibile seguire standard [Google](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) o Sphinx.
@@ -49,7 +49,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Type check rapidi:
   - **Mypy**: `make type`
   - **Pyright**: `make type-pyright` (richiede `pyright` nel PATH oppure `npx`)
-- **Linting automatico su CI**: ogni PR/build deve passare linting (**Black**, **Ruff** e **isort**). _Nota_: **Ruff** Ã¨ il linter principale del repo e ingloba molte regole di **Flake8**; dove negli standard Codex compare â€œFlake8â€, consideralo allineato a Ruff. Le regole di base restano: rispetto del line-length e **lint verde** in CI.
+- **Linting automatico su CI**: ogni PR/build deve passare linting (**Black**, **Ruff** e **isort**). _Nota_: **Ruff** Ã¨ il linter principale del repo e ingloba molte regole di **Flake8, consideralo allineato a Ruff. Le regole di base restano: rispetto del line-length e **lint verde** in CI.
 
 ---
 
@@ -57,7 +57,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Usa il **logger strutturato** dove disponibile; fallback a `logging.basicConfig` negli script.
 - **Redazione automatica attiva quando richiesto** (`LOG_REDACTION`): non loggare segreti o payload completi.
 - Includi event e metadati essenziali (slug, conteggi, esiti) per ogni operazione rilevante.
-- **Non loggare secrets, password, token o variabili dâ€™ambiente** (mai loggare lâ€™intero os.environ!). Usa utility come `dotenv` o `vault` per gestire i secrets.
+- **Non loggare secrets, password, token o variabili d'ambiente** (mai loggare l'intero `os.environ`!). Usa utility come `dotenv` o `vault` per gestire i secrets.
 
 ---
 
@@ -65,19 +65,19 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - **Path-safety**: usa `ensure_within_and_resolve` (o equivalenti SSoT) per evitare traversal; mai concatenare path manualmente.
 - **Scritture atomiche**: utilizza `safe_write_text/bytes` per generare/aggiornare file (niente write parziali).
 - **Sanitizzazione nomi file**: usa utility dedicate prima di creare file da input esterni.
-- **DRY validazioni**: centralizza i controlli ricorrenti in helper condivisi (es. funzioni di listing sicuro dei Markdown) ed evita ripetere lo stesso set di guardie in piÃ¹ punti.
+- **DRY validazioni**: centralizza i controlli ricorrenti in helper condivisi (es. funzioni di listing sicuro dei Markdown) ed evita ripetere lo stesso set di guardie in più punti.
 
 ---
 
 ## Orchestratori & UI
-- Orchestratori (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) + faÒ«ade `semantic.api` per la semantica:
+- Orchestratori (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) + facade `semantic.api` per la semantica:
   - Niente input bloccanti nei moduli di servizio; tutta la UX rimane negli orchestratori.
   - Gestisci `--non-interactive` per batch/CI.
 - UI (`onboarding_ui.py`):
   - Gating a due input (slug, nome cliente), poi mostra le schede.
-  - Drive: crea struttura â†’ genera README â†’ download su raw.
-  - Semantica: conversione â†’ arricchimento â†’ README/SUMMARY â†’ preview (opz.).
-  - Usa `_safe_streamlit_rerun()` per compatibilitÃ  con diversi stub/tipi.
+  - Drive: crea struttura -> genera README -> download su raw.
+  - Semantica: conversione -> arricchimento -> README/SUMMARY -> preview (opz.).
+  - Usa `_safe_streamlit_rerun()` per compatibilità con diversi stub/tipi.
 
 ---
 
@@ -112,12 +112,12 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ## Contributi
 - **PR piccole, atomic commit, messaggi chiari** (imperativo al presente).
 - Copri con test i cambi di comportamento; mantieni lâ€™asticella della qualitÃ .
-- **Evita duplicazioni**: se serve una nuova utility, valuta prima i moduli esistenti.
+ - Copri con test i cambi di comportamento; mantieni l'asticella della qualità.
 
 ---
 
 ## Path-Safety Lettura (Aggiornamento)
 - Letture Markdown/CSV/YAML nei moduli `pipeline/*` e `semantic/*` devono usare sempre `pipeline.path_utils.ensure_within_and_resolve(base, p)` per ottenere un path risolto e sicuro prima di leggere.
-- Ãˆ vietato usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.
+- È vietato usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.
 
 ---
