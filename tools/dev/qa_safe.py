@@ -48,7 +48,7 @@ def main(argv: List[str] | None = None) -> int:
     failures: List[str] = []
 
     checks: List[Tuple[str, List[str]]] = [
-        ("isort", ["isort", "--check-only", *LINT_PATHS]),
+        ("isort", ["isort", "--check-only", "--profile=black", *LINT_PATHS]),
         ("black", ["black", "--check", *LINT_PATHS]),
         ("ruff", ["ruff", "check", *LINT_PATHS]),
         ("mypy", ["mypy", "--config-file", "mypy.ini"]),

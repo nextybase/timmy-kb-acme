@@ -1,49 +1,69 @@
-﻿repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+﻿default_language_version:
+  python: python3.11
+
+repos:
+  - repo: local
     hooks:
+      # Base hooks (system) — usano il tuo venv
       - id: check-yaml
+        name: check-yaml (system)
+        entry: check-yaml
+        language: system
+        types_or: [yaml]
+        stages: [pre-commit]
+
       - id: end-of-file-fixer
+        name: end-of-file-fixer (system)
+        entry: end-of-file-fixer
+        language: system
+        stages: [pre-commit]
+
       - id: trailing-whitespace
+        name: trailing-whitespace (system)
+        entry: trailing-whitespace-fixer
+        language: system
+        stages: [pre-commit]
+
       - id: mixed-line-ending
-        args: [--fix=lf]
+        name: mixed-line-ending (system)
+        entry: mixed-line-ending
+        language: system
+        args: ["--fix=lf"]
+        stages: [pre-commit]
 
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
+      # Python tooling via system (uses your venv)
       - id: black
+        name: black (system)
+        entry: black
+        language: system
+        types_or: [python]
         stages: [pre-commit]
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
       - id: isort
+        name: isort (system)
+        entry: isort
+        language: system
         args: ["--profile=black"]
+        types_or: [python]
         stages: [pre-commit]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.6
-    hooks:
       - id: ruff
-        args: ["--fix"]
+        name: ruff (system)
+        entry: ruff
+        language: system
+        args: ["check", "--fix"]
         files: ^(src|tests)/
         stages: [pre-commit]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
       - id: mypy
-        stages: [pre-push]
+        name: mypy (system)
+        entry: mypy
+        language: system
         files: ^src/(config_ui/|pipeline/drive/)|^src/pipeline/drive_utils\.py$
         pass_filenames: false
-        additional_dependencies:
-          - types-PyYAML
-          - types-requests
-        args:
-          - --config-file=mypy.ini
+        args: ["--config-file", "mypy.ini"]
+        stages: [pre-push]
 
-  - repo: local
-    hooks:
       - id: forbid-unsafe-file-reads
         name: Forbid unsafe file reads (open/read_text/read_bytes) outside path_utils/tests/scripts
         entry: python tools/dev/check_no_unsafe_reads.py
