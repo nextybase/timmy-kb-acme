@@ -18,8 +18,11 @@ from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, sorted_paths
+from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
+from semantic.auto_tagger import render_tags_csv as _render_tags_csv
+from semantic.config import load_semantic_config as _load_semantic_config
+from semantic.normalizer import normalize_tags as _normalize_tags
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
-from semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
@@ -291,7 +294,12 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
-        count = int(_emit_tags_csv(raw_dir, csv_path, logger))
+        # Allinea al writer hardened: genera candidati e scrive CSV con base_dir esplicito
+        cfg = _load_semantic_config(base_dir)
+        candidates = _extract_candidates(raw_dir, cfg)
+        candidates = _normalize_tags(candidates, cfg.mapping)
+        _render_tags_csv(candidates, csv_path, base_dir=base_dir)
+        count = len(candidates)
         logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
         _write_tagging_readme(semantic_dir, logger)
         try:

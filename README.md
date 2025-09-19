@@ -1,4 +1,4 @@
-# Timmy KB - README (v1.9.2)
+﻿# Timmy KB - README (v1.9.2)
 
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
@@ -13,16 +13,16 @@ Pipeline di onboarding dei clienti per Timmy KB.
    Crea la struttura locale, opzionalmente quella remota su Drive, copia i template semantici e genera `config.yaml`.
 
 2. Tag Onboarding (HiTL)
-   Default: Google Drive — scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.
+   Default: Google Drive â€” scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.
    Dopo il checkpoint umano produce `README_TAGGING.md` e `tags_reviewed.yaml`.
 
 3. Semantic Onboarding
-   Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e può avviare la preview Docker (HonKit).
+   Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e puÃ² avviare la preview Docker (HonKit).
 
 4. Onboarding Full (Push)
    Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati), genera/valida `README.md` e `SUMMARY.md` e pubblica su GitHub.
 
-> SSoT dei tag: la fonte unica è il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
+> SSoT dei tag: la fonte unica Ã¨ il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
 
 ---
 
@@ -30,7 +30,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 
 - Python >= 3.11
 - Docker (per la preview)
-- Credenziali Google Drive (Service Account JSON) — necessarie per il default di `tag_onboarding` (Drive)
+- Credenziali Google Drive (Service Account JSON) â€” necessarie per il default di `tag_onboarding` (Drive)
 - (Opz.) GitHub Token (`GITHUB_TOKEN`) per il push
 
 ### Variabili d'ambiente
@@ -41,7 +41,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `GIT_DEFAULT_BRANCH`: branch di default (fallback `main`)
 - `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION`: `auto` (default), `on`, `off`
-- `ENV`, `CI`: modalità operative
+- `ENV`, `CI`: modalitÃ  operative
 
 ---
 
@@ -61,7 +61,7 @@ output/
 
 ---
 
-## Modalità d'uso
+## ModalitÃ  d'uso
 
 > Doppio approccio: puoi lavorare da terminale usando gli orchestratori in sequenza oppure tramite interfaccia (Streamlit).
 
@@ -95,7 +95,7 @@ py src/onboarding_full.py --slug acme --non-interactive
 ```
 
 ### Interfaccia (Streamlit)
-L'alternativa agli orchestratori via terminale è l'interfaccia.
+L'alternativa agli orchestratori via terminale Ã¨ l'interfaccia.
 
 Avvio:
 ```bash
@@ -107,9 +107,9 @@ Guida completa: `docs/guida_ui.md`.
 
 ## Sezione UI: Ricerca (retriever)
 
-Nella sidebar è presente un box apri/chiudi "Ricerca (retriever)" che consente di configurare:
-- `candidate_limit`: massimo numero di candidati caricati dal DB prima del ranking (min 500, max 20000). Valori più alti aumentano la latenza.
-- `budget di latenza (ms)`: indicazione del budget desiderato (0 = disabilitato). Usato solo se attivi l’auto.
+Nella sidebar Ã¨ presente un box apri/chiudi "Ricerca (retriever)" che consente di configurare:
+- `candidate_limit`: massimo numero di candidati caricati dal DB prima del ranking (min 500, max 20000). Valori piÃ¹ alti aumentano la latenza.
+- `budget di latenza (ms)`: indicazione del budget desiderato (0 = disabilitato). Usato solo se attivi lâ€™auto.
 - `Auto per budget`: se attivo, il sistema sceglie automaticamente un `candidate_limit` in base al budget (euristica interna; calibrabile).
 
 Le impostazioni sono salvate nel `config.yaml` del cliente sotto la chiave `retriever`:
@@ -120,7 +120,7 @@ retriever:
   auto_by_budget: false
 ```
 
-Uso a codice (API): passa dalle utilità del retriever per applicare i valori da config con la precedenza giusta:
+Uso a codice (API): passa dalle utilitÃ  del retriever per applicare i valori da config con la precedenza giusta:
 ```python
 from src.retriever import QueryParams, with_config_or_budget
 
@@ -136,9 +136,9 @@ Note: il retriever logga tempi di fase (embed/fetch/score+sort/total) per facili
 
 ## Dipendenze Drive
 
-Le funzionalità Drive richiedono `google-api-python-client`. Se la dipendenza non è installata:
-- l’import del modulo `pipeline.drive_utils` fallisce con `ImportError` esplicito;
-- la UI mostra un banner nella sezione Drive con le istruzioni per l’installazione.
+Le funzionalitÃ  Drive richiedono `google-api-python-client`. Se la dipendenza non Ã¨ installata:
+- lâ€™import del modulo `pipeline.drive_utils` fallisce con `ImportError` esplicito;
+- la UI mostra un banner nella sezione Drive con le istruzioni per lâ€™installazione.
 
 Installazione:
 ```bash
@@ -189,13 +189,20 @@ make ci-safe   # qa-safe + pytest (se presente)
 py src/tag_onboarding.py --slug <id> [--source drive|local] [--local-path <dir>] [--proceed] [--non-interactive]
 ```
 
-- Default: `--source=drive` — scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.
-- Offline/locale: `--source=local` (opz. `--local-path <dir>`). Se `--local-path` è omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
+- Default: `--source=drive` â€” scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.
+- Offline/locale: `--source=local` (opz. `--local-path <dir>`). Se `--local-path` Ã¨ omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
 
-Output Fase 1 — `semantic/tags_raw.csv` (path base-relative `raw/...` + colonne standard).
-Checkpoint HiTL — se confermato (o `--proceed`), Fase 2 genera `README_TAGGING.md` e `tags_reviewed.yaml` (stub).
+Output Fase 1 — semantic/tags_raw.csv (path base-relative
+aw/... + colonne standard).
+Checkpoint HiTL — se confermato (o --proceed), Fase 2 genera README_TAGGING.md e 	ags_reviewed.yaml (stub).
 
-> Validazione standalone: `py src/tag_onboarding.py --slug <id> --validate-only` produce `semantic/tags_review_validation.json`.
+> Validazione standalone: py src/tag_onboarding.py --slug <id> --validate-only produce semantic/tags_review_validation.json.
+
+Nota sicurezza (CSV): l'emissione di 	ags_raw.csv usa un writer centralizzato con path-safety forte
+(ensure_within_and_resolve + ensure_within) e scrittura atomica. Il writer richiede un ase_dir
+esplicito come perimetro della sandbox cliente; la façade semantic.api.build_tags_csv(...) incapsula
+questo contratto e passa ase_dir dal contesto.
+.
 
 ---
 
@@ -252,7 +259,7 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 
 ---
 
-## Ingest/CSV — Best Practice
+## Ingest/CSV â€” Best Practice
 
 - Usa esclusivamente le API pubbliche in semantic.api:
  - copy_local_pdfs_to_raw(src_dir, raw_dir, logger) per copiare PDF locali in raw/.
@@ -260,7 +267,7 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Evita helper locali e import diretti da semantic.tags_extractor fuori da src/semantic/.
 - Un hook pre-commit (no-dup-ingest-csv) previene regressioni su duplicazioni/usi non consentiti.
 
-- Su Windows, se il binario `pre-commit` non è nel PATH del venv, usa Python launcher:
+- Su Windows, se il binario `pre-commit` non Ã¨ nel PATH del venv, usa Python launcher:
   - `py -3.11 -m pre_commit install --hook-type pre-commit --hook-type pre-push`
   - `py -3.11 -m pre_commit run -a`
 
@@ -270,5 +277,5 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 
 - La preview richiede Docker; se assente viene saltata.
 - Pubblicazione su GitHub: vengono inclusi solo i `.md` di `book/`.
-- La sandbox/dataset dummy (`timmy-kb-dummy`) è usata nei test automatici per verificare coerenza e idempotenza della pipeline.
+- La sandbox/dataset dummy (`timmy-kb-dummy`) Ã¨ usata nei test automatici per verificare coerenza e idempotenza della pipeline.
 - Per scenari air-gapped usa `tag_onboarding --source=local` e popola `raw/` manualmente.
