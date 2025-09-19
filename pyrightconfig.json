@@ -13,6 +13,8 @@
     ".pytest_cache"
   ],
   "extraPaths": ["./src"],
+  "venvPath": ".",
+  "venv": "venv",
   "typeCheckingMode": "standard",
   "pythonVersion": "3.11",
   "reportMissingImports": "warning"
