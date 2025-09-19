@@ -166,7 +166,17 @@ class _KVFormatter(logging.Formatter):
         base = super().format(record)
         kv = []
         # includi subset di extra utili se presenti
-        for k in ("slug", "run_id", "file_path", "event", "branch", "repo"):
+        for k in (
+            "slug",
+            "run_id",
+            "file_path",
+            "event",
+            "branch",
+            "repo",
+            "phase",
+            "duration_ms",
+            "artifact_count",
+        ):
             v = getattr(record, k, None)
             if v:
                 kv.append(f"{k}={v}")
@@ -267,6 +277,71 @@ def get_structured_logger(
 # ---------------------------------------------
 # Metriche leggere (helper opzionale)
 # ---------------------------------------------
+class phase_scope:
+    """Context manager per telemetria di fase con campi strutturati.
+
+    Eventi emessi:
+      - event=phase_started | phase_completed | phase_failed
+      - Campi: phase, slug, run_id (dal filtro di contesto), duration_ms (se disponibile), artifact_count (opz.).
+    """
+
+    def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
+        self.logger = logger
+        self.stage = stage
+        self.customer = customer
+        self._t0: Optional[float] = None
+        self._artifact_count: Optional[int] = None
+
+    def set_artifacts(self, count: Optional[int]) -> None:
+        if count is None:
+            self._artifact_count = None
+            return
+        try:
+            self._artifact_count = int(count)
+        except Exception:
+            self._artifact_count = None
+
+    def __enter__(self) -> "phase_scope":
+        try:
+            from time import monotonic as _monotonic
+
+            self._t0 = _monotonic()
+        except Exception:
+            self._t0 = None
+        self.logger.info(
+            "phase_started",
+            extra={"event": "phase_started", "phase": self.stage, "slug": self.customer},
+        )
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> Literal[False]:
+        duration_ms: Optional[int] = None
+        if self._t0 is not None:
+            try:
+                from time import monotonic as _monotonic
+
+                duration_ms = int(round((_monotonic() - self._t0) * 1000))
+            except Exception:
+                duration_ms = None
+
+        extra: dict[str, Any] = {"phase": self.stage, "slug": self.customer}
+        if duration_ms is not None:
+            extra["duration_ms"] = duration_ms
+        if self._artifact_count is not None:
+            extra["artifact_count"] = self._artifact_count
+
+        if exc:
+            self.logger.error("phase_failed", extra={"event": "phase_failed", **extra})
+        else:
+            self.logger.info("phase_completed", extra={"event": "phase_completed", **extra})
+        return False
+
+
 class metrics_scope:
     """Context manager leggero per misurare micro-fasi e loggare in modo uniforme.
 
@@ -305,6 +380,7 @@ class metrics_scope:
 
 __all__ = [
     "get_structured_logger",
+    "phase_scope",
     "metrics_scope",
     "redact_secrets",
     "mask_partial",

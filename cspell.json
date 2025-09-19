@@ -249,7 +249,8 @@
     "avances",
     "virtualenv",
     "endcase",
-    "rels"
+    "rels",
+    "escl"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

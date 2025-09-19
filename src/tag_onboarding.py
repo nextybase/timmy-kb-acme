@@ -36,7 +36,7 @@ from pipeline.context import ClientContext
 from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.logging_utils import get_structured_logger, mask_partial, metrics_scope, tail_path
+from pipeline.logging_utils import get_structured_logger, mask_partial, phase_scope, tail_path
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
@@ -601,7 +601,7 @@ def tag_onboarding_main(
         if not drive_raw_folder_id:
             raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
         service = get_drive_service(context)
-        with metrics_scope(logger, stage="drive_download", customer=context.slug):
+        with phase_scope(logger, stage="drive_download", customer=context.slug) as m:
             download_drive_pdfs_to_local(
                 service=service,
                 remote_root_folder_id=drive_raw_folder_id,
@@ -610,6 +610,11 @@ def tag_onboarding_main(
                 context=context,
                 redact_logs=getattr(context, "redact_logs", False),
             )
+            try:
+                pdfs = [p for p in raw_dir.rglob("*.pdf") if p.is_file()]
+                m.set_artifacts(len(pdfs))
+            except Exception:
+                m.set_artifacts(None)
         logger.info(
             "Download da Drive completato",
             extra={"folder_id": mask_partial(drive_raw_folder_id)},
@@ -628,9 +633,13 @@ def tag_onboarding_main(
         if src_dir == raw_dir.expanduser().resolve():
             logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
         else:
-            with metrics_scope(logger, stage="local_copy", customer=context.slug):
+            with phase_scope(logger, stage="local_copy", customer=context.slug) as m:
                 # Delegato a semantic.api: evita duplicazioni locali
                 copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
+                try:
+                    m.set_artifacts(int(copied))
+                except Exception:
+                    m.set_artifacts(None)
             logger.info(
                 "Copia locale completata",
                 extra={"count": copied, "raw_tail": tail_path(raw_dir)},
@@ -639,9 +648,18 @@ def tag_onboarding_main(
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
     # Fase 1: CSV in semantic/
-    with metrics_scope(logger, stage="emit_csv", customer=context.slug):
+    with phase_scope(logger, stage="emit_csv", customer=context.slug) as m:
         # Delegato a semantic.api: emissione CSV e README tagging
         csv_path = build_tags_csv(context, logger, slug=slug)
+        # conta righe (escl. header) senza introdurre read_text diretto
+        try:
+            line_count = 0
+            with open_for_read_bytes_selfguard(csv_path) as f:  # bytes-safe
+                for chunk in iter(lambda: f.read(8192), b""):
+                    line_count += chunk.count(b"\n")
+            m.set_artifacts(max(0, line_count - 1))
+        except Exception:
+            m.set_artifacts(None)
     logger.info(
         "Controlla la lista keyword",
         extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
@@ -661,9 +679,13 @@ def tag_onboarding_main(
             return
 
     # Fase 2: stub in semantic/
-    with metrics_scope(logger, stage="semantic_stub", customer=context.slug):
+    with phase_scope(logger, stage="semantic_stub", customer=context.slug) as m:
         write_tagging_readme(semantic_dir, logger)
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
+        try:
+            m.set_artifacts(2)
+        except Exception:
+            m.set_artifacts(None)
     logger.info(
         "Arricchimento semantico completato",
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},

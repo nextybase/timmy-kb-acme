@@ -46,7 +46,7 @@ from pipeline.logging_utils import (
     mask_id_map,
     mask_partial,
     mask_updates,
-    metrics_scope,
+    phase_scope,
     tail_path,
 )
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
@@ -272,8 +272,15 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         )
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
-    with metrics_scope(logger, stage="create_local_structure", customer=context.slug):
+    with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
         create_local_base_structure(context, yaml_structure_file)
+        # telemetria: numero directory top-level nella base cliente
+        try:
+            base = context.base_dir
+            count = sum(1 for p in (base.iterdir() if base else []) if p.is_dir())
+            m.set_artifacts(count)
+        except Exception:
+            m.set_artifacts(None)
 
     repo_root = Path(__file__).resolve().parents[1]
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
@@ -391,17 +398,22 @@ def _drive_phase(
     redact = bool(getattr(context, "redact_logs", False))
     logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
 
-    with metrics_scope(logger, stage="drive_create_client_folder", customer=context.slug):
+    with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
         client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
+        m.set_artifacts(1)
     logger.info(
         "Cartella cliente creata su Drive",
         extra={"client_folder_id": mask_partial(client_folder_id)},
     )
 
-    with metrics_scope(logger, stage="drive_create_structure", customer=context.slug):
+    with phase_scope(logger, stage="drive_create_structure", customer=context.slug) as m:
         created_map = create_drive_structure_from_yaml(
             service, yaml_structure_file, client_folder_id, redact_logs=redact
         )
+        try:
+            m.set_artifacts(len(created_map or {}))
+        except Exception:
+            m.set_artifacts(None)
     logger.info(
         "Struttura Drive creata",
         extra={
@@ -420,10 +432,11 @@ def _drive_phase(
             file_path=str(yaml_structure_file),
         )
 
-    with metrics_scope(logger, stage="drive_upload_config", customer=context.slug):
+    with phase_scope(logger, stage="drive_upload_config", customer=context.slug) as m:
         uploaded_cfg_id = upload_config_to_drive_folder(
             service, context, parent_id=client_folder_id, redact_logs=redact
         )
+        m.set_artifacts(1)
     logger.info("Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
 
     updates = {

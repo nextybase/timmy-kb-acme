@@ -25,7 +25,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, RE
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
@@ -128,12 +128,27 @@ def onboarding_full_main(
 
     # 1) README/SUMMARY in book/ (senza fallback)
     try:
-        _write_summary_and_readme(context, logger, slug=slug)
+        with phase_scope(logger, stage="write_summary_and_readme", customer=context.slug) as m:
+            _write_summary_and_readme(context, logger, slug=slug)
+            # artifact_count: numero di file .md in book/
+            try:
+                md_dir = getattr(context, "md_dir", None)
+                count = sum(1 for p in (md_dir.glob("*.md") if md_dir else []) if p.is_file())
+                m.set_artifacts(count)
+            except Exception:
+                m.set_artifacts(None)
     except Exception as e:
         raise ConfigError(f"Impossibile generare/validare README/SUMMARY in book/: {e}") from e
 
     # 2) Preflight book/ (solo .md; ignora .md.fp, builder files e sottodirectory di build)
-    _ensure_book_purity(context, logger)
+    with phase_scope(logger, stage="ensure_book_purity", customer=context.slug) as m:
+        _ensure_book_purity(context, logger)
+        try:
+            md_dir = getattr(context, "md_dir", None)
+            count = sum(1 for p in (md_dir.glob("*.md") if md_dir else []) if p.is_file())
+            m.set_artifacts(count)
+        except Exception:
+            m.set_artifacts(None)
 
     # 3) Conferma in interattivo (nessun prompt in non-interactive)
     do_push = True
@@ -143,7 +158,9 @@ def onboarding_full_main(
             do_push = False
 
     if do_push:
-        _git_push(context, logger)
+        with phase_scope(logger, stage="git_push", customer=context.slug) as m:
+            _git_push(context, logger)
+            m.set_artifacts(1)
 
     logger.info("Completato (fase push)")
 

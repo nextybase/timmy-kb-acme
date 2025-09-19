@@ -16,6 +16,7 @@ from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, sorted_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
 from semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
@@ -104,8 +105,13 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
-    _call_convert_md(_convert_md, shim, book_dir)
-    mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
+        _call_convert_md(_convert_md, shim, book_dir)
+        mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+        try:
+            m.set_artifacts(len(mds))
+        except Exception:
+            m.set_artifacts(None)
     if mds:
         return mds
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
@@ -131,27 +137,32 @@ def enrich_frontmatter(
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
 
-    for md in mds:
-        name = md.name
-        title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
-        tags = _guess_tags_for_name(name, vocab, inv=inv)
+    with phase_scope(logger, stage="enrich_frontmatter", customer=slug) as m:
+        for md in mds:
+            name = md.name
+            title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
+            tags = _guess_tags_for_name(name, vocab, inv=inv)
+            try:
+                text = read_text_safe(book_dir, md, encoding="utf-8")
+            except OSError as e:
+                logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
+                continue
+            meta, body = _parse_frontmatter(text)
+            new_meta = _merge_frontmatter(meta, title=title, tags=tags)
+            if meta == new_meta:
+                continue
+            fm = _dump_frontmatter(new_meta)
+            try:
+                ensure_within(book_dir, md)
+                safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
+                touched.append(md)
+                logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
+            except OSError as e:
+                logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
         try:
-            text = read_text_safe(book_dir, md, encoding="utf-8")
-        except OSError as e:
-            logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
-            continue
-        meta, body = _parse_frontmatter(text)
-        new_meta = _merge_frontmatter(meta, title=title, tags=tags)
-        if meta == new_meta:
-            continue
-        fm = _dump_frontmatter(new_meta)
-        try:
-            ensure_within(book_dir, md)
-            safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
-            touched.append(md)
-            logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
-        except OSError as e:
-            logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
+            m.set_artifacts(len(touched))
+        except Exception:
+            m.set_artifacts(None)
     return touched
 
 
@@ -160,20 +171,22 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
     errors: list[str] = []
-    try:
-        _gen_summary(shim)
-        logger.info("SUMMARY.md scritto")
-    except Exception as e:  # pragma: no cover
-        errors.append(f"summary: {e}")
-    try:
-        _gen_readme(shim)
-        logger.info("README.md scritto")
-    except Exception as e:  # pragma: no cover
-        errors.append(f"readme: {e}")
-    if errors:
-        raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
-    _validate_md(shim)
-    logger.info("Validazione directory MD OK")
+    with phase_scope(logger, stage="write_summary_and_readme", customer=slug) as m:
+        try:
+            _gen_summary(shim)
+            logger.info("SUMMARY.md scritto")
+        except Exception as e:  # pragma: no cover
+            errors.append(f"summary: {e}")
+        try:
+            _gen_readme(shim)
+            logger.info("README.md scritto")
+        except Exception as e:  # pragma: no cover
+            errors.append(f"readme: {e}")
+        if errors:
+            raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
+        _validate_md(shim)
+        logger.info("Validazione directory MD OK")
+        m.set_artifacts(2)
 
 
 def build_mapping_from_vision(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
@@ -256,7 +269,12 @@ def build_mapping_from_vision(context: ClientContextType, logger: logging.Logger
     except Exception as e:
         raise ConfigError(f"Scrittura mapping fallita ({mapping_path}): {e}", slug=slug, file_path=mapping_path) from e
 
-    logger.info("vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)})
+    with phase_scope(logger, stage="build_mapping_from_vision", customer=slug) as m:
+        logger.info("vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)})
+        try:
+            m.set_artifacts(len(mapping))
+        except Exception:
+            m.set_artifacts(None)
     return mapping_path
 
 
@@ -272,9 +290,14 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
     ensure_within(semantic_dir, csv_path)
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    count = int(_emit_tags_csv(raw_dir, csv_path, logger))
-    logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
-    _write_tagging_readme(semantic_dir, logger)
+    with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
+        count = int(_emit_tags_csv(raw_dir, csv_path, logger))
+        logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
+        _write_tagging_readme(semantic_dir, logger)
+        try:
+            m.set_artifacts(count)
+        except Exception:
+            m.set_artifacts(None)
     return csv_path
 
 
@@ -283,8 +306,9 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
-    mds = convert_markdown(context, logger, slug=slug)
-    write_summary_and_readme(context, logger, slug=slug)
+    with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
+        mds = convert_markdown(context, logger, slug=slug)
+        write_summary_and_readme(context, logger, slug=slug)
 
     # ✅ preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
     ctx_base = cast(Path, getattr(context, "base_dir", None))
@@ -292,6 +316,10 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
     vocab = load_reviewed_vocab(base_dir, logger)
     if vocab:
         enrich_frontmatter(context, logger, vocab, slug=slug)
+    try:
+        m.set_artifacts(len(mds))
+    except Exception:
+        m.set_artifacts(None)
     return mds
 
 
@@ -334,7 +362,8 @@ def index_markdown_to_db(
 
     from datetime import datetime as _dt
 
-    vecs = embeddings_client.embed_texts(contents)
+    with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
+        vecs = embeddings_client.embed_texts(contents)
     if not vecs or len(vecs) != len(contents):
         logger.warning(
             "Embedding client non ha prodotto vettori coerenti",
@@ -361,6 +390,10 @@ def index_markdown_to_db(
             logger.warning("Inserimento DB fallito", extra={"file": rel_name, "error": str(e)})
             continue
     logger.info("Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)})
+    try:
+        m.set_artifacts(inserted_total)
+    except Exception:
+        m.set_artifacts(None)
     return inserted_total
 
 
