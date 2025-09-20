@@ -1,4 +1,4 @@
-# src/ui/services/drive_runner.py
+﻿# src/ui/services/drive_runner.py
 from __future__ import annotations
 
 import io
@@ -56,7 +56,7 @@ def _require_drive_utils_ui() -> None:
         missing.append("upload_config_to_drive_folder")
     if missing:
         raise RuntimeError(
-            "Funzionalità Google Drive non disponibili nella UI: "
+            "Funzionalit├á Google Drive non disponibili nella UI: "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
 
@@ -370,7 +370,19 @@ def download_raw_from_drive_with_progress(
     logger: Optional[logging.Logger] = None,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[Path]:
-    _require_drive_utils_ui()
+    # Guard specifica per il download: richiede solo funzioni necessarie
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if not callable(download_drive_pdfs_to_local):
+        missing.append("download_drive_pdfs_to_local")
+    if missing:
+        raise RuntimeError(
+            "Funzionalità Google Drive non disponibili nella UI (download): "
+            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+        )
     try:
         ensure_dotenv_loaded()
     except Exception:
