@@ -43,6 +43,23 @@ def _get_logger(context: Optional[object] = None) -> Any:
     return get_structured_logger("ui.services.drive_runner", context=context)
 
 
+def _require_drive_utils_ui() -> None:
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if not callable(create_drive_structure_from_yaml):
+        missing.append("create_drive_structure_from_yaml")
+    if not callable(upload_config_to_drive_folder):
+        missing.append("upload_config_to_drive_folder")
+    if missing:
+        raise RuntimeError(
+            "Funzionalità Google Drive non disponibili nella UI: "
+            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+        )
+
+
 # ===== Creazione struttura Drive da mapping ===================================
 
 
@@ -61,6 +78,7 @@ def build_drive_from_mapping(
       - crea 'raw/' (dalle categorie del mapping) + 'contrattualistica/'
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
+    _require_drive_utils_ui()
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)

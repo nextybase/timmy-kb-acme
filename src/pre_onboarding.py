@@ -68,6 +68,31 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
+def _require_drive_utils() -> None:
+    """Verifica che le utilità Google Drive siano disponibili e callabili.
+
+    Solleva ConfigError con istruzioni d'installazione se mancanti.
+    """
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if not callable(create_drive_structure_from_yaml):
+        missing.append("create_drive_structure_from_yaml")
+    if not callable(upload_config_to_drive_folder):
+        missing.append("upload_config_to_drive_folder")
+    if missing:
+        msg = (
+            "Supporto Google Drive non disponibile: funzioni non presenti/callabili: "
+            f"{', '.join(missing)}.\n"
+            "Installa gli extra Drive e rileggi i docs:\n"
+            "  pip install .[drive]\n"
+            "Oppure disattiva il ramo Drive (usa --dry-run o source=local)."
+        )
+        raise ConfigError(msg)
+
+
 def _resolve_yaml_structure_file() -> Path:
     """Risolve in modo robusto il percorso dello YAML della struttura cartelle."""
     here = Path(__file__).resolve()
@@ -496,6 +521,8 @@ def pre_onboarding_main(
         logger.info("Pre-onboarding locale completato (dry-run).")
         return
 
+    # Verifica disponibilità funzioni Drive prima della fase remota
+    _require_drive_utils()
     _drive_phase(
         context,
         logger,
