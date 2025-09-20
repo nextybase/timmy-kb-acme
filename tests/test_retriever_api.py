@@ -74,3 +74,33 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     # top-k rispettato e shape dell'output
     assert len(out) == 2
     assert all("content" in r and "score" in r for r in out)
+
+
+def test_search_accepts_numpy_embeddings(monkeypatch):
+    """Compatibilità: client embeddings che ritorna numpy.ndarray (2D)."""
+    import numpy as np
+
+    # Stub di fetch_candidates: un solo candidato compatibile
+    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+        yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
+
+    monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
+
+    class NumpyEmb:
+        def embed_texts(self, texts: Sequence[str], *, model: str | None = None):  # type: ignore[override]
+            assert len(texts) == 1
+            return np.array([[1.0, 0.0]])
+
+    params = QueryParams(
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="hello",
+        k=1,
+        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
+    )
+
+    out = retr.search(params, NumpyEmb())
+
+    assert len(out) == 1
+    assert isinstance(out[0]["score"], float)

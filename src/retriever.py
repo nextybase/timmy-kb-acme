@@ -171,9 +171,24 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
 
     # 1) Embedding della query
     t_emb0 = time.time()
-    q_vecs = embeddings_client.embed_texts([params.query])
+    q_raw = embeddings_client.embed_texts([params.query])
     t_emb_ms = (time.time() - t_emb0) * 1000.0
-    if not q_vecs or not q_vecs[0]:
+
+    # Normalizza l'output in liste Python evitando truthiness su array NumPy
+    try:
+        q_norm = q_raw.tolist() if hasattr(q_raw, "tolist") else q_raw  # type: ignore[assignment]
+    except Exception:
+        q_norm = q_raw
+    if not isinstance(q_norm, (list, tuple)):
+        q_norm = [q_norm]
+    # Se la sequenza non è annidata (singolo vettore), wrappa
+    if len(q_norm) > 0 and not isinstance(q_norm[0], (list, tuple)):
+        q_norm = [q_norm]
+    # Converte i vettori interni in list[float]
+    q_vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in q_norm]  # type: ignore[arg-type]
+
+    # Verifiche esplicite di vuoto
+    if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
         LOGGER.warning("Empty query embedding; returning no results")
         return []
     qv = q_vecs[0]
