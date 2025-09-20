@@ -109,7 +109,7 @@ class Settings(_BaseSettings):
     def model_post_init(self, __context: Any) -> None:
         # pyright/pylance: ok, chiamiamo super se esiste
         try:
-            super().model_post_init(__context)  # type: ignore[misc]
+            super().model_post_init(__context)
         except Exception:
             # compat, nessuna azione se la super non definisce model_post_init
             pass

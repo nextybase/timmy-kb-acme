@@ -126,6 +126,62 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     assert any("Primo vettore embedding vuoto" in r.getMessage() for r in caplog.records)
 
 
+def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
+    import logging
+    from typing import Any, cast
+
+    import numpy as np
+
+    base = tmp_path / "output" / "timmy-kb-x"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+
+    class ListNpEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [np.array([1.0, 0.0]), np.array([0.5, 0.5])]
+
+    dbp = tmp_path / "db_list_np.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="x",
+        scope="book",
+        embeddings_client=ListNpEmb(),
+        db_path=dbp,
+    )
+    assert inserted == 2
+
+
+def test_index_markdown_to_db_mismatch_lengths_returns_0(tmp_path, caplog):
+    import logging
+    from typing import Any, cast
+
+    import numpy as np
+
+    base = tmp_path / "output" / "timmy-kb-x"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+
+    class ShortEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [np.array([1.0, 0.0])]
+
+    caplog.set_level(logging.INFO)
+    ret = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="x",
+        scope="book",
+        embeddings_client=ShortEmb(),
+        db_path=tmp_path / "db_short.sqlite",
+    )
+    assert ret == 0
+
+
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
 
     base = tmp_path / "output" / "timmy-kb-x"

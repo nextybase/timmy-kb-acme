@@ -378,13 +378,21 @@ def index_markdown_to_db(
             vecs_norm = vecs_raw.tolist() if hasattr(vecs_raw, "tolist") else vecs_raw
         except Exception:
             vecs_norm = vecs_raw
-        if not isinstance(vecs_norm, (list, tuple)):
-            # Materializza generatori/iterabili
-            vecs_norm = list(vecs_norm)  # type: ignore[arg-type]
-        if len(vecs_norm) > 0 and not isinstance(vecs_norm[0], (list, tuple)):
-            # Caso: singolo vettore non annidato
+        # Materializza generatori/iterabili se non sono sequence-like
+        if not (hasattr(vecs_norm, "__len__") and hasattr(vecs_norm, "__getitem__")):
+            vecs_norm = list(vecs_norm)
+        # Determina batch vs singolo vettore considerando anche np.ndarray
+        is_batch = False
+        if len(vecs_norm) > 0:
+            first = vecs_norm[0]
+            is_inner_seq = (
+                hasattr(first, "__len__") and hasattr(first, "__getitem__") and not isinstance(first, (str, bytes))
+            ) or hasattr(first, "tolist")
+            is_batch = bool(is_inner_seq)
+        if not is_batch:
             vecs_norm = [vecs_norm]
-        vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in vecs_norm]  # type: ignore[arg-type]
+        # Converte ogni embedding in list[float]
+        vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in vecs_norm]
 
         # 2) Validazioni esplicite
         if len(vecs) == 0:

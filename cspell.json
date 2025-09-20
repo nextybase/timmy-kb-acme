@@ -256,7 +256,8 @@
     "cyclonedx",
     "wrappa",
     "caplog",
-    "loggato"
+    "loggato",
+    "ndarray"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"

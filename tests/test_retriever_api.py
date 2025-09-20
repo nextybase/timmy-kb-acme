@@ -104,3 +104,36 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
 
     assert len(out) == 1
     assert isinstance(out[0]["score"], float)
+
+
+def test_search_accepts_deque_embedding(monkeypatch):
+    """Client che ritorna deque o generatore come singolo vettore."""
+    from collections import deque
+
+    import src.retriever as retr
+    from src.retriever import QueryParams
+
+    # Stub di fetch_candidates: un solo candidato compatibile
+    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+        yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
+
+    monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
+
+    class DequeEmb:
+        def embed_texts(self, texts: Sequence[str], *, model: str | None = None):  # type: ignore[override]
+            # Restituisce un vettore come deque (singolo embedding)
+            return deque([1.0, 0.0])
+
+    params = QueryParams(
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="hello",
+        k=1,
+        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
+    )
+
+    out = retr.search(params, DequeEmb())
+
+    assert len(out) == 1
+    assert isinstance(out[0]["score"], float)
