@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\semantic\api.py
+# hypothesis_version: 6.139.2
+
+[1024, '\n---\n', '"', '%Y%m%d', '*', '*.md', '---', '---\n', '.pdf', '; ', 'Documento', 'Lettura MD fallita', 'README.md scritto', 'SUMMARY.md scritto', 'Scrittura MD fallita', '[_\\/\\-\\s]+', '\\ ', '\\"', '\\s+', 'aliases', 'b12', 'b3', 'b6', 'base', 'base_dir', 'baskets', 'book', 'build_markdown_book', 'build_tags_csv', 'concepts', 'config', 'convert_markdown', 'count', 'enrich_frontmatter', 'error', 'ethical_framework', 'file', 'file_path', 'files', 'general', 'get_paths', 'goals', 'goals_b12', 'goals_b3', 'goals_b6', 'goals_general', 'index_markdown_to_db', 'inserted', 'key_metrics', 'load_reviewed_vocab', 'md_dir', 'operating_model', 'raw', 'raw_dir', 'risks_mitigations', 'semantic', 'stakeholders_impact', 'tags', 'tags.csv.built', 'tags:', 'tags_raw.csv', 'title', 'tolist', 'utf-8', 'uvp', 'vision.mapping.built']

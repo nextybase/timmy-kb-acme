@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\logging_utils.py
+# hypothesis_version: 6.139.2
+
+[1000, '***', '-', '/', 'Authorization', 'GITHUB_TOKEN', 'GIT_HTTP_EXTRAHEADER', 'SERVICE_ACCOUNT_FILE', 'TOKEN', '_ID', '_logging_utils_key', 'artifact_count', 'branch', 'duration_ms', 'event', 'file_path', 'mask_id_map', 'mask_partial', 'mask_updates', 'metrics_scope', 'pathname', 'phase', 'phase_completed', 'phase_failed', 'phase_scope', 'phase_started', 'redact_logs', 'redact_secrets', 'repo', 'run_id', 'slug', 'tail_path', 'utf-8', 'x-access-token:', 'x-access-token:***', '…']

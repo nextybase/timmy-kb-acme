@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\drive\download.py
+# hypothesis_version: 6.139.2
+
+[0.0, 100, 1000, 1024, '.pdf', '__keep__', 'application/pdf', 'base_dir', 'dest.ensure.fail', 'download.fail', 'download.ok', 'download.progress', 'downloaded', 'drive.download.end', 'drive.download.start', 'error', 'file', 'file_id', 'file_path', 'files', 'folder.ensure.fail', 'id', 'local_root', 'local_tail', 'mimeType', 'name', 'nextPageToken', 'parts', 'progress_pct', 'remote_root', 'size', 'slug', 'wb']

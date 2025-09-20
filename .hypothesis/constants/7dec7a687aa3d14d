@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\adapters\book_purity.py
+# hypothesis_version: 6.139.2
+
+['*', ', ', '.cache', '.ds_store', '.git', '.md', '.md.fp', '.tmp', '_book', 'base_dir', 'book', 'book.json', 'book.purity.fail', 'book.purity.ok', 'count', 'md_dir', 'node_modules', 'package-lock.json', 'package.json', 'pnpm-lock.yaml', 'repo_root_dir', 'yarn.lock']

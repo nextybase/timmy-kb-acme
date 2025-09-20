@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\config_utils.py
+# hypothesis_version: 6.139.2
+
+['BASE_DRIVE', 'Backup config creato', 'DATA_VER', 'DEBUG', 'DRIVE_ID', 'DRIVE_ROOT_ID', 'GITBOOK_TOKEN', 'GITHUB_TOKEN', 'INFO', 'LOG_LEVEL', 'N_VER', 'SERVICE_ACCOUNT_FILE', 'Settings', 'bump_n_ver', 'bump_n_ver_if_needed', 'cartelle_raw_yaml', 'event', 'file_path', 'get_client_config', 'logger', 'logs', 'new', 'old', 'safe_write_file', 'set_data_ver_today', 'slug', 'utf-8', 'value']

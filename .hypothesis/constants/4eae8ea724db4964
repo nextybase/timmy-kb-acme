@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\semantic\tags_extractor.py
+# hypothesis_version: 6.139.2
+
+['*.pdf', ', ', '/', '; ', 'Copia fallita', 'PDF copiato', '[]', '[^\\w]+', '\\', 'count', 'dst', 'emit_tags_csv', 'entities', 'error', 'file_path', 'filename', 'keyphrases', 'path', 'raw', 'relative_path', 'score', 'sources', 'src', 'suggested_tags', 'utf-8', '{}']

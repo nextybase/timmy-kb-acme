@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\semantic\semantic_extractor.py
+# hypothesis_version: 6.139.2
+
+['*.md', 'Path non sicuro', '\\ ', '\\s+', 'base_dir', 'bytes', 'file', 'file_path', 'keyword', 'limit', 'md_dir', 'semantic.enrich', 'semantic.extract', 'semantic.files', 'slug', 'utf-8']

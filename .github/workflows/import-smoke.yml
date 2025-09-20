@@ -1,0 +1,55 @@
+name: Import Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  import-smoke:
+    name: Import modules without side-effects
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (minimal)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Prepare env and snapshot
+        run: |
+          echo "FOO_BAR=hello" > .env
+          BEFORE_HASH=$(find . -type f \( -not -path "./.git/*" -a -not -path "*/__pycache__/*" -a -not -name "*.pyc" -a -not -path "./out/*" \) -print0 | sort -z | xargs -0 sha256sum | sha256sum)
+          echo "$BEFORE_HASH" > before.sha
+
+      - name: Import modules
+        run: |
+          python - <<'PY'
+          import importlib, os, sys
+          from pathlib import Path
+          ROOT = Path('.').resolve()
+          SRC = (ROOT / 'src')
+          sys.path.insert(0, str(ROOT))
+          sys.path.insert(0, str(SRC))
+          modules = [
+              'src.pipeline.env_utils',
+              'src.semantic.api',
+              'src.retriever',
+              'src.ingest',
+          ]
+          for m in modules:
+              importlib.import_module(m)
+          # ensure .env not consumed at import-time
+          assert os.environ.get('FOO_BAR') is None, 'FOO_BAR unexpectedly set at import-time'
+          PY
+
+      - name: Check filesystem side-effects
+        run: |
+          AFTER_HASH=$(find . -type f \( -not -path "./.git/*" -a -not -path "*/__pycache__/*" -a -not -name "*.pyc" -a -not -path "./out/*" \) -print0 | sort -z | xargs -0 sha256sum | sha256sum)
+          diff -u before.sha <(echo "$AFTER_HASH") && echo "No file changes after import" || (echo "Detected file changes after import" && exit 1)

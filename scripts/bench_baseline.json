@@ -1,0 +1,14 @@
+{
+  "retriever": {
+    "S": {"ndarray_2d": 0.010, "list_of_ndarray": 0.011, "deque_vector": 0.010, "generator_vector": 0.010},
+    "M": {"ndarray_2d": 0.020, "list_of_ndarray": 0.021, "deque_vector": 0.020, "generator_vector": 0.021},
+    "L": {"ndarray_2d": 0.040, "list_of_ndarray": 0.041, "deque_vector": 0.040, "generator_vector": 0.041}
+  },
+  "semantic_index_markdown_to_db": {
+    "S": {"ndarray_2d": 0.010, "list_of_ndarray": 0.010, "generator_batch": 0.010},
+    "M": {"ndarray_2d": 0.020, "list_of_ndarray": 0.020, "generator_batch": 0.021},
+    "L": {"ndarray_2d": 0.040, "list_of_ndarray": 0.040, "generator_batch": 0.041}
+  },
+  "status": "baseline",
+  "note": "Valori indicativi per abilitare delta% nei summary"
+}

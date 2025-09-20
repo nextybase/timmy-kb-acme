@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\path_utils.py
+# hypothesis_version: 6.139.2
+
+[100, '-', '-{2,}', 'NFKC', 'Slug mancante.', '[\\x00-\\x1f\\x7f]', '[^\\w.\\-]+', '[^a-z0-9-]+', '^[a-z0-9-]+$', '_', 'base', 'config', 'config.yaml', 'ensure_valid_slug', 'ensure_within', 'error', 'file', 'file_path', 'is_safe_subpath', 'is_valid_slug', 'name', 'normalize_path', 'open_for_read', 'path', 'pipeline.path_utils', 'r', 'rb', 'read_text_safe', 'sanitize_filename', 'slug_regex', 'sorted_paths', 'utf-8', 'validate_slug', '{2,}']

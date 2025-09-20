@@ -1,0 +1,92 @@
+name: Bench Embeddings Normalization
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  bench:
+    name: Run bench script (non-gating)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (minimal)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run bench (JSON output)
+        run: |
+          python -m scripts.bench_embeddings_normalization --json out/bench.json --baseline scripts/bench_baseline.json || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: out/bench.json
+          if-no-files-found: warn
+
+      - name: Append summary
+        run: |
+          echo "# Bench Embeddings Normalization" >> $GITHUB_STEP_SUMMARY
+          if [ -f out/bench.json ]; then
+            python - <<'PY'
+            import json
+            from pathlib import Path
+            data = json.loads(Path('out/bench.json').read_text(encoding='utf-8'))
+            def section_nested(title, d, delta=None):
+                print(f"\n## {title}")
+                for sz, items in (d or {}).items():
+                    print(f"\n### Size {sz}")
+                    if delta and sz in delta:
+                        print("\n| case | seconds | delta% |\n|---|---:|---:|")
+                        for k, v in items.items():
+                            dv = delta.get(sz, {}).get(k)
+                            dvs = f"{dv:+.2f}%" if isinstance(dv, (int,float)) else "-"
+                            print(f"| {k} | {v:.6f} | {dvs} |")
+                    else:
+                        print("\n| case | seconds |\n|---|---:|")
+                        for k, v in items.items():
+                            print(f"| {k} | {v:.6f} |")
+            print()
+            dlt = (data.get('delta_pct') or {}) if isinstance(data, dict) else {}
+            if isinstance(data, dict) and 'retriever' in data:
+                section_nested('Retriever', data['retriever'], dlt.get('retriever'))
+            if isinstance(data, dict) and 'semantic_index_markdown_to_db' in data:
+                section_nested('Semantic Index', data['semantic_index_markdown_to_db'], dlt.get('semantic_index_markdown_to_db'))
+            PY
+          else
+            echo "No JSON produced." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Artifacts soft check
+        run: |
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          p = Path('out/bench.json')
+          if not p.exists():
+              sys.exit(0)
+          data = json.loads(p.read_text(encoding='utf-8'))
+          arts = (data.get('semantic_index_artifacts') or {})
+          warn = []
+          for sz, items in arts.items():
+              for k, v in items.items():
+                  try:
+                      iv = int(v)
+                  except Exception:
+                      continue
+                  if iv == 0:
+                      warn.append(f"WARNING: artifacts=0 for semantic[{sz}].{k}")
+          if warn:
+              print("\n".join(warn))
+          PY

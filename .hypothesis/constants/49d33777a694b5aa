@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\context.py
+# hypothesis_version: 6.139.2
+
+['CI', 'ClientContext', 'DRIVE_ID', 'ENV', 'GITHUB_TOKEN', 'INFO', 'LOG_REDACTION', 'REPO_ROOT_DIR', 'SERVICE_ACCOUNT_FILE', "Step '%s' → %s", '_CI_BOOL', 'book', 'client_name', 'config', 'config.yaml', 'error_count', 'file_path', 'log_level', 'logs', 'output', 'raw', 'redact_logs', 'repo_root_dir', 'run_id', 'slug', 'stage', 'status', 'step', 'steps', 'utf-8', 'warning_count']

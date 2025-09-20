@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\drive\client.py
+# hypothesis_version: 6.139.2
+
+[0.0, 0.5, 20.0, 300, 429, 500, 502, 503, 504, 1000, 'SERVICE_ACCOUNT_FILE', '_retry', 'attempt', 'attempts', 'backoff_total_ms', 'budget_s', 'connection aborted', 'connection reset', 'drive', 'drive-op', 'drive.client.built', 'drive.retry.backoff', 'drive.retry.giveup', 'drive_metrics_ctx', 'drive_metrics_scope', 'env', 'exc_type', 'files', 'files.get', 'files.list', 'get_drive_service', 'get_file_metadata', 'get_retry_metrics', 'impersonation', 'last_error', 'last_status', 'list_drive_files', 'message', 'missing resp', 'missing status', 'nextPageToken', 'op', 'quota exceeded', 'rate limit', 'reset by peer', 'resp', 'retries_by_error', 'retries_total', 'retryable', 'sa_file', 'scopes', 'server busy', 'service_account_file', 'sleep_s', 'status', 'timed out', 'timeout', 'too many requests', 'total_sleep_s', 'unavailable', 'v3']

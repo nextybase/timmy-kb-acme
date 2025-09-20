@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\content_utils.py
+# hypothesis_version: 6.139.2
+
+['# Summary\n\n', '*.md', '*.pdf', '-', 'Knowledge Base', 'README.md', 'SUMMARY.md', '_', 'readme.md', 'slug', 'summary.md', 'utf-8']

@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\embedding_utils.py
+# hypothesis_version: 6.139.2
+
+['__getitem__', '__len__', 'is_numeric_vector', 'normalize_embeddings', 'tolist']

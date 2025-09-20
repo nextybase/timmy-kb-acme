@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\nlp\nlp_keywords.py
+# hypothesis_version: 6.139.2
+
+[0.0, 0.2, 0.4, 0.82, 1.0, '-', 'Installare yake', 'Mn', 'NFKD', 'NOUN', 'PROPN', 'PdfReader', '[a-z0-9]', '\\s+', 'all-MiniLM-L6-v2', 'canonical', 'en_core_web_md', 'en_core_web_sm', 'getText', 'get_text', 'ignore', 'it', 'it_core_news_md', 'it_core_news_sm', 'members', 'noun_chunks', 'pages', 'pypdf', 'synonyms', 'text', 'utf-8']

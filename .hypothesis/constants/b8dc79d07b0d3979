@@ -1,0 +1,4 @@
+# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\drive\upload.py
+# hypothesis_version: 6.139.2
+
+[300, 404, '***', 'CONFIG_FILE', 'CONFIG_PATH', 'base_dir', 'book', 'book_dir', 'client', 'client_config_file', 'client_dir', 'client_root', 'config', 'config.yaml', 'config_dir', 'config_file', 'config_path', 'config_yaml_path', 'create_drive_folder', 'delete_drive_file', 'drive', 'file_id', 'files', 'files(id, name)', 'files.create.config', 'files.create.folder', 'files.delete', 'folder_id', 'folder_name', 'id', 'keys', 'local', 'md_dir', 'message', 'mimeType', 'name', 'old_id', 'output_dir', 'parent', 'parents', 'raw', 'raw_dir', 'redact_logs', 'root', 'root_folders', 'slug']
