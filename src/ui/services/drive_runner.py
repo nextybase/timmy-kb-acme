@@ -81,10 +81,6 @@ def build_drive_from_mapping(
     """
     _require_drive_utils_ui()
     # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
