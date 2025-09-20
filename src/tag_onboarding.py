@@ -620,6 +620,8 @@ def tag_onboarding_main(
         drive_raw_folder_id = cfg.get("drive_raw_folder_id")
         if not drive_raw_folder_id:
             raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
+        # Verifica disponibilità delle utility Drive prima di procedere
+        _require_drive_utils()
         service = get_drive_service(context)
         with phase_scope(logger, stage="drive_download", customer=context.slug) as m:
             download_drive_pdfs_to_local(

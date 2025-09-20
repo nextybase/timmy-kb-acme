@@ -161,3 +161,15 @@ Get-Content .\output\timmy-kb-*\logs\*.log -Tail 80
 # pulizia sandbox di prova
 Get-ChildItem .\output -Directory "timmy-kb-*" | Remove-Item -Recurse -Force
 ```
+
+---
+
+## Aggiornamenti v2.0.0 (nuovi test)
+
+- `tests/test_tag_onboarding_drive_guard_main.py`:
+  verifica che l’orchestratore `tag_onboarding_main(..., source="drive")` sollevi `ConfigError`
+  con messaggio esplicito quando le funzioni Drive non sono disponibili (hint: `pip install .[drive]`).
+
+- `tests/test_ui_drive_services_guards.py`:
+  verifica che i servizi UI `emit_readmes_for_raw` e `download_raw_from_drive_with_progress` sollevino `RuntimeError`
+  con messaggio comprensibile in assenza degli extra Drive.

@@ -33,7 +33,7 @@ def main() -> None:
         update_config_with_drive_ids,
     )
     from pipeline.context import ClientContext
-    from pipeline.env_utils import compute_redact_flag, ensure_dotenv_loaded
+    from pipeline.env_utils import compute_redact_flag
     from pipeline.logging_utils import get_structured_logger  # fix import
     from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
 
@@ -62,12 +62,6 @@ def main() -> None:
     # =========================================================================
     # Helpers (chiudono su import locali)
     # =========================================================================
-    # Carica .env una sola volta (idempotente) per rendere disponibili SERVICE_ACCOUNT_FILE/DRIVE_ID
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
-
     def _safe_compute_redact_flag(env: Optional[Dict[str, str]] = None, level: str = "INFO") -> bool:
         env = env or dict(os.environ)
         try:

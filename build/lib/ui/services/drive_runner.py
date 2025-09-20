@@ -8,7 +8,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
-from pipeline.env_utils import ensure_dotenv_loaded
 
 try:
     import pipeline.drive_utils as _du
@@ -80,11 +79,6 @@ def build_drive_from_mapping(
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
     _require_drive_utils_ui()
-    # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -266,12 +260,6 @@ def emit_readmes_for_raw(
     - ambito (titolo), descrizione, esempi
     Upload in ciascuna sottocartella. Ritorna {category_name -> file_id}
     """
-    _require_drive_utils_ui()
-    # Carica .env per SERVICE_ACCOUNT_FILE/DRIVE_ID se disponibile
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -370,11 +358,6 @@ def download_raw_from_drive_with_progress(
     logger: Optional[logging.Logger] = None,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[Path]:
-    _require_drive_utils_ui()
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
     svc = get_drive_service(ctx)

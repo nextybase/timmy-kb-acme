@@ -1,4 +1,4 @@
-# Timmy-KB - Coding Rules (v1.9.2)
+# Timmy-KB - Coding Rules (v2.0.0)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -92,6 +92,10 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Drive: tutte le operazioni passano da `pipeline/drive_utils.py` o runner dedicati; evita API low-level dirette.
 - Download RAW: usa la funzione di alto livello esposta nel runner UI.
 - Git: push solo di `.md` in `book/`; ignora `.md.fp` e file binari.
+
+### Novità v2.0.0 (UI/Drive)
+- UI/servizi devono verificare la disponibilità degli extra Drive con una guardia esplicita prima di usare funzioni come `get_drive_service` o `create_drive_folder`.
+- Mostrare errori comprensibili all’utente (RuntimeError con hint `pip install .[drive]`) al posto di `TypeError`.
 
 ---
 

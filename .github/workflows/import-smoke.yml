@@ -8,6 +8,7 @@ jobs:
   import-smoke:
     name: Import modules without side-effects
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4

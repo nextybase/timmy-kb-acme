@@ -4,8 +4,38 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "timmy-kb"
-version = "1.9.3"
+version = "2.0.0"
 requires-python = ">=3.11"
+
+# Dipendenze runtime minime per installare il pacchetto via pip install .
+# Nota: i pin completi restano in requirements.txt (SSoT). Qui manteniamo
+# solo il set necessario all'esecuzione CLI/base senza UI/Drive.
+dependencies = [
+    "PyMuPDF==1.24.14",
+    "PyPDF2==3.0.1",
+    "pydantic==2.7.1",
+    "pydantic-settings==2.0.0",
+    "python-dotenv==1.0.1",
+    "python-slugify==8.0.4",
+    "PyYAML==6.0.1",
+    "requests==2.32.2",
+    "numpy==1.26.4",
+    # Compat pydantic/types
+    "typing-extensions==4.12.2",
+    "annotated-types==0.7.0",
+    "typing-inspection==0.4.0",
+]
+
+[project.optional-dependencies]
+# Extra opzionale per le funzionalità Google Drive (usato da: pip install .[drive])
+drive = [
+    "google-api-python-client==2.127.0",
+    "google-auth-httplib2==0.2.0",
+    "google-auth-oauthlib==1.2.0",
+    "google-auth==2.34.0",
+    "httplib2==0.22.0",
+    "requests-oauthlib==2.0.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
