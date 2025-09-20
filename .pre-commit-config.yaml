@@ -2,63 +2,52 @@
   python: python3.11
 
 repos:
-  - repo: local
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
     hooks:
-      # Base hooks (system) — usano il tuo venv
       - id: check-yaml
-        name: check-yaml (system)
-        entry: check-yaml
-        language: system
-        types_or: [yaml]
         stages: [pre-commit]
-
       - id: end-of-file-fixer
-        name: end-of-file-fixer (system)
-        entry: end-of-file-fixer
-        language: system
         stages: [pre-commit]
-
       - id: trailing-whitespace
-        name: trailing-whitespace (system)
-        entry: trailing-whitespace-fixer
-        language: system
         stages: [pre-commit]
-
       - id: mixed-line-ending
-        name: mixed-line-ending (system)
-        entry: mixed-line-ending
-        language: system
         args: ["--fix=lf"]
         stages: [pre-commit]
 
-      # Python tooling via system (uses your venv)
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
       - id: black
-        name: black (system)
-        entry: black
-        language: system
         types_or: [python]
-        stages: [pre-commit]
-
-      - id: isort
-        name: isort (system)
-        entry: isort
-        language: system
-        args: ["--profile=black"]
-        types_or: [python]
-        stages: [pre-commit]
-
-      - id: ruff
-        name: ruff (system)
-        entry: ruff
-        language: system
-        args: ["check", "--fix"]
         files: ^(src|tests)/
         stages: [pre-commit]
 
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile=black"]
+        types_or: [python]
+        files: ^(src|tests)/
+        stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.8
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        files: ^(src|tests)/
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+
       - id: mypy
-        name: mypy (system)
+        name: mypy
         entry: mypy
-        language: system
+        language: python
+        additional_dependencies: ["mypy", "types-PyYAML"]
         files: ^src/(config_ui/|pipeline/drive/)|^src/pipeline/drive_utils\.py$
         pass_filenames: false
         args: ["--config-file", "mypy.ini"]
@@ -79,13 +68,15 @@ repos:
       - id: qa-safe
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python tools/dev/qa_safe.py
-        language: system
+        language: python
+        additional_dependencies: ["black", "isort", "ruff", "mypy", "types-PyYAML"]
         pass_filenames: false
         stages: [pre-push]
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
         entry: python tools/dev/qa_safe.py --with-tests
-        language: system
+        language: python
+        additional_dependencies: ["black", "isort", "ruff", "mypy", "pytest", "pyyaml", "pydantic", "pydantic-settings", "numpy", "hypothesis", "reportlab", "types-PyYAML"]
         pass_filenames: false
         stages: [pre-push]
 

@@ -32,13 +32,6 @@ from typing import Any, Dict, Optional, Tuple
 from pipeline.config_utils import get_client_config, update_config_with_drive_ids, write_client_config_file
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
-from pipeline.drive_utils import (
-    create_drive_folder,
-    create_drive_structure_from_yaml,
-    create_local_base_structure,
-    get_drive_service,
-    upload_config_to_drive_folder,
-)
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
@@ -51,6 +44,23 @@ from pipeline.logging_utils import (
     tail_path,
 )
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
+
+create_drive_folder = None
+create_drive_structure_from_yaml = None
+create_local_base_structure = None
+get_drive_service = None
+upload_config_to_drive_folder = None
+try:
+    import pipeline.drive_utils as _du
+
+    create_drive_folder = _du.create_drive_folder
+    create_drive_structure_from_yaml = _du.create_drive_structure_from_yaml
+    create_local_base_structure = _du.create_local_base_structure
+    get_drive_service = _du.get_drive_service
+    upload_config_to_drive_folder = _du.upload_config_to_drive_folder
+except Exception:
+    # Import opzionale: in modalità --dry-run non è richiesto googleapiclient
+    pass
 
 
 def _prompt(msg: str) -> str:
@@ -274,7 +284,14 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
-        create_local_base_structure(context, yaml_structure_file)
+        # In modalità offline (senza googleapiclient) usiamo un fallback locale minimo
+        if callable(create_local_base_structure):
+            create_local_base_structure(context, yaml_structure_file)
+        else:
+            # Fallback: crea solo struttura base locale
+            context.base_dir.mkdir(parents=True, exist_ok=True)
+            context.raw_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+            context.md_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
         # telemetria: numero directory top-level nella base cliente
         try:
             base = context.base_dir

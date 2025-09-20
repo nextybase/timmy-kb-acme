@@ -33,7 +33,12 @@ import storage.tags_store as tags_store
 from pipeline.config_utils import get_client_config
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
-from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+
+try:
+    from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+except Exception:  # pragma: no cover
+    download_drive_pdfs_to_local = None  # type: ignore[assignment]
+    get_drive_service = None  # type: ignore[assignment]
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger, mask_partial, phase_scope, tail_path

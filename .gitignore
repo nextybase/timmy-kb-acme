@@ -19,6 +19,9 @@ ENV/
 # === Pytest, Coverage ===
 .cache/
 .pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
 coverage.*
 .coverage
 *.coverage
@@ -30,6 +33,7 @@ output/
 tmp_repo_push/
 logs/
 data/
+.timmykb/
 
 # === Credenziali e segreti ===
 .env

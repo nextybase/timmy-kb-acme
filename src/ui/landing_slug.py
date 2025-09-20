@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
-
-try:
-    import streamlit as st
-except Exception as e:  # pragma: no cover
-    raise RuntimeError("Streamlit non disponibile per la landing UI.") from e
+from typing import Any, Optional, Tuple
 
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard
+
+st: Any | None
+try:  # preferisce runtime soft-fail per import opzionali
+    import streamlit as _st
+
+    st = _st
+except Exception:  # pragma: no cover
+    st = None
 
 CLIENT_CONTEXT_ERROR_MSG = (
     "ClientContext non disponibile. Esegui " "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
@@ -49,6 +52,8 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
 
     Restituisce: (locked, slug, client_name)
     """
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per la landing UI.")
     st.markdown("<div style='height: 6vh'></div>", unsafe_allow_html=True)
 
     # Banner in alto a destra

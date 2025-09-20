@@ -8,13 +8,21 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
-from pipeline.drive_utils import (
-    create_drive_folder,
-    create_drive_structure_from_yaml,
-    download_drive_pdfs_to_local,
-    get_drive_service,
-    upload_config_to_drive_folder,
-)
+
+try:
+    import pipeline.drive_utils as _du
+
+    create_drive_folder = _du.create_drive_folder
+    create_drive_structure_from_yaml = _du.create_drive_structure_from_yaml
+    download_drive_pdfs_to_local = _du.download_drive_pdfs_to_local
+    get_drive_service = _du.get_drive_service
+    upload_config_to_drive_folder = _du.upload_config_to_drive_folder
+except Exception:  # pragma: no cover
+    create_drive_folder = None
+    create_drive_structure_from_yaml = None
+    download_drive_pdfs_to_local = None
+    get_drive_service = None
+    upload_config_to_drive_folder = None
 from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.path_utils import sanitize_filename
 

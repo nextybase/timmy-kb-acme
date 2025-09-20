@@ -26,8 +26,6 @@ import os
 from pathlib import Path
 from typing import Any, Dict, cast
 
-import streamlit as st
-
 from pipeline.config_utils import get_client_config
 
 # Config repo (per leggere config.yaml se disponibile)
@@ -39,6 +37,14 @@ from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
 from src.retriever import QueryParams, search_with_config  # <-- usa la facade
 from src.vscode_bridge import read_response, write_request
+
+st: Any | None
+try:
+    import streamlit as _st
+
+    st = _st
+except Exception:  # pragma: no cover
+    st = None
 
 # Logging (passive at import-time): define constants/logger only
 LOGS_DIR = Path("logs")
@@ -116,6 +122,8 @@ def main() -> None:
     except Exception:
         pass
     _ensure_startup()
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per Timmy KB Coder UI.")
     st.set_page_config(page_title="Timmy KB Coder", layout="wide")
     st.title("Timmy KB Coder (UI dedicata — distinta da onboarding_ui.py)")
 

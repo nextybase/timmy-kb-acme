@@ -9,7 +9,8 @@ Opzionale: --with-tests per eseguire anche pytest.
 
 Note:
 - I PATHS sono allineati ai target standard del progetto (src/ e tests/).
-- mypy viene eseguito SENZA argomenti posizionali, così rispetta mypy.ini.
+- Tutti i tool vengono invocati come moduli di Python (python -m ...)
+  per evitare dipendenze da PATH o wrapper eseguibili su Windows.
 
 Exit code:
 - 0 se tutti i tool presenti sono passati o assenti (skip)
@@ -18,7 +19,7 @@ Exit code:
 from __future__ import annotations
 
 import argparse
-import shutil
+import importlib.util
 import subprocess
 import sys
 from typing import List, Sequence, Tuple
@@ -30,14 +31,15 @@ LINT_PATHS: Sequence[str] = (
 )
 
 
-def run_if_available(name: str, args: List[str]) -> Tuple[str, int | None]:
-    """Esegue 'args' solo se 'name' è risolvibile nel PATH; altrimenti skip."""
-    if shutil.which(name) is None:
-        print(f"[qa-safe] {name} non installato: skip")
-        return name, None
-    print(f"[qa-safe] Eseguo: {' '.join(args)}")
-    proc = subprocess.run(args, stdout=sys.stdout, stderr=sys.stderr)
-    return name, int(proc.returncode)
+def run_module_if_available(module: str, args: List[str]) -> Tuple[str, int | None]:
+    """Esegue `python -m <module> <args>` se il modulo è importabile; altrimenti skip."""
+    if importlib.util.find_spec(module) is None:
+        print(f"[qa-safe] {module} non installato: skip")
+        return module, None
+    cmd = [sys.executable, "-m", module, *args]
+    print(f"[qa-safe] Eseguo: {' '.join(cmd)}")
+    proc = subprocess.run(cmd, stdout=sys.stdout, stderr=sys.stderr)
+    return module, int(proc.returncode)
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -48,18 +50,18 @@ def main(argv: List[str] | None = None) -> int:
     failures: List[str] = []
 
     checks: List[Tuple[str, List[str]]] = [
-        ("isort", ["isort", "--check-only", "--profile=black", *LINT_PATHS]),
-        ("black", ["black", "--check", *LINT_PATHS]),
-        ("ruff", ["ruff", "check", *LINT_PATHS]),
-        ("mypy", ["mypy", "--config-file", "mypy.ini"]),
+        ("isort", ["--check-only", "--profile=black", *LINT_PATHS]),
+        ("black", ["--check", *LINT_PATHS]),
+        ("ruff", ["check", *LINT_PATHS]),
+        ("mypy", ["--config-file", "mypy.ini"]),
     ]
     if args.with_tests:
-        checks.append(("pytest", ["pytest", "-ra"]))
+        checks.append(("pytest", ["-ra"]))
 
-    for name, cmd in checks:
-        _, rc = run_if_available(name, cmd)
+    for module, module_args in checks:
+        _, rc = run_module_if_available(module, module_args)
         if rc is not None and rc != 0:
-            failures.append(name)
+            failures.append(module)
 
     if failures:
         print(f"[qa-safe] Falliti: {', '.join(failures)}")
