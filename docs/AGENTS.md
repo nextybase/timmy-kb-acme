@@ -1,7 +1,7 @@
-# AGENT — Test
+# AGENT â€” Test
 
 ## Strategia
-- Piramide: unit → middle/contract → smoke E2E (dummy).
+- Piramide: unit â†’ middle/contract â†’ smoke E2E (dummy).
 - Genera dataset dummy con tool dedicato (no dati reali).
 
 ## Regole

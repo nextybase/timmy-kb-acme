@@ -1,35 +1,35 @@
 # Integrazione di Codex in VS Code e sistema degli agenti
 
-## Perché Codex in NeXT
+## PerchÃ© Codex in NeXT
 Usiamo Codex come coding agent per accelerare sviluppo, refactoring e manutenzione guidata dai dati, mantenendo un approccio Human-in-the-Loop coerente con NeXT: iterazioni brevi, feedback continui e controllo di coerenza tra obiettivi e risultati. Questo si integra con i cicli NeXT (NeXT/Basket/Sprint) e con la Governance probabilistica, dove gli agenti forniscono insight e automazione, mentre il Team supervisiona e corregge rotta.
 
 ---
 
 ## Installazione e attivazione in VS Code
-1. Installa l’estensione Codex dal Marketplace di VS Code.
-2. Aggiungi il pannello Codex nell’editor e scegli la modalità di approvazione:
-   - **Agent (default):** può leggere file, proporre e applicare modifiche ed eseguire comandi nella working directory.
+1. Installa lâ€™estensione Codex dal Marketplace di VS Code.
+2. Aggiungi il pannello Codex nellâ€™editor e scegli la modalitÃ  di approvazione:
+   - **Agent (default):** puÃ² leggere file, proporre e applicare modifiche ed eseguire comandi nella working directory.
    - **Chat:** solo conversazione/pianificazione.
-   - **Agent (Full Access):** include accesso rete e meno prompt di conferma — usare con cautela.
+   - **Agent (Full Access):** include accesso rete e meno prompt di conferma â€” usare con cautela.
 
-Puoi autenticarti con l’account ChatGPT (piani Plus/Pro/Team/Enterprise) oppure con API key.
-**Nota OS:** su Windows l’esperienza migliore è tramite WSL; l’estensione è pienamente supportata su macOS e Linux.
+Puoi autenticarti con lâ€™account ChatGPT (piani Plus/Pro/Team/Enterprise) oppure con API key.
+**Nota OS:** su Windows lâ€™esperienza migliore Ã¨ tramite WSL; lâ€™estensione Ã¨ pienamente supportata su macOS e Linux.
 
 ---
 
 ## Memoria di progetto: AGENTS.md
-Codex supporta il file `AGENTS.md` per recepire regole, comandi e prassi del progetto. I file `AGENTS.md` fanno già parte integrante del repository: troverai la versione root e quelle nelle cartelle strategiche. Non c’è bisogno di crearli, ma solo di rispettarne le regole.
+Codex supporta il file `AGENTS.md` per recepire regole, comandi e prassi del progetto. I file `AGENTS.md` fanno giÃ  parte integrante del repository: troverai la versione root e quelle nelle cartelle strategiche. Non câ€™Ã¨ bisogno di crearli, ma solo di rispettarne le regole.
 
-L’unico file che va aggiunto manualmente è quello **Personale**, nella home dello sviluppatore.
+Lâ€™unico file che va aggiunto manualmente Ã¨ quello **Personale**, nella home dello sviluppatore.
 
 ### Come creare il file Personale
-Crea la cartella di configurazione locale (se non esiste già):
+Crea la cartella di configurazione locale (se non esiste giÃ ):
 ```bash
 mkdir -p ~/.codex
 ```
 Poi crea il file `~/.codex/AGENTS.md` e personalizzalo con preferenze e stile individuali. Esempio minimale:
 ```markdown
-# AGENTS.md — Preferenze personali
+# AGENTS.md â€” Preferenze personali
 
 ## Stile
 - Usa lingua ITA nelle risposte.
@@ -37,7 +37,7 @@ Poi crea il file `~/.codex/AGENTS.md` e personalizzalo con preferenze e stile in
 
 ## Preferenze
 - Mostra diff con evidenza.
-- Prediligi micro‑PR.
+- Prediligi microâ€‘PR.
 ```
 
 Questo file non va versionato nel repo: resta locale al tuo ambiente.
@@ -48,15 +48,15 @@ Questo file non va versionato nel repo: resta locale al tuo ambiente.
 - **docs/AGENTS.md:** regole per coerenza documentazione (lingua ITA, cSpell attivo, frontmatter e glossario, comandi `make docs`).
 - **src/ui/AGENTS.md:** vincoli per componenti di interfaccia (es. `onboarding_ui.py`); build e test controllati, riscritture solo atomiche.
 - **src/pipeline/AGENTS.md:** tutela dei flussi e delle orchestrazioni, regole sui prompt, nessuna modifica invasiva ai workflow.
-- **src/semantic/AGENTS.md:** principio “DB first”: SQLite come SSoT per i tag; YAML ammesso solo in modalità legacy con nota di migrazione.
+- **src/semantic/AGENTS.md:** principio â€œDB firstâ€: SQLite come SSoT per i tag; YAML ammesso solo in modalitÃ  legacy con nota di migrazione.
 - **tests/AGENTS.md:** convenzioni per test (pytest), naming `test_*.py`, fixture leggere, niente I/O o rete nei unit test, uso di stub/fake, esiti deterministici, soglia minima di coverage.
 
-Questi file, già presenti nel repo, assicurano che Codex lavori in coerenza con pipeline, architettura e vincoli di progetto.
+Questi file, giÃ  presenti nel repo, assicurano che Codex lavori in coerenza con pipeline, architettura e vincoli di progetto.
 
 ---
 
 ## Configurazione avanzata (CLI + cartella ~/.codex/)
-L’estensione si appoggia al Codex CLI open‑source. La configurazione avanzata vive in `~/.codex/` e supporta l’uso di MCP (Model Context Protocol) per collegare strumenti e fonti (filesystem, servizi, ecc.). Impostazioni tipiche: `~/.codex/config.toml`, `~/.codex/AGENTS.md`.
+Lâ€™estensione si appoggia al Codex CLI openâ€‘source. La configurazione avanzata vive in `~/.codex/` e supporta lâ€™uso di MCP (Model Context Protocol) per collegare strumenti e fonti (filesystem, servizi, ecc.). Impostazioni tipiche: `~/.codex/config.toml`, `~/.codex/AGENTS.md`.
 
 ### Esempio minimo ~/.codex/config.toml
 ```toml
@@ -71,9 +71,9 @@ root = "/home/<user>/workspace/timmy-kb-acme"
 # root = "C:/Users/<User>/clienti/timmy-kb-acme"
 ```
 
-MCP è un protocollo standard per esporre tool/contesto a un agente; in Codex si abilita dichiarando `mcp_servers` nella config. Architettura host–server e filtri tool sono documentati anche nell’Agents SDK di OpenAI.
+MCP Ã¨ un protocollo standard per esporre tool/contesto a un agente; in Codex si abilita dichiarando `mcp_servers` nella config. Architettura hostâ€“server e filtri tool sono documentati anche nellâ€™Agents SDK di OpenAI.
 
-Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per l’accesso al DB tag (SSoT) puoi valutare un server MCP specifico per SQLite, mantenendo il principio “DB first, YAML legacy”. (Allineamento richiesto anche nei relativi AGENTS.md di servizio.)
+Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per lâ€™accesso al DB tag (SSoT) puoi valutare un server MCP specifico per SQLite, mantenendo il principio â€œDB first, YAML legacyâ€. (Allineamento richiesto anche nei relativi AGENTS.md di servizio.)
 
 ---
 
@@ -83,24 +83,24 @@ Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per
 - **Scenario Agent (Full Access):** usarlo solo per task espliciti ad alto sforzo (migrazioni massicce, rigenerazioni documentazione), su branch dedicati.
 
 ### Esempi di prompt efficaci
-- “Allinea docs/ alle coding rules e ai termini glossario; applica correzioni cSpell e aggiorna frontmatter. Chiudi con make docs e allega diff.”
-- “Nel servizio semantic.api, usa DB come SSoT per i tag; se trovi YAML trattalo come legacy. Scrivi migrazione e test.”
-- “Rivedi onboarding_ui.py: spiega flusso, dipendenze e orchestratori chiamati; proponi 3 micro‑PR idempotenti con stima impatto.”
+- â€œAllinea docs/ alle coding rules e ai termini glossario; applica correzioni cSpell e aggiorna frontmatter. Chiudi con make docs e allega diff.â€
+- â€œNel servizio semantic.api, usa DB come SSoT per i tag; se trovi YAML trattalo come legacy. Scrivi migrazione e test.â€
+- â€œRivedi onboarding_ui.py: spiega flusso, dipendenze e orchestratori chiamati; proponi 3 microâ€‘PR idempotenti con stima impatto.â€
 
 ---
 
 ## Sicurezza, controllo e governance
-Manteniamo **Agent** come default; **Full Access** solo su richiesta esplicita, branch isolati e PR obbligatoria. Gli AGENTS.md chiariscono comandi consentiti e verifiche (lint/test/build). Questo meccanismo rispetta il principio NeXT di controllo di coerenza continuo e di adattabilità alle condizioni di progetto/mercato.
+Manteniamo **Agent** come default; **Full Access** solo su richiesta esplicita, branch isolati e PR obbligatoria. Gli AGENTS.md chiariscono comandi consentiti e verifiche (lint/test/build). Questo meccanismo rispetta il principio NeXT di controllo di coerenza continuo e di adattabilitÃ  alle condizioni di progetto/mercato.
 
 ---
 
 ## Coerenza con la filosofia del Probabilismo
-Gli agenti sostengono decisioni e operatività con evidenze (test, metriche, KPI), mentre il team guida allineamento e correzioni. Così l’incertezza diventa leva: iteriamo, misuriamo, aggiorniamo regole negli AGENTS.md dove necessario, in linea con la Governance probabilistica.
+Gli agenti sostengono decisioni e operativitÃ  con evidenze (test, metriche, KPI), mentre il team guida allineamento e correzioni. CosÃ¬ lâ€™incertezza diventa leva: iteriamo, misuriamo, aggiorniamo regole negli AGENTS.md dove necessario, in linea con la Governance probabilistica.
 
 ---
 
 ## Riferimenti ufficiali e utili
-- Documentazione estensione Codex IDE (installazione, modalità, cloud/offload).
-- Codex CLI open‑source (configurazione `~/.codex`, MCP, AGENTS.md, sandbox e approvals).
+- Documentazione estensione Codex IDE (installazione, modalitÃ , cloud/offload).
+- Codex CLI openâ€‘source (configurazione `~/.codex`, MCP, AGENTS.md, sandbox e approvals).
 - MCP con Agents SDK di OpenAI (attacco server, filtraggio tool).
-- Che cos’è AGENTS.md (formato e priorità “file più vicino”).
+- Che cosâ€™Ã¨ AGENTS.md (formato e prioritÃ  â€œfile piÃ¹ vicinoâ€).

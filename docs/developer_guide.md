@@ -1,4 +1,4 @@
-﻿# Timmy-KB - Developer Guide (v1.9.2)
+# Timmy-KB - Developer Guide (v2.0.0)
 
 Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
 

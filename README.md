@@ -1,4 +1,4 @@
-﻿# Timmy KB - README (v1.9.2)
+# Timmy KB - README (v2.0.0)
 
 [![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml)
 

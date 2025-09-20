@@ -8,7 +8,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
-from pipeline.env_utils import ensure_dotenv_loaded
 
 try:
     import pipeline.drive_utils as _du
@@ -264,10 +263,6 @@ def emit_readmes_for_raw(
     """
     _require_drive_utils_ui()
     # Carica .env per SERVICE_ACCOUNT_FILE/DRIVE_ID se disponibile
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -379,10 +374,6 @@ def download_raw_from_drive_with_progress(
             "Funzionalità Google Drive non disponibili nella UI (download): "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
     svc = get_drive_service(ctx)

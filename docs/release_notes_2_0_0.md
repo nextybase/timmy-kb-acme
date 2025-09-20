@@ -1,10 +1,10 @@
-# Timmy-KB – Release Notes v2.0.0 (2025-09-20)
+# Timmy-KB â€“ Release Notes v2.0.0 (2025-09-20)
 
 Questa release si concentra su robustezza delle integrazioni Drive, chiarezza degli errori e installazione nativa via pyproject.
 
-Novità principali
+NovitÃ  principali
 - Guardie esplicite per Google Drive:
-  - Orchestratori: `pre_onboarding` e `tag_onboarding` validano la disponibilità delle funzioni Drive prima dell'uso.
+  - Orchestratori: `pre_onboarding` e `tag_onboarding` validano la disponibilitÃ  delle funzioni Drive prima dell'uso.
   - UI: `ui/services/drive_runner.py` valida gli helper Drive e carica `.env` in modo idempotente.
 - Installazione nativa: extra `drive` in `pyproject.toml` (`pip install .[drive]`), con dipendenze base per `pip install .`.
 - Workflows CI opzionali non-gating (import-smoke, bench) confermati.

@@ -1,15 +1,15 @@
-# Onboarding UI – Guida aggiornata (v1.9.2)
+# Onboarding UI â€“ Guida aggiornata (v2.0.0)
 
-Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni.
+Questa guida descrive **come usare e come funziona** l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore piÃ¹ comuni.
 
-> **In sintesi:** la UI è una app **Streamlit** con tre step operativi: **Configurazione**, **Drive**, **Semantica**, e un opzionale **Preview Docker (HonKit)**. Tutte le funzioni delegano ora a utility stabili della pipeline; i fallback interni sono stati rimossi, salvo messaggi di avviso idempotenti quando un modulo non è disponibile.
+> **In sintesi:** la UI Ã¨ una app **Streamlit** con tre step operativi: **Configurazione**, **Drive**, **Semantica**, e un opzionale **Preview Docker (HonKit)**. Tutte le funzioni delegano ora a utility stabili della pipeline; i fallback interni sono stati rimossi, salvo messaggi di avviso idempotenti quando un modulo non Ã¨ disponibile.
 
 ---
 
 ## 1) Prerequisiti
 - **Python >= 3.11** e **Streamlit** installato
 - Repository clonato e avviato dalla *root*
-- **Per la tab "Drive"**: credenziali Google Drive (`SERVICE_ACCOUNT_FILE`) e ID dell'unità (`DRIVE_ID`)
+- **Per la tab "Drive"**: credenziali Google Drive (`SERVICE_ACCOUNT_FILE`) e ID dell'unitÃ  (`DRIVE_ID`)
 - **Per la Preview**: Docker installato e in esecuzione, porta TCP libera (configurabile in UI)
 - **Logging/Redazione (opzionale ma consigliato)**: variabili `LOG_REDACTION` / `LOG_REDACTED` o `ENV=prod`
 
@@ -23,7 +23,7 @@ streamlit run onboarding_ui.py
 # Windows
 py -m streamlit run onboarding_ui.py
 ```
-> Nota: dal refactor 2025-09 `onboarding_ui.py` è un wrapper sottile che richiama `ui.app.main()`. La logica completa vive in `src/ui/app.py` (pacchetto `ui`).
+> Nota: dal refactor 2025-09 `onboarding_ui.py` Ã¨ un wrapper sottile che richiama `ui.app.main()`. La logica completa vive in `src/ui/app.py` (pacchetto `ui`).
 Alla prima apertura, la **landing** chiede `slug` e `nome cliente`. Quando entrambi sono valorizzati, la UI si "sblocca" e salva lo stato in sessione. Il pulsante **Chiudi UI** termina il processo Streamlit in modo pulito.
 
 ---
@@ -53,7 +53,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - `build_mapping(cats, reserved)`
 - `save_tags_reviewed(mapping)`
 
-**Percorsi**: mapping rivisto in `semantic/tags_reviewed.yaml` (workspace cliente). È mantenuto come input storico, ma il **SSoT attuale è il DB SQLite**. Lo YAML è solo un *locator retrocompatibile* e sarà deprecato in 1.0.
+**Percorsi**: mapping rivisto in `semantic/tags_reviewed.yaml` (workspace cliente). Ãˆ mantenuto come input storico, ma il **SSoT attuale Ã¨ il DB SQLite**. Lo YAML Ã¨ solo un *locator retrocompatibile* e sarÃ  deprecato in 1.0.
 
 ---
 
@@ -62,7 +62,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - **Genera README per raw/**: PDF (o TXT) di istruzioni upload
 - **Download contenuti**: scarica file da Drive in `raw/`; aggiorna stato `raw_downloaded=True`
 - Pulsante extra: "Rileva PDF in raw/" aggiorna lo stato senza download
-- **Vision**: upload di `VisionStatement.pdf` → generazione automatica di `vision_statement.yaml` (schema stabile)
+- **Vision**: upload di `VisionStatement.pdf` â†’ generazione automatica di `vision_statement.yaml` (schema stabile)
 
 **Funzioni (`ui.services.drive_runner`)**:
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
@@ -74,7 +74,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 ---
 
 ## 6) Tab "Semantica"
-- Conversione **RAW → BOOK** (PDF → Markdown)
+- Conversione **RAW â†’ BOOK** (PDF â†’ Markdown)
 - **Arricchimento frontmatter**: aggiunge tag canonici dal DB SQLite (`storage/tags_store`)
 - Generazione e validazione di `README.md` e `SUMMARY.md`
 - **Preview Docker** (opzionale): container `gitbook-<slug>`, porta configurabile, start/stop dalla UI
@@ -100,12 +100,12 @@ output/
     raw/        # PDF scaricati
     book/       # Markdown generati
     semantic/
-      tags_reviewed.yaml   # mapping storico (non più SSoT)
+      tags_reviewed.yaml   # mapping storico (non piÃ¹ SSoT)
       tags.db              # SSoT attuale (SQLite)
     README.md
     SUMMARY.md
 ```
-> **SSoT dei tag reviewed = DB SQLite**. Lo YAML resta come input per migrazione e retrocompatibilità, ma sarà deprecato.
+> **SSoT dei tag reviewed = DB SQLite**. Lo YAML resta come input per migrazione e retrocompatibilitÃ , ma sarÃ  deprecato.
 
 ---
 
@@ -125,7 +125,7 @@ output/
 ---
 
 ## 10) Best practice
-- Procedere in ordine: Configurazione → Drive → Semantica → Preview
+- Procedere in ordine: Configurazione â†’ Drive â†’ Semantica â†’ Preview
 - Mantieni mapping coerente con i materiali effettivi
 - Usa normalizzazione chiavi per consistenza
 - Evita spazi/caratteri speciali nei file sorgenti
@@ -142,15 +142,15 @@ output/
 ---
 
 ## 12) FAQ
-- **Posso usare Semantica senza Drive?** Sì, se i PDF sono già in `raw/`
+- **Posso usare Semantica senza Drive?** SÃ¬, se i PDF sono giÃ  in `raw/`
 - **Come fermo la UI?** Pulsante "Chiudi UI" o interrompendo Streamlit
 - **Dove trovo i file generati?** In `output/timmy-kb-<slug>/book/` + radice workspace
 
 ---
 
-## 13) Novità e Deprecazioni
+## 13) NovitÃ  e Deprecazioni
 - **API semantica pubblica**: la UI importa solo da `semantic.api`. Gli helper `semantic_onboarding` sono deprecati e generano `DeprecationWarning`.
-- **Migrazione tag**: `tags_reviewed.yaml` resta input storico; SSoT attuale = `tags.db` (SQLite). Sarà deprecato in 1.0.
+- **Migrazione tag**: `tags_reviewed.yaml` resta input storico; SSoT attuale = `tags.db` (SQLite). SarÃ  deprecato in 1.0.
 
 ---
 
