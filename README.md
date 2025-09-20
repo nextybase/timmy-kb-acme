@@ -6,6 +6,16 @@ Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da
 
 ---
 
+## Novità v2.0.0
+
+- Guardie esplicite per Google Drive negli orchestratori (pre/tag_onboarding) e nella UI (drive_runner), con errori chiari e hint `pip install .[drive]` se mancano gli extra.
+- UI: caricamento `.env` idempotente per `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`.
+- Installazione nativa via `pyproject.toml`:
+  - extra `drive`: `pip install .[drive]`.
+  - dipendenze base per `pip install .` (SSoT dei pin in `requirements.txt`).
+- CI: workflow `import-smoke` non-gating su PR; `bench.yml` opzionale.
+- Test: aggiunti `tests/test_tag_onboarding_drive_guard_main.py` e `tests/test_ui_drive_services_guards.py`.
+
 # Timmy KB Onboarding
 
 Pipeline di onboarding dei clienti per Timmy KB.

@@ -10,7 +10,22 @@
 
 ---
 
-## [1.9.3] — 2025-09-20
+## [2.0.0] - 2025-09-20
+### Added
+- Guardie esplicite per Google Drive negli orchestratori (`pre_onboarding`, `tag_onboarding`) e nella UI (`ui/services/drive_runner.py`).
+- UI: caricamento `.env` idempotente per `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`.
+- Supporto nativo extra `drive` in `pyproject.toml` (`pip install .[drive]`) e dipendenze base per `pip install .`.
+- Test: aggiunti `tests/test_tag_onboarding_drive_guard_main.py` e `tests/test_ui_drive_services_guards.py`.
+
+### Changed
+- `src/tag_onboarding.py`: `_require_drive_utils()` invocato nel ramo `source=="drive"` prima di accedere al servizio.
+- `src/ui/services/drive_runner.py`: guardie applicate nei servizi (`build_drive_from_mapping`, `emit_readmes_for_raw`, `download_raw_from_drive_with_progress`).
+- `.github/workflows/import-smoke.yml`: reso non-gating (`continue-on-error: true`).
+
+### Fixed
+- Errori `TypeError` su funzioni Drive mancanti sostituiti con messaggi espliciti (ConfigError/RuntimeError con istruzioni installazione).
+
+## [1.9.3] - 2025-09-20
 ### Added
 - Embeddings: property/fuzz tests per `normalize_embeddings` e `cosine` (robustezza input edge).
 - CI: workflow `import-smoke.yml` (anti side-effect a import-time) e check soft `scripts/ci/check_phase_artifacts.py`.
