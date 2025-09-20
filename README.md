@@ -147,6 +147,14 @@ Installazione:
 pip install google-api-python-client
 ```
 
+Nota (consigliata): per uno setup completo usare gli extra del progetto:
+```bash
+pip install .[drive]
+# sviluppo
+pip install -e ".[drive]"
+```
+Se le dipendenze Drive non sono installate e scegli la sorgente Drive, CLI/UI mostrano messaggi chiari con le istruzioni d’installazione; i flussi offline (source=local, --dry-run) restano funzionanti.
+
 ---
 
 ## 1) Pre-onboarding
