@@ -62,13 +62,15 @@ def main(argv: List[str] | None = None) -> int:
     py_files = _python_files(LINT_PATHS)
 
     checks: List[Tuple[str, List[str]]] = [
-        ("isort", [
-            "--filter-files",
-            "--check-only",
-            "--profile=black",
-            "--line-length=120",
-            *py_files,
-        ]),
+        # isort è già coperto dall'hook ufficiale pre-commit; qui lo rendiamo opzionale
+        # (mismatch di versioni locali possono dare falsi positivi)
+        # ("isort", [
+        #     "--filter-files",
+        #     "--check-only",
+        #     "--profile=black",
+        #     "--line-length=120",
+        #     *py_files,
+        # ]),
         ("black", ["--check", *LINT_PATHS]),
         ("ruff", ["check", *LINT_PATHS]),
         ("mypy", ["--config-file", "mypy.ini"]),
