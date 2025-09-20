@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci qa-safe ci-safe
+.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci qa-safe ci-safe bench
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -81,3 +81,7 @@ ci-safe: qa-safe
 	else \
 	  echo "[ci-safe] pytest non installato: skip"; \
 	fi
+
+# Benchmark leggerezza normalizzazione embeddings (retriever/semantic)
+bench: env-check
+	@$(PY) -m scripts.bench_embeddings_normalization

@@ -341,6 +341,13 @@ def index_markdown_to_db(
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
 ) -> int:
+    """Indicizza i Markdown presenti in `book/` nel DB con embeddings.
+
+    Compatibilità embedding client:
+    - Accetta batch come `list[list[float]]`, `numpy.ndarray` 2D, `list[np.ndarray]`.
+    - Materializza generatori e converte ogni vettore in `list[float]` preservando il livello batch.
+    - Validazioni: batch non vuoto, primo vettore non vuoto, coerenza con `len(contents)`.
+    """
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])

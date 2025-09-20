@@ -137,3 +137,35 @@ def test_search_accepts_deque_embedding(monkeypatch):
 
     assert len(out) == 1
     assert isinstance(out[0]["score"], float)
+
+
+def test_search_accepts_list_of_numpy_arrays(monkeypatch):
+    """Client che ritorna list[np.ndarray] come batch (uno vettore)."""
+    import numpy as np
+
+    import src.retriever as retr
+    from src.retriever import QueryParams
+
+    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+        yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
+
+    monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
+
+    class ListNpEmb:
+        def embed_texts(self, texts: Sequence[str], *, model: str | None = None):  # type: ignore[override]
+            assert len(texts) == 1
+            return [np.array([1.0, 0.0])]
+
+    params = QueryParams(
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="hello",
+        k=1,
+        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
+    )
+
+    out = retr.search(params, ListNpEmb())
+
+    assert len(out) == 1
+    assert isinstance(out[0]["score"], float)

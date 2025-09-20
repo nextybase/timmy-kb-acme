@@ -132,6 +132,36 @@ Dettagli: [architecture.md](architecture.md).
 - Verifica invarianti: solo `.md` in `book/`; `README.md`/`SUMMARY.md` sempre presenti.
 - Windows/Linux supportati; occhio a path POSIX nei CSV.
 
+### Note tecniche recenti (embedding, logging, fasi)
+
+- Normalizzazione embeddings (retriever & semantic):
+  - Supportati: `list[list[float]]`, `numpy.ndarray` 2D, `list[np.ndarray]`, vettori singoli come `deque`/generatori/`list[float]`.
+  - Regole: materializza generatori in `list(...)`; per `ndarray` usa `.tolist()`; distingui batch (sequenza di vettori) da vettore singolo via `collections.abc.Sequence` (escludi esplicitamente `str`/`bytes`); evita doppi wrapping.
+  - Validazioni: batch non vuoto, primo vettore non vuoto, `len(vecs) == len(contents)` (per l’indicizzazione). In caso negativo logga un warning e non effettuare inserimenti parziali.
+
+- `phase_scope` atomico:
+  - Mantieni dentro il blocco `with phase_scope(...)` sia le validazioni sia gli inserimenti/operazioni critiche e il `m.set_artifacts(...)`. Le eccezioni devono propagare e marcare `phase_failed` in `__exit__`.
+
+- Caching regex per matching termini semantici:
+  - `_term_to_pattern` è decorato con `functools.lru_cache(maxsize=1024)`. Nei test che mutano il vocabolario o misurano hit/miss, usa `semantic.api._term_to_pattern.cache_clear()`.
+
+- UI Coder (`timmy_kb_coder.py`) e logging:
+  - Niente side‑effects a import‑time. La configurazione dei log è demandata a `_configure_logging()` (idempotente) invocata in `main()`. `_ensure_startup()` crea solo cartelle funzionali/DB.
+
+### Benchmark normalizzazione embeddings
+
+- Target: `make bench` (richiede NumPy); in alternativa: `py -m scripts.bench_embeddings_normalization`.
+- Misura (best‑of‑5) percorsi di normalizzazione nel retriever e nell’indicizzazione (`semantic.api.index_markdown_to_db`) su vari formati (`ndarray` 2D, `list[np.ndarray]`, generatori, deque).
+- Uso come regression check leggero; le misure sono indicative.
+
+#### Troubleshooting (benchmark)
+
+- `ModuleNotFoundError: numpy`: installa i requisiti del progetto (`pip install -r requirements.txt`).
+- Conflitti NumPy (warning da spaCy/thinc): attenersi ai pin in `requirements.txt`. Il benchmark non richiede GPU e non usa spaCy.
+- Percorsi/permessi: lo script crea `output/timmy-kb-bench/book`. Se necessario, cancella la cartella dopo le prove.
+- Lentezza locale: il benchmark esegue un best‑of‑5 molto rapido. Su ambienti lenti/CI eseguilo manualmente e non come parte della pipeline.
+- Verifiche mirate: per confronti locali, lancia solo il retriever o solo semantic commentando i blocchi nel file `scripts/bench_embeddings_normalization.py`.
+
 ### Smoke tests aggiunti (UI & E2E)
 
 #### Streamlit — Tab Finanza (headless)

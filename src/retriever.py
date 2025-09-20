@@ -1,4 +1,4 @@
-# src/retriever.py
+﻿# src/retriever.py
 """Utility di ricerca basata su embedding per la Timmy KB.
 
 Funzioni esposte:
@@ -13,7 +13,7 @@ Funzioni esposte:
 
 Design:
 - Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
-- Calcola la similarità coseno in Python sui candidati.
+- Calcola la similaritÃ  coseno in Python sui candidati.
 - Restituisce i top-k come dict con: content, meta, score.
 """
 
@@ -61,7 +61,7 @@ class QueryParams:
 
 
 def _default_candidate_limit() -> int:
-    """Singola fonte di verità del default per candidate_limit (evita drift)."""
+    """Singola fonte di veritÃ  del default per candidate_limit (evita drift)."""
     field = QueryParams.__dataclass_fields__.get("candidate_limit")
     if field is None:
         return 4000
@@ -76,15 +76,15 @@ def _default_candidate_limit() -> int:
         return 4000
 
 
-# ----------------------------------- Similarità -----------------------------------
+# ----------------------------------- SimilaritÃ  -----------------------------------
 
 
 def cosine(a: Iterable[float], b: Iterable[float]) -> float:
-    """Calcola la similarità coseno tra due vettori numerici.
+    """Calcola la similaritÃ  coseno tra due vettori numerici.
 
     Caratteristiche:
     - Iterator-safe: non assume slicing/indicizzazione; non alloca copie.
-    - Se una norma è 0 o uno dei due è vuoto, restituisce 0.0.
+    - Se una norma Ã¨ 0 o uno dei due Ã¨ vuoto, restituisce 0.0.
     - In caso di lunghezze diverse, zip tronca al minimo comune.
     """
     dot = 0.0
@@ -144,17 +144,24 @@ def _score_candidates(
 
 
 def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dict[str, Any]]:
-    """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
+    """Esegue la ricerca di chunk rilevanti per una query usando similaritÃ  coseno.
 
     Flusso:
     1) Ottiene l'embedding di `params.query` tramite
        `embeddings_client.embed_texts([str])`.
     2) Carica al massimo `params.candidate_limit` candidati per
        `(project_slug, scope)`.
-    3) Calcola similarità coseno e ordina per score decrescente con tie-break
+    3) Calcola similaritÃ  coseno e ordina per score decrescente con tie-break
        deterministico.
     4) Restituisce i top-`params.k` in forma di lista di dict:
        {content, meta, score}.
+
+    Note compatibilità embedding:
+    - Supporta output `list[list[float]]`, `numpy.ndarray` 2D, `list[np.ndarray]`,
+      e vettori singoli (deque/generatori/ndarray/liste).
+    - I generatori vengono materializzati; gli array NumPy sono convertiti con `.tolist()`.
+    - Distingue batch di vettori da vettore singolo, evitando doppi wrapping.
+    - Se batch/vettore è vuoto: warning e `[]`.
     """
     _validate_params(params)
 
@@ -185,9 +192,14 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
             q_norm = list(q_norm)
         except Exception:
             q_norm = [q_norm]
-    # Se la sequenza non è annidata (singolo vettore), wrappa
-    if len(q_norm) > 0 and not isinstance(q_norm[0], (list, tuple)):
-        q_norm = [q_norm]
+    # Se la sequenza non Ã¨ annidata (singolo vettore), wrappa
+    if len(q_norm) > 0:
+        _first = q_norm[0]
+        _is_inner_seq = (
+            hasattr(_first, "__len__") and hasattr(_first, "__getitem__") and not isinstance(_first, (str, bytes))
+        ) or hasattr(_first, "tolist")
+        if not _is_inner_seq:
+            q_norm = [q_norm]
     # Converte i vettori interni in list[float]
     q_vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in q_norm]
 
@@ -272,13 +284,13 @@ def with_config_candidate_limit(
     Precedenza:
       - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal
         default del dataclass), NON viene sovrascritto.
-      - Se è rimasto al default, e il config contiene `retriever.candidate_limit`
+      - Se Ã¨ rimasto al default, e il config contiene `retriever.candidate_limit`
         valido (>0), viene applicato.
 
     Nota: se il chiamante imposta esplicitamente il valore uguale al default
-    (4000), questa funzione non può distinguerlo dal caso “non impostato” e
-    applicherà il config. In tal caso, evitare questa funzione oppure passare un
-    valore diverso dal default per esprimere l’intento.
+    (4000), questa funzione non puÃ² distinguerlo dal caso â€œnon impostatoâ€ e
+    applicherÃ  il config. In tal caso, evitare questa funzione oppure passare un
+    valore diverso dal default per esprimere lâ€™intento.
     """
     default_lim = _default_candidate_limit()
 
@@ -343,7 +355,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
 
     Precedenza:
       - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
-      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 ->
+      - Se `retriever.auto_by_budget` Ã¨ true e `latency_budget_ms` > 0 ->
         usa choose_limit_for_budget.
       - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
       - Fallback: lascia il default del dataclass.
@@ -421,9 +433,9 @@ def preview_effective_candidate_limit(
 ) -> tuple[int, str, int]:
     """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
 
-    Ritorna (limit, source, budget_ms) dove `source` ∈
+    Ritorna (limit, source, budget_ms) dove `source` âˆˆ
     {"explicit", "auto_by_budget", "config", "default"}.
-    Utile per la UI per mostrare un’etichetta: "Limite stimato: N".
+    Utile per la UI per mostrare unâ€™etichetta: "Limite stimato: N".
     """
     default_lim = _default_candidate_limit()
 

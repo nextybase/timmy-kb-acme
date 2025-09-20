@@ -183,6 +183,21 @@ make ci-safe   # qa-safe + pytest (se presente)
 ```
 ---
 
+## Benchmark normalizzazione embeddings
+
+È disponibile un micro‑benchmark per validare la normalizzazione degli output degli embedding sia nel retriever sia nell’indicizzazione semantica.
+
+- Esecuzione rapida: `make bench`
+- Alternativa diretta: `py -m scripts.bench_embeddings_normalization`
+
+Il benchmark misura (best‑of‑5) diversi formati di output di `embed_texts`:
+- `numpy.ndarray` 2D
+- `list[np.ndarray]`
+- vettore singolo come `deque` o generatore
+
+Nota: le misure sono indicative e servono come regression check locale.
+---
+
 ## 2) Tagging semantico (HiTL)
 
 ```bash
