@@ -1,5 +1,7 @@
 ﻿# Timmy KB - README (v1.9.2)
 
+[![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml)
+
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
 ---

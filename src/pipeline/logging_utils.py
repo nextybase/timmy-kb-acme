@@ -310,7 +310,12 @@ class phase_scope:
             self._t0 = None
         self.logger.info(
             "phase_started",
-            extra={"event": "phase_started", "phase": self.stage, "slug": self.customer},
+            extra={
+                "event": "phase_started",
+                "phase": self.stage,
+                "slug": self.customer,
+                "status": "start",
+            },
         )
         return self
 
@@ -334,10 +339,17 @@ class phase_scope:
             extra["duration_ms"] = duration_ms
         if self._artifact_count is not None:
             extra["artifact_count"] = self._artifact_count
+            # Alias strutturato stabile
+            extra["artifacts"] = self._artifact_count
 
         if exc:
+            # In caso di errore, aggiungi campo strutturato 'error' e 'status=failed'
+            extra["error"] = str(exc)
+            extra["status"] = "failed"
             self.logger.error("phase_failed", extra={"event": "phase_failed", **extra})
         else:
+            # Successo: 'status=success'
+            extra["status"] = "success"
             self.logger.info("phase_completed", extra={"event": "phase_completed", **extra})
         return False
 

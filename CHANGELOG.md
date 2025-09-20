@@ -1,67 +1,71 @@
-# Changelog - Timmy‑KB (Sintesi)
+﻿# Changelog - Timmyâ€‘KB (Sintesi)
+### Observability & Benchmarks (A1, B1, B2)
+- **A1 (CI opzionale)**: workflow ench.yml (manuale + schedulato) che esegue scripts/bench_embeddings_normalization.py con output JSON e riassunto nel Job Summary. Non-gating; artifact pubblicato.
+- **B1 (phase_scope)**: logging strutturato per fasi con campi phase, status (start|success|failed), duration_ms, rtifacts (alias di rtifact_count), error su failure. Back-compat mantenuta.
+- **B2 (smoke osservabilità)**: test end-to-end per indexing e build book verificano presenza/consistenza dei campi strutturati.
 
-> Formato: [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) · [SemVer](https://semver.org/lang/it/)
+> Formato: [Keep a Changelog](https://keepachangelog.com/it/1.0.0/) Â· [SemVer](https://semver.org/lang/it/)
 >
-> Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualità.
+> Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualitÃ .
 
 ---
 
 ## [1.9.2] - 2025-09-19
 ### Added
 - **Content pipeline**: supporto ai PDF nel root di `raw/` con file aggregato in `book/`.
-- **Test**: copertura per root‑PDF, cleanup orfani, encoding SUMMARY, writer CSV hardened, loader vocab fail‑closed.
+- **Test**: copertura per rootâ€‘PDF, cleanup orfani, encoding SUMMARY, writer CSV hardened, loader vocab failâ€‘closed.
 
 ### Changed
-- `pipeline.content_utils`: cleanup idempotente dei `.md` in `book/`; `SUMMARY.md` con percent‑encoding dei link.
-- `semantic.auto_tagger.render_tags_csv`: firma con `*, base_dir`, path‑safety forte (`ensure_within_and_resolve` + atomiche); call‑site aggiornati.
-- `semantic.vocab_loader`: **fail‑closed** se manca `tags.db`; warning se DB vuoto; info con conteggio canonicals.
+- `pipeline.content_utils`: cleanup idempotente dei `.md` in `book/`; `SUMMARY.md` con percentâ€‘encoding dei link.
+- `semantic.auto_tagger.render_tags_csv`: firma con `*, base_dir`, pathâ€‘safety forte (`ensure_within_and_resolve` + atomiche); callâ€‘site aggiornati.
+- `semantic.vocab_loader`: **failâ€‘closed** se manca `tags.db`; warning se DB vuoto; info con conteggio canonicals.
 
 ### Deprecated
 - `semantic.tags_extractor.emit_tags_csv` in favore di `semantic.api.build_tags_csv(...)` o `auto_tagger.render_tags_csv(..., base_dir=...)`.
 
 ---
 
-## [fix] — 2025-09-17
+## [fix] â€” 2025-09-17
 ### Security
-- `semantic/vocab_loader.py`: path‑safety in **lettura** con `ensure_within_and_resolve`.
+- `semantic/vocab_loader.py`: pathâ€‘safety in **lettura** con `ensure_within_and_resolve`.
 
 ### Changed
-- **Retriever**: `_default_candidate_limit()` come SSoT; `cosine(...)` iterator‑safe.
+- **Retriever**: `_default_candidate_limit()` come SSoT; `cosine(...)` iteratorâ€‘safe.
 
 ### Tests
-- Unitaria retriever (precedenze `candidate_limit`, casi edge) → **104 passed**.
+- Unitaria retriever (precedenze `candidate_limit`, casi edge) â†’ **104 passed**.
 
 ---
 
-## 2025-09-17 — Smoke tests UI & E2E
+## 2025-09-17 â€” Smoke tests UI & E2E
 ### Added
 - `scripts/smoke_streamlit_finance.py` (tab **Finanza**) e `scripts/smoke_e2e.py` (E2E headless con push GitHub disabilitato).
 
 ### Changed
-- UI Finanza: bottone “Importa in finance.db” sempre attivo con gating nell’handler (stabilità test).
+- UI Finanza: bottone â€œImporta in finance.dbâ€ sempre attivo con gating nellâ€™handler (stabilitÃ  test).
 
 ---
 
 ## [1.10.0] - 2025-09-13
 ### Added
 - **Retriever**: metriche leggere (embed/fetch/score/total ms) + tool `retriever_calibrate.py`.
-- **UI**: sidebar “Ricerca (retriever)” con `candidate_limit` e `latency_budget_ms` persistiti in `config.yaml`.
+- **UI**: sidebar â€œRicerca (retriever)â€ con `candidate_limit` e `latency_budget_ms` persistiti in `config.yaml`.
 
 ### Changed
-- **Path‑safety letture** in `tag_onboarding.py` (hash) e cleanup import.
+- **Pathâ€‘safety letture** in `tag_onboarding.py` (hash) e cleanup import.
 
 ### Removed / Breaking
-- **Fallback semantici** in `semantic.api` (README/SUMMARY/convert): ora **fail‑fast**.
-- **Drive adapter**: import “hard” delle dipendenze (errore esplicito se assenti).
+- **Fallback semantici** in `semantic.api` (README/SUMMARY/convert): ora **failâ€‘fast**.
+- **Drive adapter**: import â€œhardâ€ delle dipendenze (errore esplicito se assenti).
 
 ---
 
 ## [fix] - 2025-09-14
 ### Changed
-- `onboarding_ui.py`: nessun side‑effect a import‑time; tipizzazione e subprocess via `sys.executable`.
+- `onboarding_ui.py`: nessun sideâ€‘effect a importâ€‘time; tipizzazione e subprocess via `sys.executable`.
 
 ### Security
-- `finance.api.import_csv`: path‑safety `open_for_read(...)` (traversal mitigato).
+- `finance.api.import_csv`: pathâ€‘safety `open_for_read(...)` (traversal mitigato).
 
 ---
 
@@ -85,16 +89,16 @@
 
 ## [1.8.0] - 2025-09-06
 ### Breaking
-- **Formato YAML** unificato; façade `semantic.api` unica; rimosso `semantic_onboarding.py`.
+- **Formato YAML** unificato; faÃ§ade `semantic.api` unica; rimosso `semantic_onboarding.py`.
 
 ### Added
 - `to_kebab()` (SSoT normalizzazione), CLI `src/semantic_headless.py`.
 
 ### Changed
-- Tipizzazione/ottimizzazioni estrazione semantica; logging ASCII‑only; refactor UI/runner.
+- Tipizzazione/ottimizzazioni estrazione semantica; logging ASCIIâ€‘only; refactor UI/runner.
 
 ### Security
-- Path‑safety e scritture atomiche estese (writer README/SUMMARY/MD).
+- Pathâ€‘safety e scritture atomiche estese (writer README/SUMMARY/MD).
 
 ---
 
@@ -103,7 +107,7 @@
 - cSpell e script `scripts/fix_mojibake.py`; normalizzazione tipografica docs.
 
 ### Changed
-- Editor mapping → tab **Configurazione**; struttura `raw/` derivata da `tags_reviewed.yaml`.
+- Editor mapping â†’ tab **Configurazione**; struttura `raw/` derivata da `tags_reviewed.yaml`.
 
 ---
 
@@ -116,7 +120,7 @@
 
 ---
 
-## [1.6.0] - 2025-08-29 — Interfaccia Streamlit
+## [1.6.0] - 2025-08-29 â€” Interfaccia Streamlit
 ### Added
 - **UI Streamlit** con tab **Configurazione / Drive / Semantica**; runner Drive; chiusura controllata.
 
@@ -124,7 +128,7 @@
 - Gating UI (slug/nome); caching stato; preview docker gestita; messaggistica chiara.
 
 ### Security
-- Path‑safety forte e scritture atomiche in UI/runner.
+- Pathâ€‘safety forte e scritture atomiche in UI/runner.
 
 ---
 
@@ -136,7 +140,7 @@
 - Logging strutturato SSoT; orchestratori snelliti; push GitHub hardening (retry/lease/redazione).
 
 ### Security
-- Path‑safety `ensure_within` e scritture atomiche su pipeline core.
+- Pathâ€‘safety `ensure_within` e scritture atomiche su pipeline core.
 
 ---
 
@@ -163,14 +167,14 @@
 
 ## [1.2.x] - 2025-08-24/25
 ### Added
-- Nuovi orchestratori (`semantic_onboarding`, poi deprecato); adapter fallback/preview; utility file (atomiche, path‑safety); docs indice `docs/SUMMARY.md`.
+- Nuovi orchestratori (`semantic_onboarding`, poi deprecato); adapter fallback/preview; utility file (atomiche, pathâ€‘safety); docs indice `docs/SUMMARY.md`.
 
 ### Changed
-- Centralizzazione redazione log e path‑safety; tool dummy rigenerato; test dummy/CI di base.
+- Centralizzazione redazione log e pathâ€‘safety; tool dummy rigenerato; test dummy/CI di base.
 
 ---
 
-## [1.1.0] - 2025-08-23 — Baseline stabile
+## [1.1.0] - 2025-08-23 â€” Baseline stabile
 ### Added
 - Struttura modulare `src/pipeline/*`; orchestratori `pre_onboarding`, `tag_onboarding`, `onboarding_full`.
 

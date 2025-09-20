@@ -257,7 +257,8 @@
     "wrappa",
     "caplog",
     "loggato",
-    "ndarray"
+    "ndarray",
+    "xboom"
   ],
   "ignoreRegExpList": [
     "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:’|')[-A-Za-zÀ-ÖØ-öø-ÿ]+"
