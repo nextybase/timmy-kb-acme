@@ -2,6 +2,7 @@
 # src/semantic/tags_validator.py
 # -*- coding: utf-8 -*-
 """Validatore per `tags_reviewed.yaml`"""
+
 from __future__ import annotations
 
 import json

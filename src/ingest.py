@@ -123,10 +123,8 @@ def ingest_path(
     *,
     base_dir: Optional[Path] = None,
 ) -> int:
-    (
-        """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero"
-        "di chunk."""
-    )
+    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero"
+    "di chunk."""
     p = Path(path)
     base = Path(base_dir) if base_dir is not None else p.parent
     if not p.exists() or not p.is_file():
@@ -180,6 +178,20 @@ def ingest_folder(
     """
     files = [Path(p) for p in glob(folder_glob, recursive=True)]
     files = [p for p in files if p.is_file() and p.suffix.lower() in {".md", ".txt"}]
+    # Short-circuit su input vuoto
+    if not files:
+        LOGGER.info(
+            "Riepilogo ingest_folder: files=%d chunks=%d scope=%s project=%s",
+            0,
+            0,
+            scope,
+            project_slug,
+        )
+        return {"files": 0, "chunks": 0}
+
+    # Riuso di un singolo client embeddings quando non fornito
+    client: EmbeddingsClient | None = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
+
     total_chunks = 0
     count_files = 0
     for p in files:
@@ -190,7 +202,7 @@ def ingest_folder(
                 path=str(p),
                 version=version,
                 meta=meta,
-                embeddings_client=embeddings_client,
+                embeddings_client=client,
                 base_dir=p.parent,
             )
             if n > 0:

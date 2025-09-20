@@ -15,6 +15,7 @@ Note:
 - Propaga automaticamente `context.redact_logs` a run_gitbook_docker_preview.
 - Se `container_name` non è fornito, usa `gitbook-<slug>` come default.
 """
+
 from __future__ import annotations
 
 import logging

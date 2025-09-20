@@ -17,7 +17,9 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, Optional, cast
+
+from pipeline.path_utils import ensure_within_and_resolve
 
 LOGGER = logging.getLogger("timmy_kb.kb_db")
 
@@ -32,23 +34,62 @@ def ensure_data_dir(path: Path | str = DEFAULT_DATA_DIR) -> Path:
     return p
 
 
-def get_db_path() -> Path:
-    """Restituisce il path del DB SQLite (creando la directory padre se manca)."""
+def _resolve_db_path(db_path: Optional[Path]) -> Path:
+    """Risoluzione sicura del path DB.
+
+    Regole:
+    - Se `db_path` è None: usa `data/kb.sqlite` e valida che resti sotto `data/`.
+    - Se `db_path` è assoluto: usa il path risolto così com'è (compatibilità test/override).
+    - Se `db_path` è relativo: interpretalo sotto `data/` e valida che resti entro il perimetro.
+    """
+    if db_path is None:
+        ensure_data_dir(DEFAULT_DATA_DIR)
+        return cast(Path, ensure_within_and_resolve(DEFAULT_DATA_DIR, DEFAULT_DB_PATH))
+    p = Path(db_path)
+    if p.is_absolute():
+        return p.resolve()
+    # relativo: ancora a data/
     ensure_data_dir(DEFAULT_DATA_DIR)
-    return DEFAULT_DB_PATH
+    candidate = (DEFAULT_DATA_DIR / p).resolve()
+    return cast(Path, ensure_within_and_resolve(DEFAULT_DATA_DIR, candidate))
+
+
+def get_db_path() -> Path:
+    """Restituisce il path del DB SQLite predefinito sotto `data/` (crea la cartella se manca)."""
+    return _resolve_db_path(None)
 
 
 @contextmanager
 def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
     """Context manager per una connessione SQLite con PRAGMA adeguati."""
-    dbp = Path(db_path) if db_path else get_db_path()
+    dbp = _resolve_db_path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(str(dbp), timeout=30, check_same_thread=False)
     try:
         # Configurazioni di performance e integrità
-        con.execute("PRAGMA journal_mode=WAL;")
-        con.execute("PRAGMA synchronous=NORMAL;")
-        con.execute("PRAGMA foreign_keys=ON;")
+        try:
+            con.execute("PRAGMA journal_mode=WAL;")
+            con.execute("PRAGMA synchronous=NORMAL;")
+            con.execute("PRAGMA foreign_keys=ON;")
+        except sqlite3.DatabaseError as e:
+            if "malformed" in str(e).lower():
+                try:
+                    con.close()
+                except Exception:
+                    pass
+                try:
+                    backup = dbp.with_suffix(dbp.suffix + ".bak")
+                    if dbp.exists():
+                        dbp.replace(backup)
+                    LOGGER.warning("db.malformed.recreated", extra={"db_path": str(dbp), "backup": str(backup)})
+                except Exception:
+                    pass
+                con = sqlite3.connect(str(dbp), timeout=30, check_same_thread=False)
+                con.execute("PRAGMA journal_mode=WAL;")
+                con.execute("PRAGMA synchronous=NORMAL;")
+                con.execute("PRAGMA foreign_keys=ON;")
+            else:
+                raise
         yield con
     finally:
         con.close()
@@ -79,6 +120,17 @@ def init_db(db_path: Optional[Path] = None) -> None:
             ON chunks(project_slug, scope);
             """
         )
+        # Indice UNIQUE per idempotenza su chiave naturale (project, scope, path, version, content)
+        # Safe-migration: se esistono già duplicati, la creazione fallisce -> log warning e prosegui.
+        try:
+            con.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_chunks_natural
+                ON chunks(project_slug, scope, path, version, content);
+                """
+            )
+        except sqlite3.IntegrityError:
+            LOGGER.warning("Migrazione UNIQUE ux_chunks_natural saltata: duplicati presenti")
         con.commit()
     LOGGER.debug("DB inizializzato in %s", (db_path or get_db_path()))
 
@@ -115,16 +167,36 @@ def insert_chunks(
         for chunk, vec in zip(chunks, embeddings, strict=False)
     ]
     with connect(db_path) as con:
-        cur = con.executemany(
-            """
-            INSERT INTO chunks (
-                project_slug, scope, path, version, meta_json, content, embedding_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
+        sql = (
+            "INSERT INTO chunks (project_slug, scope, path, version, meta_json, content, embedding_json, created_at) "
+            "SELECT ?, ?, ?, ?, ?, ?, ?, ? "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM chunks WHERE project_slug=? AND scope=? AND path=? AND version=? AND content=? LIMIT 1"
+            ")"
         )
+        for project_slug_v, scope_v, path_v, version_v, meta_json_v, content_v, emb_json_v, now_v in rows:
+            con.execute(
+                sql,
+                (
+                    project_slug_v,
+                    scope_v,
+                    path_v,
+                    version_v,
+                    meta_json_v,
+                    content_v,
+                    emb_json_v,
+                    now_v,
+                    # WHERE NOT EXISTS params
+                    project_slug_v,
+                    scope_v,
+                    path_v,
+                    version_v,
+                    content_v,
+                ),
+            )
         con.commit()
-        inserted = cur.rowcount if cur.rowcount is not None else len(rows)
+        # Ritorna il numero di chunk richiesti (idempotente: non duplica su re-run)
+        inserted = len(rows)
     LOGGER.info("Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path)
     return inserted
 

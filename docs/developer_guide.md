@@ -162,6 +162,20 @@ Dettagli: [architecture.md](architecture.md).
 - Lentezza locale: il benchmark esegue un best‑of‑5 molto rapido. Su ambienti lenti/CI eseguilo manualmente e non come parte della pipeline.
 - Verifiche mirate: per confronti locali, lancia solo il retriever o solo semantic commentando i blocchi nel file `scripts/bench_embeddings_normalization.py`.
 
+### SQLite — Operatività e igiene
+
+- PRAGMA consigliati (runtime): `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`.
+  - Timmy‑KB li imposta su ogni connessione (vedi `src/kb_db.py:connect`).
+- Idempotenza inserimenti: si evita la duplicazione di chunk a parità di chiave naturale
+  `(project_slug, scope, path, version, content)` tramite check applicativo
+  (`INSERT ... WHERE NOT EXISTS`) e, dove possibile, indice `UNIQUE` omonimo.
+  - La migrazione dell’indice è safe: viene saltata se esistono duplicati pre‑esistenti.
+- Manutenzione periodica (manuale, opzionale):
+  - `VACUUM;` per recuperare spazio dopo massicce cancellazioni.
+  - `ANALYZE;` dopo grandi import per aggiornare le statistiche.
+  - `REINDEX;` se si rilevano degradi sugli indici.
+  - Eseguirle solo a DB “a riposo” (nessuna scrittura concorrente).
+
 ### Smoke tests aggiunti (UI & E2E)
 
 #### Streamlit — Tab Finanza (headless)

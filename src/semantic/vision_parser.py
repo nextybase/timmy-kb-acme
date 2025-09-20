@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple, cast
 from pipeline.file_utils import safe_write_text
 
 if TYPE_CHECKING:
-
     from pipeline.path_utils import ensure_within
 
 yaml_module: Any | None = None

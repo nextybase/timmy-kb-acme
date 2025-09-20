@@ -14,6 +14,7 @@ Linee guida applicate:
 - **Path-safety STRONG** con `ensure_within(...)` prima di scrivere o montare.
 - Comandi esterni con `proc_utils.run_cmd` (timeout/retry/capture).
 """
+
 from __future__ import annotations
 
 import json
@@ -38,7 +39,8 @@ logger = get_structured_logger("pipeline.gitbook_preview")
 
 def _maybe_redact(text: str, redact: bool) -> str:
     """Applica redazione ai messaggi di log solo se richiesto."""
-    return redact_secrets(text) if (redact and text) else text
+    res = redact_secrets(text) if (redact and text) else text
+    return str(res)
 
 
 def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int, int]:

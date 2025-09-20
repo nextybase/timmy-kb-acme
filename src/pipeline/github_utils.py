@@ -513,7 +513,7 @@ def push_output_to_github(
         if force_push:
             if not force_ack:
                 raise ForcePushError(
-                    (("Force push richiesto senza ACK. Serve force_ack valorizzato.")),
+                    ("Force push richiesto senza ACK. Serve force_ack valorizzato."),
                     slug=context.slug,
                 )
             if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):

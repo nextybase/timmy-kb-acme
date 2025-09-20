@@ -15,6 +15,7 @@ from pipeline.content_utils import convert_files_to_structured_markdown as _conv
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
+from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import phase_scope
@@ -381,25 +382,7 @@ def index_markdown_to_db(
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
         # 1) Embed e normalizzazione in liste Python (compatibile con numpy/generatori)
         vecs_raw = embeddings_client.embed_texts(contents)
-        try:
-            vecs_norm = vecs_raw.tolist() if hasattr(vecs_raw, "tolist") else vecs_raw
-        except Exception:
-            vecs_norm = vecs_raw
-        # Materializza generatori/iterabili se non sono sequence-like
-        if not (hasattr(vecs_norm, "__len__") and hasattr(vecs_norm, "__getitem__")):
-            vecs_norm = list(vecs_norm)
-        # Determina batch vs singolo vettore considerando anche np.ndarray
-        is_batch = False
-        if len(vecs_norm) > 0:
-            first = vecs_norm[0]
-            is_inner_seq = (
-                hasattr(first, "__len__") and hasattr(first, "__getitem__") and not isinstance(first, (str, bytes))
-            ) or hasattr(first, "tolist")
-            is_batch = bool(is_inner_seq)
-        if not is_batch:
-            vecs_norm = [vecs_norm]
-        # Converte ogni embedding in list[float]
-        vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in vecs_norm]
+        vecs = normalize_embeddings(vecs_raw)
 
         # 2) Validazioni esplicite
         if len(vecs) == 0:

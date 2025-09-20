@@ -1,238 +1,140 @@
-# src/pipeline/env_utils.py
-"""Utilità per la gestione dell'ambiente (.env/processo) nella pipeline Timmy-KB.
-
-Cosa fa questo modulo (ruoli e funzioni principali):
-- Caricamento `.env` dalla root del progetto (se presente).
-- API PURE e prevedibili per leggere variabili:
-  - `get_env_var(key, default=None, required=False)` → str|None
-  - `require_env(key)` → str (obbligatoria)
-  - `get_bool(key, default=False)` → bool (truthy robusto)
-  - `get_int(key, default=None, *, required=False, min_value=None, max_value=None)` → int|None
-- Flag di redazione log (SSoT):
-  - `compute_redact_flag(env, log_level="INFO")` → bool
-    Modalità: LOG_REDACTION in {on/off/always/never/auto}; auto abilita se ENV∈{prod,production,ci}
-    oppure CI=true oppure sono presenti credenziali sensibili. In DEBUG la redazione è forzata OFF.
-- Governance force-push:
-  - `get_force_allowed_branches(context=None)` → list[str]
-  - `is_branch_allowed_for_force(branch, context=None, *, allow_if_unset=True)` → bool
-
-Linee guida:
-- Nessun I/O distruttivo (solo lettura `.env` + `os.environ`).
-- Nessun logging qui: gli orchestratori/adapter gestiscono il reporting.
-- Coerenza con il domain error handling: alza `ConfigError` per variabili obbligatorie.
-"""
 from __future__ import annotations
 
-import fnmatch  # per matching glob dei branch
+"""Env utilities senza side-effects a import-time.
+
+Espone:
+- ``ensure_dotenv_loaded()``: carica .env on-demand (idempotente).
+- ``get_env_var(name, default=None, required=False)``: lettura sicura.
+- ``get_bool(name, default=False)``: parsing booleano da ENV.
+- ``compute_redact_flag(env, level)``: policy minima per redazione log.
+"""
+
+import importlib.util
+import logging
 import os
-from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
-
-from .exceptions import ConfigError  # coerenza con l'error handling della pipeline
-
-# Carica .env dalla root del progetto
-# Struttura attesa: <repo_root>/src/pipeline/env_utils.py → parents[2] = <repo_root>
-ROOT_DIR = Path(__file__).resolve().parents[2]
-ENV_PATH = ROOT_DIR / ".env"
-if ENV_PATH.exists():
-    load_dotenv(dotenv_path=ENV_PATH)
+from .path_utils import read_text_safe
 
 __all__ = [
-    # API pure e canoniche
+    "ensure_dotenv_loaded",
     "get_env_var",
-    "require_env",
     "get_bool",
     "get_int",
     "compute_redact_flag",
-    "get_force_allowed_branches",
-    "is_branch_allowed_for_force",
 ]
 
-# -----------------------------
-#  Utility base (PURE)
-# -----------------------------
-
-_TRUE_SET = {"1", "true", "yes", "on", "y", "t"}
-_FALSE_SET = {"0", "false", "no", "off", "n", "f"}
+_LOGGER = logging.getLogger("pipeline.env_utils")
+_ENV_LOADED = False
 
 
-def get_env_var(
-    key: str,
-    default: Optional[str] = None,
-    required: bool = False,
-) -> Optional[str]:
-    """Recupera una variabile d'ambiente.
+def ensure_dotenv_loaded() -> bool:
+    """Carica il file .env una sola volta su richiesta esplicita.
 
-    Args:
-        key: nome della variabile.
-        default: valore di default se assente/vuota.
-        required: se True, solleva ConfigError quando la variabile è assente o vuota.
-
-    Restituisce:
-        Il valore (stringa) o `None`.
+    Ritorna True se il caricamento è stato eseguito in questa chiamata,
+    False se già caricato in precedenza o se `python-dotenv` non è disponibile.
     """
-    value = os.getenv(key, default)
-    if required and (value is None or str(value).strip() == ""):
-        raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
-    return value
-
-
-def require_env(key: str) -> str:
-    """Versione obbligatoria: restituisce sempre una stringa o solleva ConfigError."""
-    val = os.getenv(key)
-    if val is None or str(val).strip() == "":
-        raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
-    return val
-
-
-def get_bool(key: str, default: bool = False) -> bool:
-    """Lettura booleana tollerante."""
-    v = os.getenv(key)
-    if v is None:
-        return default
-    return str(v).strip().lower() in _TRUE_SET
-
-
-def get_int(
-    key: str,
-    default: Optional[int] = None,
-    *,
-    required: bool = False,
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None,
-) -> Optional[int]:
-    """Lettura intera con validazione minima e bounds opzionali."""
-    v = os.getenv(key, None)
-    if v is None or str(v).strip() == "":
-        if required:
-            raise ConfigError(f"Variabile di ambiente '{key}' mancante o vuota")
-        return default
-    try:
-        val = int(str(v).strip())
-    except (TypeError, ValueError):
-        if required:
-            raise ConfigError(f"Variabile di ambiente '{key}' non numerica: {v!r}")
-        return default
-
-    if min_value is not None and val < min_value:
-        if required:
-            raise ConfigError(f"Variabile '{key}' fuori range (<{min_value}): {val}")
-        return default
-    if max_value is not None and val > max_value:
-        if required:
-            raise ConfigError(f"Variabile '{key}' fuori range (>{max_value}): {val}")
-        return default
-    return val
-
-
-# ================================
-#  Helpers interni non esportati
-# ================================
-
-
-def _val_from(env: Mapping[str, Any] | None, key: str, fallback: Optional[str] = None) -> Optional[str]:
-    """Legge prima da `env` (se dict-like), poi da `os.environ`."""
-    if env is not None and isinstance(env, Mapping) and key in env:
-        v = env.get(key)
-        return None if v is None else str(v)
-    return os.getenv(key, fallback)
-
-
-def _has_sensitive_credentials(env: Mapping[str, Any] | None) -> bool:
-    """True se sono presenti credenziali/percorsi sensibili che suggeriscono redazione log."""
-    keys = (
-        "GITHUB_TOKEN",
-        "SERVICE_ACCOUNT_FILE",
-        "GOOGLE_APPLICATION_CREDENTIALS",
-    )
-    for k in keys:
-        if (_val_from(env, k) or "").strip():
-            return True
-    return False
-
-
-def _truthy(val: Any) -> bool:
-    return str(val).strip().lower() in _TRUE_SET if val is not None else False
-
-
-# ================================
-# Policy redazione (SSoT del flag)
-# ================================
-
-
-def compute_redact_flag(env: Mapping[str, Any] | None, log_level: str = "INFO") -> bool:
-    """Calcola il flag di redazione log in modo deterministico (nessun masking qui).
-
-    Regole:
-    - LOG_REDACTION=on/always/true  → redazione ON
-    - LOG_REDACTION=off/never/false → redazione OFF
-    - LOG_REDACTION=auto (default):
-        ON se
-          * ENV ∈ {prod, production, ci}  OR
-          * CI=true                       OR
-          * sono presenti credenziali sensibili (es. token/credenziali GCP/GitHub)
-        OFF altrimenti
-    - log_level=DEBUG forza OFF.
-    """
-    mode = (_val_from(env, "LOG_REDACTION", "auto") or "auto").strip().lower()
-
-    explicit: Optional[bool]
-    if mode in ("always", "on") or mode in _TRUE_SET:
-        explicit = True
-    elif mode in ("never", "off") or mode in _FALSE_SET:
-        explicit = False
-    else:
-        explicit = None  # auto
-
-    env_name = (_val_from(env, "ENV", "dev") or "dev").strip().lower()
-    ci_val = _val_from(env, "CI", "0")
-    auto_on = (env_name in {"prod", "production", "ci"}) or _truthy(ci_val) or _has_sensitive_credentials(env)
-
-    redact = explicit if explicit is not None else auto_on
-
-    if str(log_level or "").upper() == "DEBUG":
+    global _ENV_LOADED
+    if _ENV_LOADED:
         return False
-    return bool(redact)
-
-
-# ================================
-# Force-push branch allowlist
-# ================================
-
-
-def get_force_allowed_branches(context: Any | None = None) -> list[str]:
-    """Legge l'allow-list dei branch per il force push dalla variabile:
-    GIT_FORCE_ALLOWED_BRANCHES=main,release/*
-
-    - Supporta lista separata da virgole e/o newline.
-    - Precedenza: `context.env` (se presente), poi `os.environ`.
-    - Ritorna una lista di pattern glob (es. ["main", "release/*"]).
-    - Se non impostata o vuota → [] (nessun vincolo lato helper).
-    """
-    raw = None
+    if importlib.util.find_spec("dotenv") is None:
+        return False
     try:
-        if context is not None and hasattr(context, "env") and isinstance(context.env, dict):
-            raw = context.env.get("GIT_FORCE_ALLOWED_BRANCHES", None)
+        from dotenv import load_dotenv
+
+        loaded: Optional[bool] = load_dotenv()  # carica da CWD; non forza override
+        _ENV_LOADED = True
+        try:
+            _LOGGER.info("env.loaded", extra={"loaded": bool(loaded)})
+        except Exception:
+            pass
+        # Fallback minimale: se python-dotenv non ha popolato, prova parse basilare
+        try:
+            from pathlib import Path as _Path
+
+            env_path = _Path(".env")
+            if env_path.exists():
+                # Lettura sicura rispetto alla CWD come perimetro
+                text = read_text_safe(_Path.cwd(), env_path, encoding="utf-8")
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    if k and os.environ.get(k) is None:
+                        os.environ[k] = v
+        except Exception:
+            pass
+        return True
     except Exception:
-        raw = None
-    if raw is None:
-        raw = os.getenv("GIT_FORCE_ALLOWED_BRANCHES", "")
-
-    tokens = str(raw or "").replace("\n", ",").split(",")
-    patterns = [t.strip() for t in tokens if t and t.strip()]
-    return patterns
+        # Non propagare: il caricamento .env è best-effort
+        return False
 
 
-def is_branch_allowed_for_force(branch: str, context: Any | None = None, *, allow_if_unset: bool = True) -> bool:
-    """Verifica se `branch` è consentito per il force push.
+def get_env_var(name: str, default: Optional[str] = None, *, required: bool | None = False) -> Optional[str]:
+    """Ritorna il valore di una variabile d'ambiente.
 
-    Restituisce:
-        True se almeno un pattern combacia (fnmatch), altrimenti False.
-        Se la allow-list non è impostata/è vuota → `allow_if_unset`.
+    - Trimma spazi; se vuota, tratta come non impostata.
+    - Se ``required`` e non presente, solleva ``KeyError``.
     """
-    patterns = get_force_allowed_branches(context)
-    if not patterns:
-        return allow_if_unset
-    return any(fnmatch.fnmatch(branch, pat) for pat in patterns)
+    val = os.environ.get(name)
+    if val is None:
+        if required:
+            raise KeyError(f"ENV missing: {name}")
+        return default
+    sval = val.strip()
+    if sval == "":
+        if required:
+            raise KeyError(f"ENV empty: {name}")
+        return default
+    return sval
+
+
+def get_bool(name: str, default: bool = False) -> bool:
+    """Parsa un booleano da ENV usando valori comuni truthy/falsy.
+
+    Truthy: 1,true,yes,on (case-insensitive). Falsy: 0,false,no,off.
+    Se non impostata o non riconosciuta, ritorna ``default``.
+    """
+    val = os.environ.get(name)
+    if val is None:
+        return bool(default)
+    s = val.strip().lower()
+    if s in {"1", "true", "yes", "on"}:
+        return True
+    if s in {"0", "false", "no", "off"}:
+        return False
+    return bool(default)
+
+
+def get_int(name: str, default: int = 0) -> int:
+    """Parsa un intero da ENV; ritorna `default` se mancante o non valido."""
+    val = os.environ.get(name)
+    if val is None:
+        return int(default)
+    try:
+        return int(str(val).strip())
+    except Exception:
+        return int(default)
+
+
+def compute_redact_flag(env: Optional[Dict[str, Any]] = None, level: str = "INFO") -> bool:
+    """Calcola se redigere i log in base a ENV e livello.
+
+    Policy minimale e non invasiva:
+    - Se LOG_REDACTION/LOG_REDACTED truthy -> True.
+    - Altrimenti, se ENV ∈ {"prod","production"} -> True.
+    - Altrimenti False.
+    """
+    data = env or dict(os.environ)
+    val = str(data.get("LOG_REDACTION") or data.get("LOG_REDACTED") or "").strip().lower()
+    if val in {"1", "true", "yes", "on"}:
+        return True
+    env_name = str(data.get("ENV") or "").strip().lower()
+    if env_name in {"prod", "production"}:
+        return True
+    return False

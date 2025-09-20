@@ -75,10 +75,8 @@ try:
 except Exception as e:
     raise RuntimeError(
         (
-            (
-                "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e"
-                "'src/pipeline' e che tu stia eseguendo lo script dalla root del progetto."
-            )
+            "Impossibile importare i moduli richiesti. Verifica che il repo contenga 'src/semantic' e"
+            "'src/pipeline' e che tu stia eseguendo lo script dalla root del progetto."
         )
     ) from e
 

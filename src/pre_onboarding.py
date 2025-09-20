@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # src/pre_onboarding.py
 """
 Orchestratore della fase di pre-onboarding per Timmy-KB.
@@ -17,6 +17,7 @@ Note architetturali:
 - Path-safety STRONG: `ensure_within()` prima di ogni write/copy/delete.
 - Non stampare segreti nei log (mascheratura parziale per ID e percorsi).
 """
+
 from __future__ import annotations
 
 import argparse

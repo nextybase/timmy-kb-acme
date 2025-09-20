@@ -83,7 +83,6 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
 
 
 def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
-
     base = tmp_path / "output" / "timmy-kb-x"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
@@ -183,7 +182,6 @@ def test_index_markdown_to_db_mismatch_lengths_returns_0(tmp_path, caplog):
 
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
-
     base = tmp_path / "output" / "timmy-kb-x"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)

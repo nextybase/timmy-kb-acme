@@ -210,7 +210,7 @@ def main() -> None:
                         except Exception as e:
                             st.exception(e)
 
-            st.caption((("Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali.")))
+            st.caption(("Suggerimento: usa il pulsante Salva dentro ogni voce per applicare modifiche puntuali."))
 
         colSx, colDx = st.columns([1, 1])
         with colSx:
@@ -361,7 +361,7 @@ def main() -> None:
                     use_container_width=True,
                 ):
                     if download_raw_from_drive is None:
-                        st.error((("Funzione di download non disponibile: aggiornare 'ui.services.drive_runner'.")))
+                        st.error(("Funzione di download non disponibile: aggiornare 'ui.services.drive_runner'."))
                     else:
                         try:
                             prog = st.progress(0)
@@ -740,7 +740,7 @@ def main() -> None:
                     current_budget = 0
                 auto_flag = bool(retr.get("auto_by_budget", False))
 
-                st.caption((("Imposta il limite candidati per il ranking. Valori più alti aumentano la latenza.")))
+                st.caption(("Imposta il limite candidati per il ranking. Valori più alti aumentano la latenza."))
                 new_limit = st.number_input(
                     "candidate_limit",
                     min_value=500,
@@ -762,7 +762,7 @@ def main() -> None:
                 new_auto = st.toggle(
                     "Auto per budget",
                     value=bool(auto_flag),
-                    help=(("Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget.")),
+                    help=("Se attivo, il sistema sceglie automaticamente candidate_limit in base al budget."),
                     key="tgl_retr_auto",
                 )
 
@@ -802,7 +802,7 @@ def main() -> None:
                         except Exception as e:
                             st.exception(e)
                 with colR:
-                    st.caption((("Calibra con 1000/2000/4000 e scegline il più piccolo che rispetta il budget.")))
+                    st.caption(("Calibra con 1000/2000/4000 e scegline il più piccolo che rispetta il budget."))
 
             # Tools
             st.subheader("Tools")

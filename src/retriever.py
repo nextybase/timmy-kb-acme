@@ -13,7 +13,7 @@ Funzioni esposte:
 
 Design:
 - Carica fino a `candidate_limit` candidati da SQLite (default: 4000).
-- Calcola la similaritÃ  coseno in Python sui candidati.
+- Calcola la similarità coseno in Python sui candidati.
 - Restituisce i top-k come dict con: content, meta, score.
 """
 
@@ -27,6 +27,7 @@ from heapq import nlargest
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 from semantic.types import EmbeddingsClient
 
@@ -61,7 +62,7 @@ class QueryParams:
 
 
 def _default_candidate_limit() -> int:
-    """Singola fonte di veritÃ  del default per candidate_limit (evita drift)."""
+    """Singola fonte di verità del default per candidate_limit (evita drift)."""
     field = QueryParams.__dataclass_fields__.get("candidate_limit")
     if field is None:
         return 4000
@@ -76,26 +77,65 @@ def _default_candidate_limit() -> int:
         return 4000
 
 
-# ----------------------------------- SimilaritÃ  -----------------------------------
+# ----------------------------------- similarità -----------------------------------
 
 
 def cosine(a: Iterable[float], b: Iterable[float]) -> float:
-    """Calcola la similaritÃ  coseno tra due vettori numerici.
+    """Calcola la similarità coseno tra due vettori numerici.
 
     Caratteristiche:
     - Iterator-safe: non assume slicing/indicizzazione; non alloca copie.
-    - Se una norma Ã¨ 0 o uno dei due Ã¨ vuoto, restituisce 0.0.
+    - Se una norma è 0 o uno dei due è vuoto, restituisce 0.0.
     - In caso di lunghezze diverse, zip tronca al minimo comune.
     """
+    # Stabilizzazione numerica: valuta fattore di scala per evitare overflow
+    pairs = [(float(x), float(y)) for x, y in zip(a, b, strict=False)]
+    if not pairs:
+        return 0.0
+    try:
+        import sys as _sys
+
+        n = max(1, len(pairs))
+        hi = math.sqrt(_sys.float_info.max / float(n)) * 0.99
+        lo = math.sqrt(_sys.float_info.min) * 1.01
+    except Exception:
+        hi = 1.3e154
+        lo = 1e-154
+    max_abs = 0.0
+    for x, y in pairs:
+        ax = abs(x)
+        ay = abs(y)
+        if ax > max_abs:
+            max_abs = ax
+        if ay > max_abs:
+            max_abs = ay
+    if max_abs == 0.0:
+        return 0.0
+    # Se troppo grande -> scala in giù; se troppo piccolo -> scala in su
+    if max_abs > hi:
+        scale = hi / max_abs
+    elif max_abs < lo:
+        scale = lo / max_abs
+    else:
+        scale = 1.0
+
     dot = 0.0
     na = 0.0
     nb = 0.0
-    for x, y in zip(a, b, strict=False):
+    for x, y in ((x * scale, y * scale) for x, y in pairs):
         dot += x * y
         na += x * x
         nb += y * y
     denom = math.sqrt(na) * math.sqrt(nb)
-    return 0.0 if denom == 0.0 else (dot / denom)
+    if denom == 0.0:
+        return 0.0
+    s = dot / denom
+    # Clamp per errori numerici +/- epsilon
+    if s > 1.0:
+        return 1.0
+    if s < -1.0:
+        return -1.0
+    return s
 
 
 # --------------------------------- Validazioni ------------------------------------
@@ -117,7 +157,7 @@ def _validate_params(params: QueryParams) -> None:
     if params.candidate_limit < 0:
         raise RetrieverError("candidate_limit negativo")
     if 0 < params.candidate_limit < MIN_CANDIDATE_LIMIT or params.candidate_limit > MAX_CANDIDATE_LIMIT:
-        raise RetrieverError(f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, " f"{MAX_CANDIDATE_LIMIT}]")
+        raise RetrieverError(f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, {MAX_CANDIDATE_LIMIT}]")
     if params.k < 0:
         raise RetrieverError("k negativo")
 
@@ -132,7 +172,55 @@ def _score_candidates(
     usa l'indice di enumerazione (idx ascendente).
     """
     for idx, c in enumerate(cands):
-        sim = cosine(qv, c.get("embedding") or [])
+        raw_vec = c.get("embedding")
+        if raw_vec is None:
+            # Campo mancante: considera vettore vuoto (score 0.0)
+            v: list[float] = []
+        else:
+            vecs = normalize_embeddings(raw_vec)
+            v = vecs[0] if vecs else []
+            # Se presente ma non numerico o vuoto -> skip
+            if not v or (v and not is_numeric_vector(v)):
+                try:
+                    LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
+                except Exception:
+                    pass
+                continue
+        # v è [] o una lista di float validi a questo punto
+        # Se l'input originario era sequence-like, verifica che TUTTI gli elementi fossero numerici
+        orig_seq = None
+        if raw_vec is not None:
+            try:
+                if hasattr(raw_vec, "tolist"):
+                    orig_seq = raw_vec.tolist()
+                elif (
+                    hasattr(raw_vec, "__len__")
+                    and hasattr(raw_vec, "__getitem__")
+                    and not isinstance(raw_vec, (str, bytes))
+                ):
+                    orig_seq = list(raw_vec)
+            except Exception:
+                orig_seq = None
+        if orig_seq is not None and v:
+            all_numeric = True
+            count = 0
+            for val in orig_seq:
+                try:
+                    fv = float(val)
+                except Exception:
+                    all_numeric = False
+                    break
+                if not math.isfinite(fv):
+                    all_numeric = False
+                    break
+                count += 1
+            if (not all_numeric) or (count != len(v)):
+                try:
+                    LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
+                except Exception:
+                    pass
+                continue
+        sim = cosine(qv, v)
         yield (
             {
                 "content": c["content"],
@@ -144,14 +232,14 @@ def _score_candidates(
 
 
 def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dict[str, Any]]:
-    """Esegue la ricerca di chunk rilevanti per una query usando similaritÃ  coseno.
+    """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
     1) Ottiene l'embedding di `params.query` tramite
        `embeddings_client.embed_texts([str])`.
     2) Carica al massimo `params.candidate_limit` candidati per
        `(project_slug, scope)`.
-    3) Calcola similaritÃ  coseno e ordina per score decrescente con tie-break
+    3) Calcola similarità coseno e ordina per score decrescente con tie-break
        deterministico.
     4) Restituisce i top-`params.k` in forma di lista di dict:
        {content, meta, score}.
@@ -181,28 +269,8 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     q_raw = embeddings_client.embed_texts([params.query])
     t_emb_ms = (time.time() - t_emb0) * 1000.0
 
-    # Normalizza l'output in liste Python evitando truthiness su array NumPy
-    try:
-        q_norm = q_raw.tolist() if hasattr(q_raw, "tolist") else q_raw
-    except Exception:
-        q_norm = q_raw
-    if not (hasattr(q_norm, "__len__") and hasattr(q_norm, "__getitem__")):
-        # Materializza iterabili/generatori per evitare doppi wrapping
-        try:
-            q_norm = list(q_norm)
-        except Exception:
-            q_norm = [q_norm]
-    # Se la sequenza non Ã¨ annidata (singolo vettore), wrappa
-    if len(q_norm) > 0:
-        _first = q_norm[0]
-        _is_inner_seq = (
-            hasattr(_first, "__len__") and hasattr(_first, "__getitem__") and not isinstance(_first, (str, bytes))
-        ) or hasattr(_first, "tolist")
-        if not _is_inner_seq:
-            q_norm = [q_norm]
-    # Converte i vettori interni in list[float]
-    q_vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in q_norm]
-
+    # Normalizzazione SSoT
+    q_vecs = normalize_embeddings(q_raw)
     # Verifiche esplicite di vuoto
     if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
         LOGGER.warning("Empty query embedding; returning no results")
@@ -263,7 +331,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     except Exception:
         # Fallback di logging compatibile (solo messaggio)
         LOGGER.info(
-            ("search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms " "fetch=%.1fms score+sort=%.1fms"),
+            ("search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms"),
             params.k,
             n,
             params.candidate_limit,
@@ -284,13 +352,13 @@ def with_config_candidate_limit(
     Precedenza:
       - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal
         default del dataclass), NON viene sovrascritto.
-      - Se Ã¨ rimasto al default, e il config contiene `retriever.candidate_limit`
+      - Se è rimasto al default, e il config contiene `retriever.candidate_limit`
         valido (>0), viene applicato.
 
     Nota: se il chiamante imposta esplicitamente il valore uguale al default
-    (4000), questa funzione non puÃ² distinguerlo dal caso â€œnon impostatoâ€ e
-    applicherÃ  il config. In tal caso, evitare questa funzione oppure passare un
-    valore diverso dal default per esprimere lâ€™intento.
+    (4000), questa funzione non può distinguerlo dal caso “non impostato” e
+    applicherà il config. In tal caso, evitare questa funzione oppure passare un
+    valore diverso dal default per esprimere l’intento.
     """
     default_lim = _default_candidate_limit()
 
@@ -355,7 +423,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
 
     Precedenza:
       - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
-      - Se `retriever.auto_by_budget` Ã¨ true e `latency_budget_ms` > 0 ->
+      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 ->
         usa choose_limit_for_budget.
       - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
       - Fallback: lascia il default del dataclass.
@@ -433,9 +501,9 @@ def preview_effective_candidate_limit(
 ) -> tuple[int, str, int]:
     """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
 
-    Ritorna (limit, source, budget_ms) dove `source` âˆˆ
+    Ritorna (limit, source, budget_ms) dove `source` ∈
     {"explicit", "auto_by_budget", "config", "default"}.
-    Utile per la UI per mostrare unâ€™etichetta: "Limite stimato: N".
+    Utile per la UI per mostrare un’etichetta: "Limite stimato: N".
     """
     default_lim = _default_candidate_limit()
 
@@ -453,7 +521,7 @@ def preview_effective_candidate_limit(
         auto = False
         budget_ms = 0
     if auto and budget_ms > 0:
-        return choose_limit_for_budget(budget_ms), "auto_by_budget", budget_ms
+        return choose_limit_for_budget(budget_ms), "auto_by_budget", int(budget_ms)
     # 3) Config
     try:
         raw = retr.get("candidate_limit")

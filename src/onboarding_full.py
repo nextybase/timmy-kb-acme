@@ -12,6 +12,7 @@ Questo orchestratore:
 - Gestisce I/O utente e codici di uscita a livello orchestratore; i moduli sottostanti
   non fanno prompt/exit.
 """
+
 from __future__ import annotations
 
 import argparse

@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 from src.finance.store import import_csv
 from src.tag_onboarding import scan_raw_to_db

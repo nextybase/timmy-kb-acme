@@ -21,7 +21,6 @@ Quick demo script:
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import os
 from pathlib import Path
@@ -33,18 +32,13 @@ from pipeline.config_utils import get_client_config
 
 # Config repo (per leggere config.yaml se disponibile)
 from pipeline.context import ClientContext
+from pipeline.env_utils import ensure_dotenv_loaded
 from semantic.types import EmbeddingsClient
 from src.ingest import OpenAIEmbeddings
 from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
 from src.retriever import QueryParams, search_with_config  # <-- usa la facade
 from src.vscode_bridge import read_response, write_request
-
-# Optional: load .env senza try/except/pass (evita flake8-bandit S110)
-if importlib.util.find_spec("dotenv") is not None:  # pragma: no cover - optional dependency
-    from dotenv import load_dotenv  # type: ignore
-
-    load_dotenv()
 
 # Logging (passive at import-time): define constants/logger only
 LOGS_DIR = Path("logs")
@@ -116,6 +110,11 @@ def _load_client_cfg(slug: str) -> Dict[str, Any]:
 
 def main() -> None:
     _configure_logging()
+    # Carica .env su richiesta runtime (lazy, idempotente)
+    try:
+        ensure_dotenv_loaded()
+    except Exception:
+        pass
     _ensure_startup()
     st.set_page_config(page_title="Timmy KB Coder", layout="wide")
     st.title("Timmy KB Coder (UI dedicata — distinta da onboarding_ui.py)")

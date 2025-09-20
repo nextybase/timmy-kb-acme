@@ -99,9 +99,7 @@ def render_preview_controls(
                 except Exception as e:
                     msg = str(e)
                     if any(k in msg.lower() for k in ("docker", "daemon", "not running", "cannot connect")):
-                        st.warning(
-                            (("Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."))
-                        )
+                        st.warning(("Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."))
                         log.warning("Preview non avviata: Docker non attivo", extra={"error": msg})
                     else:
                         st.exception(e)

@@ -1,4 +1,4 @@
-﻿# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/drive_utils.py
 """
 Facade compatibile per le utility Google Drive della pipeline Timmy-KB.
