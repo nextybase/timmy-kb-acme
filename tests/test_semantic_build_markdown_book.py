@@ -31,7 +31,7 @@ def _write(p: Path, text: str) -> None:
     p.write_text(text, encoding="utf-8")
 
 
-def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path) -> None:
+def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path, caplog) -> None:
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
@@ -71,6 +71,7 @@ def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     ctx = _ctx(base)
     logger = logging.getLogger("test")
+    caplog.set_level(logging.INFO)
 
     # cast(Any, …): bypass del nominal type (ClientContext) mantenendo la logica invariata
     mds = sapi.build_markdown_book(cast(Any, ctx), logger, slug="e2e")
@@ -78,3 +79,11 @@ def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path) -> None:
     names = {p.name for p in mds}
     assert {"A.md", "B.md"}.issubset(names)
     assert (book / "SUMMARY.md").exists() and (book / "README.md").exists()
+
+    # Verifica che phase_scope abbia loggato artifact_count corretto in uscita
+    completed = [
+        r for r in caplog.records if r.msg == "phase_completed" and getattr(r, "phase", None) == "build_markdown_book"
+    ]
+    assert completed, "phase_completed non loggato per build_markdown_book"
+    # artifact_count deve riflettere il numero di markdown convertiti
+    assert any(getattr(r, "artifact_count", None) == len(mds) for r in completed)

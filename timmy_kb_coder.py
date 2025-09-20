@@ -46,18 +46,37 @@ if importlib.util.find_spec("dotenv") is not None:  # pragma: no cover - optiona
 
     load_dotenv()
 
-# Logging setup
+# Logging (passive at import-time): define constants/logger only
 LOGS_DIR = Path("logs")
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR / "timmy_kb.log", encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
 LOGGER = logging.getLogger("timmy_kb.ui")
+
+
+def _configure_logging() -> None:
+    """Configure app logging in an idempotent way.
+
+    - Create `logs/` and `timmy_kb.log` file.
+    - Add handlers only if not already present for this logger.
+    - Do not touch the root logger.
+    """
+    # Idempotency: skip if our handlers are already attached
+    if any(getattr(h, "_kb_handler", False) for h in LOGGER.handlers):
+        return
+
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    fh = logging.FileHandler(LOGS_DIR / "timmy_kb.log", encoding="utf-8")
+    fh.setFormatter(fmt)
+    fh._kb_handler = True  # type: ignore[attr-defined]
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    sh._kb_handler = True  # type: ignore[attr-defined]
+
+    LOGGER.setLevel(logging.INFO)
+    LOGGER.propagate = False
+    LOGGER.addHandler(fh)
+    LOGGER.addHandler(sh)
 
 
 def _ensure_startup() -> None:
@@ -96,6 +115,7 @@ def _load_client_cfg(slug: str) -> Dict[str, Any]:
 
 
 def main() -> None:
+    _configure_logging()
     _ensure_startup()
     st.set_page_config(page_title="Timmy KB Coder", layout="wide")
     st.title("Timmy KB Coder (UI dedicata — distinta da onboarding_ui.py)")

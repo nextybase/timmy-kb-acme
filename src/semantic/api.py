@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
@@ -317,6 +318,10 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
+        try:
+            m.set_artifacts(len(mds))
+        except Exception:
+            m.set_artifacts(None)
 
     # ✅ preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
     ctx_base = cast(Path, getattr(context, "base_dir", None))
@@ -324,10 +329,6 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
     vocab = load_reviewed_vocab(base_dir, logger)
     if vocab:
         enrich_frontmatter(context, logger, vocab, slug=slug)
-    try:
-        m.set_artifacts(len(mds))
-    except Exception:
-        m.set_artifacts(None)
     return mds
 
 
@@ -371,19 +372,51 @@ def index_markdown_to_db(
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
-        vecs = embeddings_client.embed_texts(contents)
-    if not vecs or len(vecs) != len(contents):
-        logger.warning(
-            "Embedding client non ha prodotto vettori coerenti",
-            extra={"count": len(vecs) if vecs else 0},
-        )
-        return 0
-
-    version = _dt.utcnow().strftime("%Y%m%d")
-    inserted_total = 0
-    for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
-        meta = {"file": rel_name}
+        # 1) Embed e normalizzazione in liste Python (compatibile con numpy/generatori)
+        vecs_raw = embeddings_client.embed_texts(contents)
         try:
+            vecs_norm = vecs_raw.tolist() if hasattr(vecs_raw, "tolist") else vecs_raw
+        except Exception:
+            vecs_norm = vecs_raw
+        if not isinstance(vecs_norm, (list, tuple)):
+            # Materializza generatori/iterabili
+            vecs_norm = list(vecs_norm)  # type: ignore[arg-type]
+        if len(vecs_norm) > 0 and not isinstance(vecs_norm[0], (list, tuple)):
+            # Caso: singolo vettore non annidato
+            vecs_norm = [vecs_norm]
+        vecs = [(v.tolist() if hasattr(v, "tolist") else list(v)) for v in vecs_norm]  # type: ignore[arg-type]
+
+        # 2) Validazioni esplicite
+        if len(vecs) == 0:
+            logger.warning("Embedding client non ha prodotto vettori", extra={"count": 0})
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
+            return 0
+        if len(vecs[0]) == 0:
+            logger.warning("Primo vettore embedding vuoto", extra={"count": len(vecs)})
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
+            return 0
+        if len(vecs) != len(contents):
+            logger.warning(
+                "Embedding client non ha prodotto vettori coerenti",
+                extra={"count": len(vecs)},
+            )
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
+            return 0
+
+        # 3) Inserimento DB interamente nel contesto; eccezioni propagano (phase_failed)
+        version = _dt.utcnow().strftime("%Y%m%d")
+        inserted_total = 0
+        for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
+            meta = {"file": rel_name}
             inserted_total += _insert_chunks(
                 project_slug=slug,
                 scope=scope,
@@ -394,15 +427,17 @@ def index_markdown_to_db(
                 embeddings=[list(emb)],
                 db_path=db_path,
             )
-        except Exception as e:
-            logger.warning("Inserimento DB fallito", extra={"file": rel_name, "error": str(e)})
-            continue
-    logger.info("Indicizzazione completata", extra={"inserted": inserted_total, "files": len(rel_paths)})
-    try:
-        m.set_artifacts(inserted_total)
-    except Exception:
-        m.set_artifacts(None)
-    return inserted_total
+
+        # 4) Logging finale + artifact_count dentro il contesto
+        logger.info(
+            "Indicizzazione completata",
+            extra={"inserted": inserted_total, "files": len(rel_paths)},
+        )
+        try:
+            m.set_artifacts(inserted_total)
+        except Exception:
+            m.set_artifacts(None)
+        return inserted_total
 
 
 def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
@@ -485,12 +520,12 @@ def _merge_frontmatter(existing: Dict[str, Any], *, title: Optional[str], tags: 
     return meta
 
 
+@lru_cache(maxsize=1024)
 def _term_to_pattern(term: str) -> re.Pattern[str]:
-    r"""Costruisce un pattern robusto a confini parola *semantici*:
+    r"""Costruisce un pattern robusto a confini parola *semantici*.
 
-    - lookaround espliciti: (?<!\w) ... (?!\w) token con punteggiatura (c++, ml/ops, data+)
-    - re.escape(term) per i simboli
-    - spazi del termine mappati in \s+ per tollerare separatori multipli
+    Nota: cache LRU (1024) per riutilizzare regex compilati su termini ripetuti.
+    La chiave dipende solo dall'argomento puro `term`.
     """
     esc = re.escape(term.strip().lower())
     esc = esc.replace(r"\ ", r"\s+")

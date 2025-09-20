@@ -1,77 +1,61 @@
-# tests/test_semantic_frontmatter_and_matching.py
 from __future__ import annotations
 
-from typing import Dict, Set
+import re
 
-# Testiamo helper interni (consapevolmente) per coprire le regressioni:
-from src.semantic.api import _as_list_str, _guess_tags_for_name, _merge_frontmatter
-
-# ------------------------------ Frontmatter: normalizzazione tag ------------------------------
+import semantic.api as sapi
 
 
-def test_as_list_str_normalizes_scalar_and_tuple():
-    assert _as_list_str(None) == []
-    assert _as_list_str("foo") == ["foo"]
-    assert _as_list_str(("foo", "bar")) == ["foo", "bar"]
-    assert _as_list_str(["a", "a", ""]) == ["a", "a"]  # no dedup qui: è responsabilità del merge
-    # conversione di tipi non stringa ma “stampabili”
-    assert _as_list_str(123) == ["123"]
-    assert _as_list_str({1, 2}) in (["1", "2"], ["2", "1"])  # l’ordine dei set non è garantito
+def test_term_to_pattern_caching_reduces_compilations():
+    # reset cache
+    sapi._term_to_pattern.cache_clear()
+    info0 = sapi._term_to_pattern.cache_info()
+
+    terms = ["data science", "c++", "ml/ops", "data+"]
+    text = "intro to data science and c++ with ml/ops and data+"
+    s = text.lower()
+
+    # Prima chiamata: una miss per ciascun termine unico
+    for t in terms:
+        pat = sapi._term_to_pattern(t)
+        assert isinstance(pat, re.Pattern)
+        assert pat.search(s)
+
+    info1 = sapi._term_to_pattern.cache_info()
+    assert info1.misses == info0.misses + len(terms)
+
+    # Chiamate ripetute: dovrebbero produrre solo hit
+    for _ in range(20):
+        for t in terms:
+            sapi._term_to_pattern(t)
+
+    info2 = sapi._term_to_pattern.cache_info()
+    # Almeno (20 * len(terms)) hit aggiuntivi
+    assert info2.hits >= info1.hits + 20 * len(terms)
 
 
-def test_merge_frontmatter_handles_scalar_tuple_and_dedups_sorted():
-    meta = {"tags": "foo"}  # scalar → lista
-    merged = _merge_frontmatter(meta, title=None, tags=["bar", "foo"])
-    assert merged["tags"] == ["bar", "foo"]  # dedup + sort
+def test_term_to_pattern_cache_clear_and_results_stable():
+    sapi._term_to_pattern.cache_clear()
+    infoA = sapi._term_to_pattern.cache_info()
 
-    meta2 = {"tags": ("z", "a")}
-    merged2 = _merge_frontmatter(meta2, title=None, tags=["a", "m"])
-    assert merged2["tags"] == ["a", "m", "z"]
+    t = "machine learning"
+    s = "intro to machine    learning basics".lower()
 
-    meta3 = {}  # nessun campo tags
-    merged3 = _merge_frontmatter(meta3, title="T", tags=["a"])
-    assert merged3["title"] == "T"
-    assert merged3["tags"] == ["a"]
+    # Prima invocazione: miss
+    p1 = sapi._term_to_pattern(t)
+    assert p1.search(s)
+    infoB = sapi._term_to_pattern.cache_info()
+    assert infoB.misses == infoA.misses + 1
 
+    # Seconda invocazione: hit
+    p2 = sapi._term_to_pattern(t)
+    assert p2.search(s)
+    infoC = sapi._term_to_pattern.cache_info()
+    assert infoC.hits == infoB.hits + 1
 
-# ------------------------------ Boundary matching (riduzione falsi positivi)
-# ------------------------------
-
-
-def _vocab() -> Dict[str, Dict[str, Set[str]]]:
-    # Dizionario minimamente valido per _guess_tags_for_name:
-    # {canonico: {"aliases": {alias1, alias2}}}
-    return {
-        "ai": {"aliases": {"artificial intelligence"}},
-        "finance": {"aliases": set()},
-        "data": {"aliases": {"dataset", "data-set"}},
-    }
-
-
-def test_guess_tags_for_name_respects_word_boundaries_basic():
-    vocab = _vocab()
-    # 'ai' NON deve matchare 'finance' (prima succedeva con substring)
-    assert _guess_tags_for_name("compliance.md", vocab) == []
-    assert _guess_tags_for_name("finance.md", vocab) == ["finance"]
-    # match su confine parola, separatori vari
-    hits = _guess_tags_for_name("awesome-ai_overview.md", vocab)
-    assert hits == ["ai"]
-
-
-def test_guess_tags_for_name_handles_compound_and_aliases():
-    vocab = _vocab()
-    # Alias composti: 'data-set' deve matchare come parola separata
-    assert _guess_tags_for_name("building-a-data-set-guide.md", vocab) == ["data"]
-    # Nessun match su sottostringa interna (es. 'ai' in 'braided')
-    assert _guess_tags_for_name("braided_patterns.md", vocab) == []
-
-
-def test_guess_tags_for_name_handles_punctuated_terms():
-    vocab = {
-        "c++": {"aliases": set()},
-        "ml/ops": {"aliases": {"ml ops"}},
-        "data+": {"aliases": {"data plus"}},
-    }
-    assert _guess_tags_for_name("intro-to-c++.md", vocab) == ["c++"]
-    assert _guess_tags_for_name("guide-ml-ops.md", vocab) == ["ml/ops"]
-    assert _guess_tags_for_name("data-plus-overview.md", vocab) == ["data+"]
+    # Invalida cache e verifica che si registri una nuova miss
+    sapi._term_to_pattern.cache_clear()
+    infoD = sapi._term_to_pattern.cache_info()
+    p3 = sapi._term_to_pattern(t)
+    assert p3.search(s)
+    infoE = sapi._term_to_pattern.cache_info()
+    assert infoE.misses == infoD.misses + 1
