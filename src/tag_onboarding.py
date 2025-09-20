@@ -69,6 +69,21 @@ try:
 except Exception:  # pragma: no cover
     yaml = None
 
+
+def _require_drive_utils() -> None:
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(download_drive_pdfs_to_local):
+        missing.append("download_drive_pdfs_to_local")
+    if missing:
+        raise ConfigError(
+            "Sorgente Drive selezionata ma dipendenze non installate. "
+            f"Funzioni mancanti: {', '.join(missing)}.\n"
+            "Installa gli extra: pip install .[drive]"
+        )
+
+
 _INVALID_CHARS_RE = re.compile(r'[\/:*?"<>|]')
 __all__ = [
     "tag_onboarding_main",

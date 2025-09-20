@@ -27,7 +27,7 @@ repos:
     rev: 5.13.2
     hooks:
       - id: isort
-        args: ["--profile=black"]
+        args: ["--profile=black", "--line-length=120"]
         types_or: [python]
         files: ^(src|tests)/
         stages: [pre-commit]
@@ -69,14 +69,27 @@ repos:
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python tools/dev/qa_safe.py
         language: python
-        additional_dependencies: ["black", "isort", "ruff", "mypy", "types-PyYAML"]
+        additional_dependencies: ["black==24.8.0", "isort==6.0.1", "ruff", "mypy", "types-PyYAML"]
         pass_filenames: false
         stages: [pre-push]
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
         entry: python tools/dev/qa_safe.py --with-tests
         language: python
-        additional_dependencies: ["black", "isort", "ruff", "mypy", "pytest", "pyyaml", "pydantic", "pydantic-settings", "numpy", "hypothesis", "reportlab", "types-PyYAML"]
+        additional_dependencies: [
+          "black==24.8.0",
+          "isort==6.0.1",
+          "ruff",
+          "mypy",
+          "pytest",
+          "pyyaml",
+          "pydantic",
+          "pydantic-settings",
+          "numpy",
+          "hypothesis",
+          "reportlab",
+          "types-PyYAML",
+        ]
         pass_filenames: false
         stages: [pre-push]
 
