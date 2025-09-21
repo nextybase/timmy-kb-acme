@@ -84,6 +84,7 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 
 def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
+    """Invoca il converter garantendo un fail-fast coerente se la firma è incompatibile."""
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
     sig = inspect.signature(func)
@@ -96,16 +97,20 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
         bound.apply_defaults()
         func(*bound.args, **bound.kwargs)
     except TypeError as e:
+        # Wrappa i TypeError (firma non compatibile) in ConversionError con contesto
         raise ConversionError(f"convert_md call failed: {e}", slug=ctx.slug, file_path=md_dir) from e
 
 
 def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
     """Converte i PDF in RAW in Markdown strutturato dentro book/.
 
-    Regola di idempotenza/robustezza:
-    - Se in RAW **non ci sono PDF**, NON invocare il converter (evita cleanup indesiderati)
-      e restituisci i Markdown di contenuto già presenti in book/.
-    - Se in RAW **ci sono PDF**, invoca sempre il converter.
+    Regole:
+    - Se RAW **non esiste** → ConfigError.
+    - Se RAW **non contiene PDF**:
+        - NON invocare il converter (evita segnaposto).
+        - Se in book/ ci sono già MD di contenuto → restituiscili.
+        - Altrimenti → ConfigError (fail-fast).
+    - Se RAW **contiene PDF** → invoca sempre il converter.
     """
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
@@ -117,7 +122,6 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
-    # snapshot iniziale dei contenuti
     def _list_content_mds() -> list[Path]:
         return [
             p
@@ -125,36 +129,15 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             if p.name.lower() not in {"readme.md", "summary.md"}
         ]
 
-    # Reuse preexisting content Markdown (no conversion)
-    preexisting = _list_content_mds()
-    if False and preexisting:
-        with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
-            try:
-                m.set_artifacts(len(preexisting))
-            except Exception:
-                m.set_artifacts(None)
-        return preexisting
-
+    # Lista PDF prima del phase_scope per decisione di flusso
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
-
-    # When RAW has no PDFs and no preexisting MD, still run conversion
-    if preexisting and not local_pdfs:
-        with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
-            try:
-                m.set_artifacts(len(preexisting))
-            except Exception:
-                m.set_artifacts(None)
-        return preexisting
-
-    if not local_pdfs and not preexisting:
-        _call_convert_md(_convert_md, shim, book_dir)
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if local_pdfs:
             _call_convert_md(_convert_md, shim, book_dir)
             content_mds = _list_content_mds()
         else:
-            # nessun PDF → non convertiamo; usiamo i contenuti già presenti
+            # RAW senza PDF: non convertire; usa eventuali MD già presenti
             content_mds = _list_content_mds()
 
         try:
@@ -162,17 +145,20 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         except Exception:
             m.set_artifacts(None)
 
-    if content_mds:
-        return content_mds
-
-    # nessun MD di contenuto: distinguere tra "nessun PDF" e "conversione senza output"
-    if not local_pdfs:
+    if local_pdfs:
+        # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
+        if content_mds:
+            return content_mds
+        raise ConversionError(
+            "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
+            slug=slug,
+            file_path=book_dir,
+        )
+    else:
+        # Caso senza PDF: ritorna contenuti preesistenti, se presenti; altrimenti fail-fast
+        if content_mds:
+            return content_mds
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
-    raise ConversionError(
-        "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
-        slug=slug,
-        file_path=book_dir,
-    )
 
 
 def enrich_frontmatter(
@@ -364,6 +350,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
+    """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
@@ -376,6 +363,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
             enrich_frontmatter(context, logger, vocab, slug=slug)
 
         try:
+            # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))
         except Exception:
             m.set_artifacts(None)
@@ -392,6 +380,7 @@ def index_markdown_to_db(
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
 ) -> int:
+    """Indicizza i Markdown presenti in `book/` nel DB con embeddings."""
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
@@ -578,6 +567,7 @@ def _merge_frontmatter(existing: Dict[str, Any], *, title: Optional[str], tags: 
 
 @lru_cache(maxsize=1024)
 def _term_to_pattern(term: str) -> re.Pattern[str]:
+    r"""Pattern robusto a confini parola *semantici* (spazi = \s+)."""
     esc = re.escape(term.strip().lower())
     esc = esc.replace(r"\ ", r"\s+")
     return re.compile(rf"(?<!\w){esc}(?!\w)")

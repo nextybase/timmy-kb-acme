@@ -1,3 +1,4 @@
+# tests/test_observability_smoke.py
 from __future__ import annotations
 
 import logging
@@ -68,6 +69,9 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+
+    # RAW deve contenere almeno un PDF affinché il converter venga invocato
+    (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
     def _fake_convert(ctx, md_dir: Path | None = None) -> None:  # type: ignore[no-untyped-def]
         target = md_dir or ctx.md_dir

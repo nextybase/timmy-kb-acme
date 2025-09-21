@@ -28,12 +28,15 @@ def _logger() -> logging.Logger:
 
 def test_convert_markdown_respects_ctx_overrides(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
-    raw = base / "custom_raw"  # <-- deve stare sotto base
-    book = base / "custom_book"  # <-- idem
+    raw = base / "custom_raw"  # deve stare sotto base
+    book = base / "custom_book"  # idem
     base.mkdir()
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     ctx = _Ctx(base, raw, book)
+
+    # 👇 RAW deve contenere almeno un PDF affinché il converter venga invocato
+    (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
     # Fake converter: deve scrivere in md_dir
     def _fake_convert_md(ctxlike, md_dir: Path):
@@ -54,9 +57,9 @@ def test_convert_markdown_respects_ctx_overrides(tmp_path: Path, monkeypatch):
 
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test
     mds = sem.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
-    # convert_markdown ritorna Path relativi rispetto a book_dir
-    assert any(p.name == "A.md" for p in mds)
+
     assert (book / "A.md").exists()
+    assert any(p.name == "A.md" for p in mds)
 
 
 def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, monkeypatch):
