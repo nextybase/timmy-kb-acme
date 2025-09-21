@@ -140,7 +140,7 @@ SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e ret
 ---
 
 ## 13) Novità e Deprecazioni
-- API semantica pubblica: la UI importa solo da `semantic.api`. Gli helper `semantic_onboarding` sono deprecati e generano `DeprecationWarning`.
+- API semantica pubblica: la UI importa solo da `semantic.api`. È disponibile anche un wrapper CLI (`src/semantic_onboarding.py`) che orchestri `convert_markdown` → `enrich_frontmatter` → `write_summary_and_readme` per simmetria con gli altri orchestratori.
 - Migrazione tag: `tags_reviewed.yaml` resta input storico; SSoT attuale = `tags.db` (SQLite). Sarà deprecato in 1.0.
 
 ---

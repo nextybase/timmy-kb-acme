@@ -106,6 +106,7 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive
 py src/tag_onboarding.py --slug acme --non-interactive --proceed             # default: Drive
 Rem: per flussi CLI, usare direttamente semantic.api come da snippet sopra.
 py src/onboarding_full.py --slug acme --non-interactive
+py src/semantic_onboarding.py --slug acme --non-interactive                  # wrapper fase Semantica
 ```
 
 ### Interfaccia (Streamlit)
