@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      REPO_ROOT_DIR: ${{ runner.temp }}/smoke-${{ github.run_id }}
       TIMMY_NO_GITHUB: '1'
       SKIP_GITHUB_PUSH: '1'
+      # REPO_ROOT_DIR: ${{ github.workspace }}/.smoke-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,6 +23,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Init temp dir (REPO_ROOT_DIR)
+        shell: bash
+        run: |
+          ROOT="$RUNNER_TEMP/smoke-${GITHUB_RUN_ID}"
+          mkdir -p "$ROOT"
+          echo "REPO_ROOT_DIR=$ROOT" >> "$GITHUB_ENV"
 
       - name: Install runtime deps (editable)
         run: |
