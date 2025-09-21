@@ -20,7 +20,7 @@ def make_base_payload(tags):
     }
 
 
-def _has_message(errors, message):
+def _has_message(errors: list[str], message: str) -> bool:
     return any(message in err for err in errors)
 
 
