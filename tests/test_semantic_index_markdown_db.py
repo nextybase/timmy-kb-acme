@@ -214,3 +214,57 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
     failed = [r for r in caplog.records if r.msg == "phase_failed"]
     assert failed, "phase_failed non loggato"
     assert all("artifact_count" not in r.__dict__ for r in failed)
+
+
+def test_index_excludes_readme_and_summary(tmp_path):
+    base = tmp_path / "output" / "timmy-kb-x"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    # Contenuto reale
+    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    # File da escludere
+    (book / "README.md").write_text("# R\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+
+    class E:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            # Deve essere chiamato solo per A.md
+            return [[1.0, 0.0] for _ in texts]
+
+    dbp = tmp_path / "db_exclude.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="x",
+        scope="book",
+        embeddings_client=E(),
+        db_path=dbp,
+    )
+    assert inserted == 1
+
+
+def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
+    base = tmp_path / "output" / "timmy-kb-x"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+
+    class PartEmptyEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            # Primo vuoto, secondo valido
+            return [[], [1.0, 0.5]]
+
+    caplog.set_level(logging.INFO)
+    dbp = tmp_path / "db_filter.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="x",
+        scope="book",
+        embeddings_client=PartEmptyEmb(),
+        db_path=dbp,
+    )
+    assert inserted == 1
+    # Log di drop presente
+    assert any("scartati" in r.getMessage() or "dropped" in r.getMessage() for r in caplog.records)

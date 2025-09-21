@@ -361,7 +361,11 @@ def index_markdown_to_db(
     ensure_within(base_dir, book_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
 
-    files = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+    files = [
+        p
+        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        if p.name.lower() not in {"readme.md", "summary.md"}
+    ]
     if not files:
         logger.info("Nessun Markdown da indicizzare", extra={"book": str(book_dir)})
         return 0
@@ -398,13 +402,6 @@ def index_markdown_to_db(
             except Exception:
                 m.set_artifacts(None)
             return 0
-        if len(vecs[0]) == 0:
-            logger.warning("Primo vettore embedding vuoto", extra={"count": len(vecs)})
-            try:
-                m.set_artifacts(0)
-            except Exception:
-                m.set_artifacts(None)
-            return 0
         if len(vecs) != len(contents):
             logger.warning(
                 "Embedding client non ha prodotto vettori coerenti",
@@ -415,6 +412,30 @@ def index_markdown_to_db(
             except Exception:
                 m.set_artifacts(None)
             return 0
+
+        # 2b) Filtro per-item: drop vettori vuoti mantenendo i restanti
+        filtered_contents: list[str] = []
+        filtered_paths: list[str] = []
+        filtered_vecs: list[list[float]] = []
+        for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
+            if len(emb) == 0:
+                continue
+            filtered_contents.append(text)
+            filtered_paths.append(rel_name)
+            filtered_vecs.append(list(emb))
+
+        dropped = len(contents) - len(filtered_contents)
+        if dropped > 0 and len(filtered_contents) == 0:
+            # Compat: mantieni warning storico quando tutti sono vuoti
+            logger.warning("Primo vettore embedding vuoto", extra={"count": len(vecs)})
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
+            return 0
+        if dropped > 0:
+            logger.info("Embedding vuoti scartati", extra={"dropped": dropped})
+        contents, rel_paths, vecs = filtered_contents, filtered_paths, filtered_vecs
 
         # 3) Inserimento DB interamente nel contesto; eccezioni propagano (phase_failed)
         version = _dt.utcnow().strftime("%Y%m%d")
