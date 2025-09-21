@@ -69,3 +69,6 @@ qodana.sarif.json
 
 *.egg-info/
 src/timmy_kb.egg-info/
+
+# === Node.js ===
+node_modules/
