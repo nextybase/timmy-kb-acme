@@ -29,8 +29,35 @@ jobs:
         run: flake8 src tests
       - name: Mypy
         run: mypy src
-      - name: Pytest
-        run: pytest -ra
+      - name: Pytest (coverage 85%)
+        run: pytest -ra --cov=src --cov-report=xml --cov-fail-under=85
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+      - name: Publish coverage summary
+        if: always()
+        shell: bash
+        run: |
+          python - << 'PY'
+          import xml.etree.ElementTree as ET
+          import os
+          p = 'coverage.xml'
+          try:
+              tree = ET.parse(p)
+              root = tree.getroot()
+              rate = float(root.attrib.get('line-rate', '0')) * 100.0
+              summary = f"Coverage: {rate:.2f}% (threshold 85%)\n"
+          except Exception as e:
+              summary = f"Coverage summary not available: {e}\n"
+          out = os.environ.get('GITHUB_STEP_SUMMARY')
+          if out:
+              with open(out, 'a', encoding='utf-8') as fh:
+                  fh.write(summary)
+          else:
+              print(summary)
+          PY
 
   sca:
     name: Security Audit (pip-audit)
