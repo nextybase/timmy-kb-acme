@@ -111,3 +111,8 @@ sequenceDiagram
     UI->>GH: onboarding_full (push)
     GH-->>FS: publish book/ to remote repo (branch)
 ```
+
+Note operative
+
+- La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
+- L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log “Embedding vuoti scartati”).

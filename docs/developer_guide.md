@@ -88,6 +88,10 @@ py src/onboarding_full.py --slug acme
 ```
 Aggiungi `--non-interactive` per i run batch/CI.
 
+Attenzioni (semantica/indexing)
+- `convert_markdown` fallisce se dopo la conversione sono presenti solo `README.md`/`SUMMARY.md` (fail‑fast): assicurati che `raw/` contenga PDF.
+- `index_markdown_to_db` esclude `README.md`/`SUMMARY.md` dall’indicizzazione e scarta embedding vuoti per singolo file (log “Embedding vuoti scartati”).
+
 ### Interfaccia (UI)
 ```bash
 streamlit run onboarding_ui.py
