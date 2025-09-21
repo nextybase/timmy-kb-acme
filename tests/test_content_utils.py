@@ -177,6 +177,36 @@ def test_convert_cleanup_orphan_md_idempotent(dummy_kb):
     assert (ctx.md_dir / "contratti.md").exists()
 
 
+def test_convert_emits_unique_headings_for_same_named_folders(dummy_kb):
+    """Cartelle omonime allo stesso depth in rami diversi devono avere intestazioni distinte.
+
+    Esempio:
+      raw/cat/2023/Q4/a.pdf
+      raw/cat/2024/Q4/b.pdf
+
+    Deve produrre in cat.md sia "## 2023" e "### Q4" che ricompare sotto 2024,
+    senza deduplicazione erronea.
+    """
+    ctx = _mk_ctx(dummy_kb)
+
+    _touch_pdf(ctx.raw_dir / "cat" / "2023" / "Q4" / "a.pdf")
+    _touch_pdf(ctx.raw_dir / "cat" / "2024" / "Q4" / "b.pdf")
+
+    convert_files_to_structured_markdown(ctx)
+
+    cat_md = ctx.md_dir / "cat.md"
+    assert cat_md.exists()
+    txt = cat_md.read_text(encoding="utf-8")
+    # Entrambi gli anni come heading H2
+    assert "## 2023" in txt
+    assert "## 2024" in txt
+    # La sottocartella comune Q4 deve apparire in entrambi i rami (due occorrenze)
+    assert txt.count("\n### Q4\n") == 2
+    # Sezioni PDF presenti
+    assert "#### A" in txt
+    assert "#### B" in txt
+
+
 def test_generate_summary_percent_encodes_links(dummy_kb):
     ctx = _mk_ctx(dummy_kb)
     ctx.md_dir.mkdir(parents=True, exist_ok=True)

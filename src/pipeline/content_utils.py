@@ -49,9 +49,18 @@ def _sorted_pdfs(cat_dir: Path) -> list[Path]:
 
 
 def _append_folder_headings(lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]) -> None:
+    """Appende heading per ogni sottocartella lungo il percorso.
+
+    La chiave di deduplicazione è basata sul percorso cumulativo (normalizzato in
+    minuscolo) per evitare collisioni tra cartelle omonime allo stesso depth ma
+    appartenenti a rami diversi (es. 2023/Q4 e 2024/Q4).
+    """
+    cumulative: list[str] = []
     for depth, folder in enumerate(folder_parts):
         level = 2 + depth
-        key = (depth, folder.lower())
+        cumulative.append(folder)
+        key_path = "/".join(part.lower() for part in cumulative)
+        key = (depth, key_path)
         if key not in emitted:
             lines += ["", f"{'#' * level} {_titleize(folder)}"]
             emitted.add(key)
