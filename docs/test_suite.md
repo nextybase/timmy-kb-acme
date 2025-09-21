@@ -80,6 +80,15 @@ Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
 ## 4) Pytest - guida completa
 
+Suggerito:
+
+```powershell
+# dal venv attivo
+make test
+# senza attivare il venv, usa ./venv
+make test-vscode
+```
+
 Esegue l'intera suite locale. Per default (vedi `pytest.ini`) sono esclusi i test marcati `push` e `drive`.
 
 ```powershell

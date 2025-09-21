@@ -199,8 +199,10 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 - Esecuzione manuale dei check "safe":
 
 ```bash
-make qa-safe   # isort/black/ruff/mypy (se presenti)
-make ci-safe   # qa-safe + pytest (se presente)
+make qa-safe     # isort/black/ruff/mypy (se presenti)
+make ci-safe     # qa-safe + pytest (se presente)
+make test        # esegue pytest con l'interprete attivo del venv
+make test-vscode # usa ./venv se non hai attivato il venv
 ```
 
 ### Setup cspell (VS Code)
