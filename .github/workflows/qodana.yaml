@@ -44,7 +44,8 @@ jobs:
         with:
           use-caches: false
           pr-mode: false
-          args: --save-report --report-dir=./qodana.report --results-dir=./.qodana --disable-caches --baseline ./.baseline/.qodana/qodana.sarif.json
+          # Qodana action expects comma-separated args tokens
+          args: --image,jetbrains/qodana-python-community:2025.2,--save-report,--report-dir,./qodana.report,--results-dir,./.qodana,--disable-caches,--baseline,./.baseline/.qodana/qodana.sarif.json
           upload-result: true
 
       - name: Qodana - Code Inspection (first run, no cache)
@@ -53,7 +54,7 @@ jobs:
         with:
           use-caches: false
           pr-mode: false
-          args: --save-report --report-dir=./qodana.report --results-dir=./.qodana --disable-caches
+          args: --image,jetbrains/qodana-python-community:2025.2,--save-report,--report-dir,./qodana.report,--results-dir,./.qodana,--disable-caches
           upload-result: true
 
       - name: Upload SARIF to GitHub Code Scanning
