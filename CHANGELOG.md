@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 ### Fixed
+- Telemetria di fase: `build_markdown_book` include anche `load_reviewed_vocab` ed `enrich_frontmatter`; rimosso il “success” prematuro e conteggio `artifacts` dopo l’enrich.
+- Errori contestualizzati: tutte le `PipelineError` in `pipeline.content_utils` includono `slug` e `file_path` nei casi “missing/not a directory” e validazioni affini.
+- KPI ingest: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite; aggregati coerenti in `index_markdown_to_db(...)` (idempotenza: re-run ⇒ 0).
+
+### Changed
+- `semantic.convert_markdown(...)`: se `raw/` **non** contiene PDF non invoca il converter (riusa gli MD esistenti o fallisce con `ConfigError`); se ci sono PDF esegue sempre la conversione. Esclude `README.md`/`SUMMARY.md` dagli `artifacts`.
+
+### Added
+- Test anti-regressione: `tests/test_convert_markdown_no_pdfs_raises.py` (RAW senza PDF ⇒ `ConfigError`; RAW senza PDF con MD preesistenti ⇒ ritorna MD esistenti).
+- Test wrapping: `tests/test_semantic_api_errors.py` (firma converter errata ⇒ `ConversionError` con `slug`/`file_path`).
+- Aggiornamenti smoke/path overrides: test che seedano `dummy.pdf` per rispettare la regola “converter solo con PDF”.
+
+### Docs
+- `docs/developer_guide.md`: chiarita estensione della fase `build_markdown_book`, obbligo di `slug`/`file_path` nelle `PipelineError`, KPI DB basati su inserimenti reali e comportamento ai re-run.
+
+---
+
+## [Unreleased]
+### Fixed
 - Telemetria di fase: `build_markdown_book` copre anche enrichment; rimosso “success” prematuro.
 - Messaggi errore: `PipelineError` in `pipeline.content_utils` arricchite con `slug` e `file_path`.
 - KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (re-run → 0).
