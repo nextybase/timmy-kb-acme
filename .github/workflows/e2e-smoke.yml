@@ -16,7 +16,7 @@ jobs:
       SKIP_GITHUB_PUSH: '1'
       # REPO_ROOT_DIR: ${{ github.workspace }}/.smoke-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
