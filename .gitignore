@@ -75,3 +75,17 @@ src/timmy_kb.egg-info/
 # === Node.js ===
 node_modules/
 Scripts/
+
+# === Build artifacts (P1) ===
+# Prevent committing local Python installs and build outputs
+Lib/
+build/
+dist/
+**/*.dist-info/
+**/*.egg-info/
+# Duplicates kept intentionally for clarity and robustness
+.pytest_cache/
+__pycache__/
+.coverage
+.venv/
+.env
