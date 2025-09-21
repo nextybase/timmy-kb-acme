@@ -315,8 +315,8 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         else:
             # Fallback: crea solo struttura base locale
             context.base_dir.mkdir(parents=True, exist_ok=True)
-            context.raw_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
-            context.md_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+            context.raw_dir.mkdir(parents=True, exist_ok=True)
+            context.md_dir.mkdir(parents=True, exist_ok=True)
         # telemetria: numero directory top-level nella base cliente
         try:
             base = context.base_dir
@@ -432,7 +432,10 @@ def _drive_phase(
             "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID")),
         },
     )
-    service = get_drive_service(context)
+    from typing import Any, Callable, cast
+
+    gds = cast(Callable[..., Any], get_drive_service)
+    service = gds(context)
 
     drive_parent_id = context.env.get("DRIVE_ID")
     if not drive_parent_id:
@@ -442,7 +445,12 @@ def _drive_phase(
     logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
 
     with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
-        client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
+        # Le funzioni Drive sono opzionali a import-time; dopo _require_drive_utils()
+        # castiamo a callables per soddisfare il type checker.
+        from typing import Callable, Dict, cast
+
+        cdf = cast(Callable[..., str], create_drive_folder)
+        client_folder_id = cdf(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
         m.set_artifacts(1)
     logger.info(
         "Cartella cliente creata su Drive",
@@ -450,9 +458,10 @@ def _drive_phase(
     )
 
     with phase_scope(logger, stage="drive_create_structure", customer=context.slug) as m:
-        created_map = create_drive_structure_from_yaml(
-            service, yaml_structure_file, client_folder_id, redact_logs=redact
-        )
+        from typing import Callable, Dict, cast
+
+        cds = cast(Callable[..., Dict[str, str]], create_drive_structure_from_yaml)
+        created_map = cds(service, yaml_structure_file, client_folder_id, redact_logs=redact)
         try:
             m.set_artifacts(len(created_map or {}))
         except Exception:
@@ -476,9 +485,10 @@ def _drive_phase(
         )
 
     with phase_scope(logger, stage="drive_upload_config", customer=context.slug) as m:
-        uploaded_cfg_id = upload_config_to_drive_folder(
-            service, context, parent_id=client_folder_id, redact_logs=redact
-        )
+        from typing import Callable, cast
+
+        ucf = cast(Callable[..., str], upload_config_to_drive_folder)
+        uploaded_cfg_id = ucf(service, context, parent_id=client_folder_id, redact_logs=redact)
         m.set_artifacts(1)
     logger.info("Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
 
