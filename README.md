@@ -109,6 +109,10 @@ py src/onboarding_full.py --slug acme --non-interactive
 py src/semantic_onboarding.py --slug acme --non-interactive                  # wrapper fase Semantica
 ```
 
+Nota
+- `convert_markdown` fallisce se, dopo la conversione, esistono solo `README.md`/`SUMMARY.md` (nessun contenuto): assicurati che `raw/` contenga PDF.
+- L’indicizzazione esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log: "Embedding vuoti scartati").
+
 ### Interfaccia (Streamlit)
 L'alternativa agli orchestratori via terminale Ã¨ l'interfaccia.
 
