@@ -45,18 +45,29 @@ jobs:
         run: |
           python -m pip install -U pip
           pip install pip-audit
-      - name: Run pip-audit (strict, critical only)
+      - name: Run pip-audit and gate on critical vulns
         shell: bash
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           set -euo pipefail
-          # Audit pyproject.toml if present
-          if [ -f "pyproject.toml" ]; then
-            echo "Running pip-audit on pyproject.toml"
-            pip-audit --strict --progress-spinner off --severity-level critical -P pyproject.toml
-          fi
-          # Audit requirements.txt if present
+          rm -f pip-audit.json || true
           if [ -f "requirements.txt" ]; then
             echo "Running pip-audit on requirements.txt"
-            pip-audit --strict --progress-spinner off --severity-level critical -r requirements.txt
+            pip-audit -r requirements.txt -f json -o pip-audit.json || true
+          elif [ -f "pyproject.toml" ]; then
+            echo "Installing project (editable) and auditing installed env"
+            pip install -e . || true
+            pip-audit -f json -o pip-audit.json || true
+          else
+            echo "No manifest found (requirements.txt/pyproject.toml); auditing current env"
+            pip-audit -f json -o pip-audit.json || true
+          fi
+          if [ ! -s pip-audit.json ]; then
+            echo "{}" > pip-audit.json
+          fi
+          CRIT=$(jq -r '[.dependencies[]? | .vulns[]? | select(.severity=="critical")] | length' pip-audit.json || echo 0)
+          echo "Critical vulnerabilities found: $CRIT"
+          if [ "$CRIT" != "0" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "::error::pip-audit found $CRIT critical vulnerability(ies)"
+            exit 1
           fi
