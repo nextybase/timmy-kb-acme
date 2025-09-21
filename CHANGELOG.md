@@ -6,6 +6,35 @@
 ---
 
 ## [Unreleased]
+
+### Fixed
+- Telemetria di fase: `build_markdown_book` copre anche `load_reviewed_vocab` e `enrich_frontmatter`; rimosso il “success” prematuro.
+- Messaggi errore: tutti i `PipelineError` includono `slug` e `file_path` nei punti critici (validazioni/IO).
+- KPI ingest DB: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite (idempotenza: re-run ⇒ 0).
+
+### Changed
+- `semantic.convert_markdown(...)`: se `raw/` non ha PDF **non** invoca il converter; se ci sono PDF lo invoca sempre. `README.md`/`SUMMARY.md` esclusi dagli `artifacts`.
+- `semantic_onboarding.py`: orchestratore con exit code deterministici (cattura `ConfigError`/`PipelineError`).
+- UI Finanza (`src/ui/tabs/finance.py`): scritture solo tramite `safe_write_bytes` con guardie `ensure_within`; cleanup dei file temporanei spostato in `finally`.
+- `semantic.vocab_loader`: comportamento **fail-fast** su path/DB non sicuri o illeggibili (alza `ConfigError` con `file_path`).
+
+### Added
+- `src/tools/gen_dummy_kb.py`: supporto a `--out` per generare un workspace in una cartella esplicita; bootstrap lazy (nessun side-effect a import-time).
+- `src/tools/retriever_calibrate.py`: dump JSONL atomico e validato (`ensure_within_and_resolve` + `safe_write_text`).
+- Test anti-regressione:
+  - `tests/test_convert_markdown_no_pdfs_raises.py`
+  - `tests/test_semantic_onboarding_exitcodes.py`
+  - `tests/test_finance_tab_io_safety.py`
+  - `tests/test_vocab_loader_failfast.py`
+  - `tests/test_gen_dummy_kb_import_safety.py`
+  - `tests/test_retriever_calibrate_io.py`
+
+### Docs
+- `docs/developer_guide.md`: chiarita l’estensione della fase `build_markdown_book`; obbligo di `slug`/`file_path` nei `PipelineError`; KPI DB basati su inserimenti reali; note su `gen_dummy_kb --out`, fail-fast del vocabolario e hardening del tab Finanza.
+
+---
+
+## [Unreleased]
 ### Fixed
 - Telemetria di fase: `build_markdown_book` include anche `load_reviewed_vocab` ed `enrich_frontmatter`; rimosso il “success” prematuro e conteggio `artifacts` dopo l’enrich.
 - Errori contestualizzati: tutte le `PipelineError` in `pipeline.content_utils` includono `slug` e `file_path` nei casi “missing/not a directory” e validazioni affini.

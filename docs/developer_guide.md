@@ -1,271 +1,133 @@
-# Timmy-KB - Developer Guide (v2.0.0)
+# Developer Guide
 
-Questa guida è per chi sviluppa o estende Timmy-KB: principi, setup locale, orchestratori, UI, test e regole di qualità.
-
-> Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).
-> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
+> Questa guida descrive regole, flussi e convenzioni per contribuire a **timmy‑kb**. È orientata a uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
 
 ---
 
-## Integrazione con Codex
-
-Per velocizzare sviluppo, refactor e manutenzione del progetto puoi usare Codex come coding agent direttamente in VS Code.
-L’integrazione consente di rispettare le regole definite negli `AGENTS.md` del repository e di lavorare in coerenza con i flussi NeXT, mantenendo sempre l’approccio Human‑in‑the‑Loop.
-Trovi la guida completa, con configurazione e scenari d’uso, qui: [Codex Integrazione](codex_integrazione.md).
-
----
-
-## Principi architetturali
-- Separazione dei ruoli: orchestratori = UX/CLI e controllo flusso; moduli `pipeline/*` e `semantic/*` = logica pura senza I/O interattivo.
-- Idempotenza: le operazioni possono essere ripetute senza effetti collaterali. Scritture atomiche.
-- Path-safety: ogni I/O passa da SSoT (`ensure_within`, `ensure_within_and_resolve`, `sanitize_filename`).
-- Configurazione esplicita: variabili d'ambiente lette tramite `ClientContext`; niente valori magici sparsi.
-- Logging strutturato con redazione automatica se `LOG_REDACTION` è attivo.
-
-Vedi anche: [Coding Rules](coding_rule.md) e [Architecture](architecture.md).
+## Indice
+- [Architettura in breve](#architettura-in-breve)
+- [Fasi operative e façade `semantic.api`](#fasi-operative-e-façade-semanticapi)
+- [Regole di sicurezza I/O e path-safety](#regole-di-sicurezza-io-e-path-safety)
+- [Gestione errori, exit codes e osservabilità](#gestione-errori-exit-codes-e-osservabilità)
+- [Conversione Markdown: policy ufficiale](#conversione-markdown-policy-ufficiale)
+- [Enrichment & vocabolario: comportamento fail‑fast](#enrichment--vocabolario-comportamento-fail-fast)
+- [Indexer & KPI DB (inserimenti reali)](#indexer--kpi-db-inserimenti-reali)
+- [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
+- [Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`](#tooling-gen_dummy_kbpy-e-retriever_calibratepy)
+- [Qualità del codice: lint, format, typing, test](#qualità-del-codice-lint-format-typing-test)
+- [Linee guida di contributo](#linee-guida-di-contributo)
 
 ---
 
-## Setup locale
+## Architettura in breve
+- **Orchestratori** (CLI e UI) gestiscono l’esperienza utente e coordinano i moduli.
+- **`pipeline/*`** fornisce utilità cross‑cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte **path‑safety**.
+- **`semantic/*`** espone la façade `semantic.api` che coordina conversione PDF→MD, enrichment del frontmatter e indicizzazione.
+- **Storage locale**: workspace per cliente in `output/timmy-kb-<slug>/{raw, book, semantic, config, logs}`.
+- **DB SQLite**: Single Source of Truth (SSoT) per i tag in runtime (es. `semantic/tags.db`).
 
-### Requisiti
-- Python >= 3.11
-- (Opz.) Docker per la preview HonKit
-- (Se usi Drive) JSON del Service Account e `DRIVE_ID`
+---
 
-### Ambiente virtuale
+## Fasi operative e façade `semantic.api`
+La façade `semantic.api` espone gli step principali:
+
+1. **`convert_markdown(ctx, logger, slug)`**
+   - Converte PDF in `raw/` in Markdown strutturato dentro `book/`.
+   - Vedi policy nella sezione dedicata.
+
+2. **`write_summary_and_readme(ctx, logger, slug)`**
+   - Genera/aggiorna `SUMMARY.md` e `README.md` in `book/`.
+
+3. **`load_reviewed_vocab(base_dir, logger)`**
+   - Carica (se presente) il vocabolario consolidato da `semantic/`.
+   - Comportamento **fail‑fast** su path o DB non validi (dettagli sotto).
+
+4. **`enrich_frontmatter(ctx, logger, vocab, slug)`**
+   - Arricchisce il frontmatter dei Markdown con i metadati normalizzati.
+
+5. **`index_markdown_to_db(ctx, logger, slug, scope, embeddings_client, db_path)`**
+   - Estrae chunk testuali, calcola embedding, scrive su DB (idempotente) e ritorna KPI coerenti.
+
+> **Fase `build_markdown_book`**: viene tracciata come singola fase che **copre l’intero blocco** `convert_markdown → write_summary_and_readme → load_reviewed_vocab → enrich_frontmatter`. Il “success” è emesso **solo a enrichment terminato**; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
+
+---
+
+## Regole di sicurezza I/O e path-safety
+- **Guardie obbligatorie**: usare sempre `ensure_within` / `ensure_within_and_resolve` prima di accedere a file/dir derivati da input esterni o configurazioni.
+- **Scritture atomiche**: impiegare `safe_write_text`/`safe_write_bytes` per evitare file parziali e condizioni di gara.
+- **No side‑effects a import‑time**: i moduli non devono mutare `sys.path` né eseguire I/O quando importati.
+- **Idempotenza**: tutti gli step devono poter essere ri‑eseguiti senza effetti collaterali (cleanup dei temporanei garantito anche in errore).
+
+---
+
+## Gestione errori, exit codes e osservabilità
+- **Eccezioni tipizzate**: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, …) e includere **contesto**.
+- **Contesto obbligatorio**: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
+- **Orchestratori CLI**: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
+- **Logging strutturato**: usare `phase_scope(logger, stage=..., customer=...)` per `phase_started/phase_completed/phase_failed` e valorizzare `artifacts` con numeri **reali**.
+
+---
+
+## Conversione Markdown: policy ufficiale
+- Se **`raw/` non esiste** → `ConfigError` con `file_path`.
+- Se **`raw/` non contiene PDF**:
+  - **Non** chiamare il converter (evita segnaposto).
+  - Se `book/` contiene già MD di contenuto → restituiscili.
+  - Altrimenti → `ConfigError` (fail‑fast, con `file_path=raw/`).
+- Se **ci sono PDF** in `raw/` → **invocare sempre** il converter.
+- Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
+
+---
+
+## Enrichment & vocabolario: comportamento fail‑fast
+- SSoT runtime dei tag è sotto `semantic/` (tipicamente DB). L’**assenza** del DB → ok (nessun enrichment), restituisce `{}`.
+- **Errori di path o I/O/DB** durante il load → **`ConfigError`** con `file_path` (fail‑fast, niente fallback silenziosi).
+- L’enrichment avviene nella fase estesa `build_markdown_book`; una failure blocca il “success” della fase.
+
+---
+
+## Indexer & KPI DB (inserimenti reali)
+- `insert_chunks(...)` ritorna il **numero effettivo** di righe inserite (idempotenza: re‑run ⇒ `0`).
+- L’aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
+
+---
+
+## UI: tab Finanza (I/O sicuro e cleanup)
+- Scritture **solo** tramite `safe_write_bytes` con guardie `ensure_within`.
+- Creazione del CSV temporaneo in `semantic/` con cleanup in **`finally`** (anche in caso d’errore).
+- Niente fallback a `Path.write_bytes`.
+
+---
+
+## Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`
+- **`gen_dummy_kb.py`**
+  - Nessun side‑effect a import‑time; bootstrap delle dipendenze **lazy** in `_ensure_dependencies()`.
+  - Supporta `--out <dir>` per generare un workspace esplicito; crea `raw/`, `book/`, `semantic/`, `config/`.
+- **`retriever_calibrate.py`**
+  - Evita append non atomici: accumula record in memoria e scrive una sola volta con `safe_write_text`.
+  - Validazione destinazione dump con `ensure_within_and_resolve`.
+
+---
+
+## Qualità del codice: lint, format, typing, test
+- **Formatter/Lint**: Black, isort, Ruff (config in `pyproject.toml`).
+- **Typing**: mypy/pyright; preferire type hints espliciti, no `Any` se evitabile.
+- **Test**: `pytest` con piramide unit → contract → smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
+- **Pre‑commit**: hook per lint/format/type e sicurezza (es. gitleaks); i commit devono passare tutti gli hook.
+
+Esecuzione locale suggerita:
 ```bash
-# Windows
-py -m venv venv
-venv\Scripts\activate
-pip install -U pip wheel
-pip install -r requirements.txt
-
-# Linux/macOS
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip wheel
-pip install -r requirements.txt
-```
-
-### Variabili d'ambiente utili
-- `SERVICE_ACCOUNT_FILE`: path al JSON del Service Account (Drive)
-- `DRIVE_ID`: ID della cartella root su Drive
-- `GITHUB_TOKEN`: token per push su GitHub (solo `onboarding_full`)
-- `GIT_DEFAULT_BRANCH`, `LOG_REDACTION`, `ENV`, `CI`, `YAML_STRUCTURE_FILE`
-
----
-
-## Esecuzione: orchestratori vs UI
-
-### Orchestratori (terminal-first)
-```bash
-# 1) Setup locale (+ Drive opzionale)
-py src/pre_onboarding.py --slug acme --name "Cliente ACME"
-
-# 2) Tagging semantico (default: Drive)
-py src/tag_onboarding.py --slug acme --proceed
-
-# 3) Conversione + enrichment + README/SUMMARY (+ preview opz.)
-py - <<PY
-from pipeline.context import ClientContext
-from semantic.api import convert_markdown, enrich_frontmatter, write_summary_and_readme
-from semantic.vocab_loader import load_reviewed_vocab
-import logging
-slug = 'acme'
-ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-log = logging.getLogger('semantic.manual')
-convert_markdown(ctx, log, slug=slug)
-# Preferisci il SSoT dei path dal contesto, evitando fallback legacy
-base = ctx.base_dir
-vocab = load_reviewed_vocab(base, log)
-enrich_frontmatter(ctx, log, vocab, slug=slug)
-write_summary_and_readme(ctx, log, slug=slug)
-PY
-
-# 4) Push finale (se richiesto)
-py src/onboarding_full.py --slug acme
-```
-Aggiungi `--non-interactive` per i run batch/CI.
-
-Attenzioni (semantica/indexing)
-- `convert_markdown` fallisce se dopo la conversione sono presenti solo `README.md`/`SUMMARY.md` (fail‑fast): assicurati che `raw/` contenga PDF.
-- `index_markdown_to_db` esclude `README.md`/`SUMMARY.md` dall’indicizzazione e scarta embedding vuoti per singolo file (log “Embedding vuoti scartati”).
-
-### Interfaccia (UI)
-```bash
-streamlit run onboarding_ui.py
-```
-Guida completa: [docs/guida_ui.md](guida_ui.md).
-
----
-
-## Struttura progetto (promemoria)
-```text
-src/
-  adapters/         # preview HonKit
-  pipeline/         # path/file/log/config/github/drive utils, context, eccezioni
-  semantic/         # tagging I/O, validator, enrichment
-  pre_onboarding.py | tag_onboarding.py | onboarding_full.py (semantica via semantic.api)
-output/timmy-kb-<slug>/{raw,book,semantic,config,logs}
-```
-Dettagli: [architecture.md](architecture.md).
-
----
-
-## Qualità & DX
-- Type-safety: preferisci firme esplicite e `Optional[...]` solo dove serve; evita `Any` nei moduli core.
-- Pylance/typing: quando import opzionali possono essere `None`, usa il narrowing pattern:
-  - wrapper `_require_callable(fn, name)` per funzioni opzionali;
-  - controlli `if x is None: raise RuntimeError(...)` per oggetti/moduli opzionali.
-- Streamlit: usa `_safe_streamlit_rerun()` (interno alla UI) per compat con stubs; evita `experimental_*` se c’è l'alternativa stabile.
-- Logging: usa `get_structured_logger` quando disponibile, fallback a `logging.basicConfig` negli script.
-- I/O: sempre `ensure_within_and_resolve`, `safe_write_text/bytes`.
-- Naming: `to_kebab()` per cartelle RAW; slug validati con `validate_slug`.
-- Path SSoT: negli esempi evita chiamate dirette a `semantic.api.get_paths`; usa `ClientContext` (`ctx.base_dir`) come fonte primaria.
-
----
-
-## Testing
-- Dummy dataset per smoke end-to-end:
-  ```bash
-  py src/tools/gen_dummy_kb.py --slug dummy
-  ```
-- Smoke E2E locale (senza Drive/push): vedi `docs/test_suite.md`.
-- Marker pytest: `drive`, `push`, `slow` per controllare ambito test.
-
-### UI Streamlit — Tab Finanza (headless)
-Esegue la UI in modalità headless con Playwright, crea un workspace locale coerente con `REPO_ROOT_DIR`, carica un CSV di esempio e verifica la generazione di `semantic/finance.db`.
-
-```bash
-python scripts/smoke_streamlit_finance.py
-```
-**Note**
-- Selettori robusti su sidebar e radio “Finanza”. L’upload viene effettuato nel container del bottone *Importa in finance.db* per evitare mismatch tra rerun.
-- Screenshot diagnostici salvati in temp in caso di failure.
-- La UI gestisce internamente l’assenza file (bottone sempre abilitato, gating nell’handler).
-
-#### End-to-end orchestratore (senza GitHub)
-Verifica l’intera catena: pre‑onboarding → import CSV → `onboarding_full_main`, con `REPO_ROOT_DIR` isolato e push GitHub disabilitato (token rimossi dall’ambiente).
-
-```bash
-python scripts/smoke_e2e.py --slug smoke
+make install
+make fmt && make lint && make type
+make test
 ```
 
 ---
 
-### ClientContextProtocol (contratto condiviso)
-- Riutilizza `semantic.types.ClientContextProtocol` quando una funzione richiede solo `base_dir`, `raw_dir`, `md_dir`, `slug`.
-- Evita protocolli locali duplicati (`typing.Protocol`) per lo stesso scopo; mantieni un solo contratto condiviso.
-- Esempi di firma consigliata:
-  - `pipeline.content_utils.*(ctx: ClientContextProtocol, ...)`
-  - `semantic.semantic_extractor.*(context: ClientContextProtocol, ...)`
-- Quando servono campi aggiuntivi specifici (es. `config_dir`, `repo_root_dir` per mapping), definisci protocolli locali minimali separati.
+## Linee guida di contributo
+1. **Modifiche minime e reversibili**: evitare refactor ampi senza necessità.
+2. **Niente nuove dipendenze** senza forte motivazione e consenso.
+3. **Aggiornare la documentazione** e il **CHANGELOG** per ogni modifica rilevante.
+4. **Definition of Done**: lint/format/type/test verdi; nessuna regressione osservata nei workflow E2E; log strutturati coerenti.
 
-### Type checking
-- `make type` esegue `mypy` su `src/`.
-- `make type-pyright` esegue Pyright (richiede `pyright` nel PATH oppure `npx`). Il comportamento è configurato da `pyrightconfig.json`.
-
----
-
-## Path-Safety Lettura (Aggiornamento)
-- Per tutte le letture di file utente (Markdown, CSV, YAML) in `pipeline/*` e `semantic/*` usa
-  `pipeline.path_utils.ensure_within_and_resolve(base, p)` per ottenere un path risolto e sicuro.
-- È vietato usare direttamente `open()` o `Path.read_text()` su input esterni senza passare dal wrapper.
-
-Esempi d'uso
-```python
-from pipeline.path_utils import open_for_read, read_text_safe
-
-# Lettura testo semplice (sicura)
-text = read_text_safe(book_dir, md_path)
-
-# Context manager (sicuro) per CSV/YAML/MD
-with open_for_read(semantic_dir, csv_path) as f:
-    rows = f.read().splitlines()
-```
-
----
-
-## API Semantica (Copy/CSV)
-
-Nota: `semantic.tags_extractor.emit_tags_csv` è deprecato. Usa `semantic.api.build_tags_csv(...)` oppure il writer low-level `semantic.auto_tagger.render_tags_csv(..., base_dir=...)`.
-
-Per evitare duplicazioni, gli orchestratori e gli script locali devono usare esclusivamente le API pubbliche in `semantic.api` per le operazioni di ingest locale e generazione CSV:
-
-- Copia PDF locali in RAW: `semantic.api.copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger)`
-- Emissione CSV dei tag grezzi: `semantic.api.build_tags_csv(context, logger, *, slug)`
-
-Note operative
-- Le funzioni applicano path‑safety e scritture atomiche; non usare helper locali o import diretti da `semantic.tags_extractor` fuori da `src/semantic/`.
-- In `tag_onboarding_main` i call‑site sono già delegati a queste API.
-
-### Writer CSV (low‑level) — Contratto `base_dir`
-- Per tool/script interni che usano direttamente il writer del tagger:
-  - Firma aggiornata: `semantic.auto_tagger.render_tags_csv(candidates, csv_path, *, base_dir)`
-  - Path‑safety forte:
-    - `safe_csv_path = ensure_within_and_resolve(base_dir, csv_path)`
-    - `ensure_within(safe_csv_path.parent, safe_csv_path)`
-    - Scrittura atomica con `safe_write_text(..., atomic=True)`
-- Comportamento: se `csv_path` esce dal perimetro `base_dir` viene sollevata `PathTraversalError`.
-- Esempio minimo:
-  ```python
-  from pathlib import Path
-  from semantic.auto_tagger import render_tags_csv
-
-  base = Path("output/timmy-kb-acme")
-  csv_path = base / "semantic" / "tags_raw.csv"
-  render_tags_csv(candidates, csv_path, base_dir=base)
-  ```
-- Preferenza: per orchestratori/CI usa la facade `semantic.api.build_tags_csv(...)`, che incapsula già path‑safety e side‑effects.
-
-Pre-commit
-- È presente un hook locale che impedisce l’introduzione di definizioni locali `_emit_tags_csv`/`_copy_local_pdfs_to_raw` e l’uso diretto di `semantic.tags_extractor` fuori da `src/semantic/`.
-- Esegui: `pre-commit install --hook-type pre-commit --hook-type pre-push`
-
----
-
-## Tabella comparativa: Orchestratori vs UI
-| Aspetto             | Orchestratori (CLI)                           | UI (Streamlit)                               |
-|---------------------|-----------------------------------------------|---------------------------------------------|
-| Entry point         | `pre_onboarding.py`, `tag_onboarding.py`, `onboarding_full.py` | `onboarding_ui.py` con tre tab (Config, Drive, Semantica) |
-| Destinatari         | Sviluppatori / run batch / CI                 | Utenti operativi / facilitatori              |
-| Controllo           | Script sequenziali, parametri CLI             | Interazione step-by-step con stato UI        |
-| Config              | YAML + variabili ENV                          | Editor mapping + Drive provisioning          |
-| Semantica           | `semantic.api.*` invocato da script           | `semantic.api.*` invocato dalla UI           |
-| Preview             | Da script `adapters/preview` (opzionale)      | Bottoni UI (start/stop container)            |
-| Requisiti extra     | Token GitHub per `onboarding_full`            | Docker per preview; credenziali Drive        |
-| Retrocompat         | Mirroring mapping YAML (in `pre_onboarding`)  | Mapping YAML solo come input storico         |
-
----
-
-> Versione: 1.9.2 (2025-09-19)
-> Stato: Allineata al codice corrente; esempi aggiornati a `ClientContext` come SSoT dei path; aggiunte sezioni di Smoke testing (UI Streamlit & E2E).
-
-## Security and Compliance
-
-- Esegui `make sbom` per generare SBOM CycloneDX (stampa `sbom.json`).
-- Il target usa `tools/sbom.sh`; assicurati che `cyclonedx-py` (cyclonedx-bom) sia installato nel venv.
-- Secret scanning: `pre-commit run gitleaks --all-files` utilizza `.gitleaks.toml` come configurazione minima.
-
-## Osservabilità & Robustezza (aggiornamento)
-
-### Fase `build_markdown_book`
-La fase **copre l’intero tratto**: `convert_markdown` → `write_summary_and_readme` → `load_reviewed_vocab` → `enrich_frontmatter`.
-Conseguenze:
-- Il “success” della fase viene emesso **solo** se anche l’enrichment va a buon fine.
-- Il conteggio `artifacts` riflette i **Markdown di contenuto** presenti in `book/` (README/SUMMARY esclusi) dopo l’enrich.
-
-### Errori con contesto (`PipelineError`)
-Tutte le eccezioni di validazione/IO in `pipeline.content_utils` includono:
-- `slug`: `getattr(ctx, "slug", None)` per tracciabilità.
-- `file_path`: il path coinvolto (es. `target` per `md_dir`, `raw_root` per RAW).
-
-### KPI DB: inserimenti reali
-Le metriche di ingest su SQLite riportano il **numero effettivo di nuove righe** inserite:
-- `insert_chunks(...)` usa la differenza di `total_changes` (o equivalente) per evitare sovrastime su re-run idempotenti.
-- L’aggregato in `index_markdown_to_db(...)` somma gli inserimenti reali per file, ignorando README/SUMMARY.
-
-### Conversione: comportamento ai re-run
-- Se in `raw/` **non ci sono PDF**, la conversione viene **saltata** e si riusano i Markdown già presenti.
-- Se arrivano nuovi PDF, la conversione viene **sempre** eseguita, generando/aggiornando i `.md` coerenti.
+> Per dubbi o proposte di evoluzione, apri una PR con descrizione completa (contesto, impatti, rischi, rollback) e riferimenti ai test/telemetria.

@@ -59,7 +59,7 @@ def main(argv: List[str] | None = None) -> int:
 
     failures: List[str] = []
 
-    py_files = _python_files(LINT_PATHS)
+    # py_files = _python_files(LINT_PATHS)  # non usato: mantenuto per futura isort opzionale
 
     checks: List[Tuple[str, List[str]]] = [
         # isort è già coperto dall'hook ufficiale pre-commit; qui lo rendiamo opzionale

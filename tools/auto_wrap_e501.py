@@ -18,13 +18,11 @@ Uso:
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-from textwrap import fill, indent
+from textwrap import fill
 
 # pattern: detect long comment lines
 COMMENT_RE = re.compile(r"^(\s*)#( ?)(.*\S.*)$")
@@ -151,20 +149,20 @@ def process_file(path: Path, width: int, dry: bool) -> bool:
     # 1) Wrap comments
     new_lines = []
     in_triple = False
-    triple_quote = None
+    # note: track only in_triple; quote type unused
     for line in lines:
         # detect triple-quoted regions to avoid wrapping comments inside code fences of docstrings
         if not in_triple:
             mstart = TRIPLE_QUOTE_START.match(line)
             if mstart:
                 in_triple = True
-                triple_quote = mstart.group(3)
+                _ = mstart.group(3)
                 new_lines.append(line)
                 continue
         else:
             if TRIPLE_QUOTE_END.search(line):
                 in_triple = False
-                triple_quote = None
+                _ = None
             new_lines.append(line)
             continue
 

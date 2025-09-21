@@ -278,7 +278,8 @@
                   "PGIT",
                   "PDRIVE",
                   "autonumber",
-                  "sovrastime"
+                  "sovrastime",
+                  "façade"
               ],
     "ignoreRegExpList":  [
                              "\\b(?:d|n|s|l|all|dall|nell|sull|coll|pell)(?:â€™|\u0027)[-A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]+"
