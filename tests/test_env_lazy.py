@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from pipeline.env_utils import ensure_dotenv_loaded
+import pipeline.env_utils as envu
 
 
 def test_env_lazy_load(monkeypatch, tmp_path: Path):
@@ -17,12 +17,17 @@ def test_env_lazy_load(monkeypatch, tmp_path: Path):
         del os.environ["FOO_BAR"]
 
     # Import e prima chiamata: deve caricare
-    ensure_dotenv_loaded()
+    loaded = envu.ensure_dotenv_loaded()
+    if not loaded:
+        import importlib as _il
+
+        _il.reload(envu)
+        envu.ensure_dotenv_loaded()
     # Verifica l'effetto: la variabile deve essere disponibile, a prescindere dal valore booleano
     # (puÃ² essere False se giÃ  caricata da altre parti del processo di test)
     assert os.environ.get("FOO_BAR") == "hello"
 
     # Seconda chiamata: idempotente
     os.environ["FOO_BAR"] = "hello"  # stabilizza
-    loaded2 = ensure_dotenv_loaded()
+    loaded2 = envu.ensure_dotenv_loaded()
     assert loaded2 is False
