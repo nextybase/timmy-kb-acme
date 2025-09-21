@@ -10,6 +10,10 @@
 
 ---
 
+## [Unreleased]
+### Fixed
+- Markdown (content pipeline): intestazioni di categoria ora univoche anche per sottocartelle omonime allo stesso livello, usando una chiave basata sul percorso cumulativo (es. `2023/Q4` e `2024/Q4` emettono entrambe le "Q4").
+
 ## [2.0.0] - 2025-09-20
 ### Added
 - Guardie esplicite per Google Drive negli orchestratori (`pre_onboarding`, `tag_onboarding`) e nella UI (`ui/services/drive_runner.py`).
