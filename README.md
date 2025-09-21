@@ -202,6 +202,12 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 make qa-safe   # isort/black/ruff/mypy (se presenti)
 make ci-safe   # qa-safe + pytest (se presente)
 ```
+
+### Setup cspell (VS Code)
+
+- Installa le dev dipendenze Node per i dizionari: `npm ci` (o `npm install`).
+- Se l'estensione VS Code mostra warning su `@cspell/dict-it-it`, ricarica la finestra: “Developer: Reload Window”.
+- L'hook pre-commit usa `npx -p @cspell/dict-it-it ...` e funziona anche senza `node_modules`, ma l'estensione VS Code richiede comunque `node_modules/` locali.
 ---
 
 ## Benchmark normalizzazione embeddings

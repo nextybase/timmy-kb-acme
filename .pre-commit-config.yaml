@@ -110,7 +110,7 @@ repos:
     hooks:
       - id: cspell
         name: cspell (docs + README)
-        entry: npx --yes cspell lint --no-progress --config cspell.json
+        entry: npx --yes -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
         language: system
         pass_filenames: true
         files: ^(README\.md|docs/.*\.md)$
