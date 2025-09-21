@@ -1,8 +1,10 @@
-# Timmy KB - README (v2.0.0)
+﻿# Timmy KB - README (v2.0.0)
 
 [![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml)
 
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
+
+> See also: [Architecture](docs/architecture.md).
 
 ---
 
@@ -25,16 +27,16 @@ Pipeline di onboarding dei clienti per Timmy KB.
    Crea la struttura locale, opzionalmente quella remota su Drive, copia i template semantici e genera `config.yaml`.
 
 2. Tag Onboarding (HiTL)
-   Default: Google Drive — scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.
+   Default: Google Drive â€” scarica i PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`.
    Dopo il checkpoint umano produce `README_TAGGING.md` e `tags_reviewed.yaml`.
 
 3. Semantic Onboarding
-   Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e può avviare la preview Docker (HonKit).
+   Converte i PDF in `book/*.md`, arricchisce i frontmatter leggendo i tag canonici dal DB SQLite (`semantic/tags.db`, migrato dallo YAML storico se presente), genera `README.md` e `SUMMARY.md`, e puÃ² avviare la preview Docker (HonKit).
 
 4. Onboarding Full (Push)
    Verifica che in `book/` ci siano solo `.md` (i `.md.fp` vengono ignorati), genera/valida `README.md` e `SUMMARY.md` e pubblica su GitHub.
 
-> SSoT dei tag: la fonte unica è il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
+> SSoT dei tag: la fonte unica Ã¨ il DB SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) resta come input per migrazione/authoring.
 
 ---
 
@@ -42,7 +44,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 
 - Python >= 3.11
 - Docker (per la preview)
-- Credenziali Google Drive (Service Account JSON) — necessarie per il default di `tag_onboarding` (Drive)
+- Credenziali Google Drive (Service Account JSON) â€” necessarie per il default di `tag_onboarding` (Drive)
 - (Opz.) GitHub Token (`GITHUB_TOKEN`) per il push
 
 ### Variabili d'ambiente
@@ -53,7 +55,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `GIT_DEFAULT_BRANCH`: branch di default (fallback `main`)
 - `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION`: `auto` (default), `on`, `off`
-- `ENV`, `CI`: modalità operative
+- `ENV`, `CI`: Modalità operative
 
 ---
 
@@ -107,7 +109,7 @@ py src/onboarding_full.py --slug acme --non-interactive
 ```
 
 ### Interfaccia (Streamlit)
-L'alternativa agli orchestratori via terminale è l'interfaccia.
+L'alternativa agli orchestratori via terminale Ã¨ l'interfaccia.
 
 Avvio:
 ```bash
@@ -119,9 +121,9 @@ Guida completa: `docs/guida_ui.md`.
 
 ## Sezione UI: Ricerca (retriever)
 
-Nella sidebar è presente un box apri/chiudi "Ricerca (retriever)" che consente di configurare:
-- `candidate_limit`: massimo numero di candidati caricati dal DB prima del ranking (min 500, max 20000). Valori più alti aumentano la latenza.
-- `budget di latenza (ms)`: indicazione del budget desiderato (0 = disabilitato). Usato solo se attivi l’auto.
+Nella sidebar Ã¨ presente un box apri/chiudi "Ricerca (retriever)" che consente di configurare:
+- `candidate_limit`: massimo numero di candidati caricati dal DB prima del ranking (min 500, max 20000). Valori piÃ¹ alti aumentano la latenza.
+- `budget di latenza (ms)`: indicazione del budget desiderato (0 = disabilitato). Usato solo se attivi lâ€™auto.
 - `Auto per budget`: se attivo, il sistema sceglie automaticamente un `candidate_limit` in base al budget (euristica interna; calibrabile).
 
 Le impostazioni sono salvate nel `config.yaml` del cliente sotto la chiave `retriever`:
@@ -149,9 +151,9 @@ Note: il retriever logga tempi di fase (embed/fetch/score+sort/total) per facili
 
 ## Dipendenze Drive
 
-Le funzionalità Drive richiedono `google-api-python-client`. Se la dipendenza non è installata:
-- l’import del modulo `pipeline.drive_utils` fallisce con `ImportError` esplicito;
-- la UI mostra un banner nella sezione Drive con le istruzioni per l’installazione.
+Le funzionalità Drive richiedono `google-api-python-client`. Se la dipendenza non Ã¨ installata:
+- lâ€™import del modulo `pipeline.drive_utils` fallisce con `ImportError` esplicito;
+- la UI mostra un banner nella sezione Drive con le istruzioni per lâ€™installazione.
 
 Installazione:
 ```bash
@@ -164,7 +166,7 @@ pip install .[drive]
 # sviluppo
 pip install -e ".[drive]"
 ```
-Se le dipendenze Drive non sono installate e scegli la sorgente Drive, CLI/UI mostrano messaggi chiari con le istruzioni d’installazione; i flussi offline (source=local, --dry-run) restano funzionanti.
+Se le dipendenze Drive non sono installate e scegli la sorgente Drive, CLI/UI mostrano messaggi chiari con le istruzioni dâ€™installazione; i flussi offline (source=local, --dry-run) restano funzionanti.
 
 ---
 
@@ -208,18 +210,18 @@ make test-vscode # usa ./venv se non hai attivato il venv
 ### Setup cspell (VS Code)
 
 - Installa le dev dipendenze Node per i dizionari: `npm ci` (o `npm install`).
-- Se l'estensione VS Code mostra warning su `@cspell/dict-it-it`, ricarica la finestra: “Developer: Reload Window”.
+- Se l'estensione VS Code mostra warning su `@cspell/dict-it-it`, ricarica la finestra: â€œDeveloper: Reload Window€.
 - L'hook pre-commit usa `npx -p @cspell/dict-it-it ...` e funziona anche senza `node_modules`, ma l'estensione VS Code richiede comunque `node_modules/` locali.
 ---
 
 ## Benchmark normalizzazione embeddings
 
-È disponibile un micro‑benchmark per validare la normalizzazione degli output degli embedding sia nel retriever sia nell’indicizzazione semantica.
+Ãˆ disponibile un micro-benchmark per validare la normalizzazione degli output degli embedding sia nel retriever sia nell'€™indicizzazione semantica.
 
 - Esecuzione rapida: `make bench`
 - Alternativa diretta: `py -m scripts.bench_embeddings_normalization`
 
-Il benchmark misura (best‑of‑5) diversi formati di output di `embed_texts`:
+Il benchmark misura (best-of-5) diversi formati di output di `embed_texts`:
 - `numpy.ndarray` 2D
 - `list[np.ndarray]`
 - vettore singolo come `deque` o generatore
@@ -233,12 +235,12 @@ Nota: le misure sono indicative e servono come regression check locale.
 py src/tag_onboarding.py --slug <id> [--source drive|local] [--local-path <dir>] [--proceed] [--non-interactive]
 ```
 
-- Default: `--source=drive` — scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.
-- Offline/locale: `--source=local` (opz. `--local-path <dir>`). Se `--local-path` è omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
+- Default: `--source=drive` â€” scarica i PDF dalla cartella RAW su Drive indicata in `config.yaml`.
+- Offline/locale: `--source=local` (opz. `--local-path <dir>`). Se `--local-path` Ã¨ omesso, usa direttamente `output/timmy-kb-<slug>/raw/`.
 
-Output Fase 1 — semantic/tags_raw.csv (path base-relative
+Output Fase 1 â€” semantic/tags_raw.csv (path base-relative
 aw/... + colonne standard).
-Checkpoint HiTL — se confermato (o --proceed), Fase 2 genera README_TAGGING.md e 	ags_reviewed.yaml (stub).
+Checkpoint HiTL â€” se confermato (o --proceed), Fase 2 genera README_TAGGING.md e 	ags_reviewed.yaml (stub).
 
 > Validazione standalone: py src/tag_onboarding.py --slug <id> --validate-only produce semantic/tags_review_validation.json.
 
@@ -309,7 +311,7 @@ Requisito: variabile `GITHUB_TOKEN` presente. Errori: ConfigError se il token ma
 
 ---
 
-## Ingest/CSV — Best Practice
+## Ingest/CSV â€” Best Practice
 
 - Usa esclusivamente le API pubbliche in semantic.api:
  - copy_local_pdfs_to_raw(src_dir, raw_dir, logger) per copiare PDF locali in raw/.
@@ -317,7 +319,7 @@ Requisito: variabile `GITHUB_TOKEN` presente. Errori: ConfigError se il token ma
 - Evita helper locali e import diretti da semantic.tags_extractor fuori da src/semantic/.
 - Un hook pre-commit (no-dup-ingest-csv) previene regressioni su duplicazioni/usi non consentiti.
 
-- Su Windows, se il binario `pre-commit` non è nel PATH del venv, usa Python launcher:
+- Su Windows, se il binario `pre-commit` non Ã¨ nel PATH del venv, usa Python launcher:
   - `py -3.11 -m pre_commit install --hook-type pre-commit --hook-type pre-push`
   - `py -3.11 -m pre_commit run -a`
 
@@ -327,5 +329,5 @@ Requisito: variabile `GITHUB_TOKEN` presente. Errori: ConfigError se il token ma
 
 - La preview richiede Docker; se assente viene saltata.
 - Pubblicazione su GitHub: vengono inclusi solo i `.md` di `book/`.
-- La sandbox/dataset dummy (`timmy-kb-dummy`) è usata nei test automatici per verificare coerenza e idempotenza della pipeline.
+- La sandbox/dataset dummy (`timmy-kb-dummy`) Ã¨ usata nei test automatici per verificare coerenza e idempotenza della pipeline.
 - Per scenari air-gapped usa `tag_onboarding --source=local` e popola `raw/` manualmente.

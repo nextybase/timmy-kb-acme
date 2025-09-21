@@ -56,8 +56,11 @@ def main() -> None:
     # Landing (modulo esterno)
     from ui.landing_slug import render_landing_slug
     from ui.services.drive_runner import build_drive_from_mapping, download_raw_from_drive, emit_readmes_for_raw
+    from ui.tabs.config import render_config_tab as tabs_render_config
+    from ui.tabs.drive import render_drive_tab as tabs_render_drive
     from ui.tabs.finance import render_finance_tab
     from ui.tabs.preview import render_preview_controls
+    from ui.tabs.semantic import render_semantic_tab as tabs_render_semantic
 
     # =========================================================================
     # Helpers (chiudono su import locali)
@@ -908,13 +911,22 @@ def main() -> None:
     # Sidebar Menù → sezioni
     active = cast(str, st.session_state.get("active_section") or "Configurazione")
     if active == "Configurazione":
-        _render_config_tab(log, slug, client_name)
+        try:
+            tabs_render_config(log=log, slug=slug, client_name=client_name)
+        except Exception:
+            _render_config_tab(log, slug, client_name)
     elif active == "Drive":
-        _render_drive_tab(log, slug)
+        try:
+            tabs_render_drive(log=log, slug=slug)
+        except Exception:
+            _render_drive_tab(log, slug)
     elif active == "Finanza":
         render_finance_tab(st=st, log=log, slug=slug)
     elif active == "Semantica":
-        _render_semantic_tab(log, slug)
+        try:
+            tabs_render_semantic(log=log, slug=slug)
+        except Exception:
+            _render_semantic_tab(log, slug)
     elif active == "Preview":
         # Il tab Preview è interamente nel modulo estratto
         pass
