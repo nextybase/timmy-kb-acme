@@ -33,7 +33,7 @@ type-pyright: env-check
 	fi
 
 test: env-check
-	@pytest -ra
+	@$(PY) -m pytest -ra
 
 fmt: env-check
 	@isort src tests
