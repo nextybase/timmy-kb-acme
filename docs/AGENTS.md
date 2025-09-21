@@ -1,7 +1,9 @@
-# AGENT â€” Test
+# AGENT — Test
+
+> Nota: policy comuni in `AGENTS_INDEX.md`; questo file contiene solo override specifici della documentazione.
 
 ## Strategia
-- Piramide: unit â†’ middle/contract â†’ smoke E2E (dummy).
+- Piramide: unit → middle/contract → smoke E2E (dummy).
 - Genera dataset dummy con tool dedicato (no dati reali).
 
 ## Regole

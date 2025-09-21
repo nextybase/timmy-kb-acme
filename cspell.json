@@ -1,22 +1,26 @@
 {
   "version": "0.2",
-  "language": "it,en",
-  "files": ["**/*"],
+  "import": [
+    "@cspell/dict-it-it/cspell-ext.json"
+  ],
+  "language": "en,it",
+  "caseSensitive": false,
+  "files": [
+    "README.md",
+    "docs/**/*.md"
+  ],
   "ignorePaths": [
-    "output/**",
-    "venv/**",
-    ".venv/**",
-    "node_modules/**",
-    "dist/**",
-    "build/**",
-    ".git/**",
-    ".mypy_cache/**",
-    ".pytest_cache/**"
+    ".git",
+    "node_modules",
+    ".venv",
+    ".mypy_cache",
+    ".ruff_cache"
   ],
   "words": [
     "SSoT",
     "HonKit",
     "slug",
+    "slugify",
     "HiTL",
     "Timmy",
     "frontmatter",
@@ -238,6 +242,9 @@
     "precreate",
     "deque",
     "pyrightconfig",
+    "tolist",
+    "functools",
+    "thinc",
     "splitlines",
     "facilitatori",
     "retrocompat",

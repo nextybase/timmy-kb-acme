@@ -1,4 +1,5 @@
 # AGENT — Test
+> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
 
 ## Strategia
 - Piramide: unit → middle/contract → smoke E2E (dummy).

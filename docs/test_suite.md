@@ -1,6 +1,6 @@
-# Suite di test e utente dummy
+# Suite di test e utente dummy (v2.0.0)
 
-Questa suite verifica che la pipeline Timmy KB funzioni end-to-end (pre -> tag -> semantic -> full) e a livello di singoli orchestratori. Per velocitÃ  e riproducibilitÃ  usiamo un utente dummy: una sandbox locale con PDF finti e struttura pronta.
+Questa suite verifica che la pipeline Timmy KB funzioni end-to-end (pre -> tag -> semantic -> full) e a livello di singoli orchestratori. Per velocità e riproducibilità usiamo un utente dummy: una sandbox locale con PDF finti e struttura pronta.
 
 ## Prima di tutto: genera il dummy
 
@@ -30,7 +30,7 @@ py src/tag_onboarding.py --slug dummy --source local --non-interactive --proceed
 # 4) Conversione + enrichment (no preview)
 Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
-# 5) Push (richiede GITHUB_TOKEN) â€” opzionale
+# 5) Push (richiede GITHUB_TOKEN) — opzionale
 # $env:GITHUB_TOKEN="<token>"; py src/onboarding_full.py --slug dummy --non-interactive
 ```
 
@@ -72,7 +72,7 @@ py src/tag_onboarding.py --slug prova --source local --non-interactive --proceed
 # semantic (no preview)
 Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
-# onboarding full (push) â€” richiede GITHUB_TOKEN
+# onboarding full (push) — richiede GITHUB_TOKEN
 # $env:GITHUB_TOKEN="<token>"; py src/onboarding_full.py --slug prova --non-interactive
 ```
 
@@ -146,7 +146,7 @@ pytest tests\test_unit_tags_validator.py::test_validate_missing_keys -ra
 # filtro per nome (substring)
 pytest -k "book_guard and raises" -ra
 
-# output piÃ¹ dettagliato
+# output più dettagliato
 pytest -vv -k test_validate_ok_minimal
 ```
 
@@ -167,7 +167,7 @@ Get-ChildItem .\output -Directory "timmy-kb-*" | Remove-Item -Recurse -Force
 ## Aggiornamenti v2.0.0 (nuovi test)
 
 - `tests/test_tag_onboarding_drive_guard_main.py`:
-  verifica che lâ€™orchestratore `tag_onboarding_main(..., source="drive")` sollevi `ConfigError`
+  verifica che l'orchestratore `tag_onboarding_main(..., source="drive")` sollevi `ConfigError`
   con messaggio esplicito quando le funzioni Drive non sono disponibili (hint: `pip install .[drive]`).
 
 - `tests/test_ui_drive_services_guards.py`:

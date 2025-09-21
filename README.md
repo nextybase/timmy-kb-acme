@@ -82,14 +82,14 @@ output/
 py src/pre_onboarding.py
 py src/tag_onboarding.py
 py - <<PY
-from semantic.api import get_paths, convert_markdown, enrich_frontmatter, write_summary_and_readme
+from semantic.api import convert_markdown, enrich_frontmatter, write_summary_and_readme
 from pipeline.context import ClientContext
 import logging
 slug = 'acme'
 ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
 log = logging.getLogger('semantic.manual')
 convert_markdown(ctx, log, slug=slug)
-base = get_paths(slug)['base']
+base = ctx.base_dir
 from semantic.vocab_loader import load_reviewed_vocab
 vocab = load_reviewed_vocab(base, log)
 enrich_frontmatter(ctx, log, vocab, slug=slug)
@@ -134,10 +134,11 @@ retriever:
 
 Uso a codice (API): passa dalle utilità del retriever per applicare i valori da config con la precedenza giusta:
 ```python
-from src.retriever import QueryParams, with_config_or_budget
+from src.retriever import QueryParams, with_config_or_budget, search
+from pipeline.config_utils import get_client_config
 
 params = QueryParams(db_path=..., project_slug=..., scope=..., query="...", k=8)
-cfg = get_client_config(context)  # dal tuo ClientContext
+cfg = get_client_config(ctx)  # dal tuo ClientContext
 params = with_config_or_budget(params, cfg)
 results = search(params, embeddings_client)
 ```
@@ -234,10 +235,12 @@ Checkpoint HiTL — se confermato (o --proceed), Fase 2 genera README_TAGGING.md
 > Validazione standalone: py src/tag_onboarding.py --slug <id> --validate-only produce semantic/tags_review_validation.json.
 
 Nota sicurezza (CSV): l'emissione di 	ags_raw.csv usa un writer centralizzato con path-safety forte
-(ensure_within_and_resolve + ensure_within) e scrittura atomica. Il writer richiede un ase_dir
-esplicito come perimetro della sandbox cliente; la façade semantic.api.build_tags_csv(...) incapsula
-questo contratto e passa ase_dir dal contesto.
+(ensure_within_and_resolve + ensure_within) e scrittura atomica. Il writer richiede un base_dir
+esplicito come perimetro della sandbox cliente; la facade semantic.api.build_tags_csv(...) incapsula
+questo contratto e passa base_dir dal contesto.
 .
+
+Guardie Drive: in CLI (`tag_onboarding`) viene sollevato ConfigError se scegli `--source=drive` senza extra installati; in UI i servizi Drive sollevano RuntimeError con istruzioni di installazione.
 
 ---
 
@@ -256,6 +259,8 @@ Riferimento rapido alle nuove API additive (v1): vedi la sezione "API Semantiche
 - Generazione `README.md` e `SUMMARY.md` (fallback idempotente).
 - Preview Docker (HonKit): in interattivo chiede se avviare/fermare; in CLI `--no-preview` la salta.
 
+Error handling: ConfigError se `RAW` o i PDF mancano; ConversionError se la conversione non produce Markdown o se la generazione di README/SUMMARY fallisce.
+
 ---
 
 ## 4) Onboarding Full (Push)
@@ -267,6 +272,8 @@ py src/onboarding_full.py --slug <id> [--non-interactive]
 - Preflight `book/`: ammessi solo `.md`; i `.md.fp` sono ignorati.
 - Garantisce `README.md` e `SUMMARY.md`.
 - Push GitHub via `GITHUB_TOKEN` (chiede conferma in interattivo).
+
+Requisito: variabile `GITHUB_TOKEN` presente. Errori: ConfigError se il token manca; PushError su fallimenti di push.
 
 ---
 

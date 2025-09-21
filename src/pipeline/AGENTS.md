@@ -1,4 +1,5 @@
 # AGENT — Pipeline Core (I/O & Safety)
+> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
 
 ## Regole
 - **Path‑safety**: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).

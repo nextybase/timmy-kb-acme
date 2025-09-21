@@ -3,19 +3,19 @@
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 > Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).
-> Avvio interfaccia: `streamlit run onboarding_ui.py` â€” vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Principi
-- SSoT (Single Source of Truth): riusa utility giÃ  presenti; evita duplicazioni.
+- SSoT (Single Source of Truth): riusa utility già presenti; evita duplicazioni.
 - Idempotenza: ogni step deve poter essere rieseguito senza effetti collaterali.
 - Path-safety: nessuna write/copy/rm senza passare da utility di sicurezza.
 - Fail-fast & messaggi chiari: errori espliciti e log azionabili.
-- CompatibilitÃ  cross-platform: Windows/Linux (path, encoding, newline).
+- Compatibilità cross-platform: Windows/Linux (path, encoding, newline).
 - Contratti condivisi: per funzioni che richiedono solo `base_dir/raw_dir/md_dir/slug`, usa `semantic.types.ClientContextProtocol` invece di protocolli locali duplicati.
 - No side-effects a import-time: nessun I/O o lettura di env vars a livello di modulo.
-- Adozione dipendenze: prima di aggiungere una libreria, valuta sicurezza, licenza, maturitÃ , impatto su CI/CD e alternative giÃ  adottate.
+- Adozione dipendenze: prima di aggiungere una libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e alternative già adottate.
 
 ---
 
@@ -29,7 +29,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ## Python style
 - Tipizzazione obbligatoria sui moduli core: annota parametri e ritorni. Usa `Optional[...]` in modo esplicito.
 - Evita `Any` e i wild import; mantieni import espliciti e ordinati.
-- Funzioni corte, una responsabilitÃ ; preferisci pure functions dove possibile.
+- Funzioni corte, una responsabilità; preferisci pure functions dove possibile.
 - No side-effects in import (es. no I/O top-level).
 - Estrai helper privati (SRP) se una funzione supera ~40-50 righe o mescola traversal/rendering/I/O.
 - Aggiorna le docstring delle funzioni core (stile Google o Sphinx).
@@ -37,7 +37,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ---
 
 ## Linting & Formatting
-- Ruff Ã¨ il linter SSoT: replica regole flake8/bandit in Ruff; se manca qualcosa, aggiungi in `pyproject.toml`.
+- Ruff è il linter SSoT: replica regole flake8/bandit in Ruff; se manca qualcosa, aggiungi in `pyproject.toml`.
 - Black e isort: obbligatori per formattazione/ordinamento import.
 
 ## Typing & Pylance
@@ -75,9 +75,9 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
   - Gestisci `--non-interactive` per batch/CI.
 - UI (`onboarding_ui.py`):
   - Gating a due input (slug, nome cliente), poi mostra le schede.
-  - Drive: crea struttura â†’ genera README â†’ download su raw.
-  - Semantica: conversione â†’ arricchimento â†’ README/SUMMARY â†’ preview (opz.).
-  - Usa `_safe_streamlit_rerun()` per compatibilitÃ  con stubs/tipi.
+  - Drive: crea struttura → genera README → download su raw.
+  - Semantica: conversione → arricchimento → README/SUMMARY → preview (opz.).
+  - Usa `_safe_streamlit_rerun()` per compatibilità con stubs/tipi.
 
 ---
 
@@ -93,15 +93,15 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Download RAW: usa la funzione di alto livello esposta nel runner UI.
 - Git: push solo di `.md` in `book/`; ignora `.md.fp` e file binari.
 
-### NovitÃ  v2.0.0 (UI/Drive)
-- UI/servizi devono verificare la disponibilitÃ  degli extra Drive con una guardia esplicita prima di usare funzioni come `get_drive_service` o `create_drive_folder`.
-- Mostrare errori comprensibili allâ€™utente (RuntimeError con hint `pip install .[drive]`) al posto di `TypeError`.
+### Novità v2.0.0 (UI/Drive)
+- UI/servizi devono verificare la disponibilità degli extra Drive con una guardia esplicita prima di usare funzioni come `get_drive_service` o `create_drive_folder`.
+- Mostrare errori comprensibili all’utente (RuntimeError con hint `pip install .[drive]`) al posto di `TypeError`.
 
 ---
 
 ## Test
 - Genera dataset dummy con `py src/tools/gen_dummy_kb.py --slug dummy`.
-- Piramide dei test: unit â†’ middle/contract â†’ smoke E2E (dummy). Niente dipendenze di rete nei test.
+- Piramide dei test: unit → middle/contract → smoke E2E (dummy). Niente dipendenze di rete nei test.
 - Mocka Drive/Git nei test; verifica invarianti su `book/` e presenza di README/SUMMARY.
 
 ---
@@ -115,12 +115,12 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 ## Contributi
 - PR piccole, atomic commit, messaggi chiari (imperativo al presente).
-- Copri con test i cambi di comportamento; mantieni l'asticella della qualitÃ .
+- Copri con test i cambi di comportamento; mantieni l'asticella della qualità.
 
 ---
 
 ## Path-Safety Lettura (Aggiornamento)
 - Letture Markdown/CSV/YAML nei moduli `pipeline/*` e `semantic/*`: usa sempre `pipeline.path_utils.ensure_within_and_resolve(base, p)` per ottenere un path risolto e sicuro prima di leggere.
-- Ãˆ vietato usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.
+- È vietato usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.
 
 ---

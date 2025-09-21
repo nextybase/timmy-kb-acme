@@ -1,4 +1,5 @@
 # AGENT — Semantica (enrichment/frontmatter)
+> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
 
 ## Obiettivi
 - Arricchimento frontmatter coerente e ripetibile (idempotente) sui Markdown in `book/`.

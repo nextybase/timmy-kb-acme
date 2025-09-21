@@ -1,22 +1,22 @@
 # Architettura - Timmy-KB (v2.0.0)
 
-Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi end-to-end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo Ã¨ mantenere coerenza, riuso e sicurezza I/O (path-safety + scritture atomiche).
+Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi end-to-end, struttura del repository e le API interne su cui si fonda la pipeline. Per estendere o modificare il codice, fai sempre riferimento anche a [Developer Guide](developer_guide.md) e alle regole di codifica. L'obiettivo è mantenere coerenza, riuso e sicurezza I/O (path-safety + scritture atomiche).
 
 > Doppio approccio: puoi lavorare da terminale (orchestratori in sequenza) oppure tramite interfaccia (Streamlit).
-> Avvio interfaccia: `streamlit run onboarding_ui.py` â€” vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` — vedi [Guida UI (Streamlit)](guida_ui.md).
 
 ---
 
 ## Panorama generale
 
 - Doppio approccio operativo: orchestratori CLI oppure interfaccia Streamlit (`onboarding_ui.py`) per l'onboarding end-to-end.
-- Obiettivo: trasformare PDF in una KB Markdown AIâ€‘ready, arricchita semanticamente e pronta per anteprima (HonKit/Docker) e push GitHub.
-- Scope RAW: i PDF risiedono localmente in `output/timmy-kb-<slug>/raw/`. Google Drive Ã¨ usato in:
+- Obiettivo: trasformare PDF in una KB Markdown AI‑ready, arricchita semanticamente e pronta per anteprima (HonKit/Docker) e push GitHub.
+- Scope RAW: i PDF risiedono localmente in `output/timmy-kb-<slug>/raw/`. Google Drive è usato in:
   - pre_onboarding per creare la struttura remota e caricare il `config.yaml` di base (preparazione cartelle su Drive per caricamento PDF da parte del cliente);
   - tag_onboarding per scaricare i PDF (default) nella sandbox locale (`raw/`).
 - Separazione ruoli: orchestratori (UX/CLI, prompt, exit codes) vs moduli tecnici (logica pura, niente prompt/exit).
 - Sicurezza & coerenza: `ensure_within` come SSoT per path-safety; scritture atomiche via `safe_write_*`; redazione log centralizzata.
-- Orchestrazione semantica esposta via `semantic.api` (UI e script usano solo la faÃ§ade pubblica). Il vecchio `semantic_onboarding.py` Ã¨ deprecato.
+- Orchestrazione semantica esposta via `semantic.api` (UI e script usano solo la facade pubblica). Il vecchio `semantic_onboarding.py` è deprecato.
 - Testing: suite PyTest con utente dummy generato on-demand, test unitari/middle/smoke end-to-end.
 - Performance: CSV via scrittura streaming + commit atomico; enrichment ottimizzato con un indice inverso per sinonimi/tag.
 
@@ -24,27 +24,31 @@ Questa pagina descrive l'architettura aggiornata del sistema: componenti, flussi
 
 ## Flusso end-to-end (pipeline)
 
-### 1) `pre_onboarding` â€” setup locale + (opz.) struttura Drive
+### 1) `pre_onboarding` — setup locale + (opz.) struttura Drive
 Input: `slug` (+ nome cliente in interattivo). Variabili opzionali: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `YAML_STRUCTURE_FILE`.
 Azioni: crea la sandbox locale (`raw/`, `book/`, `semantic/`, `config/`, `logs/`), risolve lo YAML struttura, (se configurato) crea la struttura su Drive e carica `config.yaml`, aggiorna il config locale con gli ID remoti.
 Output: `output/timmy-kb-<slug>/...` + `config.yaml` aggiornato (inclusi ID Drive).
+Error handling: solleva ConfigError/PipelineError in caso di configurazione mancante o path non sicuri (path‑safety + scritture atomiche).
 
-### 2) `tag_onboarding` â€” tagging semantico (HiTL) con Drive di default
-Input: PDF. Per default, la sorgente Ã¨ Drive (scaricati nella sandbox `raw/`). In alternativa `--source local`.
+### 2) `tag_onboarding` — tagging semantico (HiTL) con Drive di default
+Input: PDF. Per default, la sorgente è Drive (scaricati nella sandbox `raw/`). In alternativa `--source local`.
 Azioni: genera `semantic/tags_raw.csv` (euristiche path/filename, scrittura streaming), checkpoint HiTL che produce `README_TAGGING.md` e `tags_reviewed.yaml` (stub di revisione umana).
 Output: `tags_raw.csv` + `tags_reviewed.yaml` (stub) per la revisione.
+Guardie Drive: in CLI (tag_onboarding) ConfigError se `--source=drive` senza extra; in UI RuntimeError dai servizi Drive con istruzioni di installazione.
 
-### 3) Semantica â€” conversione + enrichment + preview (facade `semantic.api`)
-Input: `raw/` + (opz.) vocabolario canonico su SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) Ã¨ usato per authoring/migrazione.
-Azioni: conversione PDFâ†’Markdown in `book/`; arricchimento frontmatter (tags/aree) tramite vocabolario/sinonimi e indice inverso; generazione `README.md` e `SUMMARY.md` (util di repo o fallback adapter); preview HonKit Docker con stop esplicito.
+### 3) Semantica — conversione + enrichment + preview (facade `semantic.api`)
+Input: `raw/` + (opz.) vocabolario canonico su SQLite (`semantic/tags.db`); lo YAML storico (`tags_reviewed.yaml`) è usato per authoring/migrazione.
+Azioni: conversione PDF→Markdown in `book/`; arricchimento frontmatter (tags/aree) tramite vocabolario/sinonimi e indice inverso; generazione `README.md` e `SUMMARY.md` (util di repo o fallback adapter); preview HonKit Docker con stop esplicito.
 Output: Markdown pronti in `book/`; anteprima su `localhost:<port>`.
+Error handling: ConfigError se RAW o PDF mancano; ConversionError se la conversione non produce Markdown o se la generazione di README/SUMMARY fallisce.
 
-### 4) `onboarding_full` â€” push GitHub
+### 4) `onboarding_full` — push GitHub
 Input: `book/` pronto e coerente.
 Azioni: preflight su `book/` (accetta solo `.md`, ignora `.md.fp`), push su GitHub via `github_utils`.
 Output: commit/push su repo remoto.
+Requisito: variabile `GITHUB_TOKEN` presente; errori: ConfigError se mancante, PushError su fallimenti di push.
 
-> Nota sul vocabolario: `tags_reviewed.yaml` Ã¨ il file di revisione umana (HiTL). Da esso si ottiene/aggiorna il vocabolario canonico su SQLite, consumato in runtime dagli orchestratori e dalla UI (che accede tramite `semantic.api`) per l'arricchimento dei frontmatter.
+> Nota sul vocabolario: `tags_reviewed.yaml` è il file di revisione umana (HiTL). Da esso si ottiene/aggiorna il vocabolario canonico su SQLite, consumato in runtime dagli orchestratori e dalla UI (che accede tramite `semantic.api`) per l'arricchimento dei frontmatter.
 
 ---
 
@@ -52,8 +56,8 @@ Output: commit/push su repo remoto.
 
 - Orchestratori
   - `pre_onboarding.py`: setup locale; opz. Drive structure + upload `config.yaml`.
-  - `tag_onboarding.py`: ingest PDF (default Driveâ†’RAW), `tags_raw.csv`, checkpoint HiTL â†’ `tags_reviewed.yaml`.
-  - Facade `semantic.api`: PDFâ†’MD, enrichment, README/SUMMARY, preview (via adapters), usata da UI/CLI.
+  - `tag_onboarding.py`: ingest PDF (default Drive→RAW), `tags_raw.csv`, checkpoint HiTL → `tags_reviewed.yaml`.
+  - Facade `semantic.api`: PDF→MD, enrichment, README/SUMMARY, preview (via adapters), usata da UI/CLI.
   - `onboarding_full.py`: preflight `book/`, push GitHub.
 
 - Adapter
@@ -70,7 +74,7 @@ Output: commit/push su repo remoto.
   - `semantic/vocab_loader.py`: loader vocabolario canonico da SQLite (`tags.db`).
   - `semantic/tags_io.py`: README_TAGGING e stub revisione da CSV (persistenza su DB).
   - `semantic/api.py`: facade pubblica per la UI.
-  - SSoT DB fail-closed: se `semantic/tags.db` manca il loader solleva `ConfigError` con istruzioni operative; se esiste ma Ã¨ vuoto emette un `warning` esplicito. Lo YAML `tags_reviewed.yaml` resta solo per migrazione/authoring.
+  - SSoT DB fail-closed: se `semantic/tags.db` manca il loader solleva `ConfigError` con istruzioni operative; se esiste ma è vuoto emette un `warning` esplicito. Lo YAML `tags_reviewed.yaml` resta solo per migrazione/authoring.
 
 - Storage (SQLite)
   - `storage/tags_store.py`: schema v1/v2, CRUD, migrazioni e helpers (`ensure_schema_v2`, `migrate_to_v2`, ecc.).
@@ -93,7 +97,7 @@ output/
 - Utente dummy: generato da `py src/tools/gen_dummy_kb.py --slug dummy` per popolare `raw/` con PDF di esempio e asset necessari al flusso.
 - Piramide test: unit (validatori/CSV/guard), middle (contratti CLI), smoke E2E (dummy) per rilevare regressioni di flusso.
 - Isolamento esterni: i test non richiedono credenziali reali; componenti Drive/Git sono mockati o bypassati dove sensato.
-- CompatibilitÃ  OS: suite compatibile Windows/Linux; attenzione a path POSIX nei CSV.
+- Compatibilità OS: suite compatibile Windows/Linux; attenzione a path POSIX nei CSV.
 
 ---
 
@@ -115,18 +119,18 @@ output/
 
 ## Invarianti architetturali
 
-- RAW locale come sorgente runtime: tutto ciÃ² che converte/arricchisce lavora su `output/timmy-kb-<slug>/raw` e `book` locali.
-- Idempotenza: ripetere gli step non crea duplicazioni nÃ© corrompe i file; write atomiche sempre.
+- RAW locale come sorgente runtime: tutto ciò che converte/arricchisce lavora su `output/timmy-kb-<slug>/raw` e `book` locali.
+- Idempotenza: ripetere gli step non crea duplicazioni né corrompe i file; write atomiche sempre.
 - Path-safety: ogni write/copy/delete passa da `ensure_within`.
 - Redazione log: masking automatico per segreti/ID; tracciamento con `run_id`.
 - Coerenza API: funzioni orchestratrici e di servizio con firme consistenti.
-- PortabilitÃ : Windows/Linux supportati (encoding e path gestiti).
+- Portabilità: Windows/Linux supportati (encoding e path gestiti).
 
 ---
 
 ## Versioning
 
-Questa pagina documenta la release 1.9.2. Per il dettaglio delle differenze rispetto alla 1.9.1 consulta CHANGELOG.md (voce 2025-09-19). I punti salienti da tenere a mente:
+Questa pagina documenta la release 2.0.0. Per il dettaglio delle differenze rispetto alla 1.9.1 consulta CHANGELOG.md (voce 2025-09-19). I punti salienti da tenere a mente:
 - Interfaccia Streamlit per l'onboarding (alternativa agli orchestratori CLI), con gating iniziale slug/nome cliente e sblocco progressivo delle tab (Drive -> Semantica).
 - Sezione "Download contenuti su raw/" nel tab Drive (pull PDF da Drive -> locale).
-- Rifiniture di compatibilita' Pylance/Streamlit e hardening path/atomiche.
+- Rifiniture di compatibilità Pylance/Streamlit e hardening path/atomiche.

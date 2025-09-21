@@ -1,4 +1,5 @@
 # AGENT — Onboarding UI (Streamlit)
+> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
 
 ## Flusso vincolante
 1) Configurazione (mapping) → 2) Drive (provisioning + README + **download RAW**) → 3) Semantica (convert/enrich → README/SUMMARY → Preview).

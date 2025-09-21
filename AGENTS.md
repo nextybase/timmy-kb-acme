@@ -1,4 +1,5 @@
 # Istruzioni di progetto (indice)
+> Nota: per le policy comuni degli agent consulta `docs/AGENTS_INDEX.md`. Questo file contiene indicazioni generali di progetto.
 Consulta e segui i documenti in **.codex/**:
 - `.codex/CONSTITUTION.md` – principi NeXT e Probabilismo.
 - `.codex/WORKFLOWS.md` – pipeline UI/CLI.
