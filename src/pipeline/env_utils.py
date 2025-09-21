@@ -81,6 +81,12 @@ def get_env_var(name: str, default: Optional[str] = None, *, required: bool | No
     - Trimma spazi; se vuota, tratta come non impostata.
     - Se ``required`` e non presente, solleva ``KeyError``.
     """
+    try:
+        ensure_dotenv_loaded()
+    except Exception:
+        # Best-effort: il loader è idempotente e può non essere disponibile
+        # (nessuna eccezione propagata)
+        pass
     val = os.environ.get(name)
     if val is None:
         if required:
@@ -100,6 +106,10 @@ def get_bool(name: str, default: bool = False) -> bool:
     Truthy: 1,true,yes,on (case-insensitive). Falsy: 0,false,no,off.
     Se non impostata o non riconosciuta, ritorna ``default``.
     """
+    try:
+        ensure_dotenv_loaded()
+    except Exception:
+        pass
     val = os.environ.get(name)
     if val is None:
         return bool(default)
@@ -113,6 +123,10 @@ def get_bool(name: str, default: bool = False) -> bool:
 
 def get_int(name: str, default: int = 0) -> int:
     """Parsa un intero da ENV; ritorna `default` se mancante o non valido."""
+    try:
+        ensure_dotenv_loaded()
+    except Exception:
+        pass
     val = os.environ.get(name)
     if val is None:
         return int(default)

@@ -105,3 +105,13 @@ repos:
           - .gitleaks.toml
         pass_filenames: false
         stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: cspell
+        name: cspell (docs + README)
+        entry: npx --yes cspell lint --no-progress --config cspell.json
+        language: system
+        pass_filenames: true
+        files: ^(README\.md|docs/.*\.md)$
+        stages: [pre-commit]
