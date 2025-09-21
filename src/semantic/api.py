@@ -112,17 +112,23 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         _call_convert_md(_convert_md, shim, book_dir)
-        mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+        all_mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
+        # Filtra README/SUMMARY dal conteggio e dal ritorno
+        content_mds = [p for p in all_mds if p.name.lower() not in {"readme.md", "summary.md"}]
         try:
-            m.set_artifacts(len(mds))
+            m.set_artifacts(len(content_mds))
         except Exception:
             m.set_artifacts(None)
-    if mds:
-        return mds
+    if content_mds:
+        return content_mds
     local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
     if not local_pdfs:
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
-    raise ConversionError("La conversione non ha prodotto Markdown.", slug=slug, file_path=book_dir)
+    raise ConversionError(
+        "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
+        slug=slug,
+        file_path=book_dir,
+    )
 
 
 def enrich_frontmatter(
