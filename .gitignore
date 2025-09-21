@@ -14,7 +14,8 @@ ENV/
 .ENV/
 
 # === VSCode settings ===
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 
 # === Pytest, Coverage ===
 .cache/
