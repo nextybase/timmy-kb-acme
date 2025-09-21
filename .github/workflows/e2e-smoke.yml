@@ -2,6 +2,10 @@ name: E2E Smoke
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - chore/ci-trigger-e2e-smoke
   schedule:
     - cron: '0 2 * * *'  # nightly at 02:00 UTC
   workflow_dispatch:
