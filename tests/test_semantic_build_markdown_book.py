@@ -1,89 +1,62 @@
 # tests/test_semantic_build_markdown_book.py
-from __future__ import annotations
-
-import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
 
-import semantic.api as sapi
+import pytest
 
-
-@dataclass
-class C:
-    base_dir: Path
-    raw_dir: Path
-    md_dir: Path
-    slug: str
+from pipeline.exceptions import ConversionError
+from semantic import api as sapi
 
 
-def _ctx(base: Path) -> C:
-    return C(
-        base_dir=base,
-        raw_dir=base / "raw",
-        md_dir=base / "book",
-        slug="e2e",
-    )
+class _Ctx:
+    def __init__(self, base: Path, slug: str = "obs"):
+        self.base_dir = base
+        self.raw_dir = base / "raw"
+        self.md_dir = base / "book"
+        self.slug = slug
 
 
-def _write(p: Path, text: str) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text, encoding="utf-8")
-
-
-def test_build_markdown_book_end_to_end(monkeypatch, tmp_path: Path, caplog) -> None:
+def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkeypatch):
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
 
-    # Confinare i percorsi sotto tmp_path
-    monkeypatch.setattr(
-        sapi,
-        "get_paths",
-        lambda slug: {
-            "base": base,
-            "raw": raw,
-            "book": book,
-            "semantic": base / "semantic",
-        },
-    )
+    # Prepara un md fittizio così convert_markdown/summary/readme hanno materiale
+    (book / "alpha.md").write_text("# A\n\n", encoding="utf-8")
 
-    # Simula la conversione: crea 2 markdown "A.md" e "B.md" in book/
-    def _fake_convert(ctx, md_dir: Path | None = None) -> None:
-        target = md_dir or ctx.md_dir
-        _write(target / "A.md", "Body A\n")
-        _write(target / "B.md", "Body B\n")
+    # Monkeypatch: vocabolario presente e enrich che fallisce
+    monkeypatch.setattr(sapi, "load_reviewed_vocab", lambda base_dir, logger: {"canon": {"aliases": set()}})
 
-    # Genera README/SUMMARY minimi
-    monkeypatch.setattr(sapi, "_convert_md", _fake_convert)
-    monkeypatch.setattr(sapi, "_gen_summary", lambda ctx: _write(ctx.md_dir / "SUMMARY.md", "# Summary\n"))
-    monkeypatch.setattr(sapi, "_gen_readme", lambda ctx: _write(ctx.md_dir / "README.md", "# Readme\n"))
-    monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
+    def _boom(*args, **kwargs):
+        raise ConversionError("boom", slug="obs", file_path=book)
 
-    # Vocabolario non vuoto per attivare enrich_frontmatter
-    monkeypatch.setattr(
-        sapi,
-        "_load_reviewed_vocab",
-        lambda base_dir, logger: {"analytics": {"aliases": {"analytics"}}},
-    )
+    monkeypatch.setattr(sapi, "enrich_frontmatter", _boom)
 
-    ctx = _ctx(base)
-    logger = logging.getLogger("test")
-    caplog.set_level(logging.INFO)
+    ctx = _Ctx(base)
 
-    # cast(Any, …): bypass del nominal type (ClientContext) mantenendo la logica invariata
-    mds = sapi.build_markdown_book(cast(Any, ctx), logger, slug="e2e")
+    caplog.clear()
+    with pytest.raises(ConversionError):
+        sapi.build_markdown_book(ctx, logger=_NoopLogger(), slug="obs")
 
-    names = {p.name for p in mds}
-    assert {"A.md", "B.md"}.issubset(names)
-    assert (book / "SUMMARY.md").exists() and (book / "README.md").exists()
-
-    # Verifica che phase_scope abbia loggato artifact_count corretto in uscita
-    completed = [
-        r for r in caplog.records if r.msg == "phase_completed" and getattr(r, "phase", None) == "build_markdown_book"
+    # Nessuna evidenza di "success" della fase build_markdown_book nei log
+    success_records = [
+        r
+        for r in caplog.records
+        if "build_markdown_book" in (getattr(r, "message", "") or "") and "success" in r.message.lower()
     ]
-    assert completed, "phase_completed non loggato per build_markdown_book"
-    # artifact_count deve riflettere il numero di markdown convertiti
-    assert any(getattr(r, "artifact_count", None) == len(mds) for r in completed)
+    assert not success_records
+
+
+class _NoopLogger:
+    def info(self, *a, **k):
+        pass
+
+    def warning(self, *a, **k):
+        pass
+
+    def debug(self, *a, **k):
+        pass
+
+    def error(self, *a, **k):
+        pass

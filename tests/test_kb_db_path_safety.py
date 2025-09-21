@@ -7,7 +7,9 @@ import pytest
 from kb_db import fetch_candidates, insert_chunks
 
 
-def test_db_default_under_data(tmp_path):
+def test_db_default_under_data(tmp_path, monkeypatch):
+    # Isola il CWD: il DB predefinito (data/kb.sqlite) vive sotto tmp_path
+    monkeypatch.chdir(tmp_path)
     # Inserisce una riga usando il DB predefinito (data/kb.sqlite)
     inserted = insert_chunks(
         project_slug="obs",
@@ -25,7 +27,9 @@ def test_db_default_under_data(tmp_path):
     assert cands and cands[0]["content"] == "c1"
 
 
-def test_db_relative_outside_data_raises(tmp_path):
+def test_db_relative_outside_data_raises(tmp_path, monkeypatch):
+    # Isola il CWD per evitare interferenze con il repo
+    monkeypatch.chdir(tmp_path)
     # Un path relativo con traversal non deve essere accettato (ancorato a data/)
     bad = Path("..") / "evil.sqlite"
     with pytest.raises(Exception):

@@ -1,3 +1,4 @@
+# src/pipeline/content_utils.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -39,6 +40,7 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
         ensure_within(base_dir, candidate)
     except ConfigError as e:
         # mappa l'errore di configurazione/path-safety nel dominio content_utils
+        # Nota: qui non abbiamo accesso a ctx; i call-site aggiungono già slug dove serve.
         raise PipelineError(f"Unsafe directory: {candidate}", file_path=str(candidate)) from e
     return Path(candidate).resolve()
 
@@ -89,9 +91,17 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     target = _ensure_safe(ctx.base_dir, target_input)
 
     if not target.exists():
-        raise PipelineError(f"Markdown directory does not exist: {target}")
+        raise PipelineError(
+            f"Markdown directory does not exist: {target}",
+            slug=getattr(ctx, "slug", None),
+            file_path=str(target),
+        )
     if not target.is_dir():
-        raise PipelineError(f"Markdown path is not a directory: {target}")
+        raise PipelineError(
+            f"Markdown path is not a directory: {target}",
+            slug=getattr(ctx, "slug", None),
+            file_path=str(target),
+        )
     return target
 
 
@@ -156,9 +166,17 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
     target.mkdir(parents=True, exist_ok=True)
 
     if not raw_root.exists():
-        raise PipelineError(f"Raw directory does not exist: {raw_root}")
+        raise PipelineError(
+            f"Raw directory does not exist: {raw_root}",
+            slug=getattr(ctx, "slug", None),
+            file_path=str(raw_root),
+        )
     if not raw_root.is_dir():
-        raise PipelineError(f"Raw path is not a directory: {raw_root}")
+        raise PipelineError(
+            f"Raw path is not a directory: {raw_root}",
+            slug=getattr(ctx, "slug", None),
+            file_path=str(raw_root),
+        )
 
     written: set[Path] = set()
 

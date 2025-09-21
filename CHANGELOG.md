@@ -3,6 +3,16 @@
 > Formato: **Keep a Changelog** e **SemVer**
 > Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualità.
 
+---
+
+## [Unreleased]
+### Fixed
+- Telemetria di fase: `build_markdown_book` copre conversione **e** arricchimento; rimosso il “success” prematuro.
+- Messaggi errore: tutte le `PipelineError` di `pipeline.content_utils` includono `slug` e `file_path` anche per “missing/not a directory”.
+- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (secondo run → 0).
+
+---
+
 ### Observability & Benchmarks (A1, B1, B2)
 - **A1 (CI opzionale)**: workflow `bench.yml` (manuale + schedulato) che esegue `scripts/bench_embeddings_normalization.py` con output JSON e riassunto nel Job Summary. Non-gating; artifact pubblicato.
 - **B1 (phase_scope)**: logging strutturato per fasi con campi `phase`, `status` (`start|success|failed`), `duration_ms`, `artifacts` (alias di `artifact_count`), `error` su failure. Back-compat mantenuta.

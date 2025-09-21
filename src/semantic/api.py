@@ -97,9 +97,13 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
     kwargs: Dict[str, Any] = {}
     if "md_dir" in params:
         kwargs["md_dir"] = md_dir
-    bound = sig.bind_partial(ctx, **kwargs)
-    bound.apply_defaults()
-    func(*bound.args, **bound.kwargs)
+    try:
+        bound = sig.bind_partial(ctx, **kwargs)
+        bound.apply_defaults()
+        func(*bound.args, **bound.kwargs)
+    except TypeError as e:
+        # Fail-fast coerente: firma non compatibile o call errata → ConversionError con contesto
+        raise ConversionError(f"convert_md call failed: {e}", slug=ctx.slug, file_path=md_dir) from e
 
 
 def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
@@ -110,6 +114,20 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
+    # Se esistono già Markdown di contenuto, evitiamo di invocare la conversione
+    # per non rimuovere file curati manualmente quando non ci sono PDF.
+    preexisting = [
+        p
+        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        if p.name.lower() not in {"readme.md", "summary.md"}
+    ]
+    if preexisting:
+        with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
+            try:
+                m.set_artifacts(len(preexisting))
+            except Exception:
+                m.set_artifacts(None)
+        return preexisting
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         _call_convert_md(_convert_md, shim, book_dir)
         all_mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
@@ -322,20 +340,25 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
+    # Estensione dello scope: includi vocabolario + enrich dentro la stessa fase
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
+
+        # preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
+        ctx_base = cast(Path, getattr(context, "base_dir", None))
+        base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
+
+        vocab = load_reviewed_vocab(base_dir, logger)
+        if vocab:
+            enrich_frontmatter(context, logger, vocab, slug=slug)
+
         try:
+            # Manteniamo la semantica storica: artifacts = numero di MD di contenuto
             m.set_artifacts(len(mds))
         except Exception:
             m.set_artifacts(None)
 
-    # ✅ preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
-    ctx_base = cast(Path, getattr(context, "base_dir", None))
-    base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
-    vocab = load_reviewed_vocab(base_dir, logger)
-    if vocab:
-        enrich_frontmatter(context, logger, vocab, slug=slug)
     return mds
 
 

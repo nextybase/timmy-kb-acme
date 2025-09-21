@@ -1,3 +1,4 @@
+# src/kb_db.py
 """Archivio SQLite leggero per Timmy KB.
 
 Espone:
@@ -145,7 +146,7 @@ def insert_chunks(
     embeddings: list[list[float]],
     db_path: Optional[Path] = None,
 ) -> int:
-    """Inserisce righe (chunk + embedding). Restituisce il numero di righe inserite.
+    """Inserisce righe (chunk + embedding). Restituisce il numero **effettivo** di righe inserite.
 
     Solleva ValueError se le lunghezze di chunks ed embeddings non coincidono.
     """
@@ -174,6 +175,7 @@ def insert_chunks(
             "  SELECT 1 FROM chunks WHERE project_slug=? AND scope=? AND path=? AND version=? AND content=? LIMIT 1"
             ")"
         )
+        before = int(con.total_changes)
         for project_slug_v, scope_v, path_v, version_v, meta_json_v, content_v, emb_json_v, now_v in rows:
             con.execute(
                 sql,
@@ -195,8 +197,7 @@ def insert_chunks(
                 ),
             )
         con.commit()
-        # Ritorna il numero di chunk richiesti (idempotente: non duplica su re-run)
-        inserted = len(rows)
+        inserted = int(con.total_changes) - before  # numero reale di nuove righe
     LOGGER.info("Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path)
     return inserted
 
