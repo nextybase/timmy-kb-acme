@@ -447,7 +447,7 @@ def _drive_phase(
     with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
         # Le funzioni Drive sono opzionali a import-time; dopo _require_drive_utils()
         # castiamo a callables per soddisfare il type checker.
-        from typing import Callable, Dict, cast
+        from typing import Callable, cast
 
         cdf = cast(Callable[..., str], create_drive_folder)
         client_folder_id = cdf(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
@@ -458,9 +458,9 @@ def _drive_phase(
     )
 
     with phase_scope(logger, stage="drive_create_structure", customer=context.slug) as m:
-        from typing import Callable, Dict, cast
+        from typing import Callable, cast
 
-        cds = cast(Callable[..., Dict[str, str]], create_drive_structure_from_yaml)
+        cds = cast(Callable[..., dict[str, str]], create_drive_structure_from_yaml)
         created_map = cds(service, yaml_structure_file, client_folder_id, redact_logs=redact)
         try:
             m.set_artifacts(len(created_map or {}))

@@ -4,13 +4,12 @@ import re
 
 import pytest
 
+from pipeline.path_utils import to_kebab
+
 hypothesis = pytest.importorskip("hypothesis")
 strategies = pytest.importorskip("hypothesis.strategies")
 given = hypothesis.given
 st = strategies
-import pytest
-
-from pipeline.path_utils import to_kebab
 
 _ALLOWED_RE = re.compile(r"^[a-z0-9-]*$")
 
