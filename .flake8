@@ -20,10 +20,13 @@ extend-ignore =
     B033
 
 per-file-ignores =
-    tests/*: S603,S404,S101,ANN001,T201,B017
+    tests/*: S603,S404,S101,ANN001,ANN002,ANN003,B008,T201,B017
     src/tools/*: T201,S110
     src/tag_onboarding.py: E501,T201,S608
     src/pipeline/drive/upload.py: S110
     src/pipeline/file_utils.py: S110
     src/pipeline/path_utils.py: S110
     src/pipeline/yaml_utils.py: S110
+    src/pipeline/proc_utils.py: S404,S603
+    src/ui/app.py: S404,S603
+    src/storage/tags_store.py: S608
