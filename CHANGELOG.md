@@ -13,6 +13,7 @@
 ## [Unreleased]
 ### Fixed
 - Markdown (content pipeline): intestazioni di categoria ora univoche anche per sottocartelle omonime allo stesso livello, usando una chiave basata sul percorso cumulativo (es. `2023/Q4` e `2024/Q4` emettono entrambe le "Q4").
+ - Indexing/Retriever: esclusi `README.md` e `SUMMARY.md` dall’indicizzazione; filtrati e scartati embedding vuoti per singolo file (log "Embedding vuoti scartati").
 
 ## [2.0.0] - 2025-09-20
 ### Added
