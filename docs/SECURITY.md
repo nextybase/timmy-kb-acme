@@ -14,5 +14,6 @@ Esecuzione locale
 
 Note
 
+- GitHub Actions (Dependabot): aggiornamenti delle action in `.github/workflows` con PR settimanali.
 - Il job analizza sia il manifest `pyproject.toml` (PEP 621) sia `requirements.txt` quando presenti.
 - Per ulteriori dettagli consultare la tab “Actions” → workflow “Security Audit (pip-audit)”.

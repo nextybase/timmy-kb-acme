@@ -6,4 +6,5 @@
 - [ ] Path-safety & scritture **atomiche** dove si scrive su FS
 - [ ] Doc aggiornate (README / docs/*) e CHANGELOG aggiornato se serve
 - [ ] Test/coverage ok (pytest) e type-check ok (mypy)
+- [ ] QA eseguito dal venv: `venv/Script(s)/python -m ruff|black|mypy` oppure attiva il venv e lancia `make qa-safe`
 - [ ] Nessun push forzato, oppure `--force-with-lease` + allow-list + `force_ack`  <!-- governance push -->

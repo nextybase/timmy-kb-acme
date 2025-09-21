@@ -207,6 +207,11 @@ make test        # esegue pytest con l'interprete attivo del venv
 make test-vscode # usa ./venv se non hai attivato il venv
 ```
 
+- Nota venv/PATH: se i binari (ruff/black/mypy) non sono nel PATH della shell, esegui i check tramite l'interprete del venv.
+  - Windows: `venv\Scripts\python.exe -m ruff check src tests && venv\Scripts\python.exe -m black --check src tests && venv\Scripts\python.exe -m mypy src`
+  - Linux/macOS: `venv/bin/python -m ruff check src tests && venv/bin/python -m black --check src tests && venv/bin/python -m mypy src`
+  - Per usare i comandi globali, attiva prima il venv: Windows `venv\Scripts\activate`, Linux/macOS `source venv/bin/activate`.
+
 ### Setup cspell (VS Code)
 
 - Installa le dev dipendenze Node per i dizionari: `npm ci` (o `npm install`).
