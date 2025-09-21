@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type type-pyright test fmt fmt-check ci qa-safe ci-safe bench
+.PHONY: env-check install pre-commit lint type type-pyright test test-vscode fmt fmt-check ci qa-safe ci-safe bench
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -34,6 +34,16 @@ type-pyright: env-check
 
 test: env-check
 	@$(PY) -m pytest -ra
+
+# Esegue pytest usando esplicitamente il venv locale (se presente)
+test-vscode:
+	@if [ -x "venv/Scripts/python.exe" ]; then \
+	  "venv/Scripts/python.exe" -m pytest -ra; \
+	elif [ -n "$$VIRTUAL_ENV" ]; then \
+	  $(PY) -m pytest -ra; \
+	else \
+	  echo "[test-vscode] Nessun venv trovato. Attivalo (./venv) o usa: py -3.11 -m pytest -ra"; exit 1; \
+	fi
 
 fmt: env-check
 	@isort src tests
