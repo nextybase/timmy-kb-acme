@@ -454,7 +454,35 @@ def push_output_to_github(
             "⬇️  Clonazione repo remoto in working dir temporanea",
             extra={"slug": context.slug, "file_path": str(tmp_dir)},
         )
-        _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
+        # Feature toggle shallow clone (default ON)
+        shallow_env = None
+        try:
+            shallow_env = (getattr(context, "env", {}) or {}).get("USE_SHALLOW_CLONE")
+        except Exception:
+            shallow_env = None
+
+        def _to_bool(x: object) -> bool:
+            s = str(x).strip().lower()
+            return s in {"1", "true", "yes", "on"}
+
+        use_shallow = True if shallow_env is None else _to_bool(shallow_env)
+        if shallow_env is None:
+            val = os.environ.get("USE_SHALLOW_CLONE")
+            if val is not None:
+                use_shallow = _to_bool(val)
+
+        if use_shallow:
+            # init + remote add + shallow fetch
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            _run(["git", "init"], cwd=tmp_dir, env=env, op="git init")
+            _run(["git", "remote", "add", "origin", remote_url], cwd=tmp_dir, env=env, op="git remote add")
+            try:
+                _run(["git", "fetch", "origin", default_branch, "--depth=1"], cwd=tmp_dir, env=env, op="git fetch")
+            except CmdError:
+                # Se il branch remoto non esiste ancora, procederemo con checkout locale
+                pass
+        else:
+            _run(["git", "clone", remote_url, str(tmp_dir)], env=env, op="git clone")
 
         # Determina se il branch esiste sul remoto
         exists_remote_branch = True
