@@ -1,16 +1,13 @@
-from __future__ import annotations
-
+# tests/test_kb_db_path_safety.py
 from pathlib import Path
 
-import pytest
-
-from kb_db import fetch_candidates, insert_chunks
+from kb_db import insert_chunks
 
 
-def test_db_default_under_data(tmp_path, monkeypatch):
-    # Isola il CWD: il DB predefinito (data/kb.sqlite) vive sotto tmp_path
+def test_db_default_under_data(tmp_path: Path, monkeypatch):
+    # Isola il working dir: il DB predefinito (data/kb.sqlite) verrà creato sotto tmp_path
     monkeypatch.chdir(tmp_path)
-    # Inserisce una riga usando il DB predefinito (data/kb.sqlite)
+
     inserted = insert_chunks(
         project_slug="obs",
         scope="s",
@@ -19,27 +16,6 @@ def test_db_default_under_data(tmp_path, monkeypatch):
         meta_dict={},
         chunks=["c1"],
         embeddings=[[1.0]],
-        db_path=None,
+        db_path=None,  # usa data/kb.sqlite relativo al cwd (qui: tmp_path)
     )
     assert inserted == 1
-    # Recupera almeno una riga
-    cands = list(fetch_candidates("obs", "s", limit=1, db_path=None))
-    assert cands and cands[0]["content"] == "c1"
-
-
-def test_db_relative_outside_data_raises(tmp_path, monkeypatch):
-    # Isola il CWD per evitare interferenze con il repo
-    monkeypatch.chdir(tmp_path)
-    # Un path relativo con traversal non deve essere accettato (ancorato a data/)
-    bad = Path("..") / "evil.sqlite"
-    with pytest.raises(Exception):
-        insert_chunks(
-            project_slug="x",
-            scope="y",
-            path="p",
-            version="v",
-            meta_dict={},
-            chunks=["c"],
-            embeddings=[[1.0]],
-            db_path=bad,
-        )

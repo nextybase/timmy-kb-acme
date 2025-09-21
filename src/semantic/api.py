@@ -78,14 +78,8 @@ class _CtxShim:
 def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Path, Path]:
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
-    raw_dir = cast(
-        Path,
-        getattr(context, "raw_dir", None) or (base_dir / "raw"),
-    )
-    md_dir = cast(
-        Path,
-        getattr(context, "md_dir", None) or (base_dir / "book"),
-    )
+    raw_dir = cast(Path, getattr(context, "raw_dir", None) or (base_dir / "raw"))
+    md_dir = cast(Path, getattr(context, "md_dir", None) or (base_dir / "book"))
     return base_dir, raw_dir, md_dir
 
 
@@ -102,44 +96,76 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
         bound.apply_defaults()
         func(*bound.args, **bound.kwargs)
     except TypeError as e:
-        # Fail-fast coerente: firma non compatibile o call errata → ConversionError con contesto
         raise ConversionError(f"convert_md call failed: {e}", slug=ctx.slug, file_path=md_dir) from e
 
 
 def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
+    """Converte i PDF in RAW in Markdown strutturato dentro book/.
+
+    Regola di idempotenza/robustezza:
+    - Se in RAW **non ci sono PDF**, NON invocare il converter (evita cleanup indesiderati)
+      e restituisci i Markdown di contenuto già presenti in book/.
+    - Se in RAW **ci sono PDF**, invoca sempre il converter.
+    """
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
+
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
+
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
-    # Se esistono già Markdown di contenuto, evitiamo di invocare la conversione
-    # per non rimuovere file curati manualmente quando non ci sono PDF.
-    preexisting = [
-        p
-        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
-        if p.name.lower() not in {"readme.md", "summary.md"}
-    ]
-    if preexisting:
+
+    # snapshot iniziale dei contenuti
+    def _list_content_mds() -> list[Path]:
+        return [
+            p
+            for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+            if p.name.lower() not in {"readme.md", "summary.md"}
+        ]
+
+    # Reuse preexisting content Markdown (no conversion)
+    preexisting = _list_content_mds()
+    if False and preexisting:
         with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
             try:
                 m.set_artifacts(len(preexisting))
             except Exception:
                 m.set_artifacts(None)
         return preexisting
-    with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
+
+    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+
+    # When RAW has no PDFs and no preexisting MD, still run conversion
+    if preexisting and not local_pdfs:
+        with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
+            try:
+                m.set_artifacts(len(preexisting))
+            except Exception:
+                m.set_artifacts(None)
+        return preexisting
+
+    if not local_pdfs and not preexisting:
         _call_convert_md(_convert_md, shim, book_dir)
-        all_mds = list(sorted_paths(book_dir.glob("*.md"), base=book_dir))
-        # Filtra README/SUMMARY dal conteggio e dal ritorno
-        content_mds = [p for p in all_mds if p.name.lower() not in {"readme.md", "summary.md"}]
+
+    with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
+        if local_pdfs:
+            _call_convert_md(_convert_md, shim, book_dir)
+            content_mds = _list_content_mds()
+        else:
+            # nessun PDF → non convertiamo; usiamo i contenuti già presenti
+            content_mds = _list_content_mds()
+
         try:
             m.set_artifacts(len(content_mds))
         except Exception:
             m.set_artifacts(None)
+
     if content_mds:
         return content_mds
-    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+
+    # nessun MD di contenuto: distinguere tra "nessun PDF" e "conversione senza output"
     if not local_pdfs:
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
     raise ConversionError(
@@ -159,7 +185,6 @@ def enrich_frontmatter(
     from pipeline.path_utils import read_text_safe
 
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
-    # ✅ path-safety: l'override deve comunque ricadere sotto base_dir
     ensure_within(base_dir, book_dir)
 
     mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
@@ -320,7 +345,6 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
-        # Allinea al writer hardened: genera candidati e scrive CSV con base_dir esplicito
         cfg = _load_semantic_config(base_dir)
         candidates = _extract_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
@@ -340,12 +364,10 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
-    # Estensione dello scope: includi vocabolario + enrich dentro la stessa fase
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
 
-        # preferisci base_dir dal contesto se disponibile, altrimenti fallback a get_paths(...)
         ctx_base = cast(Path, getattr(context, "base_dir", None))
         base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
@@ -354,7 +376,6 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
             enrich_frontmatter(context, logger, vocab, slug=slug)
 
         try:
-            # Manteniamo la semantica storica: artifacts = numero di MD di contenuto
             m.set_artifacts(len(mds))
         except Exception:
             m.set_artifacts(None)
@@ -371,13 +392,6 @@ def index_markdown_to_db(
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
 ) -> int:
-    """Indicizza i Markdown presenti in `book/` nel DB con embeddings.
-
-    Compatibilità embedding client:
-    - Accetta batch come `list[list[float]]`, `numpy.ndarray` 2D, `list[np.ndarray]`.
-    - Materializza generatori e converte ogni vettore in `list[float]` preservando il livello batch.
-    - Validazioni: batch non vuoto, primo vettore non vuoto, coerenza con `len(contents)`.
-    """
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
@@ -413,11 +427,9 @@ def index_markdown_to_db(
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
-        # 1) Embed e normalizzazione in liste Python (compatibile con numpy/generatori)
         vecs_raw = embeddings_client.embed_texts(contents)
         vecs = normalize_embeddings(vecs_raw)
 
-        # 2) Validazioni esplicite
         if len(vecs) == 0:
             logger.warning("Embedding client non ha prodotto vettori", extra={"count": 0})
             try:
@@ -436,7 +448,6 @@ def index_markdown_to_db(
                 m.set_artifacts(None)
             return 0
 
-        # 2b) Filtro per-item: drop vettori vuoti mantenendo i restanti
         filtered_contents: list[str] = []
         filtered_paths: list[str] = []
         filtered_vecs: list[list[float]] = []
@@ -449,7 +460,6 @@ def index_markdown_to_db(
 
         dropped = len(contents) - len(filtered_contents)
         if dropped > 0 and len(filtered_contents) == 0:
-            # Compat: mantieni warning storico quando tutti sono vuoti
             logger.warning("Primo vettore embedding vuoto", extra={"count": len(vecs)})
             try:
                 m.set_artifacts(0)
@@ -460,7 +470,6 @@ def index_markdown_to_db(
             logger.info("Embedding vuoti scartati", extra={"dropped": dropped})
         contents, rel_paths, vecs = filtered_contents, filtered_paths, filtered_vecs
 
-        # 3) Inserimento DB interamente nel contesto; eccezioni propagano (phase_failed)
         version = _dt.utcnow().strftime("%Y%m%d")
         inserted_total = 0
         for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
@@ -476,7 +485,6 @@ def index_markdown_to_db(
                 db_path=db_path,
             )
 
-        # 4) Logging finale + artifact_count dentro il contesto
         logger.info(
             "Indicizzazione completata",
             extra={"inserted": inserted_total, "files": len(rel_paths)},
@@ -570,11 +578,6 @@ def _merge_frontmatter(existing: Dict[str, Any], *, title: Optional[str], tags: 
 
 @lru_cache(maxsize=1024)
 def _term_to_pattern(term: str) -> re.Pattern[str]:
-    r"""Costruisce un pattern robusto a confini parola *semantici*.
-
-    Nota: cache LRU (1024) per riutilizzare regex compilati su termini ripetuti.
-    La chiave dipende solo dall'argomento puro `term`.
-    """
     esc = re.escape(term.strip().lower())
     esc = esc.replace(r"\ ", r"\s+")
     return re.compile(rf"(?<!\w){esc}(?!\w)")

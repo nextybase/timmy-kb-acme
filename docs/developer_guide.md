@@ -254,17 +254,18 @@ Pre-commit
 La fase **copre l’intero tratto**: `convert_markdown` → `write_summary_and_readme` → `load_reviewed_vocab` → `enrich_frontmatter`.
 Conseguenze:
 - Il “success” della fase viene emesso **solo** se anche l’enrichment va a buon fine.
-- Il conteggio `artifacts` della fase riflette i **Markdown di contenuto** presenti in `book/` (README/SUMMARY esclusi) **dopo** l’enrichment.
+- Il conteggio `artifacts` riflette i **Markdown di contenuto** presenti in `book/` (README/SUMMARY esclusi) dopo l’enrich.
 
 ### Errori con contesto (`PipelineError`)
-Tutte le eccezioni di validazione/IO in `pipeline.content_utils` devono includere:
-- `slug`: `getattr(ctx, "slug", None)` per tracciabilità cliente.
+Tutte le eccezioni di validazione/IO in `pipeline.content_utils` includono:
+- `slug`: `getattr(ctx, "slug", None)` per tracciabilità.
 - `file_path`: il path coinvolto (es. `target` per `md_dir`, `raw_root` per RAW).
-Questo vale oltre ai casi “unsafe dir” già coperti: anche per “missing directory” e “not a directory”.
 
 ### KPI DB: inserimenti reali
-Le metriche di ingest su SQLite riportano ora il **numero effettivo di nuove righe** inserite:
-- `insert_chunks(...)` usa la differenza di `total_changes` (o equivalente) per evitare sovrastime in re-run idempotenti.
+Le metriche di ingest su SQLite riportano il **numero effettivo di nuove righe** inserite:
+- `insert_chunks(...)` usa la differenza di `total_changes` (o equivalente) per evitare sovrastime su re-run idempotenti.
 - L’aggregato in `index_markdown_to_db(...)` somma gli inserimenti reali per file, ignorando README/SUMMARY.
 
-**Riferimenti**: vedere la sezione “Workflow Semantico” per il dettaglio delle sottoprocedure e i contratti delle funzioni richiamate.
+### Conversione: comportamento ai re-run
+- Se in `raw/` **non ci sono PDF**, la conversione viene **saltata** e si riusano i Markdown già presenti.
+- Se arrivano nuovi PDF, la conversione viene **sempre** eseguita, generando/aggiornando i `.md` coerenti.

@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 ### Fixed
+- Telemetria di fase: `build_markdown_book` copre anche enrichment; rimosso “success” prematuro.
+- Messaggi errore: `PipelineError` in `pipeline.content_utils` arricchite con `slug` e `file_path`.
+- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (re-run → 0).
+- Conversione Markdown: nessuno skip improprio in presenza di nuovi PDF; se `raw/` è vuoto si riusano i `.md` esistenti.
+
+---
+
+## [Unreleased]
+### Fixed
 - Telemetria di fase: `build_markdown_book` copre conversione **e** arricchimento; rimosso il “success” prematuro.
 - Messaggi errore: tutte le `PipelineError` di `pipeline.content_utils` includono `slug` e `file_path` anche per “missing/not a directory”.
 - KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (secondo run → 0).
