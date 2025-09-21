@@ -57,8 +57,18 @@ jobs:
           args: --image,jetbrains/qodana-python-community:2025.2,--save-report,--report-dir,./qodana.report,--results-dir,./.qodana
           upload-result: true
 
+      - name: Check SARIF exists
+        id: sarif
+        run: |
+          if [ -f "./.qodana/qodana.sarif.json" ]; then
+            echo "has_sarif=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sarif=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload SARIF to GitHub Code Scanning
-        if: always()
+        if: always() && steps.sarif.outputs.has_sarif == 'true'
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ./.qodana/qodana.sarif.json
