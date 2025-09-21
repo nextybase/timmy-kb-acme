@@ -21,7 +21,7 @@ jobs:
 
       - name: Download previous Qodana artifact (baseline)
         id: dl
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v11
         with:
           workflow: qodana.yaml
           branch: main
