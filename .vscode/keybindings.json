@@ -1,0 +1,8 @@
+[
+  {
+    "key": "ctrl+alt+t",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Tests: Pytest (venv)",
+    "when": "editorTextFocus"
+  }
+]
