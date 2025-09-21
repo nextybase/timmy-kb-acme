@@ -77,7 +77,9 @@ def render_preview_controls(
                 disabled=(start_preview is None or running),
             ):
                 try:
-                    assert start_preview is not None  # per mypy
+                    if start_preview is None:
+                        st.error("Adapter preview non disponibile")
+                        return
                     cname = start_preview(
                         context,
                         log,
@@ -112,7 +114,9 @@ def render_preview_controls(
                 disabled=(stop_preview is None or not running),
             ):
                 try:
-                    assert stop_preview is not None  # per mypy
+                    if stop_preview is None:
+                        st.error("Adapter preview non disponibile")
+                        return
                     cname = st.session_state.get("sem_preview_container")
                     stop_preview(log, container_name=cname)
                     st.session_state["sem_preview_container"] = None
