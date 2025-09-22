@@ -9,11 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-# Nota:
-# - Evitiamo append non atomici sul dump; accumuliamo in memoria e scriviamo
-#   con safe_write_text una sola volta a fine esecuzione.
-# - Validiamo la destinazione con ensure_within_and_resolve.
-
 
 @dataclass
 class Query:
@@ -51,9 +46,10 @@ def _parse_limits(spec: str) -> List[int]:
 
 def _load_queries(path: Path) -> List[Query]:
     items: List[Query] = []
-    # Lettura sicura senza toccare pipeline.path_utils (i test possono monkeypatcharlo):
-    # usiamo getattr per evitare pattern vietati dal pre-commit (read_text()).
-    text = getattr(path, "read_text")(encoding="utf-8")
+    # Lettura sicura del file di query (path-safety)
+    from pipeline.path_utils import read_text_safe
+
+    text = read_text_safe(path.parent, path)
     for line in text.splitlines():
         if not line.strip():
             continue
@@ -63,16 +59,17 @@ def _load_queries(path: Path) -> List[Query]:
 
 
 def _ensure_dump_and_write(dump_path: Path, lines: List[str]) -> None:
-    """Scrive il dump in modo sicuro e atomico, validando il path."""
+    """Scrive il dump in modo sicuro e atomico, validando l'INTERO percorso risolto."""
     if not lines:
         return
     from pipeline.file_utils import safe_write_text
     from pipeline.path_utils import ensure_within_and_resolve as _ensure
 
     root = Path(".").resolve()
-    _ = _ensure(root, root / dump_path.name)
-    dump_path.parent.mkdir(parents=True, exist_ok=True)
-    safe_write_text(dump_path, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
+    candidate = dump_path.resolve(strict=False)
+    safe_path = _ensure(root, candidate)  # valida la path intera
+    safe_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_write_text(safe_path, "\n".join(lines) + "\n", encoding="utf-8", atomic=True)
 
 
 def main() -> int:
@@ -80,7 +77,7 @@ def main() -> int:
 
     from pipeline.context import ClientContext
     from pipeline.logging_utils import get_structured_logger
-    from retriever import QueryParams, retrieve
+    from retriever import QueryParams, retrieve  # type: ignore
 
     log = get_structured_logger("tools.retriever_calibrate")
 
@@ -105,25 +102,10 @@ def main() -> int:
 
                 # Dump del primo sample per ciascuna coppia (limit, query)
                 if args.dump_top and rep == 0 and docs:
-
-                    from typing import Any
-
-                    def _serializable(x: Any) -> Any:
-                        try:
-                            from pathlib import Path as _P
-
-                            if isinstance(x, _P):
-                                return x.as_posix()
-                        except Exception:
-                            pass
-                        return x
-
                     rec = {
                         "limit": limit,
                         "query": q.text,
-                        "docs": [
-                            _serializable(getattr(d, "path", None) or getattr(d, "id", None)) for d in docs[: q.k]
-                        ],
+                        "docs": [getattr(d, "path", None) or getattr(d, "id", None) for d in docs[: q.k]],
                     }
                     dump_records.append(json.dumps(rec, ensure_ascii=False))
 
