@@ -111,7 +111,10 @@ py src/semantic_onboarding.py --slug acme --non-interactive                  # w
 
 Nota
 - `convert_markdown` fallisce se, dopo la conversione, esistono solo `README.md`/`SUMMARY.md` (nessun contenuto): assicurati che `raw/` contenga PDF.
-- L’indicizzazione esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log: "Embedding vuoti scartati").
+- L'indicizzazione esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log: "Embedding vuoti scartati").
+- Se in `raw/` hai categorie che sono symlink verso sottocartelle reali, la conversione gestisce i link in modo
+  robusto risolvendo i percorsi in sicurezza (path‑safety) ed evitando loop/mismatch; i markdown di categoria vengono
+  generati senza errori.
 
 ### Interfaccia (Streamlit)
 L'alternativa agli orchestratori via terminale Ã¨ l'interfaccia.

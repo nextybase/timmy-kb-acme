@@ -214,8 +214,10 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
     for cat_dir, pdfs in _iter_category_pdfs(raw_root):
         cat_name = cat_dir.name
         md_file = target / f"{cat_name}.md"
+        # Risolvi base categoria per gestire symlink e relativizzare in modo coerente
+        cat_dir_resolved = ensure_within_and_resolve(raw_root, cat_dir)
         safe_pdfs = _filter_safe_pdfs(base, raw_root, pdfs)
-        content = _render_category_markdown(cat_dir, safe_pdfs)
+        content = _render_category_markdown(cat_dir, safe_pdfs, rel_base=cat_dir_resolved)
         safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
         written.add(md_file)
 
@@ -249,7 +251,7 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
     return out
 
 
-def _render_category_markdown(cat_dir: Path, pdfs: list[Path]) -> str:
+def _render_category_markdown(cat_dir: Path, pdfs: list[Path], *, rel_base: Path | None = None) -> str:
     """Costruisce il contenuto Markdown per una singola categoria."""
     lines: list[str] = [f"# {_titleize(cat_dir.name)}"]
     if not pdfs:
@@ -258,7 +260,12 @@ def _render_category_markdown(cat_dir: Path, pdfs: list[Path]) -> str:
 
     emitted_folders: set[tuple[int, str]] = set()
     for pdf in pdfs:
-        rel_parts = list(pdf.relative_to(cat_dir).parts)
+        base = rel_base or cat_dir
+        try:
+            rel_parts = list(pdf.relative_to(base).parts)
+        except Exception:
+            # Fallback robusto: usa solo il nome file se la relativizzazione fallisce
+            rel_parts = [pdf.name]
         folder_parts = rel_parts[:-1]
         _append_folder_headings(lines, folder_parts, emitted=emitted_folders)
         file_stem = Path(rel_parts[-1]).stem

@@ -91,6 +91,9 @@ La façade `semantic.api` espone gli step principali:
   - Altrimenti → `ConfigError` (fail‑fast, con `file_path=raw/`).
 - Se **ci sono PDF** in `raw/` → **invocare sempre** il converter.
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
+- Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono
+  risolti e verificati con path‑safety per evitare loop e mismatch; l’emissione del markdown procede senza eccezioni
+  usando la base risolta per il calcolo dei percorsi relativi.
 
 ---
 

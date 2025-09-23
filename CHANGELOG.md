@@ -8,6 +8,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Conversione strutturata: gestione robusta delle categorie symlink in `convert_files_to_structured_markdown`
+  (percorsi risolti in sicurezza, niente `ValueError` e nessun loop; ordinamenti invariati).
 - Telemetria di fase: `build_markdown_book` copre anche `load_reviewed_vocab` e `enrich_frontmatter`; rimosso il “success” prematuro.
 - Messaggi errore: tutti i `PipelineError` includono `slug` e `file_path` nei punti critici (validazioni/IO).
 - KPI ingest DB: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite (idempotenza: re-run ⇒ 0).
