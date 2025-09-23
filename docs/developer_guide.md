@@ -105,6 +105,7 @@ La facade `semantic.api` espone gli step principali:
 ## Indexer & KPI DB (inserimenti reali)
 - `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run → `0`).
 - L’aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
+ - Inizializzazione schema DB: eseguita una sola volta per run e in modalità fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` è `None` viene usato il percorso predefinito di `get_db_path()`).
 
 ---
 
