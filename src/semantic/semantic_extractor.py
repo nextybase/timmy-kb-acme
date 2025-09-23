@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
 
@@ -45,7 +46,10 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
 
 
 def _term_to_pattern(term: str) -> re.Pattern[str]:
-    esc = re.escape(term.strip().lower())
+    # Normalizza Unicode e rimuove caratteri a larghezza zero che possono spezzare i token
+    t = unicodedata.normalize("NFC", term.strip().lower())
+    t = re.sub(r"[\u200B\u200C\u200D\uFEFF]", "", t)
+    esc = re.escape(t)
     esc = esc.replace(r"\ ", r"\s+")
     # lookaround espliciti per supportare token con punteggiatura (es. c++, ml/ops, data+)
     return re.compile(rf"(?<!\w){esc}(?!\w)")
@@ -113,7 +117,10 @@ def extract_semantic_concepts(
 
                 from pipeline.path_utils import read_text_safe
 
-                content = read_text_safe(context.md_dir, file, encoding="utf-8").lower()
+                content = read_text_safe(context.md_dir, file, encoding="utf-8")
+                # Normalizza Unicode e rimuove caratteri invisibili che rompono i match
+                content = unicodedata.normalize("NFC", content)
+                content = re.sub(r"[\u200B\u200C\u200D\uFEFF]", "", content).lower()
 
                 # registra l'indice del primo pattern che fa match
                 hit_idx: Optional[int] = None
@@ -138,9 +145,28 @@ def extract_semantic_concepts(
     return extracted_data
 
 
+def _enrich_md(context: _Ctx, file: Path, logger: logging.Logger) -> None:
+    """Hook di arricchimento per singolo file (no-op idempotente)."""
+    try:
+        logger.debug("semantic.enrich.noop", extra={"slug": context.slug, "file_path": str(file)})
+    except Exception:
+        pass
+
+
 def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = None) -> None:
     logger = logger or get_structured_logger("semantic.enrich", context=context)
     markdown_files = _list_markdown_files(context, logger=logger)
+
+    # Consentire disattivazione opzionale via attributo del contesto (se presente)
+    try:
+        if hasattr(context, "enrich_enabled") and not bool(getattr(context, "enrich_enabled")):
+            logger.info(
+                "enrich.disabled",
+                extra={"slug": context.slug, "file_path": str(context.md_dir)},
+            )
+            return
+    except Exception:
+        pass
 
     logger.info(
         "📂 Avvio arricchimento semantico su %d file",
@@ -155,7 +181,7 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
                 file.name,
                 extra={"slug": context.slug, "file_path": str(file)},
             )
-            # TODO: step di arricchimento effettivo
+            _enrich_md(context, file, logger)
         except Exception as e:
             logger.warning(
                 "⚠️ Errore durante arricchimento %s: %s",
