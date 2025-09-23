@@ -45,10 +45,16 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
     return files
 
 
-def _term_to_pattern(term: str) -> re.Pattern[str]:
-    # Normalizza Unicode e rimuove caratteri a larghezza zero che possono spezzare i token
-    t = unicodedata.normalize("NFC", term.strip().lower())
+def _normalize_term(term: str) -> str:
+    """Sanitizza una keyword: NFC + rimozione zero‑width; non forza lowercase."""
+    t = unicodedata.normalize("NFC", str(term).strip())
     t = re.sub(r"[\u200B\u200C\u200D\uFEFF]", "", t)
+    return t
+
+
+def _term_to_pattern(term: str) -> re.Pattern[str]:
+    # Allinea la normalizzazione del pattern a quella dei termini/risultati
+    t = _normalize_term(term).lower()
     esc = re.escape(t)
     esc = esc.replace(r"\ ", r"\s+")
     # lookaround espliciti per supportare token con punteggiatura (es. c++, ml/ops, data+)
@@ -79,17 +85,17 @@ def extract_semantic_concepts(
             extracted_data[concept] = []
             continue
 
-        # normalizza/dedup (case-insensitive) mantenendo l'originale
-        seen_lowers: set[str] = set()
-        norm_kws: List[str] = []
+        # normalizza/dedup (case-insensitive) con sanificazione visibile
+        seen_norm_lowers: set[str] = set()
+        norm_kws: List[str] = []  # termini sanificati per output e pattern
         for kw in keywords:
-            k = str(kw).strip()
+            k = _normalize_term(kw)
             if not k:
                 continue
-            kl = k.lower()
-            if kl in seen_lowers:
+            key_ci = k.lower()
+            if key_ci in seen_norm_lowers:
                 continue
-            seen_lowers.add(kl)
+            seen_norm_lowers.add(key_ci)
             norm_kws.append(k)
 
         patterns = [_term_to_pattern(k) for k in norm_kws]
@@ -130,6 +136,7 @@ def extract_semantic_concepts(
                         break
 
                 if hit_idx is not None:
+                    # keyword sanificata (senza char invisibili)
                     matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
             except Exception as e:
                 logger.warning(

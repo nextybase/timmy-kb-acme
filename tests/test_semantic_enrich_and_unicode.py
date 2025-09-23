@@ -61,3 +61,34 @@ def test_enrich_markdown_folder_invokes_hook(monkeypatch: pytest.MonkeyPatch, tm
     se.enrich_markdown_folder(_Ctx(base), logging.getLogger("test.enrich2"))
 
     assert set(called) == {"a.md", "b.md"}
+
+
+def test_extract_semantic_concepts_sanitizes_and_dedups_keywords(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "doc.md").write_text("# Titolo\nQuesto documento contiene il nome autore.\n", encoding="utf-8")
+
+    ctx = _Ctx(base)
+
+    # Mapping con alias che differiscono solo per zero-width
+    mapping = {
+        "persona": [
+            "nome",
+            "no\u200Cme",  # con ZW non visibile
+        ]
+    }
+
+    monkeypatch.setattr(se, "load_semantic_mapping", lambda context, logger=None: mapping)
+
+    out = se.extract_semantic_concepts(ctx)
+    assert set(out.keys()) == {"persona"}
+    items = out["persona"]
+    # Deve esserci un solo match e la keyword deve essere sanificata (nessun zero-width)
+    assert len(items) == 1
+    kw = items[0]["keyword"]
+    assert kw == "nome"
+    # Verifica esplicita: nessun char zero-width
+    assert not any(ord(c) in {0x200B, 0x200C, 0x200D, 0xFEFF} for c in kw)
