@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # src/tag_onboarding.py
 """
@@ -9,7 +9,7 @@ A partire dai PDF grezzi in `raw/`, produce un CSV con i tag suggeriti e
 (dopo conferma) genera gli stub per la revisione semantica.
 
 Punti chiave:
-- Niente `print()` → logging strutturato.
+- Niente `print()` â†’ logging strutturato.
 - Path-safety STRONG con `ensure_within`.
 - Scritture atomiche centralizzate con `safe_write_text`.
 - Integrazione Google Drive supportata (default: Drive).
@@ -92,13 +92,13 @@ __all__ = [
 ]
 
 
-# ───────────────────────────── Helpers UX ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers UX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
 
 
-# ───────────────────────────── Core: ingest locale ───────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Core: ingest locale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def compute_sha256(path: Path) -> str:
     """SHA-256 streaming del file (chunk 8 KiB) con guardie di lettura sicure."""
     h = hashlib.sha256()
@@ -192,7 +192,7 @@ def scan_raw_to_db(
     return stats
 
 
-# ============================= NLP → DB (doc_terms / terms / folder_terms) =======================
+# ============================= NLP â†’ DB (doc_terms / terms / folder_terms) =======================
 def run_nlp_to_db(
     slug: str,
     raw_dir: Path | str,
@@ -418,12 +418,12 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
-    """Valida la struttura già caricata da `tags_reviewed.yaml`."""
+    """Valida la struttura giÃ  caricata da `tags_reviewed.yaml`."""
     errors: list[str] = []
     warnings: list[str] = []
 
     if not isinstance(data, dict):
-        errors.append("Il file YAML non è una mappa (dict) alla radice.")
+        errors.append("Il file YAML non Ã¨ una mappa (dict) alla radice.")
         return {"errors": errors, "warnings": warnings}
 
     for k in ("version", "reviewed_at", "keep_only_listed", "tags"):
@@ -440,7 +440,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     for idx, item in enumerate(data.get("tags", []), start=1):
         ctx = f"tags[{idx}]"
         if not isinstance(item, dict):
-            errors.append(f"{ctx}: elemento non è dict.")
+            errors.append(f"{ctx}: elemento non Ã¨ dict.")
             continue
 
         name = item.get("name")
@@ -476,7 +476,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
         else:
             for si, s in enumerate(syn or [], start=1):
                 if not isinstance(s, str) or not s.strip():
-                    errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
+                    errors.append(f"{ctx}: synonyms[{si}] non Ã¨ stringa valida.")
 
         if "notes" in item:
             errors.append(f"{ctx}: Chiave non supportata: 'notes'. Usa 'note'.")
@@ -485,7 +485,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
             errors.append(f"{ctx}: 'note' deve essere una stringa.")
 
     if data.get("keep_only_listed") and not data.get("tags"):
-        warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
+        warnings.append("keep_only_listed=True ma la lista 'tags' Ã¨ vuota.")
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
@@ -573,6 +573,121 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     return 0
 
 
+def _emit_csv_phase(
+    context: ClientContext,
+    logger: logging.Logger,
+    *,
+    slug: str,
+    raw_dir: Path,
+    semantic_dir: Path,
+) -> Path:
+    """Emette il CSV dei tag grezzi e ritorna il path al file generato."""
+    with phase_scope(logger, stage="emit_csv", customer=context.slug) as m:
+        csv_path: Path = build_tags_csv(context, logger, slug=slug)
+        try:
+            line_count = 0
+            with open_for_read_bytes_selfguard(csv_path) as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    line_count += chunk.count(b"\n")
+            m.set_artifacts(max(0, line_count - 1))
+        except Exception:
+            m.set_artifacts(None)
+    logger.info(
+        "Controlla la lista keyword",
+        extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
+    )
+    return csv_path
+
+
+def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: logging.Logger) -> bool:
+    """Checkpoint HiTL: decide se proseguire con la generazione degli stub."""
+    if non_interactive:
+        if not proceed_after_csv:
+            logger.info("Stop dopo CSV (non-interattivo, no --proceed).")
+            return False
+        return True
+    cont = _prompt(
+        "Controlla e approva i tag generati. " "Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
+    ).lower()
+    if cont != "y":
+        logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
+        return False
+    return True
+
+
+def _emit_stub_phase(semantic_dir: Path, csv_path: Path, logger: logging.Logger, *, context: ClientContext) -> None:
+    with phase_scope(logger, stage="semantic_stub", customer=context.slug) as m:
+        write_tagging_readme(semantic_dir, logger)
+        write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
+        try:
+            m.set_artifacts(2)
+        except Exception:
+            m.set_artifacts(None)
+    logger.info(
+        "Arricchimento semantico completato",
+        extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
+    )
+
+
+def _download_from_drive(
+    context: ClientContext,
+    logger: logging.Logger,
+    *,
+    raw_dir: Path,
+    non_interactive: bool,
+) -> None:
+    """Scarica PDF da Drive in raw/ applicando le stesse guardie e metriche."""
+    cfg = get_client_config(context) or {}
+    drive_raw_folder_id = cfg.get("drive_raw_folder_id")
+    if not drive_raw_folder_id:
+        raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
+    _require_drive_utils()
+    service = get_drive_service(context)
+    with phase_scope(logger, stage="drive_download", customer=context.slug) as m:
+        download_drive_pdfs_to_local(
+            service=service,
+            remote_root_folder_id=drive_raw_folder_id,
+            local_root_dir=raw_dir,
+            progress=not non_interactive,
+            context=context,
+            redact_logs=getattr(context, "redact_logs", False),
+        )
+        try:
+            pdfs = [p for p in raw_dir.rglob("*.pdf") if p.is_file()]
+            m.set_artifacts(len(pdfs))
+        except Exception:
+            m.set_artifacts(None)
+    logger.info("Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
+
+
+def _copy_from_local(
+    logger: logging.Logger,
+    *,
+    raw_dir: Path,
+    local_path: Optional[str],
+    non_interactive: bool,
+    context: ClientContext,
+) -> None:
+    """Copia PDF da sorgente locale in raw/ evitando duplicazioni."""
+    if not local_path:
+        local_path = str(raw_dir)
+        logger.info(
+            "Nessun --local-path fornito: uso RAW del cliente come sorgente",
+            extra={"raw": str(raw_dir), "slug": context.slug},
+        )
+    src_dir = Path(local_path).expanduser().resolve()
+    if src_dir == raw_dir.expanduser().resolve():
+        logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
+        return
+    with phase_scope(logger, stage="local_copy", customer=context.slug) as m:
+        copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
+        try:
+            m.set_artifacts(int(copied))
+        except Exception:
+            m.set_artifacts(None)
+    logger.info("Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
+
+
 def tag_onboarding_main(
     slug: str,
     *,
@@ -614,107 +729,34 @@ def tag_onboarding_main(
 
     logger.info("Avvio tag_onboarding", extra={"source": source})
 
-    # A) DRIVE (default)
+    # Sorgente di PDF
     if source == "drive":
-        cfg = get_client_config(context) or {}
-        drive_raw_folder_id = cfg.get("drive_raw_folder_id")
-        if not drive_raw_folder_id:
-            raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
-        # Verifica disponibilità delle utility Drive prima di procedere
-        _require_drive_utils()
-        service = get_drive_service(context)
-        with phase_scope(logger, stage="drive_download", customer=context.slug) as m:
-            download_drive_pdfs_to_local(
-                service=service,
-                remote_root_folder_id=drive_raw_folder_id,
-                local_root_dir=raw_dir,
-                progress=not non_interactive,
-                context=context,
-                redact_logs=getattr(context, "redact_logs", False),
-            )
-            try:
-                pdfs = [p for p in raw_dir.rglob("*.pdf") if p.is_file()]
-                m.set_artifacts(len(pdfs))
-            except Exception:
-                m.set_artifacts(None)
-        logger.info(
-            "Download da Drive completato",
-            extra={"folder_id": mask_partial(drive_raw_folder_id)},
-        )
+        _download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
 
     # B) LOCALE
     elif source == "local":
-        if not local_path:
-            # UX di default: usa direttamente la sandbox RAW del cliente
-            local_path = str(raw_dir)
-            logger.info(
-                "Nessun --local-path fornito: uso RAW del cliente come sorgente",
-                extra={"raw": str(raw_dir), "slug": context.slug},
-            )
-        src_dir = Path(local_path).expanduser().resolve()
-        if src_dir == raw_dir.expanduser().resolve():
-            logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
-        else:
-            with phase_scope(logger, stage="local_copy", customer=context.slug) as m:
-                # Delegato a semantic.api: evita duplicazioni locali
-                copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
-                try:
-                    m.set_artifacts(int(copied))
-                except Exception:
-                    m.set_artifacts(None)
-            logger.info(
-                "Copia locale completata",
-                extra={"count": copied, "raw_tail": tail_path(raw_dir)},
-            )
+        _copy_from_local(
+            logger,
+            raw_dir=raw_dir,
+            local_path=local_path,
+            non_interactive=non_interactive,
+            context=context,
+        )
     else:
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
     # Fase 1: CSV in semantic/
-    with phase_scope(logger, stage="emit_csv", customer=context.slug) as m:
-        # Delegato a semantic.api: emissione CSV e README tagging
-        csv_path = build_tags_csv(context, logger, slug=slug)
-        # conta righe (escl. header) senza introdurre read_text diretto
-        try:
-            line_count = 0
-            with open_for_read_bytes_selfguard(csv_path) as f:  # bytes-safe
-                for chunk in iter(lambda: f.read(8192), b""):
-                    line_count += chunk.count(b"\n")
-            m.set_artifacts(max(0, line_count - 1))
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "Controlla la lista keyword",
-        extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
-    )
+    csv_path = _emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
 
     # Checkpoint HiTL
-    if non_interactive:
-        if not proceed_after_csv:
-            logger.info("Stop dopo CSV (non-interattivo, no --proceed).")
-            return
-    else:
-        cont = _prompt(
-            "Controlla e approva i tag generati. " "Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
-        ).lower()
-        if cont != "y":
-            logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
-            return
+    if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
+        return
 
     # Fase 2: stub in semantic/
-    with phase_scope(logger, stage="semantic_stub", customer=context.slug) as m:
-        write_tagging_readme(semantic_dir, logger)
-        write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
-        try:
-            m.set_artifacts(2)
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "Arricchimento semantico completato",
-        extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
-    )
+    _emit_stub_phase(semantic_dir, csv_path, logger, context=context)
 
 
-# ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CLI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _resolve_cli_paths(
     context: ClientContextProtocol | ClientContext,
     *,
@@ -764,7 +806,7 @@ def _parse_args() -> argparse.Namespace:
         "--local-path",
         type=str,
         help=(
-            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userà " "direttamente output/<slug>/raw."
+            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userÃ  " "direttamente output/<slug>/raw."
         ),
     )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
@@ -787,7 +829,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--raw-dir", type=str, help="Percorso della cartella raw/")
     p.add_argument("--db", type=str, help="Percorso del DB SQLite (tags.db)")
 
-    # NLP → DB
+    # NLP â†’ DB
     p.add_argument(
         "--nlp",
         action="store_true",
@@ -872,7 +914,7 @@ if __name__ == "__main__":
         log.info("Indicizzazione completata", extra=stats)
         sys.exit(0)
 
-    # NLP → DB
+    # NLP â†’ DB
     if getattr(args, "nlp", False):
         ctx = ClientContext.load(
             slug=slug,

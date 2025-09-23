@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
+from kb_db import init_db as _init_kb_db
 from kb_db import insert_chunks as _insert_chunks
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.content_utils import convert_files_to_structured_markdown as _convert_md
@@ -129,11 +130,23 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             if p.name.lower() not in {"readme.md", "summary.md"}
         ]
 
-    # Lista PDF prima del phase_scope per decisione di flusso
-    local_pdfs = [p for p in raw_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"]
+    # Lista PDF sicura prima del phase_scope per decisione di flusso (path-safety per-file)
+    safe_pdfs: list[Path] = []
+    for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
+        try:
+            if p.is_symlink():
+                logger.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                continue
+            from pipeline.path_utils import ensure_within_and_resolve
+
+            _ = ensure_within_and_resolve(raw_dir, p)
+            safe_pdfs.append(p)
+        except Exception as e:
+            logger.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            continue
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
-        if local_pdfs:
+        if safe_pdfs:
             _call_convert_md(_convert_md, shim, book_dir)
             content_mds = _list_content_mds()
         else:
@@ -145,7 +158,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         except Exception:
             m.set_artifacts(None)
 
-    if local_pdfs:
+    if safe_pdfs:
         # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
         if content_mds:
             return content_mds
@@ -416,6 +429,12 @@ def index_markdown_to_db(
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
+        # Inizializza lo schema una sola volta per run (riduce overhead)
+        try:
+            _init_kb_db(db_path)
+        except Exception:
+            # eventuali errori verranno surfacati a valle via insert; qui non bloccare i log
+            pass
         vecs_raw = embeddings_client.embed_texts(contents)
         vecs = normalize_embeddings(vecs_raw)
 
@@ -472,6 +491,7 @@ def index_markdown_to_db(
                 chunks=[text],
                 embeddings=[list(emb)],
                 db_path=db_path,
+                ensure_schema=False,
             )
 
         logger.info(

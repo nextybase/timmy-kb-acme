@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic.vocab_loader import load_reviewed_vocab
 
@@ -15,14 +14,14 @@ def _mk_workspace(tmp_path: Path) -> Path:
     return base
 
 
-def test_load_vocab_missing_db_raises(tmp_path: Path):
+def test_load_vocab_missing_db_returns_empty_and_logs(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
-    with pytest.raises(ConfigError) as exc:
-        load_reviewed_vocab(base, logger)
-    # Il file_path dell'errore punta al DB atteso
-    assert str(getattr(exc.value, "file_path", "")).endswith(str(Path("semantic") / "tags.db"))
+    vocab = load_reviewed_vocab(base, logger)
+    assert vocab == {}
+    out = capsys.readouterr().out
+    assert "enrichment disabilitato" in out
 
 
 def test_load_vocab_empty_db_warns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):

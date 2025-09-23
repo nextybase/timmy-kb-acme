@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "timmy-kb"
-version = "2.0.0"
+version = "1.9.3"
 requires-python = ">=3.11"
 
 # Dipendenze runtime minime per installare il pacchetto via pip install .

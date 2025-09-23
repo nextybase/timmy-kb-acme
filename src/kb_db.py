@@ -145,6 +145,8 @@ def insert_chunks(
     chunks: list[str],
     embeddings: list[list[float]],
     db_path: Optional[Path] = None,
+    *,
+    ensure_schema: bool = True,
 ) -> int:
     """Inserisce righe (chunk + embedding). Restituisce il numero **effettivo** di righe inserite.
 
@@ -152,7 +154,8 @@ def insert_chunks(
     """
     if len(chunks) != len(embeddings):
         raise ValueError("il numero di chunks non coincide con il numero di embeddings")
-    init_db(db_path)
+    if ensure_schema:
+        init_db(db_path)
     now = datetime.utcnow().isoformat()
     rows = [
         (

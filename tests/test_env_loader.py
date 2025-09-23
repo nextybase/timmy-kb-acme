@@ -45,3 +45,20 @@ def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.Mo
 
     # Assert: value is read from current CWD .env via env getter
     assert envu.get_env_var("ZZZ_DRIVE_ID", required=True) == "abc123"
+
+
+def test_client_context_require_env_missing_raises_configerror(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange: assicurati che le ENV richieste non siano presenti
+    monkeypatch.delenv("SERVICE_ACCOUNT_FILE", raising=False)
+    monkeypatch.delenv("DRIVE_ID", raising=False)
+
+    from pipeline.context import ClientContext
+    from pipeline.exceptions import ConfigError
+
+    # Act & Assert: con require_env=True deve alzare ConfigError chiaro (no KeyError)
+    with pytest.raises(ConfigError) as ei:
+        ClientContext.load(slug="acme", interactive=False, require_env=True, run_id=None)
+    msg = str(ei.value)
+    # Messaggio informativo: cita almeno una delle variabili mancanti
+    assert "Variabili d'ambiente" in msg
+    assert ("SERVICE_ACCOUNT_FILE" in msg) or ("DRIVE_ID" in msg)

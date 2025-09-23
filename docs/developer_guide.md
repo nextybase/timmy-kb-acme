@@ -39,8 +39,9 @@ La façade `semantic.api` espone gli step principali:
    - Genera/aggiorna `SUMMARY.md` e `README.md` in `book/`.
 
 3. **`load_reviewed_vocab(base_dir, logger)`**
-   - Carica (se presente) il vocabolario consolidato da `semantic/`.
-   - Comportamento **fail‑fast** su path o DB non validi (dettagli sotto).
+   - Risolve i percorsi con `ensure_within_and_resolve` su `semantic/` e `tags.db`.
+   - Se `tags.db` è assente: restituisce `{}` e registra un log informativo (enrichment disabilitato).
+   - Lancia `ConfigError` solo per path non sicuri o DB illeggibile/corrotto (vedi sezione dedicata).
 
 4. **`enrich_frontmatter(ctx, logger, vocab, slug)`**
    - Arricchisce il frontmatter dei Markdown con i metadati normalizzati.
@@ -64,7 +65,21 @@ La façade `semantic.api` espone gli step principali:
 - **Eccezioni tipizzate**: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, …) e includere **contesto**.
 - **Contesto obbligatorio**: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
 - **Orchestratori CLI**: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
+- **ClientContext.load(require_env=True)**: se le ENV obbligatorie mancano o sono vuote, solleva immediatamente `ConfigError` con messaggio chiaro (mai `KeyError`).
 - **Logging strutturato**: usare `phase_scope(logger, stage=..., customer=...)` per `phase_started/phase_completed/phase_failed` e valorizzare `artifacts` con numeri **reali**.
+
+---
+
+## Indicizzazione & KPI
+- Inizializzazione schema DB: avviene una sola volta per run (all’avvio di `index_markdown_to_db`), evitando overhead per ogni file.
+- Inserimenti: KPI basati sulle righe realmente inserite; idempotenza mantenuta (re-run ⇒ 0 nuove righe).
+
+---
+
+## CI
+- Concurrency per ref/PR con `cancel-in-progress: true` per evitare job duplicati.
+- Permissions minime (`contents: read`) se non servono scritture.
+- Trigger `push`/`pull_request` limitati ai path rilevanti; schedule notturni invariati.
 
 ---
 

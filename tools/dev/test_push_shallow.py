@@ -31,31 +31,42 @@ def main() -> int:
     import sys as _sys
 
     github_mod = types.ModuleType("github")
+
     class _Github:
         def __init__(self, *a, **k):
             pass
+
         def get_user(self):
             class _U:  # pragma: no cover - not used directly
                 pass
+
             return _U()
+
     github_mod.Github = _Github
     github_exc_mod = types.ModuleType("github.GithubException")
+
     class _GithubException(Exception):
         pass
+
     github_exc_mod.GithubException = _GithubException
     _sys.modules["github"] = github_mod
     _sys.modules["github.GithubException"] = github_exc_mod
 
     # Patch pipeline.env_utils to add missing helpers expected by github_utils
     import importlib
+
     real_env = importlib.import_module("pipeline.env_utils")
     if not hasattr(real_env, "get_force_allowed_branches"):
+
         def _get_force_allowed_branches(context: Any) -> list[str]:
             return []
+
         setattr(real_env, "get_force_allowed_branches", _get_force_allowed_branches)
     if not hasattr(real_env, "is_branch_allowed_for_force"):
+
         def _is_branch_allowed_for_force(branch: str, context: Any, allow_if_unset: bool = True) -> bool:
             return True
+
         setattr(real_env, "is_branch_allowed_for_force", _is_branch_allowed_for_force)
 
     import pipeline.github_utils as gu

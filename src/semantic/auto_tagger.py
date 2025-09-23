@@ -30,6 +30,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -116,7 +117,18 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
     """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
     if not raw_dir.exists():
         return
-    yield from sorted(raw_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+    logger = logging.getLogger("semantic.auto_tagger")
+    for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
+        try:
+            # Scarta symlink a priori per evitare loop/traversal
+            if p.is_symlink():
+                logger.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                continue
+            safe_p = ensure_within_and_resolve(raw_dir, p)
+        except Exception as e:
+            logger.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            continue
+        yield safe_p
 
 
 # ------------------------------ API principali ------------------------------- #

@@ -1,13 +1,14 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import quote
 
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.path_utils import ensure_within  # SSoT path-safety
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve  # SSoT path-safety
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
 
 __all__ = [
@@ -47,7 +48,28 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 
 # ---- Helpers estratti per leggibilità --------------------------------------
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
+    # Nota: filtrato a valle in _filter_safe_pdfs (per base/raw_root)
     return sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+
+
+def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path]) -> list[Path]:
+    """Applica path-safety per-file e scarta symlink o path fuori perimetro.
+
+    Mantiene l'ordinamento ricevuto.
+    """
+    log = logging.getLogger("pipeline.content_utils")
+    out: list[Path] = []
+    for p in pdfs:
+        try:
+            if p.is_symlink():
+                log.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                continue
+            safe_p = ensure_within_and_resolve(raw_root, p)
+        except Exception as e:  # pragma: no cover (error path)
+            log.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            continue
+        out.append(safe_p)
+    return out
 
 
 def _append_folder_headings(lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]) -> None:
@@ -181,7 +203,7 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
     written: set[Path] = set()
 
     # Gestione PDF presenti direttamente in raw/ (root): file aggregato con nome coerente
-    root_pdfs = sorted((p for p in raw_root.glob("*.pdf")), key=lambda p: p.name.lower())
+    root_pdfs = _filter_safe_pdfs(base, raw_root, sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()))
     if root_pdfs:
         root_md = target / f"{raw_root.name}.md"
         content = _render_category_markdown(raw_root, root_pdfs)
@@ -192,7 +214,8 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
     for cat_dir, pdfs in _iter_category_pdfs(raw_root):
         cat_name = cat_dir.name
         md_file = target / f"{cat_name}.md"
-        content = _render_category_markdown(cat_dir, pdfs)
+        safe_pdfs = _filter_safe_pdfs(base, raw_root, pdfs)
+        content = _render_category_markdown(cat_dir, safe_pdfs)
         safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
         written.add(md_file)
 

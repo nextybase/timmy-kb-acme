@@ -1,4 +1,4 @@
-﻿# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/vocab_loader.py
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
 # Import lazy del loader reale; se assente, enrichment resta opzionale.
 try:  # pragma: no cover - dipende dall'ambiente
-    from storage.tags_store import load_tags_reviewed as _load_tags_reviewed  # type: ignore
+    from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
 except Exception:  # pragma: no cover
-    _load_tags_reviewed = None  # type: ignore
+    _load_tags_reviewed = None
 
 
 def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
@@ -98,8 +98,8 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
     if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
         for row in data:
             if isinstance(row, Mapping):
-                canon = row.get("canonical") or row.get("canon") or row.get("c")
-                alias = row.get("alias") or row.get("a")
+                canon = str(row.get("canonical") or row.get("canon") or row.get("c") or "")
+                alias = str(row.get("alias") or row.get("a") or "")
                 if isinstance(canon, (str, bytes)) and isinstance(alias, (str, bytes)):
                     out[str(canon)].add(str(alias))
             elif isinstance(row, (tuple, list)) and len(row) >= 2:
@@ -134,24 +134,25 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
 
     Regole:
-    - **DB mancante → ConfigError** (fail-fast con file_path al percorso atteso), tollerato in workspace output/.
-    - Errori path/open DB → ConfigError.
+    - Se `tags.db` non esiste: restituisce `{}` e registra un log informativo (enrichment disabilitato).
+    - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
     - Dati letti adattati a: {canonical: {"aliases": set[str]}}.
     """
     base_dir = Path(base_dir)
-    sem_dir = _semantic_dir(base_dir)
+    # Path-safety forte con risoluzione reale
+    sem_dir = ppath.ensure_within_and_resolve(base_dir, _semantic_dir(base_dir))
+    db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
 
-    # Path-safety: semantic deve stare sotto base_dir
-    ppath.ensure_within(base_dir, sem_dir)
-
-    db_path = sem_dir / "tags.db"
-
-    # Policy: in workspace di output l'assenza del DB è tollerata (ritorna {})
+    # DB assente: enrichment disabilitato (nessuna eccezione)
     if not db_path.exists():
-        parts = {p.lower() for p in base_dir.parts}
-        if "output" in parts:
-            return {}
-        raise ConfigError("DB del vocabolario mancante", file_path=db_path)
+        try:
+            logger.info(
+                "Vocabolario DB assente: enrichment disabilitato",
+                extra={"file_path": str(db_path)},
+            )
+        except Exception:
+            pass
+        return {}
 
     try:
         con = sqlite3.connect(str(db_path))

@@ -2,7 +2,18 @@ name: Import Smoke
 
 on:
   pull_request:
+    paths:
+      - 'src/**'
+      - 'requirements*.txt'
+      - '.github/workflows/import-smoke.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-smoke-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   import-smoke:

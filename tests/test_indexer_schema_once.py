@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import time
+from pathlib import Path
+from typing import List
+
+import pytest
+
+import semantic.api as sapi
+
+
+class _Ctx:
+    def __init__(self, base: Path, slug: str = "proj"):
+        self.base_dir = base
+        self.raw_dir = base / "raw"
+        self.md_dir = base / "book"
+        self.slug = slug
+
+
+class _NoopLogger:
+    def info(self, *a, **k):
+        pass
+
+    def warning(self, *a, **k):
+        pass
+
+    def debug(self, *a, **k):
+        pass
+
+    def error(self, *a, **k):
+        pass
+
+
+class _EmbClient:
+    def embed_texts(self, texts: List[str]) -> List[List[float]]:  # noqa: D401
+        return [[1.0, 0.0, 0.5] for _ in texts]
+
+
+def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    # Due file di contenuto (no README/SUMMARY)
+    (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
+    (book / "b.md").write_text("# B\nBody\n", encoding="utf-8")
+
+    ctx = _Ctx(base)
+    logger = _NoopLogger()
+    db_path = tmp_path / "kb.sqlite"
+
+    import kb_db as kdb
+
+    calls = {"init": 0}
+    real_init = kdb.init_db
+
+    def _counting_init(pth):
+        calls["init"] += 1
+        return real_init(pth)
+
+    monkeypatch.setattr(kdb, "init_db", _counting_init, raising=True)
+    # Patch anche il riferimento importato in semantic.api
+    monkeypatch.setattr(sapi, "_init_kb_db", _counting_init, raising=True)
+
+    inserted = sapi.index_markdown_to_db(
+        ctx, logger, slug=ctx.slug, scope="book", embeddings_client=_EmbClient(), db_path=db_path
+    )
+
+    assert inserted >= 2  # almeno due contenuti indicizzati
+    assert calls["init"] == 1
+
+
+def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    for i in range(5):
+        (book / f"f{i}.md").write_text(f"# F{i}\nBody\n", encoding="utf-8")
+
+    ctx = _Ctx(base)
+    logger = _NoopLogger()
+    db_path = tmp_path / "kb2.sqlite"
+
+    import kb_db as kdb
+
+    real_init = kdb.init_db
+
+    def _slow_init(pth):
+        time.sleep(0.02)
+        return real_init(pth)
+
+    monkeypatch.setattr(kdb, "init_db", _slow_init, raising=True)
+    monkeypatch.setattr(sapi, "_init_kb_db", _slow_init, raising=True)
+
+    t0 = time.perf_counter()
+    _ = sapi.index_markdown_to_db(
+        ctx, logger, slug=ctx.slug, scope="book", embeddings_client=_EmbClient(), db_path=db_path
+    )
+    dt = time.perf_counter() - t0
+
+    # Con init chiamato una sola volta, la durata deve essere < ~0.25s (ambiente CI variabile)
+    assert dt < 0.25

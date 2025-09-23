@@ -298,10 +298,21 @@ class ClientContext:
         """
         env_vars: Dict[str, Any] = {}
 
-        # Richieste (se require_env=True)
+        # Richieste (se require_env=True): mappare mancanze in ConfigError chiaro (no KeyError propagati)
         if require_env:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", required=True)
-            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", required=True)
+            missing: list[str] = []
+            saf = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
+            did = get_env_var("DRIVE_ID", default=None)
+            if not (saf and str(saf).strip()):
+                missing.append("SERVICE_ACCOUNT_FILE")
+            if not (did and str(did).strip()):
+                missing.append("DRIVE_ID")
+            if missing:
+                from .exceptions import ConfigError  # import locale per evitare effetti collaterali
+
+                raise ConfigError("Variabili d'ambiente mancanti o vuote: " + ", ".join(missing))
+            env_vars["SERVICE_ACCOUNT_FILE"] = saf
+            env_vars["DRIVE_ID"] = did
         else:
             env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
             env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)

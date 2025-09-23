@@ -1,6 +1,6 @@
 {
   "name": "timmy-kb-acme",
-  "version": "1.0.0",
+  "version": "1.9.3",
   "description": "[![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml)",
   "main": "index.js",
   "directories": {

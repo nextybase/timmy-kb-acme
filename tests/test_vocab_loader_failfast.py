@@ -52,11 +52,11 @@ def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: Any):
     base = tmp_path / "output" / "timmy-kb-acme"
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 
-    # ensure_within che fallisce per simulare path traversal
+    # ensure_within_and_resolve che fallisce per simulare path traversal/symlink malevolo
     def _unsafe(*_a, **_k):
         raise ConfigError("unsafe path", file_path=str(base / "semantic"))
 
-    monkeypatch.setattr("pipeline.path_utils.ensure_within", _unsafe, raising=True)
+    monkeypatch.setattr("pipeline.path_utils.ensure_within_and_resolve", _unsafe, raising=True)
 
     with pytest.raises(ConfigError):
         _ = vl.load_reviewed_vocab(base, _NoopLogger())

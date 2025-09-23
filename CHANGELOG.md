@@ -293,4 +293,26 @@
 - Struttura modulare `src/pipeline/*`; orchestratori `pre_onboarding`, `tag_onboarding`, `onboarding_full`.
 
 ### Changed
+
+## 1.9.3 — 2025-09-23
+
+Fix
+- ENV hardening: nessun KeyError propagato; ConfigError con messaggi chiari e orchestratori con exit code deterministici.
+- Vocabolario: assenza semantic/tags.db -> {} con log informativo; errori solo per path non sicuri o DB illeggibile.
+- Listing PDF: validazione per-file e skip sicuro di symlink/traversal con warning strutturati; conversione fallisce se restano solo README.md/SUMMARY.md.
+
+Improvements
+- Indexer: schema inizializzato una sola volta per run; rimosso overhead nei loop mantenendo idempotenza e KPI basati su inserimenti reali.
+- Orchestratori: tag_onboarding_main snellito in helper privati (download/copy, CSV, checkpoint, stub) senza modifiche di API/UX.
+
+Docs
+- Developer Guide aggiornato: policy “assenza DB ⇒ {}” per il vocabolario; path-safety per-file sui PDF; nota su initializzazione schema Indexer.
+
+CI
+- E2E/CI/import-smoke/bench: abilitata concurrency per ref/PR; permissions minime (contents: read); trigger push/pull_request limitati ai path rilevanti; schedule notturni invariati.
+
+Note
+- Nessun breaking change.
+
+
 - Output standard: `output/timmy-kb-<slug>/` (raw, book, semantic, config, logs); documentazione completa iniziale.

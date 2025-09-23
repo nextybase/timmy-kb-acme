@@ -2,9 +2,32 @@ name: E2E Smoke
 
 on:
   pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/smoke_e2e.py'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - '.github/workflows/e2e-smoke.yml'
+      - 'semantic.json'
+  push:
+    paths:
+      - 'src/**'
+      - 'scripts/smoke_e2e.py'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - '.github/workflows/e2e-smoke.yml'
+      - 'semantic.json'
   schedule:
     - cron: '0 2 * * *'  # nightly at 02:00 UTC
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # deduplica per ref/PR per evitare code di job duplicati
+  group: e2e-smoke-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e-smoke:
@@ -16,6 +39,16 @@ jobs:
       SKIP_GITHUB_PUSH: '1'
       # REPO_ROOT_DIR: ${{ github.workspace }}/.smoke-${{ github.run_id }}
     steps:
+      - name: Preflight (scheduled secrets availability)
+        if: github.event_name == 'schedule'
+        shell: bash
+        run: |
+          echo "Checking token availability on scheduled runs"
+          if [ -n "${GITHUB_TOKEN}" ]; then
+            echo "GITHUB_TOKEN is present (automatic)"
+          else
+            echo "GITHUB_TOKEN is missing" >&2
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -48,9 +81,9 @@ jobs:
           name: e2e-smoke-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
-            ${{ env.REPO_ROOT_DIR }}/logs
-            ${{ env.REPO_ROOT_DIR }}/semantic
-            ${{ env.REPO_ROOT_DIR }}/raw
+            ${{ runner.temp }}/smoke-${{ github.run_id }}/logs
+            ${{ runner.temp }}/smoke-${{ github.run_id }}/semantic
+            ${{ runner.temp }}/smoke-${{ github.run_id }}/raw
 
       - name: Publish smoke summary
         if: always()

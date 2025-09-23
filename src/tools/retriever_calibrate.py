@@ -77,7 +77,7 @@ def main() -> int:
 
     from pipeline.context import ClientContext
     from pipeline.logging_utils import get_structured_logger
-    from retriever import QueryParams, retrieve  # type: ignore
+    from retriever import QueryParams, retrieve
 
     log = get_structured_logger("tools.retriever_calibrate")
 
