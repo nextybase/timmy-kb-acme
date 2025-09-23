@@ -201,7 +201,7 @@ def _score_candidates(
                     orig_seq = list(raw_vec)
             except Exception:
                 orig_seq = None
-        if orig_seq is not None and v:
+        if False and orig_seq is not None and v:
             all_numeric = True
             count = 0
             for val in orig_seq:

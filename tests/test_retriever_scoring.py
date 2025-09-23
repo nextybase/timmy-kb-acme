@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
+import numpy as np
+
 import src.retriever as r
 from src.retriever import QueryParams, search
 
@@ -64,6 +66,29 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
     )
     out_top2 = search(params_top2, embeddings)
     assert [x["content"] for x in out_top2] == ["A", "B"]
+
+
+def test_search_accepts_nested_numpy_embedding(monkeypatch) -> None:
+    embeddings = EmbedOne([1.0, 0.0, 0.0])
+    # embedding annidato: [np.array([...])]
+    nested = [np.array([1.0, 0.0, 0.0], dtype=float)]
+    cands = [
+        _cand("nested-ok", nested),
+        _cand("worse", [0.0, 1.0, 0.0]),
+    ]
+
+    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
+
+    params = QueryParams(
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="q",
+        k=1,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
+    )
+    out = search(params, embeddings)
+    assert [x["content"] for x in out] == ["nested-ok"]
 
 
 def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
