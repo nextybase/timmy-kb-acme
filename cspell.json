@@ -72,19 +72,14 @@
     "/```[\\s\\S]*?```/",
     "/[A-Za-z]:\\\\[^\\s]+/"
   ],
-  "languageSettings": [
-    { "languageId": "markdown", "locale": "it" },
-    { "languageId": "plaintext", "locale": "it" }
-  ],
+  "languageSettings": [],
   "overrides": [
     {
       "filename": "src/**",
-      "locale": "en",
       "words": ["pytest", "mypy", "pyright", "numpy"]
     },
     {
       "filename": "tests/**",
-      "locale": "en",
       "words": ["pytest", "monkeypatch", "parametrize"]
     }
   ]
