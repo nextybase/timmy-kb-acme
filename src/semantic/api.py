@@ -132,10 +132,12 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
 
     # Lista PDF sicura prima del phase_scope per decisione di flusso (path-safety per-file)
     safe_pdfs: list[Path] = []
+    discarded_unsafe: int = 0
     for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
         try:
             if p.is_symlink():
                 logger.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                discarded_unsafe += 1
                 continue
             from pipeline.path_utils import ensure_within_and_resolve
 
@@ -143,6 +145,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             safe_pdfs.append(p)
         except Exception as e:
             logger.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            discarded_unsafe += 1
             continue
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
@@ -168,9 +171,20 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             file_path=book_dir,
         )
     else:
-        # Caso senza PDF: ritorna contenuti preesistenti, se presenti; altrimenti fail-fast
+        # Caso senza PDF validi
         if content_mds:
             return content_mds
+        if discarded_unsafe > 0:
+            # RAW conteneva PDF ma tutti scartati per path-safety/symlink
+            raise ConfigError(
+                (
+                    "Trovati solo PDF non sicuri/fuori perimetro in RAW. "
+                    "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
+                ),
+                slug=slug,
+                file_path=raw_dir,
+            )
+        # RAW vuota (nessun PDF trovato)
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
 
 

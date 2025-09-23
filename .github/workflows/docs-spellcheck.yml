@@ -1,0 +1,57 @@
+name: Docs Spellcheck (cSpell)
+
+on:
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/workflows/docs-spellcheck.yml'
+      - 'cspell.json'
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/workflows/docs-spellcheck.yml'
+      - 'cspell.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cspell-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spellcheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-gating
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install cspell and dictionaries
+        run: |
+          npm -g i cspell @cspell/dict-it-it
+          cspell --version
+      - name: Run cspell on docs and README
+        run: |
+          cspell --no-progress --show-context --relative README.md docs || true
+      - name: Check Markdown links/anchors (non-gating)
+        run: |
+          python - << 'PY'
+          import sys, subprocess
+          try:
+              subprocess.check_call([sys.executable, 'scripts/ci/check_md_links.py'])
+          except subprocess.CalledProcessError:
+              # non-gating
+              pass
+          PY
+      - name: Summarize cspell output
+        if: always()
+        shell: bash
+        run: |
+          echo "cSpell completed (non-gating). Review warnings above if present." >> "$GITHUB_STEP_SUMMARY"

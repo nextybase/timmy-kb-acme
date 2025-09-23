@@ -121,7 +121,13 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, Set[str]]]:
     """
     if _load_tags_reviewed is None:
         return {}
-    raw = _load_tags_reviewed(str(db_path))  # accetta str/Path
+    try:
+        raw = _load_tags_reviewed(str(db_path))  # accetta str/Path
+    except sqlite3.Error as exc:  # errori SQLite (query/cursor)
+        raise ConfigError(
+            f"Errore lettura DB del vocabolario: {exc}",
+            file_path=db_path,
+        ) from exc
     return _to_vocab(raw)
 
 

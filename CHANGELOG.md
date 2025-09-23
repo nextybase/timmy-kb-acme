@@ -5,6 +5,27 @@
 
 ---
 
+## [1.9.4] - 2025-09-23
+
+### Fixed
+- Vocab loader: qualsiasi errore SQLite durante apertura/query/cursor è ora tipizzato come `ConfigError` con `file_path`.
+- Conversione: caso “solo PDF non sicuri/symlink/fuori perimetro” solleva `ConfigError` con messaggio esplicito e hint operativo.
+- Documenti: rimosso mojibake/encoding rotto in README e Developer Guide; correzioni ortografiche e terminologiche.
+
+### Improvements
+- Path-safety: conteggio e logging espliciti dei PDF scartati per path-safety/symlink.
+- Retriever: documentata gestione embedding annidati/filtraggio vuoti nei KPI DB (nessun cambio API).
+
+### Docs
+- Developer Guide: sezioni aggiornate su fail-fast, path-safety, fase `build_markdown_book`, SQLite → `ConfigError`.
+- User Guide/README: Troubleshooting con messaggio per “solo PDF non sicuri/fuori perimetro”.
+- cSpell: configurazione ripulita (locale/overrides) e dizionario allineato alla terminologia.
+
+### CI
+- Preparata configurazione cSpell per uso in editor/CI (non-gating); nessun nuovo job obbligatorio.
+
+---
+
 ## [Unreleased]
 
 ### Fixed
