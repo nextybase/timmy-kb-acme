@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
+from kb_db import get_db_path as _get_db_path
 from kb_db import init_db as _init_kb_db
 from kb_db import insert_chunks as _insert_chunks
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
@@ -243,11 +244,27 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
             _gen_summary(shim)
             logger.info("SUMMARY.md scritto")
         except Exception as e:  # pragma: no cover
+            try:
+                summary_path = book_dir / "SUMMARY.md"
+            except Exception:
+                summary_path = book_dir
+            logger.exception(
+                "Generazione SUMMARY.md fallita",
+                extra={"file_path": str(summary_path), "slug": slug},
+            )
             errors.append(f"summary: {e}")
         try:
             _gen_readme(shim)
             logger.info("README.md scritto")
         except Exception as e:  # pragma: no cover
+            try:
+                readme_path = book_dir / "README.md"
+            except Exception:
+                readme_path = book_dir
+            logger.exception(
+                "Generazione README.md fallita",
+                extra={"file_path": str(readme_path), "slug": slug},
+            )
             errors.append(f"readme: {e}")
         if errors:
             raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
@@ -443,12 +460,19 @@ def index_markdown_to_db(
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
-        # Inizializza lo schema una sola volta per run (riduce overhead)
+        # Inizializza lo schema una sola volta per run (riduce overhead) con fail-fast tipizzato
         try:
             _init_kb_db(db_path)
-        except Exception:
-            # eventuali errori verranno surfacati a valle via insert; qui non bloccare i log
-            pass
+        except Exception as e:  # sqlite/IO error
+            try:
+                effective = _get_db_path() if db_path is None else Path(db_path).resolve()
+            except Exception:
+                effective = db_path or Path("data/kb.sqlite")
+            raise ConfigError(
+                f"Inizializzazione DB fallita: {e}",
+                slug=slug,
+                file_path=effective,
+            ) from e
         vecs_raw = embeddings_client.embed_texts(contents)
         vecs = normalize_embeddings(vecs_raw)
 

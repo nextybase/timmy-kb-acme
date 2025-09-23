@@ -99,3 +99,54 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
         )
     # Il messaggio aggrega gli errori dei generatori
     assert "summary:" in str(exc.value) and "readme:" in str(exc.value)
+
+
+def test_write_summary_and_readme_logs_errors_with_context(
+    monkeypatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    raw = base / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        sapi,
+        "get_paths",
+        lambda slug: {
+            "base": base,
+            "raw": raw,
+            "book": book,
+            "semantic": base / "semantic",
+        },
+    )
+
+    def _boom_summary(ctx) -> None:
+        raise RuntimeError("boom")
+
+    def _ok_readme(ctx) -> None:
+        (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
+
+    monkeypatch.setattr(sapi, "_gen_summary", _boom_summary)
+    monkeypatch.setattr(sapi, "_gen_readme", _ok_readme)
+    monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
+
+    logger = logging.getLogger("test.summary")
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(ConversionError):
+            sapi.write_summary_and_readme(
+                cast(Any, DummyCtx()),
+                logger,
+                slug="e2e",
+            )
+
+    found = False
+    for rec in caplog.records:
+        if rec.levelno >= logging.ERROR and "Generazione SUMMARY.md fallita" in rec.getMessage():
+            fp = getattr(rec, "file_path", "")
+            slug = getattr(rec, "slug", "")
+            assert str(book / "SUMMARY.md") in fp
+            assert slug == "e2e"
+            found = True
+            break
+    assert found, "expected error log for SUMMARY generation failure"
