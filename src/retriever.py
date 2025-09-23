@@ -201,25 +201,42 @@ def _score_candidates(
                     orig_seq = list(raw_vec)
             except Exception:
                 orig_seq = None
-        if False and orig_seq is not None and v:
-            all_numeric = True
-            count = 0
-            for val in orig_seq:
-                try:
-                    fv = float(val)
-                except Exception:
-                    all_numeric = False
-                    break
-                if not math.isfinite(fv):
-                    all_numeric = False
-                    break
-                count += 1
-            if (not all_numeric) or (count != len(v)):
-                try:
-                    LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
-                except Exception:
-                    pass
-                continue
+        if orig_seq is not None and v:
+            # Applica il controllo "tutti numerici" solo a sequenze piatte (1D) di scalari.
+            # Se l'originale contiene sotto-sequenze (es. [np.ndarray(...)])
+            # considera valido: la normalizzazione ha già estratto un vettore numerico.
+            try:
+
+                def _is_seq_like(x: Any) -> bool:
+                    return hasattr(x, "__len__") and hasattr(x, "__getitem__") and not isinstance(x, (str, bytes))
+
+                is_flat = True
+                for _val in orig_seq:
+                    if hasattr(_val, "tolist") or _is_seq_like(_val):
+                        is_flat = False
+                        break
+            except Exception:
+                is_flat = True
+
+            if is_flat:
+                all_numeric = True
+                count = 0
+                for val in orig_seq:
+                    try:
+                        fv = float(val)
+                    except Exception:
+                        all_numeric = False
+                        break
+                    if not math.isfinite(fv):
+                        all_numeric = False
+                        break
+                    count += 1
+                if (not all_numeric) or (count != len(v)):
+                    try:
+                        LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
+                    except Exception:
+                        pass
+                    continue
         sim = cosine(qv, v)
         yield (
             {
