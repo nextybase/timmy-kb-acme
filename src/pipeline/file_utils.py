@@ -1,4 +1,4 @@
-﻿# src/pipeline/file_utils.py
+# src/pipeline/file_utils.py
 """
 File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
