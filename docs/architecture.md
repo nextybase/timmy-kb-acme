@@ -1,4 +1,4 @@
-# Architecture Overview (v1.9.5)
+# Architecture Overview (v1.9.6)
 
 This page contains two Mermaid diagrams that illustrate Timmy KB at a high level.
 

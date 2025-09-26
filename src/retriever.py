@@ -3,6 +3,7 @@
 
 Funzioni esposte:
 - cosine(a, b) -> float
+- retrieve_candidates(params) -> list[dict]
 - search(params, embeddings_client) -> list[dict]
 - with_config_candidate_limit(params, config) -> params
 - choose_limit_for_budget(budget_ms) -> int
@@ -246,6 +247,49 @@ def _score_candidates(
             },
             idx,
         )
+
+
+# ---------------- Wrapper pubblico per calibrazione candidate_limit -------------
+
+
+def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
+    """Recupera i candidati grezzi per calibrare il `candidate_limit`.
+
+    Il wrapper applica le validazioni dell'API di ricerca e restituisce i dict
+    raw provenienti da `fetch_candidates`, permettendo agli strumenti di
+    calibrazione di ispezionare i chunk senza dipendere dal client embedding.
+    """
+    _validate_params(params)
+    if params.candidate_limit == 0:
+        return []
+    t0 = time.time()
+    candidates = list(
+        fetch_candidates(
+            params.project_slug,
+            params.scope,
+            limit=params.candidate_limit,
+            db_path=params.db_path,
+        )
+    )
+    dt_ms = (time.time() - t0) * 1000.0
+    try:
+        LOGGER.info(
+            "retriever.raw_candidates",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "candidate_limit": int(params.candidate_limit),
+                "candidates": int(len(candidates)),
+                "ms": float(dt_ms),
+            },
+        )
+    except Exception:
+        LOGGER.debug(
+            "retrieve_candidates(): loaded %s candidates (limit=%s)",
+            len(candidates),
+            params.candidate_limit,
+        )
+    return candidates
 
 
 def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dict[str, Any]]:
@@ -555,6 +599,7 @@ __all__ = [
     "RetrieverError",  # re-export
     "QueryParams",
     "cosine",
+    "retrieve_candidates",
     "search",
     "with_config_candidate_limit",
     "choose_limit_for_budget",

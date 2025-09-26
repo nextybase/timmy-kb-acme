@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_text
+from pipeline.file_utils import safe_append_text, safe_write_text
 
 # Convenzioni del repo
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -54,12 +54,9 @@ def _extract_pdf_text(pdf_path: Path) -> str:
 
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
-    logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    log_path = ensure_within_and_resolve(logs_dir, logs_dir / "vision_provision.log")
-    # JSON Lines append
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    """Scrive una riga di audit JSONL in modo atomico e sicuro."""
+    payload = json.dumps(record, ensure_ascii=False) + "\n"
+    safe_append_text(base_dir, base_dir / "logs" / "vision_provision.log", payload)
 
 
 @dataclass(frozen=True)

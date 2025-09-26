@@ -1,4 +1,5 @@
 # Developer Guide
+<!-- cSpell:ignore dataclass -->
 
 > Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb. È orientata a uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
 
@@ -16,6 +17,7 @@
 - [Enrichment & vocabolario: comportamento fail-fast](#enrichment--vocabolario-comportamento-fail-fast)
 - [Vision Statement mapping](#vision-statement-mapping)
 - [Indexer & KPI DB (inserimenti reali)](#indexer--kpi-db-inserimenti-reali)
+- [Retriever API e calibrazione](#retriever-api-e-calibrazione)
 - [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
 - [Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`](#tooling-gen_dummy_kbpy-e-retriever_calibratepy)
 - [Qualità del codice: lint, format, typing, test](#qualità-del-codice-lint-format-typing-test)
@@ -60,6 +62,7 @@ La facade `semantic.api` espone gli step principali:
 ## Regole di sicurezza I/O e path-safety
 - Guardie obbligatorie: usare sempre `ensure_within` / `ensure_within_and_resolve` prima di accedere a file/dir derivati da input esterni o configurazioni.
 - Scritture atomiche: impiegare `safe_write_text`/`safe_write_bytes` per evitare file parziali e condizioni di gara.
+- Append sicuro: usare `safe_append_text` quando serve aggiungere righe (es. audit JSONL); gestisce path-safety, lock file e fsync opzionale.
 - No side-effects a import-time: i moduli non devono mutare `sys.path` né eseguire I/O quando importati.
 - Idempotenza: tutti gli step devono poter essere ri-eseguiti senza effetti collaterali (cleanup dei temporanei garantito anche in errore).
 
@@ -160,6 +163,41 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 
 ---
 
+## Retriever API e calibrazione
+- `QueryParams` e' la dataclass SSoT per impostare la ricerca: richiede `project_slug`, `scope`, `query`, `k` e `candidate_limit`, con `db_path` opzionale per puntare a un DB specifico.
+- `retrieve_candidates(params)` valida i parametri come la search reale e recupera i chunk grezzi tramite `fetch_candidates`, emettendo log strutturati `retriever.raw_candidates`.
+- `search` e `search_with_config` restano l'interfaccia per la ricerca completa dopo la calibrazione del limite con config o budget.
+
+Esempio d'uso minimo:
+
+```python
+from retriever import QueryParams, retrieve_candidates
+
+params = QueryParams(
+    db_path=None,
+    project_slug="acme",
+    scope="book",
+    query="onboarding checklist",
+    k=5,
+    candidate_limit=2000,
+)
+raw_candidates = retrieve_candidates(params)
+```
+
+### Calibrazione retriever (`src/tools/retriever_calibrate.py`)
+- Prerequisiti: workspace gia' popolato (es. `py src/tools/gen_dummy_kb.py --slug dummy`) e un file JSONL di query con righe `{"text": "...", "k": 5}`.
+- Esecuzione tipica:
+
+```powershell
+py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/data/retriever_queries.jsonl --limits 500:2500:500 --repetitions 3 --dump-top output/timmy-kb-dummy/logs/calibrazione.jsonl
+```
+
+- `--limits` accetta sia elenchi separati da virgola (`500,1000,2000`) sia range `start:stop:step`; `--repetitions` ripete la misura; `--dump-top` salva un JSONL con i documenti top-k usando `safe_write_text`.
+- Log attesi: `retriever_calibrate.start`, piu' eventi `retriever.raw_candidates` dal wrapper, `retriever_calibrate.run` per ciascun sample e `retriever_calibrate.done` con media finale (se assenti run viene emesso `retriever_calibrate.no_runs`).
+- Il tool non contatta servizi esterni: opera sul DB locale via `retrieve_candidates` e produce output deterministici da usare per aggiornare `candidate_limit` con `with_config_candidate_limit` o `with_config_or_budget`.
+
+---
+
 ## UI: tab Finanza (I/O sicuro e cleanup)
 - Scritture solo tramite `safe_write_bytes` con guardie `ensure_within`.
 - Creazione del CSV temporaneo in `semantic/` con cleanup in `finally` (anche in caso d’errore).
@@ -172,8 +210,10 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
   - Nessun side-effect a import-time; bootstrap delle dipendenze lazy in `_ensure_dependencies()`.
   - Supporta `--out <dir>` per generare un workspace esplicito; crea `raw/`, `book/`, `semantic/`, `config/`.
 - `retriever_calibrate.py`
-  - Evita append non atomici: accumula record in memoria e scrive una sola volta con `safe_write_text`.
-  - Validazione destinazione dump con `ensure_within_and_resolve`.
+  - Costruisce `QueryParams` reali (slug, scope, query, limite) e usa il wrapper `retrieve_candidates`.
+  - Logging strutturato: `retriever_calibrate.start/run/done` con `extra` sempre valorizzato per slug, scope, limite e tempi.
+  - I dump opzionali dei doc top-k passano da `safe_write_text` dopo la guardia `ensure_within_and_resolve`.
+
 
 ---
 

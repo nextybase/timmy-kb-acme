@@ -3,6 +3,27 @@
 > Formato: **Keep a Changelog** e **SemVer**
 > Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualità.
 
+## [1.9.6] - 2025-09-27
+
+### Added
+- Utility `safe_append_text` in `pipeline.file_utils` per append atomici con path-safety, lock file e fsync opzionale.
+
+### Fixed
+- Calibrazione retriever: CLI `retriever_calibrate.py` ora usa `retrieve_candidates` validando scope/project e allineando i log strutturati.
+
+### Changed
+- Audit Vision (`semantic/vision_provision.py`) migra all'append sicuro, eliminando `open('a')` e preservando i JSON Lines.
+- Strumenti CLI (`gen_dummy_kb.py`, `gen_vision_yaml.py`, `retriever_calibrate.py`) uniformati a logging `event` + `extra`.
+
+### Docs
+- Developer/Test/Coding Guide aggiornate con wrapper `retrieve_candidates`, guida di calibrazione e norme sul logging strutturato.
+
+### Compatibility
+- Nessun breaking change: gli strumenti esistenti restano compatibili.
+- Migrazione consigliata: aggiorna gli script interni di audit/logging per usare `safe_append_text` e il pattern `logger.info("event", extra=...)`.
+
+---
+
 ## [1.9.5] - 2025-09-26
 
 ### Added

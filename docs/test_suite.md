@@ -1,4 +1,4 @@
-# Suite di test e utente dummy (v1.9.5)
+# Suite di test e utente dummy (v1.9.6)
 
 Questa suite verifica che la pipeline Timmy KB funzioni end-to-end (pre -> tag -> semantic -> full) e a livello di singoli orchestratori. Per velocità e riproducibilità usiamo un utente dummy: una sandbox locale con PDF finti e struttura pronta.
 
@@ -78,7 +78,32 @@ Esempio headless via `semantic.api` (vedi README) per conversione ed enrichment.
 
 ---
 
-## 4) Pytest - guida completa
+## 4) Calibrazione retriever (locale)
+
+Prerequisiti:
+- Workspace gia' popolato (es. `py src/tools/gen_dummy_kb.py --slug dummy`).
+- File JSONL di query con righe `{"text": "...", "k": 5}` (vedi `tests/data/retriever_queries.jsonl`).
+
+Esecuzione suggerita:
+
+```powershell
+py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/data/retriever_queries.jsonl --limits 500:2500:500 --repetitions 3 --dump-top output/timmy-kb-dummy/logs/calibrazione.jsonl
+```
+
+Parametri principali:
+- `--limits`: elenco separato da virgole oppure range `start:stop:step` per provare piu' `candidate_limit`.
+- `--repetitions`: quante volte ripetere ogni coppia query/limite per stabilizzare la misura.
+- `--dump-top`: opzionale; salva un JSONL con i doc top-k usando `safe_write_text` dopo la guardia `ensure_within_and_resolve`.
+
+Osservabilita' attesa:
+- `retriever_calibrate.start` all'avvio con slug, scope, limiti e ripetizioni.
+- Uno o piu' `retriever.raw_candidates` emessi da `retrieve_candidates` (nessuna chiamata alla rete).
+- `retriever_calibrate.run` per ogni misura con hits e latenza calcolata.
+- `retriever_calibrate.done` (o `retriever_calibrate.no_runs` se nulla da misurare).
+
+Il tool sfrutta `retrieve_candidates` e il DB SQLite locale, quindi e' deterministico: puoi confrontare i risultati per scegliere il `candidate_limit` da applicare con `with_config_candidate_limit` o `with_config_or_budget`.
+
+## 5) Pytest - guida completa
 
 Suggerito:
 
@@ -161,7 +186,7 @@ pytest -vv -k test_validate_ok_minimal
 
 ---
 
-## 5) Log e pulizia rapida
+## 6) Log e pulizia rapida
 
 ```powershell
 # ultimi log
@@ -173,7 +198,11 @@ Get-ChildItem .\output -Directory "timmy-kb-*" | Remove-Item -Recurse -Force
 
 ---
 
-## Aggiornamenti v1.9.5 (nuovi test)
+## Aggiornamenti v1.9.6 (nuovi test)
+
+- `tests/test_file_io_append.py`: simula append concorrente e failure per validare `safe_append_text`.
+- `tests/test_retriever_calibrate_io.py`: allineato al wrapper `retrieve_candidates` e verifica logging strutturato.
+- Aggiornate le fixture dummy per includere QueryParams completi nel tool di calibrazione.
 
 - `tests/test_vision_ai_module.py`: copre estrazione PDF, conversione JSON->YAML, salvataggio dello snapshot e gli errori
   `ConfigError` sul nuovo pipeline Vision Statement.

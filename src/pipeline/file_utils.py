@@ -1,40 +1,43 @@
-# src/pipeline/file_utils.py
+﻿# src/pipeline/file_utils.py
 """
 File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Centralizzare la logica di fsync (best-effort di default; opzionale più “forte”).
+- Centralizzare la logica di fsync (best-effort di default; opzionale piÃ¹ â€œforteâ€).
 - Non imporre policy di perimetro: la guardia STRONG dei path resta in
   `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
 Indice (ruolo funzioni):
 - `_fsync_file(fd, *, path=None, strict=False)`: sincronizza il file descriptor.
-  - `strict=True` → solleva `ConfigError`; altrimenti logga in debug (best-effort).
+  - `strict=True` â†’ solleva `ConfigError`; altrimenti logga in debug (best-effort).
 - `_fsync_dir_best_effort(dir_path)`: tenta la sincronizzazione della directory padre.
   - Non solleva eccezioni (compatibile con Windows/FS remoti).
 - `safe_write_text(path, data, *, encoding="utf-8", atomic=True, fsync=False)`:
   scrittura **testo** sicura.
   - Crea le directory mancanti.
   - `atomic=True`: usa temp file + `os.replace()` atomico. Con `fsync=True` fa flush+fsync.
-  - `atomic=False`: scrive direttamente e può fare fsync sul file.
+  - `atomic=False`: scrive direttamente e puÃ² fare fsync sul file.
   - Sempre prova a fsync-are la directory (best-effort).
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- Di default eseguiamo un fsync “soft” (best-effort) anche quando `fsync=False`.
-- Questo modulo non valida che `path` sia “dentro” un perimetro: quel controllo va fatto a monte.
+- Di default eseguiamo un fsync â€œsoftâ€ (best-effort) anche quando `fsync=False`.
+- Questo modulo non valida che `path` sia â€œdentroâ€ un perimetro: quel controllo va fatto a monte.
 """
 
 from __future__ import annotations
 
+import errno
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
 from .exceptions import ConfigError
 from .logging_utils import get_structured_logger
+from .path_utils import ensure_within_and_resolve
 
 _logger = get_structured_logger("pipeline.file_utils")
 
@@ -114,7 +117,7 @@ def safe_write_text(
         except Exception as e:
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
 
-    # Modalità atomica: temp + replace
+    # ModalitÃ  atomica: temp + replace
     tmp_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -131,7 +134,7 @@ def safe_write_text(
                 try:
                     tmp.flush()
                 except Exception:
-                    # flush best-effort; fsync strict intercetterà eventuali errori
+                    # flush best-effort; fsync strict intercetterÃ  eventuali errori
                     pass
                 _fsync_file(tmp.fileno(), path=tmp_path, strict=True)
             else:
@@ -202,7 +205,119 @@ def safe_write_bytes(
         raise ConfigError(f"Scrittura atomica (bytes) fallita: {e}", file_path=str(path)) from e
 
 
+def safe_append_text(
+    base_dir: Path,
+    target: Path,
+    data: str,
+    *,
+    encoding: str = "utf-8",
+    lock_timeout: float = 5.0,
+    fsync: bool = False,
+) -> None:
+    """Appende testo in modo sicuro usando path-safety, lock file e scrittura atomica."""
+    base_dir = Path(base_dir)
+    resolved_base = base_dir.resolve()
+    candidate = Path(target)
+    if not candidate.is_absolute():
+        candidate = resolved_base / candidate
+
+    if os.name == "nt":
+        sep = os.sep
+        ext_prefix = sep + sep + "?" + sep
+        unc_prefix = ext_prefix + "UNC" + sep
+
+        def _to_extended(p: Path) -> Path:
+            s = str(p)
+            if s.startswith(ext_prefix) or s.startswith(unc_prefix):
+                return p
+            if not p.is_absolute():
+                return p
+            return Path(ext_prefix + s)
+
+        def _strip_extended(p: Path) -> Path:
+            s = str(p)
+            if s.startswith(unc_prefix):
+                return Path(sep * 2 + s[len(unc_prefix) :])
+            if s.startswith(ext_prefix):
+                return Path(s[len(ext_prefix) :])
+            return p
+
+        guard_base = _to_extended(resolved_base)
+        guard_candidate = _to_extended(candidate)
+        resolved = ensure_within_and_resolve(guard_base, guard_candidate)
+        resolved = _strip_extended(resolved)
+    else:
+        resolved = ensure_within_and_resolve(resolved_base, candidate)
+
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+
+    lock_path = resolved.parent / f"{resolved.name}.lock"
+    deadline = time.monotonic() + max(lock_timeout, 0.0)
+    lock_fd: Optional[int] = None
+
+    while True:
+        try:
+            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                raise ConfigError(
+                    "Timeout nell'acquisire il lock per l'append.",
+                    file_path=str(resolved),
+                )
+            time.sleep(0.1)
+        except PermissionError as exc:
+            if exc.errno == errno.EACCES and lock_path.exists():
+                if time.monotonic() > deadline:
+                    raise ConfigError(
+                        "Timeout nell'acquisire il lock per l'append.",
+                        file_path=str(resolved),
+                    )
+                time.sleep(0.1)
+                continue
+            raise ConfigError(
+                f"Impossibile creare il lock file: {exc}",
+                file_path=str(resolved),
+            ) from exc
+        except OSError as exc:
+            raise ConfigError(
+                f"Impossibile creare il lock file: {exc}",
+                file_path=str(resolved),
+            ) from exc
+
+    try:
+        if resolved.exists():
+            try:
+                existing = resolved.read_text(encoding=encoding)
+            except Exception as exc:
+                raise ConfigError(
+                    f"Impossibile leggere il file prima dell'append: {exc}",
+                    file_path=str(resolved),
+                ) from exc
+        else:
+            existing = ""
+
+        safe_write_text(
+            resolved,
+            existing + data,
+            encoding=encoding,
+            atomic=True,
+            fsync=fsync,
+        )
+    finally:
+        if lock_fd is not None:
+            try:
+                os.close(lock_fd)
+            except Exception:
+                _logger.debug("Chiusura lock fallita", extra={"lock_path": str(lock_path)})
+        try:
+            lock_path.unlink(missing_ok=True)
+        except Exception:
+            _logger.debug("Rimozione lock fallita", extra={"lock_path": str(lock_path)})
+
+
 __all__ = [
     "safe_write_text",
     "safe_write_bytes",
+    "safe_append_text",
 ]

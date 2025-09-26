@@ -1,4 +1,5 @@
-# Timmy-KB - Coding Rules (v1.9.5)
+# Timmy-KB - Coding Rules (v1.9.6)
+<!-- cSpell:ignore Novita -->
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -70,6 +71,7 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 
 ## Logging & redazione
 - Usa il logger strutturato dove disponibile; fallback a `logging.basicConfig` negli script.
+- Pattern obbligatorio: `logger.info("event_name", extra={...})` (nessun payload anonimo); popola sempre `extra` con slug/scope/id utili.
 - Redazione automatica attiva quando richiesto (`LOG_REDACTION`): non loggare segreti o payload completi.
 - Niente segreti nei log: maschera sempre token, chiavi API e payload sensibili (es. `OPENAI_API_KEY_CODEX`, `OPENAI_API_KEY_FOLDER`).
 - Includi event e metadati essenziali (slug, conteggi, esiti) per ogni operazione rilevante.
@@ -80,6 +82,7 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 ## Sicurezza I/O
 - Path-safety: usa `ensure_within_and_resolve` (o SSoT equivalenti) per prevenire traversal; evita concatenazioni manuali.
 - Scritture atomiche: `safe_write_text/bytes` per generare/aggiornare file (niente write parziali).
+- Append sicuro: usa `safe_append_text` per audit/log multi-run; garantisce path-safety, lock file e fsync opzionale.
 - Sanitizzazione nomi file: usa utility dedicate prima di creare file da input esterni.
 - DRY validazioni: centralizza controlli ricorrenti (listing sicuro dei Markdown, ecc.).
 
@@ -109,11 +112,11 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 - Download RAW: usa la funzione di alto livello esposta nel runner UI.
 - Git: push solo di `.md` in `book/`; ignora `.md.fp` e file binari.
 
-### Novità v1.9.5 (Vision & UI)
-- Vision Statement mapping: `semantic/vision_ai.py` deve restare idempotente (snapshot + YAML), usare `safe_write_text` e non accedere all'API OpenAI senza aver risolto i path con `ensure_within_and_resolve`.
-- UI/servizi devono verificare la disponibilità degli extra Drive con una guardia esplicita prima di usare funzioni come `get_drive_service` o `create_drive_folder`.
-- Mostrare errori comprensibili all’utente (RuntimeError con hint `pip install .[drive]`) al posto di `TypeError`.
-
+### Novita v1.9.6 (Retriever & logging)
+- Wrapper `retrieve_candidates` pubblico nel retriever per calibrazioni sicure.
+- Logging strutturato obbligatorio (`event + extra`) nei tool CLI.
+- Nuova utility `safe_append_text` per append atomici con path-safety e lock cross-platform.
+- Tool Vision audit migrato a `safe_append_text` (niente open append).
 ---
 
 ## Test

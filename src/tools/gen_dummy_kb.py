@@ -30,7 +30,7 @@ SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 
 def _ensure_dependencies() -> None:
-    """Risolvi le dipendenze runtime senza side-effects a import-time."""
+    """Carica le dipendenze runtime evitando effetti collaterali a import-time."""
     global safe_write_bytes, safe_write_text, get_structured_logger, tail_path
     global ensure_within, ensure_within_and_resolve, open_for_read_bytes_selfguard
     global extract_semantic_candidates, render_tags_csv, load_semantic_config, normalize_tags
@@ -96,10 +96,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path]:
-    """Calcola i path del workspace.
-
-    Se base_override è fornito, usa quella come base_dir; altrimenti usa semantic.api.get_paths(slug).
-    """
+    """Calcola i percorsi fondamentali del workspace dummy."""
     _ensure_dependencies()
     from semantic.api import get_paths  # import leggero
 
@@ -119,6 +116,7 @@ def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path
 
 
 def _write_dummy_docs(book: Path) -> None:
+    """Crea due markdown fittizi nella cartella book/."""
     _ensure_dependencies()
     assert safe_write_text is not None
     book.mkdir(parents=True, exist_ok=True)
@@ -127,6 +125,7 @@ def _write_dummy_docs(book: Path) -> None:
 
 
 def _write_dummy_summary_readme(book: Path) -> None:
+    """Genera SUMMARY.md e README.md fittizi per la knowledge base dummy."""
     _ensure_dependencies()
     assert safe_write_text is not None
     safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
@@ -134,6 +133,7 @@ def _write_dummy_summary_readme(book: Path) -> None:
 
 
 def _maybe_write_dummy_finance(base: Path, records: int) -> None:
+    """Opzionalmente crea un CSV finanziario dummy e lo importa con le API finance."""
     _ensure_dependencies()
     assert ensure_within is not None and safe_write_text is not None
     sem = base / "semantic"
@@ -162,6 +162,7 @@ def _maybe_write_dummy_finance(base: Path, records: int) -> None:
 
 
 def main() -> int:
+    """Punto di ingresso CLI per generare un workspace dummy."""
     args = _parse_args()
     _ensure_dependencies()
     assert get_structured_logger is not None
@@ -179,10 +180,10 @@ def main() -> int:
         _write_dummy_docs(paths["book"])
         _write_dummy_summary_readme(paths["book"])
         _maybe_write_dummy_finance(paths["base"], args.records)
-        log.info({"event": "dummy_kb_generated", "slug": args.slug, "base": str(paths["base"])})
+        log.info("dummy_kb_generated", extra={"slug": args.slug, "base": str(paths["base"])})
         return 0
     except Exception as exc:
-        log.error({"event": "dummy_kb_failed", "slug": args.slug, "error": str(exc)})
+        log.error("dummy_kb_failed", extra={"slug": args.slug, "error": str(exc)})
         return 1
 
 
