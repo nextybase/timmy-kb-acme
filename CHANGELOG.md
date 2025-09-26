@@ -47,6 +47,11 @@
 
 ## [Unreleased]
 
+### UI
+- Aggiunta verifica iniziale dello slug: il pulsante `Verifica cliente` controlla l'esistenza del workspace e instrada subito alla configurazione se già presente.
+- Nuovo percorso per i clienti nuovi: upload del Vision Statement, creazione workspace, generazione immediata di `semantic/vision_statement.yaml` e `semantic/cartelle_raw.yaml`, editor inline con salvataggi atomici.
+- Sidebar principale aggiornata: il bottone `Carica contesto` appare solo quando il workspace esiste; altrimenti un messaggio rimanda al bootstrap dalla landing.
+
 ### Fixed
 - Conversione strutturata: gestione robusta delle categorie symlink in `convert_files_to_structured_markdown`
   (percorsi risolti in sicurezza, niente `ValueError` e nessun loop; ordinamenti invariati).

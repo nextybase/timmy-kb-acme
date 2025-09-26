@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
+import signal
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +52,51 @@ def _hint_pdf_locations(base_dir: Path) -> str:
     return f"- {cfg}\n- {raw}"
 
 
+def _request_shutdown(logger: logging.Logger) -> None:
+    """Richiede la terminazione pulita di Streamlit."""
+    try:
+        logger.info("ui_shutdown_request")
+        os.kill(os.getpid(), signal.SIGTERM)
+    except Exception:
+        os._exit(0)
+
+
+def _run_dummy_generation(slug: str, logger: logging.Logger) -> None:
+    """Esegue lo script gen_dummy_kb per lo slug corrente."""
+    if not slug:
+        st.warning("Slug non valido per la generazione dummy.")
+        return
+    with st.spinner("Generazione dummy in corso..."):
+        try:
+            logger.info("ui_dummy_generate_start slug=%s", slug)
+            proc = subprocess.run(
+                [sys.executable, "src/tools/gen_dummy_kb.py", "--slug", slug],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            logger.info("ui_dummy_generate_end slug=%s rc=%s", slug, proc.returncode)
+        except Exception as exc:
+            logger.exception("ui_dummy_generate_exception slug=%s", slug)
+            st.error(f"Errore durante la generazione dummy: {exc}")
+            return
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode == 0:
+        st.success("Dummy generato/aggiornato.")
+    else:
+        st.error(f"Dummy: errore (code {proc.returncode})")
+    if stdout:
+        st.code(stdout[:4000], language="bash")
+    if stderr:
+        st.code(stderr[:4000], language="bash")
+
+
+def _workspace_dir_for(slug: str) -> Path:
+    return Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+
+
 # ---------------------------
 # Main UI
 # ---------------------------
@@ -63,25 +112,41 @@ def main() -> None:
     with st.sidebar:
         st.header("Workspace")
         slug = st.text_input("Slug cliente (kebab-case)", placeholder="acme-sicilia")
-        load_btn = st.button("Carica contesto", use_container_width=True)
+        workspace_exists = bool(slug) and _workspace_dir_for(slug).exists()
+        load_btn = False
+        if workspace_exists:
+            load_btn = st.button("Carica contesto", use_container_width=True)
+        else:
+            st.info(
+                "Workspace non trovato. Usa la landing per crearlo (Verifica cliente → Carica il Vision Statement)."
+            )
 
-    # Early exit: no slug, no load
+    if "ctx_loaded" not in st.session_state:
+        st.session_state["ctx_loaded"] = False
+    if st.session_state.get("slug") and st.session_state.get("slug") != slug:
+        st.session_state["ctx_loaded"] = False
+
     if not slug:
-        st.info("Inserisci lo slug del cliente e premi 'Carica contesto'.")
+        st.info("Inserisci lo slug del cliente.")
+        st.session_state["ctx_loaded"] = False
+        return
+
+    if not workspace_exists:
+        st.warning("Workspace inesistente. Completa la procedura dalla landing UI.")
+        st.session_state["ctx_loaded"] = False
         return
 
     ctx: Optional[ClientContext] = None
-    if load_btn:
+    auto_load = workspace_exists and not st.session_state.get("ctx_loaded", False)
+    if load_btn or auto_load:
         ctx = _load_ctx(slug, logger)
         if ctx:
-            st.sidebar.success(f"Contesto caricato: {slug}")
-
-    # Manteniamo lo stato (quando Streamlit ricarica)
-    if "ctx_loaded" not in st.session_state:
-        st.session_state["ctx_loaded"] = False
-    if load_btn and ctx:
-        st.session_state["ctx_loaded"] = True
-        st.session_state["slug"] = slug
+            if load_btn:
+                st.sidebar.success(f"Contesto caricato: {slug}")
+            st.session_state["ctx_loaded"] = True
+            st.session_state["slug"] = slug
+        else:
+            st.session_state["ctx_loaded"] = False
 
     if not st.session_state["ctx_loaded"]:
         return
@@ -94,6 +159,20 @@ def main() -> None:
 
     base_dir = Path(ctx.base_dir)
     st.caption(f"Workspace base: `{base_dir}`")
+
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("Tools")
+        if st.button("Genera/Aggiorna dummy", key="btn_dummy", use_container_width=True):
+            _run_dummy_generation(slug, logger)
+        if st.button(
+            "Chiudi UI",
+            key="btn_exit",
+            use_container_width=True,
+            help="Chiude l'interfaccia Streamlit e termina il processo.",
+        ):
+            logger.info("ui_exit_requested slug=%s", slug)
+            _request_shutdown(logger)
 
     # Tabs
     t_sem, t_outputs = st.tabs(["📑 Semantica", "📁 Output"])
