@@ -10,8 +10,10 @@
 - [Regole di sicurezza I/O e path-safety](#regole-di-sicurezza-io-e-path-safety)
 - [Gestione errori, exit codes e osservabilità](#gestione-errori-exit-codes-e-osservabilità)
 - [Conversione Markdown: policy ufficiale](#conversione-markdown-policy-ufficiale)
+- [Qualità prima dei test (lint & format obbligatori)](#qualità-prima-dei-test-lint--format-obbligatori)
+- [Variabili ambiente e segreti](#variabili-ambiente-e-segreti)
+- [CI](#ci)
 - [Enrichment & vocabolario: comportamento fail-fast](#enrichment--vocabolario-comportamento-fail-fast)
-
 - [Vision Statement mapping](#vision-statement-mapping)
 - [Indexer & KPI DB (inserimenti reali)](#indexer--kpi-db-inserimenti-reali)
 - [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
@@ -69,6 +71,34 @@ La facade `semantic.api` espone gli step principali:
 - Orchestratori CLI: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
 - `ClientContext.load(require_env=True)`: se le ENV obbligatorie mancano o sono vuote, solleva immediatamente `ConfigError` con messaggio chiaro (mai `KeyError`).
 - Logging strutturato: usare `phase_scope(logger, stage=..., customer=...)` per `phase_started/phase_completed/phase_failed` e valorizzare `artifacts` con numeri reali.
+
+---
+
+## Qualità prima dei test (lint & format obbligatori)
+
+Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
+Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
+
+Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
+Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l’editor applica `black` in automatico.
+
+**Definition of Done (minimo) per ogni PR:**
+- file formattati (`black`) e import ordinati (`isort`);
+- `flake8` pulito (nessun F/E/W rilevante);
+- messaggi di log privi di segreti;
+- test esistenti non rotti.
+
+### Setup qualità locale (obbligatorio)
+
+1. Installa toolchain: `pip install -U pre-commit black isort flake8`.
+2. Attiva hook: `pre-commit install`.
+3. Editor (VS Code): abilita *format on save* con `black`, lint con `flake8`, `isort` profilo `black`, line-length 120.
+
+**Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l’editor formatterà automaticamente).
+Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualità per far arrivare al testing solo codice già pulito.
+
+> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: “rispetta line-length 120, black/isort/flake8; nessun segreto nei log”.
+
 
 ---
 

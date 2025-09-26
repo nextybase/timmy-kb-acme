@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded
-from semantic.vision_ai import ConfigError, generate
+from semantic import vision_ai
 
 
 def main() -> int:
@@ -28,11 +28,11 @@ def main() -> int:
     try:
         ensure_dotenv_loaded()
         ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
-        out = generate(ctx, log, slug=args.slug)
+        out = vision_ai.generate(ctx, log, slug=args.slug)
         log.info("Completato", extra={"out": out})
         print(out)
         return 0
-    except ConfigError as e:
+    except vision_ai.ConfigError as e:
         log.error("ConfigError: %s", e, extra={"slug": args.slug})
         print(f"ConfigError: {e}", file=sys.stderr)
         return 2

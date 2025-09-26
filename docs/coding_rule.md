@@ -36,9 +36,24 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 ---
 
-## Linting & Formatting
+## Qualità prima dei test (lint & format obbligatori)
+
+Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
+Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
+
+Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
+Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l’editor applica `black` in automatico.
+
+**Definition of Done (minimo) per ogni PR:**
+- file formattati (`black`) e import ordinati (`isort`);
+- `flake8` pulito (nessun F/E/W rilevante);
+- messaggi di log privi di segreti;
+- test esistenti non rotti.
+
+### Linting & Formatting
 - Ruff è il linter SSoT: replica regole flake8/bandit in Ruff; se manca qualcosa, aggiungi in `pyproject.toml`.
 - Black e isort: obbligatori per formattazione/ordinamento import.
+
 
 ## Typing & Pylance
 - Per dependency opzionali usa narrowing esplicito:
