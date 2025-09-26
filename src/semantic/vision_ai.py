@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import fitz  # type: ignore
 import yaml
 
 from ai.client_factory import make_openai_client
@@ -78,6 +77,10 @@ def _resolve_optional(base: Path, candidate: Path | str) -> Optional[Path]:
 
 
 def _extract_pdf_text(pdf_path: Path) -> str:
+    try:
+        import fitz  # type: ignore
+    except ImportError as exc:
+        raise ConfigError("Impossibile aprire il VisionStatement.pdf: PyMuPDF non installato.") from exc
     try:
         document = fitz.open(pdf_path)
     except Exception as exc:
