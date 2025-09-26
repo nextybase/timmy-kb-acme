@@ -5,7 +5,6 @@ import json
 import types
 from pathlib import Path
 
-import fitz
 import pytest
 import yaml
 
@@ -106,6 +105,11 @@ class _NoopLogger:
 
 
 def _create_dummy_pdf(path: Path) -> None:
+    try:
+        import fitz
+    except ImportError:
+        pytest.skip("PyMuPDF non disponibile: test ignorato")
+
     doc = fitz.open()
     try:
         page = doc.new_page()

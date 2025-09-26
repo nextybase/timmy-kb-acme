@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from typing import Any
 
 from ai import client_factory
@@ -20,7 +22,9 @@ def test_make_openai_client_fallback_on_proxy(monkeypatch):
             self.api_key = api_key
             self.http_client = http_client
 
-    monkeypatch.setattr(client_factory, "OpenAI", DummyOpenAI)
+    dummy_module = types.ModuleType("openai")
+    dummy_module.OpenAI = DummyOpenAI  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "openai", dummy_module)
     monkeypatch.setattr(client_factory, "_build_http_client", lambda: sentinel_http_client)
 
     client = client_factory.make_openai_client()

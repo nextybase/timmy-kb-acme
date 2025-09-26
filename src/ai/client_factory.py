@@ -1,16 +1,21 @@
 # src/ai/client_factory.py
 import os
-
-import httpx
-from openai import OpenAI
+from typing import TYPE_CHECKING
 
 from pipeline.exceptions import ConfigError
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 _OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
-def _build_http_client() -> httpx.Client:
+def _build_http_client():
     """Crea un httpx.Client compatibile con le versioni >=0.28."""
+    try:
+        import httpx
+    except ImportError as exc:
+        raise ConfigError("Per usare il fallback OpenAI serve installare httpx.") from exc
 
     return httpx.Client(
         base_url=_OPENAI_BASE_URL,
@@ -20,7 +25,7 @@ def _build_http_client() -> httpx.Client:
     )
 
 
-def make_openai_client() -> OpenAI:
+def make_openai_client() -> "OpenAI":
     """
     Crea e restituisce un client OpenAI.
     Ordine di ricerca chiave:
@@ -32,11 +37,17 @@ def make_openai_client() -> OpenAI:
         raise ConfigError(
             "Manca la API key. Imposta almeno OPENAI_API_KEY_FOLDER (preferito) " "oppure OPENAI_API_KEY come fallback."
         )
+
+    try:
+        from openai import OpenAI  # type: ignore import
+    except ImportError as exc:
+        raise ConfigError("OpenAI SDK non disponibile: installa il pacchetto 'openai'.") from exc
+
     # Qui NON logghiamo la chiave. Eventuali timeout/proxy si aggiungono qui.
     try:
         return OpenAI(api_key=api_key)
     except TypeError as exc:
         if "proxies" not in str(exc):
             raise
-        # Fallback per httpx>=0.28 (rimozione kwarg `proxies`).
+        # Fallback per httpx>=0.28 (rimozione kwarg proxies).
         return OpenAI(api_key=api_key, http_client=_build_http_client())
