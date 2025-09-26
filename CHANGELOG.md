@@ -6,6 +6,9 @@
 ## [1.9.5] - 2025-09-26
 
 ### Added
+- Vision onboarding in UI con pulsante esplicito **"Genera da Vision (AI)"**, progress a step e anteprima YAML prima dell'approvazione.
+- Generazione contestuale di `semantic/cartelle_raw.yaml` e provisioning delle cartelle `docs/` solo dopo il click **"Approva e crea cartelle"**.
+- Audit e idempotenza basati su `semantic/.vision_hash` con rigenerazione forzata opzionale (`force=True`).
 - Vision Statement pipeline: `semantic/vision_ai.py` estrae il testo dal PDF, salva uno snapshot (`vision_statement.txt`) e genera `vision_statement.yaml` via `gpt-4.1-mini`.
 - Script `py src/tools/gen_vision_yaml.py` carica `.env`, valida i percorsi del PDF e produce il mapping YAML con errori tipizzati (`ConfigError`).
 - Test unitari `tests/test_vision_ai_module.py` per estrazione, conversione JSON->YAML e gestione `finish_reason="length"`.
@@ -16,6 +19,7 @@
 
 ### Docs
 - README, Architecture, Developer Guide e Test Suite aggiornati con la pipeline Vision e bump documentale a v1.9.5.
+- Developer Guide e Guida UI aggiornate con il workflow Vision (upload → bottone → anteprima → approvazione).
 - Coding Rules/Policy allineate: snapshot obbligatorio, uso di `safe_write_text` e path-safety sui PDF Vision.
 
 ---
@@ -57,6 +61,7 @@
 - `semantic.vocab_loader`: comportamento **fail-fast** su path/DB non sicuri o illeggibili (alza `ConfigError` con `file_path`).
 
 ### Added
+- Vision onboarding: pulsante esplicito, creazione di `semantic/cartelle_raw.yaml`, provisioning cartelle dal YAML e audit/idempotenza via `semantic/.vision_hash`.
 - `src/tools/gen_dummy_kb.py`: supporto a `--out` per generare un workspace in una cartella esplicita; bootstrap lazy (nessun side-effect a import-time).
 - `src/tools/retriever_calibrate.py`: dump JSONL atomico e validato (`ensure_within_and_resolve` + `safe_write_text`).
 - Test anti-regressione:
@@ -68,6 +73,7 @@
   - `tests/test_retriever_calibrate_io.py`
 
 ### Docs
+- Guide aggiornate: `docs/developer_guide.md` (flusso Vision) e `docs/guida_ui.md` (pulsanti/stati landing).
 - `docs/developer_guide.md`: chiarita l’estensione della fase `build_markdown_book`; obbligo di `slug`/`file_path` nei `PipelineError`; KPI DB basati su inserimenti reali; note su `gen_dummy_kb --out`, fail-fast del vocabolario e hardening del tab Finanza.
 
 ---

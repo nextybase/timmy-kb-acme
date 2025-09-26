@@ -37,6 +37,21 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 
 ---
 
+## 3bis) Landing Vision onboarding
+- **Step 1 - upload**: con slug nuovo la landing mostra l'uploader dedicato a `VisionStatement.pdf`; il file viene salvato in `config/` con guardie `ensure_within_and_resolve`.
+- **Step 2 - Genera da Vision (AI)**: il pulsante esplicito avvia la pipeline (`semantic.vision_provision.provision_from_vision`) e visualizza gli step di avanzamento `[PDF ricevuto] -> [Snapshot] -> [YAML vision] -> [YAML cartelle]`.
+- **Step 3 - Anteprima**: al termine vengono mostrati in expander gli YAML `semantic/vision_statement.yaml` e `semantic/cartelle_raw.yaml` per revisione rapida.
+- **Step 4 - Approva**: il bottone **"Approva e crea cartelle"** crea la gerarchia `docs/` leggendo `semantic/cartelle_raw.yaml`; nessuna cartella viene generata prima di questa approvazione.
+- **Idempotenza**: se l'hash del PDF non cambia, la UI avvisa che gli artefatti sono già presenti e propone un toggle per rigenerare forzatamente (utile anche per cambiare modello).
+> Screenshot (TODO): acquisire la landing Vision aggiornata e salvarla come `docs/assets/vision_onboarding.png` per documentazione e training.
+
+**Pulsanti e stati rapidi**
+- `Genera da Vision (AI)`: si abilita dopo l'upload del PDF e resta in stato di avanzamento finche' la generazione non termina.
+- `Approva e crea cartelle`: compare dopo la generazione e rimane disabilitato finche' gli YAML non passano la validazione di schema.
+- Toggle `Rigenera Vision`: appare quando esiste `semantic/.vision_hash`; abilita la rigenerazione forzata (utile anche per cambiare modello).
+
+> Nota: mantieni il flusso idempotente; se cambi modello attiva il toggle di rigenerazione, attendi il completamento degli step di avanzamento e poi ripeti l'approvazione.
+
 ## 4) Tab "Configurazione"
 - Definisce/raffina il mapping semantico del cliente (categorie, descrizioni, alias/tag)
 - Carica mapping rivisto se esiste, altrimenti un default
@@ -65,6 +80,7 @@ Requisiti ENV: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`
 ---
 
 ## 6) Tab "Semantica"
+> Nota: `semantic/cartelle_raw.yaml` viene generato insieme a `semantic/vision_statement.yaml`; la creazione delle cartelle `docs/` rimane esplicita via pulsante nella landing.
 - Conversione RAW → BOOK (PDF → Markdown)
 - Arricchimento frontmatter: aggiunge tag canonici dal DB SQLite (`storage/tags_store`)
 - Generazione e validazione di `README.md` e `SUMMARY.md`
@@ -116,6 +132,7 @@ SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e ret
 ---
 
 ## 10) Best practice
+- Vision onboarding: sfrutta il toggle di rigenerazione solo quando devi aggiornare il modello o hai cambiato il PDF; in caso contrario l'hash evita compute inutile.
 - Procedere in ordine: Configurazione → Drive → Semantica → Preview
 - Mantieni mapping coerente con i materiali effettivi
 - Usa normalizzazione chiavi per consistenza
