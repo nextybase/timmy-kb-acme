@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -17,7 +17,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 
 # Convenzioni del repo
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Ri-uso di schema e prompt dal modulo esistente (contratto unico)
 # Nota: gli identificatori nel modulo vision_ai possono essere "interni" (prefisso _),
@@ -69,6 +69,7 @@ class _Paths:
     vision_txt: Path
     vision_yaml: Path
     cartelle_yaml: Path
+    vision_hash: Path
 
 
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
@@ -77,7 +78,22 @@ def _resolve_paths(ctx_base_dir: str) -> _Paths:
     vision_txt = ensure_within_and_resolve(sem_dir, sem_dir / "vision_statement.txt")
     vision_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "vision_statement.yaml")
     cartelle_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "cartelle_raw.yaml")
-    return _Paths(base, sem_dir, vision_txt, vision_yaml, cartelle_yaml)
+    vision_hash = ensure_within_and_resolve(sem_dir, sem_dir / ".vision_hash")
+    return _Paths(base, sem_dir, vision_txt, vision_yaml, cartelle_yaml, vision_hash)
+
+
+def _count_cartelle_folders(cartelle_path: Path, *, base_dir: Path) -> Optional[int]:
+    try:
+        raw = read_text_safe(base_dir, cartelle_path, encoding="utf-8")
+        data = yaml.safe_load(raw)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    folders = data.get("folders")
+    if isinstance(folders, list):
+        return len(folders)
+    return None
 
 
 def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
@@ -112,6 +128,7 @@ def provision_from_vision(
     slug: str,
     pdf_path: Path,
     model: str = "gpt-4.1-mini",
+    force: bool = False,
 ) -> Dict[str, Any]:
     """
     Esegue l'onboarding Vision:
@@ -127,6 +144,38 @@ def provision_from_vision(
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     pdf_hash = _sha256_of_file(pdf_path)
+
+    yaml_paths = {"vision": str(paths.vision_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
+    existing_hash: Optional[str] = None
+    if paths.vision_hash.exists():
+        try:
+            existing_hash = read_text_safe(paths.semantic_dir, paths.vision_hash, encoding="utf-8").strip()
+        except Exception:
+            existing_hash = None
+
+    if not force and existing_hash == pdf_hash and paths.vision_yaml.exists() and paths.cartelle_yaml.exists():
+        ts = datetime.now(timezone.utc).isoformat()
+        areas_count = _count_cartelle_folders(paths.cartelle_yaml, base_dir=paths.semantic_dir)
+        record = {
+            "ts": ts,
+            "slug": slug,
+            "pdf": str(pdf_path),
+            "pdf_hash": pdf_hash,
+            "model": model,
+            "yaml_paths": yaml_paths,
+            "areas_count": areas_count,
+            "regenerated": False,
+        }
+        _write_audit_line(paths.base_dir, record)
+        logger.info("vision_provision: skip_same_hash", extra=record)
+        return {
+            "pdf_hash": pdf_hash,
+            "yaml_paths": yaml_paths,
+            "model": model,
+            "generated_at": ts,
+            "areas_count": areas_count,
+            "regenerated": False,
+        }
 
     # 1) Snapshot testuale
     snapshot = _extract_pdf_text(pdf_path)
@@ -182,24 +231,28 @@ def provision_from_vision(
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
+    safe_write_text(paths.vision_hash, pdf_hash)
 
-    # Audit
+    ts = datetime.now(timezone.utc).isoformat()
+    areas_count = len(data["areas"])
     record = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": ts,
         "slug": slug,
         "pdf": str(pdf_path),
         "pdf_hash": pdf_hash,
         "model": model,
-        "yaml_paths": {"vision": str(paths.vision_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
-        "areas_count": len(data["areas"]),
+        "yaml_paths": yaml_paths,
+        "areas_count": areas_count,
+        "regenerated": True,
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
 
     return {
         "pdf_hash": pdf_hash,
-        "yaml_paths": {"vision": str(paths.vision_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
+        "yaml_paths": yaml_paths,
         "model": model,
-        "generated_at": record["ts"],
-        "areas_count": len(data["areas"]),
+        "generated_at": ts,
+        "areas_count": areas_count,
+        "regenerated": True,
     }

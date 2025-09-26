@@ -3,6 +3,7 @@
 # =========================
 from __future__ import annotations
 
+import json
 import types
 from pathlib import Path
 
@@ -128,6 +129,7 @@ def test_happy_path(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
     result = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+    assert result.get("regenerated") is True
 
     # Verifiche di esito
     assert "yaml_paths" in result
@@ -171,3 +173,70 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
     with pytest.raises(ConfigError):
         provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+
+
+def test_idempotenza_hash_salta_rigenerazione(monkeypatch, tmp_workspace: Path):
+    output_parsed = {
+        "context": {"slug": "dummy", "client_name": "Dummy"},
+        "areas": [
+            {
+                "key": "artefatti-operativi",
+                "ambito": "operativo",
+                "descrizione": "Documenti e modelli operativi.",
+                "esempio": ["SOP", "template"],
+            },
+            {
+                "key": "governance",
+                "ambito": "strategico",
+                "descrizione": "Regole e responsabilità.",
+                "esempio": ["policy", "ruoli"],
+            },
+        ],
+    }
+
+    import semantic.vision_provision as S
+
+    calls = {"count": 0}
+
+    def _fake_client():
+        calls["count"] += 1
+        return FakeOpenAI(output_parsed)
+
+    monkeypatch.setattr(S, "make_openai_client", _fake_client)
+
+    ctx = DummyCtx(base_dir=tmp_workspace)
+    pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
+
+    result_first = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+    assert result_first.get("regenerated") is True
+    assert calls["count"] == 1
+
+    vision_yaml = Path(result_first["yaml_paths"]["vision"])
+    cartelle_yaml = Path(result_first["yaml_paths"]["cartelle_raw"])
+    vision_mtime = vision_yaml.stat().st_mtime
+    cartelle_mtime = cartelle_yaml.stat().st_mtime
+
+    hash_file = tmp_workspace / "semantic" / ".vision_hash"
+    assert hash_file.exists()
+
+    log_path = tmp_workspace / "logs" / "vision_provision.log"
+    assert log_path.exists()
+    first_lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert first_lines
+
+    def _fail_client():
+        raise AssertionError("OpenAI non dovrebbe essere invocato con hash invariato")
+
+    monkeypatch.setattr(S, "make_openai_client", _fail_client)
+
+    result_second = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+    assert result_second.get("regenerated") is False
+    assert result_second["yaml_paths"] == result_first["yaml_paths"]
+    assert vision_yaml.stat().st_mtime == vision_mtime
+    assert cartelle_yaml.stat().st_mtime == cartelle_mtime
+
+    lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == len(first_lines) + 1
+    last_record = json.loads(lines[-1])
+    assert last_record["pdf_hash"] == result_second["pdf_hash"]
+    assert last_record["regenerated"] is False
