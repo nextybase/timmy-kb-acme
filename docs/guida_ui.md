@@ -1,4 +1,4 @@
-# Onboarding UI — Guida aggiornata (v2.0.0)
+﻿# Onboarding UI — Guida aggiornata (v1.9.5)
 
 Questa guida descrive come usare e come funziona l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni.
 

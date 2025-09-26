@@ -1,4 +1,4 @@
-# Architecture Overview
+# Architecture Overview (v1.9.5)
 
 This page contains two Mermaid diagrams that illustrate Timmy KB at a high level.
 
@@ -16,6 +16,7 @@ flowchart LR
       TAG[tag_onboarding.py]
       SEMCLI[semantic_onboarding.py]
       FULL[onboarding_full.py]
+      VISIONCLI[gen_vision_yaml.py]
     end
 
     subgraph Pipeline
@@ -44,6 +45,10 @@ flowchart LR
       DRIVE[Google Drive]
     end
 
+    subgraph AI Services
+      OPENAI[(OpenAI Chat API)]
+    end
+
     UI -->|actions| PRE
     UI -->|actions| TAG
     UI -->|actions| SEMCLI
@@ -52,6 +57,7 @@ flowchart LR
     CLI --> PRE
     CLI --> TAG
     CLI --> SEMCLI
+    CLI --> VISIONCLI
     CLI --> FULL
 
     PRE --> PCTX
@@ -63,14 +69,18 @@ flowchart LR
     TAG --> DB
 
     SEMCLI --> SAPI
+    VISIONCLI --> SVISION
     SAPI --> PCONT
     SAPI --> STAGS
     SAPI --> SIO
+    SVISION --> FILES
     SAPI --> FILES
     SAPI --> DB
 
     FULL --> PGIT
     PGIT --> GITHUB
+
+    SVISION --> OPENAI
 
     PDRIVE --> DRIVE
 ```
@@ -115,4 +125,5 @@ sequenceDiagram
 Note operative
 
 - La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
+- La generazione del mapping Vision usa `semantic/vision_ai.py`: salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e richiama il modello `gpt-4.1-mini`.
 - L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log “Embedding vuoti scartati”).

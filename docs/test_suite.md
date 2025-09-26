@@ -1,4 +1,4 @@
-# Suite di test e utente dummy (v2.0.0)
+# Suite di test e utente dummy (v1.9.5)
 
 Questa suite verifica che la pipeline Timmy KB funzioni end-to-end (pre -> tag -> semantic -> full) e a livello di singoli orchestratori. Per velocità e riproducibilità usiamo un utente dummy: una sandbox locale con PDF finti e struttura pronta.
 
@@ -173,8 +173,10 @@ Get-ChildItem .\output -Directory "timmy-kb-*" | Remove-Item -Recurse -Force
 
 ---
 
-## Aggiornamenti v2.0.0 (nuovi test)
+## Aggiornamenti v1.9.5 (nuovi test)
 
+- `tests/test_vision_ai_module.py`: copre estrazione PDF, conversione JSON->YAML, salvataggio dello snapshot e gli errori
+  `ConfigError` sul nuovo pipeline Vision Statement.
 - `tests/test_tag_onboarding_drive_guard_main.py`:
   verifica che l'orchestratore `tag_onboarding_main(..., source="drive")` sollevi `ConfigError`
   con messaggio esplicito quando le funzioni Drive non sono disponibili (hint: `pip install .[drive]`).

@@ -1,10 +1,16 @@
-# Timmy KB - README (v1.9.4)
+# Timmy KB - README (v1.9.5)
 
 [![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml) [![Docs Spellcheck](https://github.com/nextybase/timmy-kb-acme/actions/workflows/docs-spellcheck.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/docs-spellcheck.yml)
 
 Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da PDF cliente, con arricchimento semantico, anteprima HonKit (Docker) e push opzionale su GitHub.
 
 > See also: [Architecture](docs/architecture.md).
+
+## Novità v1.9.5
+
+- Vision Statement pipeline: `src/semantic/vision_ai.py` estrae il testo dal PDF, lo salva in `semantic/vision_statement.txt` e genera il mapping JSON/YAML via `gpt-4.1-mini`.
+- CLI `py src/tools/gen_vision_yaml.py --slug <slug>` carica `.env` automaticamente, valida i percorsi e produce `semantic/vision_statement.yaml`.
+- Suite: `tests/test_vision_ai_module.py` copre l'estrazione dal PDF, la conversione JSON->YAML e gli scenari di errore dell'assistant.
 
 ---
 
@@ -53,6 +59,8 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `DRIVE_ID`: ID cartella root dello spazio Drive (RAW parent)
 - `GITHUB_TOKEN`: richiesto per il push GitHub
 - `GIT_DEFAULT_BRANCH`: branch di default (fallback `main`)
+- `OPENAI_API_KEY_CODEX`: credenziale per la UI Timmy KB Coder e i servizi RAG basati su Codex
+- `OPENAI_API_KEY_FOLDER`: credenziale separata per i job di ingest folder e gli script batch basati su OpenAI
 - `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION`: `auto` (default), `on`, `off`
 - `ENV`, `CI`: Modalità operative
@@ -65,12 +73,27 @@ output/
   timmy-kb-<slug>/
     raw/      # PDF caricati/scaricati
     book/     # Markdown + SUMMARY.md + README.md
-    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db, finance.db (opz.)
+    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.yaml, vision_statement.txt, tags.db, finance.db (opz.)
     config/   # config.yaml (aggiornato con eventuali ID Drive)
     logs/     # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
 ```
 
 > Lo slug deve rispettare le regole in `config/config.yaml`. In interattivo, se non valido, viene richiesto di correggerlo.
+
+---
+
+## Vision Statement -> YAML
+
+> Genera il mapping semantico partendo dal Vision Statement del cliente.
+
+```bash
+py src/tools/gen_vision_yaml.py --slug <slug>
+```
+
+- Input: `VisionStatement.pdf` cercato in `config/`, `raw/` o nel `config/` globale del repo.
+- Output: `semantic/vision_statement.yaml` (mapping strutturato) e `semantic/vision_statement.txt` (snapshot testuale).
+- Richiede `OPENAI_API_KEY_FOLDER` o `OPENAI_API_KEY` nel `.env`; lo script richiama `ensure_dotenv_loaded()` automaticamente.
+- Il modello `gpt-4.1-mini` produce un JSON conforme allo schema e viene serializzato in YAML; risposte vuote o troncate sollevano `ConfigError`.
 
 ---
 

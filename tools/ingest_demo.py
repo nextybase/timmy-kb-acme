@@ -8,7 +8,7 @@ Uso:
       --version v1 \
       --meta "{\"source\": \"docs\"}"
 
-Nota: richiede OPENAI_API_KEY in ambiente (usa .env se presente).
+Nota: richiede OPENAI_API_KEY_CODEX in ambiente (usa .env se presente).
 """
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        raise SystemExit("OPENAI_API_KEY mancante. Impostalo nell'ambiente o in un file .env.")
+    if not os.getenv("OPENAI_API_KEY_CODEX"):
+        raise SystemExit("OPENAI_API_KEY_CODEX mancante. Impostalo nell'ambiente o in un file .env.")
 
     summary = ingest_folder(
         project_slug=args.project,

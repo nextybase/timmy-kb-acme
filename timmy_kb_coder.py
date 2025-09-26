@@ -91,9 +91,9 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
     """Return an embeddings client if RAG is enabled and credentials are present; otherwise None."""
     if not use_rag:
         return None
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY_CODEX")
     if not api_key:
-        st.warning("OPENAI_API_KEY non trovato nell'ambiente (.env consigliato). RAG disattivato.")
+        st.warning("OPENAI_API_KEY_CODEX non trovato nell'ambiente (.env consigliato). RAG disattivato.")
         return None
     try:
         return OpenAIEmbeddings()

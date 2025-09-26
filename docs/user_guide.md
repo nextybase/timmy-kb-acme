@@ -1,4 +1,4 @@
-# Timmy-KB - User Guide (v2.0.0)
+﻿# Timmy-KB - User Guide (v1.9.5)
 
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
@@ -31,7 +31,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
 - È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
- - Dopo l'upload di `config/VisionStatement.pdf`, viene generato il file YAML strutturato `config/vision_statement.yaml` (placeholder oggi, AI domani).
+ - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` estrae il testo, salva `semantic/vision_statement.txt` e genera `semantic/vision_statement.yaml` via OpenAI (modello `gpt-4.1-mini`).
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
@@ -58,12 +58,20 @@ Modalità **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 
 ---
 
+## Vision Statement (CLI)
+1. Copia `VisionStatement.pdf` in `output/timmy-kb-<slug>/config/` oppure in `raw/`.
+2. Assicurati che `.env` contenga `OPENAI_API_KEY_FOLDER` (o `OPENAI_API_KEY`).
+3. Esegui `py src/tools/gen_vision_yaml.py --slug <slug>`: il tool carica l'ambiente, risolve i path e genera
+   `semantic/vision_statement.yaml` più lo snapshot `semantic/vision_statement.txt`.
+4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.
+
+
 ## Struttura output
 ```
 output/timmy-kb-<slug>/
    raw/        # PDF
    book/       # Markdown + SUMMARY.md + README.md
-   semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, tags.db
+   semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.yaml, vision_statement.txt, tags.db
    config/     # config.yaml (con eventuali ID Drive)
    logs/
 ```

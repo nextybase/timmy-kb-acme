@@ -1,4 +1,4 @@
-# Timmy-KB - Coding Rules (v2.0.0)
+# Timmy-KB - Coding Rules (v1.9.5)
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
@@ -56,6 +56,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ## Logging & redazione
 - Usa il logger strutturato dove disponibile; fallback a `logging.basicConfig` negli script.
 - Redazione automatica attiva quando richiesto (`LOG_REDACTION`): non loggare segreti o payload completi.
+- Niente segreti nei log: maschera sempre token, chiavi API e payload sensibili (es. `OPENAI_API_KEY_CODEX`, `OPENAI_API_KEY_FOLDER`).
 - Includi event e metadati essenziali (slug, conteggi, esiti) per ogni operazione rilevante.
 - Non loggare secrets, password, token o variabili d'ambiente (mai l'intero `os.environ`). Usa `dotenv` o `vault` per i secrets.
 
@@ -93,7 +94,8 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - Download RAW: usa la funzione di alto livello esposta nel runner UI.
 - Git: push solo di `.md` in `book/`; ignora `.md.fp` e file binari.
 
-### Novità v2.0.0 (UI/Drive)
+### Novità v1.9.5 (Vision & UI)
+- Vision Statement mapping: `semantic/vision_ai.py` deve restare idempotente (snapshot + YAML), usare `safe_write_text` e non accedere all'API OpenAI senza aver risolto i path con `ensure_within_and_resolve`.
 - UI/servizi devono verificare la disponibilità degli extra Drive con una guardia esplicita prima di usare funzioni come `get_drive_service` o `create_drive_folder`.
 - Mostrare errori comprensibili all’utente (RuntimeError con hint `pip install .[drive]`) al posto di `TypeError`.
 

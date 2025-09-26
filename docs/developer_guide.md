@@ -11,6 +11,8 @@
 - [Gestione errori, exit codes e osservabilità](#gestione-errori-exit-codes-e-osservabilità)
 - [Conversione Markdown: policy ufficiale](#conversione-markdown-policy-ufficiale)
 - [Enrichment & vocabolario: comportamento fail-fast](#enrichment--vocabolario-comportamento-fail-fast)
+
+- [Vision Statement mapping](#vision-statement-mapping)
 - [Indexer & KPI DB (inserimenti reali)](#indexer--kpi-db-inserimenti-reali)
 - [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
 - [Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`](#tooling-gen_dummy_kbpy-e-retriever_calibratepy)
@@ -70,6 +72,11 @@ La facade `semantic.api` espone gli step principali:
 
 ---
 
+## Variabili ambiente e segreti
+- Mantieni chiavi distinte per servizio e ambiente (es. `OPENAI_API_KEY_CODEX` per la UI/RAG e `OPENAI_API_KEY_FOLDER` per i job batch).
+- Popola i secret omonimi in GitHub (Settings -> Secrets and variables -> Actions) per ciascun ambiente CI/CD, evitando valori in chiaro nei log.
+- In locale carica i segreti tramite `.env` e attiva la redazione (`LOG_REDACTION`) per prevenire tracce accidentali.
+
 ## CI
 - Concurrency per ref/PR con `cancel-in-progress: true` per evitare job duplicati.
 - Permissions minime (`contents: read`) se non servono scritture.
@@ -101,6 +108,13 @@ La facade `semantic.api` espone gli step principali:
 - Errori SQLite (apertura, query, cursor) durante la lettura del DB sono sempre rimappati a `ConfigError` con `file_path` al DB.
 
 ---
+
+## Vision Statement mapping
+- `semantic.vision_ai.generate(ctx, logger, slug)` risolve i percorsi con `ensure_within_and_resolve`, estrae il testo dal PDF con PyMuPDF e salva sempre uno snapshot (`semantic/vision_statement.txt`) prima di inviare il prompt strutturato al modello `gpt-4.1-mini`.
+- Lo YAML risultante (`semantic/vision_statement.yaml`) è scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
+- `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` -> exit code 2).
+- I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON->YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).
+
 
 ## Indexer & KPI DB (inserimenti reali)
 - `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run → `0`).

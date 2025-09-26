@@ -1,4 +1,4 @@
-# Policy di Versioning - Timmy-KB (v2.0.0)
+﻿# Policy di Versioning - Timmy-KB (v1.9.5)
 
 Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilità.
 

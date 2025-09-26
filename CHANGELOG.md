@@ -3,6 +3,21 @@
 > Formato: **Keep a Changelog** e **SemVer**
 > Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualità.
 
+## [1.9.5] - 2025-09-26
+
+### Added
+- Vision Statement pipeline: `semantic/vision_ai.py` estrae il testo dal PDF, salva uno snapshot (`vision_statement.txt`) e genera `vision_statement.yaml` via `gpt-4.1-mini`.
+- Script `py src/tools/gen_vision_yaml.py` carica `.env`, valida i percorsi del PDF e produce il mapping YAML con errori tipizzati (`ConfigError`).
+- Test unitari `tests/test_vision_ai_module.py` per estrazione, conversione JSON->YAML e gestione `finish_reason="length"`.
+
+### Changed
+- `semantic/vision_ai.py` usa le chat completions con JSON Schema, salva il dump testuale e trasforma risposte vuote/rifiutate in `ConfigError`.
+- `gen_vision_yaml.py` forza `ensure_dotenv_loaded()` prima di caricare il `ClientContext` e propaga exit code coerenti.
+
+### Docs
+- README, Architecture, Developer Guide e Test Suite aggiornati con la pipeline Vision e bump documentale a v1.9.5.
+- Coding Rules/Policy allineate: snapshot obbligatorio, uso di `safe_write_text` e path-safety sui PDF Vision.
+
 ---
 
 ## [1.9.4] - 2025-09-23
