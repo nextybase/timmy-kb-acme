@@ -58,7 +58,7 @@ openai==1.55.0
 httpx==0.27.2
 # httpx <0.28 per compatibilità con OpenAI Python (supporto proxies)
 tiktoken==0.7.0
-numpy==1.26.4
+numpy==2.3.3
 
 # Scarica il modello italiano piccolo per spaCy:
 # py -m spacy download it_core_news_md

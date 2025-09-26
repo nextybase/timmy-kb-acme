@@ -19,7 +19,7 @@ dependencies = [
     "python-slugify==8.0.4",
     "PyYAML==6.0.1",
     "requests==2.32.2",
-    "numpy==1.26.4",
+    "numpy==2.3.3",
     # Compat pydantic/types
     "typing-extensions==4.12.2",
     "annotated-types==0.7.0",
