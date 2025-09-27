@@ -24,7 +24,7 @@ requests==2.32.2
 google-api-python-client==2.127.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
-spacy==3.7.4
+spacy==3.8.7
 docker==7.0.0
 fpdf==1.7.2
 GitPython==3.1.43
