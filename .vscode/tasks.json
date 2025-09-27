@@ -1,12 +1,43 @@
 {
-  // Task per eseguire i test con il venv attivo
   "$schema": "vscode://schemas/tasks",
   "version": "2.0.0",
   "tasks": [
     {
       "label": "Tests: Pytest (venv)",
       "type": "shell",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+
+      // Usa l'interprete configurato in VS Code, se presente
+      "command": "${config:python.defaultInterpreterPath}",
+
+      // Fallback per ogni OS se l'impostazione sopra non è definita
+      "windows": {
+        "command": "${workspaceFolder}\\${input:venvFolder}\\Scripts\\python.exe",
+        "options": {
+          "env": {
+            "VIRTUAL_ENV": "${workspaceFolder}\\${input:venvFolder}",
+            "PATH": "${workspaceFolder}\\${input:venvFolder}\\Scripts;${env:PATH}"
+          }
+        }
+      },
+      "linux": {
+        "command": "${workspaceFolder}/${input:venvFolder}/bin/python",
+        "options": {
+          "env": {
+            "VIRTUAL_ENV": "${workspaceFolder}/${input:venvFolder}",
+            "PATH": "${workspaceFolder}/${input:venvFolder}/bin:${env:PATH}"
+          }
+        }
+      },
+      "osx": {
+        "command": "${workspaceFolder}/${input:venvFolder}/bin/python",
+        "options": {
+          "env": {
+            "VIRTUAL_ENV": "${workspaceFolder}/${input:venvFolder}",
+            "PATH": "${workspaceFolder}/${input:venvFolder}/bin:${env:PATH}"
+          }
+        }
+      },
+
       "args": ["-m", "pytest", "-ra"],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -20,9 +51,16 @@
         "panel": "dedicated",
         "clear": true
       },
-      "problemMatcher": [
-        "$pytest-python"
-      ]
+      "problemMatcher": "$python"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "venvFolder",
+      "type": "pickString",
+      "description": "Seleziona la cartella del virtual env",
+      "options": [".venv", "venv"],
+      "default": "venv"
     }
   ]
 }

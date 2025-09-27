@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -24,7 +24,7 @@ def test_env_lazy_load(monkeypatch, tmp_path: Path):
         _il.reload(envu)
         envu.ensure_dotenv_loaded()
     # Verifica l'effetto: la variabile deve essere disponibile, a prescindere dal valore booleano
-    # (puÃ² essere False se giÃ  caricata da altre parti del processo di test)
+    # (può essere False se già caricata da altre parti del processo di test)
     assert os.environ.get("FOO_BAR") == "hello"
 
     # Seconda chiamata: idempotente

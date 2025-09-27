@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # src/tag_onboarding.py
 """
@@ -9,7 +9,7 @@ A partire dai PDF grezzi in `raw/`, produce un CSV con i tag suggeriti e
 (dopo conferma) genera gli stub per la revisione semantica.
 
 Punti chiave:
-- Niente `print()` â†’ logging strutturato.
+- Niente `print()` → logging strutturato.
 - Path-safety STRONG con `ensure_within`.
 - Scritture atomiche centralizzate con `safe_write_text`.
 - Integrazione Google Drive supportata (default: Drive).
@@ -92,13 +92,13 @@ __all__ = [
 ]
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers UX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ───────────────────────────── Helpers UX ─────────────────────────────────────────────
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Core: ingest locale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ───────────────────────────── Core: ingest locale ───────────────────────────────────
 def compute_sha256(path: Path) -> str:
     """SHA-256 streaming del file (chunk 8 KiB) con guardie di lettura sicure."""
     h = hashlib.sha256()
@@ -192,7 +192,7 @@ def scan_raw_to_db(
     return stats
 
 
-# ============================= NLP â†’ DB (doc_terms / terms / folder_terms) =======================
+# ============================= NLP → DB (doc_terms / terms / folder_terms) =======================
 def run_nlp_to_db(
     slug: str,
     raw_dir: Path | str,
@@ -418,12 +418,12 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
-    """Valida la struttura giÃ  caricata da `tags_reviewed.yaml`."""
+    """Valida la struttura già caricata da `tags_reviewed.yaml`."""
     errors: list[str] = []
     warnings: list[str] = []
 
     if not isinstance(data, dict):
-        errors.append("Il file YAML non Ã¨ una mappa (dict) alla radice.")
+        errors.append("Il file YAML non è una mappa (dict) alla radice.")
         return {"errors": errors, "warnings": warnings}
 
     for k in ("version", "reviewed_at", "keep_only_listed", "tags"):
@@ -440,7 +440,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
     for idx, item in enumerate(data.get("tags", []), start=1):
         ctx = f"tags[{idx}]"
         if not isinstance(item, dict):
-            errors.append(f"{ctx}: elemento non Ã¨ dict.")
+            errors.append(f"{ctx}: elemento non è dict.")
             continue
 
         name = item.get("name")
@@ -476,7 +476,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
         else:
             for si, s in enumerate(syn or [], start=1):
                 if not isinstance(s, str) or not s.strip():
-                    errors.append(f"{ctx}: synonyms[{si}] non Ã¨ stringa valida.")
+                    errors.append(f"{ctx}: synonyms[{si}] non è stringa valida.")
 
         if "notes" in item:
             errors.append(f"{ctx}: Chiave non supportata: 'notes'. Usa 'note'.")
@@ -485,7 +485,7 @@ def _validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
             errors.append(f"{ctx}: 'note' deve essere una stringa.")
 
     if data.get("keep_only_listed") and not data.get("tags"):
-        warnings.append("keep_only_listed=True ma la lista 'tags' Ã¨ vuota.")
+        warnings.append("keep_only_listed=True ma la lista 'tags' è vuota.")
 
     return {"errors": errors, "warnings": warnings, "count": len(data.get("tags", []))}
 
@@ -756,7 +756,7 @@ def tag_onboarding_main(
     _emit_stub_phase(semantic_dir, csv_path, logger, context=context)
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CLI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
 def _resolve_cli_paths(
     context: ClientContextProtocol | ClientContext,
     *,
@@ -806,7 +806,7 @@ def _parse_args() -> argparse.Namespace:
         "--local-path",
         type=str,
         help=(
-            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userÃ  " "direttamente output/<slug>/raw."
+            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userà " "direttamente output/<slug>/raw."
         ),
     )
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
@@ -829,7 +829,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--raw-dir", type=str, help="Percorso della cartella raw/")
     p.add_argument("--db", type=str, help="Percorso del DB SQLite (tags.db)")
 
-    # NLP â†’ DB
+    # NLP → DB
     p.add_argument(
         "--nlp",
         action="store_true",
@@ -914,7 +914,7 @@ if __name__ == "__main__":
         log.info("Indicizzazione completata", extra=stats)
         sys.exit(0)
 
-    # NLP â†’ DB
+    # NLP → DB
     if getattr(args, "nlp", False):
         ctx = ClientContext.load(
             slug=slug,

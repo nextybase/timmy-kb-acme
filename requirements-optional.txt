@@ -1,4 +1,4 @@
-﻿spacy
+spacy
 yake
 sentence-transformers
 scikit-learn

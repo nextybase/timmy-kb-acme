@@ -1,4 +1,4 @@
-# Normalize line endings across the repo
+# Normalize line endings across the repo (LF by default)
 * text=auto eol=lf
 
 # Shell scripts stay LF
@@ -9,26 +9,52 @@
 *.cmd text eol=crlf
 *.bat text eol=crlf
 
-# Common text files as LF
-*.md text eol=lf
-*.txt text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.json text eol=lf
-*.ini text eol=lf
-*.toml text eol=lf
+# Common code/text as LF
+*.py    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.ini   text eol=lf
+*.toml  text eol=lf
 *.ipynb text eol=lf
 *.csv   text eol=lf
 *.sql   text eol=lf
+# SVG is XML; keep as text for readable diffs
+*.svg   text eol=lf
 
-# Treat binaries as binary
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.pdf binary
-*.svg binary
-*.zip binary
-*.gz binary
-*.tgz binary
+# Treat binaries as binary (no EOL conversions)
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+*.tgz    binary
+*.tar    binary
+*.7z     binary
+*.bz2    binary
+*.xz     binary
 *.sqlite binary
+*.db     binary
+
+# Office docs & fonts as binary
+*.doc   binary
+*.docx  binary
+*.xls   binary
+*.xlsx  binary
+*.ppt   binary
+*.pptx  binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+
+# Media as binary
+*.mp3 binary
+*.mp4 binary
+*.mov binary

@@ -1,4 +1,4 @@
-﻿# Integrazione di Codex in VS Code e sistema degli agenti (v1.9.6)
+# Integrazione di Codex in VS Code e sistema degli agenti (v1.9.6)
 
 ## Perché Codex in NeXT
 Usiamo Codex come coding agent per accelerare sviluppo, refactoring e manutenzione guidata dai dati, mantenendo un approccio Human‑in‑the‑Loop coerente con NeXT: iterazioni brevi, feedback continui e controllo di coerenza tra obiettivi e risultati.

@@ -1,4 +1,4 @@
-﻿Timmy‑KB v1.8.0
+Timmy‑KB v1.8.0
 
 Questa release rimuove legacy e fallback, introduce una façade semantica stabile e normalizza i log per ambienti Windows/console.
 

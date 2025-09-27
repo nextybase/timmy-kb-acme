@@ -1,4 +1,4 @@
-﻿# src/ui/services/drive_runner.py
+# src/ui/services/drive_runner.py
 from __future__ import annotations
 
 import io

@@ -1,5 +1,20 @@
-﻿default_language_version:
+minimum_pre_commit_version: "3.6.0"
+
+default_language_version:
   python: python3.11
+
+# Evita di analizzare cartelle generate/venv
+exclude: |
+  (?x)^(
+    \.venv/|
+    venv/|
+    node_modules/|
+    output/|
+    dist/|
+    build/|
+    \.gitbook/|
+    docs/_build/
+  )
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -13,6 +28,17 @@ repos:
         stages: [pre-commit]
       - id: mixed-line-ending
         args: ["--fix=lf"]
+        stages: [pre-commit]
+      - id: fix-byte-order-marker
+        stages: [pre-commit]
+      - id: check-merge-conflict
+        stages: [pre-commit]
+      - id: check-case-conflict
+        stages: [pre-commit]
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+        stages: [pre-commit]
+      - id: forbid-new-submodules
         stages: [pre-commit]
 
   - repo: https://github.com/psf/black
@@ -42,7 +68,6 @@ repos:
 
   - repo: local
     hooks:
-
       - id: mypy
         name: mypy
         entry: mypy
@@ -59,50 +84,69 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
         entry: python tools/dev/check_no_local_emit_or_copy.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
+
       - id: qa-safe
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python tools/dev/qa_safe.py
         language: python
-        additional_dependencies: ["black==24.8.0", "isort==6.0.1", "ruff", "mypy", "types-PyYAML"]
+        additional_dependencies: ["black==24.8.0", "isort==5.13.2", "ruff", "mypy", "types-PyYAML"]
         pass_filenames: false
         stages: [pre-push]
+
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
         entry: python tools/dev/qa_safe.py --with-tests
         language: python
-        additional_dependencies: [
-          "black==24.8.0",
-          "isort==6.0.1",
-          "ruff",
-          "mypy",
-          "pytest",
-          "pyyaml",
-          "pydantic",
-          "pydantic-settings",
-          "numpy",
-          "hypothesis",
-          "reportlab",
-          "types-PyYAML",
-        ]
+        additional_dependencies:
+          [
+            "black==24.8.0",
+            "isort==5.13.2",
+            "ruff",
+            "mypy",
+            "pytest",
+            "pyyaml",
+            "pydantic",
+            "pydantic-settings",
+            "numpy",
+            "hypothesis",
+            "reportlab",
+            "types-PyYAML",
+          ]
         pass_filenames: false
         stages: [pre-push]
+
+      # FIXER: rimuove C0/C1 e normalizza NFC (se modifica, pre-commit fallirà chiedendo di rieseguire il commit)
+      - id: fix-control-chars
+        name: Fix Unicode control chars (remove C0/C1 + NFC)
+        entry: python scripts/forbid_control_chars.py --fix
+        language: system
+        pass_filenames: true
+        types: [text]
+        files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml))$"
+        stages: [pre-commit]
+
+      # GUARDIANO: blocca se restano caratteri di controllo o file non-UTF-8
+      - id: forbid-control-chars
+        name: Forbid Unicode control chars & non-UTF-8
+        entry: python scripts/forbid_control_chars.py
+        language: system
+        pass_filenames: true
+        types: [text]
+        files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml))$"
+        stages: [pre-commit]
 
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.18.1
     hooks:
       - id: gitleaks
-        args:
-          - detect
-          - --no-banner
-          - --redact
-          - --config
-          - .gitleaks.toml
+        args: [detect, --no-banner, --redact, --config, .gitleaks.toml]
         pass_filenames: false
         stages: [pre-commit]
 

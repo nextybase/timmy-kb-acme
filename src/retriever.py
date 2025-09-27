@@ -1,4 +1,4 @@
-﻿# src/retriever.py
+# src/retriever.py
 """Utility di ricerca basata su embedding per la Timmy KB.
 
 Funzioni esposte:

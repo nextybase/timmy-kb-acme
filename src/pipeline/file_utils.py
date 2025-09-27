@@ -4,26 +4,26 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Centralizzare la logica di fsync (best-effort di default; opzionale piÃ¹ â€œforteâ€).
+- Centralizzare la logica di fsync (best-effort di default; opzionale più “forte”).
 - Non imporre policy di perimetro: la guardia STRONG dei path resta in
   `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
 Indice (ruolo funzioni):
 - `_fsync_file(fd, *, path=None, strict=False)`: sincronizza il file descriptor.
-  - `strict=True` â†’ solleva `ConfigError`; altrimenti logga in debug (best-effort).
+  - `strict=True` → solleva `ConfigError`; altrimenti logga in debug (best-effort).
 - `_fsync_dir_best_effort(dir_path)`: tenta la sincronizzazione della directory padre.
   - Non solleva eccezioni (compatibile con Windows/FS remoti).
 - `safe_write_text(path, data, *, encoding="utf-8", atomic=True, fsync=False)`:
   scrittura **testo** sicura.
   - Crea le directory mancanti.
   - `atomic=True`: usa temp file + `os.replace()` atomico. Con `fsync=True` fa flush+fsync.
-  - `atomic=False`: scrive direttamente e puÃ² fare fsync sul file.
+  - `atomic=False`: scrive direttamente e può fare fsync sul file.
   - Sempre prova a fsync-are la directory (best-effort).
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- Di default eseguiamo un fsync â€œsoftâ€ (best-effort) anche quando `fsync=False`.
-- Questo modulo non valida che `path` sia â€œdentroâ€ un perimetro: quel controllo va fatto a monte.
+- Di default eseguiamo un fsync “soft” (best-effort) anche quando `fsync=False`.
+- Questo modulo non valida che `path` sia “dentro” un perimetro: quel controllo va fatto a monte.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def safe_write_text(
         except Exception as e:
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
 
-    # ModalitÃ  atomica: temp + replace
+    # Modalità atomica: temp + replace
     tmp_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -134,7 +134,7 @@ def safe_write_text(
                 try:
                     tmp.flush()
                 except Exception:
-                    # flush best-effort; fsync strict intercetterÃ  eventuali errori
+                    # flush best-effort; fsync strict intercetterà eventuali errori
                     pass
                 _fsync_file(tmp.fileno(), path=tmp_path, strict=True)
             else:
