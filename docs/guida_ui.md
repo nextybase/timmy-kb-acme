@@ -40,7 +40,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 ## 3bis) Landing Vision onboarding
 - **Step 1 - upload**: con slug nuovo la landing mostra l'uploader dedicato a `VisionStatement.pdf`; il file viene salvato in `config/` con guardie `ensure_within_and_resolve`.
 - **Step 2 - Genera da Vision (AI)**: il pulsante esplicito avvia la pipeline (`semantic.vision_provision.provision_from_vision`) e visualizza gli step di avanzamento `[PDF ricevuto] -> [Snapshot] -> [YAML vision] -> [YAML cartelle]`.
-- **Step 3 - Anteprima**: al termine vengono mostrati in expander gli YAML `semantic/vision_statement.yaml` e `semantic/cartelle_raw.yaml` per revisione rapida.
+- **Step 3 - Anteprima**: al termine vengono mostrati in expander gli YAML `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml` per revisione rapida.
 - **Step 4 - Approva**: il bottone **"Approva e crea cartelle"** crea la gerarchia `docs/` leggendo `semantic/cartelle_raw.yaml`; nessuna cartella viene generata prima di questa approvazione.
 - **Idempotenza**: se l'hash del PDF non cambia, la UI avvisa che gli artefatti sono già presenti e propone un toggle per rigenerare forzatamente (utile anche per cambiare modello).
 > Screenshot (TODO): acquisire la landing Vision aggiornata e salvarla come `docs/assets/vision_onboarding.png` per documentazione e training.
@@ -68,7 +68,7 @@ Percorsi: mapping rivisto in `semantic/tags_reviewed.yaml` (workspace cliente). 
 - Genera README per raw/: PDF (o TXT) di istruzioni upload
 - Download contenuti: scarica file da Drive in `raw/`; aggiorna stato `raw_downloaded=True`
 - Pulsante extra: "Rileva PDF in raw/" aggiorna lo stato senza download
-- Vision: upload di `VisionStatement.pdf` → generazione automatica di `vision_statement.yaml` (schema stabile)
+- Vision: upload di `VisionStatement.pdf` → generazione automatica di `semantic_mapping.yaml` (schema stabile)
 
 Funzioni (`ui.services.drive_runner`):
 - `build_drive_from_mapping(slug, client_name, progress_cb)`
@@ -80,7 +80,7 @@ Requisiti ENV: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`
 ---
 
 ## 6) Tab "Semantica"
-> Nota: `semantic/cartelle_raw.yaml` viene generato insieme a `semantic/vision_statement.yaml`; la creazione delle cartelle `docs/` rimane esplicita via pulsante nella landing.
+> Nota: `semantic/cartelle_raw.yaml` viene generato insieme a `semantic/semantic_mapping.yaml`; la creazione delle cartelle `docs/` rimane esplicita via pulsante nella landing.
 - Conversione RAW → BOOK (PDF → Markdown)
 - Arricchimento frontmatter: aggiunge tag canonici dal DB SQLite (`storage/tags_store`)
 - Generazione e validazione di `README.md` e `SUMMARY.md`

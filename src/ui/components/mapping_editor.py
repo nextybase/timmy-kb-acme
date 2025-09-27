@@ -130,17 +130,27 @@ def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | 
 
 
 def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
-    """Carica il mapping rivisto del cliente (formato unico: 'tags_reviewed.yaml')."""
+    """Carica il mapping semantico del cliente.
+
+    Ordine di preferenza:
+      1. semantic/semantic_mapping.yaml (nuovo flusso Vision)
+      2. semantic/tags_reviewed.yaml (legacy)
+    """
     base_root = Path(base_root)
-    sem_dir: Path = ensure_within_and_resolve(
-        base_root / f"timmy-kb-{slug}",
-        base_root / f"timmy-kb-{slug}" / "semantic",
-    )
-    path = sem_dir / "tags_reviewed.yaml"
-    if path.is_file():
-        data = yaml_load(path)
+    client_root = base_root / f"timmy-kb-{slug}"
+    sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
+
+    mapping_path = sem_dir / "semantic_mapping.yaml"
+    if mapping_path.is_file():
+        data = yaml_load(mapping_path)
         return cast(Dict[str, Any], data)
-    raise FileNotFoundError(f"Mapping non trovato: {path}.")
+
+    legacy_path = sem_dir / "tags_reviewed.yaml"
+    if legacy_path.is_file():
+        data = yaml_load(legacy_path)
+        return cast(Dict[str, Any], data)
+
+    raise FileNotFoundError(f"Mapping non trovato: {mapping_path} o {legacy_path}.")
 
 
 def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:

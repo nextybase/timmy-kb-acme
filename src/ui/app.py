@@ -4,232 +4,464 @@ from __future__ import annotations
 import logging
 import os
 import signal
-import subprocess
-import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import streamlit as st
+import yaml
 
 from pipeline.context import ClientContext
-from pipeline.path_utils import read_text_safe
-from src.semantic.vision_ai import ConfigError
-from src.semantic.vision_ai import generate as gen_vision_yaml
+from pipeline.drive_utils import (
+    create_drive_folder,
+    create_drive_structure_from_yaml,
+    create_local_base_structure,
+    get_drive_service,
+    upload_config_to_drive_folder,
+)
+from pipeline.exceptions import ConfigError, InvalidSlug
+from pipeline.file_utils import safe_write_bytes, safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.yaml_utils import clear_yaml_cache, yaml_read
+from semantic.vision_provision import provision_from_vision
+from ui.services.drive_runner import emit_readmes_for_raw
 
-# ---------------------------
-# Helpers (no side-effect)
-# ---------------------------
+REPO_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_ROOT = REPO_ROOT / "output"
+BASE_CONFIG = REPO_ROOT / "config" / "config.yaml"
 
 
 def _setup_logging() -> logging.Logger:
-    logger = logging.getLogger("ui.app")
+    logger = logging.getLogger("ui.new_client")
     if not logger.handlers:
-        h = logging.StreamHandler()
-        fmt = logging.Formatter("%(asctime)s %(name)s [%(levelname)s] %(message)s")
-        h.setFormatter(fmt)
-        logger.addHandler(h)
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(name)s [%(levelname)s] %(message)s"))
+        logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     return logger
 
 
-def _load_ctx(slug: str, logger: logging.Logger) -> Optional[ClientContext]:
-    try:
-        return ClientContext.load(
-            slug=slug,
-            interactive=False,
-            require_env=False,
-            run_id=None,
-        )
-    except Exception:  # non esponiamo dettagli sensibili
-        logger.exception("ContextLoadError")
-        st.error(f"Errore nel caricamento del contesto per slug '{slug}'.")
-        return None
-
-
-def _hint_pdf_locations(base_dir: Path) -> str:
-    cfg = base_dir / "config" / "VisionStatement.pdf"
-    raw = base_dir / "raw" / "VisionStatement.pdf"
-    return f"- {cfg}\n- {raw}"
-
-
 def _request_shutdown(logger: logging.Logger) -> None:
-    """Richiede la terminazione pulita di Streamlit."""
     try:
-        logger.info("ui_shutdown_request")
+        logger.info("ui.shutdown_request")
         os.kill(os.getpid(), signal.SIGTERM)
     except Exception:
         os._exit(0)
 
 
-def _run_dummy_generation(slug: str, logger: logging.Logger) -> None:
-    """Esegue lo script gen_dummy_kb per lo slug corrente."""
-    if not slug:
-        st.warning("Slug non valido per la generazione dummy.")
-        return
-    with st.spinner("Generazione dummy in corso..."):
-        try:
-            logger.info("ui_dummy_generate_start slug=%s", slug)
-            proc = subprocess.run(
-                [sys.executable, "src/tools/gen_dummy_kb.py", "--slug", slug],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            logger.info("ui_dummy_generate_end slug=%s rc=%s", slug, proc.returncode)
-        except Exception as exc:
-            logger.exception("ui_dummy_generate_exception slug=%s", slug)
-            st.error(f"Errore durante la generazione dummy: {exc}")
-            return
-
-    stdout = (proc.stdout or "").strip()
-    stderr = (proc.stderr or "").strip()
-    if proc.returncode == 0:
-        st.success("Dummy generato/aggiornato.")
-    else:
-        st.error(f"Dummy: errore (code {proc.returncode})")
-    if stdout:
-        st.code(stdout[:4000], language="bash")
-    if stderr:
-        st.code(stderr[:4000], language="bash")
-
-
 def _workspace_dir_for(slug: str) -> Path:
-    return Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
+    return OUTPUT_ROOT / f"timmy-kb-{slug}"
 
 
-# ---------------------------
-# Main UI
-# ---------------------------
+def _config_path(workspace_dir: Path) -> Path:
+    return workspace_dir / "config" / "config.yaml"
+
+
+def _semantic_dir(workspace_dir: Path) -> Path:
+    return workspace_dir / "semantic"
+
+
+def _mapping_path(workspace_dir: Path) -> Path:
+    return _semantic_dir(workspace_dir) / "semantic_mapping.yaml"
+
+
+def _cartelle_path(workspace_dir: Path) -> Path:
+    return _semantic_dir(workspace_dir) / "cartelle_raw.yaml"
+
+
+def _pdf_path(workspace_dir: Path) -> Path:
+    return workspace_dir / "config" / "VisionStatement.pdf"
+
+
+def _copy_base_config(workspace_dir: Path, slug: str, logger: logging.Logger) -> Path:
+    config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    target = ensure_within_and_resolve(config_dir, config_dir / "config.yaml")
+    if not BASE_CONFIG.exists():
+        raise ConfigError(f"File di configurazione base non trovato: {BASE_CONFIG}")
+    if not target.exists():
+        content = read_text_safe(REPO_ROOT, BASE_CONFIG, encoding="utf-8")
+        safe_write_text(target, content, encoding="utf-8", atomic=True)
+        logger.info(
+            "ui.config.copied",
+            extra={"slug": slug, "path": str(target)},
+        )
+    return target
+
+
+def _load_config_data(workspace_dir: Path) -> Dict[str, Any]:
+    cfg_path = _config_path(workspace_dir)
+    data = yaml_read(workspace_dir, cfg_path)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ConfigError("config.yaml non valido: atteso un dizionario")
+    return data
+
+
+def _persist_config_value(
+    workspace_dir: Path,
+    slug: str,
+    key: str,
+    value: Any,
+    logger: logging.Logger,
+) -> None:
+    data = _load_config_data(workspace_dir)
+    data[key] = value
+    serialized = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    target = ensure_within_and_resolve(workspace_dir, _config_path(workspace_dir))
+    safe_write_text(target, serialized, encoding="utf-8", atomic=True)
+    clear_yaml_cache()
+    logger.info(
+        "ui.config.updated",
+        extra={"slug": slug, "key": key, "path": str(target)},
+    )
+
+
+def _render_config_widget(slug: str, key: str, value: Any) -> Any:
+    label = f"{key} [{slug}]"
+    if isinstance(value, bool):
+        return st.checkbox(label, value=value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return int(st.number_input(label, value=int(value), step=1))
+    if isinstance(value, float):
+        return float(st.number_input(label, value=float(value)))
+    default = "" if value is None else str(value)
+    text = st.text_input(label, value=default)
+    if value is None and text == "":
+        return None
+    return text
+
+
+def _render_config_editor(workspace_dir: Path, slug: str, logger: logging.Logger) -> None:
+    st.subheader("Config workspace")
+    try:
+        data = _load_config_data(workspace_dir)
+    except ConfigError as exc:
+        st.error(str(exc))
+        return
+
+    if not data:
+        st.info("Config vuoto: nessun campo da mostrare.")
+        return
+
+    for key, value in data.items():
+        with st.form(f"cfg_field_{key}"):
+            new_value = _render_config_widget(slug, key, value)
+            saved = st.form_submit_button("Salva", use_container_width=True)
+            if saved:
+                try:
+                    _persist_config_value(workspace_dir, slug, key, new_value, logger)
+                    st.success("Valore aggiornato.")
+                except ConfigError as exc:
+                    st.error(str(exc))
+
+
+def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -> bool:
+    st.subheader("Vision Statement")
+    config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    pdf_target = ensure_within_and_resolve(config_dir, config_dir / "VisionStatement.pdf")
+    uploader = st.file_uploader("Carica Vision Statement (PDF)", type=["pdf"])
+    if uploader is not None:
+        data = uploader.read()
+        if not data:
+            st.warning("Il file caricato e' vuoto. Riprova.")
+        else:
+            safe_write_bytes(pdf_target, data, atomic=True)
+            st.success("VisionStatement.pdf salvato.")
+            logger.info(
+                "ui.vision.pdf_uploaded",
+                extra={"slug": slug, "path": str(pdf_target), "bytes": len(data)},
+            )
+    exists = pdf_target.exists()
+    if exists:
+        st.caption(f"PDF presente: `{pdf_target}`")
+    else:
+        st.info("Carica il VisionStatement.pdf per abilitare l'inizializzazione.")
+    return exists
+
+
+def _vision_outputs_exist(workspace_dir: Path) -> bool:
+    try:
+        mapping = ensure_within_and_resolve(workspace_dir, _mapping_path(workspace_dir))
+        cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+    except ConfigError:
+        return False
+    return mapping.exists() and cartelle.exists()
+
+
+def _load_yaml_text(workspace_dir: Path, rel: Path) -> str:
+    target = ensure_within_and_resolve(workspace_dir, rel)
+    if not target.exists():
+        raise ConfigError(f"File non trovato: {target}")
+    return read_text_safe(workspace_dir, target, encoding="utf-8")
+
+
+def _validate_yaml_dict(content: str, label: str) -> Dict[str, Any]:
+    try:
+        parsed = yaml.safe_load(content) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{label}: YAML non valido ({exc})")
+    if not isinstance(parsed, dict):
+        raise ConfigError(f"{label}: atteso un dizionario alla radice.")
+    return parsed
+
+
+def _save_yaml_text(workspace_dir: Path, rel: Path, content: str) -> None:
+    target = ensure_within_and_resolve(workspace_dir, rel)
+    safe_write_text(target, content, encoding="utf-8", atomic=True)
+    clear_yaml_cache()
+
+
+def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> Optional[Dict[str, Any]]:
+    if _vision_outputs_exist(workspace_dir):
+        st.info("Gli artefatti Vision sono gia' presenti: nessuna rigenerazione.")
+        return None
+
+    pdf_path = ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir))
+    if not pdf_path.exists():
+        raise ConfigError("VisionStatement.pdf non trovato nel workspace.")
+
+    semantic_dir = ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir))
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+    result = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
+    logger.info(
+        "ui.vision.generated",
+        extra={
+            "slug": slug,
+            "mapping": result.get("yaml_paths", {}).get("mapping"),
+            "cartelle_raw": result.get("yaml_paths", {}).get("cartelle_raw"),
+        },
+    )
+    return result
+
+
+def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+    cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+    create_local_base_structure(ctx, cartelle)
+    logger.info("ui.workspace.local_structure", extra={"slug": slug, "yaml": str(cartelle)})
+
+
+def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> Dict[str, str]:
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
+    service = get_drive_service(ctx)
+    drive_parent_id = ctx.env.get("DRIVE_ID")
+    if not drive_parent_id:
+        raise ConfigError("Variabile DRIVE_ID non impostata nell'ambiente.")
+    cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+    redact = bool(getattr(ctx, "redact_logs", False))
+    client_folder_id = create_drive_folder(service, slug, parent_id=drive_parent_id, redact_logs=redact)
+    created_map = create_drive_structure_from_yaml(service, cartelle, client_folder_id, redact_logs=redact)
+    upload_config_to_drive_folder(service, ctx, parent_id=client_folder_id, redact_logs=redact)
+    logger.info(
+        "ui.workspace.drive_structure",
+        extra={"slug": slug, "client_folder_id": client_folder_id, "raw": created_map.get("raw")},
+    )
+    return created_map
+
+
+def _run_generate_readmes(slug: str, logger: logging.Logger) -> Dict[str, str]:
+    result = emit_readmes_for_raw(
+        slug=slug,
+        base_root=OUTPUT_ROOT,
+        require_env=True,
+        ensure_structure=False,
+    )
+    logger.info("ui.workspace.readmes", extra={"slug": slug, "count": len(result)})
+    return result
+
+
+def _open_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    with st.spinner("Creazione workspace..."):
+        _run_create_local_structure(slug, workspace_dir, logger)
+        _run_drive_structure(slug, workspace_dir, logger)
+        _run_generate_readmes(slug, logger)
+    st.success("Workspace inizializzato. Hai accesso agli editor YAML qui sotto.")
+
+
+def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    st.subheader(f"Workspace attivo: {slug}")
+    mapping_rel = _mapping_path(workspace_dir)
+    cartelle_rel = _cartelle_path(workspace_dir)
+
+    mapping_key = f"{slug}_mapping_text"
+    cartelle_key = f"{slug}_cartelle_text"
+
+    try:
+        mapping_text = _load_yaml_text(workspace_dir, mapping_rel)
+        cartelle_text = _load_yaml_text(workspace_dir, cartelle_rel)
+    except ConfigError as exc:
+        st.error(str(exc))
+        return
+
+    if mapping_key not in st.session_state:
+        st.session_state[mapping_key] = mapping_text
+    if cartelle_key not in st.session_state:
+        st.session_state[cartelle_key] = cartelle_text
+
+    with st.form("yaml_editor_form"):
+        st.text_area(
+            "semantic/semantic_mapping.yaml",
+            key=mapping_key,
+            height=320,
+        )
+        st.text_area(
+            "semantic/cartelle_raw.yaml",
+            key=cartelle_key,
+            height=320,
+        )
+        if st.form_submit_button("Valida & Salva", type="primary"):
+            try:
+                _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
+                _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
+                _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
+                _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
+                st.success("YAML aggiornati.")
+            except ConfigError as exc:
+                st.error(str(exc))
+
+    actions = st.columns(3)
+    with actions[0]:
+        if st.button("Crea locale", use_container_width=True):
+            try:
+                _run_create_local_structure(slug, workspace_dir, logger)
+                st.success("Struttura locale aggiornata.")
+            except ConfigError as exc:
+                st.error(str(exc))
+    with actions[1]:
+        if st.button("Crea su Drive", use_container_width=True):
+            try:
+                created = _run_drive_structure(slug, workspace_dir, logger)
+                st.success(f"Struttura Drive aggiornata (raw={created.get('raw')}).")
+            except ConfigError as exc:
+                st.error(str(exc))
+            except RuntimeError as exc:
+                st.error(str(exc))
+    with actions[2]:
+        if st.button("Genera README", use_container_width=True):
+            try:
+                uploaded = _run_generate_readmes(slug, logger)
+                st.success(f"README caricati: {len(uploaded)}")
+            except (ConfigError, RuntimeError) as exc:
+                st.error(str(exc))
+
+    st.caption(f"Mapping: `{mapping_rel}`")
+    st.caption(f"Cartelle raw: `{cartelle_rel}`")
+
+
+def _back_to_landing() -> None:
+    for key in list(st.session_state.keys()):
+        if key not in {"phase"}:
+            st.session_state.pop(key, None)
+    st.session_state["phase"] = "landing"
+
+
+def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    st.header("Nuovo cliente: configurazione iniziale")
+    st.caption(f"Workspace: `{workspace_dir}`")
+
+    try:
+        _copy_base_config(workspace_dir, slug, logger)
+    except ConfigError as exc:
+        st.error(str(exc))
+        return
+
+    _render_config_editor(workspace_dir, slug, logger)
+    pdf_ready = _handle_pdf_upload(workspace_dir, slug, logger)
+
+    if st.button("Inizializza workspace", type="primary", disabled=not pdf_ready):
+        try:
+            result = _initialize_workspace(slug, workspace_dir, logger)
+            st.session_state["init_result"] = result or {}
+            st.session_state["phase"] = "ready"
+        except ConfigError as exc:
+            st.error(str(exc))
+
+    st.button("Torna alla landing", on_click=_back_to_landing)
+
+
+def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    st.header("Workspace pronto")
+    st.success("Artefatti Vision generati. Puoi creare la struttura completa ora.")
+    result = st.session_state.get("init_result") or {}
+    yaml_paths = result.get("yaml_paths") or {}
+    if yaml_paths:
+        st.json(yaml_paths, expanded=False)
+
+    if st.button(f"Apri workspace: {slug}", type="primary"):
+        try:
+            _open_workspace(slug, workspace_dir, logger)
+            st.session_state["phase"] = "workspace"
+        except (ConfigError, RuntimeError) as exc:
+            st.error(str(exc))
+
+    st.button("Torna alla landing", on_click=_back_to_landing)
+
+
+def _render_landing(logger: logging.Logger) -> None:
+    st.title("Onboarding NeXT - Nuovo cliente")
+    slug_input = st.text_input("Slug (kebab-case)", key="landing_slug", placeholder="acme-sicilia")
+
+    col_submit, col_exit = st.columns(2)
+    with col_submit:
+        submit = st.button("Invia", type="primary", use_container_width=True)
+    with col_exit:
+        if st.button("Esci", use_container_width=True):
+            _request_shutdown(logger)
+
+    if not submit:
+        return
+
+    slug = slug_input.strip()
+    if not slug:
+        st.error("Inserisci uno slug valido.")
+        return
+    try:
+        validate_slug(slug)
+    except InvalidSlug as exc:
+        st.error(str(exc))
+        return
+
+    workspace_dir = _workspace_dir_for(slug)
+    st.session_state["slug"] = slug
+    st.session_state["workspace_dir"] = str(workspace_dir)
+    st.session_state.pop("init_result", None)
+
+    if _vision_outputs_exist(workspace_dir):
+        st.session_state["phase"] = "workspace"
+    else:
+        st.session_state["phase"] = "setup"
 
 
 def main() -> None:
     logger = _setup_logging()
+    st.set_page_config(page_title="Onboarding NeXT", layout="wide")
 
-    st.set_page_config(page_title="Onboarding NeXT / Timmy", layout="wide")
-    st.title("Onboarding NeXT — Workspace & Semantica")
+    phase = st.session_state.get("phase", "landing")
+    slug = st.session_state.get("slug")
+    workspace_dir = Path(st.session_state.get("workspace_dir", "")) if slug else None
 
-    # Sidebar: slug input
-    with st.sidebar:
-        st.header("Workspace")
-        slug = st.text_input("Slug cliente (kebab-case)", placeholder="acme-sicilia")
-        workspace_exists = bool(slug) and _workspace_dir_for(slug).exists()
-        load_btn = False
-        if workspace_exists:
-            load_btn = st.button("Carica contesto", use_container_width=True)
-        else:
-            st.info(
-                "Workspace non trovato. Usa la landing per crearlo (Verifica cliente → Carica il Vision Statement)."
-            )
-
-    if "ctx_loaded" not in st.session_state:
-        st.session_state["ctx_loaded"] = False
-    if st.session_state.get("slug") and st.session_state.get("slug") != slug:
-        st.session_state["ctx_loaded"] = False
-
-    if not slug:
-        st.info("Inserisci lo slug del cliente.")
-        st.session_state["ctx_loaded"] = False
+    if phase == "landing":
+        _render_landing(logger)
         return
 
-    if not workspace_exists:
-        st.warning("Workspace inesistente. Completa la procedura dalla landing UI.")
-        st.session_state["ctx_loaded"] = False
+    if not slug or workspace_dir is None:
+        st.session_state["phase"] = "landing"
+        _render_landing(logger)
         return
 
-    ctx: Optional[ClientContext] = None
-    auto_load = workspace_exists and not st.session_state.get("ctx_loaded", False)
-    if load_btn or auto_load:
-        ctx = _load_ctx(slug, logger)
-        if ctx:
-            if load_btn:
-                st.sidebar.success(f"Contesto caricato: {slug}")
-            st.session_state["ctx_loaded"] = True
-            st.session_state["slug"] = slug
-        else:
-            st.session_state["ctx_loaded"] = False
-
-    if not st.session_state["ctx_loaded"]:
-        return
-
-    # Ricarica il contesto dal nome slug in sessione per sicurezza
-    slug = st.session_state["slug"]
-    ctx = _load_ctx(slug, logger)
-    if ctx is None:
-        return
-
-    base_dir = Path(ctx.base_dir)
-    st.caption(f"Workspace base: `{base_dir}`")
-
-    with st.sidebar:
-        st.markdown("---")
-        st.subheader("Tools")
-        if st.button("Genera/Aggiorna dummy", key="btn_dummy", use_container_width=True):
-            _run_dummy_generation(slug, logger)
-        if st.button(
-            "Chiudi UI",
-            key="btn_exit",
-            use_container_width=True,
-            help="Chiude l'interfaccia Streamlit e termina il processo.",
-        ):
-            logger.info("ui_exit_requested slug=%s", slug)
-            _request_shutdown(logger)
-
-    # Tabs
-    t_sem, t_outputs = st.tabs(["📑 Semantica", "📁 Output"])
-
-    with t_sem:
-        st.subheader("Vision → YAML (generazione AI)")
-
-        st.write(
-            "Questo step genera `semantic/vision_statement.yaml` a partire dal `VisionStatement.pdf` "
-            "del workspace corrente, usando GPT-5 (Responses API + Structured Outputs)."
-        )
-
-        st.markdown("**Assicurati di aver caricato `VisionStatement.pdf` in uno di questi percorsi:**")
-        st.code(_hint_pdf_locations(base_dir), language="text")
-
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            run_btn = st.button("Genera vision_statement.yaml (AI)", type="primary")
-        with col2:
-            show_yaml = st.checkbox("Mostra contenuto YAML al termine", value=True)
-
-        if run_btn:
-            try:
-                out_path = gen_vision_yaml(ctx, logger, slug=slug)
-                st.success(f"Creato: {out_path}")
-
-                if show_yaml:
-                    try:
-                        content = read_text_safe(base_dir, Path(out_path), encoding="utf-8")
-                        st.code(content, language="yaml")
-                    except Exception:
-                        st.warning("File generato ma non leggibile ora; verifica i permessi o aprilo da file system.")
-            except ConfigError as e:
-                st.error(str(e))
-            except Exception:
-                logger.exception("VisionAIError")
-                st.error("Errore nella generazione del YAML. Controlla i log per i dettagli.")
-
-    with t_outputs:
-        st.subheader("Esplora output del workspace")
-        semantic_dir = base_dir / "semantic"
-        cfg_dir = base_dir / "config"
-        raw_dir = base_dir / "raw"
-
-        st.markdown("**Cartelle principali**")
-        st.write(f"- `{semantic_dir}`")
-        st.write(f"- `{cfg_dir}`")
-        st.write(f"- `{raw_dir}`")
-
-        vs_yaml = semantic_dir / "vision_statement.yaml"
-        if vs_yaml.exists():
-            st.markdown("**Anteprima `semantic/vision_statement.yaml`**")
-            try:
-                preview = read_text_safe(base_dir, vs_yaml, encoding="utf-8")
-                st.code(preview, language="yaml")
-            except Exception:
-                st.warning("Impossibile leggere l'anteprima del file YAML.")
+    if phase == "setup":
+        _render_setup(slug, workspace_dir, logger)
+    elif phase == "ready":
+        _render_ready(slug, workspace_dir, logger)
+    elif phase == "workspace":
+        _render_workspace_view(slug, workspace_dir, logger)
+    else:
+        st.session_state["phase"] = "landing"
+        _render_landing(logger)
 
 
 if __name__ == "__main__":

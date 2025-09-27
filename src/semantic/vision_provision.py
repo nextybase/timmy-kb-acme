@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import yaml
 
@@ -24,6 +24,8 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 #       ma qui li importiamo esplicitamente per evitare drift tra definizioni duplicate.
 from semantic.vision_ai import JSON_SCHEMA, SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
+
+_CHAT_COMPLETIONS_MAX_CHARS = 200_000
 from src.ai.client_factory import make_openai_client
 
 
@@ -64,7 +66,7 @@ class _Paths:
     base_dir: Path
     semantic_dir: Path
     vision_txt: Path
-    vision_yaml: Path
+    mapping_yaml: Path
     cartelle_yaml: Path
     vision_hash: Path
 
@@ -73,10 +75,10 @@ def _resolve_paths(ctx_base_dir: str) -> _Paths:
     base = Path(ctx_base_dir)
     sem_dir = ensure_within_and_resolve(base, base / "semantic")
     vision_txt = ensure_within_and_resolve(sem_dir, sem_dir / "vision_statement.txt")
-    vision_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "vision_statement.yaml")
+    mapping_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     cartelle_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "cartelle_raw.yaml")
     vision_hash = ensure_within_and_resolve(sem_dir, sem_dir / ".vision_hash")
-    return _Paths(base, sem_dir, vision_txt, vision_yaml, cartelle_yaml, vision_hash)
+    return _Paths(base, sem_dir, vision_txt, mapping_yaml, cartelle_yaml, vision_hash)
 
 
 def _count_cartelle_folders(cartelle_path: Path, *, base_dir: Path) -> Optional[int]:
@@ -93,17 +95,241 @@ def _count_cartelle_folders(cartelle_path: Path, *, base_dir: Path) -> Optional[
     return None
 
 
+def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Path, Optional[str]], None], str]:
+    import inspect
+
+    def _build_add_callable(method: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
+        try:
+            params = inspect.signature(method).parameters
+        except (TypeError, ValueError):
+            return None
+
+        if "file_ids" in params:
+
+            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+                if not file_id:
+                    raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
+                _method(vector_store_id=vs_id, file_ids=[file_id])
+
+            return _add, "id"
+        if "file_id" in params:
+
+            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+                if not file_id:
+                    raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
+                _method(vector_store_id=vs_id, file_id=file_id)
+
+            return _add, "id"
+        if "ids" in params:
+
+            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+                if not file_id:
+                    raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
+                _method(vector_store_id=vs_id, ids=[file_id])
+
+            return _add, "id"
+        if "files" in params:
+
+            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+                with file_path.open("rb") as handle:
+                    _method(vector_store_id=vs_id, files=[handle])
+
+            return _add, "upload"
+        if "file" in params:
+
+            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+                with file_path.open("rb") as handle:
+                    _method(vector_store_id=vs_id, file=handle)
+
+            return _add, "upload"
+        return None
+
+    def _try_namespace(namespace: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
+        if namespace is None:
+            return None
+        method_order = (
+            "batch",
+            "create_and_poll",
+            "create",
+            "upload_and_poll",
+            "add",
+            "attach",
+            "append",
+        )
+        for name in method_order:
+            method = getattr(namespace, name, None)
+            if method is None:
+                continue
+            candidate = _build_add_callable(method)
+            if candidate:
+                return candidate
+        return None
+
+    def _build_ops(
+        ns: Any, vs_files_global: Any
+    ) -> Optional[tuple[Any, Any, Callable[[str, Path, Optional[str]], None], str]]:
+        if ns is None or not hasattr(ns, "create"):
+            return None
+        retrieve = getattr(ns, "retrieve", None)
+        if retrieve is None:
+            return None
+
+        def _create_vs(**kwargs: Any) -> Any:
+            return ns.create(**kwargs)
+
+        create_fn = _create_vs
+
+        files_ns = getattr(ns, "files", None)
+        candidate = _try_namespace(files_ns)
+        if candidate:
+            add_fn, mode = candidate
+            return create_fn, retrieve, add_fn, mode
+
+        file_batches_ns = getattr(ns, "file_batches", None)
+        candidate = _try_namespace(file_batches_ns)
+        if candidate:
+            add_fn, mode = candidate
+            return create_fn, retrieve, add_fn, mode
+
+        candidate = _try_namespace(vs_files_global)
+        if candidate:
+            add_fn, mode = candidate
+            return create_fn, retrieve, add_fn, mode
+
+        return None
+
+    beta_ns = getattr(client, "beta", None)
+    vs_files_global = getattr(beta_ns, "vector_store_files", None)
+
+    namespaces = [
+        getattr(client, "vector_stores", None),
+        getattr(beta_ns, "vector_stores", None) if beta_ns else None,
+    ]
+    for ns in namespaces:
+        result = _build_ops(ns, vs_files_global)
+        if result:
+            return result
+
+    raise ConfigError("OpenAI client non supporta le vector stores. Aggiorna l'SDK o abilita le beta APIs.")
+
+
+def _extract_id(obj: Any) -> str:
+    if obj is None:
+        return ""
+    value = getattr(obj, "id", None)
+    if value:
+        return str(value)
+    if isinstance(obj, dict):
+        value = obj.get("id")
+        if value:
+            return str(value)
+    return ""
+
+
+def _call_semantic_mapping_response(
+    client: Any,
+    *,
+    model: str,
+    user_block: str,
+    vs_id: str,
+    snapshot_text: str,
+) -> Dict[str, Any]:
+    payload = dict(
+        model=model,
+        input=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_block},
+        ],
+        tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "vision_semantic_mapping", "schema": JSON_SCHEMA},
+        },
+        temperature=0.2,
+    )
+
+    responses_ns = getattr(client, "responses", None)
+    if responses_ns and hasattr(responses_ns, "create"):
+        resp = responses_ns.create(**payload)
+        data = getattr(resp, "output_parsed", None)
+        if data is None:
+            raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+        return data
+
+    beta_ns = getattr(client, "beta", None)
+    if beta_ns:
+        beta_resp = getattr(beta_ns, "responses", None)
+        if beta_resp and hasattr(beta_resp, "create"):
+            resp = beta_resp.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI beta responses API non ha restituito output_parsed.")
+            return data
+
+    chat_completions = getattr(getattr(client, "chat", None), "completions", None)
+    if chat_completions and hasattr(chat_completions, "create"):
+        trimmed_snapshot = snapshot_text[:_CHAT_COMPLETIONS_MAX_CHARS]
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (f"{user_block}\n\n" "Vision Statement (testo estratto):\n" f"{trimmed_snapshot}"),
+            },
+        ]
+        chat_resp = chat_completions.create(model=model, messages=messages, temperature=0.2)
+        choices = getattr(chat_resp, "choices", None)
+        if not choices:
+            raise ConfigError("Chat completions: nessuna choice restituita.")
+        first = choices[0]
+        message = getattr(first, "message", None) or getattr(first, "delta", None) or first
+        content = None
+        if isinstance(message, dict):
+            content = message.get("content")
+        else:
+            content = getattr(message, "content", None)
+        if not content:
+            raise ConfigError("Chat completions: contenuto vuoto.")
+        import json
+
+        try:
+            data = json.loads(content)
+        except Exception as exc:
+            raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
+        return data
+
+    raise ConfigError(
+        "OpenAI client non espone le API responses/chat necessarie. Aggiorna l'SDK o abilita le beta APIs."
+    )
+
+
 def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
-    vs = client.vector_stores.create(name="vision-kb-runtime")
-    vs_id = vs.id
+    create_vs, retrieve_vs, add_file, add_mode = _resolve_vector_store_ops(client)
 
-    up = client.files.create(file=pdf_path.open("rb"), purpose="assistants")
-    client.vector_stores.files.batch(vector_store_id=vs_id, file_ids=[up.id])
+    vs = create_vs(name="vision-kb-runtime")
+    vs_id = _extract_id(vs)
+    if not vs_id:
+        raise ConfigError("OpenAI client: creazione vector store senza ID.")
 
-    # Polling semplice per indicizzazione
+    if add_mode == "id":
+        with pdf_path.open("rb") as pdf_file:
+            upload = client.files.create(file=pdf_file, purpose="assistants")
+        file_id = _extract_id(upload)
+        if not file_id:
+            raise ConfigError("OpenAI client: upload del PDF fallito (ID mancante).")
+        add_file(vs_id, pdf_path, file_id)
+    elif add_mode == "upload":
+        add_file(vs_id, pdf_path, None)
+    else:
+        raise ConfigError(f"OpenAI client: modalitÃƒÂ  add_file non supportata: {add_mode!r}.")
+
     for _ in range(60):
-        status = client.vector_stores.retrieve(vs_id)
-        if getattr(status, "file_counts", None) and status.file_counts.completed >= 1:
+        status = retrieve_vs(vs_id)
+        file_counts = getattr(status, "file_counts", None)
+        if isinstance(file_counts, dict):
+            completed = file_counts.get("completed")
+        else:
+            completed = getattr(file_counts, "completed", None)
+        if completed and completed >= 1:
             break
         time.sleep(0.5)
     return vs_id
@@ -131,7 +357,7 @@ def provision_from_vision(
     Esegue l'onboarding Vision:
     1) snapshot testo
     2) invocazione AI (Responses API + file_search) -> JSON schema
-    3) scrittura YAML: vision_statement.yaml e cartelle_raw.yaml
+    3) scrittura YAML: semantic_mapping.yaml e cartelle_raw.yaml
     Ritorna metadati utili per UI/audit.
     """
     if not pdf_path.exists():
@@ -142,7 +368,7 @@ def provision_from_vision(
 
     pdf_hash = _sha256_of_file(pdf_path)
 
-    yaml_paths = {"vision": str(paths.vision_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
+    yaml_paths = {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
     existing_hash: Optional[str] = None
     if paths.vision_hash.exists():
         try:
@@ -150,7 +376,7 @@ def provision_from_vision(
         except Exception:
             existing_hash = None
 
-    if not force and existing_hash == pdf_hash and paths.vision_yaml.exists() and paths.cartelle_yaml.exists():
+    if not force and existing_hash == pdf_hash and paths.mapping_yaml.exists() and paths.cartelle_yaml.exists():
         ts = datetime.now(timezone.utc).isoformat()
         areas_count = _count_cartelle_folders(paths.cartelle_yaml, base_dir=paths.semantic_dir)
         record = {
@@ -189,25 +415,17 @@ def provision_from_vision(
         "\nVision Statement: vedi documento allegato nel contesto (tool file_search)."
     )
 
-    resp = client.responses.create(
+    data = _call_semantic_mapping_response(
+        client,
         model=model,
-        input=[
-            {"role": "system", "content": SYSTEM_PROMPT},  # riuso dal modulo esistente
-            {"role": "user", "content": user_block},
-        ],
-        tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "vision_semantic_mapping", "schema": JSON_SCHEMA},
-        },
-        temperature=0.2,
+        user_block=user_block,
+        vs_id=vs_id,
+        snapshot_text=snapshot,
     )
-
-    data: Dict[str, Any] = resp.output_parsed  # JSON validato lato API
     _validate_json_payload(data)
 
     # 3) JSON -> YAML (vision + cartelle_raw)
-    vision_yaml_str = yaml.safe_dump(
+    mapping_yaml_str = yaml.safe_dump(
         {
             "context": data["context"],
             **{
@@ -224,7 +442,7 @@ def provision_from_vision(
         sort_keys=False,
         width=100,
     )
-    safe_write_text(paths.vision_yaml, vision_yaml_str)
+    safe_write_text(paths.mapping_yaml, mapping_yaml_str)
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)

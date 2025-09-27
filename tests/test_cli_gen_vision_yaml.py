@@ -44,7 +44,7 @@ def test_cli_returns_zero_on_success(monkeypatch, tmp_workspace: Path):
     )
     # mock generate per non toccare OpenAI
     monkeypatch.setattr(
-        vision_ai, "generate", lambda ctx, logger, slug: str(tmp_workspace / "semantic" / "vision_statement.yaml")
+        vision_ai, "generate", lambda ctx, logger, slug: str(tmp_workspace / "semantic" / "semantic_mapping.yaml")
     )
     # esegui main con arg finti
     monkeypatch.setattr(sys, "argv", ["prog", "--slug", "dummy"])

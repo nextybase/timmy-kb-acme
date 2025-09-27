@@ -12,7 +12,7 @@ from ai.client_factory import make_openai_client
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # factory centralizzato
 
 _MODEL = "gpt-4.1-mini"
@@ -76,6 +76,21 @@ def _resolve_optional(base: Path, candidate: Path | str) -> Optional[Path]:
         return None
 
 
+def _copy_legacy_mapping_if_needed(base: Path, mapping_path: Path) -> None:
+    legacy_candidate = Path(base) / "semantic" / "vision_statement.yaml"
+    try:
+        legacy_path = ensure_within_and_resolve(base, legacy_candidate)
+    except ConfigError:
+        return
+    if mapping_path.exists() or not legacy_path.exists():
+        return
+    try:
+        content = read_text_safe(base, legacy_path, encoding="utf-8")
+    except Exception:
+        return
+    safe_write_text(mapping_path, content)
+
+
 def _extract_pdf_text(pdf_path: Path) -> str:
     try:
         import fitz  # type: ignore
@@ -109,7 +124,7 @@ class VisionPaths:
     base_dir: Path
     config_pdf_client: Optional[Path]
     raw_pdf: Path
-    vision_yaml: Path
+    mapping_yaml: Path
     cartelle_yaml: Path
     config_pdf_repo: Path
     text_snapshot: Path
@@ -119,12 +134,13 @@ def _resolve_paths(ctx: ClientContext, slug: str) -> VisionPaths:
     base = Path(ctx.base_dir)  # output/timmy-kb-<slug>
     config_pdf_client = _resolve_optional(base, Path("config") / "VisionStatement.pdf")
     raw_pdf = ensure_within_and_resolve(base, base / "raw" / "VisionStatement.pdf")
-    vision_yaml = ensure_within_and_resolve(base, base / "semantic" / "vision_statement.yaml")
+    mapping_yaml = ensure_within_and_resolve(base, base / "semantic" / "semantic_mapping.yaml")
     cartelle_yaml = ensure_within_and_resolve(base, base / "semantic" / "cartelle_raw.yaml")
     text_snapshot = ensure_within_and_resolve(base, base / "semantic" / _TEXT_SNAPSHOT_NAME)
     project_root = Path(__file__).resolve().parents[2]
     config_pdf_repo = ensure_within_and_resolve(project_root, project_root / "config" / "VisionStatement.pdf")
-    return VisionPaths(base, config_pdf_client, raw_pdf, vision_yaml, cartelle_yaml, config_pdf_repo, text_snapshot)
+    _copy_legacy_mapping_if_needed(base, mapping_yaml)
+    return VisionPaths(base, config_pdf_client, raw_pdf, mapping_yaml, cartelle_yaml, config_pdf_repo, text_snapshot)
 
 
 def _pick_pdf(p: VisionPaths) -> Path:
@@ -187,7 +203,7 @@ def _message_content_to_text(message_content: Any) -> str:
 
 
 def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL) -> Dict[str, str]:
-    """Genera vision_statement.yaml e cartelle_raw.yaml e restituisce i path."""
+    """Genera semantic_mapping.yaml e cartelle_raw.yaml e restituisce i path."""
     paths = _resolve_paths(ctx, slug)
     pdf_path = _pick_pdf(paths)
 
@@ -252,8 +268,8 @@ def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL)
     if "context" not in data or "areas" not in data:
         raise ConfigError("Vision AI: risposta incompleta (mancano 'context' o 'areas').")
 
-    vision_yaml_str = _json_to_yaml(data)
-    safe_write_text(paths.vision_yaml, vision_yaml_str)
+    mapping_yaml_str = _json_to_yaml(data)
+    safe_write_text(paths.mapping_yaml, mapping_yaml_str)
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
@@ -263,7 +279,7 @@ def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL)
         "vision_ai.generate_pair.done",
         extra={
             "slug": slug,
-            "vision_yaml": str(paths.vision_yaml),
+            "mapping_yaml": str(paths.mapping_yaml),
             "cartelle_raw_yaml": str(paths.cartelle_yaml),
             "model": model,
             "tokens_prompt": getattr(usage, "prompt_tokens", None),
@@ -272,7 +288,7 @@ def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL)
     )
 
     return {
-        "vision_yaml": str(paths.vision_yaml),
+        "mapping_yaml": str(paths.mapping_yaml),
         "cartelle_raw_yaml": str(paths.cartelle_yaml),
         "model": model,
         "tokens_prompt": getattr(usage, "prompt_tokens", None),
@@ -282,7 +298,7 @@ def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL)
 
 def generate(ctx: ClientContext, logger, *, slug: str) -> str:
     """
-    Genera 'semantic/vision_statement.yaml' dal VisionStatement.pdf del cliente.
+    Genera 'semantic/semantic_mapping.yaml' dal VisionStatement.pdf del cliente.
     Ritorna il path del file YAML generato (stringa).
     """
     result = generate_pair(ctx, logger, slug=slug, model=_MODEL)
@@ -290,9 +306,9 @@ def generate(ctx: ClientContext, logger, *, slug: str) -> str:
         "vision_ai.generate.done",
         extra={
             "slug": slug,
-            "out": result["vision_yaml"],
+            "out": result["mapping_yaml"],
             "tokens_prompt": result.get("tokens_prompt"),
             "tokens_completion": result.get("tokens_completion"),
         },
     )
-    return result["vision_yaml"]
+    return result["mapping_yaml"]

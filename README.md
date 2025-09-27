@@ -9,7 +9,7 @@ Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da
 ## Novità v1.9.5
 
 - Vision Statement pipeline: `src/semantic/vision_ai.py` estrae il testo dal PDF, lo salva in `semantic/vision_statement.txt` e genera il mapping JSON/YAML via `gpt-4.1-mini`.
-- CLI `py src/tools/gen_vision_yaml.py --slug <slug>` carica `.env` automaticamente, valida i percorsi e produce `semantic/vision_statement.yaml`.
+- CLI `py src/tools/gen_vision_yaml.py --slug <slug>` carica `.env` automaticamente, valida i percorsi e produce `semantic/semantic_mapping.yaml`.
 - Suite: `tests/test_vision_ai_module.py` copre l'estrazione dal PDF, la conversione JSON->YAML e gli scenari di errore dell'assistant.
 
 ---
@@ -73,7 +73,7 @@ output/
   timmy-kb-<slug>/
     raw/      # PDF caricati/scaricati
     book/     # Markdown + SUMMARY.md + README.md
-    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.yaml, vision_statement.txt, tags.db, finance.db (opz.)
+    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.txt, tags.db, finance.db (opz.)
     config/   # config.yaml (aggiornato con eventuali ID Drive)
     logs/     # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
 ```
@@ -91,7 +91,7 @@ py src/tools/gen_vision_yaml.py --slug <slug>
 ```
 
 - Input: `VisionStatement.pdf` cercato in `config/`, `raw/` o nel `config/` globale del repo.
-- Output: `semantic/vision_statement.yaml` (mapping strutturato) e `semantic/vision_statement.txt` (snapshot testuale).
+- Output: `semantic/semantic_mapping.yaml` (mapping strutturato) e `semantic/vision_statement.txt` (snapshot testuale).
 - Richiede `OPENAI_API_KEY_FOLDER` o `OPENAI_API_KEY` nel `.env`; lo script richiama `ensure_dotenv_loaded()` automaticamente.
 - Il modello `gpt-4.1-mini` produce un JSON conforme allo schema e viene serializzato in YAML; risposte vuote o troncate sollevano `ConfigError`.
 

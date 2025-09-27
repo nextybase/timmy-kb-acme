@@ -157,13 +157,13 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 ## Onboarding nuovo cliente (slug non esistente)
 1. **Upload controllato**: la landing UI accetta solo `VisionStatement.pdf`. Il file viene salvato in `config/VisionStatement.pdf` nel workspace del cliente con guardie `ensure_within_and_resolve` e scrittura atomica.
 2. **Genera da Vision (AI)**: dopo l'upload si attiva il pulsante **"Genera da Vision (AI)"**; il click avvia `semantic.vision_provision.provision_from_vision` e mostra la progress bar `[PDF ricevuto] -> [Snapshot] -> [YAML vision] -> [YAML cartelle]`.
-3. **Anteprima YAML**: al termine la UI apre un expander con `semantic/vision_statement.yaml` e `semantic/cartelle_raw.yaml` per l'audit. Questo step crea `semantic/cartelle_raw.yaml` nel workspace e logga hash del PDF e modello usato.
+3. **Anteprima YAML**: al termine la UI apre un expander con `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml` per l'audit. Questo step crea `semantic/cartelle_raw.yaml` nel workspace e logga hash del PDF e modello usato.
 4. **Approva e crea cartelle**: nessuna cartella `docs/` viene generata finche' l'utente non preme **"Approva e crea cartelle"**; il pulsante delega a `pipeline.provision_from_yaml.provision_directories_from_cartelle_raw(...)`, che legge `semantic/cartelle_raw.yaml` e crea la gerarchia in modo idempotente.
 - **Idempotenza**: l'hash del PDF viene salvato in `semantic/.vision_hash`. Se l'utente rilancia con lo stesso file, la UI segnala che gli artefatti esistono gia' e permette la rigenerazione solo su richiesta esplicita (`force=True` o cambio modello).
 - **Extra future**: la generazione di `tags_reviewed.yaml` resta fuori scope in questa fase e arrivera' in uno step dedicato alla revisione tassonomica.
 ## Vision Statement mapping
 - `semantic.vision_ai.generate(ctx, logger, slug)` risolve i percorsi con `ensure_within_and_resolve`, estrae il testo dal PDF con PyMuPDF e salva sempre uno snapshot (`semantic/vision_statement.txt`) prima di inviare il prompt strutturato al modello `gpt-4.1-mini`.
-- Lo YAML risultante (`semantic/vision_statement.yaml`) è scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
+- Lo YAML risultante (`semantic/semantic_mapping.yaml`) è scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
 - `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` -> exit code 2).
 - I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON->YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).
 

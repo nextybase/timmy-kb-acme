@@ -133,15 +133,15 @@ def test_happy_path(monkeypatch, tmp_workspace: Path):
 
     # Verifiche di esito
     assert "yaml_paths" in result
-    v_path = Path(result["yaml_paths"]["vision"])
+    mapping_path = Path(result["yaml_paths"]["mapping"])
     c_path = Path(result["yaml_paths"]["cartelle_raw"])
-    assert v_path.exists(), "vision_statement.yaml non creato"
+    assert mapping_path.exists(), "semantic_mapping.yaml non creato"
     assert c_path.exists(), "cartelle_raw.yaml non creato"
 
     # YAML parsabili e contenenti chiavi attese
-    v_yaml = yaml.safe_load(v_path.read_text(encoding="utf-8"))
+    mapping_yaml_data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
     c_yaml = yaml.safe_load(c_path.read_text(encoding="utf-8"))
-    assert "context" in v_yaml and "artefatti-operativi" in v_yaml
+    assert "context" in mapping_yaml_data and "artefatti-operativi" in mapping_yaml_data
     assert c_yaml.get("version") == 1
     assert isinstance(c_yaml.get("folders"), list)
 
@@ -211,9 +211,9 @@ def test_idempotenza_hash_salta_rigenerazione(monkeypatch, tmp_workspace: Path):
     assert result_first.get("regenerated") is True
     assert calls["count"] == 1
 
-    vision_yaml = Path(result_first["yaml_paths"]["vision"])
+    mapping_yaml = Path(result_first["yaml_paths"]["mapping"])
     cartelle_yaml = Path(result_first["yaml_paths"]["cartelle_raw"])
-    vision_mtime = vision_yaml.stat().st_mtime
+    mapping_mtime = mapping_yaml.stat().st_mtime
     cartelle_mtime = cartelle_yaml.stat().st_mtime
 
     hash_file = tmp_workspace / "semantic" / ".vision_hash"
@@ -232,7 +232,7 @@ def test_idempotenza_hash_salta_rigenerazione(monkeypatch, tmp_workspace: Path):
     result_second = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
     assert result_second.get("regenerated") is False
     assert result_second["yaml_paths"] == result_first["yaml_paths"]
-    assert vision_yaml.stat().st_mtime == vision_mtime
+    assert mapping_yaml.stat().st_mtime == mapping_mtime
     assert cartelle_yaml.stat().st_mtime == cartelle_mtime
 
     lines = log_path.read_text(encoding="utf-8").strip().splitlines()

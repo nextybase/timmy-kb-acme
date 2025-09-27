@@ -137,7 +137,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             "workspace_created": False,
             "base_dir": None,
             "yaml_paths": {},
-            "vision_yaml": "",
+            "mapping_yaml": "",
             "cartelle_yaml": "",
         }
         st.session_state["vision_workflow"] = vision_state
@@ -223,42 +223,42 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
 
     base_dir_str = cast(Optional[str], vision_state.get("base_dir"))
     yaml_paths = cast(Dict[str, str], vision_state.get("yaml_paths") or {})
-    if not base_dir_str or "vision" not in yaml_paths or "cartelle_raw" not in yaml_paths:
+    if not base_dir_str or "mapping" not in yaml_paths or "cartelle_raw" not in yaml_paths:
         st.warning("Workspace creato ma non sono disponibili gli YAML generati.")
         return False, slug, client_name
 
     base_dir_path = Path(base_dir_str)
     try:
-        vision_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["vision"]))
+        mapping_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
         cartelle_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
-        vision_content = read_text_safe(base_dir_path, vision_path, encoding="utf-8")
+        mapping_content = read_text_safe(base_dir_path, mapping_path, encoding="utf-8")
         cartelle_content = read_text_safe(base_dir_path, cartelle_path, encoding="utf-8")
     except Exception:  # pragma: no cover
-        vision_content = vision_state.get("vision_yaml", "")
+        mapping_content = vision_state.get("mapping_yaml", "")
         cartelle_content = vision_state.get("cartelle_yaml", "")
     else:
-        vision_state["vision_yaml"] = vision_content
+        vision_state["mapping_yaml"] = mapping_content
         vision_state["cartelle_yaml"] = cartelle_content
         st.session_state["vision_workflow"] = vision_state
 
     st.markdown("### YAML generati (modificabili)")
 
-    with st.form("vision_yaml_editor"):
+    with st.form("mapping_yaml_editor"):
         updated_vision = st.text_area(
-            "semantic/vision_statement.yaml",
-            value=vision_state.get("vision_yaml", ""),
+            "semantic/semantic_mapping.yaml",
+            value=vision_state.get("mapping_yaml", ""),
             height=280,
         )
-        if st.form_submit_button("Salva vision_statement.yaml"):
+        if st.form_submit_button("Salva semantic_mapping.yaml"):
             try:
-                target = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["vision"]))
+                target = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
                 safe_write_text(target, updated_vision)
-                vision_state["vision_yaml"] = updated_vision
-                st.success("vision_statement.yaml aggiornato.")
+                vision_state["mapping_yaml"] = updated_vision
+                st.success("semantic_mapping.yaml aggiornato.")
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.save_vision_failed", extra={"slug": slug})
-                st.error("Impossibile salvare vision_statement.yaml. Controlla i log.")
+                st.error("Impossibile salvare semantic_mapping.yaml. Controlla i log.")
             finally:
                 st.session_state["vision_workflow"] = vision_state
 
