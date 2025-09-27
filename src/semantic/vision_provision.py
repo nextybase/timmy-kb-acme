@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -22,11 +23,45 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 # Ri-uso di schema e prompt dal modulo esistente (contratto unico)
 # Nota: gli identificatori nel modulo vision_ai possono essere "interni" (prefisso _),
 #       ma qui li importiamo esplicitamente per evitare drift tra definizioni duplicate.
-from semantic.vision_ai import JSON_SCHEMA, SYSTEM_PROMPT  # noqa: E402
+from semantic.vision_ai import SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
 from src.ai.client_factory import make_openai_client
 
 _CHAT_COMPLETIONS_MAX_CHARS = 200_000
+
+# Schema minimo per Structured Outputs (richiede solo 'context' e 'areas')
+MIN_JSON_SCHEMA = {
+    "type": "object",
+    "required": ["context", "areas"],
+    "properties": {
+        "context": {
+            "type": "object",
+            "required": ["slug", "client_name"],
+            "properties": {
+                "slug": {"type": "string"},
+                "client_name": {"type": "string"},
+            },
+        },
+        "areas": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["key", "ambito", "descrizione"],
+                "properties": {
+                    "key": {"type": "string"},
+                    "ambito": {"type": "string"},
+                    "descrizione": {"type": "string"},
+                    "esempio": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+        "synonyms": {
+            "type": "object",
+            "additionalProperties": {"type": "array", "items": {"type": "string"}},
+        },
+    },
+}
 
 
 def _sha256_of_file(path: Path) -> str:
@@ -45,10 +80,11 @@ def _extract_pdf_text(pdf_path: Path) -> str:
     try:
         import fitz  # type: ignore
 
-        doc = fitz.open(pdf_path)
-        texts: List[str] = []
-        for page in doc:
-            texts.append(page.get_text("text"))
+        # Assicura la chiusura del file anche su Windows (evita lock del PDF)
+        with fitz.open(pdf_path) as doc:  # type: ignore[attr-defined]
+            texts: List[str] = []
+            for page in doc:
+                texts.append(page.get_text("text"))
         return "\n".join(texts).strip()
     except Exception:
         # Fallback "best effort": non blocca il flusso
@@ -239,7 +275,7 @@ def _call_semantic_mapping_response(
         tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
         response_format={
             "type": "json_schema",
-            "json_schema": {"name": "vision_semantic_mapping", "schema": JSON_SCHEMA},
+            "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
         },
         temperature=0.2,
     )
@@ -272,7 +308,15 @@ def _call_semantic_mapping_response(
                 "content": (f"{user_block}\n\n" "Vision Statement (testo estratto):\n" f"{trimmed_snapshot}"),
             },
         ]
-        chat_resp = chat_completions.create(model=model, messages=messages, temperature=0.2)
+        chat_resp = chat_completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.2,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
+            },
+        )
         choices = getattr(chat_resp, "choices", None)
         if not choices:
             raise ConfigError("Chat completions: nessuna choice restituita.")
@@ -372,6 +416,10 @@ def provision_from_vision(
     client = make_openai_client()
     vs_id = _create_vector_store_with_pdf(client, pdf_path)
 
+    # Modello: priorità a env VISION_MODEL, fallback al parametro/default
+    model_env = os.getenv("VISION_MODEL")
+    effective_model = model_env or model or "gpt-4.1-mini"
+
     user_block = (
         "Contesto cliente:\n"
         f"- slug: {slug}\n"
@@ -381,7 +429,7 @@ def provision_from_vision(
 
     data = _call_semantic_mapping_response(
         client,
-        model=model,
+        model=effective_model,
         user_block=user_block,
         vs_id=vs_id,
         snapshot_text=snapshot,
@@ -416,7 +464,7 @@ def provision_from_vision(
         "ts": ts,
         "slug": slug,
         "pdf": str(pdf_path),
-        "model": model,
+        "model": effective_model,
         "yaml_paths": {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
     }
     _write_audit_line(paths.base_dir, record)
