@@ -9,6 +9,24 @@
 - Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
 
 
+## [1.9.7] - 2025-09-28
+
+### Added
+- UI: form unica per l'editing congiunto di `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`, con due text area, validazione e pulsante "Annulla modifiche" (reload da disco).
+- UI: pulsante in sidebar "Apri workspace" con gating su slug valido e presenza dei due YAML; handler condiviso con il main panel.
+- UX: messaggi di successo/errore più chiari e sezione informativa con elenco delle correzioni automatiche applicate.
+
+### Changed
+- `semantic/vision_provision.py`: provisioning più robusto con fallback a Chat Completions quando le Responses API non sono disponibili; normalizzazione dei dati (auto-derivazione `areas[*].key` se mancante, `esempio` a lista, `synonyms` a liste di stringhe) e coercizione minima del `context`.
+- `src/ai/client_factory.py`: creazione client OpenAI più tollerante (tentativo semplice, poi fallback con `http_client`) e abilitazione best‑effort dell'header `OpenAI-Beta: assistants=v2`.
+- UI landing: salvataggio YAML atomico e gestione stato sessione per ripristino contenuti.
+
+### Fixed
+- Errori di validazione frequenti: `KeyError: 'key'` e `"context" non è un oggetto` ora risolti con validazione e correzioni automatiche.
+- Gating del pulsante di apertura workspace quando i due YAML esistono anche se la fase non è ancora `ready_to_open`.
+- Test di integrazione aggiornati: suite completa al verde.
+
+
 ## [1.9.6] - 2025-09-27
 
 ### Added
