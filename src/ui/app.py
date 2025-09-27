@@ -5,26 +5,32 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, cast, List
 
 # Import Streamlit in modo tollerante (test/CI headless)
-st: Any | None
+st: Any
 try:
-    import streamlit as _st  # type: ignore
-
+    import streamlit as _st
     st = _st
 except Exception:  # pragma: no cover
-    st = None
+    st = None  # type: ignore[assignment]
 import yaml
 
 from pipeline.context import ClientContext
-from pipeline.drive_utils import (
-    create_drive_folder,
-    create_drive_structure_from_yaml,
-    create_local_base_structure,
-    get_drive_service,
-    upload_config_to_drive_folder,
-)
+try:
+    from pipeline.drive_utils import (
+        create_drive_folder,
+        create_drive_structure_from_yaml,
+        create_local_base_structure,
+        get_drive_service,
+        upload_config_to_drive_folder,
+    )
+except Exception:  # pragma: no cover
+    create_drive_folder = None  # type: ignore[assignment]
+    create_drive_structure_from_yaml = None  # type: ignore[assignment]
+    create_local_base_structure = None  # type: ignore[assignment]
+    get_drive_service = None  # type: ignore[assignment]
+    upload_config_to_drive_folder = None  # type: ignore[assignment]
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
