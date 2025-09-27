@@ -5,18 +5,20 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import Any, Dict, Optional, cast, List
+from typing import Any, Dict, Optional, cast
 
 # Import Streamlit in modo tollerante (test/CI headless)
 st: Any
 try:
     import streamlit as _st
+
     st = _st
 except Exception:  # pragma: no cover
     st = None  # type: ignore[assignment]
 import yaml
 
 from pipeline.context import ClientContext
+
 try:
     from pipeline.drive_utils import (
         create_drive_folder,
@@ -51,6 +53,45 @@ def _setup_logging() -> logging.Logger:
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     return logger
+
+
+def _render_debug_expander(workspace_dir: Path) -> None:
+    """Mostra un expander 'Debug' con eventuali file di diagnostica vision.
+
+    Cerca in `semantic/` i file `.vision_last_response.json` e `.vision_last_error.txt`.
+    Se non trovati, mostra un messaggio informativo.
+    """
+    if st is None:  # type: ignore[truthy-bool]
+        return
+    try:
+        sem_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
+        resp_path = cast(Path, ensure_within_and_resolve(sem_dir, sem_dir / ".vision_last_response.json"))
+        err_path = cast(Path, ensure_within_and_resolve(sem_dir, sem_dir / ".vision_last_error.txt"))
+    except ConfigError:
+        with st.expander("Debug", expanded=False):
+            st.info("Nessun debug disponibile")
+        return
+
+    shown = False
+    with st.expander("Debug", expanded=False):
+        if resp_path.exists():
+            try:
+                content = read_text_safe(workspace_dir, resp_path, encoding="utf-8")
+                st.caption(f"File: `{resp_path}`")
+                st.code(content, language="json")
+                shown = True
+            except Exception:
+                pass
+        if err_path.exists():
+            try:
+                content = read_text_safe(workspace_dir, err_path, encoding="utf-8")
+                st.caption(f"File: `{err_path}`")
+                st.code(content, language="text")
+                shown = True
+            except Exception:
+                pass
+        if not shown:
+            st.info("Nessun debug disponibile")
 
 
 def _request_shutdown(logger: logging.Logger) -> None:
