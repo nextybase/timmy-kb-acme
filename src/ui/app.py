@@ -14,7 +14,7 @@ try:
 
     st = _st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore[assignment]
+    st = None
 import yaml
 
 from pipeline.context import ClientContext
@@ -28,11 +28,11 @@ try:
         upload_config_to_drive_folder,
     )
 except Exception:  # pragma: no cover
-    create_drive_folder = None  # type: ignore[assignment]
-    create_drive_structure_from_yaml = None  # type: ignore[assignment]
-    create_local_base_structure = None  # type: ignore[assignment]
-    get_drive_service = None  # type: ignore[assignment]
-    upload_config_to_drive_folder = None  # type: ignore[assignment]
+    create_drive_folder = None
+    create_drive_structure_from_yaml = None
+    create_local_base_structure = None
+    get_drive_service = None
+    upload_config_to_drive_folder = None
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
