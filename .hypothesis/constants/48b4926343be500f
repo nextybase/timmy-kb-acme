@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\onboarding_full.py
-# hypothesis_version: 6.139.2
-
-[130, '--non-interactive', '--slug', '?', 'ConfigError', 'GITHUB_TOKEN', 'PipelineError', 'Slug cliente', '__main__', 'base_dir', 'md_dir', 'n', 'onboarding_full', 'redact_logs', 'slug_pos', 'store_true', 'y']

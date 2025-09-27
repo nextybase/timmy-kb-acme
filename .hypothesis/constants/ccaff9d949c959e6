@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\ingest.py
-# hypothesis_version: 6.139.2
-
-[b'\x00', b'\n\r\t\x0c\x0b\x08\x1b', 0.9, 126, 400, 1024, '.md', '.txt', 'OpenAIEmbeddings', 'chunks', 'cl100k_base', 'files', 'latin-1', 'rb', 'timmy_kb.ingest', 'utf-16', 'utf-8']

@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\storage\tags_store.py
-# hypothesis_version: 6.139.2
-
-[0.86, 1.23, ' LIMIT ?', ',', '1', '2', '?', 'BEGIN', 'DELETE FROM tags', '__main__', 'action', 'add_term_alias', 'brand identity', 'brochure.pdf', 'clear_doc_terms', 'doc_terms', 'documents', 'edit_log', 'ensure_schema_v2', 'folder_terms', 'folders', 'get_conn', 'get_document_by_id', 'get_folder_by_path', 'get_folder_terms', 'has_doc_terms', "identita' di marca", 'it', 'keep', 'keep_only_listed', 'list_documents', 'list_folders', 'list_term_aliases', 'load_tags_reviewed', 'log_edit', 'migrate_to_v2', 'name', 'note', 'on', 'raw/marketing', 'reviewed_at', 'save_doc_terms', 'save_tags_reviewed', 'seconds', 'synonyms', 'tags', 'tags.db', 'term_aliases', 'terms', 'true', 'upsert_document', 'upsert_folder', 'upsert_folder_term', 'upsert_term', 'version', 'yake', 'yes']

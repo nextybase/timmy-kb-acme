@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\drive_utils.py
-# hypothesis_version: 6.139.2
-
-['MIME_FOLDER', 'MIME_PDF', 'MediaIoBaseDownload', '_retry', 'create_drive_folder', 'delete_drive_file', 'get_drive_service', 'get_file_metadata', 'list_drive_files']

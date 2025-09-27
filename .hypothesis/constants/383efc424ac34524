@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\semantic\layout_enricher.py
-# hypothesis_version: 6.139.2
-
-['-', '-{2,}', 'Constraints', 'NFKD', '[^a-z0-9\\-]+', '_', 'a', 'agli', 'ai', 'al', 'allowed_prefixes', 'anche', 'and', 'che', 'come', 'con', 'da', 'dataset', 'degli', 'dei', 'del', 'della', 'delle', 'dello', 'di', 'e', 'for', 'fra', 'from', 'gli', 'governance', 'il', 'in', 'kpi', 'la', 'le', 'lo', 'max_depth', 'max_nodes', 'nei', 'nelle', 'non', 'overview', 'per', 'processi', 'roadmap', 'semantic_mapping', 'sono', 'su', 'that', 'the', 'this', 'tra', 'un', 'una', 'uno', 'with', 'your', 'è']

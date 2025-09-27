@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\constants.py
-# hypothesis_version: 6.139.2
-
-[4000, '.', '.bak', '.tmp', 'BACKUP_SUFFIX', 'BASE_DIR_NAME', 'BOOK_DIR_NAME', 'BOOK_JSON_NAME', 'CONFIG_DIR_NAME', 'CONFIG_FILE_NAME', 'GDRIVE_FILE_MIME', 'GDRIVE_FOLDER_MIME', 'GITHUB_BRANCH', 'GIT_COMMIT_USER_NAME', 'GIT_DEFAULT_BRANCH', 'HONKIT_DOCKER_IMAGE', 'LOGS_DIR_NAME', 'LOG_FILE_NAME', 'MAX_CONCURRENCY', 'OUTPUT_DIR_NAME', 'PACKAGE_JSON_NAME', 'PDF_MIME_TYPE', 'PREVIEW_DEFAULT_PORT', 'RAW_DIR_NAME', 'README.md', 'README_MD_NAME', 'REPO_NAME_PREFIX', 'SEMANTIC_DIR_NAME', 'SKIP_IF_UNCHANGED', 'SUMMARY.md', 'SUMMARY_MD_NAME', 'TMP_SUFFIX', 'Timmy KB', 'application/pdf', 'book', 'book.json', 'config', 'config.yaml', 'honkit/honkit', 'honkit_preview', 'kb+noreply@local', 'logs', 'onboarding.log', 'output', 'package.json', 'raw', 'semantic', 'timmy-kb-']

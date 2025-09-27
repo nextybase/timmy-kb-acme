@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\semantic\auto_tagger.py
-# hypothesis_version: 6.139.2
-
-[0.0, 0.6, 1.0, '*.pdf', ', ', '.', '/', '[^\\w]+', '^\\d+$', 'entities', 'filename', 'keyphrases', 'path', 'relative_path', 'render_tags_csv', 'score', 'sources', 'suggested_tags', 'tags', 'utf-8']

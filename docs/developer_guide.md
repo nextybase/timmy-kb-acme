@@ -26,7 +26,7 @@
 ---
 
 ## Architettura in breve
-- Orchestratori (CLI e UI) gestiscono l’esperienza utente e coordinano i moduli.
+- Orchestratori (CLI e UI) gestiscono l'esperienza utente e coordinano i moduli.
 - `pipeline/*` fornisce utilità cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
 - `semantic/*` espone la facade `semantic.api` che coordina conversione PDF->MD, enrichment del frontmatter e indicizzazione.
 - Storage locale: workspace per cliente in `output/timmy-kb-<slug>/{raw, book, semantic, config, logs}`.
@@ -55,7 +55,7 @@ La facade `semantic.api` espone gli step principali:
 5. `index_markdown_to_db(ctx, logger, slug, scope, embeddings_client, db_path)`
    - Estrae chunk testuali, calcola embedding, scrive su DB (idempotente) e ritorna KPI coerenti.
 
-> Fase `build_markdown_book`: viene tracciata come singola fase che copre l’intero blocco `convert_markdown -> write_summary_and_readme -> load_reviewed_vocab -> enrich_frontmatter`. Il “success” è emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
+> Fase `build_markdown_book`: viene tracciata come singola fase che copre l'intero blocco `convert_markdown -> write_summary_and_readme -> load_reviewed_vocab -> enrich_frontmatter`. Il "successo è emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
 
 ---
 
@@ -77,13 +77,25 @@ La facade `semantic.api` espone gli step principali:
 
 ---
 
+## Controllo caratteri & encoding (UTF-8)
+
+- `fix-control-chars`: hook pre-commit che ripulisce i file sostituendo i caratteri di controllo vietati e applicando la normalizzazione NFC.
+- `forbid-control-chars`: hook di verifica che blocca il commit se restano caratteri proibiti o file non UTF-8.
+
+Per forzare i controlli:
+
+```bash
+pre-commit run fix-control-chars --all-files
+pre-commit run forbid-control-chars --all-files
+python scripts/forbid_control_chars.py --fix <path>
+```
 ## Qualità prima dei test (lint & format obbligatori)
 
 Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
 Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
-Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l’editor applica `black` in automatico.
+Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l'editor applica `black` in automatico.
 
 **Definition of Done (minimo) per ogni PR:**
 - file formattati (`black`) e import ordinati (`isort`);
@@ -97,10 +109,10 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 2. Attiva hook: `pre-commit install`.
 3. Editor (VS Code): abilita *format on save* con `black`, lint con `flake8`, `isort` profilo `black`, line-length 120.
 
-**Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l’editor formatterà automaticamente).
+**Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatterà automaticamente).
 Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualità per far arrivare al testing solo codice già pulito.
 
-> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: “rispetta line-length 120, black/isort/flake8; nessun segreto nei log”.
+> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/flake8; nessun segreto nei log".
 
 
 ---
@@ -126,16 +138,16 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 - Se ci sono PDF in `raw/` → invocare sempre il converter.
 - Se in `raw/` i PDF trovati sono tutti non sicuri/symlink/fuori perimetro:
   - Non chiamare il converter.
-  - Sollevare `ConfigError` con messaggio esplicito (“solo PDF non sicuri/fuori perimetro”) e hint operativo a rimuovere i symlink o spostare i PDF reali dentro `raw/`.
+  - Sollevare `ConfigError` con messaggio esplicito ("solo PDF non sicuri/fuori perimetro") e hint operativo a rimuovere i symlink o spostare i PDF reali dentro `raw/`.
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
-- Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l’emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
+- Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
 
 ---
 
 ## Enrichment & vocabolario: comportamento fail-fast
-- SSoT runtime dei tag è sotto `semantic/` (tipicamente DB). L’assenza del DB è ok (nessun enrichment), restituisce `{}`.
+- SSoT runtime dei tag è sotto `semantic/` (tipicamente DB). L'assenza del DB è ok (nessun enrichment), restituisce `{}`.
 - Errori di path o I/O/DB durante il load → `ConfigError` con `file_path` (fail-fast, niente fallback silenziosi).
-- L’enrichment avviene nella fase estesa `build_markdown_book`; una failure blocca il “success” della fase.
+- L'enrichment avviene nella fase estesa `build_markdown_book`; una failure blocca il "successo" della fase.
 
 ### Nota (Enrichment/Vocabolario - SQLite)
 - Errori SQLite (apertura, query, cursor) durante la lettura del DB sono sempre rimappati a `ConfigError` con `file_path` al DB.
@@ -158,7 +170,7 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 
 ## Indexer & KPI DB (inserimenti reali)
 - `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run → `0`).
-- L’aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
+- L'aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
  - Inizializzazione schema DB: eseguita una sola volta per run e in modalità fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` è `None` viene usato il percorso predefinito di `get_db_path()`).
 
 ---
@@ -200,7 +212,7 @@ py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/da
 
 ## UI: tab Finanza (I/O sicuro e cleanup)
 - Scritture solo tramite `safe_write_bytes` con guardie `ensure_within`.
-- Creazione del CSV temporaneo in `semantic/` con cleanup in `finally` (anche in caso d’errore).
+- Creazione del CSV temporaneo in `semantic/` con cleanup in `finally` (anche in caso d'errore).
 - Niente fallback a `Path.write_bytes`.
 
 ---

@@ -84,6 +84,18 @@ output/timmy-kb-<slug>/
 - Log con redazione automatica se `LOG_REDACTION` è attivo.
 
 ---
+## Controllo caratteri & encoding (UTF-8)
+
+- `fix-control-chars`: hook pre-commit che normalizza i file (rimozione controlli C0/C1 + NFC).
+- `forbid-control-chars`: hook pre-commit di guardia; blocca il commit se restano caratteri proibiti o file non UTF-8.
+
+Esecuzione manuale:
+
+```bash
+pre-commit run fix-control-chars --all-files
+pre-commit run forbid-control-chars --all-files
+python scripts/forbid_control_chars.py --fix <path>
+```
 
 ## Troubleshooting essenziale
 - `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).

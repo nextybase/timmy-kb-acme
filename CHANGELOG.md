@@ -3,6 +3,8 @@
 > Formato: **Keep a Changelog** e **SemVer**
 > Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualità.
 
+## [Unreleased]
+
 ## [1.9.6] - 2025-09-27
 
 ### Added

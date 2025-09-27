@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\pipeline\github_utils.py
-# hypothesis_version: 6.139.2
-
-[-2000, '(lista vuota)', '***', '*.md', ', ', '--force-with-lease=', '--porcelain', '--rebase', '-A', '-B', '-c', '-m', '.bak', '.push_', 'GIT_HTTP_EXTRAHEADER', 'GIT_SSH_COMMAND', 'HEAD', 'add', 'base_dir', 'branch', 'checkout', 'clone', 'commit', 'env', 'fetch', 'file_path', 'force_ack', 'git', 'git add', 'git checkout', 'git clone', 'git commit', 'git fetch', 'git pull --rebase', 'git push', 'git rev-parse', 'git status', 'local_sha', 'main', 'origin', 'pull', 'push', 'remote_sha', 'repo', 'rev-parse', 'slug', 'status', 'user.name=Timmy KB']

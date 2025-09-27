@@ -1,4 +1,0 @@
-# file: C:\Users\User\clienti\timmy-kb-acme\src\retriever.py
-# hypothesis_version: 6.139.2
-
-[0.0, 0.99, 1.0, 1000.0, 1.3e+154, 180, 280, 420, 500, 1000, 2000, 4000, 8000, 20000, 'QueryParams', 'RetrieverError', 'auto_by_budget', 'budget_ms', 'candidate_limit', 'candidates', 'config', 'content', 'cosine', 'default', 'embed', 'embedding', 'explicit', 'fetch', 'idx', 'k', 'k negativo', 'latency_budget_ms', 'limit', 'limit.source=config', 'limit.source=default', 'meta', 'ms', 'project_slug', 'project_slug vuoto', 'retriever', 'retriever.metrics', 'scope', 'scope vuoto', 'score', 'score_sort', 'search', 'search_with_config', 'timmy_kb.retriever', 'total']

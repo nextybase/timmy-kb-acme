@@ -43,7 +43,7 @@ Il codice deve essere conforme **prima del commit** a: `black` (format), `isort`
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
 Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
-Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l’editor applica `black` in automatico.
+Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l'editor applica `black` in automatico.
 
 **Definition of Done (minimo) per ogni PR:**
 - file formattati (`black`) e import ordinati (`isort`);

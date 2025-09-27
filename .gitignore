@@ -69,23 +69,26 @@ book.json
 qodana.report/
 qodana.sarif.json
 
-*.egg-info/
-src/timmy_kb.egg-info/
+# === Artefatti temporanei ===
+*_log.txt
+pytest*.txt
+*.diff
+e2e*.json
+qodana*.json
+Users/
 
-# === Node.js ===
-node_modules/
-Scripts/
-
-# === Build artifacts (P1) ===
-# Prevent committing local Python installs and build outputs
+# === Build artifacts ===
 Lib/
 build/
 dist/
 **/*.dist-info/
 **/*.egg-info/
-# Duplicates kept intentionally for clarity and robustness
-.pytest_cache/
-__pycache__/
-.coverage
-.venv/
-.env
+
+*.egg-info/
+src/timmy_kb.egg-info/
+
+# === Node.js ===
+node_modules/
+/Scripts/
+!scripts/
+!scripts/**
