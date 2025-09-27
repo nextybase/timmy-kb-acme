@@ -7,7 +7,14 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-import streamlit as st
+# Import Streamlit in modo tollerante (test/CI headless)
+st: Any | None
+try:
+    import streamlit as _st  # type: ignore
+
+    st = _st
+except Exception:  # pragma: no cover
+    st = None
 import yaml
 
 from pipeline.context import ClientContext
