@@ -28,7 +28,7 @@ from pipeline.path_utils import sanitize_filename
 
 # Import locali (dev UI)
 from ui.components.mapping_editor import (
-    load_tags_reviewed,
+    load_semantic_mapping,
     mapping_to_raw_structure,
     split_mapping,
     write_raw_structure_yaml,
@@ -107,7 +107,7 @@ def build_drive_from_mapping(
         progress(step, total_steps, "config.yaml caricato")
 
     # Struttura derivata dal mapping (locale -> YAML sintetico -> creazione su Drive)
-    mapping = load_tags_reviewed(slug, base_root=base_root)
+    mapping = load_semantic_mapping(slug, base_root=base_root)
     structure = mapping_to_raw_structure(mapping)
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
@@ -267,7 +267,7 @@ def emit_readmes_for_raw(
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
-    mapping = load_tags_reviewed(slug, base_root=base_root)
+    mapping = load_semantic_mapping(slug, base_root=base_root)
     cats, _ = split_mapping(mapping)
 
     # crea/recupera struttura cliente; opzionalmente crea albero RAW da mapping

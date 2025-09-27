@@ -207,7 +207,7 @@ def test_generate_pair_crea_due_yaml(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     result = vision_ai.generate_pair(ctx, logger=_NoopLogger(), slug="dummy")
 
-    vision_path = Path(result["vision_yaml"])
+    vision_path = Path(result["mapping_yaml"])
     cartelle_path = Path(result["cartelle_raw_yaml"])
     assert vision_path.exists()
     assert cartelle_path.exists()

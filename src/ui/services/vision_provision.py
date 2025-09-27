@@ -21,6 +21,14 @@ def provision_from_vision(
     model: str = "gpt-4.1-mini",
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Proxy UI-friendly verso semantic.vision_provision.provision_from_vision."""
+    """Proxy UI-friendly verso semantic.vision_provision.provision_from_vision.
+
+    Normalizza il ritorno in {'yaml_paths': {...}} per compat con la UI attuale.
+    """
     result = _provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path, model=model, force=force)
-    return cast(Dict[str, Any], result)
+    if isinstance(result, dict):
+        if "yaml_paths" in result and isinstance(result.get("yaml_paths"), dict):
+            return cast(Dict[str, Any], result)
+        if "mapping" in result and "cartelle_raw" in result:
+            return {"yaml_paths": {"mapping": result["mapping"], "cartelle_raw": result["cartelle_raw"]}}
+    return {"yaml_paths": {}}

@@ -22,8 +22,8 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read
-from semantic.vision_provision import provision_from_vision
 from ui.services.drive_runner import emit_readmes_for_raw
+from ui.services.vision_provision import provision_from_vision
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = REPO_ROOT / "output"
@@ -161,19 +161,37 @@ def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -
     config_dir = cast(Path, ensure_within_and_resolve(workspace_dir, workspace_dir / "config"))
     config_dir.mkdir(parents=True, exist_ok=True)
     pdf_target = cast(Path, ensure_within_and_resolve(config_dir, config_dir / "VisionStatement.pdf"))
+
+    exists = pdf_target.exists()
+    overwrite_allowed = False
+    if exists:
+        overwrite_allowed = st.checkbox(
+            "Sostituisci VisionStatement.pdf esistente",
+            value=False,
+            key=f"overwrite_pdf_{slug}",
+        )
+
     uploader = st.file_uploader("Carica Vision Statement (PDF)", type=["pdf"])
     if uploader is not None:
         data = uploader.read()
         if not data:
             st.warning("Il file caricato e' vuoto. Riprova.")
+        elif exists and not overwrite_allowed:
+            st.warning("File giÃ  presente. Abilita la sostituzione per sovrascrivere.")
         else:
             safe_write_bytes(pdf_target, data, atomic=True)
             st.success("VisionStatement.pdf salvato.")
             logger.info(
                 "ui.vision.pdf_uploaded",
-                extra={"slug": slug, "path": str(pdf_target), "bytes": len(data)},
+                extra={
+                    "slug": slug,
+                    "path": str(pdf_target),
+                    "bytes": len(data),
+                    "overwrite": bool(exists),
+                },
             )
-    exists = pdf_target.exists()
+            exists = True
+
     if exists:
         st.caption(f"PDF presente: `{pdf_target}`")
     else:
@@ -381,7 +399,8 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
         try:
             result = _initialize_workspace(slug, workspace_dir, logger)
             st.session_state["init_result"] = result or {}
-            st.session_state["phase"] = "ready"
+            st.toast("Workspace inizializzato")
+            st.session_state["phase"] = "ready_to_open"
         except ConfigError as exc:
             st.error(str(exc))
 
@@ -460,7 +479,7 @@ def main() -> None:
 
     if phase == "setup":
         _render_setup(slug, workspace_dir, logger)
-    elif phase == "ready":
+    elif phase == "ready_to_open":
         _render_ready(slug, workspace_dir, logger)
     elif phase == "workspace":
         _render_workspace_view(slug, workspace_dir, logger)

@@ -42,7 +42,6 @@ __all__ = [
     "convert_markdown",
     "enrich_frontmatter",
     "write_summary_and_readme",
-    "build_mapping_from_vision",
     "build_tags_csv",
     "build_markdown_book",
     "index_markdown_to_db",
@@ -86,7 +85,7 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 
 def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
-    """Invoca il converter garantendo un fail-fast coerente se la firma è incompatibile."""
+    """Invoca il converter garantendo un fail-fast coerente se la firma Ã¨ incompatibile."""
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
     sig = inspect.signature(func)
@@ -107,12 +106,12 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     """Converte i PDF in RAW in Markdown strutturato dentro book/.
 
     Regole:
-    - Se RAW **non esiste** → ConfigError.
+    - Se RAW **non esiste** â†’ ConfigError.
     - Se RAW **non contiene PDF**:
         - NON invocare il converter (evita segnaposto).
-        - Se in book/ ci sono già MD di contenuto → restituiscili.
-        - Altrimenti → ConfigError (fail-fast).
-    - Se RAW **contiene PDF** → invoca sempre il converter.
+        - Se in book/ ci sono giÃ  MD di contenuto â†’ restituiscili.
+        - Altrimenti â†’ ConfigError (fail-fast).
+    - Se RAW **contiene PDF** â†’ invoca sempre il converter.
     """
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
@@ -154,7 +153,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             _call_convert_md(_convert_md, shim, book_dir)
             content_mds = _list_content_mds()
         else:
-            # RAW senza PDF: non convertire; usa eventuali MD già presenti
+            # RAW senza PDF: non convertire; usa eventuali MD giÃ  presenti
             content_mds = _list_content_mds()
 
         try:
@@ -163,7 +162,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             m.set_artifacts(None)
 
     if safe_pdfs:
-        # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
+        # Caso con PDF: se non abbiamo ottenuto contenuti, Ã¨ anomalia di conversione
         if content_mds:
             return content_mds
         raise ConversionError(
@@ -271,95 +270,6 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
         _validate_md(shim)
         logger.info("Validazione directory MD OK")
         m.set_artifacts(2)
-
-
-def build_mapping_from_vision(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
-    base_dir = cast(Path, getattr(context, "base_dir", None) or get_paths(slug)["base"])
-    config_dir = base_dir / "config"
-    mapping_path = config_dir / "semantic_mapping.yaml"
-    vision_yaml = config_dir / "vision_statement.yaml"
-
-    ensure_within(base_dir, config_dir)
-    ensure_within(config_dir, mapping_path)
-    ensure_within(config_dir, vision_yaml)
-    if not vision_yaml.exists():
-        raise ConfigError(f"Vision YAML non trovato: {vision_yaml}", slug=slug, file_path=vision_yaml)
-
-    try:
-        from pipeline.yaml_utils import yaml_read
-
-        raw = yaml_read(vision_yaml.parent, vision_yaml) or {}
-    except Exception as e:
-        raise ConfigError(
-            f"Errore lettura/parsing vision YAML ({vision_yaml}): {e}",
-            slug=slug,
-            file_path=vision_yaml,
-        ) from e
-
-    def _as_list(val: object) -> list[str]:
-        if isinstance(val, list):
-            return [str(x).strip() for x in val if str(x).strip()]
-        if isinstance(val, str) and val.strip():
-            return [val.strip()]
-        return []
-
-    mapping: dict[str, list[str]] = {}
-    sections: list[tuple[str, object]] = [
-        ("ethical_framework", raw.get("ethical_framework")),
-        ("uvp", raw.get("uvp")),
-        ("key_metrics", raw.get("key_metrics")),
-        ("risks_mitigations", raw.get("risks_mitigations")),
-        ("operating_model", raw.get("operating_model")),
-        ("architecture_principles", raw.get("architecture_principles")),
-        ("ethics_governance_tools", raw.get("ethics_governance_tools")),
-        ("stakeholders_impact", raw.get("stakeholders_impact")),
-    ]
-    goals = raw.get("goals") or {}
-    if isinstance(goals, dict):
-        sections.append(("goals_general", (goals.get("general") or [])))
-        baskets = goals.get("baskets") or {}
-        if isinstance(baskets, dict):
-            sections.append(("goals_b3", baskets.get("b3") or []))
-            sections.append(("goals_b6", baskets.get("b6") or []))
-            sections.append(("goals_b12", baskets.get("b12") or []))
-
-    for concept, payload in sections:
-        values = _as_list(payload)
-        if not values:
-            continue
-        seen: set[str] = set()
-        norm: list[str] = []
-        for v in values:
-            key = v.lower()
-            if key not in seen:
-                seen.add(key)
-                norm.append(v)
-        if norm:
-            mapping[concept] = norm
-
-    if not mapping:
-        raise ConfigError(
-            f"Vision YAML non contiene sezioni utili per il mapping ({vision_yaml}).",
-            slug=slug,
-            file_path=vision_yaml,
-        )
-
-    config_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        import yaml
-
-        safe = yaml.safe_dump(mapping, allow_unicode=True, sort_keys=True)
-        safe_write_text(mapping_path, safe, encoding="utf-8", atomic=True)
-    except Exception as e:
-        raise ConfigError(f"Scrittura mapping fallita ({mapping_path}): {e}", slug=slug, file_path=mapping_path) from e
-
-    with phase_scope(logger, stage="build_mapping_from_vision", customer=slug) as m:
-        logger.info("vision.mapping.built", extra={"file_path": str(mapping_path), "concepts": len(mapping)})
-        try:
-            m.set_artifacts(len(mapping))
-        except Exception:
-            m.set_artifacts(None)
-    return mapping_path
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:

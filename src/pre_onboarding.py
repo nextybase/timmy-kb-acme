@@ -3,7 +3,7 @@
 """
 Orchestratore della fase di pre-onboarding per Timmy-KB.
 
-Responsabilità:
+ResponsabilitÃ :
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
@@ -59,7 +59,7 @@ try:
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
 except Exception:
-    # Import opzionale: in modalità --dry-run non è richiesto googleapiclient
+    # Import opzionale: in modalitÃ  --dry-run non Ã¨ richiesto googleapiclient
     pass
 
 
@@ -69,7 +69,7 @@ def _prompt(msg: str) -> str:
 
 
 def _require_drive_utils() -> None:
-    """Verifica che le utilità Google Drive siano disponibili e callabili.
+    """Verifica che le utilitÃ  Google Drive siano disponibili e callabili.
 
     Solleva ConfigError con istruzioni d'installazione se mancanti.
     """
@@ -143,7 +143,7 @@ def bootstrap_semantic_templates(
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
     - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
 
-    Nota: per retro-compatibilità puoi duplicare anche in semantic/semantic_mapping.yaml.
+    Nota: per retro-compatibilitÃ  puoi duplicare anche in semantic/semantic_mapping.yaml.
     """
     if context.base_dir is None:
         raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
@@ -189,7 +189,7 @@ def bootstrap_semantic_templates(
             "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
         }
 
-        # Prepend `context` solo se non già presente
+        # Prepend `context` solo se non giÃ  presente
         if "context" not in data:
             data = {"context": ctx, **data}
             payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
@@ -197,7 +197,7 @@ def bootstrap_semantic_templates(
             safe_write_text(mapping_dst, payload, atomic=True)
             logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
 
-        # (Opzionale) retro-compatibilità: mantieni anche semantic_mapping.yaml
+        # (Opzionale) retro-compatibilitÃ : mantieni anche semantic_mapping.yaml
         legacy = semantic_dir / "semantic_mapping.yaml"
         if not legacy.exists():
             try:
@@ -259,7 +259,7 @@ def _prepare_context_and_logger(
 
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
     if not require_env:
-        logger.info("Modalità offline: variabili d'ambiente esterne non richieste (require_env=False).")
+        logger.info("ModalitÃ  offline: variabili d'ambiente esterne non richieste (require_env=False).")
     logger.info(f"Config cliente caricata: {context.config_path}")
     logger.info("Avvio pre-onboarding")
     return context, logger, client_name
@@ -309,7 +309,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
-        # In modalità offline (senza googleapiclient) usiamo un fallback locale minimo
+        # In modalitÃ  offline (senza googleapiclient) usiamo un fallback locale minimo
         if callable(create_local_base_structure):
             create_local_base_structure(context, yaml_structure_file)
         else:
@@ -380,29 +380,6 @@ def ensure_local_workspace_for_ui(
         if resolved_name:
             updates["client_name"] = resolved_name
         update_config_with_drive_ids(context, updates, logger=logger)
-
-        # Genera YAML strutturato del Vision Statement (placeholder parser)
-        try:
-            from semantic.vision_parser import pdf_to_vision_yaml
-
-            out_yaml = cfg_dir / "vision_statement.yaml"
-            ensure_within(context.base_dir, out_yaml)
-            pdf_to_vision_yaml(target, out_yaml)
-            logger.info(
-                {
-                    "event": "vision_yaml_generated",
-                    "slug": context.slug,
-                    "file_path": str(out_yaml),
-                }
-            )
-        except Exception as e:
-            logger.warning(
-                {
-                    "event": "vision_yaml_generation_failed",
-                    "slug": context.slug,
-                    "error": str(e).splitlines()[:1],
-                }
-            )
 
     logger.info(
         {
@@ -527,11 +504,11 @@ def pre_onboarding_main(
     yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
 
     if dry_run:
-        logger.info("Modalità dry-run: salto operazioni su Google Drive.")
+        logger.info("ModalitÃ  dry-run: salto operazioni su Google Drive.")
         logger.info("Pre-onboarding locale completato (dry-run).")
         return
 
-    # Verifica disponibilità funzioni Drive prima della fase remota
+    # Verifica disponibilitÃ  funzioni Drive prima della fase remota
     _require_drive_utils()
     _drive_phase(
         context,
@@ -579,7 +556,7 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalità non interattiva è richiesto --slug (o slug posizionale).")
+        early_logger.error("Errore: in modalitÃ  non interattiva Ã¨ richiesto --slug (o slug posizionale).")
         sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
     try:
         slug = ensure_valid_slug(

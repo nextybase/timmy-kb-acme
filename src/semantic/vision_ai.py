@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import yaml
 
@@ -12,7 +13,7 @@ from ai.client_factory import make_openai_client
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # factory centralizzato
 
 _MODEL = "gpt-4.1-mini"
@@ -71,29 +72,14 @@ SYSTEM_PROMPT = (
 def _resolve_optional(base: Path, candidate: Path | str) -> Optional[Path]:
     candidate_path = Path(base) / Path(candidate)
     try:
-        return ensure_within_and_resolve(base, candidate_path)
+        return cast(Path, ensure_within_and_resolve(base, candidate_path))
     except ConfigError:
         return None
 
 
-def _copy_legacy_mapping_if_needed(base: Path, mapping_path: Path) -> None:
-    legacy_candidate = Path(base) / "semantic" / "vision_statement.yaml"
-    try:
-        legacy_path = ensure_within_and_resolve(base, legacy_candidate)
-    except ConfigError:
-        return
-    if mapping_path.exists() or not legacy_path.exists():
-        return
-    try:
-        content = read_text_safe(base, legacy_path, encoding="utf-8")
-    except Exception:
-        return
-    safe_write_text(mapping_path, content)
-
-
 def _extract_pdf_text(pdf_path: Path) -> str:
     try:
-        import fitz  # type: ignore
+        import fitz
     except ImportError as exc:
         raise ConfigError("Impossibile aprire il VisionStatement.pdf: PyMuPDF non installato.") from exc
     try:
@@ -139,7 +125,6 @@ def _resolve_paths(ctx: ClientContext, slug: str) -> VisionPaths:
     text_snapshot = ensure_within_and_resolve(base, base / "semantic" / _TEXT_SNAPSHOT_NAME)
     project_root = Path(__file__).resolve().parents[2]
     config_pdf_repo = ensure_within_and_resolve(project_root, project_root / "config" / "VisionStatement.pdf")
-    _copy_legacy_mapping_if_needed(base, mapping_yaml)
     return VisionPaths(base, config_pdf_client, raw_pdf, mapping_yaml, cartelle_yaml, config_pdf_repo, text_snapshot)
 
 
@@ -202,7 +187,7 @@ def _message_content_to_text(message_content: Any) -> str:
     return "".join(text_parts).strip()
 
 
-def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL) -> Dict[str, str]:
+def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, model: str = _MODEL) -> Dict[str, Any]:
     """Genera semantic_mapping.yaml e cartelle_raw.yaml e restituisce i path."""
     paths = _resolve_paths(ctx, slug)
     pdf_path = _pick_pdf(paths)
@@ -296,7 +281,7 @@ def generate_pair(ctx: ClientContext, logger, *, slug: str, model: str = _MODEL)
     }
 
 
-def generate(ctx: ClientContext, logger, *, slug: str) -> str:
+def generate(ctx: ClientContext, logger: logging.Logger, *, slug: str) -> str:
     """
     Genera 'semantic/semantic_mapping.yaml' dal VisionStatement.pdf del cliente.
     Ritorna il path del file YAML generato (stringa).
@@ -311,4 +296,4 @@ def generate(ctx: ClientContext, logger, *, slug: str) -> str:
             "tokens_completion": result.get("tokens_completion"),
         },
     )
-    return result["mapping_yaml"]
+    return cast(str, result["mapping_yaml"])

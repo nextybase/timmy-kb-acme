@@ -24,9 +24,9 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 #       ma qui li importiamo esplicitamente per evitare drift tra definizioni duplicate.
 from semantic.vision_ai import JSON_SCHEMA, SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
+from src.ai.client_factory import make_openai_client
 
 _CHAT_COMPLETIONS_MAX_CHARS = 200_000
-from src.ai.client_factory import make_openai_client
 
 
 def _sha256_of_file(path: Path) -> str:
@@ -65,20 +65,16 @@ def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
 class _Paths:
     base_dir: Path
     semantic_dir: Path
-    vision_txt: Path
     mapping_yaml: Path
     cartelle_yaml: Path
-    vision_hash: Path
 
 
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
     base = Path(ctx_base_dir)
     sem_dir = ensure_within_and_resolve(base, base / "semantic")
-    vision_txt = ensure_within_and_resolve(sem_dir, sem_dir / "vision_statement.txt")
     mapping_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     cartelle_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "cartelle_raw.yaml")
-    vision_hash = ensure_within_and_resolve(sem_dir, sem_dir / ".vision_hash")
-    return _Paths(base, sem_dir, vision_txt, mapping_yaml, cartelle_yaml, vision_hash)
+    return _Paths(base, sem_dir, mapping_yaml, cartelle_yaml)
 
 
 def _count_cartelle_folders(cartelle_path: Path, *, base_dir: Path) -> Optional[int]:
@@ -366,43 +362,11 @@ def provision_from_vision(
     paths = _resolve_paths(ctx.base_dir)
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
-    pdf_hash = _sha256_of_file(pdf_path)
+    # Nota: rimosso meccanismo legacy di hash/skip e snapshot testo
+    # La funzione ora produce esclusivamente i due YAML richiesti.
 
-    yaml_paths = {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
-    existing_hash: Optional[str] = None
-    if paths.vision_hash.exists():
-        try:
-            existing_hash = read_text_safe(paths.semantic_dir, paths.vision_hash, encoding="utf-8").strip()
-        except Exception:
-            existing_hash = None
-
-    if not force and existing_hash == pdf_hash and paths.mapping_yaml.exists() and paths.cartelle_yaml.exists():
-        ts = datetime.now(timezone.utc).isoformat()
-        areas_count = _count_cartelle_folders(paths.cartelle_yaml, base_dir=paths.semantic_dir)
-        record = {
-            "ts": ts,
-            "slug": slug,
-            "pdf": str(pdf_path),
-            "pdf_hash": pdf_hash,
-            "model": model,
-            "yaml_paths": yaml_paths,
-            "areas_count": areas_count,
-            "regenerated": False,
-        }
-        _write_audit_line(paths.base_dir, record)
-        logger.info("vision_provision: skip_same_hash", extra=record)
-        return {
-            "pdf_hash": pdf_hash,
-            "yaml_paths": yaml_paths,
-            "model": model,
-            "generated_at": ts,
-            "areas_count": areas_count,
-            "regenerated": False,
-        }
-
-    # 1) Snapshot testuale
+    # 1) Estrazione testo (solo per contesto AI; nessun salvataggio snapshot)
     snapshot = _extract_pdf_text(pdf_path)
-    safe_write_text(paths.vision_txt, snapshot)
 
     # 2) Invocazione AI
     client = make_openai_client()
@@ -424,7 +388,7 @@ def provision_from_vision(
     )
     _validate_json_payload(data)
 
-    # 3) JSON -> YAML (vision + cartelle_raw)
+    # 3) JSON -> YAML (semantic_mapping + cartelle_raw)
     mapping_yaml_str = yaml.safe_dump(
         {
             "context": data["context"],
@@ -446,28 +410,17 @@ def provision_from_vision(
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
-    safe_write_text(paths.vision_hash, pdf_hash)
 
     ts = datetime.now(timezone.utc).isoformat()
-    areas_count = len(data["areas"])
     record = {
         "ts": ts,
         "slug": slug,
         "pdf": str(pdf_path),
-        "pdf_hash": pdf_hash,
         "model": model,
-        "yaml_paths": yaml_paths,
-        "areas_count": areas_count,
-        "regenerated": True,
+        "yaml_paths": {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
 
-    return {
-        "pdf_hash": pdf_hash,
-        "yaml_paths": yaml_paths,
-        "model": model,
-        "generated_at": ts,
-        "areas_count": areas_count,
-        "regenerated": True,
-    }
+    # Ritorna solo i path dei due YAML richiesti
+    return {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}

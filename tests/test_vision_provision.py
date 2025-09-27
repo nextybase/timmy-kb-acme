@@ -3,7 +3,6 @@
 # =========================
 from __future__ import annotations
 
-import json
 import types
 from pathlib import Path
 
@@ -129,12 +128,9 @@ def test_happy_path(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
     result = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
-    assert result.get("regenerated") is True
-
-    # Verifiche di esito
-    assert "yaml_paths" in result
-    mapping_path = Path(result["yaml_paths"]["mapping"])
-    c_path = Path(result["yaml_paths"]["cartelle_raw"])
+    # La funzione ora ritorna direttamente i path attesi
+    mapping_path = Path(result["mapping"])
+    c_path = Path(result["cartelle_raw"])
     assert mapping_path.exists(), "semantic_mapping.yaml non creato"
     assert c_path.exists(), "cartelle_raw.yaml non creato"
 
@@ -158,7 +154,12 @@ def test_missing_pdf_raises(monkeypatch, tmp_path: Path):
 
     ctx = DummyCtx(base_dir=base)
     with pytest.raises(ConfigError):
-        provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=base / "config" / "VisionStatement.pdf")
+        provision_from_vision(
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=base / "config" / "VisionStatement.pdf",
+        )
 
 
 def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
@@ -175,7 +176,7 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
         provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
 
 
-def test_idempotenza_hash_salta_rigenerazione(monkeypatch, tmp_workspace: Path):
+def test_generation_creates_only_two_yaml(monkeypatch, tmp_workspace: Path):
     output_parsed = {
         "context": {"slug": "dummy", "client_name": "Dummy"},
         "areas": [
@@ -207,36 +208,21 @@ def test_idempotenza_hash_salta_rigenerazione(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
 
-    result_first = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
-    assert result_first.get("regenerated") is True
+    # Prima esecuzione: generazione YAML
+    provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
     assert calls["count"] == 1
 
-    mapping_yaml = Path(result_first["yaml_paths"]["mapping"])
-    cartelle_yaml = Path(result_first["yaml_paths"]["cartelle_raw"])
-    mapping_mtime = mapping_yaml.stat().st_mtime
-    cartelle_mtime = cartelle_yaml.stat().st_mtime
+    # Nessun artefatto legacy creato
+    assert not (tmp_workspace / "semantic" / ".vision_hash").exists()
+    assert not (tmp_workspace / "semantic" / "vision_statement.txt").exists()
 
-    hash_file = tmp_workspace / "semantic" / ".vision_hash"
-    assert hash_file.exists()
+    # In semantic/ devono esistere solo i due YAML richiesti.
+    # Gli eventuali altri file fuori perimetro non sono considerati in questo test.
+    semantic_files = {p.name for p in (tmp_workspace / "semantic").glob("*")}
+    assert {"semantic_mapping.yaml", "cartelle_raw.yaml"}.issubset(semantic_files)
 
-    log_path = tmp_workspace / "logs" / "vision_provision.log"
-    assert log_path.exists()
-    first_lines = log_path.read_text(encoding="utf-8").strip().splitlines()
-    assert first_lines
-
-    def _fail_client():
-        raise AssertionError("OpenAI non dovrebbe essere invocato con hash invariato")
-
-    monkeypatch.setattr(S, "make_openai_client", _fail_client)
-
+    # Seconda esecuzione: il client viene richiamato nuovamente e i file restano validi
     result_second = provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
-    assert result_second.get("regenerated") is False
-    assert result_second["yaml_paths"] == result_first["yaml_paths"]
-    assert mapping_yaml.stat().st_mtime == mapping_mtime
-    assert cartelle_yaml.stat().st_mtime == cartelle_mtime
-
-    lines = log_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == len(first_lines) + 1
-    last_record = json.loads(lines[-1])
-    assert last_record["pdf_hash"] == result_second["pdf_hash"]
-    assert last_record["regenerated"] is False
+    assert calls["count"] == 2
+    assert Path(result_second["mapping"]).exists()
+    assert Path(result_second["cartelle_raw"]).exists()

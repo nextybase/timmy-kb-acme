@@ -7,8 +7,8 @@ import streamlit as st
 from ui.components.mapping_editor import (
     build_mapping,
     load_default_mapping,
-    load_tags_reviewed,
-    save_tags_reviewed,
+    load_semantic_mapping,
+    save_semantic_mapping,
     split_mapping,
     validate_categories,
 )
@@ -17,7 +17,7 @@ from ui.components.mapping_editor import (
 def render_config_tab(*, log: Any, slug: str, client_name: str) -> None:
     st.subheader("Configurazione (mapping semantico)")
     try:
-        mapping = load_tags_reviewed(slug)
+        mapping = load_semantic_mapping(slug)
     except Exception:
         mapping = load_default_mapping()
 
@@ -36,8 +36,8 @@ def render_config_tab(*, log: Any, slug: str, client_name: str) -> None:
         if st.button("Salva mapping rivisto", key="btn_save_mapping_all"):
             try:
                 new_map = build_mapping(cats, reserved, slug=slug, client_name=client_name, normalize_keys=True)
-                path = save_tags_reviewed(slug, new_map)
-                log.info({"event": "tags_reviewed_saved_all", "slug": slug, "path": str(path)})
+                path = save_semantic_mapping(slug, new_map)
+                log.info({"event": "semantic_mapping_saved_all", "slug": slug, "path": str(path)})
                 st.success("Mapping salvato.")
             except Exception as e:
                 st.exception(e)

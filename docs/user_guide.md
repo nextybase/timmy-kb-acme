@@ -30,8 +30,8 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
-- È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
- - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` estrae il testo, salva `semantic/vision_statement.txt` e genera `semantic/semantic_mapping.yaml` via OpenAI (modello `gpt-4.1-mini`).
+- Ãˆ presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
+ - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI (modello `gpt-4.1-mini`).
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
@@ -62,7 +62,7 @@ Modalità **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 1. Copia `VisionStatement.pdf` in `output/timmy-kb-<slug>/config/` oppure in `raw/`.
 2. Assicurati che `.env` contenga `OPENAI_API_KEY_FOLDER` (o `OPENAI_API_KEY`).
 3. Esegui `py src/tools/gen_vision_yaml.py --slug <slug>`: il tool carica l'ambiente, risolve i path e genera
-   `semantic/semantic_mapping.yaml` più lo snapshot `semantic/vision_statement.txt`.
+   `semantic/semantic_mapping.yaml`.
 4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.
 
 
@@ -71,7 +71,7 @@ Modalità **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 output/timmy-kb-<slug>/
    raw/        # PDF
    book/       # Markdown + SUMMARY.md + README.md
-   semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.txt, tags.db
+   semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv,  tags.db
    config/     # config.yaml (con eventuali ID Drive)
    logs/
 ```
@@ -79,9 +79,9 @@ output/timmy-kb-<slug>/
 ---
 
 ## Note operative
-- **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.
+- **RAW locale Ã¨ la sorgente** per conversione/enrichment; Drive Ã¨ usato per provisioning/ingest.
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
-- Log con redazione automatica se `LOG_REDACTION` è attivo.
+- Log con redazione automatica se `LOG_REDACTION` Ã¨ attivo.
 
 ---
 ## Controllo caratteri & encoding (UTF-8)

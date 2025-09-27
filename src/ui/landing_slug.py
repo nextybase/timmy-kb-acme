@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 
@@ -29,6 +31,14 @@ CLIENT_CONTEXT_ERROR_MSG = (
 def _workspace_dir_for(slug: str) -> Path:
     repo_root = Path(__file__).resolve().parents[2]
     return repo_root / "output" / f"timmy-kb-{slug}"
+
+
+def _request_shutdown(logger: Optional[logging.Logger]) -> None:
+    try:
+        (logger or logging.getLogger("ui.landing_slug")).info("ui.shutdown_request")
+        os.kill(os.getpid(), signal.SIGTERM)
+    except Exception:
+        os._exit(0)
 
 
 def _base_dir_for(slug: str) -> Path:
@@ -120,6 +130,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             )
             or ""
         )
+        st.button("Esci", on_click=lambda: _request_shutdown(log), use_container_width=True)
 
     slug = slug.strip()
     if not slug:

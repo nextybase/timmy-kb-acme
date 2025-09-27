@@ -117,11 +117,11 @@ def items_to_examples(items: List[Dict[str, str]]) -> List[str]:
 # ---- Persistenza del mapping rivisto ----
 
 
-def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
+def save_semantic_mapping(slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
     base_root = Path(base_root)
     client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
-    path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "tags_reviewed.yaml")
+    path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     safe_write_text_compat(path, yaml_dump(mapping))
     return path
 
@@ -129,12 +129,10 @@ def save_tags_reviewed(slug: str, mapping: Dict[str, Any], *, base_root: Path | 
 # -------- API aggiuntive usate dai runner Drive --------
 
 
-def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
-    """Carica il mapping semantico del cliente.
+def load_semantic_mapping(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
+    """Carica esclusivamente semantic/semantic_mapping.yaml per il cliente.
 
-    Ordine di preferenza:
-      1. semantic/semantic_mapping.yaml (nuovo flusso Vision)
-      2. semantic/tags_reviewed.yaml (legacy)
+    Se il file non esiste, solleva FileNotFoundError.
     """
     base_root = Path(base_root)
     client_root = base_root / f"timmy-kb-{slug}"
@@ -145,12 +143,7 @@ def load_tags_reviewed(slug: str, *, base_root: Path | str = "output") -> Dict[s
         data = yaml_load(mapping_path)
         return cast(Dict[str, Any], data)
 
-    legacy_path = sem_dir / "tags_reviewed.yaml"
-    if legacy_path.is_file():
-        data = yaml_load(legacy_path)
-        return cast(Dict[str, Any], data)
-
-    raise FileNotFoundError(f"Mapping non trovato: {mapping_path} o {legacy_path}.")
+    raise FileNotFoundError(f"Mapping non trovato: {mapping_path}.")
 
 
 def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
