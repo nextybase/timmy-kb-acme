@@ -5,7 +5,7 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import streamlit as st
 import yaml
@@ -73,9 +73,9 @@ def _pdf_path(workspace_dir: Path) -> Path:
 
 
 def _copy_base_config(workspace_dir: Path, slug: str, logger: logging.Logger) -> Path:
-    config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+    config_dir = cast(Path, ensure_within_and_resolve(workspace_dir, workspace_dir / "config"))
     config_dir.mkdir(parents=True, exist_ok=True)
-    target = ensure_within_and_resolve(config_dir, config_dir / "config.yaml")
+    target = cast(Path, ensure_within_and_resolve(config_dir, config_dir / "config.yaml"))
     if not BASE_CONFIG.exists():
         raise ConfigError(f"File di configurazione base non trovato: {BASE_CONFIG}")
     if not target.exists():
@@ -108,7 +108,7 @@ def _persist_config_value(
     data = _load_config_data(workspace_dir)
     data[key] = value
     serialized = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
-    target = ensure_within_and_resolve(workspace_dir, _config_path(workspace_dir))
+    target = cast(Path, ensure_within_and_resolve(workspace_dir, _config_path(workspace_dir)))
     safe_write_text(target, serialized, encoding="utf-8", atomic=True)
     clear_yaml_cache()
     logger.info(
@@ -158,9 +158,9 @@ def _render_config_editor(workspace_dir: Path, slug: str, logger: logging.Logger
 
 def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -> bool:
     st.subheader("Vision Statement")
-    config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+    config_dir = cast(Path, ensure_within_and_resolve(workspace_dir, workspace_dir / "config"))
     config_dir.mkdir(parents=True, exist_ok=True)
-    pdf_target = ensure_within_and_resolve(config_dir, config_dir / "VisionStatement.pdf")
+    pdf_target = cast(Path, ensure_within_and_resolve(config_dir, config_dir / "VisionStatement.pdf"))
     uploader = st.file_uploader("Carica Vision Statement (PDF)", type=["pdf"])
     if uploader is not None:
         data = uploader.read()
@@ -183,18 +183,18 @@ def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -
 
 def _vision_outputs_exist(workspace_dir: Path) -> bool:
     try:
-        mapping = ensure_within_and_resolve(workspace_dir, _mapping_path(workspace_dir))
-        cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+        mapping = cast(Path, ensure_within_and_resolve(workspace_dir, _mapping_path(workspace_dir)))
+        cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     except ConfigError:
         return False
     return mapping.exists() and cartelle.exists()
 
 
 def _load_yaml_text(workspace_dir: Path, rel: Path) -> str:
-    target = ensure_within_and_resolve(workspace_dir, rel)
+    target = cast(Path, ensure_within_and_resolve(workspace_dir, rel))
     if not target.exists():
         raise ConfigError(f"File non trovato: {target}")
-    return read_text_safe(workspace_dir, target, encoding="utf-8")
+    return cast(str, read_text_safe(workspace_dir, target, encoding="utf-8"))
 
 
 def _validate_yaml_dict(content: str, label: str) -> Dict[str, Any]:
@@ -208,7 +208,7 @@ def _validate_yaml_dict(content: str, label: str) -> Dict[str, Any]:
 
 
 def _save_yaml_text(workspace_dir: Path, rel: Path, content: str) -> None:
-    target = ensure_within_and_resolve(workspace_dir, rel)
+    target = cast(Path, ensure_within_and_resolve(workspace_dir, rel))
     safe_write_text(target, content, encoding="utf-8", atomic=True)
     clear_yaml_cache()
 
@@ -218,15 +218,15 @@ def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger
         st.info("Gli artefatti Vision sono gia' presenti: nessuna rigenerazione.")
         return None
 
-    pdf_path = ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir))
+    pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
     if not pdf_path.exists():
         raise ConfigError("VisionStatement.pdf non trovato nel workspace.")
 
-    semantic_dir = ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir))
+    semantic_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-    result = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
+    result: Dict[str, Any] = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
     logger.info(
         "ui.vision.generated",
         extra={
@@ -240,7 +240,7 @@ def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger
 
 def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-    cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+    cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     create_local_base_structure(ctx, cartelle)
     logger.info("ui.workspace.local_structure", extra={"slug": slug, "yaml": str(cartelle)})
 
@@ -251,10 +251,12 @@ def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger)
     drive_parent_id = ctx.env.get("DRIVE_ID")
     if not drive_parent_id:
         raise ConfigError("Variabile DRIVE_ID non impostata nell'ambiente.")
-    cartelle = ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir))
+    cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     redact = bool(getattr(ctx, "redact_logs", False))
     client_folder_id = create_drive_folder(service, slug, parent_id=drive_parent_id, redact_logs=redact)
-    created_map = create_drive_structure_from_yaml(service, cartelle, client_folder_id, redact_logs=redact)
+    created_map = cast(
+        Dict[str, str], create_drive_structure_from_yaml(service, cartelle, client_folder_id, redact_logs=redact)
+    )
     upload_config_to_drive_folder(service, ctx, parent_id=client_folder_id, redact_logs=redact)
     logger.info(
         "ui.workspace.drive_structure",
@@ -264,11 +266,14 @@ def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger)
 
 
 def _run_generate_readmes(slug: str, logger: logging.Logger) -> Dict[str, str]:
-    result = emit_readmes_for_raw(
-        slug=slug,
-        base_root=OUTPUT_ROOT,
-        require_env=True,
-        ensure_structure=False,
+    result = cast(
+        Dict[str, str],
+        emit_readmes_for_raw(
+            slug=slug,
+            base_root=OUTPUT_ROOT,
+            require_env=True,
+            ensure_structure=False,
+        ),
     )
     logger.info("ui.workspace.readmes", extra={"slug": slug, "count": len(result)})
     return result
