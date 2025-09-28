@@ -317,10 +317,31 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 except Exception as e:
                     raise ConfigError(f"YAML non valido: {e}") from e
 
-                # --- Validazione slug: hard-fail prima di scrivere ---
+                # --- Validazione MAPPING: hard-fail prima di scrivere ---
                 validate_context_slug(map_obj, expected_slug=slug)
-                if isinstance(cart_obj, dict) and isinstance(cart_obj.get("context"), dict):
-                    validate_context_slug({"context": cart_obj["context"]}, expected_slug=slug)
+
+                # --- CARTELLE: auto-heal se context/slug assente, hard-fail se mismatch ---
+                changed_cartelle = False
+                if not isinstance(cart_obj, dict):
+                    cart_obj = {}
+                    changed_cartelle = True
+                ctx_obj = cart_obj.get("context")
+                if not isinstance(ctx_obj, dict):
+                    cart_obj["context"] = {"slug": slug}
+                    changed_cartelle = True
+                else:
+                    raw = ctx_obj.get("slug")
+                    payload_slug = raw.strip() if isinstance(raw, str) else ""
+                    if not payload_slug:
+                        ctx_obj["slug"] = slug
+                        changed_cartelle = True
+
+                # Validazione finale su cartelle (SSoT)
+                validate_context_slug(cart_obj, expected_slug=slug)
+
+                # Se auto-heal applicato, aggiorna il testo da salvare
+                if changed_cartelle:
+                    updated_cartelle = yaml.safe_dump(cart_obj, allow_unicode=True, sort_keys=False, width=100)
 
                 # --- Scritture atomiche con path-safety (solo dopo validazione) ---
                 target_map = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
@@ -338,7 +359,10 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.save_yaml_failed", extra={"slug": slug})
-                _st_notify("error", "Impossibile salvare gli YAML. Slug incoerente o YAML non valido.")
+                _st_notify(
+                    "error",
+                    "Impossibile salvare gli YAML. Slug incoerente o YAML non valido.",
+                )
             finally:
                 st.session_state["vision_workflow"] = vision_state
 

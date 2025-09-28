@@ -82,8 +82,8 @@ def _setup_state(tmp_path: Path, *, slug: str = "acme") -> Dict[str, Any]:
         "workspace_created": True,
         "base_dir": str(tmp_path),
         "yaml_paths": {
-            "mapping": "semantic/semantic_mapping.yaml",
-            "cartelle_raw": "semantic/cartelle_raw.yaml",
+            "mapping": str(sem_dir / "semantic_mapping.yaml"),
+            "cartelle_raw": str(sem_dir / "cartelle_raw.yaml"),
         },
         # Valori usati come fallback se lettura fallisce
         "mapping_yaml": "",
@@ -110,12 +110,73 @@ def test_ui_save_yaml_mismatch_slug_hard_fail(monkeypatch, tmp_path):
     monkeypatch.setattr(ui_mod, "st", dummy_st, raising=True)
 
     # Salva contenuto originale per verifica che non cambi
-    mapping_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["mapping"]
-    cart_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["cartelle_raw"]
+    mapping_file = Path(vision_state["yaml_paths"]["mapping"])
+    cart_file = Path(vision_state["yaml_paths"]["cartelle_raw"])
     orig_mapping = mapping_file.read_text(encoding="utf-8")
     orig_cart = cart_file.read_text(encoding="utf-8")
 
     # Act + Assert: hard-fail con ConfigError e nessuna scrittura
+    with pytest.raises(ConfigError):
+        ui_mod.render_landing_slug(None)
+
+    assert mapping_file.read_text(encoding="utf-8") == orig_mapping
+    assert cart_file.read_text(encoding="utf-8") == orig_cart
+
+
+def test_ui_save_yaml_cartelle_auto_heal_missing_context(monkeypatch, tmp_path):
+    # Arrange: stato con workspace e file su disco
+    vision_state = _setup_state(tmp_path)
+    slug = "acme"
+
+    # Cartelle senza context: deve essere auto-heal (iniezione context.slug)
+    overrides = {
+        "semantic/semantic_mapping.yaml": "context:\n  slug: acme\n",
+        "semantic/cartelle_raw.yaml": "folders:\n  - key: foo\n",
+    }
+    dummy_st = _DummySt(slug, vision_state, overrides)
+
+    import importlib
+
+    ui_mod = importlib.import_module("src.ui.landing_slug".replace("/", ".").replace("\\", "."))
+    monkeypatch.setattr(ui_mod, "st", dummy_st, raising=True)
+
+    cart_file = Path(vision_state["yaml_paths"]["cartelle_raw"])
+
+    # Act: submit salva senza errori e applica auto-heal
+    ui_mod.render_landing_slug(None)
+
+    # Assert: context.slug iniettato e coerente
+    import yaml as _yaml
+
+    data = _yaml.safe_load(cart_file.read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    assert data.get("context", {}).get("slug") == slug
+
+
+def test_ui_save_yaml_cartelle_slug_mismatch_hard_fail(monkeypatch, tmp_path):
+    vision_state = _setup_state(tmp_path)
+    slug = "acme"
+
+    overrides = {
+        "semantic/semantic_mapping.yaml": "context:\n  slug: acme\n",
+        "semantic/cartelle_raw.yaml": "context:\n  slug: other\n",
+    }
+    dummy_st = _DummySt(slug, vision_state, overrides)
+
+    import importlib
+
+    ui_mod = importlib.import_module("src.ui.landing_slug".replace("/", ".").replace("\\", "."))
+    monkeypatch.setattr(ui_mod, "st", dummy_st, raising=True)
+
+    mapping_file = Path(vision_state["yaml_paths"]["mapping"])
+    cart_file = Path(vision_state["yaml_paths"]["cartelle_raw"])
+    orig_mapping = mapping_file.read_text(encoding="utf-8")
+    orig_cart = cart_file.read_text(encoding="utf-8")
+
+    import pytest
+
+    from pipeline.exceptions import ConfigError
+
     with pytest.raises(ConfigError):
         ui_mod.render_landing_slug(None)
 

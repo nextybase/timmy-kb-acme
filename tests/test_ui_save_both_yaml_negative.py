@@ -76,8 +76,8 @@ def _setup_state(tmp_path: Path, *, slug: str = "acme") -> Dict[str, Any]:
         "workspace_created": True,
         "base_dir": str(tmp_path),
         "yaml_paths": {
-            "mapping": "semantic/semantic_mapping.yaml",
-            "cartelle_raw": "semantic/cartelle_raw.yaml",
+            "mapping": str(sem_dir / "semantic_mapping.yaml"),
+            "cartelle_raw": str(sem_dir / "cartelle_raw.yaml"),
         },
         "mapping_yaml": "",
         "cartelle_yaml": "",
@@ -106,8 +106,8 @@ def test_ui_save_yaml_invalid_context_variants(monkeypatch, tmp_path, override_m
     ui_mod = importlib.import_module("src.ui.landing_slug".replace("/", ".").replace("\\", "."))
     monkeypatch.setattr(ui_mod, "st", dummy_st, raising=True)
 
-    mapping_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["mapping"]
-    cart_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["cartelle_raw"]
+    mapping_file = Path(vision_state["yaml_paths"]["mapping"])
+    cart_file = Path(vision_state["yaml_paths"]["cartelle_raw"])
     orig_mapping = mapping_file.read_text(encoding="utf-8")
     orig_cart = cart_file.read_text(encoding="utf-8")
 
