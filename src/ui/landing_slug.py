@@ -28,6 +28,21 @@ CLIENT_CONTEXT_ERROR_MSG = (
 )
 
 
+def _reset_to_landing() -> None:
+    """Reimposta lo stato UI e torna alla landing (slug vuoto)."""
+    if st is None:
+        return
+    preserve = {"phase"}
+    for key in list(st.session_state.keys()):
+        if key not in preserve:
+            st.session_state.pop(key, None)
+    st.session_state["slug"] = ""
+    try:
+        st.rerun()
+    except Exception:
+        pass
+
+
 def _workspace_dir_for(slug: str) -> Path:
     repo_root = Path(__file__).resolve().parents[2]
     return repo_root / "output" / f"timmy-kb-{slug}"
@@ -192,7 +207,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         st.session_state["vision_workflow"] = vision_state
 
     create_disabled = not client_name or vision_state.get("pdf_bytes") is None
-    if st.button("Carica il Vision Statement", key="ls_create_workspace", type="primary", disabled=create_disabled):
+    if st.button("Crea workspace + carica PDF", key="ls_create_workspace", type="primary", disabled=create_disabled):
         pdf_bytes = cast(Optional[bytes], vision_state.get("pdf_bytes"))
         if not pdf_bytes:
             st.error("Carica il Vision Statement prima di procedere.")
@@ -218,6 +233,12 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 st.session_state["slug"] = slug
                 st.session_state["client_name"] = client_name or slug
                 st.success("Workspace creato e YAML generati.")
+                try:
+                    mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
+                    cartelle_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("cartelle_raw", ""))))
+                    st.json({"mapping": mapping_abs, "cartelle_raw": cartelle_abs}, expanded=False)
+                except Exception:
+                    pass
             except ConfigError as exc:
                 if log:
                     log.warning("landing.workspace_creation_failed", extra={"slug": slug, "error": str(exc)})

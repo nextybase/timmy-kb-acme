@@ -7,18 +7,21 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-# Import Streamlit in modo tollerante (test/CI headless)
-st: Any
+# Import Streamlit in modo tollerante (test/CI headless): deve stare in alto per evitare E402
 try:
-    import streamlit as _st
-
-    st = _st
+    import streamlit as st  # type: ignore
 except Exception:  # pragma: no cover
-    st = None
+    st = None  # type: ignore[assignment]
+
 import yaml
 
 from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError, InvalidSlug
+from pipeline.file_utils import safe_write_bytes, safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.yaml_utils import clear_yaml_cache, yaml_read
 
+# Queste util potrebbero non essere disponibili in ambienti headless → fallback a None
 try:
     from pipeline.drive_utils import (
         create_drive_folder,
@@ -33,10 +36,7 @@ except Exception:  # pragma: no cover
     create_local_base_structure = None
     get_drive_service = None
     upload_config_to_drive_folder = None
-from pipeline.exceptions import ConfigError, InvalidSlug
-from pipeline.file_utils import safe_write_bytes, safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
-from pipeline.yaml_utils import clear_yaml_cache, yaml_read
+
 from ui.services.drive_runner import emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
@@ -135,10 +135,7 @@ def _copy_base_config(workspace_dir: Path, slug: str, logger: logging.Logger) ->
     if not target.exists():
         content = read_text_safe(REPO_ROOT, BASE_CONFIG, encoding="utf-8")
         safe_write_text(target, content, encoding="utf-8", atomic=True)
-        logger.info(
-            "ui.config.copied",
-            extra={"slug": slug, "path": str(target)},
-        )
+        logger.info("ui.config.copied", extra={"slug": slug, "path": str(target)})
     return target
 
 
@@ -165,10 +162,7 @@ def _persist_config_value(
     target = cast(Path, ensure_within_and_resolve(workspace_dir, _config_path(workspace_dir)))
     safe_write_text(target, serialized, encoding="utf-8", atomic=True)
     clear_yaml_cache()
-    logger.info(
-        "ui.config.updated",
-        extra={"slug": slug, "key": key, "path": str(target)},
-    )
+    logger.info("ui.config.updated", extra={"slug": slug, "key": key, "path": str(target)})
 
 
 def _render_config_widget(slug: str, key: str, value: Any) -> Any:
@@ -229,9 +223,9 @@ def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -
     if uploader is not None:
         data = uploader.read()
         if not data:
-            st.warning("Il file caricato e' vuoto. Riprova.")
+            st.warning("Il file caricato è vuoto. Riprova.")
         elif exists and not overwrite_allowed:
-            st.warning("File giÃ  presente. Abilita la sostituzione per sovrascrivere.")
+            st.warning("File già presente. Abilita la sostituzione per sovrascrivere.")
         else:
             safe_write_bytes(pdf_target, data, atomic=True)
             st.success("VisionStatement.pdf salvato.")
@@ -287,7 +281,7 @@ def _save_yaml_text(workspace_dir: Path, rel: Path, content: str) -> None:
 
 def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> Optional[Dict[str, Any]]:
     if _vision_outputs_exist(workspace_dir):
-        st.info("Gli artefatti Vision sono gia' presenti: nessuna rigenerazione.")
+        st.info("Gli artefatti Vision sono già presenti: nessuna rigenerazione.")
         return None
 
     pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
@@ -380,16 +374,8 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
         st.session_state[cartelle_key] = cartelle_text
 
     with st.form("yaml_editor_form"):
-        st.text_area(
-            "semantic/semantic_mapping.yaml",
-            key=mapping_key,
-            height=320,
-        )
-        st.text_area(
-            "semantic/cartelle_raw.yaml",
-            key=cartelle_key,
-            height=320,
-        )
+        st.text_area("semantic/semantic_mapping.yaml", key=mapping_key, height=320)
+        st.text_area("semantic/cartelle_raw.yaml", key=cartelle_key, height=320)
         if st.form_submit_button("Valida & Salva", type="primary"):
             try:
                 _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
@@ -457,6 +443,7 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
             st.session_state["phase"] = "ready_to_open"
         except ConfigError as exc:
             st.error(str(exc))
+            _render_debug_expander(workspace_dir)
 
     st.button("Torna alla landing", on_click=_back_to_landing)
 
@@ -468,6 +455,27 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     yaml_paths = result.get("yaml_paths") or {}
     if yaml_paths:
         st.json(yaml_paths, expanded=False)
+
+    # Opzione di rigenerazione YAML se gli artefatti sono presenti
+    mapping_path = yaml_paths.get("mapping")
+    cartelle_path = yaml_paths.get("cartelle_raw")
+    if mapping_path and cartelle_path:
+        confirm_key = f"regen_confirm_{slug}"
+        confirm = st.checkbox("Sovrascrivi i file", key=confirm_key, value=False)
+        if st.button("Rigenera YAML"):
+            if not confirm:
+                st.warning("Conferma la sovrascrittura per procedere.")
+            else:
+                try:
+                    # Rilancia la generazione usando il PDF esistente nel workspace
+                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                    pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
+                    new_result = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
+                    yaml_paths_new = new_result.get("yaml_paths") if isinstance(new_result, dict) else {}
+                    st.session_state["init_result"] = {"yaml_paths": yaml_paths_new or {}}
+                    st.success("YAML rigenerati con successo.")
+                except ConfigError as exc:
+                    st.error(str(exc))
 
     if st.button(f"Apri workspace: {slug}", type="primary"):
         try:
@@ -516,7 +524,8 @@ def _render_landing(logger: logging.Logger) -> None:
 
 def main() -> None:
     logger = _setup_logging()
-    st.set_page_config(page_title="Onboarding NeXT", layout="wide")
+    if st is not None:
+        st.set_page_config(page_title="Onboarding NeXT", layout="wide")
 
     phase = st.session_state.get("phase", "landing")
     slug = st.session_state.get("slug")
