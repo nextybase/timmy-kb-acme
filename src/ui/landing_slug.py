@@ -13,8 +13,9 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug, open_for_read_bytes_selfguard, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe
 from pre_onboarding import ensure_local_workspace_for_ui
+from semantic.validation import validate_context_slug
 from ui.services import vision_provision as vision_services
 
 st: Any | None
@@ -309,25 +310,19 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         )
         if st.form_submit_button("Valida & Salva"):
             try:
-                # --- Guard rail: coerenza slug nei due YAML ---
+                # --- Parse YAML (mapping + cartelle) ---
                 try:
                     map_obj = yaml.safe_load(updated_vision) or {}
                     cart_obj = yaml.safe_load(updated_cartelle) or {}
                 except Exception as e:
-                    raise ConfigError(f"YAML non valido: {e}")
+                    raise ConfigError(f"YAML non valido: {e}") from e
 
-                def _extract_slug(obj: Dict[str, Any]) -> str:
-                    ctx = (obj.get("context") or {}) if isinstance(obj, dict) else {}
-                    return str((ctx or {}).get("slug") or "").strip()
+                # --- Validazione slug: hard-fail prima di scrivere ---
+                validate_context_slug(map_obj, expected_slug=slug)
+                if isinstance(cart_obj, dict) and isinstance(cart_obj.get("context"), dict):
+                    validate_context_slug({"context": cart_obj["context"]}, expected_slug=slug)
 
-                # Enforce: slug presente, valido e uguale allo slug attivo in ENTRAMBI gli YAML
-                s1 = _extract_slug(map_obj)
-                s2 = _extract_slug(cart_obj)
-                for s in (s1, s2):
-                    if not s or not is_valid_slug(s) or s != slug:
-                        raise ConfigError("Slug nel YAML assente/non valido o diverso dal cliente attivo.", slug=s)
-
-                # --- Scritture atomiche con path-safety ---
+                # --- Scritture atomiche con path-safety (solo dopo validazione) ---
                 target_map = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
                 target_cart = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
                 safe_write_text(target_map, updated_vision)
@@ -335,6 +330,11 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 vision_state["mapping_yaml"] = updated_vision
                 vision_state["cartelle_yaml"] = updated_cartelle
                 st.success("YAML aggiornati.")
+            except ConfigError as exc:  # pragma: no cover
+                if log:
+                    log.exception("landing.save_yaml_failed", extra={"slug": slug})
+                if st is not None:
+                    st.error(str(exc))
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.save_yaml_failed", extra={"slug": slug})

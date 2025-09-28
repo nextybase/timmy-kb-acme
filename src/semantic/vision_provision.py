@@ -18,7 +18,8 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 
 # Convenzioni del repo
-from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from semantic.validation import validate_context_slug
 
 # Ri-uso di schema e prompt dal modulo esistente (contratto unico)
 # Nota: gli identificatori nel modulo vision_ai possono essere "interni" (prefisso _),
@@ -384,7 +385,7 @@ def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str]
     if not isinstance(data, dict):
         raise ConfigError("Output modello non valido: payload non è un oggetto JSON.")
 
-    # Presenza campi base
+    # Presenza campi base (verifica preliminare)
     if "context" not in data or "areas" not in data:
         raise ConfigError("Output modello non valido: mancano 'context' o 'areas'.")
 
@@ -393,20 +394,13 @@ def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str]
     areas = data.get("areas")
     if not isinstance(ctx, dict):
         raise ConfigError("Output modello non valido: 'context' deve essere un oggetto.")
+    # Coerenza slug, se richiesta (SSoT)
+    if expected_slug is not None:
+        validate_context_slug(data, expected_slug=expected_slug)
+
+    # Aree: lista non vuota
     if not isinstance(areas, list) or not areas:
         raise ConfigError("Output modello non valido: 'areas' deve essere una lista non vuota.")
-
-    # Coerenza slug, se richiesta
-    if expected_slug is not None:
-        raw_slug = ctx.get("slug")
-        if not isinstance(raw_slug, str) or not raw_slug.strip():
-            raise ConfigError("Output modello non valido: 'context.slug' mancante o non stringa.")
-        payload_slug = raw_slug.strip()
-        if not is_valid_slug(payload_slug) or payload_slug != expected_slug:
-            raise ConfigError(
-                f"Slug incoerente nel payload: {payload_slug!r} != {expected_slug!r}",
-                slug=payload_slug,
-            )
 
 
 def provision_from_vision(

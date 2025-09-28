@@ -12,16 +12,15 @@ class _DummyCtx:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:  # pragma: no cover - simple stub
+    def __exit__(self, exc_type, exc, tb) -> bool:  # pragma: no cover
         return False
 
 
 class _DummySt:
-    def __init__(self, slug: str, vision_state: Dict[str, Any], overrides: Dict[str, str] | None = None):
+    def __init__(self, slug: str, vision_state: Dict[str, Any], overrides: Dict[str, str]):
         self.session_state: Dict[str, Any] = {"slug": slug, "vision_workflow": vision_state}
-        self._overrides = overrides or {}
+        self._overrides = overrides
 
-    # Layout helpers
     def columns(self, _spec) -> Tuple[_DummyCtx, _DummyCtx, _DummyCtx]:  # type: ignore[name-defined]
         return _DummyCtx(), _DummyCtx(), _DummyCtx()
 
@@ -31,7 +30,6 @@ class _DummySt:
     def json(self, *_a, **_k) -> None:  # pragma: no cover
         pass
 
-    # Inputs
     def text_input(self, _label: str, value: str = "", **_k) -> str:
         return value
 
@@ -41,7 +39,6 @@ class _DummySt:
     def file_uploader(self, *_a, **_k):  # pragma: no cover
         return None
 
-    # Form API
     def form(self, _name: str) -> _DummyCtx:  # type: ignore[name-defined]
         return _DummyCtx()
 
@@ -51,7 +48,6 @@ class _DummySt:
     def form_submit_button(self, _label: str) -> bool:
         return True
 
-    # Messages
     def success(self, *_a, **_k) -> None:  # pragma: no cover
         pass
 
@@ -59,10 +55,8 @@ class _DummySt:
         pass
 
     def error(self, message: str) -> None:
-        # Re-propaga come ConfigError per consentire pytest.raises
         raise ConfigError(message)
 
-    # Session/flow
     def rerun(self) -> None:  # pragma: no cover
         pass
 
@@ -85,37 +79,38 @@ def _setup_state(tmp_path: Path, *, slug: str = "acme") -> Dict[str, Any]:
             "mapping": "semantic/semantic_mapping.yaml",
             "cartelle_raw": "semantic/cartelle_raw.yaml",
         },
-        # Valori usati come fallback se lettura fallisce
         "mapping_yaml": "",
         "cartelle_yaml": "",
     }
 
 
-def test_ui_save_yaml_mismatch_slug_hard_fail(monkeypatch, tmp_path):
-    # Arrange: stato UI con workspace esistente e file su disco
+@pytest.mark.parametrize(
+    "override_mapping",
+    [
+        "context: 123\n",  # context non dict
+        "context:\n  slug: \n",  # slug vuoto
+        "context: {}\n",  # slug mancante
+    ],
+)
+def test_ui_save_yaml_invalid_context_variants(monkeypatch, tmp_path, override_mapping: str):
     vision_state = _setup_state(tmp_path)
     slug = "acme"
-
-    # Override dei contenuti editati dall'utente (mismatch nello slug del mapping)
     overrides = {
-        "semantic/semantic_mapping.yaml": "context:\n  slug: other\n",
+        "semantic/semantic_mapping.yaml": override_mapping,
         "semantic/cartelle_raw.yaml": "context:\n  slug: acme\n",
     }
     dummy_st = _DummySt(slug, vision_state, overrides)
 
-    # Import e patch del modulo UI
     import importlib
 
     ui_mod = importlib.import_module("src.ui.landing_slug".replace("/", ".").replace("\\", "."))
     monkeypatch.setattr(ui_mod, "st", dummy_st, raising=True)
 
-    # Salva contenuto originale per verifica che non cambi
     mapping_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["mapping"]
     cart_file = Path(vision_state["base_dir"]) / vision_state["yaml_paths"]["cartelle_raw"]
     orig_mapping = mapping_file.read_text(encoding="utf-8")
     orig_cart = cart_file.read_text(encoding="utf-8")
 
-    # Act + Assert: hard-fail con ConfigError e nessuna scrittura
     with pytest.raises(ConfigError):
         ui_mod.render_landing_slug(None)
 

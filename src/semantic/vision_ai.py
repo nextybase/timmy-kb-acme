@@ -14,6 +14,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug
+from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # factory centralizzato
 
 _MODEL = "gpt-4.1-mini"
@@ -274,8 +275,8 @@ def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, mode
     if "context" not in data or "areas" not in data:
         raise ConfigError("Vision AI: risposta incompleta (mancano 'context' o 'areas').")
 
-    # HARD GATE: coerenza slug per prevenire artefatti inter-cliente
-    _ensure_slug_coherent(data, expected_slug=slug)
+    # HARD GATE: coerenza slug per prevenire artefatti inter-cliente (SSoT)
+    validate_context_slug(data, expected_slug=slug)
 
     mapping_yaml_str = _json_to_yaml(data)
     safe_write_text(paths.mapping_yaml, mapping_yaml_str)
