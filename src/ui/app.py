@@ -494,8 +494,9 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     # Percorsi YAML sempre visibili, anche se init_result manca (refresh)
     mapping_rel = _mapping_path(workspace_dir)
     cartelle_rel = _cartelle_path(workspace_dir)
-    st.caption(f"Mapping: `{mapping_rel}`")
-    st.caption(f"Cartelle raw: `{cartelle_rel}`")
+    if hasattr(st, "caption"):
+        st.caption(f"Mapping: `{mapping_rel}`")
+        st.caption(f"Cartelle raw: `{cartelle_rel}`")
 
     # Opzione di rigenerazione YAML se gli artefatti sono presenti
     mapping_path = yaml_paths.get("mapping")
