@@ -503,7 +503,10 @@ def _write_validation_report(report_path: Path, result: dict[str, Any], logger: 
         encoding="utf-8",
         atomic=True,
     )
-    logger.info("Report validazione scritto", extra={"file_path": str(report_path)})
+    logger.info(
+        "cli.tag_onboarding.report_written",
+        extra={"file_path": str(report_path)},
+    )
 
 
 def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
@@ -547,7 +550,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 
     if not db_path.exists():
         logger.error(
-            "Tags DB non trovato",
+            "cli.tag_onboarding.db_missing",
             extra={"file_path": str(db_path), "file_path_tail": tail_path(db_path)},
         )
         return 1
@@ -564,12 +567,12 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     warns = len(result.get("warnings", []))
 
     if errs:
-        logger.error("Validazione FALLITA", extra={"errors": errs, "warnings": warns})
+        logger.error("cli.tag_onboarding.validation_failed", extra={"errors": errs, "warnings": warns})
         return 1
     if warns:
-        logger.warning("Validazione con AVVISI", extra={"warnings": warns})
+        logger.warning("cli.tag_onboarding.validation_warn", extra={"warnings": warns})
         return 2
-    logger.info("Validazione OK", extra={"tags_count": result.get("count", 0)})
+    logger.info("cli.tag_onboarding.validation_ok", extra={"tags_count": result.get("count", 0)})
     return 0
 
 
@@ -593,7 +596,7 @@ def _emit_csv_phase(
         except Exception:
             m.set_artifacts(None)
     logger.info(
-        "Controlla la lista keyword",
+        "cli.tag_onboarding.csv_emitted",
         extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
     )
     return csv_path
@@ -603,14 +606,14 @@ def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: l
     """Checkpoint HiTL: decide se proseguire con la generazione degli stub."""
     if non_interactive:
         if not proceed_after_csv:
-            logger.info("Stop dopo CSV (non-interattivo, no --proceed).")
+            logger.info("cli.tag_onboarding.stop_after_csv")
             return False
         return True
     cont = _prompt(
         "Controlla e approva i tag generati. " "Sei pronto per proseguire con l'arricchimento semantico? (y/n): "
     ).lower()
     if cont != "y":
-        logger.info("Interrotto su richiesta utente, uscita senza arricchimento semantico")
+        logger.info("cli.tag_onboarding.user_aborted")
         return False
     return True
 
@@ -657,7 +660,10 @@ def _download_from_drive(
             m.set_artifacts(len(pdfs))
         except Exception:
             m.set_artifacts(None)
-    logger.info("Download da Drive completato", extra={"folder_id": mask_partial(drive_raw_folder_id)})
+    logger.info(
+        "cli.tag_onboarding.drive_download_completed",
+        extra={"folder_id": mask_partial(drive_raw_folder_id)},
+    )
 
 
 def _copy_from_local(
@@ -677,7 +683,10 @@ def _copy_from_local(
         )
     src_dir = Path(local_path).expanduser().resolve()
     if src_dir == raw_dir.expanduser().resolve():
-        logger.info("Sorgente coincidente con RAW: salto fase copia", extra={"raw": str(raw_dir)})
+        logger.info(
+            "cli.tag_onboarding.source_matches_raw",
+            extra={"raw": str(raw_dir)},
+        )
         return
     with phase_scope(logger, stage="local_copy", customer=context.slug) as m:
         copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
@@ -685,7 +694,10 @@ def _copy_from_local(
             m.set_artifacts(int(copied))
         except Exception:
             m.set_artifacts(None)
-    logger.info("Copia locale completata", extra={"count": copied, "raw_tail": tail_path(raw_dir)})
+    logger.info(
+        "cli.tag_onboarding.local_copy_completed",
+        extra={"count": copied, "raw_tail": tail_path(raw_dir)},
+    )
 
 
 def tag_onboarding_main(
@@ -727,7 +739,7 @@ def tag_onboarding_main(
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 
-    logger.info("Avvio tag_onboarding", extra={"source": source})
+    logger.info("cli.tag_onboarding.started", extra={"slug": slug, "source": source})
 
     # Sorgente di PDF
     if source == "drive":
@@ -877,7 +889,7 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modo non interattivo viene richiesto --slug (o slug posizionale).")
+        early_logger.error("cli.tag_onboarding.missing_slug")
         sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
 
     try:
@@ -911,7 +923,7 @@ if __name__ == "__main__":
         )
         stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
         log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
-        log.info("Indicizzazione completata", extra=stats)
+        log.info("cli.tag_onboarding.scan_completed", extra=stats)
         sys.exit(0)
 
     # NLP → DB
@@ -943,7 +955,7 @@ if __name__ == "__main__":
             only_missing=bool(args.only_missing),
         )
         log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
-        log.info("NLP pipeline terminata", extra=stats)
+        log.info("cli.tag_onboarding.nlp_completed", extra=stats)
         sys.exit(0)
 
     try:
@@ -960,11 +972,11 @@ if __name__ == "__main__":
         sys.exit(130)
     except PipelineError as exc:
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
-        logger.error(str(exc))
+        logger.error("cli.tag_onboarding.failed", extra={"slug": slug, "error": str(exc)})
         sys.exit(exit_code_for(exc))
     except Exception as exc:  # noqa: BLE001
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
-        logger.error(f"Errore non gestito: {exc}")
+        logger.error("cli.tag_onboarding.failed", extra={"slug": slug, "error": str(exc)})
         sys.exit(exit_code_for(PipelineError(str(exc))))
 
 # Sezione helper duplicati rimossa (copy/CSV delegati)

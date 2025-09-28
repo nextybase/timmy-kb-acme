@@ -28,7 +28,6 @@ Note:
 
 from __future__ import annotations
 
-import errno
 import os
 import tempfile
 import time
@@ -214,13 +213,19 @@ def safe_append_text(
     lock_timeout: float = 5.0,
     fsync: bool = False,
 ) -> None:
-    """Appende testo in modo sicuro usando path-safety, lock file e scrittura atomica."""
+    """Appende testo in modo sicuro usando path-safety, lock file e scrittura atomica.
+
+    Nota: su Windows può emergere PermissionError durante create/unlink concorrenti
+    del lock file. Lo trattiamo come contesa del lock (al pari di FileExistsError),
+    con piccoli retry fino a lock_timeout.
+    """
     base_dir = Path(base_dir)
     resolved_base = base_dir.resolve()
     candidate = Path(target)
     if not candidate.is_absolute():
         candidate = resolved_base / candidate
 
+    # Gestione percorsi estesi su Windows (\\?\...) per evitare limiti di lunghezza/normi NTFS.
     if os.name == "nt":
         sep = os.sep
         ext_prefix = sep + sep + "?" + sep
@@ -255,30 +260,19 @@ def safe_append_text(
     deadline = time.monotonic() + max(lock_timeout, 0.0)
     lock_fd: Optional[int] = None
 
+    # Tentativo di acquisizione lock con retry su contesa (FileExistsError/PermissionError)
     while True:
         try:
             lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError):
             if time.monotonic() > deadline:
                 raise ConfigError(
                     "Timeout nell'acquisire il lock per l'append.",
                     file_path=str(resolved),
                 )
-            time.sleep(0.1)
-        except PermissionError as exc:
-            if exc.errno == errno.EACCES and lock_path.exists():
-                if time.monotonic() > deadline:
-                    raise ConfigError(
-                        "Timeout nell'acquisire il lock per l'append.",
-                        file_path=str(resolved),
-                    )
-                time.sleep(0.1)
-                continue
-            raise ConfigError(
-                f"Impossibile creare il lock file: {exc}",
-                file_path=str(resolved),
-            ) from exc
+            time.sleep(0.05)  # backoff breve per ridurre la probabilità di race
+            continue
         except OSError as exc:
             raise ConfigError(
                 f"Impossibile creare il lock file: {exc}",
@@ -297,6 +291,7 @@ def safe_append_text(
         else:
             existing = ""
 
+        # Scrittura atomica del contenuto (append simulato: read + write atomico)
         safe_write_text(
             resolved,
             existing + data,
@@ -314,10 +309,3 @@ def safe_append_text(
             lock_path.unlink(missing_ok=True)
         except Exception:
             _logger.debug("Rimozione lock fallita", extra={"lock_path": str(lock_path)})
-
-
-__all__ = [
-    "safe_write_text",
-    "safe_write_bytes",
-    "safe_append_text",
-]

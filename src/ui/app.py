@@ -98,7 +98,15 @@ def _render_debug_expander(workspace_dir: Path) -> None:
 
 def _request_shutdown(logger: logging.Logger) -> None:
     try:
-        logger.info("ui.shutdown_request")
+        slug_extra: Dict[str, Any] = {}
+        try:
+            if st is not None:
+                s = cast(Optional[str], st.session_state.get("slug"))
+                if s:
+                    slug_extra["slug"] = s
+        except Exception:
+            pass
+        logger.info("ui.shutdown_request", extra=slug_extra or None)
         os.kill(os.getpid(), signal.SIGTERM)
     except Exception:
         os._exit(0)
@@ -364,6 +372,10 @@ def _open_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> N
         _run_drive_structure(slug, workspace_dir, logger)
         _run_generate_readmes(slug, logger)
     st.success("Workspace inizializzato. Hai accesso agli editor YAML qui sotto.")
+    try:
+        logger.info("ui.workspace.opened", extra={"slug": slug})
+    except Exception:
+        pass
 
 
 def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
@@ -472,10 +484,12 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
 
     if st.button("Inizializza workspace", type="primary", disabled=not pdf_ready):
         try:
+            logger.info("ui.setup.init_start", extra={"slug": slug})
             result = _initialize_workspace(slug, workspace_dir, logger)
             st.session_state["init_result"] = result or {}
             st.toast("Workspace inizializzato")
             st.session_state["phase"] = "ready_to_open"
+            logger.info("ui.setup.init_done", extra={"slug": slug})
         except ConfigError as exc:
             st.error(str(exc))
             _render_debug_expander(workspace_dir)
@@ -577,9 +591,17 @@ def _render_landing(logger: logging.Logger) -> None:
         validate_slug(slug)
     except InvalidSlug as exc:
         st.error(str(exc))
+        try:
+            logger.info("ui.landing.invalid_slug", extra={"slug": slug})
+        except Exception:
+            pass
         return
 
     workspace_dir = _workspace_dir_for(slug)
+    try:
+        logger.info("ui.landing.open", extra={"slug": slug})
+    except Exception:
+        pass
     st.session_state["slug"] = slug
     st.session_state["workspace_dir"] = str(workspace_dir)
     st.session_state.pop("init_result", None)

@@ -162,11 +162,17 @@ def bootstrap_semantic_templates(
 
     if not struct_dst.exists() and struct_src.exists():
         shutil.copy2(struct_src, struct_dst)
-        logger.info({"event": "semantic_template_copied", "file": str(struct_dst)})
+        logger.info(
+            "cli.pre_onboarding.semantic_template_copied",
+            extra={"slug": context.slug, "file_path": str(struct_dst)},
+        )
 
     if not mapping_dst.exists() and mapping_src.exists():
         shutil.copy2(mapping_src, mapping_dst)
-        logger.info({"event": "semantic_template_copied", "file": str(mapping_dst)})
+        logger.info(
+            "cli.pre_onboarding.semantic_template_copied",
+            extra={"slug": context.slug, "file_path": str(mapping_dst)},
+        )
 
     # Iniezione blocco `context` nel mapping (scrittura atomica)
     try:
@@ -195,23 +201,27 @@ def bootstrap_semantic_templates(
             payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
             ensure_within(semantic_dir, mapping_dst)
             safe_write_text(mapping_dst, payload, atomic=True)
-            logger.info({"event": "semantic_mapping_context_injected", "file": str(mapping_dst)})
+            logger.info(
+                "cli.pre_onboarding.semantic_mapping_context_injected",
+                extra={"slug": context.slug, "file_path": str(mapping_dst)},
+            )
 
         # (Opzionale) retro-compatibilitÃ : mantieni anche semantic_mapping.yaml
         legacy = semantic_dir / "semantic_mapping.yaml"
         if not legacy.exists():
             try:
                 shutil.copy2(mapping_dst, legacy)
-                logger.info({"event": "semantic_mapping_legacy_copied", "file": str(legacy)})
+                logger.info(
+                    "cli.pre_onboarding.semantic_mapping_legacy_copied",
+                    extra={"slug": context.slug, "file_path": str(legacy)},
+                )
             except Exception:
                 pass
 
     except Exception as e:  # non blocca il flusso
         logger.warning(
-            {
-                "event": "semantic_mapping_context_inject_failed",
-                "err": str(e).splitlines()[:1],
-            }
+            "cli.pre_onboarding.semantic_mapping_context_inject_failed",
+            extra={"slug": context.slug, "err": str(e).splitlines()[:1]},
         )
 
 
@@ -259,9 +269,9 @@ def _prepare_context_and_logger(
 
     logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
     if not require_env:
-        logger.info("ModalitÃ  offline: variabili d'ambiente esterne non richieste (require_env=False).")
-    logger.info(f"Config cliente caricata: {context.config_path}")
-    logger.info("Avvio pre-onboarding")
+        logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
+    logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(context.config_path)})
+    logger.info("cli.pre_onboarding.started", extra={"slug": context.slug})
     return context, logger, client_name
 
 
@@ -419,7 +429,10 @@ def _drive_phase(
         raise ConfigError("DRIVE_ID non impostato nell'ambiente (.env).")
 
     redact = bool(getattr(context, "redact_logs", False))
-    logger.info("pre_onboarding.drive.start", extra={"parent": mask_partial(drive_parent_id)})
+    logger.info(
+        "cli.pre_onboarding.drive.start",
+        extra={"slug": context.slug, "parent": mask_partial(drive_parent_id)},
+    )
 
     with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
         # Le funzioni Drive sono opzionali a import-time; dopo _require_drive_utils()
@@ -467,7 +480,10 @@ def _drive_phase(
         ucf = cast(Callable[..., str], upload_config_to_drive_folder)
         uploaded_cfg_id = ucf(service, context, parent_id=client_folder_id, redact_logs=redact)
         m.set_artifacts(1)
-    logger.info("Config caricato su Drive", extra={"uploaded_cfg_id": mask_partial(uploaded_cfg_id)})
+    logger.info(
+        "cli.pre_onboarding.drive_config_uploaded",
+        extra={"slug": context.slug, "uploaded_cfg_id": mask_partial(uploaded_cfg_id)},
+    )
 
     updates = {
         "drive_folder_id": client_folder_id,
@@ -476,7 +492,10 @@ def _drive_phase(
         "client_name": client_name,
     }
     update_config_with_drive_ids(context, updates=updates, logger=logger)
-    logger.info("Config aggiornato con dati", extra={"updates_masked": mask_updates(updates)})
+    logger.info(
+        "cli.pre_onboarding.config_updated_with_drive_ids",
+        extra={"slug": context.slug, "updates_masked": mask_updates(updates)},
+    )
 
 
 # --------------------------------- ORCHESTRATORE SNELLITO ---------------------------------
@@ -517,7 +536,7 @@ def pre_onboarding_main(
         client_name=client_name,
         require_env=require_env,
     )
-    logger.info(f"Pre-onboarding completato per cliente: {context.slug}")
+    logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
 
 
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------

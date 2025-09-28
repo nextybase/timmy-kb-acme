@@ -89,7 +89,7 @@ def _git_push(context: ClientContext, logger: logging.Logger) -> None:
             force_ack=None,
             redact_logs=getattr(context, "redact_logs", False),
         )
-        logger.info("Git push completato (github_utils)")
+        logger.info("cli.onboarding_full.push_completed", extra={"slug": context.slug})
     except Exception as e:
         raise PushError(f"Git push fallito tramite github_utils: {e}") from e
 
@@ -125,7 +125,7 @@ def onboarding_full_main(
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
-    logger.info("Avvio onboarding_full (PUSH GitHub)")
+    logger.info("cli.onboarding_full.started", extra={"slug": slug})
 
     # 1) README/SUMMARY in book/ (senza fallback)
     try:
@@ -163,7 +163,10 @@ def onboarding_full_main(
             _git_push(context, logger)
             m.set_artifacts(1)
 
-    logger.info("Completato (fase push)")
+    logger.info(
+        "cli.onboarding_full.completed",
+        extra={"slug": slug, "artifacts": int(1 if do_push else 0)},
+    )
 
 
 # ---------- CLI ----------
@@ -184,7 +187,7 @@ if __name__ == "__main__":
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalita' non interattiva e' richiesto --slug (o slug posizionale).")
+        early_logger.error("cli.onboarding_full.missing_slug")
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
         slug = ensure_valid_slug(
@@ -206,12 +209,12 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         sys.exit(130)
     except ConfigError as e:
-        early_logger.error("Uscita per ConfigError: " + str(e))
+        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     except PipelineError as e:
         code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
-        early_logger.error("Uscita per PipelineError: " + str(e))
+        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
         sys.exit(code)
     except Exception as e:
-        early_logger.error("Uscita per errore non gestito: " + str(e))
+        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
         sys.exit(EXIT_CODES.get("PipelineError", 1))

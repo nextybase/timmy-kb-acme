@@ -151,6 +151,13 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             discarded_unsafe += 1
             continue
 
+    # KPI aggregato sui PDF scartati (se > 0)
+    if discarded_unsafe > 0:
+        logger.info(
+            "semantic.convert.discarded_unsafe",
+            extra={"slug": slug, "count": discarded_unsafe},
+        )
+
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if safe_pdfs:
             _call_convert_md(_convert_md, shim, book_dir)
@@ -385,6 +392,9 @@ def index_markdown_to_db(
 
     contents: list[str] = []
     rel_paths: list[str] = []
+    skipped_io = 0
+    skipped_no_text = 0
+
     for f in files:
         try:
             text = read_text_safe(book_dir, f, encoding="utf-8")
@@ -393,12 +403,27 @@ def index_markdown_to_db(
                 "semantic.index.read_failed",
                 extra={"slug": slug, "file_path": str(f), "error": str(e)},
             )
+            skipped_io += 1
+            continue
+        if not text or not text.strip():
+            skipped_no_text += 1
             continue
         contents.append(text)
         rel_paths.append(f.name)
 
     if not contents:
         logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
+        # Anche in caso di 0 contenuti, emettiamo l’aggregato degli skip se presente
+        if skipped_io > 0 or skipped_no_text > 0:
+            logger.info(
+                "semantic.index.skips",
+                extra={
+                    "slug": slug,
+                    "skipped_io": skipped_io,
+                    "skipped_no_text": skipped_no_text,
+                    "vectors_empty": 0,
+                },
+            )
         return 0
 
     from datetime import datetime as _dt
@@ -426,6 +451,16 @@ def index_markdown_to_db(
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
+            # Aggregato skip (nessun embedding generato)
+            logger.info(
+                "semantic.index.skips",
+                extra={
+                    "slug": slug,
+                    "skipped_io": skipped_io,
+                    "skipped_no_text": skipped_no_text,
+                    "vectors_empty": 0,
+                },
+            )
             return 0
         if len(vecs) != len(contents):
             logger.warning(
@@ -436,6 +471,17 @@ def index_markdown_to_db(
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
+            # Aggregato skip in caso di mismatch
+            dropped_mismatch = max(0, len(contents) - len(vecs))
+            logger.info(
+                "semantic.index.skips",
+                extra={
+                    "slug": slug,
+                    "skipped_io": skipped_io,
+                    "skipped_no_text": skipped_no_text,
+                    "vectors_empty": dropped_mismatch,
+                },
+            )
             return 0
 
         filtered_contents: list[str] = []
@@ -457,11 +503,33 @@ def index_markdown_to_db(
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
+            # Aggregato skip
+            logger.info(
+                "semantic.index.skips",
+                extra={
+                    "slug": slug,
+                    "skipped_io": skipped_io,
+                    "skipped_no_text": skipped_no_text,
+                    "vectors_empty": dropped,
+                },
+            )
             return 0
         if dropped > 0:
             # Log strutturato + messaggio umano per i test (cerca 'scartati'/'dropped')
             logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped})
             logger.info("Embeddings scartati (dropped): %s", dropped)
+
+        # KPI aggregato sugli skip (solo se c'è almeno uno > 0)
+        if skipped_io > 0 or skipped_no_text > 0 or dropped > 0:
+            logger.info(
+                "semantic.index.skips",
+                extra={
+                    "slug": slug,
+                    "skipped_io": skipped_io,
+                    "skipped_no_text": skipped_no_text,
+                    "vectors_empty": dropped,
+                },
+            )
 
         contents, rel_paths, vecs = filtered_contents, filtered_paths, filtered_vecs
 
