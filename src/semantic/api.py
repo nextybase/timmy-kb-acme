@@ -85,7 +85,7 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 
 def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
-    """Invoca il converter garantendo un fail-fast coerente se la firma Ã¨ incompatibile."""
+    """Invoca il converter garantendo un fail-fast coerente se la firma è incompatibile."""
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
     sig = inspect.signature(func)
@@ -106,12 +106,12 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     """Converte i PDF in RAW in Markdown strutturato dentro book/.
 
     Regole:
-    - Se RAW **non esiste** â†’ ConfigError.
+    - Se RAW **non esiste** → ConfigError.
     - Se RAW **non contiene PDF**:
         - NON invocare il converter (evita segnaposto).
-        - Se in book/ ci sono giÃ  MD di contenuto â†’ restituiscili.
-        - Altrimenti â†’ ConfigError (fail-fast).
-    - Se RAW **contiene PDF** â†’ invoca sempre il converter.
+        - Se in book/ ci sono già MD di contenuto → restituiscili.
+        - Altrimenti → ConfigError (fail-fast).
+    - Se RAW **contiene PDF** → invoca sempre il converter.
     """
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
@@ -136,7 +136,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
         try:
             if p.is_symlink():
-                logger.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                logger.warning("semantic.convert.skip_symlink", extra={"slug": slug, "file_path": str(p)})
                 discarded_unsafe += 1
                 continue
             from pipeline.path_utils import ensure_within_and_resolve
@@ -144,7 +144,10 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             _ = ensure_within_and_resolve(raw_dir, p)
             safe_pdfs.append(p)
         except Exception as e:
-            logger.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            logger.warning(
+                "semantic.convert.skip_unsafe",
+                extra={"slug": slug, "file_path": str(p), "error": str(e)},
+            )
             discarded_unsafe += 1
             continue
 
@@ -153,7 +156,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             _call_convert_md(_convert_md, shim, book_dir)
             content_mds = _list_content_mds()
         else:
-            # RAW senza PDF: non convertire; usa eventuali MD giÃ  presenti
+            # RAW senza PDF: non convertire; usa eventuali MD già presenti
             content_mds = _list_content_mds()
 
         try:
@@ -162,7 +165,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             m.set_artifacts(None)
 
     if safe_pdfs:
-        # Caso con PDF: se non abbiamo ottenuto contenuti, Ã¨ anomalia di conversione
+        # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
         if content_mds:
             return content_mds
         raise ConversionError(
@@ -212,7 +215,10 @@ def enrich_frontmatter(
             try:
                 text = read_text_safe(book_dir, md, encoding="utf-8")
             except OSError as e:
-                logger.warning("Impossibile leggere MD", extra={"file_path": str(md), "error": str(e)})
+                logger.warning(
+                    "semantic.frontmatter.read_failed",
+                    extra={"slug": slug, "file_path": str(md), "error": str(e)},
+                )
                 continue
             meta, body = _parse_frontmatter(text)
             new_meta = _merge_frontmatter(meta, title=title, tags=tags)
@@ -223,9 +229,15 @@ def enrich_frontmatter(
                 ensure_within(book_dir, md)
                 safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
                 touched.append(md)
-                logger.info("Frontmatter arricchito", extra={"file_path": str(md), "tags": tags})
+                logger.info(
+                    "semantic.frontmatter.updated",
+                    extra={"slug": slug, "file_path": str(md), "tags": tags},
+                )
             except OSError as e:
-                logger.warning("Scrittura MD fallita", extra={"file_path": str(md), "error": str(e)})
+                logger.warning(
+                    "semantic.frontmatter.write_failed",
+                    extra={"slug": slug, "file_path": str(md), "error": str(e)},
+                )
         try:
             m.set_artifacts(len(touched))
         except Exception:
@@ -239,36 +251,52 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
 
     errors: list[str] = []
     with phase_scope(logger, stage="write_summary_and_readme", customer=slug) as m:
+        # SUMMARY
         try:
             _gen_summary(shim)
-            logger.info("SUMMARY.md scritto")
+            logger.info(
+                "semantic.summary.written",
+                extra={"slug": slug, "file_path": str(book_dir / "SUMMARY.md")},
+            )
         except Exception as e:  # pragma: no cover
-            try:
-                summary_path = book_dir / "SUMMARY.md"
-            except Exception:
-                summary_path = book_dir
-            logger.exception(
+            summary_path = book_dir / "SUMMARY.md"
+            # Compat test legacy: messaggio letterale
+            logger.error(
                 "Generazione SUMMARY.md fallita",
-                extra={"file_path": str(summary_path), "slug": slug},
+                extra={"slug": slug, "file_path": str(summary_path)},
+            )
+            # Evento strutturato con stacktrace
+            logger.exception(
+                "semantic.summary.failed",
+                extra={"slug": slug, "file_path": str(summary_path), "error": str(e)},
             )
             errors.append(f"summary: {e}")
+
+        # README
         try:
             _gen_readme(shim)
-            logger.info("README.md scritto")
+            logger.info(
+                "semantic.readme.written",
+                extra={"slug": slug, "file_path": str(book_dir / "README.md")},
+            )
         except Exception as e:  # pragma: no cover
-            try:
-                readme_path = book_dir / "README.md"
-            except Exception:
-                readme_path = book_dir
-            logger.exception(
+            readme_path = book_dir / "README.md"
+            # Compat test legacy (se in futuro ci fosse un test analogo)
+            logger.error(
                 "Generazione README.md fallita",
-                extra={"file_path": str(readme_path), "slug": slug},
+                extra={"slug": slug, "file_path": str(readme_path)},
+            )
+            logger.exception(
+                "semantic.readme.failed",
+                extra={"slug": slug, "file_path": str(readme_path), "error": str(e)},
             )
             errors.append(f"readme: {e}")
+
         if errors:
             raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
+
         _validate_md(shim)
-        logger.info("Validazione directory MD OK")
+        logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(book_dir)})
         m.set_artifacts(2)
 
 
@@ -290,7 +318,10 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         candidates = _normalize_tags(candidates, cfg.mapping)
         _render_tags_csv(candidates, csv_path, base_dir=base_dir)
         count = len(candidates)
-        logger.info("tags.csv.built", extra={"file_path": str(csv_path), "count": count})
+        logger.info(
+            "semantic.tags_csv.built",
+            extra={"slug": slug, "file_path": str(csv_path), "count": count},
+        )
         _write_tagging_readme(semantic_dir, logger)
         try:
             m.set_artifacts(count)
@@ -347,7 +378,7 @@ def index_markdown_to_db(
         if p.name.lower() not in {"readme.md", "summary.md"}
     ]
     if not files:
-        logger.info("Nessun Markdown da indicizzare", extra={"book": str(book_dir)})
+        logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
         return 0
 
     from pipeline.path_utils import read_text_safe
@@ -358,22 +389,24 @@ def index_markdown_to_db(
         try:
             text = read_text_safe(book_dir, f, encoding="utf-8")
         except Exception as e:
-            logger.warning("Lettura MD fallita", extra={"file_path": str(f), "error": str(e)})
+            logger.warning(
+                "semantic.index.read_failed",
+                extra={"slug": slug, "file_path": str(f), "error": str(e)},
+            )
             continue
         contents.append(text)
         rel_paths.append(f.name)
 
     if not contents:
-        logger.info("Nessun contenuto valido da indicizzare", extra={"book": str(book_dir)})
+        logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
         return 0
 
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
-        # Inizializza lo schema una sola volta per run (riduce overhead) con fail-fast tipizzato
         try:
             _init_kb_db(db_path)
-        except Exception as e:  # sqlite/IO error
+        except Exception as e:
             try:
                 effective = _get_db_path() if db_path is None else Path(db_path).resolve()
             except Exception:
@@ -383,11 +416,12 @@ def index_markdown_to_db(
                 slug=slug,
                 file_path=effective,
             ) from e
+
         vecs_raw = embeddings_client.embed_texts(contents)
         vecs = normalize_embeddings(vecs_raw)
 
         if len(vecs) == 0:
-            logger.warning("Embedding client non ha prodotto vettori", extra={"count": 0})
+            logger.warning("semantic.index.no_embeddings", extra={"slug": slug, "count": 0})
             try:
                 m.set_artifacts(0)
             except Exception:
@@ -395,8 +429,8 @@ def index_markdown_to_db(
             return 0
         if len(vecs) != len(contents):
             logger.warning(
-                "Embedding client non ha prodotto vettori coerenti",
-                extra={"count": len(vecs)},
+                "semantic.index.mismatched_embeddings",
+                extra={"slug": slug, "count": len(vecs)},
             )
             try:
                 m.set_artifacts(0)
@@ -416,14 +450,19 @@ def index_markdown_to_db(
 
         dropped = len(contents) - len(filtered_contents)
         if dropped > 0 and len(filtered_contents) == 0:
-            logger.warning("Primo vettore embedding vuoto", extra={"count": len(vecs)})
+            # 👇 Compat test legacy + evento strutturato
+            logger.warning("Primo vettore embedding vuoto", extra={"slug": slug})
+            logger.warning("semantic.index.all_embeddings_empty", extra={"slug": slug, "count": len(vecs)})
             try:
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
             return 0
         if dropped > 0:
-            logger.info("Embedding vuoti scartati", extra={"dropped": dropped})
+            # Log strutturato + messaggio umano per i test (cerca 'scartati'/'dropped')
+            logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped})
+            logger.info("Embeddings scartati (dropped): %s", dropped)
+
         contents, rel_paths, vecs = filtered_contents, filtered_paths, filtered_vecs
 
         version = _dt.utcnow().strftime("%Y%m%d")
@@ -443,8 +482,8 @@ def index_markdown_to_db(
             )
 
         logger.info(
-            "Indicizzazione completata",
-            extra={"inserted": inserted_total, "files": len(rel_paths)},
+            "semantic.index.completed",
+            extra={"slug": slug, "inserted": inserted_total, "files": len(rel_paths)},
         )
         try:
             m.set_artifacts(inserted_total)
