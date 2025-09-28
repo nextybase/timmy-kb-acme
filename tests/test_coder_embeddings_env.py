@@ -51,3 +51,21 @@ def test_coder_embeddings_no_fallback_when_openai_key_present(monkeypatch, caplo
     assert os.getenv("OPENAI_API_KEY") == "primary-secret"
     # Nessun log di fallback
     assert not any("embeddings.api_key.source=codex_fallback" in rec.message for rec in caplog.records)
+
+
+def test_coder_embeddings_only_openai_key_also_works(monkeypatch, caplog):
+    # Solo OPENAI_API_KEY presente: nessun fallback, ma client deve inizializzarsi
+    monkeypatch.delenv("OPENAI_API_KEY_CODEX", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "primary-secret")
+
+    import timmy_kb_coder as tkc
+
+    importlib.reload(tkc)
+    monkeypatch.setattr(tkc, "OpenAIEmbeddings", _StubEmb, raising=True)
+
+    caplog.set_level("INFO")
+    client = tkc._emb_client_or_none(use_rag=True)
+
+    assert isinstance(client, _StubEmb)
+    # Nessun log di fallback, usa la primaria
+    assert not any("embeddings.api_key.source=codex_fallback" in rec.message for rec in caplog.records)
