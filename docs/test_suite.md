@@ -114,7 +114,7 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 ### 12) Vocab & loader - SQLite vocab, fallback e fail-fast
 
 - **Vocab loader**: `test_vocab_loader.py`, `test_vocab_loader_failfast.py`, `test_vocab_loader_sqlite_errors.py`.
-- **Integrazione DB**: `tests/test_vocab_loader_integration_db` - verifica l'integrazione di `load_reviewed_vocab` con il backend DB/`tags_store`.
+- **Integrazione DB**: `tests/test_vocab_loader_integration_db.py` - verifica l'integrazione di `load_reviewed_vocab` con il backend DB/`tags_store`.
 
 ### 13) Script & qualità repo
 
