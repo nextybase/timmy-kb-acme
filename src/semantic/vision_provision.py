@@ -18,7 +18,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 
 # Convenzioni del repo
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug, read_text_safe
 
 # Ri-uso di schema e prompt dal modulo esistente (contratto unico)
 # Nota: gli identificatori nel modulo vision_ai possono essere "interni" (prefisso _),
@@ -360,7 +360,7 @@ def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
     elif add_mode == "upload":
         add_file(vs_id, pdf_path, None)
     else:
-        raise ConfigError(f"OpenAI client: modalitÃƒÂ  add_file non supportata: {add_mode!r}.")
+        raise ConfigError(f"OpenAI client: modalità add_file non supportata: {add_mode!r}.")
 
     for _ in range(60):
         status = retrieve_vs(vs_id)
@@ -375,13 +375,25 @@ def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
     return vs_id
 
 
-def _validate_json_payload(data: Dict[str, Any]) -> None:
+def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str] = None) -> None:
+    """Valida la forma minima del payload e, se fornito, la coerenza dello slug."""
     if not isinstance(data, dict):
         raise ConfigError("Output modello non valido: payload non e un oggetto JSON.")
     if "context" not in data or "areas" not in data:
         raise ConfigError("Output modello non valido: mancano 'context' o 'areas'.")
     if not isinstance(data["areas"], list) or not data["areas"]:
         raise ConfigError("Output modello non valido: 'areas' vuoto o non list.")
+    if expected_slug is not None:
+        ctx = data.get("context") or {}
+        payload_slug = str((ctx or {}).get("slug") or "").strip()
+        if not payload_slug:
+            raise ConfigError("Output modello non valido: 'context.slug' mancante.")
+        # valida formato e coerenza con lo slug attivo
+        if not is_valid_slug(payload_slug) or payload_slug != expected_slug:
+            raise ConfigError(
+                f"Slug incoerente nel payload: {payload_slug!r} != {expected_slug!r}",
+                slug=payload_slug,
+            )
 
 
 def provision_from_vision(
@@ -434,7 +446,8 @@ def provision_from_vision(
         vs_id=vs_id,
         snapshot_text=snapshot,
     )
-    _validate_json_payload(data)
+    # HARD GATE: coerenza slug per prevenire leak inter-cliente
+    _validate_json_payload(data, expected_slug=slug)
 
     # 3) JSON -> YAML (semantic_mapping + cartelle_raw)
     mapping_yaml_str = yaml.safe_dump(

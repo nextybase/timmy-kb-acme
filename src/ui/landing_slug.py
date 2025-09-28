@@ -8,10 +8,12 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 
+import yaml
+
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug, open_for_read_bytes_selfguard, read_text_safe
 from pre_onboarding import ensure_local_workspace_for_ui
 from ui.services import vision_provision as vision_services
 
@@ -24,7 +26,7 @@ except Exception:  # pragma: no cover
     st = None
 
 CLIENT_CONTEXT_ERROR_MSG = (
-    "ClientContext non disponibile. Esegui " "pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
+    "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
 )
 
 
@@ -98,6 +100,25 @@ def _render_logo() -> None:
             )
     except Exception:  # pragma: no cover
         pass
+
+
+def _st_notify(level: str, message: str) -> None:
+    """Invoca st.<level> se disponibile, altrimenti fallback a warning/info.
+
+    Compatibile con stub/dummy usati nei test dove `st.error`/`st.warning`
+    possono non esistere. Non solleva eccezioni.
+    """
+    if st is None:
+        return
+    # Prova il livello richiesto, poi degrada a warning/info
+    for name in (level, "warning", "info"):
+        fn = getattr(st, name, None)
+        if callable(fn):
+            try:
+                fn(message)
+                break
+            except Exception:
+                continue
 
 
 def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str, str]:
@@ -210,7 +231,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     if st.button("Crea workspace + carica PDF", key="ls_create_workspace", type="primary", disabled=create_disabled):
         pdf_bytes = cast(Optional[bytes], vision_state.get("pdf_bytes"))
         if not pdf_bytes:
-            st.error("Carica il Vision Statement prima di procedere.")
+            _st_notify("error", "Carica il Vision Statement prima di procedere.")
         else:
             try:
                 ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
@@ -242,11 +263,11 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             except ConfigError as exc:
                 if log:
                     log.warning("landing.workspace_creation_failed", extra={"slug": slug, "error": str(exc)})
-                st.error(str(exc))
+                _st_notify("error", str(exc))
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.workspace_creation_failed", extra={"slug": slug})
-                st.error("Errore durante la creazione del workspace. Controlla i log.")
+                _st_notify("error", "Errore durante la creazione del workspace. Controlla i log.")
             finally:
                 st.session_state["vision_workflow"] = vision_state
 
@@ -288,6 +309,25 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         )
         if st.form_submit_button("Valida & Salva"):
             try:
+                # --- Guard rail: coerenza slug nei due YAML ---
+                try:
+                    map_obj = yaml.safe_load(updated_vision) or {}
+                    cart_obj = yaml.safe_load(updated_cartelle) or {}
+                except Exception as e:
+                    raise ConfigError(f"YAML non valido: {e}")
+
+                def _extract_slug(obj: Dict[str, Any]) -> str:
+                    ctx = (obj.get("context") or {}) if isinstance(obj, dict) else {}
+                    return str((ctx or {}).get("slug") or "").strip()
+
+                # Enforce: slug presente, valido e uguale allo slug attivo in ENTRAMBI gli YAML
+                s1 = _extract_slug(map_obj)
+                s2 = _extract_slug(cart_obj)
+                for s in (s1, s2):
+                    if not s or not is_valid_slug(s) or s != slug:
+                        raise ConfigError("Slug nel YAML assente/non valido o diverso dal cliente attivo.", slug=s)
+
+                # --- Scritture atomiche con path-safety ---
                 target_map = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
                 target_cart = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
                 safe_write_text(target_map, updated_vision)
@@ -298,7 +338,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.save_yaml_failed", extra={"slug": slug})
-                st.error("Impossibile salvare gli YAML. Controlla i log.")
+                _st_notify("error", "Impossibile salvare gli YAML. Slug incoerente o YAML non valido.")
             finally:
                 st.session_state["vision_workflow"] = vision_state
 

@@ -351,8 +351,8 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
         vocab = load_reviewed_vocab(base_dir, logger)
-        if vocab:
-            enrich_frontmatter(context, logger, vocab, slug=slug)
+        # Enrichment sempre eseguito: con vocab vuoto aggiorna comunque i titoli/frontmatter.
+        enrich_frontmatter(context, logger, vocab, slug=slug)
 
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
