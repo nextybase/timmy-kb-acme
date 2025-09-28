@@ -15,6 +15,7 @@ Strategia:
 Uso:
   python tools/auto_wrap_e501.py --paths src tests --width 100 [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse

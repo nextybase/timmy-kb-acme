@@ -46,6 +46,7 @@ __all__ = [
     "build_markdown_book",
     "index_markdown_to_db",
     "copy_local_pdfs_to_raw",
+    "list_content_markdown",
 ]
 
 
@@ -102,6 +103,48 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
         raise ConversionError(f"convert_md call failed: {e}", slug=ctx.slug, file_path=md_dir) from e
 
 
+# ---------------------------
+# Helper DRY / SRP (PR1)
+# ---------------------------
+def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> tuple[list[Path], int]:
+    """Raccoglie PDF sotto raw_dir applicando path-safety forte e scartando symlink/percorsi insicuri.
+
+    Restituisce (lista_pdf_sicuri, conteggio_scartati).
+    Log coerenti con semantic.convert.skip_symlink / semantic.convert.skip_unsafe.
+    """
+    # Import runtime per consentire ai test di monkeypatchare path_utils.ensure_within_and_resolve
+    from pipeline import path_utils as ppath
+
+    safe: list[Path] = []
+    discarded = 0
+    for candidate in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
+        try:
+            if candidate.is_symlink():
+                logger.warning("semantic.convert.skip_symlink", extra={"slug": slug, "file_path": str(candidate)})
+                discarded += 1
+                continue
+            # Verifica perimetro e risoluzione path (monkeypatchable nei test)
+            ppath.ensure_within_and_resolve(raw_dir, candidate)
+            safe.append(candidate)
+        except Exception as exc:
+            logger.warning(
+                "semantic.convert.skip_unsafe",
+                extra={"slug": slug, "file_path": str(candidate), "error": str(exc)},
+            )
+            discarded += 1
+            continue
+    return safe, discarded
+
+
+def list_content_markdown(book_dir: Path) -> list[Path]:
+    """Elenco dei Markdown 'di contenuto' in book_dir, escludendo README/SUMMARY."""
+    return [
+        p
+        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        if p.name.lower() not in {"readme.md", "summary.md"}
+    ]
+
+
 def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
     """Converte i PDF in RAW in Markdown strutturato dentro book/.
 
@@ -123,48 +166,20 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
-    def _list_content_mds() -> list[Path]:
-        return [
-            p
-            for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
-            if p.name.lower() not in {"readme.md", "summary.md"}
-        ]
-
     # Lista PDF sicura prima del phase_scope per decisione di flusso (path-safety per-file)
-    safe_pdfs: list[Path] = []
-    discarded_unsafe: int = 0
-    for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
-        try:
-            if p.is_symlink():
-                logger.warning("semantic.convert.skip_symlink", extra={"slug": slug, "file_path": str(p)})
-                discarded_unsafe += 1
-                continue
-            from pipeline.path_utils import ensure_within_and_resolve
-
-            _ = ensure_within_and_resolve(raw_dir, p)
-            safe_pdfs.append(p)
-        except Exception as e:
-            logger.warning(
-                "semantic.convert.skip_unsafe",
-                extra={"slug": slug, "file_path": str(p), "error": str(e)},
-            )
-            discarded_unsafe += 1
-            continue
+    safe_pdfs, discarded_unsafe = _collect_safe_pdfs(raw_dir, logger, slug)
 
     # KPI aggregato sui PDF scartati (se > 0)
     if discarded_unsafe > 0:
-        logger.info(
-            "semantic.convert.discarded_unsafe",
-            extra={"slug": slug, "count": discarded_unsafe},
-        )
+        logger.info("semantic.convert.discarded_unsafe", extra={"slug": slug, "count": discarded_unsafe})
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if safe_pdfs:
             _call_convert_md(_convert_md, shim, book_dir)
-            content_mds = _list_content_mds()
+            content_mds = list_content_markdown(book_dir)
         else:
             # RAW senza PDF: non convertire; usa eventuali MD già presenti
-            content_mds = _list_content_mds()
+            content_mds = list_content_markdown(book_dir)
 
         try:
             m.set_artifacts(len(content_mds))

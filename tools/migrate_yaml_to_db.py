@@ -11,6 +11,7 @@ Requisiti:
   - PyYAML installato (già presente nel progetto)
   - Nessuna dipendenza extra (usa sqlite3 stdlib)
 """
+
 from __future__ import annotations
 
 import argparse

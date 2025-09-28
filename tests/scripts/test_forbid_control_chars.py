@@ -48,7 +48,7 @@ def test_detects_control_chars_without_fix(repo_tmp: Path) -> None:
 
 
 def test_fix_removes_controls_and_normalizes(repo_tmp: Path) -> None:
-    text = "caf\u00A9\x02\u0065\u0301"
+    text = "caf\u00a9\x02\u0065\u0301"
     target = repo_tmp / "fix.txt"
     target.write_text(text, encoding="utf-8")
 

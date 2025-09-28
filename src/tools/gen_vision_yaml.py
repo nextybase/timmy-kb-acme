@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from importlib import import_module
 from pathlib import Path
 
 # Bootstrap identico alla UI: aggiungi SRC al sys.path
@@ -11,10 +12,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from pipeline.context import ClientContext
-from pipeline.env_utils import ensure_dotenv_loaded
-from pipeline.logging_utils import get_structured_logger
-from semantic import vision_ai
+# Import dinamici per rispettare E402 mantenendo il bootstrap di sys.path
+ClientContext = import_module("pipeline.context").ClientContext
+ensure_dotenv_loaded = import_module("pipeline.env_utils").ensure_dotenv_loaded
+get_structured_logger = import_module("pipeline.logging_utils").get_structured_logger
+vision_ai = import_module("semantic.vision_ai")
 
 
 def main() -> int:

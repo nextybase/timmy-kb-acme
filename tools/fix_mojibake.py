@@ -15,9 +15,11 @@ TARGETS = [
     Path("docs/architecture.md"),
 ]
 
+
 def _latin1(hex_bytes: str) -> str:
     """Decode a mojibake sequence expressed with latin-1 bytes."""
     return bytes.fromhex(hex_bytes).decode("latin1")
+
 
 REPLACEMENTS: dict[str, str] = {
     _latin1("E28094"): "—",  # em dash
@@ -44,17 +46,20 @@ REPLACEMENTS: dict[str, str] = {
     "D" + _latin1("E28099"): "D’",
 }
 
+
 def fix_text(text: str) -> str:
     fixed = text
     for corrupted, clean in REPLACEMENTS.items():
         fixed = fixed.replace(corrupted, clean)
     return fixed
 
+
 def _atomic_write(path: Path, content: str) -> None:
     with NamedTemporaryFile("w", encoding="utf-8", delete=False, newline="") as tmp:
         tmp.write(content)
         temp_path = Path(tmp.name)
     os.replace(temp_path, path)
+
 
 def main() -> None:
     changed: list[str] = []
@@ -70,6 +75,7 @@ def main() -> None:
         print("Fixed mojibake in:", ", ".join(changed))
     else:
         print("No changes")
+
 
 if __name__ == "__main__":
     main()

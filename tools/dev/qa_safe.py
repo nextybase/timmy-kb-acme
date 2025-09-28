@@ -16,6 +16,7 @@ Exit code:
 - 0 se tutti i tool presenti sono passati o assenti (skip)
 - 1 se uno dei tool presenti fallisce
 """
+
 from __future__ import annotations
 
 import argparse

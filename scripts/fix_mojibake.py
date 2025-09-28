@@ -9,6 +9,7 @@ con --apply scrive le modifiche.
 Esempio:
   python scripts/fix_mojibake.py --apply
 """
+
 from __future__ import annotations
 
 import argparse

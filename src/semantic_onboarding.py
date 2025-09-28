@@ -10,6 +10,7 @@ from pathlib import Path
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 
 
@@ -72,10 +73,11 @@ def main() -> int:
         book_dir: Path = getattr(ctx, "md_dir", None) or paths["book"]
         summary_path = book_dir / "SUMMARY.md"
         readme_path = book_dir / "README.md"
+        content_mds = list_content_markdown(book_dir)  # <-- PR2: conteggio contenuti reali
         print("\n== Semantic Onboarding ===")
         print(f"Slug: {slug}")
         print(f"Book dir: {book_dir}")
-        print(f"Markdown generati: {len(list(book_dir.glob('*.md')))}")
+        print(f"Markdown generati: {len(content_mds)}")  # <-- PR2: solo contenuto (no README/SUMMARY)
         print(f"Frontmatter arricchiti: {len(touched)}")
         print(f"SUMMARY.md: {'OK' if summary_path.exists() else 'mancante'}")
         print(f"README.md: {'OK' if readme_path.exists() else 'mancante'}")

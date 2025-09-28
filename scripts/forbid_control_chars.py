@@ -4,15 +4,21 @@ import argparse
 import sys
 import unicodedata
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
+from importlib import import_module
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT / 'src') not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT / 'src'))
+if str(_REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from pipeline.file_utils import safe_write_text
-from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve
+# Import dinamici post-bootstrapping per rispettare E402 (niente import dopo codice)
+_file_utils = import_module("pipeline.file_utils")
+_logging_utils = import_module("pipeline.logging_utils")
+_path_utils = import_module("pipeline.path_utils")
+
+safe_write_text = _file_utils.safe_write_text
+get_structured_logger = _logging_utils.get_structured_logger
+ensure_within_and_resolve = _path_utils.ensure_within_and_resolve
 
 ALLOWED_CONTROLS = {0x09, 0x0A, 0x0D}  # tab, newline, carriage return
 CONTROL_RANGES = (
@@ -37,11 +43,13 @@ def _find_violations(text: str) -> List[dict[str, str | int]]:
     col = 1
     for ch in text:
         if _is_forbidden_control(ch):
-            violations.append({
-                "line": line,
-                "column": col,
-                "code": f"U+{ord(ch):04X}",
-            })
+            violations.append(
+                {
+                    "line": line,
+                    "column": col,
+                    "code": f"U+{ord(ch):04X}",
+                }
+            )
         if ch == "\n":
             line += 1
             col = 1

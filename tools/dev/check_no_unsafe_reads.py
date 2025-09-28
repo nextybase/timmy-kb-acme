@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fail pre-commit if raw file reads are introduced outside safe helpers."""
+
 from __future__ import annotations
 
 import subprocess

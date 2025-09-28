@@ -61,25 +61,21 @@ def _ensure_dependencies() -> None:
     except Exception:
         _fic = None
 
-    # Bind
-    globals().update(
-        dict(
-            safe_write_bytes=_swb,
-            safe_write_text=_swt,
-            get_structured_logger=_gsl,
-            tail_path=_tail,
-            ensure_within=_ew,
-            ensure_within_and_resolve=_ewr,
-            open_for_read_bytes_selfguard=_ofr,
-            extract_semantic_candidates=_esc,
-            render_tags_csv=_rtc,
-            load_semantic_config=_lsc,
-            normalize_tags=_nt,
-            _write_tagging_readme=_wtr,
-            _write_review_stub_from_csv=_wrs,
-            _fin_import_csv=_fic,
-        )
-    )
+    # Bind espliciti per evitare false positive F824 su global non assegnati
+    safe_write_bytes = _swb
+    safe_write_text = _swt
+    get_structured_logger = _gsl
+    tail_path = _tail
+    ensure_within = _ew
+    ensure_within_and_resolve = _ewr
+    open_for_read_bytes_selfguard = _ofr
+    extract_semantic_candidates = _esc
+    render_tags_csv = _rtc
+    load_semantic_config = _lsc
+    normalize_tags = _nt
+    _write_tagging_readme = _wtr
+    _write_review_stub_from_csv = _wrs
+    _fin_import_csv = _fic
 
 
 def _parse_args() -> argparse.Namespace:

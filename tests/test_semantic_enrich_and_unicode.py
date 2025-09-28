@@ -19,7 +19,7 @@ class _Ctx:
 
 def test_term_pattern_matches_with_zero_width_removed() -> None:
     kw = "nome"
-    content_zw = "no\u200Cme e no\u200Bme"
+    content_zw = "no\u200cme e no\u200bme"
     pat = se._term_to_pattern(kw)
     import re as _re
 
@@ -77,7 +77,7 @@ def test_extract_semantic_concepts_sanitizes_and_dedups_keywords(
     mapping = {
         "persona": [
             "nome",
-            "no\u200Cme",  # con ZW non visibile
+            "no\u200cme",  # con ZW non visibile
         ]
     }
 
