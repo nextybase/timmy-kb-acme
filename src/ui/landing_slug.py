@@ -275,41 +275,30 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
 
     st.markdown("### YAML generati (modificabili)")
 
-    with st.form("mapping_yaml_editor"):
+    with st.form("yaml_editor_form"):
         updated_vision = st.text_area(
             "semantic/semantic_mapping.yaml",
             value=vision_state.get("mapping_yaml", ""),
             height=280,
         )
-        if st.form_submit_button("Salva semantic_mapping.yaml"):
-            try:
-                target = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
-                safe_write_text(target, updated_vision)
-                vision_state["mapping_yaml"] = updated_vision
-                st.success("semantic_mapping.yaml aggiornato.")
-            except Exception:  # pragma: no cover
-                if log:
-                    log.exception("landing.save_vision_failed", extra={"slug": slug})
-                st.error("Impossibile salvare semantic_mapping.yaml. Controlla i log.")
-            finally:
-                st.session_state["vision_workflow"] = vision_state
-
-    with st.form("cartelle_yaml_editor"):
         updated_cartelle = st.text_area(
             "semantic/cartelle_raw.yaml",
             value=vision_state.get("cartelle_yaml", ""),
             height=280,
         )
-        if st.form_submit_button("Salva cartelle_raw.yaml"):
+        if st.form_submit_button("Valida & Salva"):
             try:
-                target = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
-                safe_write_text(target, updated_cartelle)
+                target_map = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
+                target_cart = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
+                safe_write_text(target_map, updated_vision)
+                safe_write_text(target_cart, updated_cartelle)
+                vision_state["mapping_yaml"] = updated_vision
                 vision_state["cartelle_yaml"] = updated_cartelle
-                st.success("cartelle_raw.yaml aggiornato.")
+                st.success("YAML aggiornati.")
             except Exception:  # pragma: no cover
                 if log:
-                    log.exception("landing.save_cartelle_failed", extra={"slug": slug})
-                st.error("Impossibile salvare cartelle_raw.yaml. Controlla i log.")
+                    log.exception("landing.save_yaml_failed", extra={"slug": slug})
+                st.error("Impossibile salvare gli YAML. Controlla i log.")
             finally:
                 st.session_state["vision_workflow"] = vision_state
 
