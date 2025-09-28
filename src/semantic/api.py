@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import logging
 import re
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
@@ -156,6 +157,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         - Altrimenti → ConfigError (fail-fast).
     - Se RAW **contiene PDF** → invoca sempre il converter.
     """
+    start_ts = time.perf_counter()
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, book_dir)
@@ -189,6 +191,16 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     if safe_pdfs:
         # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
         if content_mds:
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "sem.convert_markdown.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
+            )
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "sem.convert_markdown.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
+            )
             return content_mds
         raise ConversionError(
             "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
@@ -222,6 +234,7 @@ def enrich_frontmatter(
 ) -> List[Path]:
     from pipeline.path_utils import read_text_safe
 
+    start_ts = time.perf_counter()
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
     ensure_within(base_dir, book_dir)
 
@@ -264,10 +277,16 @@ def enrich_frontmatter(
             m.set_artifacts(len(touched))
         except Exception:
             m.set_artifacts(None)
+    ms = int((time.perf_counter() - start_ts) * 1000)
+    logger.info(
+        "sem.enrich_frontmatter.done",
+        extra={"slug": slug, "ms": ms, "artifacts": {"updated": len(touched)}},
+    )
     return touched
 
 
 def write_summary_and_readme(context: ClientContextType, logger: logging.Logger, *, slug: str) -> None:
+    start_ts = time.perf_counter()
     base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
 
@@ -320,6 +339,11 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
         _validate_md(shim)
         logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(book_dir)})
         m.set_artifacts(2)
+    ms = int((time.perf_counter() - start_ts) * 1000)
+    logger.info(
+        "sem.summary_readme.done",
+        extra={"slug": slug, "ms": ms, "artifacts": {"summary": True, "readme": True}},
+    )
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
@@ -358,6 +382,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
     """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
+    start_ts = time.perf_counter()
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
@@ -374,7 +399,11 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
             m.set_artifacts(len(mds))
         except Exception:
             m.set_artifacts(None)
-
+    ms = int((time.perf_counter() - start_ts) * 1000)
+    logger.info(
+        "sem.book.done",
+        extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(mds)}},
+    )
     return mds
 
 
@@ -388,6 +417,7 @@ def index_markdown_to_db(
     db_path: Path | None = None,
 ) -> int:
     """Indicizza i Markdown presenti in `book/` nel DB con embeddings."""
+    start_ts = time.perf_counter()
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
@@ -397,6 +427,11 @@ def index_markdown_to_db(
     files = list_content_markdown(book_dir)
     if not files:
         logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
+        ms = int((time.perf_counter() - start_ts) * 1000)
+        logger.info(
+            "sem.index.done",
+            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": 0}},
+        )
         return 0
 
     from pipeline.path_utils import read_text_safe
@@ -435,6 +470,11 @@ def index_markdown_to_db(
                     "vectors_empty": 0,
                 },
             )
+        ms = int((time.perf_counter() - start_ts) * 1000)
+        logger.info(
+            "sem.index.done",
+            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
+        )
         return 0
 
     from datetime import datetime as _dt
@@ -472,6 +512,11 @@ def index_markdown_to_db(
                     "vectors_empty": 0,
                 },
             )
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "sem.index.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
+            )
             return 0
         if len(vecs) != len(contents):
             logger.warning(
@@ -492,6 +537,11 @@ def index_markdown_to_db(
                     "skipped_no_text": skipped_no_text,
                     "vectors_empty": dropped_mismatch,
                 },
+            )
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "sem.index.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
 
@@ -523,6 +573,11 @@ def index_markdown_to_db(
                     "skipped_no_text": skipped_no_text,
                     "vectors_empty": dropped,
                 },
+            )
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "sem.index.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
         if dropped > 0:
@@ -563,6 +618,11 @@ def index_markdown_to_db(
         logger.info(
             "semantic.index.completed",
             extra={"slug": slug, "inserted": inserted_total, "files": len(rel_paths)},
+        )
+        ms = int((time.perf_counter() - start_ts) * 1000)
+        logger.info(
+            "sem.index.done",
+            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": inserted_total, "files": len(rel_paths)}},
         )
         try:
             m.set_artifacts(inserted_total)

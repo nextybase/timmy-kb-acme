@@ -175,7 +175,7 @@ class ClientContext:
         config_path = cls._ensure_config(repo_root, slug, _logger)
 
         # 5) Carica config cliente (yaml)
-        settings = cls._load_yaml_config(config_path, _logger)
+        settings = cls._load_yaml_config(config_path, slug, _logger)
 
         # 6) Livello log (default INFO; retro-compat da kwargs)
         log_level = str(kwargs.get("log_level", "INFO")).upper()
@@ -227,10 +227,13 @@ class ClientContext:
         if env_root:
             try:
                 root = Path(str(env_root)).expanduser().resolve()
-                logger.info("repo_root_dir impostato da ENV", extra={"repo_root_dir": str(root)})
+                logger.info(
+                    "context.repo_root_dir_env",
+                    extra={"slug": slug, "repo_root_dir": str(root)},
+                )
                 return root
             except Exception as e:
-                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root} ({e})") from e
+                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug) from e
 
         # Project root = this file → ../../
         default_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
@@ -257,8 +260,7 @@ class ClientContext:
 
         if not config_path.exists():
             logger.info(
-                "Cliente '%s' non trovato: creazione struttura base.",
-                slug,
+                "context.config.bootstrap",
                 extra={"slug": slug, "file_path": str(config_path)},
             )
             # Template dal progetto
@@ -278,16 +280,19 @@ class ClientContext:
         return config_path
 
     @staticmethod
-    def _load_yaml_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
+    def _load_yaml_config(config_path: Path, slug: str, logger: logging.Logger) -> Dict[str, Any]:
         """Carica e valida il file YAML di configurazione del cliente."""
         try:
             from .yaml_utils import yaml_read
 
             settings = yaml_read(config_path.parent, config_path) or {}
         except Exception as e:  # pragma: no cover
-            raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path) from e
+            raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path, slug=slug) from e
 
-        logger.info("Config cliente caricata", extra={"file_path": str(config_path)})
+        logger.info(
+            "context.config.loaded",
+            extra={"slug": slug, "file_path": str(config_path)},
+        )
         return settings
 
     @staticmethod

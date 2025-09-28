@@ -419,21 +419,31 @@ def provision_from_vision(
     3) scrittura YAML: semantic_mapping.yaml e cartelle_raw.yaml
     Ritorna metadati utili per UI/audit.
     """
-    if not pdf_path.exists():
-        raise ConfigError(f"PDF non trovato: {pdf_path}")
+    # 0) Base dir dal contesto (obbligatoria per path-safety)
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    # 1) Risoluzione sicura del PDF entro il perimetro del workspace
+    try:
+        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+    except ConfigError as e:
+        # Arricchisci con slug per diagnosi coerente
+        raise e.__class__(str(e), slug=slug, file_path=getattr(e, "file_path", None)) from e
+    if not safe_pdf.exists():
+        raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
 
-    paths = _resolve_paths(ctx.base_dir)
+    paths = _resolve_paths(str(base_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     # Nota: rimosso meccanismo legacy di hash/skip e snapshot testo
     # La funzione ora produce esclusivamente i due YAML richiesti.
 
     # 1) Estrazione testo (solo per contesto AI; nessun salvataggio snapshot)
-    snapshot = _extract_pdf_text(pdf_path)
+    snapshot = _extract_pdf_text(safe_pdf)
 
     # 2) Invocazione AI
     client = make_openai_client()
-    vs_id = _create_vector_store_with_pdf(client, pdf_path)
+    vs_id = _create_vector_store_with_pdf(client, safe_pdf)
 
     # Modello: priorità a env VISION_MODEL, fallback al parametro/default
     model_env = os.getenv("VISION_MODEL")
@@ -483,7 +493,7 @@ def provision_from_vision(
     record = {
         "ts": ts,
         "slug": slug,
-        "pdf": str(pdf_path),
+        "pdf": str(safe_pdf),
         "model": effective_model,
         "yaml_paths": {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
     }
