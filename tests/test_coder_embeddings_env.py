@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 from typing import Any
 
 
@@ -28,8 +27,8 @@ def test_coder_embeddings_fallback_from_codex_sets_openai_key_and_logs(monkeypat
     client = tkc._emb_client_or_none(use_rag=True)
 
     assert isinstance(client, _StubEmb)
-    # Fallback applicato all'ambiente
-    assert os.getenv("OPENAI_API_KEY") == "codex-secret"
+    # Fallback soft: non muta l'ambiente, passa la chiave direttamente al client
+    assert getattr(client, "kwargs", {}).get("api_key") == "codex-secret"
     # Log di sorgente fallback presente
     assert any("embeddings.api_key.source=codex_fallback" in rec.message for rec in caplog.records)
 
@@ -47,8 +46,8 @@ def test_coder_embeddings_no_fallback_when_openai_key_present(monkeypatch, caplo
     client = tkc._emb_client_or_none(use_rag=True)
 
     assert isinstance(client, _StubEmb)
-    # La chiave primaria resta invariata
-    assert os.getenv("OPENAI_API_KEY") == "primary-secret"
+    # La chiave primaria resta invariata (nessun parametro passato al client)
+    assert "api_key" not in getattr(client, "kwargs", {})
     # Nessun log di fallback
     assert not any("embeddings.api_key.source=codex_fallback" in rec.message for rec in caplog.records)
 
@@ -67,5 +66,7 @@ def test_coder_embeddings_only_openai_key_also_works(monkeypatch, caplog):
     client = tkc._emb_client_or_none(use_rag=True)
 
     assert isinstance(client, _StubEmb)
+    # Nessun parametro api_key passato esplicitamente
+    assert "api_key" not in getattr(client, "kwargs", {})
     # Nessun log di fallback, usa la primaria
     assert not any("embeddings.api_key.source=codex_fallback" in rec.message for rec in caplog.records)

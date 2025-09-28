@@ -93,17 +93,17 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
         return None
     api_key = os.getenv("OPENAI_API_KEY")
     api_key_codex = os.getenv("OPENAI_API_KEY_CODEX")
-    # Se manca la chiave primaria ma c'è la CODEX, inietta fallback
-    if not api_key and api_key_codex:
-        os.environ["OPENAI_API_KEY"] = api_key_codex
-        LOGGER.info("embeddings.api_key.source=codex_fallback")
-        api_key = api_key_codex
-    # Se ancora manca qualsiasi chiave, disattiva RAG con messaggio utente
+    # Se mancano entrambe le chiavi, disattiva RAG con messaggio utente
     if not api_key and not api_key_codex:
         st.warning("OPENAI_API_KEY_CODEX non trovato nell'ambiente (.env consigliato). RAG disattivato.")
         return None
     try:
-        return OpenAIEmbeddings()
+        # Preferisci OPENAI_API_KEY se presente; altrimenti fallback alla CODEX senza mutare l'ambiente
+        if api_key:
+            return OpenAIEmbeddings()
+        # Fallback soft: usa la CODEX per costruire il client embeddings
+        LOGGER.info("embeddings.api_key.source=codex_fallback")
+        return OpenAIEmbeddings(api_key=api_key_codex)
     except Exception as e:  # pragma: no cover - mostra feedback in UI
         LOGGER.exception("Errore init embeddings: %s", e)
         st.error(f"Errore init embeddings: {e}")

@@ -90,13 +90,19 @@ def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -
 class OpenAIEmbeddings:
     """Client semplice per calcolare embedding tramite API openai>=1.x."""
 
-    def __init__(self: "OpenAIEmbeddings", model: str = "text-embedding-3-small") -> None:
+    def __init__(
+        self: "OpenAIEmbeddings",
+        model: str = "text-embedding-3-small",
+        *,
+        api_key: str | None = None,
+    ) -> None:
         try:
             from openai import OpenAI
         except Exception as e:  # pragma: no cover - errore di import
             raise RuntimeError("Pacchetto openai non disponibile. Installa openai>=1.x") from e
         self._OpenAI = OpenAI
-        self._client = OpenAI()
+        # Iniezione opzionale della chiave senza mutare l'ambiente
+        self._client = OpenAI(api_key=api_key) if api_key else OpenAI()
         self._model = model
 
     def embed_texts(
