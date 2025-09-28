@@ -13,7 +13,7 @@ from ai.client_factory import make_openai_client
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # factory centralizzato
 
 _MODEL = "gpt-4.1-mini"
@@ -171,6 +171,27 @@ def _json_to_yaml(data: Dict[str, Any]) -> str:
     return yaml.safe_dump(yaml_obj, allow_unicode=True, sort_keys=False, width=100)
 
 
+def _ensure_slug_coherent(data: Dict[str, Any], *, expected_slug: str) -> None:
+    """Valida che il payload abbia un context dict con uno slug coerente allo slug richiesto.
+
+    Previene leak/artefatti inter-cliente se il modello restituisce slug diverso.
+    """
+    if not isinstance(data, dict):
+        raise ConfigError("Output modello non valido: payload non e' un oggetto JSON.")
+    ctx = data.get("context")
+    if not isinstance(ctx, dict):
+        raise ConfigError("Output modello non valido: 'context' deve essere un oggetto.")
+    raw_slug = ctx.get("slug")
+    if not isinstance(raw_slug, str) or not raw_slug.strip():
+        raise ConfigError("Output modello non valido: 'context.slug' mancante o non stringa.")
+    payload_slug = raw_slug.strip()
+    if not is_valid_slug(payload_slug) or payload_slug != expected_slug:
+        raise ConfigError(
+            f"Slug incoerente nel payload: {payload_slug!r} != {expected_slug!r}",
+            slug=payload_slug,
+        )
+
+
 def _message_content_to_text(message_content: Any) -> str:
     if not message_content:
         return ""
@@ -252,6 +273,9 @@ def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, mode
 
     if "context" not in data or "areas" not in data:
         raise ConfigError("Vision AI: risposta incompleta (mancano 'context' o 'areas').")
+
+    # HARD GATE: coerenza slug per prevenire artefatti inter-cliente
+    _ensure_slug_coherent(data, expected_slug=slug)
 
     mapping_yaml_str = _json_to_yaml(data)
     safe_write_text(paths.mapping_yaml, mapping_yaml_str)
