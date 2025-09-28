@@ -9,9 +9,9 @@ from typing import Any, Dict, Optional, cast
 
 # Import Streamlit in modo tollerante (test/CI headless): deve stare in alto per evitare E402
 try:
-    import streamlit as st
+    import streamlit as st  # type: ignore
 except Exception:  # pragma: no cover
-    st = None
+    st = None  # type: ignore[assignment]
 
 import yaml
 
@@ -56,12 +56,12 @@ def _setup_logging() -> logging.Logger:
 
 
 def _render_debug_expander(workspace_dir: Path) -> None:
-    """Mostra un expander 'Debug' con eventuali file di diagnostica vision.
+    """Mostra un expander 'Debug' con eventuali file di diagnostica Vision.
 
     Cerca in `semantic/` i file `.vision_last_response.json` e `.vision_last_error.txt`.
     Se non trovati, mostra un messaggio informativo.
     """
-    if st is None:
+    if st is None:  # type: ignore[truthy-bool]
         return
     try:
         sem_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
@@ -305,6 +305,8 @@ def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger
 
 
 def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    if create_local_base_structure is None:
+        raise RuntimeError("Funzionalità locali non disponibili: installa i moduli 'pipeline.drive_utils'.")
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
     cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     create_local_base_structure(ctx, cartelle)
@@ -312,6 +314,14 @@ def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.
 
 
 def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> Dict[str, str]:
+    # Guardie per ambienti senza dipendenze Drive
+    if not (
+        get_drive_service and create_drive_folder and create_drive_structure_from_yaml and upload_config_to_drive_folder
+    ):
+        raise RuntimeError(
+            "Funzionalità Drive non disponibili: installa gli extra o configura i servizi (pipeline.drive_utils)."
+        )
+
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
     service = get_drive_service(ctx)
     drive_parent_id = ctx.env.get("DRIVE_ID")
@@ -321,7 +331,8 @@ def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger)
     redact = bool(getattr(ctx, "redact_logs", False))
     client_folder_id = create_drive_folder(service, slug, parent_id=drive_parent_id, redact_logs=redact)
     created_map = cast(
-        Dict[str, str], create_drive_structure_from_yaml(service, cartelle, client_folder_id, redact_logs=redact)
+        Dict[str, str],
+        create_drive_structure_from_yaml(service, cartelle, client_folder_id, redact_logs=redact),
     )
     upload_config_to_drive_folder(service, ctx, parent_id=client_folder_id, redact_logs=redact)
     logger.info(
@@ -378,8 +389,28 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
         st.text_area("semantic/cartelle_raw.yaml", key=cartelle_key, height=320)
         if st.form_submit_button("Valida & Salva", type="primary"):
             try:
+                # Parsing/validazione base
                 _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
                 _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
+
+                # Validazione schema minima (più stretta)
+                mapping_data = yaml.safe_load(st.session_state[mapping_key]) or {}
+                cartelle_data = yaml.safe_load(st.session_state[cartelle_key]) or {}
+
+                if (
+                    "context" not in mapping_data
+                    or "areas" not in mapping_data
+                    or not isinstance(mapping_data["areas"], list)
+                    or not mapping_data["areas"]
+                ):
+                    raise ConfigError("semantic_mapping.yaml: mancano 'context' o 'areas' (lista non vuota).")
+                ctx_map = mapping_data["context"]
+                if not isinstance(ctx_map, dict) or "slug" not in ctx_map or "client_name" not in ctx_map:
+                    raise ConfigError("semantic_mapping.yaml: 'context.slug' e 'context.client_name' sono obbligatori.")
+
+                if cartelle_data.get("version") != 1 or not isinstance(cartelle_data.get("folders"), list):
+                    raise ConfigError("cartelle_raw.yaml: attesi 'version: 1' e 'folders' come lista.")
+
                 _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
                 _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
                 st.success("YAML aggiornati.")
@@ -393,6 +424,8 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
                 _run_create_local_structure(slug, workspace_dir, logger)
                 st.success("Struttura locale aggiornata.")
             except ConfigError as exc:
+                st.error(str(exc))
+            except RuntimeError as exc:
                 st.error(str(exc))
     with actions[1]:
         if st.button("Crea su Drive", use_container_width=True):
@@ -456,6 +489,12 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     if yaml_paths:
         st.json(yaml_paths, expanded=False)
 
+    # Percorsi YAML sempre visibili, anche se init_result manca (refresh)
+    mapping_rel = _mapping_path(workspace_dir)
+    cartelle_rel = _cartelle_path(workspace_dir)
+    st.caption(f"Mapping: `{mapping_rel}`")
+    st.caption(f"Cartelle raw: `{cartelle_rel}`")
+
     # Opzione di rigenerazione YAML se gli artefatti sono presenti
     mapping_path = yaml_paths.get("mapping")
     cartelle_path = yaml_paths.get("cartelle_raw")
@@ -485,6 +524,32 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
             st.error(str(exc))
 
     st.button("Torna alla landing", on_click=_back_to_landing)
+
+
+def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path], logger: logging.Logger) -> None:
+    """Shortcut in sidebar per aprire rapidamente il workspace."""
+    if st is None or slug is None or workspace_dir is None:
+        return
+    with st.sidebar:
+        try:
+            mapping_rel = _mapping_path(workspace_dir)
+            cartelle_rel = _cartelle_path(workspace_dir)
+            if mapping_rel.exists() and cartelle_rel.exists():
+                st.caption(f"Mapping: `{mapping_rel}`")
+                st.caption(f"Cartelle raw: `{cartelle_rel}`")
+                if st.session_state.get("phase") == "ready_to_open":
+                    if st.button("Apri workspace", type="primary", use_container_width=True):
+                        try:
+                            _open_workspace(slug, workspace_dir, logger)
+                            st.session_state["phase"] = "workspace"
+                            st.rerun()
+                        except (ConfigError, RuntimeError) as exc:
+                            st.error(str(exc))
+            else:
+                st.info("Inizializza workspace prima di aprirlo")
+        except Exception:
+            # La sidebar non deve interrompere il rendering principale
+            pass
 
 
 def _render_landing(logger: logging.Logger) -> None:
@@ -530,6 +595,9 @@ def main() -> None:
     phase = st.session_state.get("phase", "landing")
     slug = st.session_state.get("slug")
     workspace_dir = Path(st.session_state.get("workspace_dir", "")) if slug else None
+
+    # Sidebar scorciatoie (non bloccante)
+    _render_sidebar_shortcuts(slug, workspace_dir, logger)
 
     if phase == "landing":
         _render_landing(logger)
