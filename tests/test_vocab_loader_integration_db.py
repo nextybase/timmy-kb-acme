@@ -1,11 +1,10 @@
 # tests/test_vocab_loader_integration_db.py
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, Set
-
 import importlib
 import sys
+from pathlib import Path
+from typing import Dict, Set
 
 import src.semantic.vocab_loader as vl
 
