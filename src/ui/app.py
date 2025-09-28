@@ -9,9 +9,9 @@ from typing import Any, Dict, Optional, cast
 
 # Import Streamlit in modo tollerante (test/CI headless): deve stare in alto per evitare E402
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore[assignment]
+    st = None
 
 import yaml
 
@@ -61,7 +61,7 @@ def _render_debug_expander(workspace_dir: Path) -> None:
     Cerca in `semantic/` i file `.vision_last_response.json` e `.vision_last_error.txt`.
     Se non trovati, mostra un messaggio informativo.
     """
-    if st is None:  # type: ignore[truthy-bool]
+    if st is None:
         return
     try:
         sem_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
