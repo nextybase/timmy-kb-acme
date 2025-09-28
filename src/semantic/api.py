@@ -394,11 +394,7 @@ def index_markdown_to_db(
     ensure_within(base_dir, book_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
 
-    files = [
-        p
-        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
-        if p.name.lower() not in {"readme.md", "summary.md"}
-    ]
+    files = list_content_markdown(book_dir)
     if not files:
         logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
         return 0
