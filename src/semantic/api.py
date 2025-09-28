@@ -196,11 +196,6 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                 "sem.convert_markdown.done",
                 extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
             )
-            ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "sem.convert_markdown.done",
-                extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
-            )
             return content_mds
         raise ConversionError(
             "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
