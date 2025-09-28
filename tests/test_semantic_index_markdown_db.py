@@ -122,7 +122,11 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
         db_path=tmp_path / "db_empty.sqlite",
     )
     assert ret == 0
-    assert any("Primo vettore embedding vuoto" in r.getMessage() for r in caplog.records)
+    # Accetta sia il messaggio legacy sia l’evento strutturato introdotto
+    assert any(
+        ("Primo vettore embedding vuoto" in r.getMessage()) or (r.getMessage() == "semantic.index.all_embeddings_empty")
+        for r in caplog.records
+    )
 
 
 def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
@@ -266,5 +270,10 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
         db_path=dbp,
     )
     assert inserted == 1
-    # Log di drop presente
-    assert any("scartati" in r.getMessage() or "dropped" in r.getMessage() for r in caplog.records)
+    # Log di drop presente (accetta messaggio umano o evento strutturato)
+    assert any(
+        ("scartati" in r.getMessage())
+        or ("dropped" in r.getMessage())
+        or (r.getMessage() == "semantic.index.embedding_pruned")
+        for r in caplog.records
+    )
