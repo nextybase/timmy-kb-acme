@@ -21,3 +21,12 @@ Se `tags.db` assente: proponi migrazione o rigenerazione safe.
 ## cSpell cleanup su docs/
 - Raccogli parole ignote; aggiorna `cspell.json` e `.vscode/settings.json`.
 - Evita ignore per‑file se non necessario.
+
+### Micro-PR Commit Template
+Titolo: <breve, imperativo>
+Motivazione: <bugfix/security/robustezza; impatto>
+Scope: <file toccati e perché; 1 change set>
+Regole rispettate: path-safety ✔ / atomiche ✔ / no side-effects a import-time ✔
+Test: <nuovi/aggiornati; come riprodurre — es. pytest -k ...>
+QA: isort → black → ruff --fix → mypy → pytest
+Note docs: <se tocchi X, aggiorna Y/Z>
