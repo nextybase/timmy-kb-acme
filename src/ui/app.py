@@ -7,12 +7,7 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-# Import Streamlit in modo tollerante (test/CI headless): deve stare in alto per evitare E402
-try:
-    import streamlit as st  # type: ignore
-except Exception:  # pragma: no cover
-    st = None  # type: ignore[assignment]
-
+# Import standard/third‑party prima di qualsiasi codice
 import yaml
 
 from pipeline.context import ClientContext
@@ -40,6 +35,13 @@ except Exception:  # pragma: no cover
 from ui.services.drive_runner import emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
+# Import Streamlit in modo tollerante (test/CI headless)
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover
+    st = None
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = REPO_ROOT / "output"
 BASE_CONFIG = REPO_ROOT / "config" / "config.yaml"
@@ -61,7 +63,7 @@ def _render_debug_expander(workspace_dir: Path) -> None:
     Cerca in `semantic/` i file `.vision_last_response.json` e `.vision_last_error.txt`.
     Se non trovati, mostra un messaggio informativo.
     """
-    if st is None:  # type: ignore[truthy-bool]
+    if st is None:
         return
     try:
         sem_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
