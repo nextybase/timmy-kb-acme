@@ -376,19 +376,32 @@ def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
 
 
 def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str] = None) -> None:
-    """Valida la forma minima del payload e, se fornito, la coerenza dello slug."""
+    """
+    Valida lo schema minimo del payload e (opzionale) la coerenza dello slug.
+    Deve fallire SEMPRE con ConfigError (mai AttributeError/KeyError).
+    """
+    # Oggetto radice
     if not isinstance(data, dict):
-        raise ConfigError("Output modello non valido: payload non e un oggetto JSON.")
+        raise ConfigError("Output modello non valido: payload non è un oggetto JSON.")
+
+    # Presenza campi base
     if "context" not in data or "areas" not in data:
         raise ConfigError("Output modello non valido: mancano 'context' o 'areas'.")
-    if not isinstance(data["areas"], list) or not data["areas"]:
-        raise ConfigError("Output modello non valido: 'areas' vuoto o non list.")
+
+    # Tipi corretti
+    ctx = data.get("context")
+    areas = data.get("areas")
+    if not isinstance(ctx, dict):
+        raise ConfigError("Output modello non valido: 'context' deve essere un oggetto.")
+    if not isinstance(areas, list) or not areas:
+        raise ConfigError("Output modello non valido: 'areas' deve essere una lista non vuota.")
+
+    # Coerenza slug, se richiesta
     if expected_slug is not None:
-        ctx = data.get("context") or {}
-        payload_slug = str((ctx or {}).get("slug") or "").strip()
-        if not payload_slug:
-            raise ConfigError("Output modello non valido: 'context.slug' mancante.")
-        # valida formato e coerenza con lo slug attivo
+        raw_slug = ctx.get("slug")
+        if not isinstance(raw_slug, str) or not raw_slug.strip():
+            raise ConfigError("Output modello non valido: 'context.slug' mancante o non stringa.")
+        payload_slug = raw_slug.strip()
         if not is_valid_slug(payload_slug) or payload_slug != expected_slug:
             raise ConfigError(
                 f"Slug incoerente nel payload: {payload_slug!r} != {expected_slug!r}",

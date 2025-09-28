@@ -226,3 +226,43 @@ def test_generation_creates_only_two_yaml(monkeypatch, tmp_workspace: Path):
     assert calls["count"] == 2
     assert Path(result_second["mapping"]).exists()
     assert Path(result_second["cartelle_raw"]).exists()
+
+
+def test_context_not_dict_raises(monkeypatch, tmp_workspace: Path):
+    """Se context non è un dict, _validate_json_payload deve sollevare ConfigError (no AttributeError)."""
+    bad_output = {
+        "context": ["not-a-dict"],
+        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "esempio": ["x"]}],
+    }
+
+    import semantic.vision_provision as S
+    from pipeline.exceptions import ConfigError
+
+    class _FakeOpenAI(FakeOpenAI):
+        def __init__(self):
+            super().__init__(bad_output)
+
+    monkeypatch.setattr(S, "make_openai_client", lambda: _FakeOpenAI())
+    ctx = DummyCtx(base_dir=tmp_workspace)
+    pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
+
+    with pytest.raises(ConfigError):
+        provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+
+
+def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
+    """Se context.slug è diverso dallo slug atteso, deve fallire con ConfigError (guard-rail anti leak)."""
+    mismatched = {
+        "context": {"slug": "other", "client_name": "Other"},
+        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "esempio": ["x"]}],
+    }
+
+    import semantic.vision_provision as S
+    from pipeline.exceptions import ConfigError
+
+    monkeypatch.setattr(S, "make_openai_client", lambda: FakeOpenAI(mismatched))
+    ctx = DummyCtx(base_dir=tmp_workspace)
+    pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
+
+    with pytest.raises(ConfigError):
+        provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
