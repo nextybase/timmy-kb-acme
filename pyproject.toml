@@ -18,7 +18,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "python-slugify==8.0.4",
     "PyYAML==6.0.1",
-    "requests==2.32.2",
+    "requests==2.32.5",
     "numpy==1.26.4",
     # Compat pydantic/types
     "typing-extensions==4.12.2",
