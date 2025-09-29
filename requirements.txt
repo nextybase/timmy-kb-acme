@@ -72,4 +72,4 @@ requests-oauthlib==2.0.0
 sentence-transformers==2.7.0
 scikit-learn==1.5.1
 yake==0.4.8
-torch==2.2.2
+torch==2.8.0
