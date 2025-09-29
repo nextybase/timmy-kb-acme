@@ -97,6 +97,41 @@ def _append_pdf_section(lines: list[str], file_stem: str, *, level: int, filenam
     ]
 
 
+def _group_safe_pdfs_by_category(
+    raw_root: Path,
+    safe_pdfs: list[Path],
+) -> tuple[list[Path], list[tuple[Path, list[Path]]]]:
+    """Dato un elenco di PDF *già* validati (risolti dentro raw_root),
+    restituisce:
+      - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
+
+    Non effettua ulteriori controlli di sicurezza (assunti a monte).
+    Mantiene ordinamento stabile per percorso.
+    """
+    # Root = PDF direttamente dentro raw_root
+    root_pdfs = [p for p in safe_pdfs if p.parent == raw_root]
+    # Gruppi per categoria (prima sottocartella)
+    groups: dict[Path, list[Path]] = {}
+    for pdf in safe_pdfs:
+        try:
+            rel = pdf.relative_to(raw_root)
+        except Exception:
+            # fuori perimetro -> ignora (non dovrebbe accadere se già validati)
+            continue
+        parts = list(rel.parts)
+        if len(parts) < 2:
+            # è un PDF in root (già conteggiato)
+            continue
+        cat_dir = raw_root / parts[0]
+        groups.setdefault(cat_dir, []).append(pdf)
+
+    # Ordina deterministico: categorie per nome, PDF per path
+    items: list[tuple[Path, list[Path]]] = []
+    for cat_dir in sorted(groups.keys(), key=lambda d: d.name.lower()):
+        items.append((cat_dir, sorted(groups[cat_dir], key=lambda p: p.as_posix().lower())))
+    return (sorted(root_pdfs, key=lambda p: p.as_posix().lower()), items)
+
+
 # -----------------------------
 # API
 # -----------------------------
@@ -167,7 +202,12 @@ def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pa
     return summary
 
 
-def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> None:
+def convert_files_to_structured_markdown(
+    ctx: _ClientCtx,
+    md_dir: Path | None = None,
+    *,
+    safe_pdfs: list[Path] | None = None,
+) -> None:
     """Per ogni sotto-cartella diretta di ctx.raw_dir (categoria) crea un file <categoria>.md dentro
     md_dir con struttura:
 
@@ -176,6 +216,12 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
       - Heading del PDF a livello (2 + depth) e riga placeholder di contenuto
 
     Se una categoria non contiene PDF, scrive una riga informativa.
+
+    Parametri:
+      - safe_pdfs: opzionale. Lista di PDF **già filtrati e risolti** dentro raw_root
+        (path-safety e symlink già verificati). Se fornita, evita la scansione di raw/
+        e viene usata per generare il libro. Se None, viene effettuata la discovery
+        completa come in precedenza. (Back-compatibile)
     """
     base = ctx.base_dir
     raw_root = ctx.raw_dir
@@ -202,8 +248,16 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
 
     written: set[Path] = set()
 
+    # -- Sorgente PDF: o discovery (legacy) o grouping da safe_pdfs (nuovo percorso) --
+    if safe_pdfs is not None:
+        # Assumiamo che i path siano *già* dentro raw_root e risolti
+        root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
+    else:
+        # Legacy: discovery completa con path-safety per-file
+        root_pdfs = _filter_safe_pdfs(base, raw_root, sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()))
+        cat_items = _iter_category_pdfs(raw_root)
+
     # Gestione PDF presenti direttamente in raw/ (root): file aggregato con nome coerente
-    root_pdfs = _filter_safe_pdfs(base, raw_root, sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()))
     if root_pdfs:
         root_md = target / f"{raw_root.name}.md"
         content = _render_category_markdown(raw_root, root_pdfs)
@@ -211,13 +265,14 @@ def convert_files_to_structured_markdown(ctx: _ClientCtx, md_dir: Path | None = 
         written.add(root_md)
 
     # categorie = sole directory immediate sotto raw/
-    for cat_dir, pdfs in _iter_category_pdfs(raw_root):
+    for cat_dir, pdfs in cat_items:
         cat_name = cat_dir.name
         md_file = target / f"{cat_name}.md"
         # Risolvi base categoria per gestire symlink e relativizzare in modo coerente
         cat_dir_resolved = ensure_within_and_resolve(raw_root, cat_dir)
-        safe_pdfs = _filter_safe_pdfs(base, raw_root, pdfs)
-        content = _render_category_markdown(cat_dir, safe_pdfs, rel_base=cat_dir_resolved)
+        # Se arriviamo da safe_pdfs, pdfs è già "safe"; nel percorso legacy filtriamo ora
+        safe_list = pdfs if safe_pdfs is not None else _filter_safe_pdfs(base, raw_root, pdfs)
+        content = _render_category_markdown(cat_dir, safe_list, rel_base=cat_dir_resolved)
         safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
         written.add(md_file)
 

@@ -163,6 +163,91 @@ def _validate_params(params: QueryParams) -> None:
         raise RetrieverError("k negativo")
 
 
+# -------- Helper embedding: short-circuit + validazioni estratte (riduce ciclomatica) --------
+
+
+def _is_seq_like(x: Any) -> bool:
+    return hasattr(x, "__len__") and hasattr(x, "__getitem__") and not isinstance(x, (str, bytes))
+
+
+def _coerce_candidate_vector(raw_vec: Any, *, idx: int | None = None) -> list[float] | None:
+    """Converte `raw_vec` in `list[float]` applicando:
+    - Short-circuit se è già una sequenza numerica piatta (is_numeric_vector)
+    - Normalizzazione SSoT altrimenti
+    - Controlli di validità su sequenze piatte originali (tutti numerici, finitezza, lunghezza coerente)
+
+    Ritorna:
+      - list[float] valida (anche vuota)
+      - None se il candidato va skippato (embedding invalido)
+    """
+    if raw_vec is None:
+        return []
+
+    # Short-circuit: già list/seq di numerici
+    if is_numeric_vector(raw_vec):
+        try:
+            return [float(v) for v in raw_vec]  # type: ignore[return-value]
+        except Exception:
+            try:
+                LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
+            except Exception:
+                pass
+            return None
+
+    # Percorso standard: normalizzazione SSoT
+    vecs = normalize_embeddings(raw_vec)
+    v = vecs[0] if vecs else []
+    if not v or (v and not is_numeric_vector(v)):
+        try:
+            LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
+        except Exception:
+            pass
+        return None
+
+    # Coerenza per sequenze piatte originali (evita interpretazioni scorrette)
+    orig_seq = None
+    try:
+        if hasattr(raw_vec, "tolist"):
+            orig_seq = raw_vec.tolist()
+        elif _is_seq_like(raw_vec):
+            orig_seq = list(raw_vec)
+    except Exception:
+        orig_seq = None
+
+    if orig_seq is not None and v:
+        # Solo per sequenze piatte 1D (no sotto-sequenze / array 2D)
+        try:
+            is_flat = True
+            for _val in orig_seq:
+                if hasattr(_val, "tolist") or _is_seq_like(_val):
+                    is_flat = False
+                    break
+        except Exception:
+            is_flat = True
+
+        if is_flat:
+            all_numeric = True
+            count = 0
+            for val in orig_seq:
+                try:
+                    fv = float(val)
+                except Exception:
+                    all_numeric = False
+                    break
+                if not math.isfinite(fv):
+                    all_numeric = False
+                    break
+                count += 1
+            if (not all_numeric) or (count != len(v)):
+                try:
+                    LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
+                except Exception:
+                    pass
+                return None
+
+    return v
+
+
 def _score_candidates(
     qv: Sequence[float],
     cands: Sequence[dict[str, Any]],
@@ -173,71 +258,10 @@ def _score_candidates(
     usa l'indice di enumerazione (idx ascendente).
     """
     for idx, c in enumerate(cands):
-        raw_vec = c.get("embedding")
-        if raw_vec is None:
-            # Campo mancante: considera vettore vuoto (score 0.0)
-            v: list[float] = []
-        else:
-            vecs = normalize_embeddings(raw_vec)
-            v = vecs[0] if vecs else []
-            # Se presente ma non numerico o vuoto -> skip
-            if not v or (v and not is_numeric_vector(v)):
-                try:
-                    LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
-                except Exception:
-                    pass
-                continue
-        # v è [] o una lista di float validi a questo punto
-        # Se l'input originario era sequence-like, verifica che TUTTI gli elementi fossero numerici
-        orig_seq = None
-        if raw_vec is not None:
-            try:
-                if hasattr(raw_vec, "tolist"):
-                    orig_seq = raw_vec.tolist()
-                elif (
-                    hasattr(raw_vec, "__len__")
-                    and hasattr(raw_vec, "__getitem__")
-                    and not isinstance(raw_vec, (str, bytes))
-                ):
-                    orig_seq = list(raw_vec)
-            except Exception:
-                orig_seq = None
-        if orig_seq is not None and v:
-            # Applica il controllo "tutti numerici" solo a sequenze piatte (1D) di scalari.
-            # Se l'originale contiene sotto-sequenze (es. [np.ndarray(...)])
-            # considera valido: la normalizzazione ha già estratto un vettore numerico.
-            try:
-
-                def _is_seq_like(x: Any) -> bool:
-                    return hasattr(x, "__len__") and hasattr(x, "__getitem__") and not isinstance(x, (str, bytes))
-
-                is_flat = True
-                for _val in orig_seq:
-                    if hasattr(_val, "tolist") or _is_seq_like(_val):
-                        is_flat = False
-                        break
-            except Exception:
-                is_flat = True
-
-            if is_flat:
-                all_numeric = True
-                count = 0
-                for val in orig_seq:
-                    try:
-                        fv = float(val)
-                    except Exception:
-                        all_numeric = False
-                        break
-                    if not math.isfinite(fv):
-                        all_numeric = False
-                        break
-                    count += 1
-                if (not all_numeric) or (count != len(v)):
-                    try:
-                        LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
-                    except Exception:
-                        pass
-                    continue
+        v = _coerce_candidate_vector(c.get("embedding"), idx=idx)
+        if v is None:
+            continue
+        # v è [] o una lista di float valida
         sim = cosine(qv, v)
         yield (
             {

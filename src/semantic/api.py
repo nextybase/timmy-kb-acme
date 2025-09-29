@@ -86,8 +86,19 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
     return base_dir, raw_dir, md_dir
 
 
-def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
-    """Invoca il converter garantendo un fail-fast coerente se la firma è incompatibile."""
+def _call_convert_md(
+    func: Any,
+    ctx: _CtxShim,
+    md_dir: Path,
+    *,
+    safe_pdfs: list[Path] | None = None,
+) -> None:
+    """Invoca il converter garantendo un fail-fast coerente se la firma è incompatibile.
+
+    Passa `safe_pdfs` solo se:
+      - è stato calcolato a monte (non None)
+      - la funzione target accetta il parametro (retro-compatibilità).
+    """
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
     sig = inspect.signature(func)
@@ -95,6 +106,8 @@ def _call_convert_md(func: Any, ctx: _CtxShim, md_dir: Path) -> None:
     kwargs: Dict[str, Any] = {}
     if "md_dir" in params:
         kwargs["md_dir"] = md_dir
+    if safe_pdfs is not None and "safe_pdfs" in params:
+        kwargs["safe_pdfs"] = safe_pdfs
     try:
         bound = sig.bind_partial(ctx, **kwargs)
         bound.apply_defaults()
@@ -164,7 +177,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
 
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
-    # NEW: Guard-rail — RAW deve essere una directory (fail-fast tipizzato)
+    # Guard-rail — RAW deve essere una directory (fail-fast tipizzato)
     if not raw_dir.is_dir():
         raise ConfigError(f"Percorso RAW non è una directory: {raw_dir}", slug=slug, file_path=raw_dir)
 
@@ -180,7 +193,8 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if safe_pdfs:
-            _call_convert_md(_convert_md, shim, book_dir)
+            # 🔁 Evita doppia scansione: passa la lista già validata
+            _call_convert_md(_convert_md, shim, book_dir, safe_pdfs=safe_pdfs)
             content_mds = list_content_markdown(book_dir)
         else:
             # RAW senza PDF: non convertire; usa eventuali MD già presenti
@@ -424,7 +438,7 @@ def index_markdown_to_db(
 
     files = list_content_markdown(book_dir)
     if not files:
-        # NEW: telemetria completa anche su branch "vuoto"
+        # Telemetria completa anche su branch "vuoto"
         with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
             logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
             try:
@@ -462,7 +476,7 @@ def index_markdown_to_db(
         rel_paths.append(f.name)
 
     if not contents:
-        # NEW: phase_scope anche su "no contents"
+        # phase_scope anche su "no contents"
         with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
             logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
             if skipped_io > 0 or skipped_no_text > 0:
@@ -528,7 +542,7 @@ def index_markdown_to_db(
             )
             return 0
 
-        # NEW: indicizzazione parziale su mismatch (senza abort)
+        # Indicizzazione parziale su mismatch (senza abort)
         if len(vecs) != len(contents):
             logger.warning(
                 "semantic.index.mismatched_embeddings",
@@ -563,7 +577,7 @@ def index_markdown_to_db(
 
         dropped = len(contents) - len(filtered_contents)
         if dropped > 0 and len(filtered_contents) == 0:
-            # 👇 Compat test legacy + evento strutturato
+            # Compat test legacy + evento strutturato
             logger.warning("Primo vettore embedding vuoto", extra={"slug": slug})
             logger.warning("semantic.index.all_embeddings_empty", extra={"slug": slug, "count": len(vecs)})
             try:
