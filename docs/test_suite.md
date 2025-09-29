@@ -85,7 +85,7 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 ### 7) DB layer & ingest — SQLite, idempotenza, performance
 
 - **Schema & init**: `test_indexer_init_failfast.py`, `test_indexer_schema_once.py`.
-- **Inserimento & idempotenza**: `test_kb_db_insert.py`, `test_kb_db_idempotency.py`, `test_kb_db_path_safety.py`, `test_db_safety.py`.
+- **Inserimento & idempotenza**: `test_kb_db_insert.py`, `test_kb_db_idempotency.py`, `test_kb_db_path_safety.py`, `test_db_safety.py`, `test_kb_db_logging.py`.
 - **Ingest**: `test_ingest_performance.py`, `test_ingest_safety.py`.
 
 ### 8) Environment & import safety — Config, lazy load, dipendenze
@@ -96,8 +96,9 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 ### 9) Osservabilità & logging — Phase scope, smoke
 
-- **PhaseScope**: `test_phase_scope.py`, `test_phase_scope_structured.py`.
+- **PhaseScope**: `test_phase_scope.py`, `test_phase_scope_structured.py`, `test_semantic_convert_phase_scope.py`.
 - **Observability smoke**: `test_observability_smoke.py`.
+- **Content logging**: `test_content_utils_logging.py`.
 - **Coder logging**: `test_timmy_kb_coder_logging.py`.
 
 ### 10) Prompting & layout — Prompt builder, suggerimenti layout

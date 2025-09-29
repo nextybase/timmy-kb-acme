@@ -178,30 +178,22 @@ def insert_chunks(
             "  SELECT 1 FROM chunks WHERE project_slug=? AND scope=? AND path=? AND version=? AND content=? LIMIT 1"
             ")"
         )
+        params = [(pr, sc, pa, ve, mj, co, ej, ts, pr, sc, pa, ve, co) for (pr, sc, pa, ve, mj, co, ej, ts) in rows]
         before = int(con.total_changes)
-        for project_slug_v, scope_v, path_v, version_v, meta_json_v, content_v, emb_json_v, now_v in rows:
-            con.execute(
-                sql,
-                (
-                    project_slug_v,
-                    scope_v,
-                    path_v,
-                    version_v,
-                    meta_json_v,
-                    content_v,
-                    emb_json_v,
-                    now_v,
-                    # WHERE NOT EXISTS params
-                    project_slug_v,
-                    scope_v,
-                    path_v,
-                    version_v,
-                    content_v,
-                ),
-            )
+        con.executemany(sql, params)
         con.commit()
         inserted = int(con.total_changes) - before  # numero reale di nuove righe
-    LOGGER.info("Inseriti %d chunk per progetto=%s, scope=%s, path=%s", inserted, project_slug, scope, path)
+    LOGGER.info(
+        "semantic.index.db_inserted",
+        extra={
+            "project_slug": project_slug,
+            "scope": scope,
+            "path": path,
+            "version": version,
+            "rows": len(rows),
+            "inserted": inserted,
+        },
+    )
     return inserted
 
 
@@ -227,10 +219,16 @@ def fetch_candidates(
                 meta = json.loads(meta_json) if meta_json else {}
             except json.JSONDecodeError:
                 meta = {}
-                LOGGER.warning("Meta JSON non valido: %s", meta_json)
+                LOGGER.warning(
+                    "kb_db.fetch.invalid_meta_json",
+                    extra={"project_slug": project_slug, "scope": scope},
+                )
             try:
                 emb = json.loads(emb_json) if emb_json else []
             except json.JSONDecodeError:
                 emb = []
-                LOGGER.warning("Embedding JSON non valido: %s", emb_json)
+                LOGGER.warning(
+                    "kb_db.fetch.invalid_embedding_json",
+                    extra={"project_slug": project_slug, "scope": scope},
+                )
             yield {"content": content, "meta": meta, "embedding": emb}
