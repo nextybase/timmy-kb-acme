@@ -26,7 +26,9 @@ from src.retriever import QueryParams, search
 
 
 class _DummyEmbeddings:
-    def embed_texts(self, texts: Iterable[str], *, model: str | None = None) -> List[List[float]]:  # type: ignore[override]
+    def embed_texts(
+        self, texts: Iterable[str], *, model: str | None = None
+    ) -> List[List[float]]:  # type: ignore[override]
         out: List[List[float]] = []
         for t in texts:
             # Vettore semplice e deterministico basato su hash locale (nessuna rete)
@@ -92,7 +94,12 @@ def main() -> None:
     emb = _DummyEmbeddings()
 
     rows: list[BenchRow] = []
-    raw_results: dict[str, Any] = {"runs": int(args.runs), "k": int(args.k), "candidates": candidates_list, "results": []}
+    raw_results: dict[str, Any] = {
+        "runs": int(args.runs),
+        "k": int(args.k),
+        "candidates": candidates_list,
+        "results": [],
+    }
 
     for cand in candidates_list:
         timings: list[float] = []
