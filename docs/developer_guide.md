@@ -1,7 +1,7 @@
 # Developer Guide
 <!-- cSpell:ignore dataclass -->
 
-> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb. ├ê orientata a uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
+> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb seguendo uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
 
 ---
 
@@ -9,9 +9,9 @@
 - [Architettura in breve](#architettura-in-breve)
 - [Fasi operative e facade `semantic.api`](#fasi-operative-e-facade-semanticapi)
 - [Regole di sicurezza I/O e path-safety](#regole-di-sicurezza-io-e-path-safety)
-- [Gestione errori, exit codes e osservabilit├á](#gestione-errori-exit-codes-e-osservabilit├á)
+- [Gestione errori, exit codes e osservabilità](#gestione-errori-exit-codes-e-osservabilità)
 - [Conversione Markdown: policy ufficiale](#conversione-markdown-policy-ufficiale)
-- [Qualit├á prima dei test (lint & format obbligatori)](#qualit├á-prima-dei-test-lint--format-obbligatori)
+- [Qualità prima dei test (lint & format obbligatori)](#Qualita├á-prima-dei-test-lint--format-obbligatori)
 - [Variabili ambiente e segreti](#variabili-ambiente-e-segreti)
 - [CI](#ci)
 - [Enrichment & vocabolario: comportamento fail-fast](#enrichment--vocabolario-comportamento-fail-fast)
@@ -20,14 +20,14 @@
 - [Retriever API e calibrazione](#retriever-api-e-calibrazione)
 - [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
 - [Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`](#tooling-gen_dummy_kbpy-e-retriever_calibratepy)
-- [Qualit├á del codice: lint, format, typing, test](#qualit├á-del-codice-lint-format-typing-test)
+- [Qualita├á del codice: lint, format, typing, test](#Qualita├á-del-codice-lint-format-typing-test)
 - [Linee guida di contributo](#linee-guida-di-contributo)
 
 ---
 
 ## Architettura in breve
 - Orchestratori (CLI e UI) gestiscono l'esperienza utente e coordinano i moduli.
-- `pipeline/*` fornisce utilit├á cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
+- `pipeline/*` fornisce utilita├á cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
 - `semantic/*` espone la facade `semantic.api` che coordina conversione PDF->MD, enrichment del frontmatter e indicizzazione.
 - Storage locale: workspace per cliente in `output/timmy-kb-<slug>/{raw, book, semantic, config, logs}`.
 - DB SQLite: Single Source of Truth (SSoT) per i tag in runtime (es. `semantic/tags.db`).
@@ -68,7 +68,7 @@ La facade `semantic.api` espone gli step principali:
 
 ---
 
-## Gestione errori, exit codes e osservabilit├á
+## Gestione errori, exit codes e osservabilita├á
 - Eccezioni tipizzate: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, ÔÇª) e includere contesto.
 - Contesto obbligatorio: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
 - Orchestratori CLI: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
@@ -89,7 +89,7 @@ pre-commit run fix-control-chars --all-files
 pre-commit run forbid-control-chars --all-files
 python scripts/forbid_control_chars.py --fix <path>
 ```
-## Qualit├á prima dei test (lint & format obbligatori)
+## Qualita├á prima dei test (lint & format obbligatori)
 
 Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
@@ -103,14 +103,14 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 - messaggi di log privi di segreti;
 - test esistenti non rotti.
 
-### Setup qualit├á locale (obbligatorio)
+### Setup Qualita├á locale (obbligatorio)
 
 1. Installa toolchain: `pip install -U pre-commit black isort flake8`.
 2. Attiva hook: `pre-commit install`.
 3. Editor (VS Code): abilita *format on save* con `black`, lint con `flake8`, `isort` profilo `black`, line-length 120.
 
 **Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatter├á automaticamente).
-Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualit├á per far arrivare al testing solo codice gi├á pulito.
+Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di Qualita├á per far arrivare al testing solo codice gi├á pulito.
 
 > Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/flake8; nessun segreto nei log".
 
@@ -142,9 +142,9 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
 - Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
 
-### Modalit├á DRY con `safe_pdfs`
+### Modalita├á DRY con `safe_pdfs`
 - Se il chiamante fornisce `safe_pdfs` (gi├á validati e risolti all'interno di `ctx.raw_dir`), `convert_files_to_structured_markdown(..., safe_pdfs=...)` evita qualsiasi discovery legacy e usa esattamente quell'elenco.
-- Restano invariate le garanzie: pathÔÇæsafety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
+- Restano invariate le garanzie: path-safety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
 
 ---
 
@@ -175,7 +175,7 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 ## Indexer & KPI DB (inserimenti reali)
 - `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run ÔåÆ `0`).
 - L'aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
- - Inizializzazione schema DB: eseguita una sola volta per run e in modalit├á fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` ├¿ `None` viene usato il percorso predefinito di `get_db_path()`).
+ - Inizializzazione schema DB: eseguita una sola volta per run e in Modalita├á fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` ├¿ `None` viene usato il percorso predefinito di `get_db_path()`).
 
 ### Indicizzazione parziale e telemetria
 - Mismatch lunghezze: se `len(embeddings) != len(contents)` si indicizza sul minimo comune (troncamento dei tre array); idempotenza e schema DB invariati.
@@ -201,11 +201,11 @@ semantic.index.done | phase_completed artifacts=0
 - `search` e `search_with_config` restano l'interfaccia per la ricerca completa dopo la calibrazione del limite con config o budget.
 
 ### Ottimizzazione trasparente e metriche
-- ShortÔÇæcircuit: se un candidato espone gi├á un embedding piatto `list[float]`, viene usato direttamente (niente normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
+- Short-circuit: se un candidato espone gi├á un embedding piatto `list[float]`, viene usato direttamente (niente normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
 - Log `retriever.metrics` include tempi `{total, embed, fetch, score_sort}` e contatori `coerce {short, normalized, skipped}`.
 - Vincoli su `QueryParams.candidate_limit`: intervallo valido `[500, 20000]`.
 
-### Procedura di calibrazione (p95 Ôåô, qualit├á invariata)
+### Procedura di calibrazione (p95 Ôåô, Qualita├á invariata)
 - Strumento: `scripts/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground-truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
 - Esecuzione rapida:
   - `make bench-retriever` (3 run, k=10, candidate_limit in `{500,1000,2000,5000,10000,20000}`; usa query integrate di fallback)
@@ -262,7 +262,7 @@ py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/da
 
 ---
 
-## Qualit├á del codice: lint, format, typing, test
+## Qualita├á del codice: lint, format, typing, test
 - Formatter/Lint: Black, isort, Ruff (config in `pyproject.toml`).
 - Typing: mypy/pyright; preferire type hints espliciti, no `Any` se evitabile.
 - Test: `pytest` con piramide unit ÔåÆ contract ÔåÆ smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
@@ -278,7 +278,7 @@ make test
 ---
 
 ## Linee guida di contributo
-1. Modifiche minime e reversibili: evitare refactor ampi senza necessit├á.
+1. Modifiche minime e reversibili: evitare refactor ampi senza necessita├á.
 2. Niente nuove dipendenze senza forte motivazione e consenso.
 3. Aggiornare la documentazione e il CHANGELOG per ogni modifica rilevante.
 4. Definition of Done: lint/format/type/test verdi; nessuna regressione osservata nei workflow E2E; log strutturati coerenti.
