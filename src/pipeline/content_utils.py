@@ -55,7 +55,7 @@ def _sorted_pdfs(cat_dir: Path) -> list[Path]:
     )
 
 
-def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path]) -> list[Path]:
+def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, slug: str | None = None) -> list[Path]:
     """Applica path-safety per-file e scarta symlink o path fuori perimetro.
 
     Mantiene l'ordinamento ricevuto.
@@ -65,11 +65,17 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path]) -> l
     for p in pdfs:
         try:
             if p.is_symlink():
-                log.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                log.warning(
+                    "pipeline.content.skip_symlink",
+                    extra={"slug": slug, "file_path": str(p)},
+                )
                 continue
             safe_p = ensure_within_and_resolve(raw_root, p)
         except Exception as e:  # pragma: no cover (error path)
-            log.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            log.warning(
+                "pipeline.content.skip_unsafe",
+                extra={"slug": slug, "file_path": str(p), "error": str(e)},
+            )
             continue
         out.append(safe_p)
     return out
@@ -253,7 +259,12 @@ def convert_files_to_structured_markdown(
     if safe_pdfs is not None:
         root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
     else:
-        root_pdfs = _filter_safe_pdfs(base, raw_root, sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()))
+        root_pdfs = _filter_safe_pdfs(
+            base,
+            raw_root,
+            sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()),
+            slug=getattr(ctx, "slug", None),
+        )
         cat_items = _iter_category_pdfs(raw_root)
 
     # PDF direttamente in raw/: produce un file aggregato
@@ -267,7 +278,9 @@ def convert_files_to_structured_markdown(
     for cat_dir, pdfs in cat_items:
         md_file = target / f"{cat_dir.name}.md"
         cat_dir_resolved = ensure_within_and_resolve(raw_root, cat_dir)
-        safe_list = pdfs if safe_pdfs is not None else _filter_safe_pdfs(base, raw_root, pdfs)
+        safe_list = (
+            pdfs if safe_pdfs is not None else _filter_safe_pdfs(base, raw_root, pdfs, slug=getattr(ctx, "slug", None))
+        )
         content = _render_category_markdown(cat_dir, safe_list, rel_base=cat_dir_resolved)
         safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
         written.add(md_file)
