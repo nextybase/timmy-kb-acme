@@ -170,7 +170,12 @@ def _is_seq_like(x: Any) -> bool:
     return hasattr(x, "__len__") and hasattr(x, "__getitem__") and not isinstance(x, (str, bytes))
 
 
-def _coerce_candidate_vector(raw_vec: Any, *, idx: int | None = None) -> list[float] | None:
+def _coerce_candidate_vector(
+    raw_vec: Any,
+    *,
+    idx: int | None = None,
+    stats: dict[str, int] | None = None,
+) -> list[float] | None:
     """Converte `raw_vec` in `list[float]` applicando:
     - Short-circuit se è già una sequenza numerica piatta (is_numeric_vector)
     - Normalizzazione SSoT altrimenti
@@ -181,17 +186,23 @@ def _coerce_candidate_vector(raw_vec: Any, *, idx: int | None = None) -> list[fl
       - None se il candidato va skippato (embedding invalido)
     """
     if raw_vec is None:
+        # Coerente con la logica precedente: vettore vuoto consente score 0.0
         return []
 
     # Short-circuit: già list/seq di numerici
     if is_numeric_vector(raw_vec):
         try:
-            return [float(v) for v in raw_vec]  # type: ignore[return-value]
+            v = [float(v) for v in raw_vec]  # type: ignore[return-value]
+            if stats is not None:
+                stats["short"] = stats.get("short", 0) + 1
+            return v
         except Exception:
             try:
                 LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
             except Exception:
                 pass
+            if stats is not None:
+                stats["skipped"] = stats.get("skipped", 0) + 1
             return None
 
     # Percorso standard: normalizzazione SSoT
@@ -202,6 +213,8 @@ def _coerce_candidate_vector(raw_vec: Any, *, idx: int | None = None) -> list[fl
             LOGGER.debug("skip.candidate.invalid_embedding", extra={"idx": idx})
         except Exception:
             pass
+        if stats is not None:
+            stats["skipped"] = stats.get("skipped", 0) + 1
         return None
 
     # Coerenza per sequenze piatte originali (evita interpretazioni scorrette)
@@ -243,14 +256,20 @@ def _coerce_candidate_vector(raw_vec: Any, *, idx: int | None = None) -> list[fl
                     LOGGER.debug("skip.candidate.invalid_embedding_non_numeric", extra={"idx": idx})
                 except Exception:
                     pass
+                if stats is not None:
+                    stats["skipped"] = stats.get("skipped", 0) + 1
                 return None
 
+    if stats is not None:
+        stats["normalized"] = stats.get("normalized", 0) + 1
     return v
 
 
 def _score_candidates(
     qv: Sequence[float],
     cands: Sequence[dict[str, Any]],
+    *,
+    stats: dict[str, int] | None = None,
 ) -> Iterable[tuple[dict[str, Any], int]]:
     """Produce coppie (item_dict, idx) con score coseno e indice per tie-break.
 
@@ -258,7 +277,7 @@ def _score_candidates(
     usa l'indice di enumerazione (idx ascendente).
     """
     for idx, c in enumerate(cands):
-        v = _coerce_candidate_vector(c.get("embedding"), idx=idx)
+        v = _coerce_candidate_vector(c.get("embedding"), idx=idx, stats=stats)
         if v is None:
             continue
         # v è [] o una lista di float valida
@@ -376,7 +395,8 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     n = len(cands)
 
     # 3) Scoring (generator) con indice per tie-break deterministico
-    scored_iter = _score_candidates(qv, cands)
+    coerce_stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
+    scored_iter = _score_candidates(qv, cands, stats=coerce_stats)
 
     # 4) Ordinamento e top-k con tie-break deterministico (score desc, idx asc)
     k = max(0, int(params.k))
@@ -395,7 +415,7 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     dt = (time.time() - t0) * 1000.0
     t_score_sort_ms = max(0.0, dt - t_emb_ms - t_fetch_ms)
 
-    # Logging metriche (campi chiave + timing)
+    # Logging metriche (campi chiave + timing + coerce)
     try:
         LOGGER.info(
             "retriever.metrics",
@@ -410,6 +430,11 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
                     "embed": float(t_emb_ms),
                     "fetch": float(t_fetch_ms),
                     "score_sort": float(t_score_sort_ms),
+                },
+                "coerce": {
+                    "short": int(coerce_stats.get("short", 0)),
+                    "normalized": int(coerce_stats.get("normalized", 0)),
+                    "skipped": int(coerce_stats.get("skipped", 0)),
                 },
             },
         )

@@ -9,6 +9,7 @@ import time
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
+from weakref import WeakKeyDictionary
 
 from kb_db import get_db_path as _get_db_path
 from kb_db import init_db as _init_kb_db
@@ -86,6 +87,28 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
     return base_dir, raw_dir, md_dir
 
 
+# --- feature detection cache per il converter (evita inspect ripetuti) ---
+_SUPPORTED_SAFE_PDFS: "WeakKeyDictionary[Any, bool]" = WeakKeyDictionary()
+
+
+def _converter_supports_safe_pdfs(func: Any) -> bool:
+    try:
+        return _SUPPORTED_SAFE_PDFS[func]
+    except Exception:
+        pass
+    try:
+        sig = inspect.signature(func)
+        supports = "safe_pdfs" in sig.parameters
+    except Exception:
+        supports = False
+    try:
+        _SUPPORTED_SAFE_PDFS[func] = supports
+    except Exception:
+        # best-effort: se non possiamo cache-are (oggetti non weakref-abili), ignora
+        pass
+    return supports
+
+
 def _call_convert_md(
     func: Any,
     ctx: _CtxShim,
@@ -101,17 +124,21 @@ def _call_convert_md(
     """
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
-    sig = inspect.signature(func)
-    params = sig.parameters
+
     kwargs: Dict[str, Any] = {}
-    if "md_dir" in params:
-        kwargs["md_dir"] = md_dir
-    if safe_pdfs is not None and "safe_pdfs" in params:
-        kwargs["safe_pdfs"] = safe_pdfs
+    # molti converter già accettano md_dir come keyword
     try:
-        bound = sig.bind_partial(ctx, **kwargs)
-        bound.apply_defaults()
-        func(*bound.args, **bound.kwargs)
+        if "md_dir" in inspect.signature(func).parameters:
+            kwargs["md_dir"] = md_dir
+    except Exception:
+        # se l'ispezione fallisce, tentiamo con nessuna kw e lasciamo a TypeError
+        pass
+
+    if safe_pdfs is not None and _converter_supports_safe_pdfs(func):
+        kwargs["safe_pdfs"] = safe_pdfs
+
+    try:
+        func(ctx, **kwargs)
     except TypeError as e:
         # Wrappa i TypeError (firma non compatibile) in ConversionError con contesto
         raise ConversionError(f"convert_md call failed: {e}", slug=ctx.slug, file_path=md_dir) from e
@@ -519,13 +546,16 @@ def index_markdown_to_db(
         vecs_raw = embeddings_client.embed_texts(contents)
         vecs = normalize_embeddings(vecs_raw)
 
+        # Accumulatori per un SOLO evento `semantic.index.skips` a fine fase
+        vectors_empty = 0  # drop per mismatch + per embeddings vuoti
+
         if len(vecs) == 0:
             logger.warning("semantic.index.no_embeddings", extra={"slug": slug, "count": 0})
             try:
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
-            # Aggregato skip (nessun embedding generato)
+            # Unico evento di skips per questo ramo
             logger.info(
                 "semantic.index.skips",
                 extra={
@@ -542,7 +572,7 @@ def index_markdown_to_db(
             )
             return 0
 
-        # Indicizzazione parziale su mismatch (senza abort)
+        # Indicizzazione parziale su mismatch (senza abort) — accumula vectors_empty
         if len(vecs) != len(contents):
             logger.warning(
                 "semantic.index.mismatched_embeddings",
@@ -552,19 +582,12 @@ def index_markdown_to_db(
             dropped_mismatch = (len(contents) - min_len) + (len(vecs) - min_len)
             if dropped_mismatch > 0:
                 logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped_mismatch})
-                logger.info(
-                    "semantic.index.skips",
-                    extra={
-                        "slug": slug,
-                        "skipped_io": skipped_io,
-                        "skipped_no_text": skipped_no_text,
-                        "vectors_empty": dropped_mismatch,
-                    },
-                )
+            vectors_empty += max(0, dropped_mismatch)
             contents = contents[:min_len]
             rel_paths = rel_paths[:min_len]
             vecs = vecs[:min_len]
 
+        # Filtro embeddings vuoti per-item — accumula vectors_empty
         filtered_contents: list[str] = []
         filtered_paths: list[str] = []
         filtered_vecs: list[list[float]] = []
@@ -575,23 +598,24 @@ def index_markdown_to_db(
             filtered_paths.append(rel_name)
             filtered_vecs.append(list(emb))
 
-        dropped = len(contents) - len(filtered_contents)
-        if dropped > 0 and len(filtered_contents) == 0:
+        dropped_empty = len(contents) - len(filtered_contents)
+        if dropped_empty > 0 and len(filtered_contents) == 0:
             # Compat test legacy + evento strutturato
             logger.warning("Primo vettore embedding vuoto", extra={"slug": slug})
             logger.warning("semantic.index.all_embeddings_empty", extra={"slug": slug, "count": len(vecs)})
+            vectors_empty += dropped_empty
             try:
                 m.set_artifacts(0)
             except Exception:
                 m.set_artifacts(None)
-            # Aggregato skip
+            # Unico evento di skips per questo ramo terminale
             logger.info(
                 "semantic.index.skips",
                 extra={
                     "slug": slug,
                     "skipped_io": skipped_io,
                     "skipped_no_text": skipped_no_text,
-                    "vectors_empty": dropped,
+                    "vectors_empty": int(vectors_empty),
                 },
             )
             ms = int((time.perf_counter() - start_ts) * 1000)
@@ -600,20 +624,22 @@ def index_markdown_to_db(
                 extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
-        if dropped > 0:
-            # Log strutturato + messaggio umano per i test (cerca 'scartati'/'dropped')
-            logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped})
-            logger.info("Embeddings scartati (dropped): %s", dropped)
 
-        # KPI aggregato sugli skip (solo se c'è almeno uno > 0)
-        if skipped_io > 0 or skipped_no_text > 0 or dropped > 0:
+        if dropped_empty > 0:
+            # Log umano + strutturato (senza replicare 'skips' qui)
+            logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped_empty})
+            logger.info("Embeddings scartati (dropped): %s", dropped_empty)
+        vectors_empty += max(0, dropped_empty)
+
+        # KPI aggregato sugli skip — EMESSO UNA SOLA VOLTA (se > 0)
+        if skipped_io > 0 or skipped_no_text > 0 or vectors_empty > 0:
             logger.info(
                 "semantic.index.skips",
                 extra={
                     "slug": slug,
-                    "skipped_io": skipped_io,
-                    "skipped_no_text": skipped_no_text,
-                    "vectors_empty": dropped,
+                    "skipped_io": int(skipped_io),
+                    "skipped_no_text": int(skipped_no_text),
+                    "vectors_empty": int(vectors_empty),
                 },
             )
 
