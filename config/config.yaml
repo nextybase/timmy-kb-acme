@@ -38,6 +38,6 @@ DATA_VER: null
 # Impostazioni efficaci per la ricerca top-k. Il valore viene applicato solo
 # se il chiamante non ha personalizzato QueryParams.candidate_limit.
 retriever:
-  candidate_limit: 2000         # default consigliato (calibrato su p95 vs 4000)
+  candidate_limit: 4000         # baseline consigliato (nessun override di default)
   auto_by_budget: false         # se true e latency_budget_ms > 0 usa la mappa euristica
   latency_budget_ms: 0          # budget (opz.) per auto_by_budget
