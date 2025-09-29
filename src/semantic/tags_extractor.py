@@ -68,7 +68,9 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
     copied = 0
     failures: list[tuple[Path, Path, str]] = []
-    pdfs: List[Path] = sorted_paths(src_dir.rglob("*.pdf"), base=src_dir)
+    pdfs: List[Path] = [
+        p for p in sorted_paths(src_dir.rglob("*"), base=src_dir) if p.is_file() and p.suffix.lower() == ".pdf"
+    ]
 
     for src in pdfs:
         try:

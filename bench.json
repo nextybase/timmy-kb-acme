@@ -1,0 +1,32 @@
+{
+  "runs": 3,
+  "k": 10,
+  "candidates": [
+    4000,
+    5000,
+    10000
+  ],
+  "results": [
+    {
+      "candidate_limit": 4000,
+      "p95_ms": 8.246450030128472,
+      "mean_ms": 6.495822224274485,
+      "hit_at_k": null,
+      "samples": 9
+    },
+    {
+      "candidate_limit": 5000,
+      "p95_ms": 9.019799996167421,
+      "mean_ms": 6.241788887160106,
+      "hit_at_k": null,
+      "samples": 9
+    },
+    {
+      "candidate_limit": 10000,
+      "p95_ms": 8.119050035020337,
+      "mean_ms": 6.206533341254625,
+      "hit_at_k": null,
+      "samples": 9
+    }
+  ]
+}

@@ -40,10 +40,9 @@ def build_markdown_headless(
     base = ctx_base if isinstance(ctx_base, Path) else get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base, log) or {}
 
-    # 3) Arricchimento frontmatter (opzionale se vocab vuoto)
-    enriched: List[Path] = []
-    if vocab:
-        enriched = enrich_frontmatter(ctx, log, vocab, slug=slug)
+    # 3) Arricchimento frontmatter: esegui SEMPRE anche con vocab vuoto
+    #    (titoli normalizzati devono essere impostati comunque)
+    enriched: List[Path] = enrich_frontmatter(ctx, log, vocab, slug=slug)
 
     # 4) SUMMARY.md + README.md + validazione directory MD
     write_summary_and_readme(ctx, log, slug=slug)

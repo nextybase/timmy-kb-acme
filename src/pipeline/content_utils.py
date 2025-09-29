@@ -48,7 +48,10 @@ def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
 
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
     # Nota: filtrato a valle in _filter_safe_pdfs (per base/raw_root)
-    return sorted(cat_dir.rglob("*.pdf"), key=lambda p: p.as_posix().lower())
+    return sorted(
+        (p for p in cat_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"),
+        key=lambda p: p.as_posix().lower(),
+    )
 
 
 def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path]) -> list[Path]:

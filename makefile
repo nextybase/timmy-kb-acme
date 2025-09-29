@@ -95,3 +95,7 @@ ci-safe: qa-safe
 # Benchmark leggerezza normalizzazione embeddings (retriever/semantic)
 bench: env-check
 	@$(PY) -m scripts.bench_embeddings_normalization
+
+# Benchmark retriever (locale, senza rete). Usa fallback di query integrate se non passi --queries
+bench-retriever: env-check
+	@$(PY) tools/retriever_benchmark.py --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000

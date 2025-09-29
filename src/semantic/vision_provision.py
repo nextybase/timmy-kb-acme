@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -363,17 +364,26 @@ def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
     else:
         raise ConfigError(f"OpenAI client: modalità add_file non supportata: {add_mode!r}.")
 
+    completed_val: Optional[int] = None
     for _ in range(60):
         status = retrieve_vs(vs_id)
         file_counts = getattr(status, "file_counts", None)
         if isinstance(file_counts, dict):
-            completed = file_counts.get("completed")
+            completed_val = file_counts.get("completed")  # type: ignore[assignment]
         else:
-            completed = getattr(file_counts, "completed", None)
-        if completed and completed >= 1:
-            break
+            completed_val = getattr(file_counts, "completed", None)
+        if completed_val and int(completed_val) >= 1:
+            return vs_id
         time.sleep(0.5)
-    return vs_id
+
+    logging.getLogger("semantic.vision_provision").warning(
+        "vision.vector_store.timeout",
+        extra={"vs_id": vs_id, "pdf": str(pdf_path), "completed": int(completed_val or 0)},
+    )
+    raise ConfigError(
+        "Vector store non pronto: file non indicizzato entro il timeout",
+        file_path=str(pdf_path),
+    )
 
 
 def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str] = None) -> None:

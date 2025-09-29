@@ -158,11 +158,14 @@ def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> tupl
 
     safe: list[Path] = []
     discarded = 0
-    for candidate in sorted_paths(raw_dir.rglob("*.pdf"), base=raw_dir):
+    for candidate in sorted_paths(raw_dir.rglob("*"), base=raw_dir):
         try:
             if candidate.is_symlink():
                 logger.warning("semantic.convert.skip_symlink", extra={"slug": slug, "file_path": str(candidate)})
                 discarded += 1
+                continue
+            # Estensione PDF case-insensitive
+            if not candidate.is_file() or candidate.suffix.lower() != ".pdf":
                 continue
             # Verifica perimetro e risoluzione path (monkeypatchable nei test)
             ppath.ensure_within_and_resolve(raw_dir, candidate)
