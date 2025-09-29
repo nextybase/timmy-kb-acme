@@ -149,8 +149,6 @@ def ingest_path(
             extra={"event": "ingest.invalid_file", "file": str(p)},
         )
         return 0
-        LOGGER.error("ingest_path: non è un file valido: %s", path)
-        return 0
     if _is_binary(base, p):
         LOGGER.info(
             "ingest.skip.binary",
