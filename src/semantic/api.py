@@ -237,7 +237,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         if content_mds:
             ms = int((time.perf_counter() - start_ts) * 1000)
             logger.info(
-                "sem.convert_markdown.done",
+                "semantic.convert_markdown.done",
                 extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
             )
             return content_mds
@@ -318,7 +318,7 @@ def enrich_frontmatter(
             m.set_artifacts(None)
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
-        "sem.enrich_frontmatter.done",
+        "semantic.enrich_frontmatter.done",
         extra={"slug": slug, "ms": ms, "artifacts": {"updated": len(touched)}},
     )
     return touched
@@ -380,7 +380,7 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
         m.set_artifacts(2)
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
-        "sem.summary_readme.done",
+        "semantic.summary_readme.done",
         extra={"slug": slug, "ms": ms, "artifacts": {"summary": True, "readme": True}},
     )
 
@@ -440,7 +440,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
             m.set_artifacts(None)
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
-        "sem.book.done",
+        "semantic.book.done",
         extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(mds)}},
     )
     return mds
@@ -474,7 +474,7 @@ def index_markdown_to_db(
                 m.set_artifacts(None)
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
-            "sem.index.done",
+            "semantic.index.done",
             extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": 0}},
         )
         return 0
@@ -522,7 +522,7 @@ def index_markdown_to_db(
                 m.set_artifacts(None)
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
-            "sem.index.done",
+            "semantic.index.done",
             extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
         )
         return 0
@@ -567,7 +567,7 @@ def index_markdown_to_db(
             )
             ms = int((time.perf_counter() - start_ts) * 1000)
             logger.info(
-                "sem.index.done",
+                "semantic.index.done",
                 extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
@@ -620,7 +620,7 @@ def index_markdown_to_db(
             )
             ms = int((time.perf_counter() - start_ts) * 1000)
             logger.info(
-                "sem.index.done",
+                "semantic.index.done",
                 extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
@@ -667,7 +667,7 @@ def index_markdown_to_db(
         )
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
-            "sem.index.done",
+            "semantic.index.done",
             extra={"slug": slug, "ms": ms, "artifacts": {"inserted": inserted_total, "files": len(rel_paths)}},
         )
         try:

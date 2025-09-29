@@ -189,7 +189,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
     assert any("semantic.index.mismatched_embeddings" in m for m in msgs)
     assert any("semantic.index.embedding_pruned" in m for m in msgs)
     assert any("semantic.index.skips" in m for m in msgs)
-    assert any("sem.index.done" in m for m in msgs)
+    assert any("semantic.index.done" in m for m in msgs)
 
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):

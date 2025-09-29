@@ -8,7 +8,7 @@ Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da
 
 ## Comportamento rilevante (Indexing/Retriever)
 - Indicizzazione parziale: se `len(embeddings) != len(contents)` l'indice usa il minimo comune; nessun cambio di schema o API.
-- Telemetria run vuoti: rami "no files"/"no contents" entrano in `phase_scope` con `artifacts=0` e chiudono con `sem.index.done`.
+- Telemetria run vuoti: rami "no files"/"no contents" entrano in `phase_scope` con `artifacts=0` e chiudono con `semantic.index.done`.
 - Conversione DRY: se passi `safe_pdfs` già validati/risolti in `raw/`, la conversione usa solo quell'elenco (niente discovery) e pulisce `.md` orfani in modo idempotente.
 - Retriever: short‑circuit per embedding già `list[float]` (ranking invariato); log unico `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` e `coerce {short, normalized, skipped}`.
 

@@ -42,7 +42,7 @@ def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog
     # Verifica eventi chiave di telemetria
     msgs = [r.getMessage() for r in caplog.records]
     assert "semantic.index.no_files" in msgs, "manca evento no_files"
-    assert "sem.index.done" in msgs, "manca evento di completamento fase"
+    assert "semantic.index.done" in msgs, "manca evento di completamento fase"
     # Il phase_scope deve emettere start/completed anche in ramo 'no files'
     assert "phase_started" in msgs, "manca phase_started"
     assert "phase_completed" in msgs, "manca phase_completed"

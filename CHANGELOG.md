@@ -10,7 +10,7 @@
 
 ### Changed
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune); telemetria aggiornata con eventi `semantic.index.mismatched_embeddings` e `semantic.index.embedding_pruned`; unico `semantic.index.skips` aggregato con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
-- Telemetria phase_scope: i rami "no files" e "no contents" sono sempre tracciati con `artifact_count=0` e chiusura `sem.index.done`.
+- Telemetria phase_scope: i rami "no files" e "no contents" sono sempre tracciati con `artifact_count=0` e chiusura `semantic.index.done`.
 - Retriever: short‑circuit per embedding piatti `list[float]` (nessun impatto su ranking) e log `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` + `coerce {short, normalized, skipped}`.
 
 ### Added

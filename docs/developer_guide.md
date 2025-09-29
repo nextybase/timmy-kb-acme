@@ -184,13 +184,13 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
   - `semantic.index.embedding_pruned` con `dropped` totale.
   - Un solo `semantic.index.skips` (quando emesso) con chiavi sempre presenti: `{skipped_io, skipped_no_text, vectors_empty}`.
 - Run vuoti:
-  - Ramo "no files" e "no contents": sempre tracciati in `phase_scope` con `artifact_count=0` e chiusura `sem.index.done`.
+  - Ramo "no files" e "no contents": sempre tracciati in `phase_scope` con `artifact_count=0` e chiusura `semantic.index.done`.
 
 Esempio log (compatto)
 ```
 phase_started phase=index_markdown_to_db
 semantic.index.no_files | semantic.index.no_valid_contents
-sem.index.done | phase_completed artifacts=0
+semantic.index.done | phase_completed artifacts=0
 ```
 
 ---
