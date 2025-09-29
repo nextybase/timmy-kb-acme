@@ -1,7 +1,7 @@
-﻿# Developer Guide
+# Developer Guide
 <!-- cSpell:ignore dataclass -->
 
-> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb. Ãˆ orientata a uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
+> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb. ├ê orientata a uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
 
 ---
 
@@ -9,9 +9,9 @@
 - [Architettura in breve](#architettura-in-breve)
 - [Fasi operative e facade `semantic.api`](#fasi-operative-e-facade-semanticapi)
 - [Regole di sicurezza I/O e path-safety](#regole-di-sicurezza-io-e-path-safety)
-- [Gestione errori, exit codes e osservabilitÃ ](#gestione-errori-exit-codes-e-osservabilitÃ )
+- [Gestione errori, exit codes e osservabilit├á](#gestione-errori-exit-codes-e-osservabilit├á)
 - [Conversione Markdown: policy ufficiale](#conversione-markdown-policy-ufficiale)
-- [QualitÃ  prima dei test (lint & format obbligatori)](#qualitÃ -prima-dei-test-lint--format-obbligatori)
+- [Qualit├á prima dei test (lint & format obbligatori)](#qualit├á-prima-dei-test-lint--format-obbligatori)
 - [Variabili ambiente e segreti](#variabili-ambiente-e-segreti)
 - [CI](#ci)
 - [Enrichment & vocabolario: comportamento fail-fast](#enrichment--vocabolario-comportamento-fail-fast)
@@ -20,14 +20,14 @@
 - [Retriever API e calibrazione](#retriever-api-e-calibrazione)
 - [UI: tab Finanza (I/O sicuro e cleanup)](#ui-tab-finanza-io-sicuro-e-cleanup)
 - [Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`](#tooling-gen_dummy_kbpy-e-retriever_calibratepy)
-- [QualitÃ  del codice: lint, format, typing, test](#qualitÃ -del-codice-lint-format-typing-test)
+- [Qualit├á del codice: lint, format, typing, test](#qualit├á-del-codice-lint-format-typing-test)
 - [Linee guida di contributo](#linee-guida-di-contributo)
 
 ---
 
 ## Architettura in breve
 - Orchestratori (CLI e UI) gestiscono l'esperienza utente e coordinano i moduli.
-- `pipeline/*` fornisce utilitÃ  cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
+- `pipeline/*` fornisce utilit├á cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
 - `semantic/*` espone la facade `semantic.api` che coordina conversione PDF->MD, enrichment del frontmatter e indicizzazione.
 - Storage locale: workspace per cliente in `output/timmy-kb-<slug>/{raw, book, semantic, config, logs}`.
 - DB SQLite: Single Source of Truth (SSoT) per i tag in runtime (es. `semantic/tags.db`).
@@ -46,7 +46,7 @@ La facade `semantic.api` espone gli step principali:
 
 3. `load_reviewed_vocab(base_dir, logger)`
    - Risolve i percorsi con `ensure_within_and_resolve` su `semantic/` e `tags.db`.
-   - Se `tags.db` Ã¨ assente: restituisce `{}` e registra un log informativo (enrichment disabilitato).
+   - Se `tags.db` ├¿ assente: restituisce `{}` e registra un log informativo (enrichment disabilitato).
    - Lancia `ConfigError` solo per path non sicuri o DB illeggibile/corrotto (vedi sezione dedicata).
 
 4. `enrich_frontmatter(ctx, logger, vocab, slug)`
@@ -55,7 +55,7 @@ La facade `semantic.api` espone gli step principali:
 5. `index_markdown_to_db(ctx, logger, slug, scope, embeddings_client, db_path)`
    - Estrae chunk testuali, calcola embedding, scrive su DB (idempotente) e ritorna KPI coerenti.
 
-> Fase `build_markdown_book`: viene tracciata come singola fase che copre l'intero blocco `convert_markdown -> write_summary_and_readme -> load_reviewed_vocab -> enrich_frontmatter`. Il "successo Ã¨ emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
+> Fase `build_markdown_book`: viene tracciata come singola fase che copre l'intero blocco `convert_markdown -> write_summary_and_readme -> load_reviewed_vocab -> enrich_frontmatter`. Il "successo ├¿ emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
 
 ---
 
@@ -63,13 +63,13 @@ La facade `semantic.api` espone gli step principali:
 - Guardie obbligatorie: usare sempre `ensure_within` / `ensure_within_and_resolve` prima di accedere a file/dir derivati da input esterni o configurazioni.
 - Scritture atomiche: impiegare `safe_write_text`/`safe_write_bytes` per evitare file parziali e condizioni di gara.
 - Append sicuro: usare `safe_append_text` quando serve aggiungere righe (es. audit JSONL); gestisce path-safety, lock file e fsync opzionale.
-- No side-effects a import-time: i moduli non devono mutare `sys.path` nÃ© eseguire I/O quando importati.
+- No side-effects a import-time: i moduli non devono mutare `sys.path` n├® eseguire I/O quando importati.
 - Idempotenza: tutti gli step devono poter essere ri-eseguiti senza effetti collaterali (cleanup dei temporanei garantito anche in errore).
 
 ---
 
-## Gestione errori, exit codes e osservabilitÃ 
-- Eccezioni tipizzate: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, â€¦) e includere contesto.
+## Gestione errori, exit codes e osservabilit├á
+- Eccezioni tipizzate: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, ÔÇª) e includere contesto.
 - Contesto obbligatorio: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
 - Orchestratori CLI: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
 - `ClientContext.load(require_env=True)`: se le ENV obbligatorie mancano o sono vuote, solleva immediatamente `ConfigError` con messaggio chiaro (mai `KeyError`).
@@ -89,7 +89,7 @@ pre-commit run fix-control-chars --all-files
 pre-commit run forbid-control-chars --all-files
 python scripts/forbid_control_chars.py --fix <path>
 ```
-## QualitÃ  prima dei test (lint & format obbligatori)
+## Qualit├á prima dei test (lint & format obbligatori)
 
 Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
@@ -103,14 +103,14 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 - messaggi di log privi di segreti;
 - test esistenti non rotti.
 
-### Setup qualitÃ  locale (obbligatorio)
+### Setup qualit├á locale (obbligatorio)
 
 1. Installa toolchain: `pip install -U pre-commit black isort flake8`.
 2. Attiva hook: `pre-commit install`.
 3. Editor (VS Code): abilita *format on save* con `black`, lint con `flake8`, `isort` profilo `black`, line-length 120.
 
-**Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatterÃ  automaticamente).
-Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualitÃ  per far arrivare al testing solo codice giÃ  pulito.
+**Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatter├á automaticamente).
+Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualit├á per far arrivare al testing solo codice gi├á pulito.
 
 > Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/flake8; nessun segreto nei log".
 
@@ -130,27 +130,27 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 ---
 
 ## Conversione Markdown: policy ufficiale
-- Se `raw/` non esiste â†’ `ConfigError` con `file_path`.
+- Se `raw/` non esiste ÔåÆ `ConfigError` con `file_path`.
 - Se `raw/` non contiene PDF:
   - Non chiamare il converter (evita segnaposto).
-  - Se `book/` contiene giÃ  MD di contenuto â†’ restituiscili.
-  - Altrimenti â†’ `ConfigError` (fail-fast, con `file_path=raw/`).
-- Se ci sono PDF in `raw/` â†’ invocare sempre il converter.
+  - Se `book/` contiene gi├á MD di contenuto ÔåÆ restituiscili.
+  - Altrimenti ÔåÆ `ConfigError` (fail-fast, con `file_path=raw/`).
+- Se ci sono PDF in `raw/` ÔåÆ invocare sempre il converter.
 - Se in `raw/` i PDF trovati sono tutti non sicuri/symlink/fuori perimetro:
   - Non chiamare il converter.
   - Sollevare `ConfigError` con messaggio esplicito ("solo PDF non sicuri/fuori perimetro") e hint operativo a rimuovere i symlink o spostare i PDF reali dentro `raw/`.
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
 - Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
 
-### ModalitÃ  DRY con `safe_pdfs`
-- Se il chiamante fornisce `safe_pdfs` (giÃ  validati e risolti all'interno di `ctx.raw_dir`), `convert_files_to_structured_markdown(..., safe_pdfs=...)` evita qualsiasi discovery legacy e usa esattamente quell'elenco.
-- Restano invariate le garanzie: pathâ€‘safety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
+### Modalit├á DRY con `safe_pdfs`
+- Se il chiamante fornisce `safe_pdfs` (gi├á validati e risolti all'interno di `ctx.raw_dir`), `convert_files_to_structured_markdown(..., safe_pdfs=...)` evita qualsiasi discovery legacy e usa esattamente quell'elenco.
+- Restano invariate le garanzie: pathÔÇæsafety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
 
 ---
 
 ## Enrichment & vocabolario: comportamento fail-fast
-- SSoT runtime dei tag Ã¨ sotto `semantic/` (tipicamente DB). L'assenza del DB Ã¨ ok (nessun enrichment), restituisce `{}`.
-- Errori di path o I/O/DB durante il load â†’ `ConfigError` con `file_path` (fail-fast, niente fallback silenziosi).
+- SSoT runtime dei tag ├¿ sotto `semantic/` (tipicamente DB). L'assenza del DB ├¿ ok (nessun enrichment), restituisce `{}`.
+- Errori di path o I/O/DB durante il load ÔåÆ `ConfigError` con `file_path` (fail-fast, niente fallback silenziosi).
 - L'enrichment avviene nella fase estesa `build_markdown_book`; una failure blocca il "successo" della fase.
 
 ### Nota (Enrichment/Vocabolario - SQLite)
@@ -167,15 +167,15 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 - **Extra future**: la generazione di `tags_reviewed.yaml` resta fuori scope in questa fase e arrivera' in uno step dedicato alla revisione tassonomica.
 ## Vision Statement mapping
 - `semantic.vision_ai.generate(ctx, logger, slug)` risolve i percorsi con `ensure_within_and_resolve`, estrae il testo dal PDF con PyMuPDF e salva sempre uno snapshot (`semantic/vision_statement.txt`) prima di inviare il prompt strutturato al modello `gpt-4.1-mini`.
-- Lo YAML risultante (`semantic/semantic_mapping.yaml`) Ã¨ scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
+- Lo YAML risultante (`semantic/semantic_mapping.yaml`) ├¿ scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
 - `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` -> exit code 2).
 - I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON->YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).
 
 
 ## Indexer & KPI DB (inserimenti reali)
-- `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run â†’ `0`).
+- `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run ÔåÆ `0`).
 - L'aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
- - Inizializzazione schema DB: eseguita una sola volta per run e in modalitÃ  fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` Ã¨ `None` viene usato il percorso predefinito di `get_db_path()`).
+ - Inizializzazione schema DB: eseguita una sola volta per run e in modalit├á fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` ├¿ `None` viene usato il percorso predefinito di `get_db_path()`).
 
 ### Indicizzazione parziale e telemetria
 - Mismatch lunghezze: se `len(embeddings) != len(contents)` si indicizza sul minimo comune (troncamento dei tre array); idempotenza e schema DB invariati.
@@ -201,16 +201,16 @@ semantic.index.done | phase_completed artifacts=0
 - `search` e `search_with_config` restano l'interfaccia per la ricerca completa dopo la calibrazione del limite con config o budget.
 
 ### Ottimizzazione trasparente e metriche
-- Shortâ€‘circuit: se un candidato espone giÃ  un embedding piatto `list[float]`, viene usato direttamente (niente normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
+- ShortÔÇæcircuit: se un candidato espone gi├á un embedding piatto `list[float]`, viene usato direttamente (niente normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
 - Log `retriever.metrics` include tempi `{total, embed, fetch, score_sort}` e contatori `coerce {short, normalized, skipped}`.
 - Vincoli su `QueryParams.candidate_limit`: intervallo valido `[500, 20000]`.
 
-### Procedura di calibrazione (p95 â†“, qualitÃ  invariata)
+### Procedura di calibrazione (p95 Ôåô, qualit├á invariata)
 - Strumento: `scripts/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground-truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
 - Esecuzione rapida:
   - `make bench-retriever` (3 run, k=10, candidate_limit in `{500,1000,2000,5000,10000,20000}`; usa query integrate di fallback)
   - Oppure: `python scripts/retriever_benchmark.py --queries data/queries.json --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000 --slug x --scope book --db data/kb.sqlite`
-- Criterio decisione: scegli la configurazione con `p95` ridotto di almeno ~15% rispetto alla baseline (es. 4000) e perdita `hit@k â‰¤ 1%`.
+- Criterio decisione: scegli la configurazione con `p95` ridotto di almeno ~15% rispetto alla baseline (es. 4000) e perdita `hit@k Ôëñ 1%`.
 - Applicazione: aggiorna `config/config.yaml` sotto `retriever.candidate_limit`. Il valore viene applicato dal facade `with_config_or_budget(...)` solo quando il chiamante non ha impostato esplicitamente un limite diverso dal default.
 
 Esempio d'uso minimo:
@@ -262,10 +262,10 @@ py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/da
 
 ---
 
-## QualitÃ  del codice: lint, format, typing, test
+## Qualit├á del codice: lint, format, typing, test
 - Formatter/Lint: Black, isort, Ruff (config in `pyproject.toml`).
 - Typing: mypy/pyright; preferire type hints espliciti, no `Any` se evitabile.
-- Test: `pytest` con piramide unit â†’ contract â†’ smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
+- Test: `pytest` con piramide unit ÔåÆ contract ÔåÆ smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
 - Pre-commit: hook per lint/format/type e sicurezza (es. gitleaks); i commit devono passare tutti gli hook.
 
 Esecuzione locale suggerita:
@@ -278,19 +278,9 @@ make test
 ---
 
 ## Linee guida di contributo
-1. Modifiche minime e reversibili: evitare refactor ampi senza necessitÃ .
+1. Modifiche minime e reversibili: evitare refactor ampi senza necessit├á.
 2. Niente nuove dipendenze senza forte motivazione e consenso.
 3. Aggiornare la documentazione e il CHANGELOG per ogni modifica rilevante.
 4. Definition of Done: lint/format/type/test verdi; nessuna regressione osservata nei workflow E2E; log strutturati coerenti.
 
 > Per dubbi o proposte di evoluzione, apri una PR con descrizione completa (contesto, impatti, rischi, rollback) e riferimenti ai test/telemetria.
-
----
-
-## Eventi di logging (estratto)
-- pipeline.content.skip_symlink — extra: slug, ile_path.
-- pipeline.content.skip_unsafe — extra: slug, ile_path, error.
-- semantic.convert_markdown.done — extra: slug, ms, rtifacts={content_files} (unico per esecuzione).
-- semantic.index.db_inserted — extra: project_slug, scope, path, ersion, ows, inserted.
-- kb_db.fetch.invalid_meta_json — extra: project_slug, scope.
-- kb_db.fetch.invalid_embedding_json — extra: project_slug, scope.
