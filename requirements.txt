@@ -19,7 +19,7 @@ pydantic==2.7.1
 pydantic-settings==2.0.0
 python-dotenv==1.0.1
 python-slugify==8.0.4
-PyYAML==6.0.1
+PyYAML==6.0.3
 requests==2.32.2
 google-api-python-client==2.127.0
 google-auth-httplib2==0.2.0
