@@ -274,38 +274,6 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             return content_mds
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
 
-    if safe_pdfs:
-        # Caso con PDF: se non abbiamo ottenuto contenuti, è anomalia di conversione
-        if content_mds:
-            ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "semantic.convert_markdown.done",
-                extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(content_mds)}},
-            )
-            return content_mds
-        raise ConversionError(
-            "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
-            slug=slug,
-            file_path=book_dir,
-        )
-    else:
-        # Caso senza PDF validi
-        if discarded_unsafe > 0:
-            # RAW conteneva PDF ma tutti scartati per path-safety/symlink: fail-fast (niente riuso legacy)
-            raise ConfigError(
-                (
-                    "Trovati solo PDF non sicuri/fuori perimetro in RAW. "
-                    "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
-                ),
-                slug=slug,
-                file_path=raw_dir,
-            )
-        # Nessun PDF in RAW: se esistono contenuti preesistenti, restituisci quelli
-        if content_mds:
-            return content_mds
-        # RAW vuota (nessun PDF trovato)
-        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
-
 
 def enrich_frontmatter(
     context: ClientContextType,
