@@ -157,7 +157,7 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
     assert inserted == 2
 
 
-def test_index_markdown_to_db_mismatch_lengths_returns_0(tmp_path, caplog):
+def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog):
     import logging
     from typing import Any, cast
 
@@ -171,6 +171,7 @@ def test_index_markdown_to_db_mismatch_lengths_returns_0(tmp_path, caplog):
 
     class ShortEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            # solo 1 embedding per forzare mismatch con 2 contenuti
             return [np.array([1.0, 0.0])]
 
     caplog.set_level(logging.INFO)
@@ -182,7 +183,13 @@ def test_index_markdown_to_db_mismatch_lengths_returns_0(tmp_path, caplog):
         embeddings_client=ShortEmb(),
         db_path=tmp_path / "db_short.sqlite",
     )
-    assert ret == 0
+    # nuovo comportamento: indicizzazione parziale sul minimo comune
+    assert ret == 1
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("semantic.index.mismatched_embeddings" in m for m in msgs)
+    assert any("semantic.index.embedding_pruned" in m for m in msgs)
+    assert any("semantic.index.skips" in m for m in msgs)
+    assert any("sem.index.done" in m for m in msgs)
 
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
