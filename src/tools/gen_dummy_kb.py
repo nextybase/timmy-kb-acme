@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import types
 from pathlib import Path
 from typing import Optional
 
@@ -26,21 +27,27 @@ _write_tagging_readme = None
 _write_review_stub_from_csv = None
 _fin_import_csv = None
 
+# Cache interna delle dipendenze risolte; non influisce sui placeholder sopra (restano None)
+_DEPS: types.SimpleNamespace | None = None
+
 SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 
-def _ensure_dependencies() -> None:
-    """Carica le dipendenze runtime evitando effetti collaterali a import-time."""
-    global safe_write_bytes, safe_write_text, get_structured_logger, tail_path
-    global ensure_within, ensure_within_and_resolve, open_for_read_bytes_selfguard
-    global extract_semantic_candidates, render_tags_csv, load_semantic_config, normalize_tags
-    global _write_tagging_readme, _write_review_stub_from_csv, _fin_import_csv
+def _ensure_dependencies() -> types.SimpleNamespace:
+    """Carica le dipendenze runtime evitando side-effects a import-time.
 
-    if safe_write_text is not None:  # idempotente
-        return
+    - Inserisce `SRC_ROOT` in `sys.path` se assente (anche se le dipendenze sono già in cache).
+    - Risolve e cache le dipendenze alla prima chiamata; i placeholder globali restano None.
+    """
+    global _DEPS
 
-    if str(SRC_ROOT) not in sys.path:
-        sys.path.insert(0, str(SRC_ROOT))
+    # Assicura che `src/` sia importabile, senza duplicare voci
+    src_path = str(SRC_ROOT)
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+
+    if _DEPS is not None:
+        return _DEPS
 
     from pipeline.file_utils import safe_write_bytes as _swb
     from pipeline.file_utils import safe_write_text as _swt
@@ -61,82 +68,89 @@ def _ensure_dependencies() -> None:
     except Exception:
         _fic = None
 
-    # Bind espliciti per evitare false positive F824 su global non assegnati
-    safe_write_bytes = _swb
-    safe_write_text = _swt
-    get_structured_logger = _gsl
-    tail_path = _tail
-    ensure_within = _ew
-    ensure_within_and_resolve = _ewr
-    open_for_read_bytes_selfguard = _ofr
-    extract_semantic_candidates = _esc
-    render_tags_csv = _rtc
-    load_semantic_config = _lsc
-    normalize_tags = _nt
-    _write_tagging_readme = _wtr
-    _write_review_stub_from_csv = _wrs
-    _fin_import_csv = _fic
+    _DEPS = types.SimpleNamespace(
+        safe_write_bytes=_swb,
+        safe_write_text=_swt,
+        get_structured_logger=_gsl,
+        tail_path=_tail,
+        ensure_within=_ew,
+        ensure_within_and_resolve=_ewr,
+        open_for_read_bytes_selfguard=_ofr,
+        extract_semantic_candidates=_esc,
+        render_tags_csv=_rtc,
+        load_semantic_config=_lsc,
+        normalize_tags=_nt,
+        write_tagging_readme=_wtr,
+        write_tags_review_stub_from_csv=_wrs,
+        fin_import_csv=_fic,
+    )
+    return _DEPS
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Genera una knowledge base dummy per demo/test locali.")
-    p.add_argument("--slug", required=True, help="Slug cliente (es. acme)")
+    p.add_argument("--slug", default="timmy-kb-dummy", help="Slug KB (default: timmy-kb-dummy)")
     p.add_argument("--records", type=int, default=3, help="Numero di record fittizi finanziari (default: 3)")
     p.add_argument(
-        "--out",
+        "--base-dir",
         type=str,
-        default="",
-        help="Cartella base del workspace da generare (es. /tmp/kb). Se omessa usa output/timmy-kb-<slug>.",
+        default="output",
+        help="Cartella base in cui creare lo slug (default: output). Nei test usare tmp_path.",
     )
-    return p.parse_args()
+    return p.parse_args(argv)
+
+
+def make_workspace(slug: str, base_dir: str) -> Path:
+    """Ritorna la cartella base del workspace standard (base_dir/timmy-kb-<slug>). Idempotente."""
+    base = Path(base_dir).resolve()
+    base.mkdir(parents=True, exist_ok=True)
+    return base / f"timmy-kb-{slug}"
 
 
 def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path]:
     """Calcola i percorsi fondamentali del workspace dummy."""
-    _ensure_dependencies()
-    from semantic.api import get_paths  # import leggero
-
-    if base_override:
+    if base_override is not None:
         base = base_override
-        raw = base / "raw"
-        book = base / "book"
-        sem = base / "semantic"
-        return {"base": base, "raw": raw, "book": book, "sem": sem}
+    else:
+        # Fallback: usa la struttura standard di semantic.api (output/timmy-kb-<slug>)
+        _ensure_dependencies()
+        from semantic.api import get_paths  # import leggero
 
-    paths = get_paths(slug)
-    base = paths["base"]
-    raw = paths["raw"]
-    book = paths["book"]
+        paths = get_paths(slug)
+        base = paths["base"]
+
+    raw = base / "raw"
+    book = base / "book"
     sem = base / "semantic"
     return {"base": base, "raw": raw, "book": book, "sem": sem}
 
 
 def _write_dummy_docs(book: Path) -> None:
     """Crea due markdown fittizi nella cartella book/."""
-    _ensure_dependencies()
-    assert safe_write_text is not None
+    d = _ensure_dependencies()
+    assert d.safe_write_text is not None
     book.mkdir(parents=True, exist_ok=True)
-    safe_write_text(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
-    safe_write_text(book / "beta.md", "# Beta\n\n", encoding="utf-8", atomic=True)
+    d.safe_write_text(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
+    d.safe_write_text(book / "beta.md", "# Beta\n\n", encoding="utf-8", atomic=True)
 
 
 def _write_dummy_summary_readme(book: Path) -> None:
     """Genera SUMMARY.md e README.md fittizi per la knowledge base dummy."""
-    _ensure_dependencies()
-    assert safe_write_text is not None
-    safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
-    safe_write_text(book / "README.md", "# Dummy KB\n\n", encoding="utf-8", atomic=True)
+    d = _ensure_dependencies()
+    assert d.safe_write_text is not None
+    d.safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
+    d.safe_write_text(book / "README.md", "# Dummy KB\n\n", encoding="utf-8", atomic=True)
 
 
 def _maybe_write_dummy_finance(base: Path, records: int) -> None:
     """Opzionalmente crea un CSV finanziario dummy e lo importa con le API finance."""
-    _ensure_dependencies()
-    assert ensure_within is not None and safe_write_text is not None
+    d = _ensure_dependencies()
+    assert d.ensure_within is not None and d.safe_write_text is not None
     sem = base / "semantic"
-    ensure_within(base, sem)
+    d.ensure_within(base, sem)
     sem.mkdir(parents=True, exist_ok=True)
 
-    if _fin_import_csv is None or records <= 0:
+    if d.fin_import_csv is None or records <= 0:
         return
 
     # Genera CSV in modo atomico
@@ -150,23 +164,23 @@ def _maybe_write_dummy_finance(base: Path, records: int) -> None:
         wr.writerow(["m_revenue", f"2024Q{i%4+1}", i + 1])
 
     tmp = sem / "dummy-finance.csv"
-    safe_write_text(tmp, buf.getvalue(), encoding="utf-8", atomic=True)
+    d.safe_write_text(tmp, buf.getvalue(), encoding="utf-8", atomic=True)
     try:
-        _fin_import_csv(base, tmp)
+        d.fin_import_csv(base, tmp)
     finally:
         tmp.unlink(missing_ok=True)
 
 
-def main() -> int:
-    """Punto di ingresso CLI per generare un workspace dummy."""
-    args = _parse_args()
-    _ensure_dependencies()
-    assert get_structured_logger is not None
-    log = get_structured_logger("tools.gen_dummy_kb")
+def main(argv: list[str] | None = None) -> int:
+    """Punto di ingresso CLI per generare un workspace dummy (richiamabile dai test)."""
+    args = _parse_args(argv)
+    d = _ensure_dependencies()
+    assert d.get_structured_logger is not None
+    log = d.get_structured_logger("tools.gen_dummy_kb")
 
     try:
-        base_override = Path(args.out).resolve() if args.out else None
-        paths = _workspace_paths(args.slug, base_override)
+        ws_base = make_workspace(args.slug, args.base_dir)
+        paths = _workspace_paths(args.slug, ws_base)
         # Crea le directory minime
         paths["base"].mkdir(parents=True, exist_ok=True)
         paths["raw"].mkdir(parents=True, exist_ok=True)

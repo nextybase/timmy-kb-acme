@@ -1,6 +1,5 @@
 # tests/conftest.py
 import faulthandler
-import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, Mapping
@@ -34,14 +33,12 @@ def dummy_kb(tmp_path: Path) -> Mapping[str, Path]:
     # Percorso script di generazione (se presente)
     script = Path(__file__).parents[1] / "src" / "tools" / "gen_dummy_kb.py"
     if script.exists():
-        subprocess.run(
-            [sys.executable, str(script), "--out", str(kb), "--slug", "dummy"],
-            check=True,
-        )
-        # Se lo script ha creato una root annidata (timmy-kb-dummy), usa quella
-        nested = kb / "timmy-kb-dummy"
-        if nested.exists():
-            kb = nested
+        # Usa l'entrypoint Python per evitare processi esterni e passare base-dir tmp
+        from src.tools.gen_dummy_kb import main as gen_dummy
+
+        base = kb
+        gen_dummy(["--base-dir", str(base), "--slug", "timmy-kb-dummy"])
+        kb = base / "timmy-kb-dummy"
     else:
         # Fallback minimo: crea le cartelle base
         (kb / "raw").mkdir(parents=True, exist_ok=True)
