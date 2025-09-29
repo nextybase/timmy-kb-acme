@@ -13,7 +13,7 @@ from pipeline.exceptions import ConfigError
 # verifichiamo che l'utility resti robusta in scenari di concorrenza e errori controllati.
 
 
-def test_safe_append_text_concurrent_threads(tmp_path: Path) -> None:
+def test_safe_append_text_concurrent_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "ws"
     base.mkdir()
     target = base / "logs" / "audit.log"
@@ -23,6 +23,13 @@ def test_safe_append_text_concurrent_threads(tmp_path: Path) -> None:
     expected_tokens = [f"{tid}-{i}" for tid in range(thread_count) for i in range(append_per_thread)]
     errors: list[Exception] = []
     lock = threading.Lock()
+
+    # Verifica che non venga chiamato safe_write_text (semantica nuova: append diretto)
+    monkeypatch.setattr(
+        file_utils,
+        "safe_write_text",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("safe_write_text should not be called")),
+    )
 
     def worker(tid: int) -> None:
         for i in range(append_per_thread):
@@ -55,19 +62,17 @@ def test_safe_append_text_failure_leaves_file_intact(tmp_path: Path, monkeypatch
     file_utils.safe_append_text(base, target, "seed\n")
     original = target.read_text(encoding="utf-8")
 
-    original_safe_write = file_utils.safe_write_text
+    # Simula failure in append (open/append) senza leggere l'intero file
+    import builtins as _bi  # local import per monkeypatch selettivo
 
-    def flaky_safe_write(
-        path: Path,
-        data: str,
-        *,
-        encoding: str = "utf-8",
-        atomic: bool = True,
-        fsync: bool = False,
-    ) -> None:
-        raise ConfigError("simulated failure", file_path=str(path))
+    _orig_open = _bi.open
 
-    monkeypatch.setattr(file_utils, "safe_write_text", flaky_safe_write)
+    def flaky_open(path, mode="r", *args, **kwargs):  # type: ignore[no-untyped-def]
+        if str(path) == str(target) and "a" in str(mode):
+            raise ConfigError("simulated failure", file_path=str(path))
+        return _orig_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(_bi, "open", flaky_open)
 
     with pytest.raises(ConfigError):
         file_utils.safe_append_text(base, target, "second\n", lock_timeout=0.1)
@@ -76,6 +81,7 @@ def test_safe_append_text_failure_leaves_file_intact(tmp_path: Path, monkeypatch
     lock_path = target.parent / f"{target.name}.lock"
     assert not lock_path.exists()
 
-    monkeypatch.setattr(file_utils, "safe_write_text", original_safe_write)
+    # Ripristina open originale e verifica append successivo
+    monkeypatch.setattr(_bi, "open", _orig_open)
     file_utils.safe_append_text(base, target, "tail\n")
     assert target.read_text(encoding="utf-8") == original + "tail\n"

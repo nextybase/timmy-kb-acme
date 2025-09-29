@@ -213,7 +213,7 @@ def safe_append_text(
     lock_timeout: float = 5.0,
     fsync: bool = False,
 ) -> None:
-    """Appende testo in modo sicuro usando path-safety, lock file e scrittura atomica.
+    """Appende testo in modo sicuro usando path-safety, lock file e append diretto.
 
     Nota: su Windows può emergere PermissionError durante create/unlink concorrenti
     del lock file. Lo trattiamo come contesa del lock (al pari di FileExistsError),
@@ -280,25 +280,23 @@ def safe_append_text(
             ) from exc
 
     try:
-        if resolved.exists():
-            try:
-                existing = resolved.read_text(encoding=encoding)
-            except Exception as exc:
-                raise ConfigError(
-                    f"Impossibile leggere il file prima dell'append: {exc}",
-                    file_path=str(resolved),
-                ) from exc
-        else:
-            existing = ""
-
-        # Scrittura atomica del contenuto (append simulato: read + write atomico)
-        safe_write_text(
-            resolved,
-            existing + data,
-            encoding=encoding,
-            atomic=True,
-            fsync=fsync,
-        )
+        try:
+            with open(resolved, "a", encoding=encoding, newline="") as f:
+                f.write(data)
+                if fsync:
+                    try:
+                        f.flush()
+                    except Exception:
+                        pass
+                    _fsync_file(f.fileno(), path=resolved, strict=True)
+                else:
+                    _fsync_file(f.fileno(), path=resolved, strict=False)
+            _fsync_dir_best_effort(resolved.parent)
+        except Exception as exc:
+            raise ConfigError(
+                f"Append fallito: {exc}",
+                file_path=str(resolved),
+            ) from exc
     finally:
         if lock_fd is not None:
             try:
