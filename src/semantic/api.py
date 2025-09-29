@@ -164,6 +164,9 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
 
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
+    # NEW: Guard-rail — RAW deve essere una directory (fail-fast tipizzato)
+    if not raw_dir.is_dir():
+        raise ConfigError(f"Percorso RAW non è una directory: {raw_dir}", slug=slug, file_path=raw_dir)
 
     book_dir.mkdir(parents=True, exist_ok=True)
     shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
@@ -421,7 +424,13 @@ def index_markdown_to_db(
 
     files = list_content_markdown(book_dir)
     if not files:
-        logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
+        # NEW: telemetria completa anche su branch "vuoto"
+        with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
+            logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
             "sem.index.done",
@@ -453,18 +462,23 @@ def index_markdown_to_db(
         rel_paths.append(f.name)
 
     if not contents:
-        logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
-        # Anche in caso di 0 contenuti, emettiamo l’aggregato degli skip se presente
-        if skipped_io > 0 or skipped_no_text > 0:
-            logger.info(
-                "semantic.index.skips",
-                extra={
-                    "slug": slug,
-                    "skipped_io": skipped_io,
-                    "skipped_no_text": skipped_no_text,
-                    "vectors_empty": 0,
-                },
-            )
+        # NEW: phase_scope anche su "no contents"
+        with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
+            logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
+            if skipped_io > 0 or skipped_no_text > 0:
+                logger.info(
+                    "semantic.index.skips",
+                    extra={
+                        "slug": slug,
+                        "skipped_io": skipped_io,
+                        "skipped_no_text": skipped_no_text,
+                        "vectors_empty": 0,
+                    },
+                )
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
             "sem.index.done",
@@ -513,32 +527,29 @@ def index_markdown_to_db(
                 extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
             )
             return 0
+
+        # NEW: indicizzazione parziale su mismatch (senza abort)
         if len(vecs) != len(contents):
             logger.warning(
                 "semantic.index.mismatched_embeddings",
-                extra={"slug": slug, "count": len(vecs)},
+                extra={"slug": slug, "embeddings": len(vecs), "contents": len(contents)},
             )
-            try:
-                m.set_artifacts(0)
-            except Exception:
-                m.set_artifacts(None)
-            # Aggregato skip in caso di mismatch
-            dropped_mismatch = max(0, len(contents) - len(vecs))
-            logger.info(
-                "semantic.index.skips",
-                extra={
-                    "slug": slug,
-                    "skipped_io": skipped_io,
-                    "skipped_no_text": skipped_no_text,
-                    "vectors_empty": dropped_mismatch,
-                },
-            )
-            ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "sem.index.done",
-                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
-            )
-            return 0
+            min_len = min(len(vecs), len(contents))
+            dropped_mismatch = (len(contents) - min_len) + (len(vecs) - min_len)
+            if dropped_mismatch > 0:
+                logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped_mismatch})
+                logger.info(
+                    "semantic.index.skips",
+                    extra={
+                        "slug": slug,
+                        "skipped_io": skipped_io,
+                        "skipped_no_text": skipped_no_text,
+                        "vectors_empty": dropped_mismatch,
+                    },
+                )
+            contents = contents[:min_len]
+            rel_paths = rel_paths[:min_len]
+            vecs = vecs[:min_len]
 
         filtered_contents: list[str] = []
         filtered_paths: list[str] = []
