@@ -6,6 +6,31 @@ Pipeline per la generazione di una Knowledge Base Markdown AI-ready a partire da
 
 > See also: [Architecture](docs/architecture.md).
 
+## Comportamento rilevante (Indexing/Retriever)
+- Indicizzazione parziale: se `len(embeddings) != len(contents)` l'indice usa il minimo comune; nessun cambio di schema o API.
+- Telemetria run vuoti: rami "no files"/"no contents" entrano in `phase_scope` con `artifacts=0` e chiudono con `sem.index.done`.
+- Conversione DRY: se passi `safe_pdfs` già validati/risolti in `raw/`, la conversione usa solo quell'elenco (niente discovery) e pulisce `.md` orfani in modo idempotente.
+- Retriever: short‑circuit per embedding già `list[float]` (ranking invariato); log unico `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` e `coerce {short, normalized, skipped}`.
+
+Esempi log compatti
+```
+semantic.index.mismatched_embeddings  embeddings=1 contents=2
+semantic.index.embedding_pruned dropped=1
+semantic.index.skips skipped_io=0 skipped_no_text=0 vectors_empty=1
+```
+
+Per dettagli vedi anche: `docs/developer_guide.md` (Indexer & Retriever) e la nuova sezione Troubleshooting in `docs/index.md`.
+
+## Troubleshooting
+
+### "Percorso RAW non è una directory: <path>"
+- Causa: il percorso `raw/` non esiste o punta a un file; oppure path non sicuro.
+- Azione: crea `output/timmy-kb-<slug>/raw/` (directory, non file), verifica permessi e path‑safety (`ensure_within*/resolve`).
+
+### Indicizzazione senza contenuti ("no contents")
+- Sintomi: `phase_scope` con `artifact_count=0`, log `semantic.index.no_valid_contents` e (se presenti) unico `semantic.index.skips` con `{skipped_io, skipped_no_text, vectors_empty}`.
+- Azione: verifica i `.md` in `book/` (non vuoti), controlla warning `semantic.index.read_failed` ed esito del client embeddings (no vettori vuoti).
+
 ## Novità v1.9.5
 
 - Vision Statement pipeline: `src/semantic/vision_ai.py` estrae il testo dal PDF, lo salva in `semantic/vision_statement.txt` e genera il mapping JSON/YAML via `gpt-4.1-mini`.

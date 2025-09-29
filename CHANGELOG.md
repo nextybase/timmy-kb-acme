@@ -8,6 +8,17 @@
 ### Pending
 - Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
 
+### Changed
+- Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune); telemetria aggiornata con eventi `semantic.index.mismatched_embeddings` e `semantic.index.embedding_pruned`; unico `semantic.index.skips` aggregato con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
+- Telemetria phase_scope: i rami "no files" e "no contents" sono sempre tracciati con `artifact_count=0` e chiusura `sem.index.done`.
+- Retriever: short‑circuit per embedding piatti `list[float]` (nessun impatto su ranking) e log `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` + `coerce {short, normalized, skipped}`.
+
+### Added
+- Test: mismatch parziale in indexing, invariance ranking (short‑circuit vs normalize), metriche `coerce`, e caso "no contents → artifacts=0".
+
+### Compatibility
+- Nessun breaking change; API pubbliche invariate (semantic.api, retriever, content_utils) e schema DB stabile.
+
 
 ## [1.9.7] - 2025-09-28
 

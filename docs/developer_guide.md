@@ -142,6 +142,10 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
 - Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
 
+### Modalità DRY con `safe_pdfs`
+- Se il chiamante fornisce `safe_pdfs` (già validati e risolti all'interno di `ctx.raw_dir`), `convert_files_to_structured_markdown(..., safe_pdfs=...)` evita qualsiasi discovery legacy e usa esattamente quell'elenco.
+- Restano invariate le garanzie: path‑safety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
+
 ---
 
 ## Enrichment & vocabolario: comportamento fail-fast
@@ -173,12 +177,33 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 - L'aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per coerenti KPI/telemetria.
  - Inizializzazione schema DB: eseguita una sola volta per run e in modalità fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` è `None` viene usato il percorso predefinito di `get_db_path()`).
 
+### Indicizzazione parziale e telemetria
+- Mismatch lunghezze: se `len(embeddings) != len(contents)` si indicizza sul minimo comune (troncamento dei tre array); idempotenza e schema DB invariati.
+- Log emessi:
+  - `semantic.index.mismatched_embeddings` con i conteggi `embeddings`/`contents`.
+  - `semantic.index.embedding_pruned` con `dropped` totale.
+  - Un solo `semantic.index.skips` (quando emesso) con chiavi sempre presenti: `{skipped_io, skipped_no_text, vectors_empty}`.
+- Run vuoti:
+  - Ramo "no files" e "no contents": sempre tracciati in `phase_scope` con `artifact_count=0` e chiusura `sem.index.done`.
+
+Esempio log (compatto)
+```
+phase_started phase=index_markdown_to_db
+semantic.index.no_files | semantic.index.no_valid_contents
+sem.index.done | phase_completed artifacts=0
+```
+
 ---
 
 ## Retriever API e calibrazione
 - `QueryParams` e' la dataclass SSoT per impostare la ricerca: richiede `project_slug`, `scope`, `query`, `k` e `candidate_limit`, con `db_path` opzionale per puntare a un DB specifico.
 - `retrieve_candidates(params)` valida i parametri come la search reale e recupera i chunk grezzi tramite `fetch_candidates`, emettendo log strutturati `retriever.raw_candidates`.
 - `search` e `search_with_config` restano l'interfaccia per la ricerca completa dopo la calibrazione del limite con config o budget.
+
+### Ottimizzazione trasparente e metriche
+- Short‑circuit: se un candidato espone già un embedding piatto `list[float]`, viene usato direttamente (niente normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
+- Log `retriever.metrics` include tempi `{total, embed, fetch, score_sort}` e contatori `coerce {short, normalized, skipped}`.
+- Vincoli su `QueryParams.candidate_limit`: intervallo valido `[500, 20000]`.
 
 Esempio d'uso minimo:
 
