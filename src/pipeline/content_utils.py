@@ -34,15 +34,16 @@ def _titleize(name: str) -> str:
     return " ".join(p.capitalize() for p in parts) if parts else name
 
 
-def _ensure_safe(base_dir: Path, candidate: Path) -> Path:
+def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) -> Path:
     """Wrapper che applica path-safety (via ensure_within) e restituisce il path risolto.
 
-    Mappa gli errori di configurazione in PipelineError per coerenza call-site.
+    Mappa gli errori di configurazione in PipelineError per coerenza call-site,
+    includendo sempre lo `slug` quando disponibile.
     """
     try:
         ensure_within(base_dir, candidate)
     except ConfigError as e:
-        raise PipelineError(f"Unsafe directory: {candidate}", file_path=str(candidate)) from e
+        raise PipelineError(f"Unsafe directory: {candidate}", slug=slug, file_path=str(candidate)) from e
     return Path(candidate).resolve()
 
 
@@ -160,7 +161,7 @@ def _render_category_markdown(cat_dir: Path, pdfs: list[Path], *, rel_base: Path
 def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     """Verifica che la cartella markdown esista, sia una directory e sia 'safe' rispetto a ctx.base_dir."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input)
+    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
 
     if not target.exists():
         raise PipelineError(
@@ -180,7 +181,7 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
 def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     """Crea (o sovrascrive) README.md nella cartella markdown target."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input)
+    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
@@ -197,7 +198,7 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
 def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e SUMMARY.md)."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input)
+    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     summary = target / "SUMMARY.md"
@@ -228,8 +229,8 @@ def convert_files_to_structured_markdown(
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
 
     # sicurezza percorso per target e raw_root
-    target = _ensure_safe(base, target_input)
-    raw_root = _ensure_safe(base, raw_root)
+    target = _ensure_safe(base, target_input, slug=getattr(ctx, "slug", None))
+    raw_root = _ensure_safe(base, raw_root, slug=getattr(ctx, "slug", None))
 
     target.mkdir(parents=True, exist_ok=True)
 

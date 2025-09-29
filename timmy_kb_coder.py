@@ -100,12 +100,23 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
     try:
         # Preferisci OPENAI_API_KEY se presente; altrimenti fallback alla CODEX senza mutare l'ambiente
         if api_key:
+            # Sorgente chiavi: env standard
+            LOGGER.info(
+                "embeddings.api_key",
+                extra={"event": "embeddings.api_key", "source": "env"},
+            )
             return OpenAIEmbeddings()
         # Fallback soft: usa la CODEX per costruire il client embeddings
-        LOGGER.info("embeddings.api_key.source=codex_fallback")
+        LOGGER.info(
+            "embeddings.api_key",
+            extra={"event": "embeddings.api_key", "source": "codex_fallback"},
+        )
         return OpenAIEmbeddings(api_key=api_key_codex)
     except Exception as e:  # pragma: no cover - mostra feedback in UI
-        LOGGER.exception("Errore init embeddings: %s", e)
+        LOGGER.exception(
+            "coder.embeddings.error",
+            extra={"event": "coder.embeddings.error", "error": str(e)},
+        )
         st.error(f"Errore init embeddings: {e}")
         return None
 
@@ -117,7 +128,14 @@ def _load_client_cfg(slug: str) -> Dict[str, Any]:
         cfg = get_client_config(ctx) or {}
         return cfg if isinstance(cfg, dict) else {}
     except Exception as e:
-        LOGGER.info("Config cliente non disponibile per slug=%s: %s", slug, e)
+        LOGGER.info(
+            "coder.config.unavailable",
+            extra={
+                "event": "coder.config.unavailable",
+                "slug": slug,
+                "error": str(e),
+            },
+        )
         return {}
 
 
@@ -169,9 +187,30 @@ def main() -> None:
                 cfg = _load_client_cfg(project_slug)
                 retrieved = search_with_config(params, cfg, emb_client)
             except Exception as e:  # pragma: no cover - mostra feedback in UI
-                LOGGER.exception("Errore nella ricerca: %s", e)
+                LOGGER.exception(
+                    "coder.search.error",
+                    extra={
+                        "event": "coder.search.error",
+                        "slug": project_slug,
+                        "scope": scope,
+                        "error": str(e),
+                    },
+                )
                 st.error(f"Errore nella ricerca: {e}")
                 retrieved = []
+        # Riepilogo risultati (anche se vuoto)
+        try:
+            LOGGER.info(
+                "coder.search.summary",
+                extra={
+                    "event": "coder.search.summary",
+                    "slug": project_slug,
+                    "scope": scope,
+                    "results": int(len(retrieved or [])),
+                },
+            )
+        except Exception:
+            pass
         prompt = build_prompt(next_premise, coding_rules, task, retrieved)
         st.code(prompt, language="markdown")
         path = write_request(prompt)

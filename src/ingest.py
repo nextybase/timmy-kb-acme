@@ -34,8 +34,18 @@ def _read_text_file(base_dir: Path, p: Path) -> Optional[str]:
             try:
                 return cast(str, read_text_safe(base_dir, p, encoding=enc))
             except (UnicodeDecodeError, OSError):
-                LOGGER.debug("Fallback di codifica fallito per %s con %s", p, enc)
-        LOGGER.warning("Impossibile leggere file di testo: %s", p)
+                LOGGER.debug(
+                    "ingest.read.fallback_failed",
+                    extra={
+                        "event": "ingest.read.fallback_failed",
+                        "file": str(p),
+                        "encoding": enc,
+                    },
+                )
+        LOGGER.warning(
+            "ingest.read.failed_text",
+            extra={"event": "ingest.read.failed_text", "file": str(p)},
+        )
         return None
 
 
@@ -134,10 +144,18 @@ def ingest_path(
     p = Path(path)
     base = Path(base_dir) if base_dir is not None else p.parent
     if not p.exists() or not p.is_file():
+        LOGGER.error(
+            "ingest.invalid_file",
+            extra={"event": "ingest.invalid_file", "file": str(p)},
+        )
+        return 0
         LOGGER.error("ingest_path: non è un file valido: %s", path)
         return 0
     if _is_binary(base, p):
-        LOGGER.info("File binario saltato: %s", path)
+        LOGGER.info(
+            "ingest.skip.binary",
+            extra={"event": "ingest.skip.binary", "file": str(p)},
+        )
         return 0
     text = _read_text_file(base, p)
     if text is None:
@@ -161,11 +179,14 @@ def ingest_path(
         )
     )
     LOGGER.info(
-        "ingest_path: %s -> %d chunk salvati per progetto=%s scope=%s",
-        path,
-        inserted,
-        project_slug,
-        scope,
+        "ingest.file.saved",
+        extra={
+            "event": "ingest.file.saved",
+            "project": project_slug,
+            "scope": scope,
+            "file": str(p),
+            "chunks": inserted,
+        },
     )
     return inserted
 
@@ -187,11 +208,14 @@ def ingest_folder(
     # Short-circuit su input vuoto
     if not files:
         LOGGER.info(
-            "Riepilogo ingest_folder: files=%d chunks=%d scope=%s project=%s",
-            0,
-            0,
-            scope,
-            project_slug,
+            "ingest.summary",
+            extra={
+                "event": "ingest.summary",
+                "project": project_slug,
+                "scope": scope,
+                "files": 0,
+                "chunks": 0,
+            },
         )
         return {"files": 0, "chunks": 0}
 
@@ -215,13 +239,25 @@ def ingest_folder(
                 total_chunks += n
                 count_files += 1
         except Exception as e:  # ingest robusto
-            LOGGER.exception("Errore durante ingestion di %s: %s", p, e)
+            LOGGER.exception(
+                "ingest.error",
+                extra={
+                    "event": "ingest.error",
+                    "file": str(p),
+                    "scope": scope,
+                    "project": project_slug,
+                    "error": str(e),
+                },
+            )
             continue
     LOGGER.info(
-        "Riepilogo ingest_folder: files=%d chunks=%d scope=%s project=%s",
-        count_files,
-        total_chunks,
-        scope,
-        project_slug,
+        "ingest.summary",
+        extra={
+            "event": "ingest.summary",
+            "project": project_slug,
+            "scope": scope,
+            "files": count_files,
+            "chunks": total_chunks,
+        },
     )
     return {"files": count_files, "chunks": total_chunks}

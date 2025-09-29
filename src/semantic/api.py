@@ -251,10 +251,8 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         )
     else:
         # Caso senza PDF validi
-        if content_mds:
-            return content_mds
         if discarded_unsafe > 0:
-            # RAW conteneva PDF ma tutti scartati per path-safety/symlink
+            # RAW conteneva PDF ma tutti scartati per path-safety/symlink: fail-fast (niente riuso legacy)
             raise ConfigError(
                 (
                     "Trovati solo PDF non sicuri/fuori perimetro in RAW. "
@@ -263,6 +261,9 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                 slug=slug,
                 file_path=raw_dir,
             )
+        # Nessun PDF in RAW: se esistono contenuti preesistenti, restituisci quelli
+        if content_mds:
+            return content_mds
         # RAW vuota (nessun PDF trovato)
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
 
