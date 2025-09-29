@@ -33,3 +33,11 @@ DATA_VER: null
 
 # === Policy aggiuntive / estensioni future ===
 # (Aggiungi qui ulteriori parametri pipeline editabili)
+
+# === Retriever (calibrazione) ===
+# Impostazioni efficaci per la ricerca top-k. Il valore viene applicato solo
+# se il chiamante non ha personalizzato QueryParams.candidate_limit.
+retriever:
+  candidate_limit: 2000         # default consigliato (calibrato su p95 vs 4000)
+  auto_by_budget: false         # se true e latency_budget_ms > 0 usa la mappa euristica
+  latency_budget_ms: 0          # budget (opz.) per auto_by_budget
