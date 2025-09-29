@@ -9,6 +9,7 @@
 - Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
 
 ### Changed
+- Dev tooling: rinominata cartella root `tools/` in `scripts/`; aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`). Nessun impatto sul runtime package (resta intatto `src/tools/`).
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune); telemetria aggiornata con eventi `semantic.index.mismatched_embeddings` e `semantic.index.embedding_pruned`; unico `semantic.index.skips` aggregato con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
 - Telemetria phase_scope: i rami "no files" e "no contents" sono sempre tracciati con `artifact_count=0` e chiusura `semantic.index.done`.
 - File I/O:  `safe_append_text` passa ad append diretto O(1) per record (nessun read+rewrite); preservati lock e fsync opzionale; test aggiornati.
@@ -18,9 +19,11 @@
 - Test: mismatch parziale in indexing, invariance ranking (shortÃ¢â‚¬â€˜circuit vs normalize), metriche `coerce`, e caso "no contents Ã¢â€ â€™ artifacts=0".
 
 ### Compatibility
-- Nessun breaking change; API pubbliche invariate (semantic.api, retriever, content_utils) e schema DB stabile.
+- Nessun breaking change; API pubbliche invariate (semantic.api, retriever, content_utils) e schema DB stabile. Per gli script di sviluppo usa ora `scripts/` al posto di `tools/`.
 
 ### Fixed
+- `src/tools/gen_dummy_kb.py`: import-safety ripristinata (nessun binding a import-time; dipendenze risolte lazy via cache interna).
+- `src/tools/gen_dummy_kb.py`: allineato il percorso workspace a `output/timmy-kb-<slug>` per compatibilità con semantic.api e smoke E2E.
 - PDF discovery case-insensitive (.pdf/.PDF) in API, content_utils, tags_extractor.
 
 

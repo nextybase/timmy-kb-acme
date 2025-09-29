@@ -99,7 +99,7 @@ Quando chiedi a Codex di preparare un commit/push, vengono lanciati i controlli 
 - Pre‑commit (su tutti i file toccati o `-a`):
   - check‑yaml, end‑of‑file‑fixer, trailing‑whitespace, mixed‑line‑ending
   - Black, isort, Ruff (formattazione/lint)
-  - Hook locali: path‑safety/emit‑copy guards (tools/dev/*), gitleaks (secret scan)
+- Hook locali: path‑safety/emit‑copy guards (scripts/dev/*), gitleaks (secret scan)
   - cspell (README + docs)
 - Pre‑push (se richiesto o in CI):
   - mypy mirato (aree selezionate)

@@ -80,21 +80,21 @@ repos:
 
       - id: forbid-unsafe-file-reads
         name: Forbid unsafe file reads (open/read_text/read_bytes) outside path_utils/tests/scripts
-        entry: python tools/dev/check_no_unsafe_reads.py
+        entry: python scripts/dev/check_no_unsafe_reads.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
-        entry: python tools/dev/check_no_local_emit_or_copy.py
+        entry: python scripts/dev/check_no_local_emit_or_copy.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: qa-safe
         name: qa-safe (isort/black/ruff/mypy se presenti)
-        entry: python tools/dev/qa_safe.py
+        entry: python scripts/dev/qa_safe.py
         language: python
         additional_dependencies: ["black==24.8.0", "isort==5.13.2", "ruff", "mypy", "types-PyYAML"]
         pass_filenames: false
@@ -102,7 +102,7 @@ repos:
 
       - id: qa-safe-tests
         name: qa-safe --with-tests (pytest se presente)
-        entry: python tools/dev/qa_safe.py --with-tests
+        entry: python scripts/dev/qa_safe.py --with-tests
         language: python
         additional_dependencies:
           [

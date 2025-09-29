@@ -206,10 +206,10 @@ semantic.index.done | phase_completed artifacts=0
 - Vincoli su `QueryParams.candidate_limit`: intervallo valido `[500, 20000]`.
 
 ### Procedura di calibrazione (p95 ↓, qualità invariata)
-- Strumento: `tools/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground-truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
+- Strumento: `scripts/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground-truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
 - Esecuzione rapida:
   - `make bench-retriever` (3 run, k=10, candidate_limit in `{500,1000,2000,5000,10000,20000}`; usa query integrate di fallback)
-  - Oppure: `python tools/retriever_benchmark.py --queries data/queries.json --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000 --slug x --scope book --db data/kb.sqlite`
+  - Oppure: `python scripts/retriever_benchmark.py --queries data/queries.json --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000 --slug x --scope book --db data/kb.sqlite`
 - Criterio decisione: scegli la configurazione con `p95` ridotto di almeno ~15% rispetto alla baseline (es. 4000) e perdita `hit@k ≤ 1%`.
 - Applicazione: aggiorna `config/config.yaml` sotto `retriever.candidate_limit`. Il valore viene applicato dal facade `with_config_or_budget(...)` solo quando il chiamante non ha impostato esplicitamente un limite diverso dal default.
 

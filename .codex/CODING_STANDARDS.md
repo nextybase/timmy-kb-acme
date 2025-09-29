@@ -12,9 +12,9 @@
 ## Policy aggiuntive (pre-commit)
 
 - Vietato usare `assert` runtime in `src/` (consentiti nei test): usa eccezioni tipizzate (`PipelineError`, `ConfigError`, ...).
-  - Hook: `forbid-runtime-asserts` (tools/dev/forbid_runtime_asserts.py)
+  - Hook: `forbid-runtime-asserts` (scripts/dev/forbid_runtime_asserts.py)
 - Vietato `Path.write_text/Path.write_bytes` in `src/`: usa `safe_write_text/bytes` (scrittura atomica) dopo guardia `ensure_within`.
-  - Hook: `forbid-path-write-text-bytes` (tools/dev/forbid_path_writetext_bytes.py)
+  - Hook: `forbid-path-write-text-bytes` (scripts/dev/forbid_path_writetext_bytes.py)
 - SSoT path-safety: chi scrive/copia/elimina deve invocare `ensure_within(base, target)` prima dell’operazione.
 
 ## API di modulo e tipizzazione
