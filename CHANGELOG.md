@@ -1,7 +1,7 @@
-# Changelog â€“ Timmy-KB (Sintesi)
+# Changelog Ã¢â‚¬â€œ Timmy-KB (Sintesi)
 
 > Formato: **Keep a Changelog** e **SemVer**
-> Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualitÃ .
+> Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualitÃƒÂ .
 
 ## [Unreleased]
 
@@ -11,10 +11,11 @@
 ### Changed
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune); telemetria aggiornata con eventi `semantic.index.mismatched_embeddings` e `semantic.index.embedding_pruned`; unico `semantic.index.skips` aggregato con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
 - Telemetria phase_scope: i rami "no files" e "no contents" sono sempre tracciati con `artifact_count=0` e chiusura `semantic.index.done`.
-- Retriever: short‑circuit per embedding piatti `list[float]` (nessun impatto su ranking) e log `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` + `coerce {short, normalized, skipped}`.
+- File I/O:  `safe_append_text` passa ad append diretto O(1) per record (nessun read+rewrite); preservati lock e fsync opzionale; test aggiornati.
+- Retriever: shortâ€‘circuit per embedding piatti `list[float]` (nessun impatto su ranking) e log `retriever.metrics` con tempi `{total, embed, fetch, score_sort}` + `coerce {short, normalized, skipped}`.
 
 ### Added
-- Test: mismatch parziale in indexing, invariance ranking (short‑circuit vs normalize), metriche `coerce`, e caso "no contents → artifacts=0".
+- Test: mismatch parziale in indexing, invariance ranking (shortâ€‘circuit vs normalize), metriche `coerce`, e caso "no contents â†’ artifacts=0".
 
 ### Compatibility
 - Nessun breaking change; API pubbliche invariate (semantic.api, retriever, content_utils) e schema DB stabile.
@@ -25,16 +26,16 @@
 ### Added
 - UI: form unica per l'editing congiunto di `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`, con due text area, validazione e pulsante "Annulla modifiche" (reload da disco).
 - UI: pulsante in sidebar "Apri workspace" con gating su slug valido e presenza dei due YAML; handler condiviso con il main panel.
-- UX: messaggi di successo/errore più chiari e sezione informativa con elenco delle correzioni automatiche applicate.
+- UX: messaggi di successo/errore piÃ¹ chiari e sezione informativa con elenco delle correzioni automatiche applicate.
 
 ### Changed
-- `semantic/vision_provision.py`: provisioning più robusto con fallback a Chat Completions quando le Responses API non sono disponibili; normalizzazione dei dati (auto-derivazione `areas[*].key` se mancante, `esempio` a lista, `synonyms` a liste di stringhe) e coercizione minima del `context`.
-- `src/ai/client_factory.py`: creazione client OpenAI più tollerante (tentativo semplice, poi fallback con `http_client`) e abilitazione best‑effort dell'header `OpenAI-Beta: assistants=v2`.
+- `semantic/vision_provision.py`: provisioning piÃ¹ robusto con fallback a Chat Completions quando le Responses API non sono disponibili; normalizzazione dei dati (auto-derivazione `areas[*].key` se mancante, `esempio` a lista, `synonyms` a liste di stringhe) e coercizione minima del `context`.
+- `src/ai/client_factory.py`: creazione client OpenAI piÃ¹ tollerante (tentativo semplice, poi fallback con `http_client`) e abilitazione bestâ€‘effort dell'header `OpenAI-Beta: assistants=v2`.
 - UI landing: salvataggio YAML atomico e gestione stato sessione per ripristino contenuti.
 
 ### Fixed
-- Errori di validazione frequenti: `KeyError: 'key'` e `"context" non è un oggetto` ora risolti con validazione e correzioni automatiche.
-- Gating del pulsante di apertura workspace quando i due YAML esistono anche se la fase non è ancora `ready_to_open`.
+- Errori di validazione frequenti: `KeyError: 'key'` e `"context" non Ã¨ un oggetto` ora risolti con validazione e correzioni automatiche.
+- Gating del pulsante di apertura workspace quando i due YAML esistono anche se la fase non Ã¨ ancora `ready_to_open`.
 - Test di integrazione aggiornati: suite completa al verde.
 
 
@@ -75,7 +76,7 @@
 
 ### Docs
 - README, Architecture, Developer Guide e Test Suite aggiornati con la pipeline Vision e bump documentale a v1.9.5.
-- Developer Guide e Guida UI aggiornate con il workflow Vision (upload â†’ bottone â†’ anteprima â†’ approvazione).
+- Developer Guide e Guida UI aggiornate con il workflow Vision (upload Ã¢â€ â€™ bottone Ã¢â€ â€™ anteprima Ã¢â€ â€™ approvazione).
 - Coding Rules/Policy allineate: snapshot obbligatorio, uso di `safe_write_text` e path-safety sui PDF Vision.
 
 ---
@@ -83,8 +84,8 @@
 ## [1.9.4] - 2025-09-23
 
 ### Fixed
-- Vocab loader: qualsiasi errore SQLite durante apertura/query/cursor Ã¨ ora tipizzato come `ConfigError` con `file_path`.
-- Conversione: caso â€œsolo PDF non sicuri/symlink/fuori perimetroâ€ solleva `ConfigError` con messaggio esplicito e hint operativo.
+- Vocab loader: qualsiasi errore SQLite durante apertura/query/cursor ÃƒÂ¨ ora tipizzato come `ConfigError` con `file_path`.
+- Conversione: caso Ã¢â‚¬Å“solo PDF non sicuri/symlink/fuori perimetroÃ¢â‚¬ solleva `ConfigError` con messaggio esplicito e hint operativo.
 - Documenti: rimosso mojibake/encoding rotto in README e Developer Guide; correzioni ortografiche e terminologiche.
 
 ### Improvements
@@ -92,8 +93,8 @@
 - Retriever: documentata gestione embedding annidati/filtraggio vuoti nei KPI DB (nessun cambio API).
 
 ### Docs
-- Developer Guide: sezioni aggiornate su fail-fast, path-safety, fase `build_markdown_book`, SQLite â†’ `ConfigError`.
-- User Guide/README: Troubleshooting con messaggio per â€œsolo PDF non sicuri/fuori perimetroâ€.
+- Developer Guide: sezioni aggiornate su fail-fast, path-safety, fase `build_markdown_book`, SQLite Ã¢â€ â€™ `ConfigError`.
+- User Guide/README: Troubleshooting con messaggio per Ã¢â‚¬Å“solo PDF non sicuri/fuori perimetroÃ¢â‚¬.
 - cSpell: configurazione ripulita (locale/overrides) e dizionario allineato alla terminologia.
 
 ### CI
@@ -104,16 +105,16 @@
 ## [Unreleased]
 
 ### UI
-- Aggiunta verifica iniziale dello slug: il pulsante `Verifica cliente` controlla l'esistenza del workspace e instrada subito alla configurazione se giÃ  presente.
+- Aggiunta verifica iniziale dello slug: il pulsante `Verifica cliente` controlla l'esistenza del workspace e instrada subito alla configurazione se giÃƒÂ  presente.
 - Nuovo percorso per i clienti nuovi: upload del Vision Statement, creazione workspace, generazione immediata di `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`, editor inline con salvataggi atomici.
 - Sidebar principale aggiornata: il bottone `Carica contesto` appare solo quando il workspace esiste; altrimenti un messaggio rimanda al bootstrap dalla landing.
 
 ### Fixed
 - Conversione strutturata: gestione robusta delle categorie symlink in `convert_files_to_structured_markdown`
   (percorsi risolti in sicurezza, niente `ValueError` e nessun loop; ordinamenti invariati).
-- Telemetria di fase: `build_markdown_book` copre anche `load_reviewed_vocab` e `enrich_frontmatter`; rimosso il â€œsuccessâ€ prematuro.
+- Telemetria di fase: `build_markdown_book` copre anche `load_reviewed_vocab` e `enrich_frontmatter`; rimosso il Ã¢â‚¬Å“successÃ¢â‚¬ prematuro.
 - Messaggi errore: tutti i `PipelineError` includono `slug` e `file_path` nei punti critici (validazioni/IO).
-- KPI ingest DB: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite (idempotenza: re-run â‡’ 0).
+- KPI ingest DB: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite (idempotenza: re-run Ã¢â€¡â€™ 0).
 
 ### Changed
 - `semantic.convert_markdown(...)`: se `raw/` non ha PDF **non** invoca il converter; se ci sono PDF lo invoca sempre. `README.md`/`SUMMARY.md` esclusi dagli `artifacts`.
@@ -135,23 +136,23 @@
 
 ### Docs
 - Guide aggiornate: `docs/developer_guide.md` (flusso Vision) e `docs/guida_ui.md` (pulsanti/stati landing).
-- `docs/developer_guide.md`: chiarita lâ€™estensione della fase `build_markdown_book`; obbligo di `slug`/`file_path` nei `PipelineError`; KPI DB basati su inserimenti reali; note su `gen_dummy_kb --out`, fail-fast del vocabolario e hardening del tab Finanza.
+- `docs/developer_guide.md`: chiarita lÃ¢â‚¬â„¢estensione della fase `build_markdown_book`; obbligo di `slug`/`file_path` nei `PipelineError`; KPI DB basati su inserimenti reali; note su `gen_dummy_kb --out`, fail-fast del vocabolario e hardening del tab Finanza.
 
 ---
 
 ## [Unreleased]
 ### Fixed
-- Telemetria di fase: `build_markdown_book` include anche `load_reviewed_vocab` ed `enrich_frontmatter`; rimosso il â€œsuccessâ€ prematuro e conteggio `artifacts` dopo lâ€™enrich.
-- Errori contestualizzati: tutte le `PipelineError` in `pipeline.content_utils` includono `slug` e `file_path` nei casi â€œmissing/not a directoryâ€ e validazioni affini.
-- KPI ingest: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite; aggregati coerenti in `index_markdown_to_db(...)` (idempotenza: re-run â‡’ 0).
+- Telemetria di fase: `build_markdown_book` include anche `load_reviewed_vocab` ed `enrich_frontmatter`; rimosso il Ã¢â‚¬Å“successÃ¢â‚¬ prematuro e conteggio `artifacts` dopo lÃ¢â‚¬â„¢enrich.
+- Errori contestualizzati: tutte le `PipelineError` in `pipeline.content_utils` includono `slug` e `file_path` nei casi Ã¢â‚¬Å“missing/not a directoryÃ¢â‚¬ e validazioni affini.
+- KPI ingest: `kb_db.insert_chunks(...)` restituisce il numero **reale** di righe inserite; aggregati coerenti in `index_markdown_to_db(...)` (idempotenza: re-run Ã¢â€¡â€™ 0).
 
 ### Changed
 - `semantic.convert_markdown(...)`: se `raw/` **non** contiene PDF non invoca il converter (riusa gli MD esistenti o fallisce con `ConfigError`); se ci sono PDF esegue sempre la conversione. Esclude `README.md`/`SUMMARY.md` dagli `artifacts`.
 
 ### Added
-- Test anti-regressione: `tests/test_convert_markdown_no_pdfs_raises.py` (RAW senza PDF â‡’ `ConfigError`; RAW senza PDF con MD preesistenti â‡’ ritorna MD esistenti).
-- Test wrapping: `tests/test_semantic_api_errors.py` (firma converter errata â‡’ `ConversionError` con `slug`/`file_path`).
-- Aggiornamenti smoke/path overrides: test che seedano `dummy.pdf` per rispettare la regola â€œconverter solo con PDFâ€.
+- Test anti-regressione: `tests/test_convert_markdown_no_pdfs_raises.py` (RAW senza PDF Ã¢â€¡â€™ `ConfigError`; RAW senza PDF con MD preesistenti Ã¢â€¡â€™ ritorna MD esistenti).
+- Test wrapping: `tests/test_semantic_api_errors.py` (firma converter errata Ã¢â€¡â€™ `ConversionError` con `slug`/`file_path`).
+- Aggiornamenti smoke/path overrides: test che seedano `dummy.pdf` per rispettare la regola Ã¢â‚¬Å“converter solo con PDFÃ¢â‚¬.
 
 ### Docs
 - `docs/developer_guide.md`: chiarita estensione della fase `build_markdown_book`, obbligo di `slug`/`file_path` nelle `PipelineError`, KPI DB basati su inserimenti reali e comportamento ai re-run.
@@ -160,32 +161,32 @@
 
 ## [Unreleased]
 ### Fixed
-- Telemetria di fase: `build_markdown_book` copre anche enrichment; rimosso â€œsuccessâ€ prematuro.
+- Telemetria di fase: `build_markdown_book` copre anche enrichment; rimosso Ã¢â‚¬Å“successÃ¢â‚¬ prematuro.
 - Messaggi errore: `PipelineError` in `pipeline.content_utils` arricchite con `slug` e `file_path`.
-- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (re-run â†’ 0).
-- Conversione Markdown: nessuno skip improprio in presenza di nuovi PDF; se `raw/` Ã¨ vuoto si riusano i `.md` esistenti.
+- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (re-run Ã¢â€ â€™ 0).
+- Conversione Markdown: nessuno skip improprio in presenza di nuovi PDF; se `raw/` ÃƒÂ¨ vuoto si riusano i `.md` esistenti.
 
 ---
 
 ## [Unreleased]
 ### Fixed
-- Telemetria di fase: `build_markdown_book` copre conversione **e** arricchimento; rimosso il â€œsuccessâ€ prematuro.
-- Messaggi errore: tutte le `PipelineError` di `pipeline.content_utils` includono `slug` e `file_path` anche per â€œmissing/not a directoryâ€.
-- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (secondo run â†’ 0).
+- Telemetria di fase: `build_markdown_book` copre conversione **e** arricchimento; rimosso il Ã¢â‚¬Å“successÃ¢â‚¬ prematuro.
+- Messaggi errore: tutte le `PipelineError` di `pipeline.content_utils` includono `slug` e `file_path` anche per Ã¢â‚¬Å“missing/not a directoryÃ¢â‚¬.
+- KPI ingest: `insert_chunks(...)` ritorna il numero **reale** di righe inserite; idempotenza rispettata (secondo run Ã¢â€ â€™ 0).
 
 ---
 
 ### Observability & Benchmarks (A1, B1, B2)
 - **A1 (CI opzionale)**: workflow `bench.yml` (manuale + schedulato) che esegue `scripts/bench_embeddings_normalization.py` con output JSON e riassunto nel Job Summary. Non-gating; artifact pubblicato.
 - **B1 (phase_scope)**: logging strutturato per fasi con campi `phase`, `status` (`start|success|failed`), `duration_ms`, `artifacts` (alias di `artifact_count`), `error` su failure. Back-compat mantenuta.
-- **B2 (smoke osservabilitÃ )**: test end-to-end per indexing e build book che verificano presenza/consistenza dei campi strutturati.
+- **B2 (smoke osservabilitÃƒÂ )**: test end-to-end per indexing e build book che verificano presenza/consistenza dei campi strutturati.
 
 ---
 
 ## [Unreleased]
 ### Fixed
 - Markdown (content pipeline): intestazioni di categoria ora univoche anche per sottocartelle omonime allo stesso livello, usando una chiave basata sul percorso cumulativo (es. `2023/Q4` e `2024/Q4` emettono entrambe le "Q4").
- - Indexing/Retriever: esclusi `README.md` e `SUMMARY.md` dallâ€™indicizzazione; filtrati e scartati embedding vuoti per singolo file (log "Embedding vuoti scartati").
+ - Indexing/Retriever: esclusi `README.md` e `SUMMARY.md` dallÃ¢â‚¬â„¢indicizzazione; filtrati e scartati embedding vuoti per singolo file (log "Embedding vuoti scartati").
 
 ## [2.0.0] - 2025-09-20
 ### Added
@@ -220,14 +221,14 @@
 - Lint/type: pulizia import/ignores; mypy 0 errori sui moduli core.
 
 ### Performance
-- Indici DB: conferma `idx_chunks_project_scope` + indice UNIQUE â€œsoftâ€ su chiave naturale per prevenire duplicati futuri.
+- Indici DB: conferma `idx_chunks_project_scope` + indice UNIQUE Ã¢â‚¬Å“softÃ¢â‚¬ su chiave naturale per prevenire duplicati futuri.
 
 ### CI
 - Workflows bench/import-smoke non-gating; warnings informativi su `artifacts=0`.
 
 ---
 
-## [1.9.2] â€” 2025-09-19
+## [1.9.2] Ã¢â‚¬â€ 2025-09-19
 ### Added
 - **Content pipeline**: supporto ai PDF nel root di `raw/` con file aggregato in `book/`.
 - **Test**: copertura per PDF in root, cleanup orfani, encoding `SUMMARY`, writer CSV hardened, loader vocab fail-closed.
@@ -242,7 +243,7 @@
 
 ---
 
-## [fix] â€” 2025-09-17
+## [fix] Ã¢â‚¬â€ 2025-09-17
 ### Fixed
 - `semantic/vocab_loader.py`: path-safety in **lettura** con `ensure_within_and_resolve`.
 
@@ -250,25 +251,25 @@
 - **Retriever**: `_default_candidate_limit()` come SSoT; `cosine(...)` iterator-safe.
 
 ### Tests
-- Unitarie retriever (precedenze `candidate_limit`, casi edge) â€“ **104 passed**.
+- Unitarie retriever (precedenze `candidate_limit`, casi edge) Ã¢â‚¬â€œ **104 passed**.
 
 ---
 
-## Smoke tests UI & E2E â€” 2025-09-17
+## Smoke tests UI & E2E Ã¢â‚¬â€ 2025-09-17
 ### Added
 - `scripts/smoke_streamlit_finance.py` (tab **Finanza**) e `scripts/smoke_e2e.py` (E2E headless con push GitHub disabilitato).
 
 ### Changed
-- UI Finanza: bottone â€œImporta in finance.dbâ€ sempre attivo con gating nellâ€™handler (stabilitÃ  test).
+- UI Finanza: bottone Ã¢â‚¬Å“Importa in finance.dbÃ¢â‚¬ sempre attivo con gating nellÃ¢â‚¬â„¢handler (stabilitÃƒÂ  test).
 
 ---
 
-## [1.10.0] â€” 2025-09-13
-> Nota: versione maggiore rilasciata prima di 1.9.x; lâ€™ordinamento qui Ã¨ cronologico.
+## [1.10.0] Ã¢â‚¬â€ 2025-09-13
+> Nota: versione maggiore rilasciata prima di 1.9.x; lÃ¢â‚¬â„¢ordinamento qui ÃƒÂ¨ cronologico.
 
 ### Added
 - **Retriever**: metriche leggere (embed/fetch/score/total ms) + tool `retriever_calibrate.py`.
-- **UI**: sidebar â€œRicerca (retriever)â€ con `candidate_limit` e `latency_budget_ms` persistiti in `config.yaml`.
+- **UI**: sidebar Ã¢â‚¬Å“Ricerca (retriever)Ã¢â‚¬ con `candidate_limit` e `latency_budget_ms` persistiti in `config.yaml`.
 
 ### Changed
 - **Path-safety letture** in `tag_onboarding.py` (hash) e cleanup import.
@@ -279,7 +280,7 @@
 
 ---
 
-## [fix] â€” 2025-09-14
+## [fix] Ã¢â‚¬â€ 2025-09-14
 ### Changed
 - `onboarding_ui.py`: nessun side-effect a import-time; tipizzazione e subprocess via `sys.executable`.
 
@@ -288,7 +289,7 @@
 
 ---
 
-## [1.8.2] â€” 2025-09-07
+## [1.8.2] Ã¢â‚¬â€ 2025-09-07
 ### Added
 - `pipeline/path_utils.ensure_within_and_resolve` (SSoT letture sicure) + test traversal/symlink.
 
@@ -297,7 +298,7 @@
 
 ---
 
-## [1.8.1] â€” 2025-09-06
+## [1.8.1] Ã¢â‚¬â€ 2025-09-06
 ### Added
 - Suite test semantica (estrazione, mapping, frontmatter, summary/readme, E2E enrichment).
 
@@ -306,9 +307,9 @@
 
 ---
 
-## [1.8.0] â€” 2025-09-06
+## [1.8.0] Ã¢â‚¬â€ 2025-09-06
 ### Breaking
-- **Formato YAML** unificato; faÃ§ade `semantic.api` unica; rimosso `semantic_onboarding.py`.
+- **Formato YAML** unificato; faÃƒÂ§ade `semantic.api` unica; rimosso `semantic_onboarding.py`.
 
 ### Added
 - `to_kebab()` (SSoT normalizzazione), CLI `src/semantic_headless.py`.
@@ -321,16 +322,16 @@
 
 ---
 
-## [1.7.0] â€” 2025-09-01
+## [1.7.0] Ã¢â‚¬â€ 2025-09-01
 ### Added
 - cSpell e script `scripts/fix_mojibake.py`; normalizzazione tipografica docs.
 
 ### Changed
-- Editor mapping â†’ tab **Configurazione**; struttura `raw/` derivata da `tags_reviewed.yaml`.
+- Editor mapping Ã¢â€ â€™ tab **Configurazione**; struttura `raw/` derivata da `tags_reviewed.yaml`.
 
 ---
 
-## [1.6.1] â€” 2025-08-30
+## [1.6.1] Ã¢â‚¬â€ 2025-08-30
 ### Added
 - Task **CILite**; mypy mirato su `ui`.
 
@@ -339,7 +340,7 @@
 
 ---
 
-## [1.6.0] â€” 2025-08-29 â€” Interfaccia Streamlit
+## [1.6.0] Ã¢â‚¬â€ 2025-08-29 Ã¢â‚¬â€ Interfaccia Streamlit
 ### Added
 - **UI Streamlit** con tab **Configurazione / Drive / Semantica**; runner Drive; chiusura controllata.
 
@@ -351,7 +352,7 @@
 
 ---
 
-## [1.5.0] â€” 2025-08-27
+## [1.5.0] Ã¢â‚¬â€ 2025-08-27
 ### Added
 - Suite test PyTest (unit/contract/smoke) + `pytest.ini`; doc test dedicata.
 
@@ -363,7 +364,7 @@
 
 ---
 
-## [1.4.0] â€” 2025-08-26
+## [1.4.0] Ã¢â‚¬â€ 2025-08-26
 ### Added
 - Preview HonKit/GitBook via Docker; adapter Preview; IO sicure; CI (Qodana/GitHub Actions).
 
@@ -375,7 +376,7 @@
 
 ---
 
-## [1.3.0] â€” 2025-08-26
+## [1.3.0] Ã¢â‚¬â€ 2025-08-26
 ### Changed
 - Refactor orchestratori secondo linee guida (funzioni pure testabili; SRP in CSV/enrichment).
 
@@ -384,7 +385,7 @@
 
 ---
 
-## [1.2.x] â€” 2025-08-24/25
+## [1.2.x] Ã¢â‚¬â€ 2025-08-24/25
 ### Added
 - Nuovi orchestratori (poi deprecati); adapter fallback/preview; utility file (atomiche, path-safety); indice `docs/SUMMARY.md`.
 
@@ -393,13 +394,13 @@
 
 ---
 
-## [1.1.0] â€” 2025-08-23 â€” Baseline stabile
+## [1.1.0] Ã¢â‚¬â€ 2025-08-23 Ã¢â‚¬â€ Baseline stabile
 ### Added
 - Struttura modulare `src/pipeline/*`; orchestratori `pre_onboarding`, `tag_onboarding`, `onboarding_full`.
 
 ### Changed
 
-## 1.9.3 â€” 2025-09-23
+## 1.9.3 Ã¢â‚¬â€ 2025-09-23
 
 Fix
 - ENV hardening: nessun KeyError propagato; ConfigError con messaggi chiari e orchestratori con exit code deterministici.
@@ -411,7 +412,7 @@ Improvements
 - Orchestratori: tag_onboarding_main snellito in helper privati (download/copy, CSV, checkpoint, stub) senza modifiche di API/UX.
 
 Docs
-- Developer Guide aggiornato: policy â€œassenza DB â‡’ {}â€ per il vocabolario; path-safety per-file sui PDF; nota su initializzazione schema Indexer.
+- Developer Guide aggiornato: policy Ã¢â‚¬Å“assenza DB Ã¢â€¡â€™ {}Ã¢â‚¬ per il vocabolario; path-safety per-file sui PDF; nota su initializzazione schema Indexer.
 
 CI
 - E2E/CI/import-smoke/bench: abilitata concurrency per ref/PR; permissions minime (contents: read); trigger push/pull_request limitati ai path rilevanti; schedule notturni invariati.
