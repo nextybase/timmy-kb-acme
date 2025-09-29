@@ -449,10 +449,13 @@ def provision_from_vision(
     model_env = os.getenv("VISION_MODEL")
     effective_model = model_env or model or "gpt-4.1-mini"
 
+    # Nome visualizzato nel prompt: preferisci ctx.client_name se presente, altrimenti slug
+    display_name = getattr(ctx, "client_name", None) or slug
+
     user_block = (
         "Contesto cliente:\n"
         f"- slug: {slug}\n"
-        f"- client_name: {slug}\n"
+        f"- client_name: {display_name}\n"
         "\nVision Statement: vedi documento allegato nel contesto (tool file_search)."
     )
 
@@ -493,6 +496,7 @@ def provision_from_vision(
     record = {
         "ts": ts,
         "slug": slug,
+        "client_name": display_name,
         "pdf": str(safe_pdf),
         "model": effective_model,
         "yaml_paths": {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
