@@ -31,25 +31,25 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 ### 1) Unit — Core utility, path‑safety, YAML & stringhe
 
-- **Path & FS safety**: `test_architecture_paths.py`, `test_path_utils.py`, `test_path_safety_reads.py`, `test_content_utils.py`, `test_content_utils_no_traversal_when_safe_pdfs.py`, `test_content_utils_slug_traversal_error.py`, `test_content_utils_symlink_category.py` (*skip su Win*), `test_pdf_iteration_symlink.py` (*skip su Win*).
+- **Path & FS safety**: `test_architecture_paths.py`, `test_path_utils.py`, `test_path_safety_reads.py`, `test_content_utils.py`, `test_content_utils_symlink_category.py` (*skip su Win*), `test_pdf_iteration_symlink.py` (*skip su Win*).
 - **I/O atomico**: `test_file_io_append.py`, `test_yaml_utils.py`.
 - **YAML validation**: `test_yaml_validation.py`.
-- **String/slug**: `test_slug_property.py`, `test_validation_slug.py`.
+- **String/slug**: `test_slug_property.py`.
 
 ### 2) Semantic API — Conversione, frontmatter, book, indicizzazione, tag CSV
 
-- **Conversione & guardie**: `test_semantic_api_convert_md.py`, `test_semantic_convert_failfast.py`, `test_convert_markdown_no_pdfs_raises.py`, `test_convert_markdown_rerun_processes_new_pdfs.py`, `test_convert_markdown_unsafe_message.py`, `test_convert_markdown_unsafe_legacy.py`, `test_semantic_convert_fallback_no_safe_pdfs_param.py`, `test_semantic_convert_markdown_raw_not_directory.py`, `test_semantic_convert_passes_safe_pdfs.py`.
-- **Frontmatter & arricchimento**: `test_semantic_api_frontmatter.py`, `test_semantic_api_enrich_frontmatter.py`, `test_semantic_enrich_ctx_override.py`, `test_semantic_enrich_and_unicode.py`, `test_semantic_frontmatter_and_matching.py`, `test_semantic_headless_enrichment_without_vocab.py`.
-- **Build libro (SUMMARY/README)**: `test_semantic_build_markdown_book.py`, `test_semantic_api_summary_readme.py`, `test_semantic_api_list_content_markdown.py`.
+- **Conversione & guardie**: `test_semantic_api_convert_md.py`, `test_semantic_convert_failfast.py`, `test_convert_markdown_no_pdfs_raises.py`, `test_convert_markdown_rerun_processes_new_pdfs.py`, `test_convert_markdown_unsafe_message.py`.
+- **Frontmatter & arricchimento**: `test_semantic_api_frontmatter.py`, `test_semantic_api_enrich_frontmatter.py`, `test_semantic_enrich_ctx_override.py`, `test_semantic_enrich_and_unicode.py`, `test_semantic_frontmatter_and_matching.py`.
+- **Build libro (SUMMARY/README)**: `test_semantic_build_markdown_book.py`, `test_semantic_api_summary_readme.py`.
 - **Estrattore & mapping**: `test_semantic_extractor.py`, `test_semantic_extractor_punct_matching.py`, `test_semantic_mapping.py`.
-- **Indicizzazione DB**: `test_semantic_index_markdown_db.py`, `test_semantic_index_markdown_partial_mismatch.py`, `test_semantic_index_no_files_phase_scope.py`.
+- **Indicizzazione DB**: `test_semantic_index_markdown_db.py`.
 - **Tag CSV**: `test_semantic_tags_csv.py`, `test_unit_emit_tags_csv.py`.
 - **Error handling**: `test_semantic_api_errors.py`, `test_semantic_onboarding_exitcodes.py`.
 
 ### 3) Vision AI — Generazione mapping da PDF e provisioning
 
-- **Vision pipeline (PyMuPDF richiesto)**: `test_vision_ai.py`, `test_vision_ai_module.py` (*skipped se PyMuPDF assente*), `test_vision_ai_slug_mismatch.py`.
-- **Provisioning da Vision**: `test_vision_provision.py`, `test_vision_provision_client_name_prompt.py`, `test_vision_provision_vector_store_timeout.py`, `test_semantic_vision_path_safety.py`.
+- **Vision pipeline (PyMuPDF richiesto)**: `test_vision_ai.py`, `test_vision_ai_module.py` (*skipped se PyMuPDF assente*).
+- **Provisioning da Vision**: `test_vision_provision.py`.
 
 ### 4) Orchestratori & CLI - Onboarding e flussi operativi
 
@@ -69,23 +69,23 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 ### 5) UI (Streamlit) - Onboarding workspace e azioni
 
 - **Landing/paths**: `test_ui_paths_box.py`, `test_ui_labels.py`.
-- **Inizializzazione/rigenerazione**: `test_ui_regenerate_yaml.py`, `test_ui_save_both_yaml.py`, `test_ui_save_both_yaml_negative.py`.
+- **Inizializzazione/rigenerazione**: `test_ui_regenerate_yaml.py`, `test_ui_save_both_yaml.py`.
 - **Exit & chiusura**: `test_ui_exit_buttons.py`.
-- **Debug & guardie servizi**: `test_ui_debug_expander.py`, `test_ui_drive_services_guards.py`, `test_ui_vision_gating.py`, `test_ui_coder_embeddings_key_fallback.py`.
+- **Debug & guardie servizi**: `test_ui_debug_expander.py`, `test_ui_drive_services_guards.py`.
 - **Utilità**: `test_ui_utils.py`.
 
 ### 6) Retriever — Parametri, scoring, top‑K, configurazione
 
 - **API & validazioni**: `test_retriever_api.py`, `test_retriever_validate.py`.
 - **Config & auto‑budget**: `test_retriever_config.py`, `test_retriever_unit.py`.
-- **Scoring & ranking**: `test_retriever_scoring.py`, `test_retriever_topk.py`, `test_retriever_ranking_invariance_short_circuit.py`.
+- **Scoring & ranking**: `test_retriever_scoring.py`, `test_retriever_topk.py`.
 - **Strumenti I/O**: `test_retriever_calibrate_io.py`.
-- **Proprieta' embedding (Hypothesis/cosine)**: `test_embeddings_property.py`, `test_retriever_metrics_counters.py`.
+- **Proprieta' embedding (Hypothesis/cosine)**: `test_embeddings_property.py`.
 
 ### 7) DB layer & ingest — SQLite, idempotenza, performance
 
 - **Schema & init**: `test_indexer_init_failfast.py`, `test_indexer_schema_once.py`.
-- **Inserimento & idempotenza**: `test_kb_db_insert.py`, `test_kb_db_idempotency.py`, `test_kb_db_path_safety.py`, `test_db_safety.py`, `test_kb_db_logging.py`.
+- **Inserimento & idempotenza**: `test_kb_db_insert.py`, `test_kb_db_idempotency.py`, `test_kb_db_path_safety.py`, `test_db_safety.py`.
 - **Ingest**: `test_ingest_performance.py`, `test_ingest_safety.py`.
 
 ### 8) Environment & import safety — Config, lazy load, dipendenze
@@ -96,9 +96,8 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 ### 9) Osservabilità & logging — Phase scope, smoke
 
-- **PhaseScope**: `test_phase_scope.py`, `test_phase_scope_structured.py`, `test_semantic_convert_phase_scope.py`.
+- **PhaseScope**: `test_phase_scope.py`, `test_phase_scope_structured.py`.
 - **Observability smoke**: `test_observability_smoke.py`.
-- **Content logging**: `test_content_utils_logging.py`.
 - **Coder logging**: `test_timmy_kb_coder_logging.py`.
 
 ### 10) Prompting & layout — Prompt builder, suggerimenti layout
@@ -110,7 +109,7 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 - **Drive**: `test_drive_guards.py`, `test_drive_runner_pagination.py`, `test_drive_runner_progress.py`, `test_tag_onboarding_drive_guard_main.py`.
 - **Finance tab (I/O safety)**: `test_finance_tab_io_safety.py`.
-- **Client OpenAI (fallback/config)**: `test_client_factory.py`, `test_coder_embeddings_env.py`.
+- **Client OpenAI (fallback/config)**: `test_client_factory.py`.
 
 ### 12) Vocab & loader - SQLite vocab, fallback e fail-fast
 
