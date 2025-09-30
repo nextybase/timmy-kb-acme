@@ -11,9 +11,6 @@ Cosa fa il modulo
   * idempotenza semplice (skip se esiste ed ha stessa dimensione),
   * logging strutturato e propagazione di errori aggregati tramite `PipelineError`.
 
-- `emit_tags_csv(...)` is deprecated: raises NotImplementedError and points to
-  `semantic.api.build_tags_csv` or `semantic.auto_tagger.render_tags_csv`.
-
 Schema CSV (compat con orchestratori/tag_onboarding)
 ----------------------------------------------------
 relative_path | suggested_tags | entities | keyphrases | score | sources
@@ -37,7 +34,7 @@ from pipeline.path_utils import ensure_within  # STRONG: SSoT per write/delete
 from pipeline.path_utils import is_safe_subpath  # SOFT: pre-check booleano per shortlist/letture
 from pipeline.path_utils import normalize_path, sanitize_filename, sorted_paths
 
-__all__ = ["copy_local_pdfs_to_raw", "emit_tags_csv"]
+__all__ = ["copy_local_pdfs_to_raw"]
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
@@ -119,10 +116,3 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         raise PipelineError(f"Copie PDF fallite: {len(failures)}. Dettagli: {summary}")
 
     return copied
-
-
-def emit_tags_csv(*args: object, **kwargs: object) -> int:  # pragma: no cover
-    """Stub deprecato: usa le nuove API di generazione CSV dei tag."""
-    raise NotImplementedError(
-        "emit_tags_csv ? deprecata: usa semantic.api.build_tags_csv o semantic.auto_tagger.render_tags_csv"
-    )

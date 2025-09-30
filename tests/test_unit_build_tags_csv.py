@@ -1,4 +1,4 @@
-# tests/test_unit_emit_tags_csv.py
+# tests/test_unit_build_tags_csv.py
 import csv
 import logging
 from pathlib import Path
@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from src.semantic.api import build_tags_csv
 
 
-def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:
+def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:
     slug = "acme"
     base_root = tmp_path / "output"
     base_dir = base_root / f"timmy-kb-{slug}"

@@ -26,9 +26,7 @@ from src.retriever import QueryParams, search
 
 
 class _DummyEmbeddings:
-    def embed_texts(
-        self, texts: Iterable[str], *, model: str | None = None
-    ) -> List[List[float]]:  # type: ignore[override]
+    def embed_texts(self, texts: Iterable[str], *, model: str | None = None) -> List[List[float]]:  # type: ignore[override]
         out: List[List[float]] = []
         for t in texts:
             # Vettore semplice e deterministico basato su hash locale (nessuna rete)
@@ -131,13 +129,15 @@ def main() -> None:
         mean = float(statistics.fmean(timings)) if timings else 0.0
         hit_ratio = (hits / eval_count) if eval_count > 0 else None
         rows.append(BenchRow(candidate_limit=cand, p95_ms=p95, mean_ms=mean, hit_at_k=hit_ratio, runs=int(args.runs)))
-        raw_results["results"].append({
-            "candidate_limit": cand,
-            "p95_ms": p95,
-            "mean_ms": mean,
-            "hit_at_k": hit_ratio,
-            "samples": len(timings),
-        })
+        raw_results["results"].append(
+            {
+                "candidate_limit": cand,
+                "p95_ms": p95,
+                "mean_ms": mean,
+                "hit_at_k": hit_ratio,
+                "samples": len(timings),
+            }
+        )
 
     # Stampa tabella compatta
     headers = ["limit", "p95_ms", "mean_ms", "hit@k"]

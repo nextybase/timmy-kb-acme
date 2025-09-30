@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fail-fast su helper duplicati per ingest/CSV:
-- Vietate definizioni locali di `_emit_tags_csv` e `_copy_local_pdfs_to_raw` fuori da `src/semantic/`.
+- Vietate definizioni locali di `_copy_local_pdfs_to_raw` fuori da `src/semantic/`.
 - Vietati import/usi diretti di `semantic.tags_extractor` fuori da `src/semantic/`.
 
 Scopo: forzare l'uso di `semantic.api` come SSoT.
@@ -27,7 +27,7 @@ def main() -> int:
         if parts and parts[0] == "semantic":
             continue
         text = py.read_text(encoding="utf-8", errors="ignore")
-        if "def _emit_tags_csv" in text or "def _copy_local_pdfs_to_raw" in text:
+        if "def _copy_local_pdfs_to_raw" in text:
             bad.append((py, "definizione helper duplicato"))
         if "semantic.tags_extractor" in text or "from semantic.tags_extractor import" in text:
             bad.append((py, "uso diretto semantic.tags_extractor"))

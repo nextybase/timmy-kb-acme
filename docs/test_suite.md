@@ -43,7 +43,7 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 - **Build libro (SUMMARY/README)**: `test_semantic_build_markdown_book.py`, `test_semantic_api_summary_readme.py`.
 - **Estrattore & mapping**: `test_semantic_extractor.py`, `test_semantic_extractor_punct_matching.py`, `test_semantic_mapping.py`.
 - **Indicizzazione DB**: `test_semantic_index_markdown_db.py`.
-- **Tag CSV**: `test_semantic_tags_csv.py`, `test_unit_emit_tags_csv.py`.
+- **Tag CSV**: `test_semantic_tags_csv.py`, `test_unit_build_tags_csv.py`.
 - **Error handling**: `test_semantic_api_errors.py`, `test_semantic_onboarding_exitcodes.py`.
 
 ### 3) Vision AI — Generazione mapping da PDF e provisioning
