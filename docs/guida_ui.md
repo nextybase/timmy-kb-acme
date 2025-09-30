@@ -1,15 +1,15 @@
 # Onboarding UI — Guida aggiornata (v1.9.6)
 
-Questa guida descrive come usare e come funziona l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore piÃ¹ comuni.
+Questa guida descrive come usare e come funziona l'interfaccia `onboarding_ui.py`, il suo inserimento nella pipeline, le dipendenze e i casi d'errore più comuni.
 
-> In sintesi: la UI Ã¨ una app Streamlit con tre step operativi: Configurazione, Drive, Semantica, e un opzionale Preview Docker (HonKit). Tutte le funzioni delegano a utility stabili della pipeline; i fallback interni sono stati rimossi, salvo messaggi di avviso idempotenti quando un modulo non Ã¨ disponibile.
+> In sintesi: la UI è una app Streamlit con tre step operativi: Configurazione, Drive, Semantica, e un opzionale Preview Docker (HonKit). Tutte le funzioni delegano a utility stabili della pipeline; i fallback interni sono stati rimossi, salvo messaggi di avviso idempotenti quando un modulo non è disponibile.
 
 ---
 
 ## 1) Prerequisiti
 - Python >= 3.11 e Streamlit installato
 - Repository clonato e avviato dalla root
-- Per la tab "Drive": credenziali Google Drive (`SERVICE_ACCOUNT_FILE`) e ID dell'unità  (`DRIVE_ID`)
+- Per la tab "Drive": credenziali Google Drive (`SERVICE_ACCOUNT_FILE`) e ID dell'unità (`DRIVE_ID`)
 - Per la Preview: Docker installato e in esecuzione, porta TCP libera (configurabile in UI)
 - Logging/Redazione (opzionale ma consigliato): variabili `LOG_REDACTION` / `LOG_REDACTED` o `ENV=prod`
 
@@ -42,7 +42,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - **Step 2 - Genera da Vision (AI)**: il pulsante esplicito avvia la pipeline (`semantic.vision_provision.provision_from_vision`) e genera direttamente due YAML: `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`.
 - **Step 3 - Anteprima**: al termine vengono mostrati in expander gli YAML per revisione rapida.
 - **Step 4 - Approva**: il bottone **"Approva e crea cartelle"** crea la gerarchia `docs/` leggendo `semantic/cartelle_raw.yaml`; nessuna cartella viene generata prima di questa approvazione.
-- **Idempotenza**: se l'hash del PDF non cambia, la UI avvisa che gli artefatti sono giÃ  presenti e propone un toggle per rigenerare forzatamente (utile anche per cambiare modello).
+- **Idempotenza**: se l'hash del PDF non cambia, la UI avvisa che gli artefatti sono già presenti e propone un toggle per rigenerare forzatamente (utile anche per cambiare modello).
 > Screenshot (TODO): acquisire la landing Vision aggiornata e salvarla come `docs/assets/vision_onboarding.png` per documentazione e training.
 
 **Pulsanti e stati rapidi**
@@ -81,7 +81,7 @@ Requisiti ENV: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`
 
 ## 6) Tab "Semantica"
 > Nota: `semantic/cartelle_raw.yaml` viene generato insieme a `semantic/semantic_mapping.yaml`; la creazione delle cartelle `docs/` rimane esplicita via pulsante nella landing.
-- Conversione RAW â†’ BOOK (PDF â†’ Markdown)
+- Conversione RAW > BOOK (PDF > Markdown)
 - Arricchimento frontmatter: aggiunge tag canonici dal DB SQLite (`storage/tags_store`)
 - Generazione e validazione di `README.md` e `SUMMARY.md`
 - Preview Docker (opzionale): container `gitbook-<slug>`, porta configurabile, start/stop dalla UI
@@ -112,8 +112,8 @@ output/
     README.md
     SUMMARY.md
 ```
-Il bootstrap crea sia tags_reviewed.yaml sia semantic_mapping.yaml; la UI legge semantic_mapping.yaml, runtime SSoT = SQLite (tags.db).
-SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e retro‑compatibilità
+Il bootstrap crea sia cartelle_raw.yaml sia semantic_mapping.yaml; la UI legge semantic_mapping.yaml, runtime SSoT = SQLite (tags.db).
+SSoT dei tag reviewed = DB SQLite.
 
 ---
 
@@ -287,7 +287,7 @@ output/
     SUMMARY.md
 ```
 Il bootstrap crea sia tags_reviewed.yaml sia semantic_mapping.yaml; la UI legge semantic_mapping.yaml, runtime SSoT = SQLite (tags.db).
-SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e retro‑compatibilità, ma sarà deprecato.
+SSoT dei tag reviewed = DB SQLite. YAML solo per bootstrap, SSoT runtime = SQLite.
 
 ---
 
@@ -331,13 +331,7 @@ SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e ret
 
 ---
 
-## 13) Novità e Deprecazioni
-- API semantica pubblica: la UI importa solo da `semantic.api`. È disponibile anche un wrapper CLI (`src/semantic_onboarding.py`) che orchestri `convert_markdown` → `enrich_frontmatter` → `write_summary_and_readme` per simmetria con gli altri orchestratori.
-- Mapping YAML: SSoT = `semantic/semantic_mapping.yaml`. I percorsi legacy non sono più utilizzati dalla UI.
-
----
-
-## 14) CLI vs UI (in breve)
+## 13) CLI vs UI (in breve)
 - Entry point: `pre_onboarding.py`, `tag_onboarding.py`, `onboarding_full.py` vs `onboarding_ui.py`
 - Destinatari: DevOps/CI/power user vs utenti operativi/facilitatori
 - Config: YAML + ENV vs editor interattivo mapping + Drive provisioning

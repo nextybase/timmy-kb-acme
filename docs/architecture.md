@@ -1,4 +1,4 @@
-# Architecture Overview (v1.9.6)
+# Architecture Overview
 
 This page contains two Mermaid diagrams that illustrate Timmy KB at a high level.
 
@@ -14,7 +14,7 @@ flowchart LR
     subgraph Orchestrators
       PRE[pre_onboarding.py]
       TAG[tag_onboarding.py]
-      SEMCLI[semantic_onboarding.py]
+      SEMCLI[semantic_onboarding.py (wrapper di semantic.api)]
       FULL[onboarding_full.py]
       VISIONCLI[gen_vision_yaml.py]
     end
@@ -29,9 +29,8 @@ flowchart LR
     end
 
     subgraph Semantic
-      SAPI[semantic.api]
-      STAGS[semantic.tags_* / normalizer]
-      SIO[semantic.tags_io]
+      SEMANTIC[semantic.api + semantic.tags_io + semantic.semantic_mapping]
+      SVISION[semantic.vision_*]
     end
 
     subgraph Storage
@@ -64,18 +63,16 @@ flowchart LR
     PRE --> PDRIVE
     PRE --> FILES
 
-    TAG --> SAPI
+    TAG --> SEMANTIC
     TAG --> FILES
     TAG --> DB
 
-    SEMCLI --> SAPI
+    SEMCLI --> SEMANTIC
     VISIONCLI --> SVISION
-    SAPI --> PCONT
-    SAPI --> STAGS
-    SAPI --> SIO
+    SEMANTIC --> PCONT
     SVISION --> FILES
-    SAPI --> FILES
-    SAPI --> DB
+    SEMANTIC --> FILES
+    SEMANTIC --> DB
 
     FULL --> PGIT
     PGIT --> GITHUB
@@ -124,6 +121,7 @@ sequenceDiagram
 
 Note operative
 
+- YAML e usato per il bootstrap iniziale; a runtime la fonte di verita e SQLite (semantic/tags.db).
 - La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
 - La generazione del mapping Vision usa `semantic/vision_ai.py`: salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e richiama il modello `gpt-4.1-mini`.
 - L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log "Embedding vuoti scartati").

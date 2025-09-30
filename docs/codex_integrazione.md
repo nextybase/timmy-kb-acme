@@ -69,9 +69,9 @@ root = "/home/<user>/workspace/timmy-kb-acme"
 # root = "C:/Users/<User>/clienti/timmy-kb-acme"
 ```
 
-MCP è un protocollo standard per esporre tool/contesto a un agente; in Codex si abilita dichiarando `mcp_servers` nella config. Architettura host–server e filtri tool sono documentati anche nell'Agents SDK di OpenAI.
+MCP è un protocollo standard per esporre tool/contesto a un agente; in Codex si abilita dichiarando `mcp_servers` nella config. Architettura host-server e filtri tool sono documentati anche nell'Agents SDK di OpenAI.
 
-Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per l'accesso al DB tag (SSoT) puoi valutare un server MCP specifico per SQLite, mantenendo il principio "DB first, YAML legacy". (Allineamento richiesto anche nei relativi AGENTS.md di servizio.)
+Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per l'accesso al DB tag (SSoT) puoi valutare un server MCP specifico per SQLite, mantenendo il principio "DB first, YAML solo bootstrap". (Allineamento richiesto anche nei relativi AGENTS.md di servizio.)
 
 ---
 
@@ -82,7 +82,7 @@ Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per
 
 Esempi di prompt efficaci
 - "Allinea docs/ alle coding rules e ai termini glossario; applica correzioni cSpell e aggiorna frontmatter. Chiudi con make docs e allega diff."
-- "Nel servizio semantic.api, usa DB come SSoT per i tag; se trovi YAML trattalo come legacy. Scrivi migrazione e test."
+- "Nel servizio semantic.api, usa DB come SSoT per i tag. Scrivi migrazione e test."
 - "Rivedi onboarding_ui.py: spiega flusso, dipendenze e orchestratori chiamati; proponi 3 micro‑PR idempotenti con stima impatto."
 
 ---

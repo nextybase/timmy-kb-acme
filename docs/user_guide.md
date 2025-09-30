@@ -5,7 +5,7 @@ Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
 
-Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica (gli helper interni/ex-CLI sono deprecati).
+Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica.
 
 ---
 
@@ -79,9 +79,9 @@ output/timmy-kb-<slug>/
 ---
 
 ## Note operative
-- **RAW locale Ã¨ la sorgente** per conversione/enrichment; Drive Ã¨ usato per provisioning/ingest.
+- **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
-- Log con redazione automatica se `LOG_REDACTION` Ã¨ attivo.
+- Log con redazione automatica se `LOG_REDACTION` è attivo.
 
 ---
 ## Controllo caratteri & encoding (UTF-8)

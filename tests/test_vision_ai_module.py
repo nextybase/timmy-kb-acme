@@ -99,6 +99,15 @@ def test_json_to_yaml_missing_area_field_raises() -> None:
         vision_ai._json_to_yaml(broken)
 
 
+def test_json_to_yaml_missing_keywords_raises() -> None:
+    data = {
+        "context": {"slug": "demo", "client_name": "Demo"},
+        "areas": [{"key": "demo", "ambito": "Ambito", "descrizione": "Desc"}],
+    }
+    with pytest.raises(ConfigError, match="keywords"):
+        vision_ai._json_to_yaml(data)
+
+
 def test_extract_pdf_text_returns_plain_text(tmp_path: Path) -> None:
     pdf_path = tmp_path / "vision.pdf"
     _make_pdf(pdf_path, "Contenuto Visione")

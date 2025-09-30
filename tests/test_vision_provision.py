@@ -13,6 +13,7 @@ from pipeline.exceptions import ConfigError
 
 # Import modulo sotto test
 from semantic.vision_provision import provision_from_vision
+from semantic.vision_utils import json_to_cartelle_raw_yaml
 
 # ---- Fakes OpenAI -----------------------------------------------------------
 
@@ -248,6 +249,16 @@ def test_context_not_dict_raises(monkeypatch, tmp_workspace: Path):
 
     with pytest.raises(ConfigError):
         provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+
+
+def test_json_to_cartelle_missing_keywords_raises() -> None:
+    data = {
+        "context": {"slug": "demo"},
+        "areas": [{"key": "demo", "ambito": "Ambito", "descrizione": "Desc"}],
+    }
+
+    with pytest.raises(ConfigError, match="keywords"):
+        json_to_cartelle_raw_yaml(data, slug="demo")
 
 
 def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
