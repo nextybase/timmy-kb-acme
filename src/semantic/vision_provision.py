@@ -481,12 +481,20 @@ def provision_from_vision(
 
     # 3) JSON -> YAML (semantic_mapping + cartelle_raw)
     categories: Dict[str, Dict[str, Any]] = {}
-    for area in data["areas"]:
-        raw_keywords = area["keywords"]
+    for idx, area in enumerate(data["areas"]):
+        raw_keywords = area.get("keywords")
         if raw_keywords is None:
-            raw_keywords = []
-        if not isinstance(raw_keywords, list):
+            raise ConfigError(
+                f"Vision payload area #{idx} priva di 'keywords'.",
+                slug=slug,
+            )
+        if isinstance(raw_keywords, str):
             raw_keywords = [raw_keywords]
+        elif not isinstance(raw_keywords, list):
+            raise ConfigError(
+                f"Vision payload area #{idx} ha 'keywords' non valido (atteso list/str).",
+                slug=slug,
+            )
         keywords = [str(item).strip() for item in raw_keywords if str(item).strip()]
         categories[area["key"]] = {
             "ambito": area["ambito"],

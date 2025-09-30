@@ -261,6 +261,23 @@ def test_json_to_cartelle_missing_keywords_raises() -> None:
         json_to_cartelle_raw_yaml(data, slug="demo")
 
 
+def test_provision_missing_keywords_raises(monkeypatch, tmp_workspace: Path):
+    output_parsed = {
+        "context": {"slug": "dummy", "client_name": "Dummy"},
+        "areas": [{"key": "artefatti-operativi", "ambito": "operativo", "descrizione": "Documenti"}],
+    }
+
+    import semantic.vision_provision as S
+
+    monkeypatch.setattr(S, "make_openai_client", lambda: FakeOpenAI(output_parsed))
+
+    ctx = DummyCtx(base_dir=tmp_workspace)
+    pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
+
+    with pytest.raises(ConfigError, match="keywords"):
+        provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+
+
 def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     """Se context.slug è diverso dallo slug atteso, deve fallire con ConfigError (guard-rail anti leak)."""
     mismatched = {

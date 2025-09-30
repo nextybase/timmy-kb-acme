@@ -65,12 +65,6 @@ namespace_packages = true
 module = "pipeline.config_utils"
 disable_error_code = ["call-overload","no-any-return","arg-type"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra"
-pythonpath = ["."]
-
-
 [[tool.mypy.overrides]]
 module = "dotenv.*"
 ignore_missing_imports = true
@@ -82,7 +76,7 @@ ignore_missing_imports = true
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["timmy_kb"]
+known_first_party = ["timmy_kb", "pipeline", "semantic", "storage", "ui"]
 
 [tool.ruff]
 line-length = 120
