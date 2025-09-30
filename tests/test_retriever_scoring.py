@@ -111,3 +111,34 @@ def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
     out = search(params, embeddings)
     # "ok" deve venire prima di "no-emb" (score 1.0 vs 0.0)
     assert [x["content"] for x in out] == ["ok", "no-emb"]
+
+
+def test_search_large_vectors_preserve_order(monkeypatch) -> None:
+    size = 20000
+    base_vec = [float((i % 17) - 8) for i in range(size)]
+    embeddings = EmbedOne(base_vec)
+
+    slightly_worse = [v + (0.25 if (i % 2 == 0) else -0.25) for i, v in enumerate(base_vec)]
+    orthogonal_like = [0.0 for _ in range(size)]
+
+    cands = [
+        _cand("best", list(base_vec)),
+        _cand("slightly-worse", slightly_worse),
+        _cand("orth", orthogonal_like),
+    ]
+
+    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
+
+    params = QueryParams(
+        db_path=None,
+        project_slug="acme",
+        scope="kb",
+        query="q",
+        k=3,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
+    )
+    out = search(params, embeddings)
+
+    contents = [x["content"] for x in out]
+    assert contents == ["best", "slightly-worse", "orth"]
+    assert out[0]["score"] >= out[1]["score"] > out[2]["score"]

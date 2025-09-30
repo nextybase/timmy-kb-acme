@@ -6,6 +6,7 @@
 
 import math
 from collections import deque
+from typing import Iterable
 
 import pytest
 
@@ -46,6 +47,30 @@ def test_cosine_zero_norm_returns_zero():
 
 
 # ----------------------- Test SSoT / precedence candidate_limit -----------------------
+
+
+def test_cosine_large_generator_handles_massive_input():
+    size = 200_000
+
+    def factory() -> Iterable[float]:
+        for i in range(size):
+            yield float((i % 11) - 5)
+
+    val = cosine(factory(), factory())
+    assert val == pytest.approx(1.0, rel=1e-12)
+
+
+def test_cosine_scales_huge_magnitudes():
+    size = 4096
+    huge = 1e308
+
+    def make_vec(sign: float):
+        return (huge * sign for _ in range(size))
+
+    same = cosine(make_vec(1.0), make_vec(1.0))
+    opposite = cosine(make_vec(1.0), make_vec(-1.0))
+    assert same == pytest.approx(1.0, rel=1e-12)
+    assert opposite == pytest.approx(-1.0, rel=1e-12)
 
 
 def _default_params():

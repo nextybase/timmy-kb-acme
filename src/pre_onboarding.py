@@ -523,8 +523,8 @@ def pre_onboarding_main(
     yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
 
     if dry_run:
-        logger.info("ModalitÃ  dry-run: salto operazioni su Google Drive.")
-        logger.info("Pre-onboarding locale completato (dry-run).")
+        logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
+        logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "mode": "dry-run", "artifacts": 1})
         return
 
     # Verifica disponibilitÃ  funzioni Drive prima della fase remota
@@ -573,9 +573,17 @@ if __name__ == "__main__":
     run_id = uuid.uuid4().hex
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
+    def _error_extra(err_value: list[str], slug_value: Optional[str] = None) -> Dict[str, Any]:
+        slug_ref = slug_value if slug_value is not None else (unresolved_slug or None)
+        mode = "non-interactive" if args.non_interactive else "interactive"
+        return {"slug": slug_ref, "mode": mode, "dry_run": bool(args.dry_run), "err": err_value, "run_id": run_id}
+
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("Errore: in modalitÃ  non interattiva Ã¨ richiesto --slug (o slug posizionale).")
+        early_logger.error(
+            "cli.pre_onboarding.exit.config_error",
+            extra=_error_extra(["Missing slug in non-interactive mode"], locals().get("slug")),
+        )
         sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
     try:
         slug = ensure_valid_slug(
@@ -599,11 +607,20 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         sys.exit(130)
     except ConfigError as exc:
-        early_logger.error("Uscita per ConfigError: " + str(exc))
+        early_logger.error(
+            "cli.pre_onboarding.exit.config_error",
+            extra=_error_extra(str(exc).splitlines()[:1], slug),
+        )
         sys.exit(exit_code_for(exc))
     except PipelineError as exc:
-        early_logger.error(f"Uscita per PipelineError: {exc}")
+        early_logger.error(
+            "cli.pre_onboarding.exit.pipeline_error",
+            extra=_error_extra(str(exc).splitlines()[:1], slug),
+        )
         sys.exit(exit_code_for(exc))
     except Exception as exc:  # noqa: BLE001 - hardening finale
-        early_logger.error(f"Uscita per errore non gestito: {exc}")
+        early_logger.error(
+            "cli.pre_onboarding.exit.unhandled",
+            extra=_error_extra(str(exc).splitlines()[:1], slug),
+        )
         sys.exit(exit_code_for(PipelineError(str(exc))))

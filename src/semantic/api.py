@@ -584,21 +584,34 @@ def index_markdown_to_db(
             return 0
 
         # Indicizzazione parziale su mismatch (senza abort) — accumula vectors_empty
-        if len(vecs) != len(contents):
+        original_contents_len = len(contents)
+        original_embeddings_len = len(vecs)
+        if original_embeddings_len != original_contents_len:
             logger.warning(
                 "semantic.index.mismatched_embeddings",
-                extra={"slug": slug, "embeddings": len(vecs), "contents": len(contents)},
+                extra={"slug": slug, "embeddings": original_embeddings_len, "contents": original_contents_len},
             )
-            min_len = min(len(vecs), len(contents))
-            dropped_mismatch = (len(contents) - min_len) + (len(vecs) - min_len)
+            min_len = min(original_embeddings_len, original_contents_len)
+            dropped_mismatch = (original_contents_len - min_len) + (original_embeddings_len - min_len)
             if dropped_mismatch > 0:
-                logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped_mismatch})
+                logger.info(
+                    "semantic.index.embedding_pruned",
+                    extra={
+                        "slug": slug,
+                        "cause": "mismatch",
+                        "dropped": int(dropped_mismatch),
+                        "kept": int(min_len),
+                        "contents": int(original_contents_len),
+                        "embeddings": int(original_embeddings_len),
+                    },
+                )
             vectors_empty += max(0, dropped_mismatch)
             contents = contents[:min_len]
             rel_paths = rel_paths[:min_len]
             vecs = vecs[:min_len]
 
-        # Filtro embeddings vuoti per-item — accumula vectors_empty
+        original_candidate_count = len(contents)
+        # Filtro embeddings vuoti per-item ? accumula vectors_empty
         filtered_contents: list[str] = []
         filtered_paths: list[str] = []
         filtered_vecs: list[list[float]] = []
@@ -609,7 +622,7 @@ def index_markdown_to_db(
             filtered_paths.append(rel_name)
             filtered_vecs.append(list(emb))
 
-        dropped_empty = len(contents) - len(filtered_contents)
+        dropped_empty = original_candidate_count - len(filtered_contents)
         if dropped_empty > 0 and len(filtered_contents) == 0:
             # Compat test legacy + evento strutturato
             logger.warning("Primo vettore embedding vuoto", extra={"slug": slug})
@@ -637,9 +650,16 @@ def index_markdown_to_db(
             return 0
 
         if dropped_empty > 0:
-            # Log umano + strutturato (senza replicare 'skips' qui)
-            logger.info("semantic.index.embedding_pruned", extra={"slug": slug, "dropped": dropped_empty})
-            logger.info("Embeddings scartati (dropped): %s", dropped_empty)
+            logger.info(
+                "semantic.index.embedding_pruned",
+                extra={
+                    "slug": slug,
+                    "cause": "empty_embedding",
+                    "dropped": int(dropped_empty),
+                    "kept": int(len(filtered_contents)),
+                    "candidates": int(original_candidate_count),
+                },
+            )
         vectors_empty += max(0, dropped_empty)
 
         # KPI aggregato sugli skip — EMESSO UNA SOLA VOLTA (se > 0)

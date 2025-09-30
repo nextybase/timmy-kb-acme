@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Set, cast
 
 import pipeline.path_utils as ppath  # late-bound per testability
+from pipeline.constants import REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError
 
 __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
@@ -135,6 +136,40 @@ def _semantic_dir(base_dir: Path) -> Path:
     return base_dir / "semantic"
 
 
+def _derive_slug(base_dir: Path) -> str | None:
+    name = Path(base_dir).name
+    if not name:
+        return None
+    prefix = REPO_NAME_PREFIX
+    if prefix and name.startswith(prefix):
+        stripped = name[len(prefix) :]
+        if stripped:
+            return stripped
+    return name
+
+
+def _log_vocab_event(
+    logger: logging.Logger,
+    event: str,
+    *,
+    slug: str | None,
+    file_path: Path,
+    canon_count: int,
+) -> None:
+    try:
+        logger.info(
+            event,
+            extra={
+                "event": event,
+                "slug": slug,
+                "file_path": str(file_path),
+                "canon_count": int(canon_count),
+            },
+        )
+    except Exception:
+        pass
+
+
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
     """
     Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
@@ -148,16 +183,17 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     # Path-safety forte con risoluzione reale
     sem_dir = ppath.ensure_within_and_resolve(base_dir, _semantic_dir(base_dir))
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
+    slug = _derive_slug(base_dir)
 
     # DB assente: enrichment disabilitato (nessuna eccezione)
     if not db_path.exists():
-        try:
-            logger.info(
-                "Vocabolario DB assente: enrichment disabilitato",
-                extra={"file_path": str(db_path)},
-            )
-        except Exception:
-            pass
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.db_missing",
+            slug=slug,
+            file_path=db_path,
+            canon_count=0,
+        )
         return {}
 
     try:
@@ -172,14 +208,20 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     raw = load_tags_reviewed_db(db_path)
     vocab = _to_vocab(raw)
     if not vocab:
-        logger.info(
-            "Vocabolario DB presente ma vuoto (senza canonici)",
-            extra={"file_path": str(db_path)},
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.db_empty",
+            slug=slug,
+            file_path=db_path,
+            canon_count=0,
         )
         return {}
 
-    logger.info(
-        "Vocabolario reviewed caricato",
-        extra={"file_path": str(db_path), "canon_count": len(vocab)},
+    _log_vocab_event(
+        logger,
+        "semantic.vocab.loaded",
+        slug=slug,
+        file_path=db_path,
+        canon_count=len(vocab),
     )
     return vocab

@@ -52,4 +52,11 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
     messages = [r.getMessage() for r in caplog.records]
     assert any("semantic.index.mismatched_embeddings" in m for m in messages)
     assert any("semantic.index.embedding_pruned" in m for m in messages)
+
+    pruned_records = [r for r in caplog.records if r.getMessage() == "semantic.index.embedding_pruned"]
+    assert pruned_records
+    pruned = pruned_records[-1]
+    assert getattr(pruned, "cause", None) == "mismatch"
+    assert getattr(pruned, "dropped", None) == 1
+    assert getattr(pruned, "kept", None) == 1
     assert any("semantic.index.skips" in m for m in messages)

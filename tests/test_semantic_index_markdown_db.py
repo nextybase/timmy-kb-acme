@@ -191,6 +191,13 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
     assert any("semantic.index.skips" in m for m in msgs)
     assert any("semantic.index.done" in m for m in msgs)
 
+    pruned_records = [r for r in caplog.records if r.getMessage() == "semantic.index.embedding_pruned"]
+    assert pruned_records
+    pruned = pruned_records[-1]
+    assert getattr(pruned, "cause", None) == "mismatch"
+    assert getattr(pruned, "dropped", None) == 1
+    assert getattr(pruned, "kept", None) == 1
+
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
     base = tmp_path / "output" / "timmy-kb-x"
@@ -278,9 +285,8 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
     )
     assert inserted == 1
     # Log di drop presente (accetta messaggio umano o evento strutturato)
-    assert any(
-        ("scartati" in r.getMessage())
-        or ("dropped" in r.getMessage())
-        or (r.getMessage() == "semantic.index.embedding_pruned")
-        for r in caplog.records
-    )
+    pruned_records = [r for r in caplog.records if r.getMessage() == "semantic.index.embedding_pruned"]
+    assert pruned_records
+    pruned = pruned_records[-1]
+    assert getattr(pruned, "cause", None) == "empty_embedding"
+    assert getattr(pruned, "dropped", None) == 1

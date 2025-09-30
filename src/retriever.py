@@ -25,6 +25,7 @@ import math
 import time
 from dataclasses import MISSING, dataclass, replace
 from heapq import nlargest
+from itertools import tee
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
@@ -82,37 +83,34 @@ def _default_candidate_limit() -> int:
 
 
 def cosine(a: Iterable[float], b: Iterable[float]) -> float:
-    """Calcola la similarità coseno tra due vettori numerici.
+    """Calcola la similarit? coseno tra due vettori numerici."""
 
-    Caratteristiche:
-    - Iterator-safe: non assume slicing/indicizzazione; non alloca copie.
-    - Se una norma è 0 o uno dei due è vuoto, restituisce 0.0.
-    - In caso di lunghezze diverse, zip tronca al minimo comune.
-    """
-    # Stabilizzazione numerica: valuta fattore di scala per evitare overflow
-    pairs = [(float(x), float(y)) for x, y in zip(a, b, strict=False)]
-    if not pairs:
-        return 0.0
-    try:
-        import sys as _sys
+    pairs_iter = ((float(x), float(y)) for x, y in zip(a, b, strict=False))
+    stats_iter, calc_iter = tee(pairs_iter)
 
-        n = max(1, len(pairs))
-        hi = math.sqrt(_sys.float_info.max / float(n)) * 0.99
-        lo = math.sqrt(_sys.float_info.min) * 1.01
-    except Exception:
-        hi = 1.3e154
-        lo = 1e-154
+    count = 0
     max_abs = 0.0
-    for x, y in pairs:
+    for x, y in stats_iter:
         ax = abs(x)
         ay = abs(y)
         if ax > max_abs:
             max_abs = ax
         if ay > max_abs:
             max_abs = ay
-    if max_abs == 0.0:
+        count += 1
+
+    if count == 0 or max_abs == 0.0:
         return 0.0
-    # Se troppo grande -> scala in giù; se troppo piccolo -> scala in su
+
+    try:
+        import sys as _sys
+
+        hi = math.sqrt(_sys.float_info.max / float(count)) * 0.99
+        lo = math.sqrt(_sys.float_info.min) * 1.01
+    except Exception:
+        hi = 1.3e154
+        lo = 1e-154
+
     if max_abs > hi:
         scale = hi / max_abs
     elif max_abs < lo:
@@ -123,20 +121,26 @@ def cosine(a: Iterable[float], b: Iterable[float]) -> float:
     dot = 0.0
     na = 0.0
     nb = 0.0
-    for x, y in ((x * scale, y * scale) for x, y in pairs):
-        dot += x * y
-        na += x * x
-        nb += y * y
+    for x, y in calc_iter:
+        sx = x * scale
+        sy = y * scale
+        dot += sx * sy
+        na += sx * sx
+        nb += sy * sy
+
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+
     denom = math.sqrt(na) * math.sqrt(nb)
     if denom == 0.0:
         return 0.0
-    s = dot / denom
-    # Clamp per errori numerici +/- epsilon
-    if s > 1.0:
+
+    result = dot / denom
+    if result > 1.0:
         return 1.0
-    if s < -1.0:
+    if result < -1.0:
         return -1.0
-    return s
+    return result
 
 
 # --------------------------------- Validazioni ------------------------------------

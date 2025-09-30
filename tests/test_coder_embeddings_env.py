@@ -79,3 +79,20 @@ def test_coder_embeddings_only_openai_key_also_works(monkeypatch, caplog):
         rec.message == "embeddings.api_key" and getattr(rec, "source", None) == "codex_fallback"
         for rec in caplog.records
     )
+
+
+def test_coder_embeddings_handles_missing_streamlit(monkeypatch, caplog):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY_CODEX", raising=False)
+
+    import timmy_kb_coder as tkc
+
+    importlib.reload(tkc)
+    tkc.st = None
+
+    caplog.set_level("INFO")
+    client = tkc._emb_client_or_none(use_rag=True)
+
+    assert client is None
+    assert any(rec.message == "coder.rag.disabled" for rec in caplog.records)
+    assert any(getattr(rec, "event", None) == "coder.rag.disabled" for rec in caplog.records)

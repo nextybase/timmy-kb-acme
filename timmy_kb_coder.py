@@ -93,31 +93,22 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
         return None
     api_key = os.getenv("OPENAI_API_KEY")
     api_key_codex = os.getenv("OPENAI_API_KEY_CODEX")
-    # Se mancano entrambe le chiavi, disattiva RAG con messaggio utente
+    ui = st
     if not api_key and not api_key_codex:
-        st.warning("OPENAI_API_KEY_CODEX non trovato nell'ambiente (.env consigliato). RAG disattivato.")
+        LOGGER.info("coder.rag.disabled", extra={"event": "coder.rag.disabled", "reason": "missing_openai_keys"})
+        if ui is not None:
+            ui.warning("OPENAI_API_KEY_CODEX non trovato nell'ambiente (.env consigliato). RAG disattivato.")
         return None
     try:
-        # Preferisci OPENAI_API_KEY se presente; altrimenti fallback alla CODEX senza mutare l'ambiente
         if api_key:
-            # Sorgente chiavi: env standard
-            LOGGER.info(
-                "embeddings.api_key",
-                extra={"event": "embeddings.api_key", "source": "env"},
-            )
+            LOGGER.info("embeddings.api_key", extra={"event": "embeddings.api_key", "source": "env"})
             return OpenAIEmbeddings()
-        # Fallback soft: usa la CODEX per costruire il client embeddings
-        LOGGER.info(
-            "embeddings.api_key",
-            extra={"event": "embeddings.api_key", "source": "codex_fallback"},
-        )
+        LOGGER.info("embeddings.api_key", extra={"event": "embeddings.api_key", "source": "codex_fallback"})
         return OpenAIEmbeddings(api_key=api_key_codex)
     except Exception as e:  # pragma: no cover - mostra feedback in UI
-        LOGGER.exception(
-            "coder.embeddings.error",
-            extra={"event": "coder.embeddings.error", "error": str(e)},
-        )
-        st.error(f"Errore init embeddings: {e}")
+        LOGGER.exception("coder.embeddings.ui_error", extra={"event": "coder.embeddings.ui_error", "error": str(e)})
+        if ui is not None:
+            ui.error(f"Errore init embeddings: {e}")
         return None
 
 
