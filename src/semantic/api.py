@@ -625,8 +625,14 @@ def index_markdown_to_db(
         dropped_empty = original_candidate_count - len(filtered_contents)
         if dropped_empty > 0 and len(filtered_contents) == 0:
             # Compat test legacy + evento strutturato
-            logger.warning("Primo vettore embedding vuoto", extra={"slug": slug})
-            logger.warning("semantic.index.all_embeddings_empty", extra={"slug": slug, "count": len(vecs)})
+            logger.warning(
+                "semantic.index.first_embedding_empty",
+                extra={"slug": slug, "cause": "empty_embedding"},
+            )
+            logger.warning(
+                "semantic.index.all_embeddings_empty",
+                extra={"event": "semantic.index.all_embeddings_empty", "slug": slug, "count": len(vecs)},
+            )
             vectors_empty += dropped_empty
             try:
                 m.set_artifacts(0)

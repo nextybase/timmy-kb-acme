@@ -143,7 +143,7 @@ def bootstrap_semantic_templates(
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
     - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
 
-    Nota: per retro-compatibilitÃ  puoi duplicare anche in semantic/semantic_mapping.yaml.
+    Nota: duplica automaticamente anche semantic/semantic_mapping.yaml per compatibilita UI.
     """
     if context.base_dir is None:
         raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)

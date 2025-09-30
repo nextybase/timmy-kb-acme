@@ -107,6 +107,9 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
         return OpenAIEmbeddings(api_key=api_key_codex)
     except Exception as e:  # pragma: no cover - mostra feedback in UI
         LOGGER.exception("coder.embeddings.ui_error", extra={"event": "coder.embeddings.ui_error", "error": str(e)})
+        LOGGER.info(
+            "coder.rag.disabled", extra={"event": "coder.rag.disabled", "reason": "init_error", "error": str(e)}
+        )
         if ui is not None:
             ui.error(f"Errore init embeddings: {e}")
         return None

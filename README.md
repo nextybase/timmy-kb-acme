@@ -237,7 +237,7 @@ py src/pre_onboarding.py [--slug <id>] [--name <nome>] [--non-interactive] [--dr
 
 1) Richiede slug (e, se interattivo, nome cliente).
 2) Crea struttura locale (`raw/`, `book/`, `config/`, `logs/`, `semantic/`).
-3) Copia template in `semantic/` (`cartelle_raw.yaml`, `semantic_mapping.yaml`) con blocco di contesto.
+3) Copia template in `semantic/` (`cartelle_raw.yaml`, `tags_reviewed.yaml` + duplicato `semantic_mapping.yaml` per compatibilita UI) con blocco di contesto.
 4) Drive (opz.): se configurato, crea/aggiorna la struttura remota e carica `config.yaml`; aggiorna il config locale con gli ID.
 
 > Con `--dry-run` lavora solo in locale, senza Drive.

@@ -24,13 +24,13 @@ def write(p: Path, text: str) -> None:
 
 def test_load_semantic_mapping_normalization_variants(tmp_path: Path) -> None:
     cfg = tmp_path / "client" / "config"
-    # Mix of list, dict(keywords), dict(esempio), dict(tags), and single string
+    # Mix of list, dict(keywords), dict(tags), and single string
     mapping_yaml = """
     Concept1: [" Foo ", "bar", "foo"]
     Concept2:
       keywords: ["x", "X", "y"]
     Concept3:
-      esempio: ["e1", "e2", "e1"]
+      keywords: ["e1", "e2", "e1"]
     Concept4:
       tags: ["t1", "t2", "t1", "t3"]
     Concept5: "solo"

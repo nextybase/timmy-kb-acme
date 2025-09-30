@@ -122,9 +122,12 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
         db_path=tmp_path / "db_empty.sqlite",
     )
     assert ret == 0
-    # Accetta sia il messaggio legacy sia l’evento strutturato introdotto
+    # Verifica i log strutturati emessi quando gli embeddings risultano vuoti
+    assert any(r.getMessage() == "semantic.index.first_embedding_empty" for r in caplog.records)
+    assert any(r.getMessage() == "semantic.index.all_embeddings_empty" for r in caplog.records)
     assert any(
-        ("Primo vettore embedding vuoto" in r.getMessage()) or (r.getMessage() == "semantic.index.all_embeddings_empty")
+        r.getMessage() == "semantic.index.all_embeddings_empty"
+        and getattr(r, "event", None) == "semantic.index.all_embeddings_empty"
         for r in caplog.records
     )
 

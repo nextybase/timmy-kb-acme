@@ -12,7 +12,6 @@ Formato normalizzato: dict[str, list[str]]
   Accetta varianti:
     - concept: [keywords...]
     - concept: { keywords: [...]}            # preferito
-    - concept: { esempio: [...] }            # compat legacy (default_semantic_mapping.yaml)
     - concept: { tags: [...] }               # fallback generico
 """
 
@@ -40,9 +39,9 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
     """Converte il mapping grezzo in un dizionario {concept: [keywords, ...]}.
 
     Regole:
-    - Se il valore Ã¨ una lista -> usala come keywords
-    - Se Ã¨ un dict -> prova 'keywords', poi 'esempio', poi 'tags'
-    - Se Ã¨ una stringa -> singola keyword
+    - Se il valore e' una lista -> usala come keywords
+    - Se e' un dict -> prova 'keywords', poi 'tags'
+    - Se e' una stringa -> singola keyword
     - Dedup case-insensitive preservando l'ordine (mantiene il casing originale)
     """
     norm: Dict[str, List[str]] = {}
@@ -55,8 +54,6 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
             src = None
             if isinstance(payload.get("keywords"), list):
                 src = payload.get("keywords")
-            elif isinstance(payload.get("esempio"), list):  # compat con YAML attuale
-                src = payload.get("esempio")
             elif isinstance(payload.get("tags"), list):
                 src = payload.get("tags")
             if src:
@@ -176,7 +173,7 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
     # 3) fallback se vuoto/non valido
     if not mapping:
         logger.warning(
-            "âš ï¸ Mapping semantico vuoto/non valido; carico fallback",
+            "âš ï ̧ Mapping semantico vuoto/non valido; carico fallback",
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
         # Risoluzione sicura del fallback rispetto alla root del repo

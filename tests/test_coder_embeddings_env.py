@@ -96,3 +96,24 @@ def test_coder_embeddings_handles_missing_streamlit(monkeypatch, caplog):
     assert client is None
     assert any(rec.message == "coder.rag.disabled" for rec in caplog.records)
     assert any(getattr(rec, "event", None) == "coder.rag.disabled" for rec in caplog.records)
+
+
+def test_coder_embeddings_logs_disabled_on_init_error(monkeypatch, caplog):
+    monkeypatch.setenv("OPENAI_API_KEY", "primary-secret")
+
+    import timmy_kb_coder as tkc
+
+    importlib.reload(tkc)
+
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tkc, "OpenAIEmbeddings", _raise, raising=True)
+
+    caplog.set_level("INFO")
+    client = tkc._emb_client_or_none(use_rag=True)
+
+    assert client is None
+    assert any(
+        rec.message == "coder.rag.disabled" and getattr(rec, "reason", None) == "init_error" for rec in caplog.records
+    )

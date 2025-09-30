@@ -47,10 +47,11 @@ def split_mapping(root: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, Any]], Dict
         if k in reserved:
             continue
         if isinstance(v, dict):
+            keywords = v.get("keywords") or v.get("esempio") or []
             cats[k] = {
                 "ambito": str(v.get("ambito", "")),
                 "descrizione": str(v.get("descrizione", "")),
-                "esempio": list(v.get("esempio", []) or []),
+                "esempio": list(keywords),
             }
     return cats, reserved
 
@@ -81,7 +82,7 @@ def build_mapping(
         out[key] = {
             "ambito": str(data.get("ambito", "")),
             "descrizione": str(data.get("descrizione", "")),
-            "esempio": [str(x) for x in (data.get("esempio") or []) if str(x).strip()],
+            "keywords": [str(x) for x in (data.get("esempio") or []) if str(x).strip()],
         }
     return out
 

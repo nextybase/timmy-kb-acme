@@ -112,6 +112,7 @@ output/
     README.md
     SUMMARY.md
 ```
+Il bootstrap crea sia tags_reviewed.yaml sia semantic_mapping.yaml; la UI legge semantic_mapping.yaml, runtime SSoT = SQLite (tags.db).
 SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e retro‑compatibilità
 
 ---
@@ -285,6 +286,7 @@ output/
     README.md
     SUMMARY.md
 ```
+Il bootstrap crea sia tags_reviewed.yaml sia semantic_mapping.yaml; la UI legge semantic_mapping.yaml, runtime SSoT = SQLite (tags.db).
 SSoT dei tag reviewed = DB SQLite. Lo YAML resta come input per migrazione e retro‑compatibilità, ma sarà deprecato.
 
 ---
