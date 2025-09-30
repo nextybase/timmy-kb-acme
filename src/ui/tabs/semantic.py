@@ -7,6 +7,7 @@ import streamlit as st
 
 from pipeline.context import ClientContext
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
+from ui.clients_store import set_state
 
 
 def render_semantic_tab(*, log: Any, slug: str) -> None:
@@ -27,6 +28,7 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             vocab = load_reviewed_vocab(base_dir, log)
             touched = enrich_frontmatter(ctx, log, vocab, slug=slug)
             st.success(f"Frontmatter arricchiti: {len(touched)}")
+            set_state(slug, "arricchito")
         except Exception as e:
             st.exception(e)
 
@@ -35,5 +37,6 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
             write_summary_and_readme(ctx, log, slug=slug)
             st.success("SUMMARY.md e README.md generati/validati.")
+            set_state(slug, "finito")
         except Exception as e:
             st.exception(e)

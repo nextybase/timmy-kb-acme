@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover
     get_drive_service = None
     upload_config_to_drive_folder = None
 
-from ui.clients_store import ClientEntry, ensure_db, load_clients, upsert_client
+from ui.clients_store import ClientEntry, ensure_db, load_clients, set_state, upsert_client
 from ui.services.drive_runner import emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
@@ -46,6 +46,17 @@ except Exception:  # pragma: no cover
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = REPO_ROOT / "output"
 BASE_CONFIG = REPO_ROOT / "config" / "config.yaml"
+
+
+def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
+    """Aggiorna lo stato del cliente registrato, senza interrompere la UI."""
+    try:
+        set_state(slug, stato)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("ui.client_state_update_failed", extra={"slug": slug, "target_state": stato, "error": str(exc)})
+        return False
+    logger.info("ui.client_state_updated", extra={"slug": slug, "state": stato})
+    return True
 
 
 def _setup_logging() -> logging.Logger:
@@ -372,6 +383,7 @@ def _open_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> N
         _run_create_local_structure(slug, workspace_dir, logger)
         _run_drive_structure(slug, workspace_dir, logger)
         _run_generate_readmes(slug, logger)
+    _update_client_state(logger, slug, "inizializzato")
     st.success("Workspace inizializzato. Hai accesso agli editor YAML qui sotto.")
     try:
         logger.info("ui.workspace.opened", extra={"slug": slug})

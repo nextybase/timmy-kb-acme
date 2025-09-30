@@ -4,6 +4,7 @@ from typing import Any
 
 import streamlit as st
 
+from ui.clients_store import set_state
 from ui.services.drive_runner import build_drive_from_mapping, download_raw_from_drive, emit_readmes_for_raw
 
 
@@ -26,6 +27,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                     slug=slug, client_name=st.session_state.get("client_name", ""), progress=_cb
                 )
                 st.success(f"Struttura creata: {ids}")
+                set_state(slug, "inizializzato")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
             except Exception as e:
                 st.exception(e)
@@ -48,6 +50,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                 count = len(res) if hasattr(res, "__len__") else None
                 msg_tail = f" ({count} file)" if count is not None else ""
                 st.success(f"Download completato{msg_tail}.")
+                set_state(slug, "pronto")
                 log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                 st.session_state["raw_downloaded"] = True
                 st.session_state["raw_ready"] = True
