@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover
     get_drive_service = None
     upload_config_to_drive_folder = None
 
+from ui.clients_store import ClientEntry, ensure_db, upsert_client
 from ui.services.drive_runner import emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
@@ -570,46 +571,72 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
 
 
 def _render_landing(logger: logging.Logger) -> None:
-    st.title("Onboarding NeXT - Nuovo cliente")
-    slug_input = st.text_input("Slug (kebab-case)", key="landing_slug", placeholder="acme-sicilia")
+    tab_new, tab_edit = st.tabs(["Nuovo cliente", "Modifica cliente"])
 
-    col_submit, col_exit = st.columns(2)
-    with col_submit:
-        submit = st.button("Invia", type="primary", use_container_width=True)
-    with col_exit:
-        if st.button("Esci", use_container_width=True):
-            _request_shutdown(logger)
+    with tab_new:
+        slug_input = st.text_input("Slug (kebab-case)", key="landing_new_slug", placeholder="acme-sicilia")
+        name_input = st.text_input("Nome cliente", key="landing_new_name", placeholder="Acme S.p.A.")
+        uploaded_pdf = st.file_uploader("VisionStatement.pdf", type=["pdf"], key="landing_new_pdf")
 
-    if not submit:
-        return
+        col_submit, col_exit = st.columns([2, 1])
+        with col_submit:
+            submit = st.button("Crea e continua", type="primary", use_container_width=True, key="landing_new_submit")
+        with col_exit:
+            if st.button("Esci", use_container_width=True, key="landing_exit_btn"):
+                _request_shutdown(logger)
 
-    slug = slug_input.strip()
-    if not slug:
-        st.error("Inserisci uno slug valido.")
-        return
-    try:
-        validate_slug(slug)
-    except InvalidSlug as exc:
-        st.error(str(exc))
-        try:
-            logger.info("ui.landing.invalid_slug", extra={"slug": slug})
-        except Exception:
-            pass
-        return
+        if submit:
+            slug = slug_input.strip()
+            nome = name_input.strip()
+            if not slug:
+                st.error("Inserisci uno slug valido")
+                return
+            try:
+                validate_slug(slug)
+            except InvalidSlug as exc:
+                st.error(str(exc))
+                try:
+                    logger.info("ui.landing.invalid_slug", extra={"slug": slug})
+                except Exception:
+                    pass
+                return
+            if not nome:
+                st.error("Inserisci un nome cliente")
+                return
+            if uploaded_pdf is None:
+                st.error("Carica il Vision Statement (PDF) per procedere")
+                return
+            pdf_bytes = uploaded_pdf.getvalue() or b""
+            if not pdf_bytes:
+                st.error("Carica il Vision Statement (PDF) per procedere")
+                return
+            try:
+                workspace_dir = _workspace_dir_for(slug)
+                workspace_dir.mkdir(parents=True, exist_ok=True)
+                _copy_base_config(workspace_dir, slug, logger)
+                semantic_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
+                semantic_dir.mkdir(parents=True, exist_ok=True)
+                pdf_path = cast(Path, ensure_within_and_resolve(semantic_dir, semantic_dir / "VisionStatement.pdf"))
+                safe_write_bytes(pdf_path, pdf_bytes, atomic=True)
 
-    workspace_dir = _workspace_dir_for(slug)
-    try:
-        logger.info("ui.landing.open", extra={"slug": slug})
-    except Exception:
-        pass
-    st.session_state["slug"] = slug
-    st.session_state["workspace_dir"] = str(workspace_dir)
-    st.session_state.pop("init_result", None)
+                ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                result: Dict[str, Any] | None = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
 
-    if _vision_outputs_exist(workspace_dir):
-        st.session_state["phase"] = "workspace"
-    else:
-        st.session_state["phase"] = "setup"
+                ensure_db()
+                upsert_client(ClientEntry(slug=slug, nome=nome, stato="nuovo"))
+
+                st.session_state["slug"] = slug
+                st.session_state["workspace_dir"] = str(workspace_dir)
+                st.session_state.pop("init_result", None)
+                st.session_state["init_result"] = result if isinstance(result, dict) else {}
+                st.session_state["phase"] = "setup"
+
+                st.rerun()
+            except (ConfigError, RuntimeError) as exc:
+                st.error(str(exc))
+
+    with tab_edit:
+        st.info("La modifica cliente sarà disponibile a breve.")
 
 
 def main() -> None:
