@@ -57,7 +57,7 @@ La redazione log preferisce la logica di pipeline (`compute_redact_flag`); in as
 - Carica mapping rivisto se esiste, altrimenti un default
 - Editor per una categoria alla volta (supporto HiTL)
 - Validazione (duplicati, campi obbligatori, coerenza)
-- Opzione di normalizzazione chiavi (kebab‑case)
+- Opzione di normalizzazione chiavi (kebab-case)
 
 Percorsi: mapping SSoT in `semantic/semantic_mapping.yaml` (workspace cliente).
 
@@ -231,7 +231,7 @@ Pulsanti e stati rapidi
 - Carica mapping rivisto se esiste, altrimenti un default
 - Editor per una categoria alla volta (supporto HiTL)
 - Validazione (duplicati, campi obbligatori, coerenza)
-- Opzione di normalizzazione chiavi (kebab‑case)
+- Opzione di normalizzazione chiavi (kebab-case)
 
 Percorsi: mapping SSoT in `semantic/semantic_mapping.yaml` (workspace cliente).
 

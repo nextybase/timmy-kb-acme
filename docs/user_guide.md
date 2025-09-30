@@ -30,8 +30,8 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
-- Ãˆ presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
- - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI (modello `gpt-4.1-mini`).
+- È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
+ - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI (modello `gpt-5`).
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
