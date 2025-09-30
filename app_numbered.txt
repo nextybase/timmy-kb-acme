@@ -170,7 +170,7 @@
  170:                         height=120,
  171:                         key=f"desc_{idx}_{cat_key}",
  172:                     )
- 173:                     examples_str = "\n".join([str(x) for x in (meta.get("esempio") or [])])
+ 173:                     examples_str = "\n".join([str(x) for x in (meta.get("keywords") or [])])
  174:                     ex = st.text_area(
  175:                         f"Esempi (uno per riga) - {cat_key}",
  176:                         value=examples_str,
@@ -188,7 +188,7 @@
  188:                             new_cats[cat_key] = {
  189:                                 "ambito": amb.strip(),
  190:                                 "descrizione": desc.strip(),
- 191:                                 "esempio": [ln.strip() for ln in ex.splitlines() if ln.strip()],
+ 191:                                 "keywords": [ln.strip() for ln in ex.splitlines() if ln.strip()],
  192:                             }
  193:                             err = validate_categories(new_cats, normalize_keys=normalize_keys)
  194:                             if err:

@@ -306,10 +306,16 @@ def emit_readmes_for_raw(
         if not folder_id:
             log.warning("raw.subfolder.missing", extra={"category": folder_k})
             continue
+        raw_examples = meta.get("keywords")
+        if raw_examples is None:
+            raw_examples = []
+        if not isinstance(raw_examples, list):
+            raw_examples = [raw_examples]
+        examples = [str(x).strip() for x in raw_examples if str(x).strip()]
         data, mime = _render_readme_pdf_bytes(
             title=meta.get("ambito") or folder_k,
             descr=meta.get("descrizione") or "",
-            examples=[str(x) for x in (meta.get("esempio") or []) if str(x).strip()],
+            examples=examples,
         )
         file_id = _drive_upload_bytes(
             svc,

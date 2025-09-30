@@ -28,7 +28,7 @@ def test_provision_uses_client_name_in_prompt(tmp_path, monkeypatch):
         return {
             "context": {"slug": "x", "client_name": ctx.client_name},
             "areas": [
-                {"key": "core", "ambito": "A", "descrizione": "D", "esempio": []},
+                {"key": "core", "ambito": "A", "descrizione": "D", "keywords": []},
             ],
         }
 

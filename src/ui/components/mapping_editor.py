@@ -39,7 +39,7 @@ def load_default_mapping() -> Dict[str, Any]:
 def split_mapping(root: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """Ritorna (categorie_editabili, blob_riservato).
 
-    Categorie = {cat: {"ambito": str, "descrizione": str, "esempio": List[str]}}
+    Categorie = {cat: {"ambito": str, "descrizione": str, "keywords": List[str]}}
     """
     reserved = {k: v for k, v in root.items() if k in MAPPING_RESERVED}
     cats: Dict[str, Dict[str, Any]] = {}
@@ -47,11 +47,15 @@ def split_mapping(root: Dict[str, Any]) -> Tuple[Dict[str, Dict[str, Any]], Dict
         if k in reserved:
             continue
         if isinstance(v, dict):
-            keywords = v.get("keywords") or v.get("esempio") or []
+            keywords_source = v.get("keywords")
+            if keywords_source is None:
+                keywords_source = []
+            if not isinstance(keywords_source, list):
+                keywords_source = [str(keywords_source)] if keywords_source else []
             cats[k] = {
                 "ambito": str(v.get("ambito", "")),
                 "descrizione": str(v.get("descrizione", "")),
-                "esempio": list(keywords),
+                "keywords": [str(x) for x in keywords_source],
             }
     return cats, reserved
 
@@ -79,10 +83,15 @@ def build_mapping(
     # categorie
     for k, data in categories.items():
         key = to_kebab(k) if normalize_keys else k
+        cleaned_keywords: List[str] = []
+        for item in data.get("keywords") or []:
+            value = str(item).strip()
+            if value:
+                cleaned_keywords.append(value)
         out[key] = {
             "ambito": str(data.get("ambito", "")),
             "descrizione": str(data.get("descrizione", "")),
-            "keywords": [str(x) for x in (data.get("esempio") or []) if str(x).strip()],
+            "keywords": cleaned_keywords,
         }
     return out
 

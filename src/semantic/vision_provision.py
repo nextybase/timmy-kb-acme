@@ -49,12 +49,12 @@ MIN_JSON_SCHEMA = {
             "minItems": 1,
             "items": {
                 "type": "object",
-                "required": ["key", "ambito", "descrizione"],
+                "required": ["key", "ambito", "descrizione", "keywords"],
                 "properties": {
                     "key": {"type": "string"},
                     "ambito": {"type": "string"},
                     "descrizione": {"type": "string"},
-                    "esempio": {"type": "array", "items": {"type": "string"}},
+                    "keywords": {"type": "array", "items": {"type": "string"}},
                 },
             },
         },
@@ -480,19 +480,26 @@ def provision_from_vision(
     _validate_json_payload(data, expected_slug=slug)
 
     # 3) JSON -> YAML (semantic_mapping + cartelle_raw)
+    categories: Dict[str, Dict[str, Any]] = {}
+    for area in data["areas"]:
+        raw_keywords = area["keywords"]
+        if raw_keywords is None:
+            raw_keywords = []
+        if not isinstance(raw_keywords, list):
+            raw_keywords = [raw_keywords]
+        keywords = [str(item).strip() for item in raw_keywords if str(item).strip()]
+        categories[area["key"]] = {
+            "ambito": area["ambito"],
+            "descrizione": area["descrizione"],
+            "keywords": keywords,
+        }
+
+    mapping_payload: Dict[str, Any] = {"context": data["context"], **categories}
+    if data.get("synonyms"):
+        mapping_payload["synonyms"] = data["synonyms"]
+
     mapping_yaml_str = yaml.safe_dump(
-        {
-            "context": data["context"],
-            **{
-                area["key"]: {
-                    "ambito": area["ambito"],
-                    "descrizione": area["descrizione"],
-                    "esempio": area["esempio"],
-                }
-                for area in data["areas"]
-            },
-            **({"synonyms": data.get("synonyms")} if data.get("synonyms") else {}),
-        },
+        mapping_payload,
         allow_unicode=True,
         sort_keys=False,
         width=100,

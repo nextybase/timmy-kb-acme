@@ -13,6 +13,7 @@ Formato normalizzato: dict[str, list[str]]
     - concept: [keywords...]
     - concept: { keywords: [...]}            # preferito
     - concept: { tags: [...] }               # fallback generico
+    - concept: 'keyword'
 """
 
 from __future__ import annotations

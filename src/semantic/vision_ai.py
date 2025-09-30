@@ -41,12 +41,12 @@ JSON_SCHEMA: Dict[str, Any] = {
             "minItems": 3,
             "items": {
                 "type": "object",
-                "required": ["key", "ambito", "descrizione", "esempio"],
+                "required": ["key", "ambito", "descrizione", "keywords"],
                 "properties": {
                     "key": {"type": "string", "pattern": "^[a-z0-9-]+$"},
                     "ambito": {"type": "string"},
                     "descrizione": {"type": "string", "maxLength": 240},
-                    "esempio": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                    "keywords": {"type": "array", "minItems": 1, "items": {"type": "string"}},
                 },
                 "additionalProperties": False,
             },
@@ -158,10 +158,16 @@ def _json_to_yaml(data: Dict[str, Any]) -> str:
             raise ConfigError("Vision AI: elemento di 'areas' non e' un oggetto JSON.")
         try:
             key = area["key"]
+            raw_keywords = area["keywords"]
+            if raw_keywords is None:
+                raw_keywords = []
+            if not isinstance(raw_keywords, list):
+                raw_keywords = [raw_keywords]
+            keywords = [str(item).strip() for item in raw_keywords if str(item).strip()]
             mapping[key] = {
                 "ambito": area["ambito"],
                 "descrizione": area["descrizione"],
-                "esempio": area["esempio"],
+                "keywords": keywords,
             }
         except KeyError as exc:
             raise ConfigError(f"Vision AI: area incompleta ({exc}).") from exc

@@ -77,9 +77,9 @@ def test_json_to_yaml_valid_payload() -> None:
     data = {
         "context": {"slug": "sample", "client_name": "Sample Corp"},
         "areas": [
-            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Descrizione", "esempio": ["Doc"]},
-            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "esempio": ["Doc2"]},
-            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "esempio": ["Doc3"]},
+            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Descrizione", "keywords": ["Doc"]},
+            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "keywords": ["Doc2"]},
+            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "keywords": ["Doc3"]},
         ],
         "synonyms": {"pa": ["pubblica amministrazione"]},
     }
@@ -93,7 +93,7 @@ def test_json_to_yaml_valid_payload() -> None:
 def test_json_to_yaml_missing_area_field_raises() -> None:
     broken = {
         "context": {"slug": "demo", "client_name": "Demo"},
-        "areas": [{"ambito": "Ambito", "descrizione": "Desc", "esempio": ["Doc"]}],
+        "areas": [{"ambito": "Ambito", "descrizione": "Desc", "keywords": ["Doc"]}],
     }
     with pytest.raises(ConfigError):
         vision_ai._json_to_yaml(broken)
@@ -111,9 +111,9 @@ def test_generate_creates_yaml_and_snapshot(tmp_path: Path, monkeypatch: pytest.
     payload = {
         "context": {"slug": "dummy", "client_name": "Dummy Corp"},
         "areas": [
-            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "esempio": ["Doc"]},
-            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "esempio": ["Doc2"]},
-            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "esempio": ["Doc3"]},
+            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "keywords": ["Doc"]},
+            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "keywords": ["Doc2"]},
+            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "keywords": ["Doc3"]},
         ],
         "synonyms": {"pa": ["pubblica amministrazione"]},
     }
@@ -136,9 +136,9 @@ def test_generate_raises_on_finish_reason_length(tmp_path: Path, monkeypatch: py
     payload = {
         "context": {"slug": "overflow", "client_name": "Overflow Corp"},
         "areas": [
-            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "esempio": ["Doc"]},
-            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "esempio": ["Doc2"]},
-            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "esempio": ["Doc3"]},
+            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "keywords": ["Doc"]},
+            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "keywords": ["Doc2"]},
+            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "keywords": ["Doc3"]},
         ],
     }
     completions = FakeCompletions(payload, finish_reason="length")

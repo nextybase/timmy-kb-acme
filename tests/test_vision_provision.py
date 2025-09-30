@@ -108,13 +108,13 @@ def test_happy_path(monkeypatch, tmp_workspace: Path):
                 "key": "artefatti-operativi",
                 "ambito": "operativo",
                 "descrizione": "Documenti e modelli operativi.",
-                "esempio": ["SOP", "template"],
+                "keywords": ["SOP", "template"],
             },
             {
                 "key": "governance",
                 "ambito": "strategico",
                 "descrizione": "Regole e responsabilità.",
-                "esempio": ["policy", "ruoli"],
+                "keywords": ["policy", "ruoli"],
             },
         ],
         "synonyms": {"pa": ["pubblica amministrazione"]},
@@ -184,13 +184,13 @@ def test_generation_creates_only_two_yaml(monkeypatch, tmp_workspace: Path):
                 "key": "artefatti-operativi",
                 "ambito": "operativo",
                 "descrizione": "Documenti e modelli operativi.",
-                "esempio": ["SOP", "template"],
+                "keywords": ["SOP", "template"],
             },
             {
                 "key": "governance",
                 "ambito": "strategico",
                 "descrizione": "Regole e responsabilità.",
-                "esempio": ["policy", "ruoli"],
+                "keywords": ["policy", "ruoli"],
             },
         ],
     }
@@ -232,7 +232,7 @@ def test_context_not_dict_raises(monkeypatch, tmp_workspace: Path):
     """Se context non è un dict, _validate_json_payload deve sollevare ConfigError (no AttributeError)."""
     bad_output = {
         "context": ["not-a-dict"],
-        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "esempio": ["x"]}],
+        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "keywords": ["x"]}],
     }
 
     import semantic.vision_provision as S
@@ -254,7 +254,7 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     """Se context.slug è diverso dallo slug atteso, deve fallire con ConfigError (guard-rail anti leak)."""
     mismatched = {
         "context": {"slug": "other", "client_name": "Other"},
-        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "esempio": ["x"]}],
+        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "keywords": ["x"]}],
     }
 
     import semantic.vision_provision as S

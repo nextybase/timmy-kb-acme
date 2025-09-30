@@ -64,7 +64,7 @@ def test_vision_ai_slug_mismatch_raises_and_writes_no_yaml(tmp_path, monkeypatch
     payload = {
         "context": {"slug": "other", "client_name": "X"},
         "areas": [
-            {"key": "k", "ambito": "a", "descrizione": "d", "esempio": ["e"]},
+            {"key": "k", "ambito": "a", "descrizione": "d", "keywords": ["e"]},
         ],
     }
 

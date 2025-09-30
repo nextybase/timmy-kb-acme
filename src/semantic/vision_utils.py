@@ -25,13 +25,18 @@ def json_to_cartelle_raw_yaml(data: Dict[str, Any], slug: str) -> str:
             raise ConfigError(f"Vision data: area #{idx} priva di chiave valida.")
         ambito = area.get("ambito")
         descrizione = area.get("descrizione")
-        esempi = area.get("esempio")
+        raw_examples = area["keywords"]
+        if raw_examples is None:
+            raw_examples = []
+        if not isinstance(raw_examples, list):
+            raw_examples = [raw_examples]
+        examples = [str(item).strip() for item in raw_examples if str(item).strip()]
         folders.append(
             {
                 "key": key,
                 "title": ambito if isinstance(ambito, str) and ambito else key,
                 "description": descrizione if isinstance(descrizione, str) else "",
-                "examples": list(esempi) if isinstance(esempi, list) else [],
+                "examples": examples,
             }
         )
 
