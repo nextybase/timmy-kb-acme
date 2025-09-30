@@ -12,9 +12,10 @@ import yaml
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, InvalidSlug
-from pipeline.file_utils import safe_write_bytes, safe_write_text
+from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read
+from pre_onboarding import ensure_local_workspace_for_ui
 
 # Queste util potrebbero non essere disponibili in ambienti headless â†’ fallback a None
 try:
@@ -270,11 +271,17 @@ def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -
     if uploader is not None:
         data = uploader.read()
         if not data:
-            st.warning("Il file caricato Ã¨ vuoto. Riprova.")
+            st.warning("Il file caricato è vuoto. Riprova.")
         elif exists and not overwrite_allowed:
-            st.warning("File giÃ  presente. Abilita la sostituzione per sovrascrivere.")
+            st.warning("File già presente. Abilita la sostituzione per sovrascrivere.")
         else:
-            safe_write_bytes(pdf_target, data, atomic=True)
+            try:
+                config_data = _load_config_data(workspace_dir)
+            except ConfigError:
+                config_data = {}
+            client_name = cast(str, (config_data.get("client_name") or slug))
+            ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=data)
+            pdf_target = cast(Path, ensure_within_and_resolve(config_dir, config_dir / "VisionStatement.pdf"))
             st.success("VisionStatement.pdf salvato.")
             logger.info(
                 "ui.vision.pdf_uploaded",
@@ -638,7 +645,7 @@ def _render_landing(logger: logging.Logger) -> None:
                     pass
                 return
             if not nome:
-                st.error("Inserisci un nome cliente")
+                st.error("Inserisci il nome del cliente")
                 return
             if uploaded_pdf is None:
                 st.error("Carica il Vision Statement (PDF) per procedere")
@@ -651,12 +658,12 @@ def _render_landing(logger: logging.Logger) -> None:
                 workspace_dir = _workspace_dir_for(slug)
                 workspace_dir.mkdir(parents=True, exist_ok=True)
                 _copy_base_config(workspace_dir, slug, logger)
-                semantic_dir = cast(Path, ensure_within_and_resolve(workspace_dir, _semantic_dir(workspace_dir)))
-                semantic_dir.mkdir(parents=True, exist_ok=True)
-                pdf_path = cast(Path, ensure_within_and_resolve(semantic_dir, semantic_dir / "VisionStatement.pdf"))
-                safe_write_bytes(pdf_path, pdf_bytes, atomic=True)
+
+                ensure_local_workspace_for_ui(slug=slug, client_name=nome, vision_statement_pdf=pdf_bytes)
 
                 ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                base_dir = cast(Path, ctx.base_dir) if ctx.base_dir is not None else workspace_dir
+                pdf_path = cast(Path, ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf"))
                 result: Dict[str, Any] | None = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
 
                 ensure_db()
