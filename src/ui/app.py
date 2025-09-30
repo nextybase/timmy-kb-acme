@@ -7,7 +7,7 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-# Import standard/third‑party prima di qualsiasi codice
+# Import standard/thirdâ€‘party prima di qualsiasi codice
 import yaml
 
 from pipeline.context import ClientContext
@@ -16,7 +16,7 @@ from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read
 
-# Queste util potrebbero non essere disponibili in ambienti headless → fallback a None
+# Queste util potrebbero non essere disponibili in ambienti headless â†’ fallback a None
 try:
     from pipeline.drive_utils import (
         create_drive_folder,
@@ -57,6 +57,31 @@ def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
         return False
     logger.info("ui.client_state_updated", extra={"slug": slug, "state": stato})
     return True
+
+
+def _current_client_state(slug: Optional[str]) -> str | None:
+    if not slug:
+        return None
+    try:
+        entries: list[ClientEntry] = load_clients()
+    except Exception:
+        return None
+    for entry in entries:
+        if entry.slug == slug:
+            return cast(str, entry.stato)
+    return None
+
+
+def _render_header(slug: Optional[str]) -> None:
+    st.title("Onboarding NeXT â€” Clienti")
+    if not slug:
+        st.caption("Nessun cliente attivo. Crea o seleziona un cliente per iniziare.")
+        return
+    state = _current_client_state(slug)
+    if state:
+        st.markdown(f"Cliente attivo: **{slug}** — Stato: `{state.upper()}`")
+    else:
+        st.caption(f"Cliente attivo: **{slug}** â€” Stato non registrato")
 
 
 def _setup_logging() -> logging.Logger:
@@ -245,9 +270,9 @@ def _handle_pdf_upload(workspace_dir: Path, slug: str, logger: logging.Logger) -
     if uploader is not None:
         data = uploader.read()
         if not data:
-            st.warning("Il file caricato è vuoto. Riprova.")
+            st.warning("Il file caricato Ã¨ vuoto. Riprova.")
         elif exists and not overwrite_allowed:
-            st.warning("File già presente. Abilita la sostituzione per sovrascrivere.")
+            st.warning("File giÃ  presente. Abilita la sostituzione per sovrascrivere.")
         else:
             safe_write_bytes(pdf_target, data, atomic=True)
             st.success("VisionStatement.pdf salvato.")
@@ -303,7 +328,7 @@ def _save_yaml_text(workspace_dir: Path, rel: Path, content: str) -> None:
 
 def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> Optional[Dict[str, Any]]:
     if _vision_outputs_exist(workspace_dir):
-        st.info("Gli artefatti Vision sono già presenti: nessuna rigenerazione.")
+        st.info("Gli artefatti Vision sono giÃ  presenti: nessuna rigenerazione.")
         return None
 
     pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
@@ -328,7 +353,7 @@ def _initialize_workspace(slug: str, workspace_dir: Path, logger: logging.Logger
 
 def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
     if create_local_base_structure is None:
-        raise RuntimeError("Funzionalità locali non disponibili: installa i moduli 'pipeline.drive_utils'.")
+        raise RuntimeError("FunzionalitÃ  locali non disponibili: installa i moduli 'pipeline.drive_utils'.")
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
     cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     create_local_base_structure(ctx, cartelle)
@@ -341,7 +366,7 @@ def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger)
         get_drive_service and create_drive_folder and create_drive_structure_from_yaml and upload_config_to_drive_folder
     ):
         raise RuntimeError(
-            "Funzionalità Drive non disponibili: installa gli extra o configura i servizi (pipeline.drive_utils)."
+            "FunzionalitÃ  Drive non disponibili: installa gli extra o configura i servizi (pipeline.drive_utils)."
         )
 
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
@@ -420,7 +445,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
                 _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
                 _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
 
-                # Validazione schema minima (più stretta)
+                # Validazione schema minima (piÃ¹ stretta)
                 mapping_data = yaml.safe_load(st.session_state[mapping_key]) or {}
                 cartelle_data = yaml.safe_load(st.session_state[cartelle_key]) or {}
 
@@ -658,8 +683,9 @@ def _render_landing(logger: logging.Logger) -> None:
                     index=0,
                     disabled=True,
                     key="landing_edit_select_disabled",
+                    help="Registro vuoto: crea un nuovo cliente per iniziare.",
                 )
-                st.info("Nessun cliente registrato: crea un nuovo cliente per iniziare.")
+                st.info("Nessun cliente registrato. Crea un nuovo cliente per iniziare.")
                 open_disabled = True
             else:
                 labels = {f"{entry.nome or entry.slug} ({entry.slug})": entry for entry in clients}
@@ -672,6 +698,7 @@ def _render_landing(logger: logging.Logger) -> None:
                         index=None,
                         placeholder="Scegli un cliente",
                         key="landing_edit_select",
+                        help="Seleziona un cliente dallâ€™elenco.",
                     )
                 except TypeError:
                     placeholder = "-- Seleziona cliente --"
@@ -681,6 +708,7 @@ def _render_landing(logger: logging.Logger) -> None:
                         fallback_options,
                         index=0,
                         key="landing_edit_select_fallback",
+                        help="Seleziona un cliente dallâ€™elenco.",
                     )
                     if selected_label == placeholder:
                         selected_label = None
@@ -693,6 +721,7 @@ def _render_landing(logger: logging.Logger) -> None:
                 use_container_width=True,
                 disabled=open_disabled,
                 key="landing_edit_open",
+                help="Apri il workspace del cliente scelto.",
             )
 
         if open_client and selected_entry:
@@ -708,7 +737,7 @@ def _render_landing(logger: logging.Logger) -> None:
 def main() -> None:
     logger = _setup_logging()
     if st is not None:
-        st.set_page_config(page_title="Onboarding NeXT", layout="wide")
+        st.set_page_config(page_title="Onboarding NeXT â€” Clienti", layout="wide")
 
     phase = st.session_state.get("phase", "landing")
     slug = st.session_state.get("slug")
@@ -716,6 +745,7 @@ def main() -> None:
 
     # Sidebar scorciatoie (non bloccante)
     _render_sidebar_shortcuts(slug, workspace_dir, logger)
+    _render_header(slug)
 
     if phase == "landing":
         _render_landing(logger)
