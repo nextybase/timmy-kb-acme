@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Sequence, cast
 
 import yaml
 
@@ -110,7 +110,7 @@ def set_state(slug: str, stato: str) -> None:
 
 
 def _resolved_db_path() -> Path:
-    return ensure_within_and_resolve(REPO_ROOT, DB_FILE)
+    return cast(Path, ensure_within_and_resolve(REPO_ROOT, DB_FILE))
 
 
 def _dump_payload(entries: Sequence[ClientEntry]) -> str:
