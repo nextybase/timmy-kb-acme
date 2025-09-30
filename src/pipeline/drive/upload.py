@@ -146,22 +146,16 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
 
 
 def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
-    """Normalizza la struttura YAML della gerarchia remota in un **mapping annidato**.
+    """Normalizza la struttura YAML della gerarchia remota in un mapping annidato.
 
     Formati supportati:
-    1) **Moderno**: dict con chiavi qualsiasi (es. RAW/YAML o categorie libere).
-       Il formato legacy con `root_folders` **non è supportato** in v1.8.0.
-    2) **Fallback permissivo**: se è un dict che non contiene RAW/YAML, viene usato
-       così com'è (nessun errore).
+    1) Formato moderno: dict con chiavi arbitrarie (es. RAW/YAML o categorie libere).
+    2) Fallback permissivo: se il dict non contiene RAW/YAML, viene usato cosi' com'e'.
     """
     if isinstance(data, dict):
-        # v1.8.0: formato legacy NON supportato
         if "root_folders" in data:
-            raise ConfigError(
-                "Formato legacy 'root_folders' non supportato in v1.8.0. "
-                "Fornire un mapping {nome: sottoalbero} moderno."
-            )
-        # Moderno/generico: accetta il dict così com'è
+            raise ConfigError("Formato legacy 'root_folders' non supportato: usa un mapping {nome: sottoalbero}.")
+        # Moderno/generico: accetta il dict cosi' com'e'
         return data
 
     raise ConfigError("Struttura YAML non valida: atteso un mapping (dict).")
@@ -265,10 +259,8 @@ def create_drive_structure_from_yaml(
 ) -> Dict[str, str]:
     """Crea la struttura di cartelle remota a partire da un file YAML.
 
-    Comportamento (v1.8.0):
-    - Accetta solo struttura **moderna**: mapping {nome: sottoalbero}; il formato legacy
-      con `root_folders` non è supportato.
-    - Ritorna una mappa nome→ID. Nessun alias aggiunto.
+    Accetta solo la struttura moderna {nome: sottoalbero}; il formato legacy con `root_folders` non e'
+    supportato. Ritorna una mappa nome->ID senza alias.
     """
     if not os.path.isfile(str(yaml_path)):
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
@@ -285,8 +277,6 @@ def create_drive_structure_from_yaml(
 
     result: Dict[str, str] = {}
     _create_remote_tree_from_mapping(service, client_folder_id, mapping, redact_logs=redact_logs, result=result)
-
-    # v1.8.0: nessun alias nel risultato
 
     logger.info(
         "drive.upload.tree.created",

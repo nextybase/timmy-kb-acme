@@ -83,7 +83,7 @@ def _default_candidate_limit() -> int:
 
 
 def cosine(a: Iterable[float], b: Iterable[float]) -> float:
-    """Calcola la similarit? coseno tra due vettori numerici."""
+    """Calcola la similarità coseno tra due vettori numerici."""
 
     pairs_iter = ((float(x), float(y)) for x, y in zip(a, b, strict=False))
     stats_iter, calc_iter = tee(pairs_iter)
@@ -470,7 +470,7 @@ def with_config_candidate_limit(
         valido (>0), viene applicato.
 
     Nota: se il chiamante imposta esplicitamente il valore uguale al default
-    (4000), questa funzione non può distinguerlo dal caso “non impostato” e
+    (4000), questa funzione non può distinguerlo dal caso 'non impostato' e
     applicherà il config. In tal caso, evitare questa funzione oppure passare un
     valore diverso dal default per esprimere l’intento.
     """
@@ -615,7 +615,7 @@ def preview_effective_candidate_limit(
 ) -> tuple[int, str, int]:
     """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
 
-    Ritorna (limit, source, budget_ms) dove `source` ∈
+    Ritorna (limit, source, budget_ms) dove `source`
     {"explicit", "auto_by_budget", "config", "default"}.
     Utile per la UI per mostrare un’etichetta: "Limite stimato: N".
     """

@@ -66,11 +66,8 @@ def write_tags_review_stub_from_csv(
 ) -> Path:
     """Genera uno stub di revisione a partire da `tags_raw.csv` e lo salva in SQLite.
 
-    Compatibilità:
-    - Preferisce lo schema esteso con header `suggested_tags`.
-    - Se assente, degrada al formato legacy a 2 colonne: [relative_path, suggested_tags].
-
     Regole:
+    - Richiede lo schema esteso con header `suggested_tags`; se manca viene sollevato ConfigError.
     - Usa tutti i suggerimenti (split su ',') in lowercase e deduplicati preservando l'ordine.
     - Si ferma quando ha raccolto `top_n` tag unici.
     - Lettura CSV consentita solo se il file è sotto `semantic_dir`.
@@ -89,14 +86,19 @@ def write_tags_review_stub_from_csv(
             reader = csv.reader(f)
             header = next(reader, None)
 
-            # Individua l'indice della colonna suggerimenti
-            idx_suggestions = 1  # fallback legacy
-            if header and isinstance(header, list):
-                try:
-                    idx_suggestions = header.index("suggested_tags")
-                except ValueError:
-                    # header diverso o assente -> mantieni fallback
-                    pass
+            if not header or not isinstance(header, list):
+                raise ConfigError(
+                    "tags_raw.csv deve usare lo schema esteso con colonna 'suggested_tags'",
+                    file_path=str(csv_path),
+                )
+
+            try:
+                idx_suggestions = header.index("suggested_tags")
+            except ValueError as e:
+                raise ConfigError(
+                    "Colonna 'suggested_tags' mancante: aggiorna tags_raw.csv allo schema esteso",
+                    file_path=str(csv_path),
+                ) from e
 
             for row in reader:
                 if idx_suggestions >= len(row):
@@ -114,6 +116,8 @@ def write_tags_review_stub_from_csv(
 
     except FileNotFoundError as e:
         raise ConfigError(f"CSV dei tag non trovato: {e}", file_path=str(csv_path)) from e
+    except ConfigError:
+        raise
     except Exception as e:
         raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
 

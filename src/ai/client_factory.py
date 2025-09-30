@@ -30,7 +30,7 @@ def make_openai_client() -> "OpenAI":
     Crea e restituisce un client OpenAI.
     Ordine di ricerca chiave:
     1) OPENAI_API_KEY_FOLDER (dedicata agli assistenti su file/folder)
-    2) OPENAI_API_KEY (fallback legacy)
+    2) OPENAI_API_KEY (compatibilita' storica)
     """
     api_key = os.getenv("OPENAI_API_KEY_FOLDER") or os.getenv("OPENAI_API_KEY")
     if not api_key:
