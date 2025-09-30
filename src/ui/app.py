@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover
     get_drive_service = None
     upload_config_to_drive_folder = None
 
-from ui.clients_store import ClientEntry, ensure_db, upsert_client
+from ui.clients_store import ClientEntry, ensure_db, load_clients, upsert_client
 from ui.services.drive_runner import emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
@@ -636,7 +636,61 @@ def _render_landing(logger: logging.Logger) -> None:
                 st.error(str(exc))
 
     with tab_edit:
-        st.info("La modifica cliente sarà disponibile a breve.")
+        clients = load_clients()
+        selected_entry: ClientEntry | None = None
+        with st.form("landing_edit_form"):
+            if not clients:
+                st.selectbox(
+                    "Seleziona cliente",
+                    options=["Nessun cliente registrato"],
+                    index=0,
+                    disabled=True,
+                    key="landing_edit_select_disabled",
+                )
+                st.info("Nessun cliente registrato: crea un nuovo cliente per iniziare.")
+                open_disabled = True
+            else:
+                labels = {f"{entry.nome or entry.slug} ({entry.slug})": entry for entry in clients}
+                options = list(labels.keys())
+                selected_label: str | None = None
+                try:
+                    selected_label = st.selectbox(
+                        "Seleziona cliente",
+                        options,
+                        index=None,
+                        placeholder="Scegli un cliente",
+                        key="landing_edit_select",
+                    )
+                except TypeError:
+                    placeholder = "-- Seleziona cliente --"
+                    fallback_options = [placeholder, *options]
+                    selected_label = st.selectbox(
+                        "Seleziona cliente",
+                        fallback_options,
+                        index=0,
+                        key="landing_edit_select_fallback",
+                    )
+                    if selected_label == placeholder:
+                        selected_label = None
+                if selected_label:
+                    selected_entry = labels.get(selected_label)
+                open_disabled = selected_entry is None
+            open_client = st.form_submit_button(
+                "Apri",
+                type="primary",
+                use_container_width=True,
+                disabled=open_disabled,
+                key="landing_edit_open",
+            )
+
+        if open_client and selected_entry:
+            slug_to_open = selected_entry.slug
+            workspace_dir = _workspace_dir_for(slug_to_open)
+            st.session_state["slug"] = slug_to_open
+            st.session_state["workspace_dir"] = str(workspace_dir)
+            st.session_state.pop("init_result", None)
+            st.session_state["phase"] = "workspace" if _vision_outputs_exist(workspace_dir) else "setup"
+            st.rerun()
 
 
 def main() -> None:
