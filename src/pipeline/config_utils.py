@@ -14,9 +14,6 @@ Centralizza le utilità di configurazione per la pipeline Timmy-KB:
   contesto (errore se assente/malformato).
 - `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di
   ambiente (config valido e cartelle chiave come `logs/`).
-- `safe_write_file(file_path, content)`: **wrapper legacy** che scrive testo in modo
-  atomico passando da `safe_write_text`. Per nuovo codice, usare direttamente
-  `safe_write_text`.
 - `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale
   su `config.yaml` con backup `.bak` e scrittura atomica.
 
@@ -240,31 +237,6 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
 # ----------------------------------------------------------
 #  Scrittura sicura di file generici (wrapper legacy) – ATOMICA
 # ----------------------------------------------------------
-def safe_write_file(file_path: Path, content: str) -> None:
-    """Scrive testo in modo sicuro e atomico usando `safe_write_text`.
-
-    - Crea le cartelle necessarie.
-    - Se esiste già un file, crea backup `<nome>.bak`.
-    - Usa `safe_write_text(..., atomic=True)` per la sostituzione.
-
-    Nota: funzione mantenuta per retrocompatibilità; preferire `safe_write_text`.
-    """
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Path-safety minimale (perimetro = directory padre)
-    ensure_within(file_path.parent, file_path)
-
-    # Backup se già esiste
-    if file_path.exists():
-        backup_path = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
-        shutil.copy(file_path, backup_path)
-        logger.info(f"Backup creato: {backup_path}")
-
-    try:
-        safe_write_text(file_path, content, encoding="utf-8", atomic=True)
-    except Exception as e:
-        logger.error(f"Errore scrittura file {file_path}: {e}")
-        raise PipelineError(f"Errore scrittura file {file_path}: {e}") from e
 
 
 # ----------------------------------------------------------
@@ -331,7 +303,6 @@ __all__ = [
     "write_client_config_file",
     "get_client_config",
     "validate_preonboarding_environment",
-    "safe_write_file",
     "update_config_with_drive_ids",
     "bump_n_ver_if_needed",
     "set_data_ver_today",
