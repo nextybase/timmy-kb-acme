@@ -42,8 +42,6 @@ py src/onboarding_full.py --slug acme --non-interactive
 ```
 
 Opzioni comuni:
-- `--no-preview` (non usato in `onboarding_full.py`, resta per compatibilità in v1.2.x se previsto)
-- `--no-push` (non applicabile: l'orchestratore è solo push)
 - `--force-with-lease` / `--force-push` (se/quando supportati: usare con cautela)
 
 ## 6) Error handling

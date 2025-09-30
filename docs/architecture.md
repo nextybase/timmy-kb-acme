@@ -105,7 +105,7 @@ sequenceDiagram
     UI->>TAG: generate tags CSV (drive/local)
     TAG-->>DRV: (optional) download RAW PDFs
     TAG->>FS: copy CSV / README_TAGGING
-    TAG->>DB: write semantic/tags.db (migrated if needed)
+    TAG->>DB: write semantic/tags.db
 
     UI->>SEM: convert_markdown(slug)
     SEM->>FS: write book/*.md

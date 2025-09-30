@@ -96,7 +96,7 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
   - Gating a due input (slug, nome cliente), poi mostra le schede.
   - Drive: crea struttura → genera README → download su raw.
   - Semantica: conversione → arricchimento → README/SUMMARY → preview (opz.).
-  - Usa `_safe_streamlit_rerun()` per compatibilità con stubs/tipi.
+  - Usa `_safe_streamlit_rerun()` per gestire il rerun in modo coerente con stubs/tipi.
 
 ---
 

@@ -83,7 +83,7 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `SERVICE_ACCOUNT_FILE`: path al JSON del Service Account (Drive)
 - `DRIVE_ID`: ID cartella root dello spazio Drive (RAW parent)
 - `GITHUB_TOKEN`: richiesto per il push GitHub
-- `GIT_DEFAULT_BRANCH`: branch di default (fallback `main`)
+- `GIT_DEFAULT_BRANCH`: branch di default `main`
 - `OPENAI_API_KEY_CODEX`: credenziale per la UI Timmy KB Coder e i servizi RAG basati su Codex.
   - Fallback Coder: se `OPENAI_API_KEY` non è impostata, la UI Coder usa `OPENAI_API_KEY_CODEX` come chiave embeddings
     e registra `embeddings.api_key.source=codex_fallback` nei log.
@@ -327,7 +327,7 @@ Riferimento rapido alle nuove API additive (v1): vedi la sezione "API Semantiche
 
 - Conversione PDF -> Markdown in `book/`.
 - Arricchimento frontmatter dai tag canonici dal DB SQLite (`semantic/tags.db`).
-- Generazione `README.md` e `SUMMARY.md` (fallback idempotente).
+- Generazione idempotente di `README.md` e `SUMMARY.md`.
 - Preview Docker (HonKit): in interattivo chiede se avviare/fermare; in CLI `--no-preview` la salta.
 
 Error handling: ConfigError se `RAW` o i PDF mancano; ConversionError se la conversione non produce Markdown o se la generazione di README/SUMMARY fallisce.
