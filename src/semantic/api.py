@@ -351,11 +351,6 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
             )
         except Exception as e:  # pragma: no cover
             summary_path = book_dir / "SUMMARY.md"
-            # Compat test legacy: messaggio letterale
-            logger.error(
-                "Generazione SUMMARY.md fallita",
-                extra={"slug": slug, "file_path": str(summary_path)},
-            )
             # Evento strutturato con stacktrace
             logger.exception(
                 "semantic.summary.failed",

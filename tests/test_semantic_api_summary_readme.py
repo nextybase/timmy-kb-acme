@@ -140,13 +140,12 @@ def test_write_summary_and_readme_logs_errors_with_context(
                 slug="e2e",
             )
 
-    found = False
     for rec in caplog.records:
-        if rec.levelno >= logging.ERROR and "Generazione SUMMARY.md fallita" in rec.getMessage():
+        if rec.getMessage() == "semantic.summary.failed":
             fp = getattr(rec, "file_path", "")
             slug = getattr(rec, "slug", "")
             assert str(book / "SUMMARY.md") in fp
             assert slug == "e2e"
-            found = True
             break
-    assert found, "expected error log for SUMMARY generation failure"
+    else:
+        raise AssertionError("expected semantic.summary.failed log")
