@@ -11,10 +11,8 @@ Cosa fa il modulo
   * idempotenza semplice (skip se esiste ed ha stessa dimensione),
   * logging strutturato e propagazione di errori aggregati tramite `PipelineError`.
 
-- `emit_tags_csv(raw_dir, csv_path, logger) -> int`
-  Scansiona ricorsivamente `raw/` e genera un CSV di tag “grezzi” (euristica conservativa)
-  a partire da nomi cartelle/filename. Scrive **atomicamente** il file via `safe_write_text`
-  dopo validazione STRONG del percorso (`ensure_within`).
+- `emit_tags_csv(...)` is deprecated: raises NotImplementedError and points to
+  `semantic.api.build_tags_csv` or `semantic.auto_tagger.render_tags_csv`.
 
 Schema CSV (compat con orchestratori/tag_onboarding)
 ----------------------------------------------------
@@ -31,7 +29,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import warnings
 from pathlib import Path
 from typing import List
 
@@ -124,42 +121,8 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return copied
 
 
-def emit_tags_csv(raw_dir: Path, csv_path: Path, logger: logging.Logger) -> int:
-    """
-    Heuristica conservativa: per ogni PDF propone keyword grezze
-    da nomi cartelle e filename. HiTL arricchirà in seguito.
-
-    Schema CSV (esteso, coerente con Blocco B / tag_onboarding):
-      relative_path | suggested_tags | entities | keyphrases | score | sources
-
-    Regole:
-    - STRONG (SSoT): ensure_within(base_dir, csv_path[.parent]) prima di scrivere.
-    - Scrittura atomica del CSV via safe_write_text.
-    """
-    # Deprecation shim: delega al writer hardened con path-safety forte
-    from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
-    from semantic.auto_tagger import render_tags_csv as _render_tags_csv
-    from semantic.config import load_semantic_config as _load_semantic_config
-
-    warnings.warn(
-        (
-            "emit_tags_csv è deprecato; usa semantic.api.build_tags_csv oppure "
-            "semantic.auto_tagger.render_tags_csv(..., base_dir=...)."
-        ),
-        DeprecationWarning,
-        stacklevel=2,
+def emit_tags_csv(*args: object, **kwargs: object) -> int:  # pragma: no cover
+    """Stub deprecato: usa le nuove API di generazione CSV dei tag."""
+    raise NotImplementedError(
+        "emit_tags_csv ? deprecata: usa semantic.api.build_tags_csv o semantic.auto_tagger.render_tags_csv"
     )
-    raw_dir = normalize_path(raw_dir)
-    csv_path = normalize_path(csv_path)
-    base_dir = raw_dir.parent.resolve()
-    ensure_within(base_dir, csv_path.parent)
-    ensure_within(base_dir, csv_path)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg = _load_semantic_config(base_dir)
-    candidates = _extract_candidates(raw_dir, cfg)
-    _render_tags_csv(candidates, csv_path, base_dir=base_dir)
-    logger.info(
-        "Tag grezzi (estesi) generati",
-        extra={"file_path": str(csv_path), "count": len(candidates)},
-    )
-    return len(candidates)

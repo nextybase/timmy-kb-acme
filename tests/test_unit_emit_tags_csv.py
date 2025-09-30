@@ -2,32 +2,43 @@
 import csv
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
-from src.semantic.tags_extractor import emit_tags_csv as _emit_tags_csv
+from src.semantic.api import build_tags_csv
 
 
-def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
-    raw = tmp_path / "raw"
-    sem = tmp_path / "semantic"
-    raw.mkdir()
-    sem.mkdir()
-    # struttura annidata con nomi realistici
+def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:
+    slug = "acme"
+    base_root = tmp_path / "output"
+    base_dir = base_root / f"timmy-kb-{slug}"
+    raw = base_dir / "raw"
+    sem = base_dir / "semantic"
+    book = base_dir / "book"
+    config_dir = base_dir / "config"
+
+    raw.mkdir(parents=True, exist_ok=True)
+    sem.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (sem / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+
     nested = raw / "HR" / "Policies"
     nested.mkdir(parents=True, exist_ok=True)
     (nested / "Welcome Packet 2024.pdf").write_bytes(b"%PDF-1.4\n")
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
-    csv_path = sem / "tags_raw.csv"
-    # Passa un logger reale per soddisfare la signature (logging.Logger)
-    written = _emit_tags_csv(raw, csv_path, logging.getLogger("test"))
-    assert written == 2
+    context = SimpleNamespace(base_dir=base_dir, raw_dir=raw, md_dir=book)
+    csv_path = build_tags_csv(context, logging.getLogger("test"), slug=slug)
+
+    assert csv_path == sem / "tags_raw.csv"
     assert csv_path.exists()
 
     with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
-    # Header atteso
     assert reader.fieldnames == [
         "relative_path",
         "suggested_tags",
@@ -36,8 +47,8 @@ def test_emit_tags_csv_generates_posix_paths_and_header(tmp_path: Path):
         "score",
         "sources",
     ]
+    assert len(rows) == 2
 
     rel_paths = {r["relative_path"] for r in rows}
-    # Deve usare separatori POSIX e prefisso "raw/"
     assert "raw/HR/Policies/Welcome Packet 2024.pdf" in rel_paths
     assert "raw/Security-Guide_v2.pdf" in rel_paths

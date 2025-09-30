@@ -4,7 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from ui.utils.core import ensure_within_and_resolve, safe_write_text_compat, to_kebab, yaml_dump, yaml_load
+from pipeline.file_utils import safe_write_text
+from ui.utils.core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
     "context",
@@ -122,7 +123,7 @@ def save_semantic_mapping(slug: str, mapping: Dict[str, Any], *, base_root: Path
     client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
-    safe_write_text_compat(path, yaml_dump(mapping))
+    safe_write_text(path, yaml_dump(mapping), encoding="utf-8", atomic=True)
     return path
 
 
@@ -167,5 +168,5 @@ def write_raw_structure_yaml(slug: str, structure: Dict[str, Any], *, base_root:
         base_root / f"timmy-kb-{slug}" / "semantic",
     )
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "_raw_from_mapping.yaml")
-    safe_write_text_compat(path, yaml_dump(structure))
+    safe_write_text(path, yaml_dump(structure), encoding="utf-8", atomic=True)
     return path
