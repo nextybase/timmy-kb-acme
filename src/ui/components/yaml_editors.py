@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import yaml
 
@@ -10,9 +11,9 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import clear_yaml_cache
 
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore
+    st = None
 
 from ui.const import DEFAULT_ENCODING
 from ui.utils.core import safe_write_text
@@ -33,14 +34,14 @@ def _workspace_root(slug: str) -> Path:
 
 def _semantic_path(slug: str, filename: str) -> Path:
     workspace = _workspace_root(slug)
-    return ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename)
+    return cast(Path, ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename))
 
 
 def _read_yaml_text(slug: str, filename: str) -> str:
     path = _semantic_path(slug, filename)
     if not path.exists():
         raise ConfigError(f"File `{path}` non trovato. Genera gli artefatti Vision e riprova.")
-    return read_text_safe(_workspace_root(slug), path, encoding=DEFAULT_ENCODING)
+    return cast(str, read_text_safe(_workspace_root(slug), path, encoding=DEFAULT_ENCODING))
 
 
 def _write_yaml_text(slug: str, filename: str, content: str) -> None:

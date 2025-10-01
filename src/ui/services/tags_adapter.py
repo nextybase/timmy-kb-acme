@@ -16,9 +16,9 @@ from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_c
 from storage.tags_store import derive_db_path_from_yaml_path, load_tags_reviewed
 
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore
+    st = None
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[3] / "output"
 

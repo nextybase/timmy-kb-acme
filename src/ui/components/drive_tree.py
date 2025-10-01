@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore
+    st = None
 
 try:
     from pipeline.context import ClientContext
     from pipeline.drive_utils import MIME_FOLDER, get_drive_service, list_drive_files
 except Exception:  # pragma: no cover
-    ClientContext = None  # type: ignore
+    ClientContext = None
     MIME_FOLDER = "application/vnd.google-apps.folder"  # fallback literal
-    get_drive_service = None  # type: ignore
-    list_drive_files = None  # type: ignore
+    get_drive_service = None
+    list_drive_files = None
 
 _LOGGER = logging.getLogger("ui.components.drive_tree")
 _FIELDS_MINIMAL = "nextPageToken, files(id, name, mimeType, size, modifiedTime)"
@@ -77,7 +77,7 @@ def _find_child_folder(service: Any, parent_id: str, name: str) -> Optional[Dict
     query_name = name.replace("'", "\\'")
     query = "mimeType = 'application/vnd.google-apps.folder' " f"and name = '{query_name}'"
     for item in list_drive_files(service, parent_id, query=query, fields=_FIELDS_MINIMAL):
-        return item
+        return cast(Dict[str, Any], item)
     return None
 
 

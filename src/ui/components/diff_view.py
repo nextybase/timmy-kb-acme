@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore
+    st = None
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[3] / "output"
 
