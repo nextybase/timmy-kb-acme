@@ -35,6 +35,18 @@ class ClientEntry:
     stato: str
 
 
+def get_state(slug: str) -> str | None:
+    """Ritorna lo stato normalizzato del cliente (o None se non esiste)."""
+    slug_norm = slug.strip()
+    if not slug_norm:
+        return None
+    entries = load_clients()
+    for entry in entries:
+        if entry.slug == slug_norm:
+            return entry.stato
+    return None
+
+
 def ensure_db() -> None:
     """Create the YAML store if missing."""
     db_path = _resolved_db_path()
