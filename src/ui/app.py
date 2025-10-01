@@ -48,7 +48,7 @@ except Exception:  # pragma: no cover
     render_drive_local_diff = None
 
 try:
-    from ui.components.yaml_editors import edit_tags_reviewed
+    from ui.components.yaml_editors import edit_cartelle_raw, edit_semantic_mapping, edit_tags_reviewed
 except Exception:  # pragma: no cover
     edit_tags_reviewed = None
 
@@ -996,6 +996,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         st.session_state["ui.manage_slug"] = None
         return
 
+    st.subheader("Gestisci cliente")
     selected_session: str | None = st.session_state.get("ui.manage_slug")
     selection_value: str | None
 
@@ -1099,7 +1100,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 
     st.subheader(f"Gestisci cliente - {slug}")
     if workspace_dir.exists():
-        st.caption(f"Workspace: `{workspace_dir}`")
+        st.caption(f"Workspace: {workspace_dir}")
     else:
         st.warning("Workspace locale non trovato. Alcune funzionalita potrebbero non funzionare.")
 
@@ -1107,42 +1108,62 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     raw_exists = raw_dir.exists() and raw_dir.is_dir()
 
     st.session_state.setdefault("ui.busy.download_raw", False)
+    st.session_state.setdefault("ui.busy.extract_tags", False)
+
     download_busy = bool(st.session_state.get("ui.busy.download_raw"))
     download_available = callable(download_raw_from_drive_with_progress)
+    extract_busy = bool(st.session_state.get("ui.busy.extract_tags"))
 
-    col_drive, col_diff, col_tags = st.columns([1.1, 1.3, 1.1])
+    col_drive, col_diff, col_tags = st.columns([3, 4, 3])
     drive_index: Dict[str, Dict[str, Any]] = {}
 
     with col_drive:
+        st.subheader(f"Albero Drive (DRIVE_ID/{slug})")
+        st.caption("Focus su raw/ e sottocartelle.")
         if callable(render_drive_tree):
             try:
                 drive_index = render_drive_tree(slug)
             except Exception as exc:  # pragma: no cover
-                st.error(f"Impossibile caricare l'albero Drive: {exc}")
+                st.error("Impossibile caricare l'albero Drive")
+                st.caption(f"Dettaglio: {exc}")
                 logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
+        else:
+            st.info("Albero Drive non disponibile in questo ambiente.")
 
     with col_diff:
+        st.subheader("Differenze Drive/Locale")
         download_clicked = st.button(
             "Scarica da Drive in raw/",
-            type="secondary",
+            type="primary",
             use_container_width=True,
             disabled=download_busy or not download_available,
             help="Scarica i PDF da DRIVE_ID/<slug>/raw/ nella cartella locale raw/.",
         )
         if download_clicked and download_available and not download_busy:
             st.session_state["ui.busy.download_raw"] = True
+            status = None
             try:
-                with st.status("Scaricamento da Drive in corso...", expanded=True) as status:
+                status = st.status("Scaricamento da Drive in corso...", expanded=True)
+                with status:
                     status.write("Connessione a Drive...")
                     download_raw_from_drive_with_progress(slug=slug, logger=logger)
                     status.update(label="Scaricamento completato", state="complete", expanded=False)
-                st.session_state["ui.busy.download_raw"] = False
+                try:
+                    set_state(slug, "pronto")
+                    logger.info("ui.state.updated", extra={"slug": slug, "state": "pronto"})
+                    st.toast("Stato cliente aggiornato a 'pronto'.")
+                except Exception as state_exc:  # pragma: no cover
+                    logger.warning("ui.state.update_failed", extra={"slug": slug, "error": str(state_exc)})
+                st.success("Scaricamento completato")
                 st.rerun()
             except Exception as exc:  # pragma: no cover
-                st.session_state["ui.busy.download_raw"] = False
+                if status is not None:
+                    status.update(label="Scaricamento interrotto", state="error", expanded=False)
                 st.error("Scaricamento da Drive non riuscito")
                 st.caption(f"Dettaglio: {exc}")
                 logger.warning("ui.manage.download_raw_failed", extra={"slug": slug, "error": str(exc)})
+            finally:
+                st.session_state["ui.busy.download_raw"] = False
         elif download_clicked and not download_available:
             st.warning("Scaricamento da Drive non disponibile in questo ambiente.")
 
@@ -1157,6 +1178,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
             st.info("Diff Drive/locale non ancora disponibile.")
 
     with col_tags:
+        st.subheader("Tag revisionati")
         if callable(edit_tags_reviewed):
             try:
                 edit_tags_reviewed(slug)
@@ -1167,7 +1189,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         else:
             st.info("Editor tags non disponibile in questo ambiente.")
 
-        extract_disabled = not raw_exists
+        extract_disabled = not raw_exists or not callable(run_tags_update) or extract_busy
         extract_clicked = st.button(
             "Estrai Tags",
             type="primary",
@@ -1175,11 +1197,30 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
             disabled=extract_disabled,
             help="Aggiorna tags_reviewed.yaml analizzando i contenuti in raw/.",
         )
-        if extract_clicked:
-            if run_tags_update is None:
-                st.info("Estrazione tag disponibile nei prossimi step.")
-            else:
-                st.info("Estrazione tag sara' collegata nei prossimi step.")
+        if extract_clicked and callable(run_tags_update) and not extract_busy and raw_exists:
+            st.session_state["ui.busy.extract_tags"] = True
+            status = None
+            try:
+                status = st.status("Estrazione tag in corso...", expanded=True)
+                with status:
+                    status.write("Analisi dei PDF in raw/...")
+                    run_tags_update(slug)
+                    status.update(label="Estrazione completata", state="complete", expanded=False)
+                st.success("Estrai Tags completato")
+                st.toast("tags_reviewed.yaml aggiornato.")
+                st.rerun()
+            except Exception as exc:  # pragma: no cover
+                if status is not None:
+                    status.update(label="Estrazione interrotta", state="error", expanded=False)
+                st.error("Estrazione tag non riuscita")
+                st.caption(f"Dettaglio: {exc}")
+                logger.warning("ui.manage.tags_extract_failed", extra={"slug": slug, "error": str(exc)})
+            finally:
+                st.session_state["ui.busy.extract_tags"] = False
+        elif extract_clicked and not raw_exists:
+            st.warning("Cartella raw/ locale non disponibile.")
+        elif extract_clicked and not callable(run_tags_update):
+            st.warning("Adapter Estrai Tags non disponibile in questo ambiente.")
 
     st.subheader("Semantica")
     state_val = (get_state(slug) or "").lower()
@@ -1188,7 +1229,11 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     if state_val in eligible_states:
         sem_tabs = st.tabs(["Semantica"])
         with sem_tabs[0]:
-            st.info("Sezione Semantica in preparazione.")
+            st.caption("Editor YAML semantici.")
+            if callable(edit_semantic_mapping):
+                edit_semantic_mapping(slug)
+            if callable(edit_cartelle_raw):
+                edit_cartelle_raw(slug)
     else:
         st.info("La semantica sara' disponibile quando lo stato raggiunge 'pronto' (dopo il download dei PDF in raw/).")
 
