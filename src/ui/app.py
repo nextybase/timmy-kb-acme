@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover
     upload_config_to_drive_folder = None
 
 from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client
-from ui.services.drive_runner import emit_readmes_for_raw
+from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw
 from ui.services.vision_provision import provision_from_vision
 
 try:
@@ -48,9 +48,14 @@ except Exception:  # pragma: no cover
     render_drive_local_diff = None
 
 try:
-    from ui.services.tags_adapter import extract_tags_for_review
+    from ui.components.yaml_editors import edit_tags_reviewed
 except Exception:  # pragma: no cover
-    extract_tags_for_review = None
+    edit_tags_reviewed = None
+
+try:
+    from ui.services.tags_adapter import run_tags_update
+except Exception:  # pragma: no cover
+    run_tags_update = None
 # Import Streamlit in modo tollerante (test/CI headless)
 try:
     import streamlit as st
@@ -294,7 +299,8 @@ def _render_config_editor(workspace_dir: Path, slug: str, logger: logging.Logger
     try:
         data = _load_config_data(workspace_dir)
     except ConfigError as exc:
-        st.error(str(exc))
+        st.error("YAML non disponibile")
+        st.caption(f"Dettaglio: {exc}")
         return
 
     if not data:
@@ -538,7 +544,8 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
                 _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
                 st.success("YAML aggiornati.")
             except ConfigError as exc:
-                st.error(str(exc))
+                st.error("Salvataggio YAML non riuscito")
+                st.caption(f"Dettaglio: {exc}")
 
     actions = st.columns(3)
     with actions[0]:
@@ -547,7 +554,8 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
                 _run_create_local_structure(slug, workspace_dir, logger)
                 st.success("Struttura locale aggiornata.")
             except ConfigError as exc:
-                st.error(str(exc))
+                st.error("Salvataggio YAML non riuscito")
+                st.caption(f"Dettaglio: {exc}")
             except RuntimeError as exc:
                 st.error(str(exc))
     with actions[1]:
@@ -556,7 +564,8 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
                 created = _run_drive_structure(slug, workspace_dir, logger)
                 st.success(f"Struttura Drive aggiornata (raw={created.get('raw')}).")
             except ConfigError as exc:
-                st.error(str(exc))
+                st.error("Salvataggio YAML non riuscito")
+                st.caption(f"Dettaglio: {exc}")
             except RuntimeError as exc:
                 st.error(str(exc))
     with actions[2]:
@@ -729,12 +738,13 @@ def _render_new_client_block(logger: logging.Logger) -> None:
     st.session_state.setdefault("ui.busy.init", False)
     st.session_state.setdefault("ui.busy.create_workspace", False)
 
+    st.subheader("Nuovo Cliente")
     uploaded_pdf_obj = st.session_state.get("ui.new.vision_pdf")
     uploaded_pdf_widget = st.file_uploader(
         "VisionStatement.pdf",
         type=["pdf"],
         key="ui.new.vision_pdf",
-        help="Carica il Vision Statement in formato PDF.",
+        help="Carica il VisionStatement.pdf del cliente (obbligatorio).",
     )
     if uploaded_pdf_widget is not None:
         uploaded_pdf_obj = uploaded_pdf_widget
@@ -753,13 +763,13 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             "Slug (kebab-case)",
             key="ui.new.slug",
             placeholder="acme-sicilia",
-            help="Identificatore univoco in formato kebab-case.",
+            help="Inserisci uno slug unico in formato kebab-case.",
         )
         name_value = st.text_input(
             "Nome cliente",
             key="ui.new.nome",
             placeholder="Acme S.p.A.",
-            help="Nome leggibile del cliente.",
+            help="Inserisci il nome completo del cliente.",
         )
 
         slug_trimmed = slug_value.strip()
@@ -770,15 +780,18 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             try:
                 validate_slug(slug_trimmed)
             except InvalidSlug as exc:
-                st.error(f"Slug non valido: {exc}")
+                st.error("Slug non valido")
+                st.caption(f"Dettaglio: {exc}")
             else:
                 slug_valid = True
         elif slug_value:
-            st.error("Lo slug non puo contenere solo spazi.")
+            st.error("Slug non valido")
+            st.caption("Lo slug non puo contenere solo spazi.")
 
         name_valid = bool(name_trimmed)
         if name_value and not name_valid:
-            st.error("Il nome del cliente non puo contenere solo spazi.")
+            st.error("Nome cliente non valido")
+            st.caption("Il nome non puo contenere solo spazi.")
 
         busy_init = bool(st.session_state.get("ui.busy.init"))
         init_clicked = st.form_submit_button(
@@ -786,6 +799,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             type="primary",
             use_container_width=True,
             disabled=busy_init,
+            help="Genera i file YAML in semantic/ a partire dalla Vision.",
         )
 
     if init_clicked:
@@ -855,8 +869,15 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             st.session_state["ui.new.init_done"] = True
             st.success("Artefatti Vision generati. Verifica gli YAML prima di creare il workspace.")
             logger.info("ui.new.vision_completed", extra={"slug": slug_trimmed})
+            try:
+                set_state(slug_trimmed, "nuovo")
+                logger.info("ui.state.updated", extra={"slug": slug_trimmed, "state": "nuovo"})
+                st.toast("Stato cliente aggiornato a 'nuovo'.")
+            except Exception as state_exc:  # pragma: no cover
+                logger.warning("ui.state.update_failed", extra={"slug": slug_trimmed, "error": str(state_exc)})
         except (ConfigError, RuntimeError) as exc:
-            st.error(str(exc))
+            st.error("Inizializzazione Vision non riuscita")
+            st.caption(f"Dettaglio: {exc}")
             logger.warning("ui.new.vision_failed", extra={"slug": slug_trimmed, "error": str(exc)})
         except Exception:  # pragma: no cover
             st.error("Errore inaspettato durante l'inizializzazione del workspace.")
@@ -880,7 +901,8 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             st.session_state[mapping_key] = _load_yaml_text(workspace_dir, mapping_rel)
             st.session_state[cartelle_key] = _load_yaml_text(workspace_dir, cartelle_rel)
         except ConfigError as exc:
-            st.error(str(exc))
+            st.error("YAML non disponibile")
+            st.caption(f"Dettaglio: {exc}")
             return
 
     st.subheader("YAML Vision (modificabili)")
@@ -899,7 +921,8 @@ def _render_new_client_block(logger: logging.Logger) -> None:
                 _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
                 st.success("YAML aggiornati.")
             except ConfigError as exc:
-                st.error(str(exc))
+                st.error("Salvataggio YAML non riuscito")
+                st.caption(f"Dettaglio: {exc}")
 
     slug_effective = st.session_state.get("ui.new.slug_effective", "")
     nome_effective = st.session_state.get("ui.new.nome_effective", slug_effective)
@@ -910,7 +933,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             type="primary",
             use_container_width=True,
             disabled=busy_create,
-            help="Crea la struttura locale e Drive usando gli YAML correnti.",
+            help="Crea la struttura su Drive e completa le cartelle locali.",
         )
 
     if create_clicked:
@@ -946,7 +969,8 @@ def _render_new_client_block(logger: logging.Logger) -> None:
                 },
             )
         except (ConfigError, RuntimeError) as exc:
-            st.error(str(exc))
+            st.error("Creazione workspace non riuscita")
+            st.caption(f"Dettaglio: {exc}")
             logger.warning(
                 "ui.new.workspace_creation_failed",
                 extra={"slug": slug_effective, "error": str(exc)},
@@ -962,7 +986,8 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
     try:
         clients = load_clients()
     except Exception as exc:  # pragma: no cover
-        st.error("Impossibile caricare l'elenco clienti.")
+        st.error("Impossibile caricare l'elenco clienti")
+        st.caption(f"Dettaglio: {exc}")
         logger.warning("ui.manage.load_clients_failed", extra={"error": str(exc)})
         return
 
@@ -994,7 +1019,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                     index=None,
                     placeholder="Scegli uno slug",
                     key="ui.manage.selectbox",
-                    help="Seleziona lo slug del cliente da gestire.",
+                    help="Seleziona un cliente dall'elenco.",
                 )
             except TypeError:
                 fallback_options = [placeholder, *slug_options]
@@ -1006,7 +1031,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                     fallback_options,
                     index=default_index,
                     key="ui.manage.selectbox",
-                    help="Seleziona lo slug del cliente da gestire.",
+                    help="Seleziona un cliente dall'elenco.",
                 )
                 selection_value = None if choice == placeholder else choice
         choose = st.form_submit_button(
@@ -1026,61 +1051,6 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         return
 
     _render_manage_client_view(slug, logger)
-
-
-def _render_tags_reviewed_editor(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
-    tags_rel = _tags_reviewed_path(workspace_dir)
-    tags_key = f"ui.manage.{slug}.tags_reviewed_text"
-    tags_missing = False
-    if tags_key not in st.session_state:
-        try:
-            st.session_state[tags_key] = _load_yaml_text(workspace_dir, tags_rel)
-        except ConfigError:
-            st.session_state[tags_key] = ""
-            tags_missing = True
-    if tags_missing:
-        st.info("tags_reviewed.yaml non trovato. Verra creato al salvataggio.")
-
-    with st.form(f"tags_reviewed_form_{slug}"):
-        st.text_area(
-            "semantic/tags_reviewed.yaml",
-            key=tags_key,
-            height=320,
-            help="Aggiorna manualmente il file tags_reviewed.yaml.",
-        )
-        saved = st.form_submit_button(
-            "Salva YAML",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if saved:
-        try:
-            _validate_yaml_dict(st.session_state[tags_key], "tags_reviewed.yaml")
-            tags_rel.parent.mkdir(parents=True, exist_ok=True)
-            _save_yaml_text(workspace_dir, tags_rel, st.session_state[tags_key])
-            st.success("tags_reviewed.yaml aggiornato.")
-            logger.info("ui.manage.tags_saved", extra={"slug": slug})
-        except ConfigError as exc:
-            st.error(str(exc))
-
-    if st.button(
-        "Estrai Tags",
-        key=f"tags_extract_{slug}",
-        use_container_width=True,
-        help="Esegue l'estrazione automatica dei tag dal workspace.",
-    ):
-        if extract_tags_for_review is None:
-            st.info("Adapter Estrai Tags non ancora disponibile.")
-        else:
-            with st.spinner("Estrazione dei tag in corso..."):
-                try:
-                    extract_tags_for_review(slug)
-                    st.success("Estrazione completata.")
-                    logger.info("ui.manage.tags_extracted", extra={"slug": slug})
-                except Exception as exc:  # pragma: no cover
-                    st.error(f"Errore durante l'estrazione dei tag: {exc}")
-                    logger.warning("ui.manage.tags_extract_failed", extra={"slug": slug, "error": str(exc)})
 
 
 def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
@@ -1127,11 +1097,18 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     logger = logger or logging.getLogger("ui.manage_client")
     workspace_dir = _workspace_dir_for(slug)
 
-    st.subheader(f"Gestione cliente: {slug}")
+    st.subheader(f"Gestisci cliente - {slug}")
     if workspace_dir.exists():
         st.caption(f"Workspace: `{workspace_dir}`")
     else:
         st.warning("Workspace locale non trovato. Alcune funzionalita potrebbero non funzionare.")
+
+    raw_dir = workspace_dir / "raw"
+    raw_exists = raw_dir.exists() and raw_dir.is_dir()
+
+    st.session_state.setdefault("ui.busy.download_raw", False)
+    download_busy = bool(st.session_state.get("ui.busy.download_raw"))
+    download_available = callable(download_raw_from_drive_with_progress)
 
     col_drive, col_diff, col_tags = st.columns([1.1, 1.3, 1.1])
     drive_index: Dict[str, Dict[str, Any]] = {}
@@ -1145,24 +1122,73 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                 logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
 
     with col_diff:
+        download_clicked = st.button(
+            "Scarica da Drive in raw/",
+            type="secondary",
+            use_container_width=True,
+            disabled=download_busy or not download_available,
+            help="Scarica i PDF da DRIVE_ID/<slug>/raw/ nella cartella locale raw/.",
+        )
+        if download_clicked and download_available and not download_busy:
+            st.session_state["ui.busy.download_raw"] = True
+            try:
+                with st.status("Scaricamento da Drive in corso...", expanded=True) as status:
+                    status.write("Connessione a Drive...")
+                    download_raw_from_drive_with_progress(slug=slug, logger=logger)
+                    status.update(label="Scaricamento completato", state="complete", expanded=False)
+                st.session_state["ui.busy.download_raw"] = False
+                st.rerun()
+            except Exception as exc:  # pragma: no cover
+                st.session_state["ui.busy.download_raw"] = False
+                st.error("Scaricamento da Drive non riuscito")
+                st.caption(f"Dettaglio: {exc}")
+                logger.warning("ui.manage.download_raw_failed", extra={"slug": slug, "error": str(exc)})
+        elif download_clicked and not download_available:
+            st.warning("Scaricamento da Drive non disponibile in questo ambiente.")
+
         if callable(render_drive_local_diff):
             try:
                 render_drive_local_diff(slug, drive_index)
             except Exception as exc:  # pragma: no cover
-                st.error(f"Impossibile calcolare il diff Drive/locale: {exc}")
+                st.error("Diff Drive/Locale non riuscito")
+                st.caption(f"Dettaglio: {exc}")
                 logger.warning("ui.manage.diff_failed", extra={"slug": slug, "error": str(exc)})
         else:
             st.info("Diff Drive/locale non ancora disponibile.")
 
     with col_tags:
-        _render_tags_reviewed_editor(slug, workspace_dir, logger)
+        if callable(edit_tags_reviewed):
+            try:
+                edit_tags_reviewed(slug)
+            except Exception as exc:  # pragma: no cover
+                st.error("Impossibile mostrare tags_reviewed.yaml")
+                st.caption(f"Dettaglio: {exc}")
+                logger.warning("ui.manage.tags_editor_failed", extra={"slug": slug, "error": str(exc)})
+        else:
+            st.info("Editor tags non disponibile in questo ambiente.")
 
-    client_state = (get_state(slug) or "").lower()
+        extract_disabled = not raw_exists
+        extract_clicked = st.button(
+            "Estrai Tags",
+            type="primary",
+            use_container_width=True,
+            disabled=extract_disabled,
+            help="Aggiorna tags_reviewed.yaml analizzando i contenuti in raw/.",
+        )
+        if extract_clicked:
+            if run_tags_update is None:
+                st.info("Estrazione tag disponibile nei prossimi step.")
+            else:
+                st.info("Estrazione tag sara' collegata nei prossimi step.")
+
+    st.subheader("Semantica")
+    state_val = (get_state(slug) or "").lower()
     eligible_states = {"pronto", "arricchito", "finito"}
-    if client_state in eligible_states:
-        tabs = st.tabs(["Semantica"])
-        with tabs[0]:
-            _render_manage_semantic_tab(slug, workspace_dir, logger)
+
+    if state_val in eligible_states:
+        sem_tabs = st.tabs(["Semantica"])
+        with sem_tabs[0]:
+            st.info("Sezione Semantica in preparazione.")
     else:
         st.info("La semantica sara' disponibile quando lo stato raggiunge 'pronto' (dopo il download dei PDF in raw/).")
 

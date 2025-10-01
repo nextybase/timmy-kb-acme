@@ -61,7 +61,8 @@ def edit_semantic_mapping(slug: str) -> None:
     try:
         original = _read_yaml_text(slug, MAPPING_FILE)
     except ConfigError as exc:
-        st.error(str(exc))
+        st.error("File non disponibile")
+        st.caption(f"Dettaglio: {exc}")
         return
 
     state_key = f"yaml_mapping::{slug}"
@@ -69,7 +70,7 @@ def edit_semantic_mapping(slug: str) -> None:
         st.session_state[state_key] = original
 
     st.subheader("semantic_mapping.yaml")
-    st.caption(f"Path: output/timmy-kb-{slug}/semantic/{MAPPING_FILE}")
+    st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{MAPPING_FILE}")
 
     text_value = st.text_area(
         "Contenuto mapping",
@@ -77,7 +78,7 @@ def edit_semantic_mapping(slug: str) -> None:
         height=360,
     )
 
-    if st.button("Salva mapping", key=f"save_mapping_{slug}", type="primary"):
+    if st.button("Salva mapping", type="primary"):
         try:
             data = yaml.safe_load(text_value) or {}
             if not isinstance(data, dict):
@@ -94,7 +95,8 @@ def edit_semantic_mapping(slug: str) -> None:
             _write_yaml_text(slug, MAPPING_FILE, text_value)
             st.success("semantic_mapping.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error(str(exc))
+            st.error("Salvataggio non riuscito")
+            st.caption(f"Dettaglio: {exc}")
         except yaml.YAMLError as exc:  # pragma: no cover
             st.error(f"Parsing YAML non riuscito: {exc}")
 
@@ -104,7 +106,8 @@ def edit_cartelle_raw(slug: str) -> None:
     try:
         original = _read_yaml_text(slug, CARTELLE_FILE)
     except ConfigError as exc:
-        st.error(str(exc))
+        st.error("File non disponibile")
+        st.caption(f"Dettaglio: {exc}")
         return
 
     state_key = f"yaml_cartelle::{slug}"
@@ -112,7 +115,7 @@ def edit_cartelle_raw(slug: str) -> None:
         st.session_state[state_key] = original
 
     st.subheader("cartelle_raw.yaml")
-    st.caption(f"Path: output/timmy-kb-{slug}/semantic/{CARTELLE_FILE}")
+    st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{CARTELLE_FILE}")
 
     text_value = st.text_area(
         "Contenuto cartelle_raw",
@@ -120,7 +123,7 @@ def edit_cartelle_raw(slug: str) -> None:
         height=360,
     )
 
-    if st.button("Salva cartelle", key=f"save_cartelle_{slug}", type="primary"):
+    if st.button("Salva cartelle", type="primary"):
         try:
             data = yaml.safe_load(text_value) or {}
             if not isinstance(data, dict):
@@ -139,7 +142,8 @@ def edit_cartelle_raw(slug: str) -> None:
             _write_yaml_text(slug, CARTELLE_FILE, text_value)
             st.success("cartelle_raw.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error(str(exc))
+            st.error("Salvataggio non riuscito")
+            st.caption(f"Dettaglio: {exc}")
         except yaml.YAMLError as exc:  # pragma: no cover
             st.error(f"Parsing YAML non riuscito: {exc}")
 
@@ -149,23 +153,24 @@ def edit_tags_reviewed(slug: str) -> None:
     try:
         original = _read_yaml_text(slug, TAGS_FILE)
     except ConfigError as exc:
-        st.error(str(exc))
+        st.error("File non disponibile")
+        st.caption(f"Dettaglio: {exc}")
         return
 
     state_key = f"yaml_tags::{slug}"
     if state_key not in st.session_state:
         st.session_state[state_key] = original
 
-    st.subheader("tags_reviewed.yaml")
-    st.caption(f"Path: output/timmy-kb-{slug}/semantic/{TAGS_FILE}")
+    st.subheader("Tag revisionati")
+    st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{TAGS_FILE}")
 
     text_value = st.text_area(
-        "Contenuto tags_reviewed",
+        "Contenuto tags_reviewed.yaml",
         key=state_key,
         height=360,
     )
 
-    if st.button("Salva tags", key=f"save_tags_{slug}", type="primary"):
+    if st.button("Salva tags", type="primary"):
         try:
             data = yaml.safe_load(text_value) or {}
             if isinstance(data, dict):
@@ -179,6 +184,7 @@ def edit_tags_reviewed(slug: str) -> None:
             _write_yaml_text(slug, TAGS_FILE, text_value)
             st.success("tags_reviewed.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error(str(exc))
+            st.error("Salvataggio non riuscito")
+            st.caption(f"Dettaglio: {exc}")
         except yaml.YAMLError as exc:  # pragma: no cover
             st.error(f"Parsing YAML non riuscito: {exc}")

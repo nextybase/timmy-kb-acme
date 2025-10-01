@@ -84,6 +84,7 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     if st is None:
         return
 
+    st.subheader("Differenze Drive/Locale")
     drive_index = drive_index or {}
     drive_entries = {key: meta for key, meta in drive_index.items() if key == "raw" or key.startswith("raw/")}
 
@@ -147,8 +148,7 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
         return
 
     st.caption(
-        "Confronto basato su dimensione e timestamp (sec). Differenze di timezone o sync parziale possono"
-        " produrre scostamenti."
+        "Confronto su dimensione e timestamp (s). Differenze di fuso o sincronizzazione possono produrre scostamenti."
     )
 
     col_drive, col_local, col_diff = st.columns(3)
