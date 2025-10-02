@@ -697,10 +697,10 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         ):
             active_slug = slug or "dummy"
             try:
-                from tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
+                from tools.gen_dummy_kb import main as gen_dummy_main
 
                 with st.spinner(f"Genero dataset dummy per '{active_slug}'..."):
-                    exit_code = gen_dummy_main(["--slug", active_slug, "--non-interactive"])  # type: ignore[arg-type]
+                    exit_code = gen_dummy_main(["--slug", active_slug, "--non-interactive"])
                 if int(exit_code) == 0:
                     st.success(f"Dummy generato per '{active_slug}'.")
                     logger.info("ui.sidebar.dummy_generated", extra={"slug": active_slug})
