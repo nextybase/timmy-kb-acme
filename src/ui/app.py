@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 import os
 import signal
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
@@ -113,6 +115,35 @@ def _setup_logging() -> logging.Logger:
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     return logger
+
+
+def _ui_delete_client_via_tool(slug: str) -> tuple[bool, str]:
+    """UI adapter che invoca il tool CLI per eliminare il cliente.
+
+    Restituisce (ok, messaggio). Prima chiudiamo gli handler di logging per
+    rilasciare eventuali lock su file .log nella cartella del workspace.
+    """
+    # Rilascia gli handler di logging (sblocca i file aperti su Windows)
+    try:
+        logging.shutdown()
+    except Exception:
+        pass
+
+    cmd = [sys.executable, "-m", "src.tools.clean_client_workspace", "--slug", slug, "-y"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        output = (result.stdout or result.stderr or "").strip()
+        return True, output or "Pulizia completata."
+    except FileNotFoundError as exc:
+        return False, f"Tool di cleanup non trovato: {exc}"
+    except subprocess.CalledProcessError as exc:
+        message = (exc.stderr or exc.stdout or str(exc)).strip()
+        return False, message or "Errore durante l'eliminazione del cliente."
+    except Exception as exc:  # pragma: no cover
+        return False, str(exc)
+    finally:
+        # Ripristina un logger minimo della UI dopo lo shutdown globale
+        _setup_logging()
 
 
 def _render_debug_expander(workspace_dir: Path) -> None:
@@ -1091,6 +1122,33 @@ def _render_new_client_block(logger: logging.Logger) -> None:
 
 
 def _render_manage_client_block(logger: logging.Logger) -> None:
+    # Stato base
+    st.session_state.setdefault("ui.mode", "manage")
+    st.session_state.setdefault("ui.show_manage_select", True)
+    st.session_state.setdefault("ui.manage_slug", None)
+    st.session_state.setdefault("ui.manage.selected_slug", None)
+    st.session_state.setdefault("ui.manage.confirm_open", False)
+    st.session_state.setdefault("ui.manage.confirm_slug", "")
+    st.session_state.setdefault("ui.manage.reset_confirm_typed", False)
+
+    # Se dobbiamo resettare il campo digitato, farlo PRIMA di creare il widget
+    if st.session_state.pop("ui.manage.reset_confirm_typed", False):
+        st.session_state.pop("ui.manage.confirm_typed", None)
+
+    # Banner feedback (persistito per 1 rerun)
+    feedback = st.session_state.pop("ui.manage.feedback", None)
+    if feedback:
+        status, message = feedback
+        if status == "success":
+            st.success(message)
+        elif status == "error":
+            st.error(message)
+        elif status == "warning":
+            st.warning(message)
+        else:
+            st.info(message)
+
+    # Elenco clienti
     try:
         clients = load_clients()
     except Exception as exc:  # pragma: no cover
@@ -1102,61 +1160,119 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
     if not clients:
         st.info("Nessun cliente registrato. Crea un nuovo cliente per iniziare.")
         st.session_state["ui.manage_slug"] = None
+        st.session_state["ui.manage.selected_slug"] = None
         return
 
     st.subheader("Gestisci cliente")
-    selected_session: str | None = st.session_state.get("ui.manage_slug")
-    selection_value: str | None
+    slugs = [entry.slug for entry in clients]
+    selected_slug = st.session_state.get("ui.manage.selected_slug")
+    if not selected_slug or selected_slug not in slugs:
+        selected_slug = slugs[0] if slugs else None
 
-    with st.form("manage_client_select_form"):
-        if not clients:
-            st.selectbox(
-                "Cliente",
-                options=["Nessun cliente registrato"],
-                index=0,
-                disabled=True,
-                help="Registro vuoto: crea un nuovo cliente per iniziare.",
-            )
-            selection_value = None
-        else:
-            slug_options = [entry.slug for entry in clients]
-            placeholder = "-- Seleziona uno slug --"
-            try:
-                selection_value = st.selectbox(
-                    "Cliente",
-                    slug_options,
-                    index=None,
-                    placeholder="Scegli uno slug",
-                    key="ui.manage.selectbox",
-                    help="Seleziona un cliente dall'elenco.",
-                )
-            except TypeError:
-                fallback_options = [placeholder, *slug_options]
-                default_index = 0
-                if selected_session and selected_session in slug_options:
-                    default_index = fallback_options.index(selected_session)
-                choice = st.selectbox(
-                    "Cliente",
-                    fallback_options,
-                    index=default_index,
-                    key="ui.manage.selectbox",
-                    help="Seleziona un cliente dall'elenco.",
-                )
-                selection_value = None if choice == placeholder else choice
-        choose = st.form_submit_button(
-            "Scegli",
+    try:
+        selected = st.selectbox(
+            "Cliente",
+            options=slugs,
+            index=slugs.index(selected_slug) if selected_slug else 0,
+            key="ui.manage.selectbox",
+            help="Seleziona un cliente dall'elenco.",
+        )
+    except Exception:  # pragma: no cover
+        selected = st.selectbox("Cliente", options=slugs, key="ui.manage.selectbox")
+    st.session_state["ui.manage.selected_slug"] = selected if selected else None
+
+    col_manage, col_delete = st.columns([1, 1])
+
+    # Gestisci: entra nella vista del cliente
+    with col_manage:
+        if st.button(
+            "Gestisci",
+            key="ui.manage.button",
             type="primary",
             use_container_width=True,
-            disabled=selection_value is None,
-        )
+            disabled=not selected,
+        ):
+            st.session_state["ui.manage_slug"] = selected
+            logger.info("ui.manage.slug_selected", extra={"slug": selected})
+            st.rerun()
 
-    if choose and selection_value:
-        st.session_state["ui.manage_slug"] = selection_value
-        logger.info("ui.manage.slug_selected", extra={"slug": selection_value})
+    # Elimina: apri conferma
+    with col_delete:
+        if st.button(
+            "Elimina",
+            key="ui.manage.delete_button",
+            use_container_width=True,
+            disabled=not selected,
+        ):
+            if selected:
+                st.session_state["ui.manage.confirm_open"] = True
+                st.session_state["ui.manage.confirm_slug"] = selected
+                # reset del campo digitato nel prossimo run, così il widget nascerà vuoto
+                st.session_state["ui.manage.reset_confirm_typed"] = True
+                st.rerun()
 
+    # Box di conferma eliminazione
+    if st.session_state.get("ui.manage.confirm_open"):
+        slug_to_del = st.session_state.get("ui.manage.confirm_slug") or ""
+        with st.container(border=True):
+            st.warning(
+                "⚠️ Azione **irreversibile**: saranno rimossi workspace locale, record nel DB e cartella su Drive."
+            )
+            st.caption(f"Cliente selezionato: **{slug_to_del}**")
+            typed = st.text_input(
+                "Per confermare digita lo slug esatto",
+                key="ui.manage.confirm_typed",
+                placeholder=slug_to_del,
+            )
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                confirm = st.button(
+                    "Conferma eliminazione",
+                    type="primary",
+                    use_container_width=True,
+                    key="ui.manage.confirm_go",
+                )
+            with c2:
+                cancel = st.button(
+                    "Annulla",
+                    use_container_width=True,
+                    key="ui.manage.confirm_cancel",
+                )
+
+        if cancel:
+            st.session_state["ui.manage.confirm_open"] = False
+            st.session_state["ui.manage.confirm_slug"] = ""
+            st.session_state["ui.manage.reset_confirm_typed"] = True
+            st.rerun()
+
+        if confirm:
+            if typed.strip() != slug_to_del:
+                st.error("Lo slug digitato non coincide. Controlla e riprova.")
+            else:
+                with st.spinner(f"Elimino '{slug_to_del}' da locale, DB e Drive..."):
+                    ok, message = _ui_delete_client_via_tool(slug_to_del)
+
+                # Chiudi dialog, resetta campo e mostra banner al prossimo run
+                st.session_state["ui.manage.confirm_open"] = False
+                st.session_state["ui.manage.reset_confirm_typed"] = True
+
+                if ok:
+                    st.session_state["ui.manage.feedback"] = (
+                        "success",
+                        f"Cliente '{slug_to_del}' eliminato. {message}",
+                    )
+                    st.toast(f"Cliente '{slug_to_del}' eliminato.")
+                    if slug_to_del == st.session_state.get("ui.manage_slug"):
+                        st.session_state.pop("ui.manage_slug", None)
+                    st.session_state["ui.manage.selected_slug"] = None
+                else:
+                    st.session_state["ui.manage.feedback"] = ("error", f"Errore eliminazione: {message}")
+                st.rerun()
+
+    # Se nessun cliente aperto in gestione, mostra istruzione
     slug = st.session_state.get("ui.manage_slug")
     if not slug:
-        st.info("Seleziona un cliente per accedere agli strumenti di gestione.")
+        st.info("Seleziona un cliente e premi 'Gestisci' per accedere agli strumenti dedicati.")
         return
 
     _render_manage_client_view(slug, logger)

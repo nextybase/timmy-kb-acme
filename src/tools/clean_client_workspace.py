@@ -1,232 +1,413 @@
-#!/usr/bin/env python3
-# src/tools/clean_client_workspace.py
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+# src/tools/clean_client_workspace.py
 from __future__ import annotations
 
+"""
+Tool CLI: rimozione workspace cliente (locale + DB + Drive).
+
+- Rispetta SSoT e path-safety (ensure_within_and_resolve).
+- Logging strutturato "event + extra".
+- Idempotente: l'assenza di risorse non è errore.
+- Compatibile Windows: gestisce file lock (log aperti) con retry e skip mirato.
+- Evita side-effects a import-time (solo funzioni; l'esecuzione parte in main()).
+
+Exit codes:
+- 0: OK
+- 2: Config/parametri non validi (es. slug mancante)
+- 3: Drive non disponibile / permessi insufficienti
+- 4: Rimozione locale fallita in modo non recuperabile
+- 1: Errore generico inatteso
+"""
+
 import argparse
-import re
+import os
 import shutil
+import sys
+import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple, cast
 
+import yaml
+from googleapiclient.errors import HttpError
+
+from src.pipeline.context import ClientContext
+from src.pipeline.exceptions import ConfigError
+from src.pipeline.logging_utils import get_structured_logger
+from src.pipeline.path_utils import ensure_within, ensure_within_and_resolve
+
+# Dipendenze Drive (opzionali; usate se disponibili)
 try:
-    from googleapiclient.errors import HttpError  # type: ignore
+    from src.pipeline.drive.client import get_drive_service  # SSoT per service
 except Exception:  # pragma: no cover
+    get_drive_service = None  # type: ignore[assignment]
 
-    class HttpError(Exception):
-        """Fallback when googleapiclient is unavailable."""
 
+# --------------------------------------------------------------------------------------
+# Costanti e utilità
+# --------------------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_ROOT = REPO_ROOT / "output"
+CLIENTS_DB_DIR = REPO_ROOT / "clients_db"
+CLIENTS_DB_FILE = CLIENTS_DB_DIR / "clients.yaml"
+
+LOGGER = get_structured_logger("tools.clean_client_workspace")
+
+
+def _redact(s: Optional[str]) -> Optional[str]:
+    if not s:
+        return s
+    t = str(s)
+    if len(t) <= 7:
+        return "***"
+    return f"{t[:3]}***{t[-3:]}"
+
+
+def _ask_yes_no(prompt: str) -> bool:
+    try:
+        ans = input(prompt + " [y/N]: ").strip().lower()
+    except EOFError:
+        return False
+    return ans in {"y", "yes", "s", "si", "sí"}  # it/en compat
+
+
+def _confirm_irreversible(slug: str, assume_yes: bool) -> bool:
+    if assume_yes:
+        return True
+    msg = (
+        f"⚠️ Confermi l'eliminazione IRREVERSIBILE del workspace '{slug}'?\n"
+        "- Cartella locale output/timmy-kb-<slug>\n"
+        "- Record in clients_db/clients.yaml\n"
+        "- Cartella cliente su Drive (se presente)\n"
+    )
+    return _ask_yes_no(msg)
+
+
+# --------------------------------------------------------------------------------------
+# Drive helpers
+# --------------------------------------------------------------------------------------
+
+
+def _drive_find_client_folder_id(service: Any, drive_parent_id: str, slug: str) -> Optional[str]:
+    q = (
+        f"name = '{slug}' and '{drive_parent_id}' in parents and "
+        "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    )
+
+    def _call() -> Dict[str, Any]:
+        return (
+            service.files()
+            .list(
+                q=q,
+                spaces="drive",
+                fields="files(id,name)",
+                pageSize=10,
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+
+    resp = cast(Dict[str, Any], _call())
+    files = cast(Iterable[Dict[str, Any]], resp.get("files", []))
+    for f in files:
+        return cast(str, f.get("id"))
+    return None
+
+
+def _drive_delete_by_id(service: Any, file_id: str) -> None:
+    service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+
+
+def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+    """
+    Prova a eliminare la cartella cliente su Drive. Idempotente.
+    Ritorna (ok, messaggio); ok=False solo per errori di permesso o dipendenze.
+    """
+    if get_drive_service is None:
+        logger.info("tools.clean_client_workspace.drive.unavailable")
+        return False, "Funzionalità Drive non disponibili (dipendenze assenti)."
+
+    try:
+        # Carico il contesto per ottenere ENV e Drive service.
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        service = get_drive_service(ctx)
+        drive_parent_id = (ctx.env or {}).get("DRIVE_ID")
+        if not drive_parent_id:
+            logger.info("tools.clean_client_workspace.drive.no_parent", extra={"slug": slug})
+            return True, "DRIVE_ID non impostato: nessuna cartella da rimuovere (skip)."
+
+        folder_id = _drive_find_client_folder_id(service, drive_parent_id, slug)
+        if not folder_id:
+            logger.info(
+                "tools.clean_client_workspace.drive.folder_absent",
+                extra={"slug": slug, "drive_parent": _redact(drive_parent_id)},
+            )
+            return True, "Cartella cliente su Drive assente (ok)."
+
+        try:
+            _drive_delete_by_id(service, folder_id)
+            logger.info(
+                "tools.clean_client_workspace.drive.folder_deleted",
+                extra={"slug": slug, "folder_id": _redact(folder_id)},
+            )
+            return True, "Cartella cliente su Drive eliminata."
+        except HttpError as e:
+            status = getattr(getattr(e, "resp", None), "status", None)
+            logger.info(
+                "tools.clean_client_workspace.drive.delete_failed",
+                extra={"slug": slug, "status": status, "folder_id": _redact(folder_id)},
+            )
+            if status in (401, 403):  # permesso mancante
+                return False, "Permessi Drive insufficienti per eliminare la cartella."
+            raise
+    except ConfigError as e:
+        logger.info("tools.clean_client_workspace.drive.ctx_error", extra={"slug": slug, "message": str(e)[:200]})
+        # Non blocchiamo: continuiamo con la porzione locale/DB
+        return True, "Contesto Drive non disponibile: salto rimozione Drive."
+    except Exception as e:  # pragma: no cover
+        logger.info("tools.clean_client_workspace.drive.unexpected", extra={"slug": slug, "message": str(e)[:200]})
+        return False, f"Errore inatteso Drive: {e}"
+
+
+# --------------------------------------------------------------------------------------
+# Local workspace deletion (Windows-safe)
+# --------------------------------------------------------------------------------------
+
+
+def _try_remove_readonly(func, path, exc_info):  # noqa: ANN001
+    # Callback per shutil.rmtree onerror: rimuove readonly e riprova
+    try:
+        os.chmod(path, 0o666)
+    except Exception:
+        pass
+    try:
+        func(path)
+    except Exception:
         pass
 
 
-import yaml
+def _rmtree_best_effort(
+    base: Path,
+    target: Path,
+    slug: str,
+    *,
+    logger=LOGGER,
+    retries: int = 5,
+    delay: float = 0.6,
+) -> Tuple[bool, list[str]]:
+    """
+    Prova a eliminare target in modo robusto.
+    In caso di lock (Windows), tenta retry; se persiste, prova a eliminare contenuti
+    uno a uno e ritorna l'elenco dei residui.
+    """
+    ensure_within(base, target)
+    residuals: list[str] = []
 
-from src.pipeline.logging_utils import get_structured_logger, mask_partial
-from src.pipeline.path_utils import ensure_within  # guard-rail path
-from src.ui import clients_store  # per DB_FILE e formato YAML
-
-LOG = get_structured_logger("tools.clean_client_workspace")
-
-
-# ------------------------------- Helpers -------------------------------------
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _output_root() -> Path:
-    return _repo_root() / "output"
-
-
-def _workspace_dir(slug: str) -> Path:
-    return _output_root() / f"timmy-kb-{slug}"
-
-
-def _validate_slug(slug: str) -> None:
-    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", slug):
-        raise ValueError(
-            f"Slug '{slug}' non valido. Usa minuscole, numeri e '-', senza spazi "
-            f"e senza '-' iniziale/finale (es: 'acme-corp')."
-        )
-
-
-def _confirm(prompt: str, default: bool = False) -> bool:
-    yn = " [Y/n] " if default else " [y/N] "
-    ans = input(prompt + yn).strip().lower()
-    if not ans:
-        return default
-    return ans in {"y", "yes", "s", "si", "sì"}
-
-
-def _load_clients_yaml(path: Path) -> dict:
-    if not path.exists():
-        return {"version": 1, "clients": []}
-    with path.open("r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-    if "clients" not in data or not isinstance(data["clients"], list):
-        data = {"version": data.get("version", 1), "clients": []}
-    return data
-
-
-def _write_clients_yaml(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
-    tmp.replace(path)
-
-
-def _find_drive_client_folder_id(service: Any, drive_id: str, slug: str) -> Optional[str]:
-    """Find the client folder named `<slug>` at the Shared Drive root."""
-    folder_mime = "application/vnd.google-apps.folder"
-    q = f"name = '{slug}' and mimeType = '{folder_mime}' and trashed = false"
-    resp = (
-        service.files()
-        .list(
-            q=q,
-            corpora="drive",
-            driveId=drive_id,
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-            fields="files(id,name,parents,driveId)",
-            spaces="drive",
-        )
-        .execute()
-    )
-    files = resp.get("files", [])
-    return files[0]["id"] if files else None
-
-
-def _delete_on_drive_if_present(slug: str) -> None:
-    """Se configurato, elimina l'intera cartella del cliente su Drive (idempotente)."""
-    try:
-        # Usiamo i wrapper esistenti; se non installati/settati, saltiamo senza fallire.
-        from src.pipeline.context import ClientContext
-        from src.pipeline.drive_utils import get_drive_service
-    except Exception as exc:  # drive opzionale
-        LOG.info("drive.skip.unavailable", extra={"reason": str(exc)})
-        return
-
-    # Carica env senza requisiti rigidi (non deve scrivere nulla in output/)
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-    drive_id = (ctx.env or {}).get("DRIVE_ID")
-    if not drive_id:
-        LOG.info("drive.skip.no_parent_id")
-        return
-
-    try:
-        service = get_drive_service(ctx)
-    except Exception as exc:
-        LOG.warning("drive.client.error", extra={"error": str(exc)})
-        return
-
-    folder_id = _find_drive_client_folder_id(service, drive_id, slug)
-    if not folder_id:
-        LOG.info("drive.folder.absent", extra={"slug": slug})
-        return
-
-    try:
+    for attempt in range(1, retries + 1):
         try:
-            service.files().delete(fileId=folder_id, supportsAllDrives=True).execute()
-            LOG.info("drive.folder.deleted", extra={"slug": slug, "folder_id": mask_partial(folder_id)})
-        except HttpError as err:
-            status = getattr(err, "status_code", None)
-            if status is None:
-                resp = getattr(err, "resp", None)
-                status = getattr(resp, "status", None) if resp is not None else None
-            if status == 403:
-                service.files().update(
-                    fileId=folder_id,
-                    body={"trashed": True},
-                    supportsAllDrives=True,
-                ).execute()
-                LOG.info("drive.folder.trashed", extra={"slug": slug, "folder_id": mask_partial(folder_id)})
-            elif status == 404:
-                LOG.info("drive.folder.absent", extra={"slug": slug})
-            else:
-                raise
-    except Exception as exc:
-        LOG.error(
-            "drive.folder.delete_failed", extra={"slug": slug, "folder_id": mask_partial(folder_id), "error": str(exc)}
+            shutil.rmtree(target, onerror=_try_remove_readonly)
+            return True, residuals
+        except Exception as e:
+            logger.info(
+                "tools.clean_client_workspace.local.rmtree_retry",
+                extra={
+                    "slug": slug,
+                    "attempt": attempt,
+                    "retries": retries,
+                    "delay": delay,
+                    "path": str(target),
+                    "message": str(e)[:120],
+                },
+            )
+            time.sleep(delay)
+
+    # Best-effort per pulire quasi tutto, isolando i file bloccati
+    if target.exists():
+        for p in sorted(target.rglob("*"), key=len, reverse=True):
+            try:
+                if p.is_file() or p.is_symlink():
+                    p.unlink(missing_ok=True)
+                elif p.is_dir():
+                    p.rmdir()
+            except Exception:
+                residuals.append(str(p))
+        # Ritenta la rimozione della root se vuota
+        try:
+            target.rmdir()
+        except Exception:
+            pass
+
+    still_exists = target.exists()
+    return (not still_exists), residuals
+
+
+def _delete_local_workspace(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+    """
+    Elimina il workspace locale `output/timmy-kb-<slug>`.
+    Non fallisce se la cartella non esiste. In caso di file lock residui,
+    li segnala e ritorna comunque ok=True se tutto il resto è stato rimosso.
+    """
+    base = ensure_within_and_resolve(REPO_ROOT, OUTPUT_ROOT)
+    work = ensure_within_and_resolve(base, base / f"timmy-kb-{slug}")
+
+    if not work.exists():
+        logger.info("tools.clean_client_workspace.local.absent", extra={"slug": slug, "path": str(work)})
+        return True, "Workspace locale assente (ok)."
+
+    logger.info("tools.clean_client_workspace.local.delete_start", extra={"slug": slug, "path": str(work)})
+    ok, residuals = _rmtree_best_effort(base, work, slug, logger=logger)
+
+    if ok:
+        logger.info("tools.clean_client_workspace.local.delete_done", extra={"slug": slug})
+        return True, "Workspace locale eliminato."
+
+    # Se restano solo file di log bloccati, consideriamo l'operazione sufficiente
+    locked_only_logs = all("logs" in r for r in residuals) and len(residuals) <= 3
+    if locked_only_logs:
+        logger.info(
+            "tools.clean_client_workspace.local.residual_logs",
+            extra={"slug": slug, "residual_count": len(residuals)},
+        )
+        return True, (
+            "Workspace locale quasi eliminato; residui (log) bloccati da altri processi. "
+            "Chiudi l'app e riprova per rimuovere i log."
         )
 
-
-# ------------------------------- Main ----------------------------------------
-
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description=(
-            "Rimuove workspace su Drive (se configurato), poi cartella locale in output/ " "e l'entry nel DB clienti."
-        )
+    logger.error(
+        "tools.clean_client_workspace.local.delete_failed",
+        extra={"slug": slug, "residual_count": len(residuals)},
     )
-    p.add_argument("--slug", type=str, help="Slug cliente da cancellare (es. acme-srl)")
-    p.add_argument("-y", "--yes", action="store_true", help="Non chiedere conferma interattiva")
-    return p.parse_args()
+    return False, f"Rimozione locale non completa. Residui: {len(residuals)}"
 
 
-def main() -> int:
-    args = _parse_args()
-    slug = (args.slug or input("Slug cliente da cancellare: ").strip()).lower()
+# --------------------------------------------------------------------------------------
+# DB (clients.yaml)
+# --------------------------------------------------------------------------------------
+
+
+def _remove_from_clients_db(slug: str, logger=LOGGER) -> Tuple[bool, str]:
     try:
-        _validate_slug(slug)
-    except Exception as exc:
-        LOG.error("invalid.slug", extra={"slug": slug, "error": str(exc)})
-        print(f"Slug non valido: {slug}")
-        return 2
+        db_dir = ensure_within_and_resolve(REPO_ROOT, CLIENTS_DB_DIR)
+        db_file = ensure_within_and_resolve(db_dir, CLIENTS_DB_FILE)
 
-    ws_dir = _workspace_dir(slug)
-    db_path = Path(clients_store.DB_FILE)
+        if not db_file.exists():
+            logger.info("tools.clean_client_workspace.db.absent", extra={"slug": slug, "path": str(db_file)})
+            return True, "DB clienti assente (ok)."
 
-    # Riepilogo da confermare
-    todo: list[str] = []
-    todo.append("eventuale cartella su Google Drive (se configurato)")
-    if ws_dir.exists():
-        todo.append(f"cartella locale: {ws_dir}")
-    if db_path.exists():
-        db = _load_clients_yaml(db_path)
-        if any((c or {}).get("slug") == slug for c in db.get("clients", [])):
-            todo.append(f"entry in DB clienti: {db_path}")
+        with db_file.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
 
-    if not args.yes:
-        print("ATTENZIONE: verranno rimossi/eliminati i seguenti elementi:")
-        for item in todo:
-            print(f" - {item}")
-        if not _confirm("Procedo?", default=False):
-            print("Operazione annullata.")
-            return 0
+        if not isinstance(data, dict):
+            data = {}
 
-    # 1) Elimina cartella cliente su Drive (prima, così non si ricrea config.yaml in locale)
-    _delete_on_drive_if_present(slug)
+        items = data.get("clients")
+        if not isinstance(items, list):
+            items = []
 
-    # 2) Elimina workspace locale (idempotente, con guardia di sicurezza)
-    try:
-        ensure_within(_output_root(), ws_dir)
-        if ws_dir.exists():
-            shutil.rmtree(ws_dir)
-            LOG.info("local.workspace.deleted", extra={"slug": slug, "path": str(ws_dir)})
-    except Exception as exc:
-        LOG.error("local.workspace.delete_failed", extra={"slug": slug, "error": str(exc)})
-        print(f"Errore durante la rimozione del workspace locale: {exc}")
+        new_items = [it for it in items if not (isinstance(it, dict) and it.get("slug") == slug)]
+
+        if len(new_items) == len(items):
+            logger.info("tools.clean_client_workspace.db.no_entry", extra={"slug": slug})
+            return True, "Record non presente nel DB (ok)."
+
+        data["clients"] = new_items
+        tmp = db_file.with_suffix(".yaml.tmp")
+        with tmp.open("w", encoding="utf-8", newline="\n") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        tmp.replace(db_file)
+
+        logger.info("tools.clean_client_workspace.db.entry_removed", extra={"slug": slug, "path": str(db_file)})
+        return True, "Record rimosso dal DB clienti."
+    except Exception as e:  # pragma: no cover
+        logger.error("tools.clean_client_workspace.db.error", extra={"slug": slug, "message": str(e)[:200]})
+        return False, f"Errore aggiornando il DB clienti: {e}"
+
+
+# --------------------------------------------------------------------------------------
+# Orchestrazione
+# --------------------------------------------------------------------------------------
+
+
+def _resolve_slug(args_slug: Optional[str]) -> str:
+    slug = (args_slug or "").strip()
+    if not slug:
+        slug = input("Inserisci lo slug del cliente (kebab-case): ").strip()
+    if not slug:
+        raise ConfigError("Slug mancante.")
+    return slug
+
+
+def run_cleanup(slug: str, assume_yes: bool = False) -> int:
+    LOGGER.info("tools.clean_client_workspace.start", extra={"slug": slug})
+
+    if not _confirm_irreversible(slug, assume_yes):
+        LOGGER.info("tools.clean_client_workspace.cancelled", extra={"slug": slug})
+        print("Operazione annullata.")
+        return 0
+
+    # 1) Drive
+    ok_drive, msg_drive = _delete_on_drive_if_present(slug, LOGGER)
+    if msg_drive:
+        print(msg_drive)
+    if not ok_drive:
+        # Proseguiamo comunque con locale + DB, ma segnaliamo exit speciale se tutto il resto va bene
+        drive_error = True
+    else:
+        drive_error = False
+
+    # 2) Locale
+    ok_local, msg_local = _delete_local_workspace(slug, LOGGER)
+    if msg_local:
+        print(msg_local)
+    if not ok_local:
+        print("Errore: rimozione locale incompleta.")
+        # Non ha senso procedere: lo stato locale è incoerente
+        return 4
+
+    # 3) DB
+    ok_db, msg_db = _remove_from_clients_db(slug, LOGGER)
+    if msg_db:
+        print(msg_db)
+    if not ok_db:
+        # Non blocchiamo: il workspace è stato rimosso, ma segnaliamo errore generico
+        return 1
+
+    LOGGER.info("tools.clean_client_workspace.done", extra={"slug": slug})
+
+    if drive_error:
+        # Locale + DB ok, Drive ko per permessi / dipendenze
         return 3
-
-    # 3) Rimuovi dal DB clienti
-    try:
-        db = _load_clients_yaml(db_path)
-        before = len(db.get("clients", []))
-        db["clients"] = [c for c in db.get("clients", []) if (c or {}).get("slug") != slug]
-        after = len(db.get("clients", []))
-        if after != before:
-            _write_clients_yaml(db_path, db)
-            LOG.info("clients.db.updated", extra={"slug": slug, "path": str(db_path)})
-    except Exception as exc:
-        LOG.warning("clients.db.update_failed", extra={"slug": slug, "error": str(exc)})
-
-    print("Pulizia completata.")
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def parse_args(argv: Iterable[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="clean_client_workspace",
+        description="Elimina workspace cliente (locale + DB + Drive). Operazione irreversibile.",
+    )
+    parser.add_argument("--slug", type=str, help="Slug del cliente (kebab-case).")
+    parser.add_argument("-y", "--yes", action="store_true", help="Non chiedere conferma (assume Yes).")
+    return parser.parse_args(list(argv))
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    try:
+        ns = parse_args(argv or [])
+        slug = _resolve_slug(ns.slug)
+        return run_cleanup(slug=slug, assume_yes=bool(ns.yes))
+    except ConfigError as e:
+        LOGGER.info("tools.clean_client_workspace.invalid_args", extra={"message": str(e)[:200]})
+        print(f"Argomenti non validi: {e}")
+        return 2
+    except KeyboardInterrupt:
+        print("\nInterrotto dall'utente.")
+        return 1
+    except Exception as e:  # pragma: no cover
+        LOGGER.error("tools.clean_client_workspace.unexpected", extra={"message": str(e)[:200]})
+        print(f"Errore inatteso: {e}")
+        return 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main(sys.argv[1:]))

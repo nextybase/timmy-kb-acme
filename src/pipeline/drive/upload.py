@@ -7,41 +7,13 @@ from googleapiclient.errors import HttpError
 """
 Operazioni di creazione/aggiornamento su Google Drive e struttura locale.
 
-# Panoramica & ruoli delle funzioni
+Principi chiave:
 
-Questa unità fornisce la superficie pubblica per le operazioni "write" lato Drive
-e per il bootstrap della struttura locale. È richiamata tramite `pipeline.drive_utils`
-e mantiene la compatibilità con il monolite precedente.
-
-## API principali
-
-- create_drive_folder(service, name, parent_id=None, *, redact_logs=False) -> str
-  Idempotente: se la cartella esiste sotto `parent_id` riusa l'ID, altrimenti la crea.
-
-- create_drive_structure_from_yaml
-  (service, yaml_path, client_folder_id, *, redact_logs=False) -> dict[str, str]
-  Costruisce ricorsivamente l’albero di cartelle remoto partendo da uno YAML nel **formato moderno**
-  (mapping {nome: sottoalbero}). Ritorna una mappa nome→ID.
-
-- upload_config_to_drive_folder(service, context, parent_id, *, redact_logs=False) -> str
-  Carica (sostituzione sicura) `config.yaml` nella cartella cliente su Drive. Se presente
-  elimina la versione precedente. Redige gli ID nei log se richiesto.
-
-- delete_drive_file(service, file_id) -> None
-  Elimina un file da Drive; ignora 404 per idempotenza.
-
-- create_local_base_structure(context, yaml_path) -> None
-  Crea la struttura **locale** minima (raw/, book/, config/) e popola raw/ secondo
-  la sezione RAW dello YAML. Se il `context` non espone `raw_dir`/`book_dir`/`config_dir`,
-  li inizializza come `Path` assoluti.
-
-## Convenzioni & sicurezza
-
-- Compatibilità Shared Drives (supportsAllDrives=True).
-- Idempotenza su creazione cartelle e upload config.
-- Logging strutturato (nessun print) con supporto alla redazione (`redact_logs`).
-- La guardia STRONG sui path (SSoT) resta in `pipeline.path_utils.ensure_within`;
-  qui si assume che gli orchestratori abbiano validato i perimetri di scrittura.
+- In Drive, alla root cliente creiamo SOLO `raw/` e `contrattualistica/`.
+- Sotto `raw/` creiamo una cartella per ogni categoria strutturale dallo YAML.
+- In locale, creiamo solo le categorie di primo livello (niente title/description/examples).
+- Dove possibile preferiamo sempre lo YAML del cliente:
+  `<output>/timmy-kb-<slug>/semantic/cartelle_raw.yaml`.
 """
 
 import os
@@ -55,17 +27,16 @@ from ..logging_utils import get_structured_logger
 from ..path_utils import sanitize_filename
 from .client import _retry
 
-# Logger di modulo (fallback). Dove possibile, useremo un logger contestualizzato locale.
 logger = get_structured_logger("pipeline.drive.upload")
 
 _FOLDER_MIME = "application/vnd.google-apps.folder"
+_META_KEYS: set[str] = {"title", "description", "examples", "note", "tags"}
 
-
-# ------------------------------- Utilità locali -----------------------------------
+# --------------------------------- Utilità ---------------------------------
 
 
 def _maybe_redact(text: str, redact: bool) -> str:
-    """Oscura parzialmente il testo nei log quando `redact` è attivo."""
+    """Oscura una stringa nei log quando `redact` è attivo."""
     if not redact or not text:
         return text
     t = str(text)
@@ -79,16 +50,14 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _list_existing_folder_by_name(service: Any, parent_id: Optional[str], name: str) -> Optional[str]:
-    """Ritorna l'ID di una cartella già esistente con `name` sotto `parent_id`, se presente.
-
-    Se `parent_id` è None, cerca a livello "root" dell'utente/service account.
-    """
+def _list_existing_folder_by_name(
+    service: Any,
+    parent_id: Optional[str],
+    name: str,
+) -> Optional[str]:
+    """Ritorna l'ID di una cartella `name` già esistente sotto `parent_id` (se presente)."""
     base = "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-    if parent_id:
-        q = f"{base} and '{parent_id}' in parents and name = '{name}'"
-    else:
-        q = f"{base} and name = '{name}'"
+    q = f"{base} and '{parent_id}' in parents and name = '{name}'" if parent_id else f"{base} and name = '{name}'"
 
     def _call() -> Any:
         req = service.files().list(
@@ -103,16 +72,11 @@ def _list_existing_folder_by_name(service: Any, parent_id: Optional[str], name: 
 
     resp = cast(Dict[str, Any], _retry(_call, op_name="files.list.folder_by_name"))
     files = cast(List[Dict[str, Any]], resp.get("files", []))
-    if not files:
-        return None
-    return cast(str, files[0]["id"])  # id è atteso stringa
+    return cast(Optional[str], files[0]["id"] if files else None)
 
 
 def _create_folder(service: Any, name: str, parent_id: Optional[str]) -> str:
-    """Crea una cartella su Drive e ritorna l'ID.
-
-    Non esegue lookup: la responsabilità di idempotenza è nel chiamante.
-    """
+    """Crea una cartella e ritorna l'ID (nessun controllo di idempotenza)."""
     body: Dict[str, Any] = {"name": name, "mimeType": _FOLDER_MIME}
     if parent_id:
         body["parents"] = [parent_id]
@@ -121,11 +85,11 @@ def _create_folder(service: Any, name: str, parent_id: Optional[str]) -> str:
         return service.files().create(body=body, fields="id", supportsAllDrives=True).execute()
 
     resp = cast(Dict[str, Any], _retry(_call, op_name="files.create.folder"))
-    return cast(str, resp["id"])  # ID previsto stringa
+    return cast(str, resp["id"])
 
 
 def _delete_file_hard(service: Any, file_id: str) -> None:
-    """Elimina un file su Drive; ignora il 404 (già non presente)."""
+    """Elimina un file su Drive; ignora il 404."""
 
     def _call() -> Any:
         return service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
@@ -133,35 +97,52 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
     try:
         _retry(_call, op_name="files.delete")
     except HttpError as e:
+        status: Optional[int] = None
         try:
             status = int(e.resp.status)
         except Exception:
-            status = None
-        if status == 404:
-            return
-        raise
+            pass
+        if status != 404:
+            raise
 
 
-# ------------------------------- Normalizzazione YAML -----------------------------
+# --------------------------------- YAML ------------------------------------
 
 
 def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
-    """Normalizza la struttura YAML della gerarchia remota in un mapping annidato.
-
-    Formati supportati:
-    1) Formato moderno: dict con chiavi arbitrarie (es. RAW/YAML o categorie libere).
-    2) Fallback permissivo: se il dict non contiene RAW/YAML, viene usato cosi' com'e'.
-    """
+    """Valida/normalizza lo YAML della gerarchia remota in un mapping annidato."""
     if isinstance(data, dict):
         if "root_folders" in data:
-            raise ConfigError("Formato legacy 'root_folders' non supportato: usa un mapping {nome: sottoalbero}.")
-        # Moderno/generico: accetta il dict cosi' com'e'
+            raise ConfigError("Formato legacy 'root_folders' non supportato: usare mapping {nome: sottoalbero}.")
         return data
-
     raise ConfigError("Struttura YAML non valida: atteso un mapping (dict).")
 
 
-# ------------------------------- API: Cartelle/Albero -----------------------------
+def _extract_structural_raw_names(mapping: Dict[str, Any]) -> List[str]:
+    """Estrae i nomi delle categorie RAW di primo livello (senza meta-chiavi)."""
+    names: List[str] = []
+
+    if isinstance(mapping.get("raw"), dict):
+        for k in mapping["raw"].keys():
+            names.append(sanitize_filename(str(k)))
+
+    if not names and isinstance(mapping.get("folders"), list):
+        for item in mapping["folders"]:
+            if isinstance(item, dict):
+                key = item.get("key") or item.get("name")
+                if key:
+                    names.append(sanitize_filename(str(key)))
+
+    seen: set[str] = set()
+    deduped: List[str] = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            deduped.append(n)
+    return deduped
+
+
+# ------------------------------- API Drive ---------------------------------
 
 
 def create_drive_folder(
@@ -171,12 +152,7 @@ def create_drive_folder(
     *,
     redact_logs: bool = False,
 ) -> str:
-    """Crea (idempotente) una cartella `name` sotto `parent_id` e ne ritorna l'ID.
-
-    Regole:
-    - Se una cartella con lo stesso nome esiste già sotto `parent_id`, riusa l'ID esistente.
-    - Se non esiste, la crea.
-    """
+    """Crea (idempotente) la cartella `name` sotto `parent_id` e ritorna l'ID."""
     if not name:
         raise DriveUploadError("Nome cartella mancante.")
 
@@ -186,7 +162,7 @@ def create_drive_folder(
             "drive.upload.folder.reuse",
             extra={
                 "parent": _maybe_redact(parent_id or "root", redact_logs),
-                "folder_name": name,  # ⚠️ niente chiave 'name'
+                "folder_name": name,
                 "folder_id": _maybe_redact(existing, redact_logs),
             },
         )
@@ -199,7 +175,7 @@ def create_drive_folder(
             "drive.upload.folder.create_error",
             extra={
                 "parent": _maybe_redact(parent_id or "root", redact_logs),
-                "folder_name": name,  # ⚠️ niente chiave 'name'
+                "folder_name": name,
                 "message": str(e)[:300],
             },
         )
@@ -209,7 +185,7 @@ def create_drive_folder(
         "drive.upload.folder.created",
         extra={
             "parent": _maybe_redact(parent_id or "root", redact_logs),
-            "folder_name": name,  # ⚠️ niente chiave 'name'
+            "folder_name": name,
             "folder_id": _maybe_redact(new_id, redact_logs),
         },
     )
@@ -224,10 +200,7 @@ def _create_remote_tree_from_mapping(
     redact_logs: bool = False,
     result: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
-    """Crea ricorsivamente un albero di cartelle da una mappatura {nome: sottoalbero}.
-
-    Ritorna/aggiorna un dizionario `result` con {nome_livello: id} per i nodi creati.
-    """
+    """Crea ricorsivamente un albero di cartelle da mapping {nome: sottoalbero}."""
     if result is None:
         result = {}
 
@@ -237,16 +210,15 @@ def _create_remote_tree_from_mapping(
         result[name] = folder_id
 
         if isinstance(subtree, dict):
-            _create_remote_tree_from_mapping(service, folder_id, subtree, redact_logs=redact_logs, result=result)
-        elif isinstance(subtree, (list, tuple)):
-            for leaf in subtree:
-                leaf_name = sanitize_filename(str(leaf))
-                leaf_id = create_drive_folder(service, leaf_name, folder_id, redact_logs=redact_logs)
-                result[leaf_name] = leaf_id
-        else:
-            # foglia vuota / valore non strutturato: nessuna sotto-cartella
-            pass
-
+            structural_children = {k: v for k, v in subtree.items() if k not in _META_KEYS}
+            if structural_children:
+                _create_remote_tree_from_mapping(
+                    service,
+                    folder_id,
+                    structural_children,
+                    redact_logs=redact_logs,
+                    result=result,
+                )
     return result
 
 
@@ -257,11 +229,7 @@ def create_drive_structure_from_yaml(
     *,
     redact_logs: bool = False,
 ) -> Dict[str, str]:
-    """Crea la struttura di cartelle remota a partire da un file YAML.
-
-    Accetta solo la struttura moderna {nome: sottoalbero}; il formato legacy con `root_folders` non e'
-    supportato. Ritorna una mappa nome->ID senza alias.
-    """
+    """Crea la struttura remota a partire da file YAML (formato moderno)."""
     if not os.path.isfile(str(yaml_path)):
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
 
@@ -274,29 +242,33 @@ def create_drive_structure_from_yaml(
         raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
 
     mapping = _normalize_yaml_structure(data)
-
-    filtered: Dict[str, Any]
-    if isinstance(mapping, dict) and isinstance(mapping.get("raw"), dict):
-        filtered = {"raw": mapping["raw"]}
-    elif isinstance(mapping, dict) and isinstance(mapping.get("folders"), list):
-        raw_block: Dict[str, Dict[str, Any]] = {}
-        for item in mapping["folders"]:
-            if isinstance(item, dict):
-                key = item.get("key") or item.get("name")
-                if key:
-                    raw_block[str(key)] = {k: v for k, v in item.items() if k not in {"key", "name"}}
-        filtered = {"raw": raw_block}
-    else:
-        filtered = {"raw": {}}
+    raw_names = _extract_structural_raw_names(mapping)
 
     result: Dict[str, str] = {}
-    _create_remote_tree_from_mapping(
+    raw_root_id = create_drive_folder(
         service,
+        "raw",
         client_folder_id,
-        filtered,
         redact_logs=redact_logs,
-        result=result,
     )
+    result["raw"] = raw_root_id
+
+    contr_id = create_drive_folder(
+        service,
+        "contrattualistica",
+        client_folder_id,
+        redact_logs=redact_logs,
+    )
+    result["contrattualistica"] = contr_id
+
+    for name in raw_names:
+        folder_id = create_drive_folder(
+            service,
+            name,
+            raw_root_id,
+            redact_logs=redact_logs,
+        )
+        result[name] = folder_id
 
     logger.info(
         "drive.upload.tree.created",
@@ -308,16 +280,12 @@ def create_drive_structure_from_yaml(
     return result
 
 
-# ------------------------------- Upload config ------------------------------------
+# ----------------------------- Upload config --------------------------------
 
 
 def _resolve_local_config_path(context: Any) -> Path:
-    """Risolve il percorso locale del file `config.yaml` secondo convenzioni note.
-
-    Ordine tentativi (conservativo): 1) attributi diretti sul contesto 2) <config_dir>/config.yaml
-    3) <client_dir>/config/config.yaml
-    """
-    candidates = []
+    """Tenta varie convenzioni per trovare il `config.yaml` locale del cliente."""
+    candidates: List[str] = []
     for attr in (
         "config_file",
         "config_path",
@@ -332,12 +300,12 @@ def _resolve_local_config_path(context: Any) -> Path:
                 candidates.append(str(cand))
 
     if hasattr(context, "config_dir"):
-        dir_path = context.config_dir
+        dir_path = getattr(context, "config_dir", None)
         if dir_path:
             candidates.append(os.path.join(str(dir_path), "config.yaml"))
 
     if hasattr(context, "client_dir"):
-        base = context.client_dir
+        base = getattr(context, "client_dir", None)
         if base:
             candidates.append(os.path.join(str(base), "config", "config.yaml"))
 
@@ -349,8 +317,12 @@ def _resolve_local_config_path(context: Any) -> Path:
     raise ConfigError("Impossibile individuare il file locale config.yaml nel contesto fornito.")
 
 
-def _find_existing_child_file_by_name(service: Any, parent_id: str, name: str) -> Optional[str]:
-    """Ritorna l'ID di un file figlio con `name` sotto `parent_id`, altrimenti None."""
+def _find_existing_child_file_by_name(
+    service: Any,
+    parent_id: str,
+    name: str,
+) -> Optional[str]:
+    """Ritorna l'ID del file figlio chiamato `name` sotto `parent_id` (se esiste)."""
     q = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
 
     def _call() -> Any:
@@ -369,9 +341,7 @@ def _find_existing_child_file_by_name(service: Any, parent_id: str, name: str) -
 
     resp = _retry(_call, op_name="files.list.config_by_name")
     files = cast(List[Dict[str, Any]], resp.get("files", []))
-    if not files:
-        return None
-    return cast(str, files[0]["id"])  # id stringa
+    return cast(Optional[str], files[0]["id"] if files else None)
 
 
 def upload_config_to_drive_folder(
@@ -381,13 +351,12 @@ def upload_config_to_drive_folder(
     *,
     redact_logs: bool = False,
 ) -> str:
-    """Carica il file `config.yaml` nella cartella cliente (sostituzione sicura se esiste)."""
+    """Carica `config.yaml` nella cartella cliente (sostituzione sicura)."""
     if not parent_id:
         raise DriveUploadError("Parent ID mancante per upload config.")
 
-    # Logger contestualizzato + redazione auto-derivata dal contesto (come in download.py)
     local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
-    redact_logs = bool(redact_logs or (getattr(context, "redact_logs", False) if context is not None else False))
+    redact_logs = bool(redact_logs or getattr(context, "redact_logs", False))
 
     local_config = _resolve_local_config_path(context)
     if not local_config.is_file():
@@ -404,7 +373,6 @@ def upload_config_to_drive_folder(
         )
         _delete_file_hard(service, existing_id)
 
-    # Lazy import: disponibile solo se effettivamente carichiamo il file
     try:
         from googleapiclient.http import MediaFileUpload
     except Exception as e:  # noqa: BLE001
@@ -413,11 +381,24 @@ def upload_config_to_drive_folder(
             "Installa la libreria o usa --dry-run."
         ) from e
 
-    media = MediaFileUpload(str(local_config), mimetype="application/octet-stream", resumable=False)
+    media = MediaFileUpload(
+        str(local_config),
+        mimetype="application/octet-stream",
+        resumable=False,
+    )
     body = {"name": "config.yaml", "parents": [parent_id]}
 
     def _call() -> Any:
-        return service.files().create(body=body, media_body=media, fields="id", supportsAllDrives=True).execute()
+        return (
+            service.files()
+            .create(
+                body=body,
+                media_body=media,
+                fields="id",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
 
     try:
         resp = cast(Dict[str, Any], _retry(_call, op_name="files.create.config"))
@@ -432,7 +413,7 @@ def upload_config_to_drive_folder(
         )
         raise DriveUploadError(f"Upload config.yaml fallito: {e}") from e
 
-    file_id = cast(str, resp["id"])  # id è stringa
+    file_id = cast(str, resp["id"])
     local_logger.info(
         "drive.upload.config.done",
         extra={
@@ -444,11 +425,11 @@ def upload_config_to_drive_folder(
     return file_id
 
 
-# ------------------------------- Struttura LOCALE (permissiva) --------------------
+# --------------------------- Struttura locale --------------------------------
 
 
 def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]:
-    """Carica il file YAML e ritorna la struttura normalizzata (vedi _normalize_yaml_structure)."""
+    """Carica lo YAML e ritorna la struttura normalizzata."""
     p = Path(str(yaml_path))
     if not p.exists():
         raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
@@ -462,18 +443,14 @@ def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]
 
 
 def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str]]) -> None:
-    """Crea la struttura LOCALE di base in modo **permissivo**.
-
-    Comportamento:
-    - Determina una base directory:
-        * `context.output_dir` oppure `context.base_dir`
-        * altrimenti fallback: `output/timmy-kb-<slug>`
-    - Garantisce l'esistenza di `raw/`, `book/`, `config/`.
-    - Crea le sottocartelle sotto `raw/` secondo la sezione RAW dello YAML (se presente).
-    - Se `context` non espone `raw_dir`/`book_dir`/`config_dir`, li imposta come `Path` assoluti.
-    - Idempotente.
     """
-    # Logger contestualizzato per uniformità con gli orchestratori
+    Crea la struttura LOCALE di base.
+
+    - Base dir: context.output_dir | context.base_dir | output/timmy-kb-<slug>
+    - Crea raw/, book/, config/.
+    - Popola **solo** le categorie di primo livello sotto raw/ ricavate dallo YAML.
+    - **Preferisce sempre lo YAML del cliente**: <base>/semantic/cartelle_raw.yaml (se esiste).
+    """
     local_logger = get_structured_logger("pipeline.drive.upload", context=context) if context else logger
 
     slug = getattr(context, "slug", "client")
@@ -485,8 +462,7 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
             base = Path(val).resolve()
             break
     if base is None:
-        base = Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}"
-        base = base.resolve()
+        base = (Path(OUTPUT_DIR_NAME) / f"timmy-kb-{slug}").resolve()
     _ensure_dir(base)
 
     raw_dir = Path(getattr(context, "raw_dir", base / "raw")).resolve()
@@ -496,40 +472,23 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
     for d in (raw_dir, book_dir, cfg_dir):
         _ensure_dir(d)
 
-    if not hasattr(context, "raw_dir"):
-        try:
-            context.raw_dir = raw_dir
-        except Exception:
-            pass
-    if not hasattr(context, "book_dir"):
-        try:
-            context.book_dir = book_dir
-        except Exception:
-            pass
-    if not hasattr(context, "config_dir"):
-        try:
-            context.config_dir = cfg_dir
-        except Exception:
-            pass
-
-    struct = _read_yaml_structure(yaml_path)
-    raw_mapping = struct.get("raw") or {}
-
-    def _mk_children(base_path: Path, mapping: Dict[str, Any]) -> None:
-        for raw_name, subtree in (mapping or {}).items():
-            name = sanitize_filename(str(raw_name))
-            child = base_path / name
-            _ensure_dir(child)
-            if isinstance(subtree, dict):
-                _mk_children(child, subtree)
-            elif isinstance(subtree, (list, tuple)):
-                for leaf in subtree:
-                    leaf_name = sanitize_filename(str(leaf))
-                    _ensure_dir(child / leaf_name)
-            else:
+    # Esporta i path nel contesto se mancano
+    for attr, val in (("raw_dir", raw_dir), ("book_dir", book_dir), ("config_dir", cfg_dir)):
+        if not hasattr(context, attr):
+            try:
+                setattr(context, attr, val)
+            except Exception:
                 pass
 
-    _mk_children(raw_dir, raw_mapping)
+    # Preferisci YAML del cliente, ignora quello generale se il primo esiste
+    client_yaml = base / "semantic" / "cartelle_raw.yaml"
+    chosen_yaml = client_yaml if client_yaml.exists() else Path(str(yaml_path))
+
+    struct = _read_yaml_structure(chosen_yaml)
+    raw_names = _extract_structural_raw_names(struct)
+
+    for name in raw_names:
+        _ensure_dir(raw_dir / name)
 
     local_logger.info(
         "drive.upload.local_structure.created",
@@ -537,24 +496,23 @@ def create_local_base_structure(context: Any, yaml_path: Union[str, PathLike[str
             "raw_dir": str(raw_dir),
             "book_dir": str(book_dir),
             "config_dir": str(cfg_dir),
+            "yaml_used": str(chosen_yaml),
         },
     )
 
 
-# ------------------------------- Delete -------------------------------------------
+# --------------------------------- Delete ----------------------------------
 
 
 def delete_drive_file(service: Any, file_id: str) -> None:
-    """Elimina un file per ID.
-
-    Non solleva se il file non esiste (404).
-    """
+    """Elimina un file per ID (idempotente)."""
     if not file_id:
         return
     _delete_file_hard(service, file_id)
 
 
-# ------------------------------- Esportazioni -------------------------------------
+# ------------------------------- Esportazioni --------------------------------
+
 
 __all__ = [
     "create_drive_folder",
