@@ -662,10 +662,61 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
 
 
 def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path], logger: logging.Logger) -> None:
-    """Shortcut in sidebar per aprire rapidamente il workspace."""
-    if st is None or slug is None or workspace_dir is None:
+    """Shortcut e azioni rapide nel menu laterale."""
+    if st is None:
         return
+
     with st.sidebar:
+        try:
+            logo_path = REPO_ROOT / "assets" / "next-logo.png"
+            if logo_path.exists():
+                st.image(str(logo_path), use_container_width=True)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("ui.sidebar.logo_error", extra={"error": str(exc)})
+
+        st.caption("Scorciatoie")
+        st.write("- Apri workspace locale")
+        st.write("- Apri cartella RAW")
+        st.write("- Apri cartella Markdown")
+
+        st.divider()
+        col_exit, col_dummy = st.columns(2)
+        if col_exit.button(
+            "Esci",
+            key="sidebar_exit_btn",
+            use_container_width=True,
+            help="Chiudi l'app",
+        ):
+            _request_shutdown(logger)
+
+        if col_dummy.button(
+            "Genera dummy",
+            key="sidebar_dummy_btn",
+            use_container_width=True,
+            help="Crea il workspace di esempio per testare il flusso",
+        ):
+            active_slug = slug or "dummy"
+            try:
+                from tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
+
+                with st.spinner(f"Genero dataset dummy per '{active_slug}'..."):
+                    exit_code = gen_dummy_main(["--slug", active_slug, "--non-interactive"])  # type: ignore[arg-type]
+                if int(exit_code) == 0:
+                    st.success(f"Dummy generato per '{active_slug}'.")
+                    logger.info("ui.sidebar.dummy_generated", extra={"slug": active_slug})
+                else:  # pragma: no cover
+                    st.error("Generazione dummy terminata con errore.")
+                    logger.error(
+                        "ui.sidebar.dummy_failed",
+                        extra={"slug": active_slug, "code": int(exit_code)},
+                    )
+            except Exception as exc:  # pragma: no cover
+                st.error(f"Errore durante la generazione del dummy: {exc}")
+                logger.exception("ui.sidebar.dummy_exception", extra={"slug": active_slug})
+
+        if slug is None or workspace_dir is None:
+            return
+
         try:
             mapping_rel = _mapping_path(workspace_dir)
             cartelle_rel = _cartelle_path(workspace_dir)
@@ -682,7 +733,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
                             st.error(str(exc))
             else:
                 st.info("Inizializza workspace prima di aprirlo")
-        except Exception:
+        except Exception:  # pragma: no cover
             # La sidebar non deve interrompere il rendering principale
             pass
 
