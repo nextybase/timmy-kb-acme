@@ -13,7 +13,7 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read
 from pre_onboarding import ensure_local_workspace_for_ui
 
@@ -64,8 +64,9 @@ except Exception:  # pragma: no cover
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = REPO_ROOT / "config"
 OUTPUT_ROOT = REPO_ROOT / "output"
-BASE_CONFIG = REPO_ROOT / "config" / "config.yaml"
+BASE_CONFIG = CONFIG_DIR / "config.yaml"
 
 
 def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
@@ -493,10 +494,51 @@ def _open_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> N
         # i runner segnaleranno successivamente file mancanti
         pass
 
+    client_yaml = workspace_dir / "semantic" / "cartelle_raw.yaml"
+    global_yaml = CONFIG_DIR / "cartelle_raw.yaml"
+    backup_yaml = CONFIG_DIR / "cartelle_raw.yaml.ui.bak"
+
     with st.spinner("Creazione workspace..."):
-        _run_create_local_structure(slug, workspace_dir, logger)
-        _run_drive_structure(slug, workspace_dir, logger)
-        _run_generate_readmes(slug, logger)
+        swapped = False
+        try:
+            ensure_within(CONFIG_DIR, global_yaml)
+            ensure_within(CONFIG_DIR, backup_yaml)
+            ensure_within(workspace_dir, client_yaml)
+
+            if client_yaml.is_file():
+                client_text = read_text_safe(workspace_dir, client_yaml, encoding="utf-8")
+                normalized_text = _normalize_cartelle_yaml(client_text, slug)
+                if normalized_text != client_text:
+                    safe_write_text(client_yaml, normalized_text, encoding="utf-8", atomic=True)
+                if global_yaml.exists():
+                    original_text = read_text_safe(CONFIG_DIR, global_yaml, encoding="utf-8")
+                    safe_write_text(backup_yaml, original_text, encoding="utf-8", atomic=True)
+                safe_write_text(global_yaml, normalized_text, encoding="utf-8", atomic=True)
+                swapped = True
+                try:
+                    logger.info("ui.cartelle.swap_applied", extra={"slug": slug})
+                except Exception:
+                    pass
+
+            _run_create_local_structure(slug, workspace_dir, logger)
+            _run_drive_structure(slug, workspace_dir, logger)
+            _run_generate_readmes(slug, logger)
+        finally:
+            if swapped:
+                try:
+                    if backup_yaml.exists():
+                        restored_text = read_text_safe(CONFIG_DIR, backup_yaml, encoding="utf-8")
+                        safe_write_text(global_yaml, restored_text, encoding="utf-8", atomic=True)
+                        backup_yaml.unlink(missing_ok=True)
+                    else:
+                        global_yaml.unlink(missing_ok=True)
+                    try:
+                        logger.info("ui.cartelle.swap_restored", extra={"slug": slug})
+                    except Exception:
+                        pass
+                except Exception:
+                    st.warning("Ripristino file di configurazione globale non riuscito.")
+
     _update_client_state(logger, slug, "inizializzato")
     st.success("Workspace inizializzato. Hai accesso agli editor YAML qui sotto.")
     try:
