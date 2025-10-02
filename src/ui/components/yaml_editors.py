@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+YAML editors for semantic workspace files.
+
+UI-only: improves labels/help/accessibility without changing business logic or
+side-effects.
+"""
+
 import logging
 from pathlib import Path
 from typing import cast
@@ -34,7 +41,10 @@ def _workspace_root(slug: str) -> Path:
 
 def _semantic_path(slug: str, filename: str) -> Path:
     workspace = _workspace_root(slug)
-    return cast(Path, ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename))
+    return cast(
+        Path,
+        ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename),
+    )
 
 
 def _read_yaml_text(slug: str, filename: str) -> str:
@@ -71,11 +81,16 @@ def edit_semantic_mapping(slug: str) -> None:
 
     st.subheader("semantic_mapping.yaml")
     st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{MAPPING_FILE}")
+    st.caption("Schema minimo: context.slug, context.client_name, areas[].")
 
     text_value = st.text_area(
-        "Contenuto mapping",
+        "Contenuto mapping (YAML)",
         key=state_key,
         height=360,
+        help=(
+            "Inserisci YAML valido con i campi obbligatori: context.slug, "
+            "context.client_name e 'areas' (lista non vuota)."
+        ),
     )
 
     if st.button("Salva mapping", type="primary"):
@@ -116,11 +131,13 @@ def edit_cartelle_raw(slug: str) -> None:
 
     st.subheader("cartelle_raw.yaml")
     st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{CARTELLE_FILE}")
+    st.caption("Schema atteso: nodo radice dict con chiave 'raw' → {cartella: {...}}.")
 
     text_value = st.text_area(
-        "Contenuto cartelle_raw",
+        "Contenuto cartelle_raw (YAML)",
         key=state_key,
         height=360,
+        help=("Assicurati che esista il nodo 'raw' e che i nomi cartella non siano " "vuoti o duplicati."),
     )
 
     if st.button("Salva cartelle", type="primary"):
@@ -163,11 +180,13 @@ def edit_tags_reviewed(slug: str) -> None:
 
     st.subheader("Tag revisionati")
     st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{TAGS_FILE}")
+    st.caption("Accetta dict (chiave→metadati) o lista (elenco tag).")
 
     text_value = st.text_area(
-        "Contenuto tags_reviewed.yaml",
+        "Contenuto tags_reviewed.yaml (YAML)",
         key=state_key,
         height=360,
+        help="Il contenuto può essere un dict non vuoto o una lista non vuota.",
     )
 
     if st.button("Salva tags", type="primary"):

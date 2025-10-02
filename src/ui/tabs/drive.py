@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional, Protocol, Sequence
 
 import streamlit as st
 
@@ -8,12 +8,50 @@ from ui.clients_store import set_state
 from ui.services.drive_runner import build_drive_from_mapping, download_raw_from_drive, emit_readmes_for_raw
 
 
-def render_drive_tab(*, log: Any, slug: str) -> None:
-    st.subheader("Google Drive: struttura e contenuti RAW")
+class _ProgressFn(Protocol):
+    def __call__(self, done: int, total: int, label: str) -> None:  # pragma: no cover
+        ...
 
-    colA, colB = st.columns(2)
+
+class _DownloadWithProgress(Protocol):
+    def __call__(self, *, slug: str, on_progress: _ProgressFn) -> Sequence[Any]:  # pragma: no cover
+        ...
+
+
+# Proviamo a usare la variante con progress; fallback se non disponibile
+download_raw_from_drive_with_progress: Optional[_DownloadWithProgress]
+try:
+    from ui.services.drive_runner import download_raw_from_drive_with_progress as _dl_with_progress
+
+    download_raw_from_drive_with_progress = _dl_with_progress
+except Exception:  # pragma: no cover
+    download_raw_from_drive_with_progress = None
+
+
+def render_drive_tab(*, log: Any, slug: str) -> None:
+    """Render Google Drive raw flow.
+
+    UI-only layer: no business-logic changes.
+    """
+    st.subheader("Google Drive: struttura e contenuti RAW")
+    st.caption(
+        "Crea/aggiorna la struttura su Drive a partire dal mapping rivisto, genera i README in "
+        "`raw/` e scarica i PDF localmente. Tutti i passaggi sono idempotenti."
+    )
+
+    colA, colB = st.columns(2, gap="large")
+
+    # 1) Crea/aggiorna struttura Drive
     with colA:
-        if st.button("1) Crea/aggiorna struttura Drive", key="btn_drive_create", use_container_width=True):
+        if st.button(
+            "1) Crea/aggiorna struttura su Drive",
+            key="btn_drive_create",
+            use_container_width=True,
+            help=(
+                "Legge il mapping rivisto e crea/alinea le cartelle su Drive "
+                "(cartella cliente → raw/ → sottocartelle)."
+            ),
+        ):
             try:
                 prog = st.progress(0)
                 status = st.empty()
@@ -21,38 +59,90 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                 def _cb(step: int, total: int, label: str) -> None:
                     pct = int(step * 100 / max(total, 1))
                     prog.progress(pct)
-                    status.markdown(f"{pct}% - {label}")
+                    status.markdown(f"{pct}% — {label}")
 
                 ids = build_drive_from_mapping(
-                    slug=slug, client_name=st.session_state.get("client_name", ""), progress=_cb
+                    slug=slug,
+                    client_name=st.session_state.get("client_name", ""),
+                    progress=_cb,
                 )
-                st.success(f"Struttura creata: {ids}")
+                st.success("Struttura Drive creata/aggiornata.")
+                st.caption(f"IDs cartelle: {ids}")
                 set_state(slug, "inizializzato")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
-            except Exception as e:
+            except FileNotFoundError as e:
+                st.error("Mapping non trovato per questo cliente.")
+                st.caption(
+                    "Apri la sezione Configurazione, verifica/modifica il mapping e premi "
+                    "**Salva mapping rivisto**, poi riprova."
+                )
+                st.caption(f"Dettagli: {e}")
+            except Exception as e:  # pragma: no cover
                 st.exception(e)
+
+    # 2) Genera README
     with colB:
-        if st.button("2) Genera README in raw/", key="btn_drive_readmes", type="primary", use_container_width=True):
+        if st.button(
+            "2) Genera README in raw/",
+            key="btn_drive_readmes",
+            type="primary",
+            use_container_width=True,
+            help="Crea README introduttivi in ogni sottocartella di raw/ con istruzioni operative.",
+        ):
             try:
                 result = emit_readmes_for_raw(slug=slug, ensure_structure=True)
                 st.success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
                 st.session_state["drive_readmes_done"] = True
-            except Exception as e:
+            except FileNotFoundError as e:
+                st.error("Mapping non trovato per questo cliente.")
+                st.caption(
+                    "Apri la sezione Configurazione, verifica/modifica il mapping e premi "
+                    "**Salva mapping rivisto**, poi riprova."
+                )
+                st.caption(f"Dettagli: {e}")
+            except Exception as e:  # pragma: no cover
                 st.exception(e)
 
+    # 3) Download PDF in raw/ (abilitato dopo README)
     if st.session_state.get("drive_readmes_done"):
         st.markdown("---")
         st.subheader("Download contenuti su raw/")
-        if st.button("Scarica PDF da Drive in raw/", key="btn_drive_download_raw", use_container_width=True):
-            try:
-                res = download_raw_from_drive(slug=slug)
-                count = len(res) if hasattr(res, "__len__") else None
-                msg_tail = f" ({count} file)" if count is not None else ""
-                st.success(f"Download completato{msg_tail}.")
-                set_state(slug, "pronto")
-                log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
-                st.session_state["raw_downloaded"] = True
-                st.session_state["raw_ready"] = True
-            except Exception as e:
-                st.exception(e)
+        c1, c2 = st.columns([1, 3])
+
+        with c1:
+            if st.button(
+                "Scarica PDF da Drive in raw/",
+                key="btn_drive_download_raw",
+                use_container_width=True,
+                help=("Scarica i PDF caricati nelle cartelle di raw/ su Drive verso la tua cartella " "raw/ locale."),
+            ):
+                try:
+                    if download_raw_from_drive_with_progress is not None:
+                        prog2 = st.progress(0)
+                        status2 = st.empty()
+
+                        def _pcb(done: int, total: int, label: str) -> None:
+                            pct = int((done * 100) / max(total, 1))
+                            prog2.progress(pct)
+                            status2.markdown(f"{pct}% — {label}")
+
+                        res = download_raw_from_drive_with_progress(slug=slug, on_progress=_pcb)
+                    else:
+                        res = download_raw_from_drive(slug=slug)
+
+                    count = len(res) if hasattr(res, "__len__") else None
+                    msg_tail = f" ({count} file)" if count is not None else ""
+                    st.success(f"Download completato{msg_tail}.")
+                    set_state(slug, "pronto")
+                    log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
+                    st.session_state["raw_downloaded"] = True
+                    st.session_state["raw_ready"] = True
+                except Exception as e:  # pragma: no cover
+                    st.exception(e)
+
+        with c2:
+            st.write(
+                "Dopo il download, puoi procedere agli step di **Semantica (RAW → BOOK)** per la "
+                "conversione in Markdown e la generazione dei materiali di navigazione."
+            )
