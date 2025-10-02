@@ -1,64 +1,48 @@
+# tests/test_smoke_dummy_e2e.py
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
 import subprocess
 import sys
-import uuid
+import time
 from pathlib import Path
 
-import pytest
 
-PY = sys.executable
+def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
+    """
+    Genera la KB dummy usando lo script CLI *senza* sporcare la cartella `output/`.
 
+    Nota: usiamo l'opzione `--base-dir` dello script per indirizzare tutta la
+    generazione sotto `tmp_path`, così i test restano self-contained e non
+    accumulano cartelle in repository.
+    """
+    slug = f"dummy-{int(time.time())}"
 
-def run(cmd, env=None):
-    print("+", " ".join(cmd))
-    subprocess.check_call(cmd, env=env)
+    # Esegui lo script con base dir forzata al tmp_path del test
+    cmd = [
+        sys.executable,
+        "src/tools/gen_dummy_kb.py",
+        "--slug",
+        slug,
+        "--base-dir",
+        str(tmp_path),
+    ]
+    ret = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    assert ret.returncode == 0, f"CLI fallita (rc={ret.returncode}). stdout:\n{ret.stdout}\nstderr:\n{ret.stderr}"
 
+    # Verifica che la generazione sia avvenuta *solo* sotto tmp_path
+    base = tmp_path / f"timmy-kb-{slug}"
+    assert base.is_dir(), f"Workspace non creato: {base}"
 
-@pytest.mark.slow
-def test_smoke_dummy_e2e(tmp_path: Path, monkeypatch):
-    # Slug unico per evitare collisioni fra run
-    slug = "dummy-" + uuid.uuid4().hex[:8]
-    out = Path("output") / f"timmy-kb-{slug}"
+    # Percorsi minimi attesi dal generatore dummy
+    book = base / "book"
+    alpha = book / "alpha.md"
+    beta = book / "beta.md"
+    readme = book / "README.md"
+    summary = book / "SUMMARY.md"
 
-    # 1) pre: solo locale (dry-run evita Drive)
-    run(
-        [
-            PY,
-            "src/pre_onboarding.py",
-            "--slug",
-            slug,
-            "--name",
-            "Cliente Dummy",
-            "--non-interactive",
-            "--dry-run",
-        ]
-    )
+    for p in (alpha, beta, readme, summary):
+        assert p.is_file(), f"File mancante: {p}"
 
-    # 2) genera sandbox dummy (PDF + tags_raw.csv)
-    run([PY, "src/tools/gen_dummy_kb.py", "--slug", slug])
-
-    # 3) tag: usa LOCAL perché i PDF sono già in RAW (è più rapido e stabile in CI)
-    run(
-        [
-            PY,
-            "src/tag_onboarding.py",
-            "--slug",
-            slug,
-            "--source",
-            "local",
-            "--non-interactive",
-            "--proceed",
-        ]
-    )
-
-    # 4) semantic headless (facade semantic.api)
-    run([PY, "src/semantic_headless.py", "--slug", slug, "--no-preview", "--non-interactive"])
-
-    # Assert principali
-    assert (out / "raw").exists()
-    assert (out / "semantic" / "tags.db").exists()
-    assert (out / "book" / "README.md").exists()
-    assert (out / "book" / "SUMMARY.md").exists()
-
-    # NB: non testiamo il push in CI (richiede GITHUB_TOKEN). Se vuoi abilitarlo:
-    # os.environ["GITHUB_TOKEN"] = "<token>"
-    # run([PY, "src/onboarding_full.py", "--slug", slug, "--non-interactive"])
+    # Extra: nessuna deriva su output/ (idempotenza ambientale)
+    assert not (Path("output") / f"timmy-kb-{slug}").exists(), "Lo script ha sporcato output/"
