@@ -275,8 +275,28 @@ def create_drive_structure_from_yaml(
 
     mapping = _normalize_yaml_structure(data)
 
+    filtered: Dict[str, Any]
+    if isinstance(mapping, dict) and isinstance(mapping.get("raw"), dict):
+        filtered = {"raw": mapping["raw"]}
+    elif isinstance(mapping, dict) and isinstance(mapping.get("folders"), list):
+        raw_block: Dict[str, Dict[str, Any]] = {}
+        for item in mapping["folders"]:
+            if isinstance(item, dict):
+                key = item.get("key") or item.get("name")
+                if key:
+                    raw_block[str(key)] = {k: v for k, v in item.items() if k not in {"key", "name"}}
+        filtered = {"raw": raw_block}
+    else:
+        filtered = {"raw": {}}
+
     result: Dict[str, str] = {}
-    _create_remote_tree_from_mapping(service, client_folder_id, mapping, redact_logs=redact_logs, result=result)
+    _create_remote_tree_from_mapping(
+        service,
+        client_folder_id,
+        filtered,
+        redact_logs=redact_logs,
+        result=result,
+    )
 
     logger.info(
         "drive.upload.tree.created",
