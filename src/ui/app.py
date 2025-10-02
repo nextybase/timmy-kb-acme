@@ -470,7 +470,7 @@ def _run_generate_readmes(slug: str, logger: logging.Logger) -> Dict[str, str]:
             slug=slug,
             base_root=OUTPUT_ROOT,
             require_env=True,
-            ensure_structure=False,
+            ensure_structure=True,
         ),
     )
     logger.info("ui.workspace.readmes", extra={"slug": slug, "count": len(result)})
@@ -478,6 +478,21 @@ def _run_generate_readmes(slug: str, logger: logging.Logger) -> Dict[str, str]:
 
 
 def _open_workspace(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
+    # NOTE: normalizza cartelle_raw.yaml al formato con nodo 'raw' prima di proseguire
+    try:
+        cartelle_rel = _cartelle_path(workspace_dir)
+        current_text = _load_yaml_text(workspace_dir, cartelle_rel)
+        normalized = _normalize_cartelle_yaml(current_text, slug)
+        if normalized != current_text:
+            _save_yaml_text(workspace_dir, cartelle_rel, normalized)
+            try:
+                logger.info("ui.cartelle.normalized", extra={"slug": slug})
+            except Exception:
+                pass
+    except ConfigError:
+        # i runner segnaleranno successivamente file mancanti
+        pass
+
     with st.spinner("Creazione workspace..."):
         _run_create_local_structure(slug, workspace_dir, logger)
         _run_drive_structure(slug, workspace_dir, logger)

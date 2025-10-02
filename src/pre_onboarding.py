@@ -302,7 +302,21 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     write_client_config_file(context, cfg)
 
-    yaml_structure_file = _resolve_yaml_structure_file()
+    repo_root = Path(__file__).resolve().parents[1]
+    bootstrap_semantic_templates(repo_root, context, client_name, logger)
+
+    semantic_yaml: Optional[Path] = None
+    base_dir = context.base_dir
+    if base_dir is not None:
+        try:
+            semantic_candidate = (base_dir / "semantic" / "cartelle_raw.yaml").resolve()
+            ensure_within(base_dir, semantic_candidate)
+            if semantic_candidate.is_file():
+                semantic_yaml = semantic_candidate
+        except Exception:
+            semantic_yaml = None
+
+    yaml_structure_file = semantic_yaml if semantic_yaml is not None else _resolve_yaml_structure_file()
     logger.info(
         "pre_onboarding.yaml.resolved",
         extra={
@@ -335,8 +349,6 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         except Exception:
             m.set_artifacts(None)
 
-    repo_root = Path(__file__).resolve().parents[1]
-    bootstrap_semantic_templates(repo_root, context, client_name, logger)
     return yaml_structure_file
 
 
