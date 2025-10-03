@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, cast
 
+from pipeline.file_utils import safe_write_text as _safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve as _ensure_within_and_resolve
 from pipeline.path_utils import to_kebab as _to_kebab
 
@@ -36,3 +37,12 @@ def yaml_dump(data: Dict[str, Any]) -> str:
     import yaml
 
     return yaml.safe_dump(data or {}, allow_unicode=True, sort_keys=True)
+
+
+# UI adapter: expose pipeline safe write with the same friendly signature
+def safe_write_text(path: Path | str, data: str, *, encoding: str = "utf-8", atomic: bool = True) -> None:
+    """
+    Thin wrapper around pipeline.file_utils.safe_write_text.
+    Keeps UI layer imports stable; no behavior change.
+    """
+    _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic)
