@@ -16,12 +16,12 @@ if str(SRC_ROOT) not in sys.path:
 # Import standard/third party prima di qualsiasi codice
 import yaml
 
-from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError, InvalidSlug
-from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug
-from pipeline.yaml_utils import clear_yaml_cache, yaml_read
-from pre_onboarding import ensure_local_workspace_for_ui
+from pipeline.context import ClientContext  # noqa: E402
+from pipeline.exceptions import ConfigError, InvalidSlug  # noqa: E402
+from pipeline.file_utils import safe_write_text  # noqa: E402
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug  # noqa: E402
+from pipeline.yaml_utils import clear_yaml_cache, yaml_read  # noqa: E402
+from pre_onboarding import ensure_local_workspace_for_ui  # noqa: E402
 
 # Queste util potrebbero non essere disponibili in ambienti headless: fallback a None
 try:
@@ -39,9 +39,9 @@ except Exception:  # pragma: no cover
     get_drive_service = None
     upload_config_to_drive_folder = None
 
-from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client
-from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw
-from ui.services.vision_provision import provision_from_vision
+from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client  # noqa: E402
+from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw  # noqa: E402
+from ui.services.vision_provision import provision_from_vision  # noqa: E402
 
 try:
     from ui.components.drive_tree import render_drive_tree
