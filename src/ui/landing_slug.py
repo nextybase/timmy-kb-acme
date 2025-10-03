@@ -11,9 +11,9 @@ from typing import Any, Dict, Optional, Tuple, cast
 import yaml
 
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe, validate_slug
 from pre_onboarding import ensure_local_workspace_for_ui
 from semantic.validation import validate_context_slug
 from ui.services import vision_provision as vision_services
@@ -26,6 +26,65 @@ try:  # preferisce runtime soft-fail per import opzionali
 except Exception:  # pragma: no cover
     st = None
 
+UI_STATE_PREFIX = "ui."
+
+
+def _ui_key(name: str) -> str:
+    return f"{UI_STATE_PREFIX}{name}"
+
+
+def _state_get(name: str, default: Any | None = None) -> Any | None:
+    if st is None:
+        return default
+    full_key = _ui_key(name)
+    if full_key in st.session_state:
+        return st.session_state.get(full_key, default)
+    return st.session_state.get(name, default)
+
+
+def _state_set(name: str, value: Any) -> None:
+    if st is None:
+        return
+    full_key = _ui_key(name)
+    st.session_state[full_key] = value
+    st.session_state[name] = value
+
+
+def _state_pop(name: str) -> Any:
+    if st is None:
+        return None
+    full_key = _ui_key(name)
+    value = st.session_state.pop(full_key, None)
+    st.session_state.pop(name, None)
+    return value
+
+
+class _NullForm:
+    def __enter__(self) -> "_NullForm":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+def _safe_form(name: str, clear_on_submit: bool = False):
+    if st is None:
+        return _NullForm()
+    form_fn = getattr(st, "form", None)
+    if callable(form_fn):
+        return form_fn(name, clear_on_submit=clear_on_submit)
+    return _NullForm()
+
+
+def _safe_form_submit(label: str, **kwargs) -> bool:
+    if st is None:
+        return False
+    submit_fn = getattr(st, "form_submit_button", None)
+    if callable(submit_fn):
+        return submit_fn(label, **kwargs)
+    return bool(getattr(st, "button", lambda *a, **k: False)(label, **kwargs))
+
+
 CLIENT_CONTEXT_ERROR_MSG = (
     "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
 )
@@ -35,11 +94,11 @@ def _reset_to_landing() -> None:
     """Reimposta lo stato UI e torna alla landing (slug vuoto)."""
     if st is None:
         return
-    preserve = {"phase"}
+    preserve = {"phase", _ui_key("phase")}
     for key in list(st.session_state.keys()):
         if key not in preserve:
             st.session_state.pop(key, None)
-    st.session_state["slug"] = ""
+    _state_set("slug", "")
     try:
         st.rerun()
     except Exception:
@@ -135,11 +194,11 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     except Exception:  # pragma: no cover
         client_name = fallback_name or slug
 
-    st.session_state["slug"] = slug
-    st.session_state["client_name"] = client_name
-    st.session_state["client_locked"] = True
-    st.session_state["active_section"] = "Configurazione"
-    st.session_state.pop("vision_workflow", None)
+    _state_set("slug", slug)
+    _state_set("client_name", client_name)
+    _state_set("client_locked", True)
+    _state_set("active_section", "Configurazione")
+    _state_pop("vision_workflow")
     try:
         st.rerun()
     except Exception:  # pragma: no cover
@@ -157,23 +216,48 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     _render_logo()
 
     c1, c2, c3 = st.columns([1, 2, 1])
+    slug_state = _state_get("slug", "")
+    verify_clicked = False
+    form_error = False
+    slug_submitted = False
     with c2:
-        slug: str = (
-            st.text_input(
+        with _safe_form("ls_slug_form", clear_on_submit=False):
+            slug_input = st.text_input(
                 "Slug cliente",
-                value=st.session_state.get("slug", ""),
+                value=slug_state,
                 key="ls_slug",
                 placeholder="es. acme",
             )
-            or ""
-        )
+            verify_clicked = _safe_form_submit(
+                "Verifica cliente",
+                type="primary",
+                use_container_width=True,
+            )
         st.button("Esci", on_click=lambda: _request_shutdown(log), use_container_width=True)
 
-    slug = slug.strip()
-    if not slug:
+    if verify_clicked:
+        candidate = (slug_input or "").strip()
+        if not candidate:
+            st.error("Inserisci uno slug.")
+            _state_set("slug", "")
+            slug_state = ""
+            form_error = True
+        else:
+            try:
+                validate_slug(candidate)
+            except InvalidSlug:
+                st.error("Slug non valido. Usa solo minuscole, numeri e trattini.")
+                form_error = True
+            else:
+                slug_state = candidate
+                slug_submitted = True
+                _state_set("slug", slug_state)
+
+    slug = (slug_state or "").strip()
+    if not slug or form_error:
         return False, "", ""
 
-    vision_state = cast(Optional[Dict[str, Any]], st.session_state.get("vision_workflow"))
+    vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))
     if not vision_state or vision_state.get("slug") != slug:
         vision_state = {
             "slug": slug,
@@ -188,17 +272,17 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             "mapping_yaml": "",
             "cartelle_yaml": "",
         }
-        st.session_state["vision_workflow"] = vision_state
+        _state_set("vision_workflow", vision_state)
 
     workspace_dir = _workspace_dir_for(slug)
     workspace_exists = workspace_dir.exists()
 
-    if st.button("Verifica cliente", key="ls_verify"):
+    if slug_submitted:
         if workspace_exists:
             return _enter_existing_workspace(slug, vision_state.get("client_name", ""))
         vision_state["verified"] = True
         vision_state["needs_creation"] = True
-        st.session_state["vision_workflow"] = vision_state
+        _state_set("vision_workflow", vision_state)
         st.success("Cliente nuovo: carica il Vision Statement e crea il workspace.")
 
     if not vision_state.get("verified", False):
@@ -216,7 +300,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         type=["pdf"],
         accept_multiple_files=False,
         key="ls_pdf",
-        help="Carica il Vision Statement. Verrà salvato come config/VisionStatement.pdf quando crei il workspace.",
+        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
     )
     if uploaded_pdf is not None:
         raw_pdf = uploaded_pdf.read()
@@ -226,7 +310,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             st.success(f"PDF caricato: {uploaded_pdf.name}")
         else:
             st.warning("File PDF vuoto: riprova il caricamento.")
-        st.session_state["vision_workflow"] = vision_state
+        _state_set("vision_workflow", vision_state)
 
     create_disabled = not client_name or vision_state.get("pdf_bytes") is None
     if st.button("Crea workspace + carica PDF", key="ls_create_workspace", type="primary", disabled=create_disabled):
@@ -252,8 +336,8 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 vision_state["yaml_paths"] = yaml_paths
                 vision_state["workspace_created"] = True
                 vision_state["needs_creation"] = False
-                st.session_state["slug"] = slug
-                st.session_state["client_name"] = client_name or slug
+                _state_set("slug", slug)
+                _state_set("client_name", client_name or slug)
                 st.success("Workspace creato e YAML generati.")
                 try:
                     mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
@@ -270,7 +354,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                     log.exception("landing.workspace_creation_failed", extra={"slug": slug})
                 _st_notify("error", "Errore durante la creazione del workspace. Controlla i log.")
             finally:
-                st.session_state["vision_workflow"] = vision_state
+                _state_set("vision_workflow", vision_state)
 
     if not vision_state.get("workspace_created"):
         return False, slug, client_name
@@ -293,7 +377,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     else:
         vision_state["mapping_yaml"] = mapping_content
         vision_state["cartelle_yaml"] = cartelle_content
-        st.session_state["vision_workflow"] = vision_state
+        _state_set("vision_workflow", vision_state)
 
     st.markdown("### YAML generati (modificabili)")
 
@@ -308,7 +392,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             value=vision_state.get("cartelle_yaml", ""),
             height=280,
         )
-        if st.form_submit_button("Valida & Salva"):
+        if _safe_form_submit("Valida & Salva"):
             try:
                 # --- Parse YAML (mapping + cartelle) ---
                 try:
@@ -364,13 +448,13 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                     "Impossibile salvare gli YAML. Slug incoerente o YAML non valido.",
                 )
             finally:
-                st.session_state["vision_workflow"] = vision_state
+                _state_set("vision_workflow", vision_state)
 
     if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary"):
         vision_state["workspace_committed"] = True
-        st.session_state["vision_workflow"] = vision_state
-        st.session_state["client_locked"] = True
-        st.session_state["active_section"] = "Configurazione"
+        _state_set("vision_workflow", vision_state)
+        _state_set("client_locked", True)
+        _state_set("active_section", "Configurazione")
         try:
             st.rerun()
         except Exception:  # pragma: no cover

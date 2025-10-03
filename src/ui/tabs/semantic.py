@@ -27,10 +27,11 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
         state = ""  # fallback prudente: meglio mostrare il warning che bloccare la UI
 
     if state not in {"pronto", "arricchito", "finito"}:
-        st.warning(
-            "La sezione **Semantica** si abilita dopo aver scaricato i PDF su `raw/` "
-            "(tab **Drive** → Genera README → Scarica PDF)."
-        )
+        st.warning("Semantica disponibile dopo il completamento del flusso Drive.")
+        with st.expander("Requisiti per proseguire", expanded=False):
+            st.markdown("- PDF scaricati in `raw/` tramite tab Drive.")
+            st.markdown("- README generati in `raw/` (step 2).")
+            st.markdown("- Stato cliente aggiornato almeno a `pronto`.")
         return
 
     # 1) Conversione RAW -> BOOK (Markdown)

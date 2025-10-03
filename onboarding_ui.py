@@ -54,11 +54,14 @@ _bootstrap_sys_path()
 
 def _page_config() -> None:
     # Deve essere la PRIMA chiamata Streamlit della pagina
-    st.set_page_config(page_title="Onboarding NeXT - Clienti", layout="wide")
-
+    st.set_page_config(
+        page_title="Onboarding NeXT - Clienti",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
 
 def _render_global_error(e: Exception) -> None:
-    st.error("Si è verificato un errore non gestito nell'interfaccia.")
+    st.error("Errore imprevisto. Apri i dettagli tecnici per maggiori informazioni.")
     with st.expander("Dettagli tecnici", expanded=False):
         st.exception(e)
 

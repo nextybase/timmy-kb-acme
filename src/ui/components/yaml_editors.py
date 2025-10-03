@@ -26,6 +26,16 @@ from ui.const import DEFAULT_ENCODING
 from ui.utils.core import safe_write_text
 
 LOGGER = logging.getLogger("ui.components.yaml_editors")
+
+
+def _show_error(message: str, exc: Exception) -> None:
+    if st is None:
+        return
+    st.error(message)
+    with st.expander("Dettagli tecnici", expanded=False):
+        st.exception(exc)
+
+
 SEMANTIC_DIR = "semantic"
 MAPPING_FILE = "semantic_mapping.yaml"
 CARTELLE_FILE = "cartelle_raw.yaml"
@@ -92,6 +102,8 @@ def edit_semantic_mapping(slug: str) -> None:
             "context.client_name e 'areas' (lista non vuota)."
         ),
     )
+    line_count = text_value.count("\n") + 1
+    st.caption(f"Totale righe: {line_count}")
 
     if st.button("Salva mapping", type="primary"):
         try:
@@ -110,10 +122,9 @@ def edit_semantic_mapping(slug: str) -> None:
             _write_yaml_text(slug, MAPPING_FILE, text_value)
             st.success("semantic_mapping.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error("Salvataggio non riuscito")
-            st.caption(f"Dettaglio: {exc}")
+            _show_error("Salvataggio non riuscito", exc)
         except yaml.YAMLError as exc:  # pragma: no cover
-            st.error(f"Parsing YAML non riuscito: {exc}")
+            _show_error("YAML non valido", exc)
 
 
 def edit_cartelle_raw(slug: str) -> None:
@@ -139,12 +150,20 @@ def edit_cartelle_raw(slug: str) -> None:
         height=360,
         help=("Assicurati che esista il nodo 'raw' e che i nomi cartella non siano " "vuoti o duplicati."),
     )
+    line_count = text_value.count("\n") + 1
+    st.caption(f"Totale righe: {line_count}")
 
     if st.button("Salva cartelle", type="primary"):
         try:
             data = yaml.safe_load(text_value) or {}
             if not isinstance(data, dict):
                 raise ConfigError("cartelle_raw deve essere un oggetto YAML.")
+            context = data.get("context")
+            if not isinstance(context, dict):
+                raise ConfigError("cartelle_raw richiede il blocco 'context'.")
+            for required in ("slug", "client_name"):
+                if required not in context:
+                    raise ConfigError(f"Campo obbligatorio mancante in context: '{required}'.")
             raw_section = data.get("raw")
             if not isinstance(raw_section, dict):
                 raise ConfigError("cartelle_raw deve contenere il blocco 'raw'.")
@@ -159,10 +178,9 @@ def edit_cartelle_raw(slug: str) -> None:
             _write_yaml_text(slug, CARTELLE_FILE, text_value)
             st.success("cartelle_raw.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error("Salvataggio non riuscito")
-            st.caption(f"Dettaglio: {exc}")
+            _show_error("Salvataggio non riuscito", exc)
         except yaml.YAMLError as exc:  # pragma: no cover
-            st.error(f"Parsing YAML non riuscito: {exc}")
+            _show_error("YAML non valido", exc)
 
 
 def edit_tags_reviewed(slug: str) -> None:
@@ -186,8 +204,10 @@ def edit_tags_reviewed(slug: str) -> None:
         "Contenuto tags_reviewed.yaml (YAML)",
         key=state_key,
         height=360,
-        help="Il contenuto può essere un dict non vuoto o una lista non vuota.",
+        help="Il contenuto puo essere un dict non vuoto o una lista non vuota.",
     )
+    line_count = text_value.count("\n") + 1
+    st.caption(f"Totale righe: {line_count}")
 
     if st.button("Salva tags", type="primary"):
         try:
@@ -203,7 +223,6 @@ def edit_tags_reviewed(slug: str) -> None:
             _write_yaml_text(slug, TAGS_FILE, text_value)
             st.success("tags_reviewed.yaml salvato correttamente.")
         except ConfigError as exc:
-            st.error("Salvataggio non riuscito")
-            st.caption(f"Dettaglio: {exc}")
+            _show_error("Salvataggio non riuscito", exc)
         except yaml.YAMLError as exc:  # pragma: no cover
-            st.error(f"Parsing YAML non riuscito: {exc}")
+            _show_error("YAML non valido", exc)

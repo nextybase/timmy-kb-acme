@@ -49,36 +49,36 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
             use_container_width=True,
             help=(
                 "Legge il mapping rivisto e crea/alinea le cartelle su Drive "
-                "(cartella cliente → raw/ → sottocartelle)."
+                "(cartella cliente \u2019 raw/ \u2019 sottocartelle)."
             ),
         ):
             try:
-                prog = st.progress(0)
+                progress_bar = st.progress(0)
                 status = st.empty()
 
                 def _cb(step: int, total: int, label: str) -> None:
                     pct = int(step * 100 / max(total, 1))
-                    prog.progress(pct)
-                    status.markdown(f"{pct}% — {label}")
+                    progress_bar.progress(pct)
+                    status.write(f"{pct}% · {label}")
 
                 ids = build_drive_from_mapping(
                     slug=slug,
                     client_name=st.session_state.get("client_name", ""),
                     progress=_cb,
                 )
-                st.success("Struttura Drive creata/aggiornata.")
+                progress_bar.progress(100)
+                status.write("100% · Operazione completata")
+                st.success("Struttura Drive aggiornata.")
                 st.caption(f"IDs cartelle: {ids}")
                 set_state(slug, "inizializzato")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
-            except FileNotFoundError as e:
-                st.error("Mapping non trovato per questo cliente.")
-                st.caption(
-                    "Apri la sezione Configurazione, verifica/modifica il mapping e premi "
-                    "**Salva mapping rivisto**, poi riprova."
-                )
-                st.caption(f"Dettagli: {e}")
-            except Exception as e:  # pragma: no cover
-                st.exception(e)
+            except FileNotFoundError as exc:
+                st.error("Mapping non trovato.")
+                st.caption("Apri Configurazione, salva il mapping rivisto e riprova.")
+                st.caption(f"Dettaglio tecnico: {exc}")
+            except Exception as exc:  # pragma: no cover
+                st.error("Struttura Drive non aggiornata.")
+                st.caption(f"Dettaglio tecnico: {exc}")
 
     # 2) Genera README
     with colB:
@@ -94,15 +94,13 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                 st.success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
                 st.session_state["drive_readmes_done"] = True
-            except FileNotFoundError as e:
-                st.error("Mapping non trovato per questo cliente.")
-                st.caption(
-                    "Apri la sezione Configurazione, verifica/modifica il mapping e premi "
-                    "**Salva mapping rivisto**, poi riprova."
-                )
-                st.caption(f"Dettagli: {e}")
-            except Exception as e:  # pragma: no cover
-                st.exception(e)
+            except FileNotFoundError as exc:
+                st.error("Mapping non trovato.")
+                st.caption("Apri Configurazione, salva il mapping rivisto e riprova.")
+                st.caption(f"Dettaglio tecnico: {exc}")
+            except Exception as exc:  # pragma: no cover
+                st.error("Generazione README non riuscita.")
+                st.caption(f"Dettaglio tecnico: {exc}")
 
     # 3) Download PDF in raw/ (abilitato dopo README)
     if st.session_state.get("drive_readmes_done"):
@@ -118,19 +116,22 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                 help=("Scarica i PDF caricati nelle cartelle di raw/ su Drive verso la tua cartella " "raw/ locale."),
             ):
                 try:
+                    progress_bar = st.progress(0)
+                    status = st.empty()
                     if download_raw_from_drive_with_progress is not None:
-                        prog2 = st.progress(0)
-                        status2 = st.empty()
 
                         def _pcb(done: int, total: int, label: str) -> None:
                             pct = int((done * 100) / max(total, 1))
-                            prog2.progress(pct)
-                            status2.markdown(f"{pct}% — {label}")
+                            progress_bar.progress(pct)
+                            status.write(f"{pct}% · {label}")
 
                         res = download_raw_from_drive_with_progress(slug=slug, on_progress=_pcb)
                     else:
+                        status.write("0% · Preparazione download")
                         res = download_raw_from_drive(slug=slug)
 
+                    progress_bar.progress(100)
+                    status.write("100% · Download completato")
                     count = len(res) if hasattr(res, "__len__") else None
                     msg_tail = f" ({count} file)" if count is not None else ""
                     st.success(f"Download completato{msg_tail}.")
@@ -138,8 +139,9 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                     log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                     st.session_state["raw_downloaded"] = True
                     st.session_state["raw_ready"] = True
-                except Exception as e:  # pragma: no cover
-                    st.exception(e)
+                except Exception as exc:  # pragma: no cover
+                    st.error("Download non riuscito.")
+                    st.caption(f"Dettaglio tecnico: {exc}")
 
         with c2:
             st.write(

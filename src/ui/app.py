@@ -739,6 +739,44 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     st.button("Torna alla landing", on_click=_back_to_landing)
 
 
+def _handle_sidebar_navigation(slug: str, target: str) -> None:
+    if st is None:
+        return
+    st.session_state["ui.mode"] = "manage"
+    st.session_state["ui.show_manage_select"] = True
+    st.session_state["ui.manage_slug"] = slug
+    st.session_state["ui.manage.selected_slug"] = slug
+    if target == "semantica":
+        st.session_state["ui.manage.target"] = target
+    else:
+        st.session_state.pop("ui.manage.target", None)
+    try:
+        st.rerun()
+    except Exception:
+        pass
+
+
+def _render_sidebar_client_panel(slug: Optional[str], logger: logging.Logger) -> None:
+    if st is None or not slug:
+        return
+    _ = logger
+    state_value = _current_client_state(slug) or "N/D"
+    st.caption("Cliente attivo")
+    st.text_input("Slug", value=slug, key=f"sidebar.slug.{slug}", disabled=True)
+    st.text_input(
+        "Stato",
+        value=state_value.upper() if isinstance(state_value, str) else str(state_value),
+        key=f"sidebar.state.{slug}",
+        disabled=True,
+    )
+    go_drive = st.button("Vai a Drive", key=f"sidebar.drive.{slug}", use_container_width=True)
+    go_semantic = st.button("Vai a Semantica", key=f"sidebar.semantic.{slug}", use_container_width=True)
+    if go_drive:
+        _handle_sidebar_navigation(slug, "drive")
+    if go_semantic:
+        _handle_sidebar_navigation(slug, "semantica")
+
+
 def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path], logger: logging.Logger) -> None:
     """Shortcut e azioni rapide nel menu laterale."""
     if st is None:
@@ -758,6 +796,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         st.write("- Apri cartella Markdown")
 
         st.divider()
+        _render_sidebar_client_panel(slug, logger)
         col_exit, col_dummy = st.columns(2)
         if col_exit.button(
             "Esci",
@@ -792,7 +831,9 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
                 st.error(f"Errore durante la generazione del dummy: {exc}")
                 logger.exception("ui.sidebar.dummy_exception", extra={"slug": active_slug})
 
-        if slug is None or workspace_dir is None:
+        if slug is None:
+            return
+        if workspace_dir is None:
             return
 
         try:
@@ -1309,6 +1350,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     else:
         st.warning("Workspace locale non trovato. Alcune funzionalita potrebbero non funzionare.")
 
+    st.markdown("#### Navigazione rapida")
+    st.markdown("- [Drive](#section-drive)\n- [Editor YAML](#section-yaml)\n- [Semantica](#section-semantic)")
+
     raw_dir = workspace_dir / "raw"
     raw_exists = raw_dir.exists() and raw_dir.is_dir()
 
@@ -1319,6 +1363,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     download_available = callable(download_raw_from_drive_with_progress)
     extract_busy = bool(st.session_state.get("ui.busy.extract_tags"))
 
+    st.markdown("<a id='section-drive'></a>", unsafe_allow_html=True)
     col_drive, col_diff, col_tags = st.columns([3, 4, 3])
     drive_index: Dict[str, Dict[str, Any]] = {}
 
@@ -1427,6 +1472,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         elif extract_clicked and not callable(run_tags_update):
             st.warning("Adapter Estrai Tags non disponibile in questo ambiente.")
 
+    st.markdown("<a id='section-yaml'></a><a id='section-semantic'></a>", unsafe_allow_html=True)
     st.subheader("Semantica")
     state_val = (get_state(slug) or "").lower()
     eligible_states = {"pronto", "arricchito", "finito"}
