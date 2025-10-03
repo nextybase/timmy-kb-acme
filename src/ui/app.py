@@ -14,7 +14,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 # Import standard/third party prima di qualsiasi codice
-import yaml
+import yaml  # noqa: E402
 
 from pipeline.context import ClientContext  # noqa: E402
 from pipeline.exceptions import ConfigError, InvalidSlug  # noqa: E402
