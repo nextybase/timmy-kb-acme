@@ -6,7 +6,8 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, cast
+from types import TracebackType
+from typing import Any, ContextManager, Dict, Literal, Optional, Tuple, cast
 
 import yaml
 
@@ -63,25 +64,43 @@ class _NullForm:
     def __enter__(self) -> "_NullForm":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
         return False
 
 
-def _safe_form(name: str, clear_on_submit: bool = False):
+def _safe_form(name: str, clear_on_submit: bool = False) -> ContextManager[Any]:
     if st is None:
-        return _NullForm()
+        return cast(ContextManager[Any], _NullForm())
     form_fn = getattr(st, "form", None)
     if callable(form_fn):
-        return form_fn(name, clear_on_submit=clear_on_submit)
-    return _NullForm()
+        try:
+            return cast(ContextManager[Any], form_fn(name, clear_on_submit=clear_on_submit))
+        except TypeError as exc:
+            if "clear_on_submit" not in str(exc):
+                raise
+            return cast(ContextManager[Any], form_fn(name))
+    return cast(ContextManager[Any], _NullForm())
 
 
-def _safe_form_submit(label: str, **kwargs) -> bool:
+def _safe_form_submit(label: str, **kwargs: Any) -> bool:
     if st is None:
         return False
     submit_fn = getattr(st, "form_submit_button", None)
     if callable(submit_fn):
-        return submit_fn(label, **kwargs)
+        try:
+            result = submit_fn(label, **kwargs)
+        except TypeError as exc:
+            message = str(exc)
+            if any(key in message for key in kwargs.keys()):
+                result = submit_fn(label)
+            else:
+                raise
+        return bool(result)
     return bool(getattr(st, "button", lambda *a, **k: False)(label, **kwargs))
 
 
@@ -254,10 +273,18 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 _state_set("slug", slug_state)
 
     slug = (slug_state or "").strip()
+    vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))
+
+    if not slug and isinstance(vision_state, dict):
+        persisted_slug = str(vision_state.get("slug") or "").strip()
+        if persisted_slug:
+            slug = persisted_slug
+            slug_state = persisted_slug
+            _state_set("slug", persisted_slug)
+
     if not slug or form_error:
         return False, "", ""
 
-    vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))
     if not vision_state or vision_state.get("slug") != slug:
         vision_state = {
             "slug": slug,
