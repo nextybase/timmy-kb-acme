@@ -109,7 +109,7 @@ def edit_semantic_mapping(slug: str) -> None:
     line_count = text_value.count("\n") + 1
     st.caption(f"Totale righe: {line_count}")
 
-    if st.button("Salva mapping", type="primary"):
+    if st.button("Salva mapping", type="primary", width="stretch"):
         try:
             data = yaml.safe_load(text_value) or {}
             if not isinstance(data, dict):
@@ -157,7 +157,7 @@ def edit_cartelle_raw(slug: str) -> None:
     line_count = text_value.count("\n") + 1
     st.caption(f"Totale righe: {line_count}")
 
-    if st.button("Salva cartelle", type="primary"):
+    if st.button("Salva cartelle", type="primary", width="stretch"):
         try:
             data = yaml.safe_load(text_value) or {}
             if not isinstance(data, dict):
@@ -213,7 +213,7 @@ def edit_tags_reviewed(slug: str) -> None:
     line_count = text_value.count("\n") + 1
     st.caption(f"Totale righe: {line_count}")
 
-    if st.button("Salva tags", type="primary"):
+    if st.button("Salva tags", type="primary", width="stretch"):
         try:
             data = yaml.safe_load(text_value) or {}
             if isinstance(data, dict):
