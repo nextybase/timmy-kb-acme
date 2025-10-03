@@ -126,16 +126,29 @@ def _call_convert_md(
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
 
     kwargs: Dict[str, Any] = {}
-    # molti converter già accettano md_dir come keyword
-    try:
-        if "md_dir" in inspect.signature(func).parameters:
-            kwargs["md_dir"] = md_dir
-    except Exception:
-        # se l'ispezione fallisce, tentiamo con nessuna kw e lasciamo a TypeError
-        pass
 
-    if safe_pdfs is not None and _converter_supports_safe_pdfs(func):
-        kwargs["safe_pdfs"] = safe_pdfs
+    # Ispezione UNA VOLTA e cache per safe_pdfs
+    sig: inspect.Signature | None
+    try:
+        sig = inspect.signature(func)
+    except Exception:
+        sig = None
+
+    # molti converter già accettano md_dir come keyword
+    if sig and "md_dir" in sig.parameters:
+        kwargs["md_dir"] = md_dir
+
+    if safe_pdfs is not None:
+        if sig is not None:
+            supports_safe = "safe_pdfs" in sig.parameters
+            try:
+                _SUPPORTED_SAFE_PDFS[func] = supports_safe
+            except Exception:
+                pass
+        else:
+            supports_safe = _converter_supports_safe_pdfs(func)
+        if supports_safe:
+            kwargs["safe_pdfs"] = safe_pdfs
 
     try:
         func(ctx, **kwargs)
@@ -168,8 +181,8 @@ def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> tupl
             if not candidate.is_file() or candidate.suffix.lower() != ".pdf":
                 continue
             # Verifica perimetro e risoluzione path (monkeypatchable nei test)
-            ppath.ensure_within_and_resolve(raw_dir, candidate)
-            safe.append(candidate)
+            safe_path = ppath.ensure_within_and_resolve(raw_dir, candidate)
+            safe.append(safe_path)
         except Exception as exc:
             logger.warning(
                 "semantic.convert.skip_unsafe",
@@ -256,13 +269,18 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             # RAW conteneva PDF ma tutti scartati: fail-fast (niente riuso legacy)
             raise ConfigError(
                 (
-                    "Trovati solo PDF non sicuri/fuori perimetro in RAW. "
+                    f"Trovati solo PDF non sicuri/fuori perimetro in RAW (scartati={discarded_unsafe}). "
                     "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
                 ),
                 slug=slug,
                 file_path=raw_dir,
             )
         if content_mds:
+            # Reuse esplicito di contenuti già presenti
+            logger.info(
+                "semantic.convert.reused_existing_content",
+                extra={"slug": slug, "count": len(content_mds)},
+            )
             logger.info(
                 "semantic.convert_markdown.done",
                 extra={
@@ -784,7 +802,8 @@ def _merge_frontmatter(existing: Dict[str, Any], *, title: Optional[str], tags: 
         meta["title"] = title
     if tags:
         left = _as_list_str(meta.get("tags"))
-        merged = sorted(set(left + list(tags)))
+        # Comportamento richiesto dai test: unione, deduplica e ORDINE ALFABETICO
+        merged = sorted(set([*left, *tags]))
         meta["tags"] = merged
     return meta
 

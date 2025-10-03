@@ -1,2 +1,5 @@
 version: 1
-clients: []
+clients:
+- slug: prova
+  nome: prova srl
+  stato: inizializzato
