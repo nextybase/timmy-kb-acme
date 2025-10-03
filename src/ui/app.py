@@ -839,21 +839,22 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
 
         st.divider()
         _render_sidebar_client_panel(slug, logger)
-        col_exit, col_dummy = st.columns(2)
-        if col_exit.button(
-            "Esci",
-            key="sidebar_exit_btn",
-            width="stretch",
-            help="Chiudi l'app",
-        ):
-            _request_shutdown(logger)
 
-        if col_dummy.button(
+        st.caption("Azioni rapide")
+        if st.button("Home", key="sidebar_home_btn", width="stretch", help="Torna alla schermata iniziale."):
+            _back_to_landing()
+            try:
+                st.rerun()
+            except Exception:
+                pass
+
+        generate_dummy_clicked = st.button(
             "Genera dummy",
             key="sidebar_dummy_btn",
             width="stretch",
             help="Crea il workspace di esempio per testare il flusso",
-        ):
+        )
+        if generate_dummy_clicked:
             active_slug = slug or "dummy"
             try:
                 from tools.gen_dummy_kb import main as gen_dummy_main
@@ -872,6 +873,9 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
             except Exception as exc:  # pragma: no cover
                 st.error(f"Errore durante la generazione del dummy: {exc}")
                 logger.exception("ui.sidebar.dummy_exception", extra={"slug": active_slug})
+
+        if st.button("Esci", key="sidebar_exit_btn", type="primary", width="stretch", help="Chiudi l'app"):
+            _request_shutdown(logger)
 
         if slug is None:
             return
