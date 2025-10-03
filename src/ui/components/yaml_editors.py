@@ -91,7 +91,11 @@ def edit_semantic_mapping(slug: str) -> None:
 
     st.subheader("semantic_mapping.yaml")
     st.caption(f"Percorso: output/timmy-kb-{slug}/semantic/{MAPPING_FILE}")
-    st.caption("Schema minimo: context.slug, context.client_name, areas[].")
+    # UI: descrizione più esplicita per screen reader
+    st.caption(
+        "Schema minimo: context.slug, context.client_name, areas[]. "
+        "Usa YAML valido. Il salvataggio è atomico con guardie di path-safety."
+    )
 
     text_value = st.text_area(
         "Contenuto mapping (YAML)",

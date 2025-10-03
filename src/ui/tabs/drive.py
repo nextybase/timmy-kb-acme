@@ -46,20 +46,42 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
         if st.button(
             "1) Crea/aggiorna struttura su Drive",
             key="btn_drive_create",
-            use_container_width=True,
+            width="stretch",
             help=(
-                "Legge il mapping rivisto e crea/alinea le cartelle su Drive "
-                "(cartella cliente \u2019 raw/ \u2019 sottocartelle)."
+                "Crea/allinea la gerarchia su Drive dal mapping rivisto "
+                "(cartella cliente -> raw/ -> sottocartelle). Operazione idempotente."
             ),
         ):
             try:
                 progress_bar = st.progress(0)
-                status = st.empty()
+                status_container = None
+                status_placeholder = None
+                status_api = getattr(st, "status", None)
+                if callable(status_api):
+                    try:
+                        status_container = status_api("Inizializzazione...", expanded=False)
+                    except Exception:
+                        status_container = None
+                if status_container is None:
+                    status_placeholder = st.empty()
+                    status_placeholder.write("Inizializzazione...")
 
-                def _cb(step: int, total: int, label: str) -> None:
+                def _update_status(message: str) -> None:
+                    nonlocal status_container, status_placeholder
+                    if status_container is not None:
+                        try:
+                            status_container.update(label=message)
+                            return
+                        except Exception:
+                            status_container = None
+                    if status_placeholder is None:
+                        status_placeholder = st.empty()
+                    status_placeholder.write(message)
+
+                def _cb(step: int, total: int, label: str) -> None:  # UI: callback unificato
                     pct = int(step * 100 / max(total, 1))
                     progress_bar.progress(pct)
-                    status.write(f"{pct}% · {label}")
+                    _update_status(f"{pct}% · {label}")
 
                 ids = build_drive_from_mapping(
                     slug=slug,
@@ -67,7 +89,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                     progress=_cb,
                 )
                 progress_bar.progress(100)
-                status.write("100% · Operazione completata")
+                _update_status("100% · Operazione completata")
                 st.success("Struttura Drive aggiornata.")
                 st.caption(f"IDs cartelle: {ids}")
                 set_state(slug, "inizializzato")
@@ -86,7 +108,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
             "2) Genera README in raw/",
             key="btn_drive_readmes",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             help="Crea README introduttivi in ogni sottocartella di raw/ con istruzioni operative.",
         ):
             try:
@@ -112,7 +134,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
             if st.button(
                 "Scarica PDF da Drive in raw/",
                 key="btn_drive_download_raw",
-                use_container_width=True,
+                width="stretch",
                 help=("Scarica i PDF caricati nelle cartelle di raw/ su Drive verso la tua cartella " "raw/ locale."),
             ):
                 try:

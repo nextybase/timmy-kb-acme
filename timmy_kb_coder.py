@@ -164,7 +164,7 @@ def main() -> None:
 
     # Actions
     c1, c2 = st.columns([1, 1])
-    if c1.button("Compila & Invia a VS Code", use_container_width=True):
+    if c1.button("Compila & Invia a VS Code", width="stretch"):
         retrieved: list[dict] = []
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
@@ -210,7 +210,7 @@ def main() -> None:
         path = write_request(prompt)
         st.success(f"Prompt salvato in {path}")
 
-    if c2.button("Leggi risposta da VS Code", use_container_width=True):
+    if c2.button("Leggi risposta da VS Code", width="stretch"):
         resp = read_response()
         if resp:
             st.markdown(resp)

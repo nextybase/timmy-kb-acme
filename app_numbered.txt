@@ -181,7 +181,7 @@
  181:                     if st.button(
  182:                         f"Salva {cat_key}",
  183:                         key=f"btn_save_cat_{idx}_{cat_key}",
- 184:                         use_container_width=True,
+ 184:                         width="stretch",
  185:                     ):
  186:                         try:
  187:                             new_cats = dict(cats)
@@ -220,7 +220,7 @@
  220:
  221:         colSx, colDx = st.columns([1, 1])
  222:         with colSx:
- 223:             if st.button("Valida mapping", key="btn_validate_mapping", use_container_width=True):
+ 223:             if st.button("Valida mapping", key="btn_validate_mapping", width="stretch"):
  224:                 err = validate_categories(cats, normalize_keys=normalize_keys)
  225:                 st.success("Mapping valido.") if not err else st.error(f"Errore: {err}")
  226:         with colDx:
@@ -228,7 +228,7 @@
  228:                 "Salva mapping rivisto",
  229:                 key="btn_save_mapping_all",
  230:                 type="primary",
- 231:                 use_container_width=True,
+ 231:                 width="stretch",
  232:             ):
  233:                 try:
  234:                     new_map = build_mapping(
@@ -290,7 +290,7 @@
  290:             st.write(f"SERVICE_ACCOUNT_FILE: {_mask_path(saf)}")
  291:             st.write(f"DRIVE_ID: {_mask_id(did)}")
  292:
- 293:             if st.button("Verifica credenziali Drive", key="btn_drive_preflight", use_container_width=True):
+ 293:             if st.button("Verifica credenziali Drive", key="btn_drive_preflight", width="stretch"):
  294:                 try:
  295:                     from pipeline.drive_utils import get_drive_service
  296:
@@ -307,7 +307,7 @@
  307:             if st.button(
  308:                 "1) Crea/aggiorna struttura Drive",
  309:                 key="btn_drive_create",
- 310:                 use_container_width=True,
+ 310:                 width="stretch",
  311:             ):
  312:                 try:
  313:                     prog = st.progress(0)
@@ -338,7 +338,7 @@
  338:                 "2) Genera README in raw/",
  339:                 key="btn_drive_readmes",
  340:                 type="primary",
- 341:                 use_container_width=True,
+ 341:                 width="stretch",
  342:             ):
  343:                 try:
  344:                     result = emit_readmes_for_raw(slug=slug, ensure_structure=True)
@@ -364,7 +364,7 @@
  364:                 if st.button(
  365:                     "Scarica PDF da Drive in raw/",
  366:                     key="btn_drive_download_raw",
- 367:                     use_container_width=True,
+ 367:                     width="stretch",
  368:                 ):
  369:                     if download_raw_from_drive is None:
  370:                         st.error(("Funzione di download non disponibile: aggiornare 'ui.services.drive_runner'."))
@@ -396,7 +396,7 @@
  396:                 if st.button(
  397:                     "Rileva PDF in raw/",
  398:                     key="btn_drive_detect_raw_ready",
- 399:                     use_container_width=True,
+ 399:                     width="stretch",
  400:                 ):
  401:                     try:
  402:                         ctx = _ensure_context(slug, log)
@@ -455,7 +455,7 @@
  455:             st.markdown("<div class='next-card'>", unsafe_allow_html=True)
  456:             st.markdown("**1) Conversione RAW → BOOK**")
  457:             st.caption("Converte i PDF in Markdown (cartella book/).")
- 458:             if st.button("Converti PDF in Markdown", key="btn_sem_convert", use_container_width=True):
+ 458:             if st.button("Converti PDF in Markdown", key="btn_sem_convert", width="stretch"):
  459:                 try:
  460:                     mds = sem_convert(context, log, slug=slug)
  461:                     st.success(f"OK. File Markdown in book/: {len(mds)}")
@@ -478,7 +478,7 @@
  478:                 if st.button(
  479:                     "Arricchisci con tag canonici (SQLite)",
  480:                     key="btn_sem_enrich",
- 481:                     use_container_width=True,
+ 481:                     width="stretch",
  482:                 ):
  483:                     try:
  484:                         # Usa il base_dir reale dal ClientContext (override inclusi)
@@ -515,7 +515,7 @@
  515:                 if st.button(
  516:                     "Genera/valida README & SUMMARY",
  517:                     key="btn_sem_write_md",
- 518:                     use_container_width=True,
+ 518:                     width="stretch",
  519:                 ):
  520:                     try:
  521:                         sem_write_md(context, log, slug=slug)
@@ -665,7 +665,7 @@
  665:                 "Esci",
  666:                 key="btn_exit_landing",
  667:                 help="Chiude l'interfaccia Streamlit e termina il processo.",
- 668:                 use_container_width=True,
+ 668:                 width="stretch",
  669:             ):
  670:                 try:
  671:                     log.info({"event": "ui_exit_requested", "slug": st.session_state.get("slug", "-")})

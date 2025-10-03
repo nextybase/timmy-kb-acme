@@ -73,7 +73,7 @@ def render_preview_controls(
             if st.button(
                 "Avvia preview",
                 key="btn_sem_preview_start",
-                use_container_width=True,
+                width="stretch",
                 disabled=(start_preview is None or running),
             ):
                 try:
@@ -110,7 +110,7 @@ def render_preview_controls(
             if st.button(
                 "Ferma preview",
                 key="btn_sem_preview_stop",
-                use_container_width=True,
+                width="stretch",
                 disabled=(stop_preview is None or not running),
             ):
                 try:

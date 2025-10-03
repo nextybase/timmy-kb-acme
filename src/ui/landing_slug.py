@@ -250,9 +250,9 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             verify_clicked = _safe_form_submit(
                 "Verifica cliente",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
-        st.button("Esci", on_click=lambda: _request_shutdown(log), use_container_width=True)
+        st.button("Esci", on_click=lambda: _request_shutdown(log), width="stretch")
 
     if verify_clicked:
         candidate = (slug_input or "").strip()

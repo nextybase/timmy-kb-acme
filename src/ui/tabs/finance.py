@@ -77,7 +77,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
         if st.button(
             "Importa in finance.db",
             key="btn_fin_import",
-            use_container_width=True,
+            width="stretch",
             disabled=(file is None),
         ):
             if file is None:

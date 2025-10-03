@@ -7,7 +7,11 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
+
+SRC_ROOT = Path(__file__).resolve().parents[1]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 # Import standard/third party prima di qualsiasi codice
 import yaml
@@ -52,12 +56,15 @@ except Exception:  # pragma: no cover
 try:
     from ui.components.yaml_editors import edit_cartelle_raw, edit_semantic_mapping, edit_tags_reviewed
 except Exception:  # pragma: no cover
+    edit_semantic_mapping = None
+    edit_cartelle_raw = None
     edit_tags_reviewed = None
 
 try:
     from ui.services.tags_adapter import run_tags_update
 except Exception:  # pragma: no cover
     run_tags_update = None
+
 # Import Streamlit in modo tollerante (test/CI headless)
 try:
     import streamlit as st
@@ -69,6 +76,35 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO_ROOT / "config"
 OUTPUT_ROOT = REPO_ROOT / "output"
 BASE_CONFIG = CONFIG_DIR / "config.yaml"
+
+
+# --- UI adapters (solo presentazione, no business logic) ----------------------
+DialogDecorator = Callable[[Callable[[], None]], Callable[[], None]]
+DialogFactory = Callable[[str], DialogDecorator]
+
+
+def _ui_dialog(title: str, body_fn: Callable[[], None]) -> None:
+    """
+    Version-safe dialog:
+    - prefer st.dialog (>=1.30) / st.experimental_dialog (decorator)
+    - fallback finale: expander "pseudo-modal"
+    body_fn: funzione senza argomenti che renderizza il contenuto del dialog.
+    """
+    if st is None:
+        return
+    dlg_raw = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
+    dlg = cast(Optional[DialogFactory], dlg_raw)
+    if dlg is not None:
+        decorator: DialogDecorator = dlg(title)
+
+        @decorator
+        def _show() -> None:
+            body_fn()
+
+        _show()
+    else:
+        with st.expander(title, expanded=True):
+            body_fn()
 
 
 def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
@@ -96,15 +132,26 @@ def _current_client_state(slug: Optional[str]) -> str | None:
 
 
 def _render_header(slug: Optional[str]) -> None:
+    # Landmark principale per skip-link
+    st.markdown("<main id='main'></main>", unsafe_allow_html=True)
     st.title("Onboarding NeXT - Clienti")
     if not slug:
         st.caption("Nessun cliente attivo. Crea o seleziona un cliente per iniziare.")
         return
     state = _current_client_state(slug)
     if state:
-        st.markdown(f"Cliente attivo: **{slug}** - Stato: `{state.upper()}`")
-    else:
-        st.caption(f"Cliente attivo: **{slug}** - Stato non registrato")
+        st.markdown(f"Cliente attivo: **{slug}** — Stato: `{state.upper()}`")
+    try:
+        with st.sidebar:
+            st.markdown("### Cliente")
+            st.write(f"**Slug**: `{slug}`")
+            st.write(f"**Stato**: `{(state or 'n/d').upper()}`")
+            st.divider()
+            st.markdown("[Vai a Configurazione](#section-yaml)")
+            st.markdown("[Vai a Google Drive](#section-drive)")
+            st.markdown("[Vai a Semantica](#section-semantic)")
+    except Exception:
+        pass
 
 
 def _setup_logging() -> logging.Logger:
@@ -332,7 +379,7 @@ def _render_config_editor(workspace_dir: Path, slug: str, logger: logging.Logger
     for key, value in data.items():
         with st.form(f"cfg_field_{key}"):
             new_value = _render_config_widget(slug, key, value)
-            saved = st.form_submit_button("Salva", use_container_width=True)
+            saved = st.form_submit_button("Salva", width="stretch")
             if saved:
                 try:
                     _persist_config_value(workspace_dir, slug, key, new_value, logger)
@@ -594,7 +641,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
     with st.form("yaml_editor_form"):
         st.text_area("semantic/semantic_mapping.yaml", key=mapping_key, height=320)
         st.text_area("semantic/cartelle_raw.yaml", key=cartelle_key, height=320)
-        if st.form_submit_button("Valida & Salva", type="primary"):
+        if st.form_submit_button("Valida & Salva", type="primary", width="stretch"):
             try:
                 # Parsing/validazione base
                 _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
@@ -627,7 +674,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
 
     actions = st.columns(3)
     with actions[0]:
-        if st.button("Crea locale", use_container_width=True):
+        if st.button("Crea locale", width="stretch"):
             try:
                 _run_create_local_structure(slug, workspace_dir, logger)
                 st.success("Struttura locale aggiornata.")
@@ -637,7 +684,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
             except RuntimeError as exc:
                 st.error(str(exc))
     with actions[1]:
-        if st.button("Crea su Drive", use_container_width=True):
+        if st.button("Crea su Drive", width="stretch"):
             try:
                 created = _run_drive_structure(slug, workspace_dir, logger)
                 st.success(f"Struttura Drive aggiornata (raw={created.get('raw')}).")
@@ -647,7 +694,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
             except RuntimeError as exc:
                 st.error(str(exc))
     with actions[2]:
-        if st.button("Genera README", use_container_width=True):
+        if st.button("Genera README", width="stretch"):
             try:
                 uploaded = _run_generate_readmes(slug, logger)
                 st.success(f"README caricati: {len(uploaded)}")
@@ -769,8 +816,8 @@ def _render_sidebar_client_panel(slug: Optional[str], logger: logging.Logger) ->
         key=f"sidebar.state.{slug}",
         disabled=True,
     )
-    go_drive = st.button("Vai a Drive", key=f"sidebar.drive.{slug}", use_container_width=True)
-    go_semantic = st.button("Vai a Semantica", key=f"sidebar.semantic.{slug}", use_container_width=True)
+    go_drive = st.button("Vai a Drive", key=f"sidebar.drive.{slug}", width="stretch")
+    go_semantic = st.button("Vai a Semantica", key=f"sidebar.semantic.{slug}", width="stretch")
     if go_drive:
         _handle_sidebar_navigation(slug, "drive")
     if go_semantic:
@@ -786,14 +833,9 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         try:
             logo_path = REPO_ROOT / "assets" / "next-logo.png"
             if logo_path.exists():
-                st.image(str(logo_path), use_container_width=True)
+                st.image(str(logo_path), width="stretch")  # immagini: lasciamo compat (nessun warning)
         except Exception as exc:  # pragma: no cover
             logger.warning("ui.sidebar.logo_error", extra={"error": str(exc)})
-
-        st.caption("Scorciatoie")
-        st.write("- Apri workspace locale")
-        st.write("- Apri cartella RAW")
-        st.write("- Apri cartella Markdown")
 
         st.divider()
         _render_sidebar_client_panel(slug, logger)
@@ -801,7 +843,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         if col_exit.button(
             "Esci",
             key="sidebar_exit_btn",
-            use_container_width=True,
+            width="stretch",
             help="Chiudi l'app",
         ):
             _request_shutdown(logger)
@@ -809,7 +851,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         if col_dummy.button(
             "Genera dummy",
             key="sidebar_dummy_btn",
-            use_container_width=True,
+            width="stretch",
             help="Crea il workspace di esempio per testare il flusso",
         ):
             active_slug = slug or "dummy"
@@ -843,7 +885,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
                 st.caption(f"Mapping: `{mapping_rel}`")
                 st.caption(f"Cartelle raw: `{cartelle_rel}`")
                 if st.session_state.get("phase") == "ready_to_open":
-                    if st.button("Apri workspace", type="primary", use_container_width=True):
+                    if st.button("Apri workspace", type="primary", width="stretch"):
                         try:
                             _open_workspace(slug, workspace_dir, logger)
                             st.session_state["phase"] = "workspace"
@@ -867,12 +909,12 @@ def _render_landing(logger: logging.Logger) -> None:
         new_clicked = st.button(
             "Nuovo Cliente",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             help="Avvia la procedura per registrare un nuovo cliente.",
         )
         manage_clicked = st.button(
             "Gestisci cliente",
-            use_container_width=True,
+            width="stretch",
             help="Mostra l'elenco dei clienti disponibili.",
         )
 
@@ -967,7 +1009,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
         init_clicked = st.form_submit_button(
             "Inizializza workspace",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=busy_init,
             help="Genera i file YAML in semantic/ a partire dalla Vision.",
         )
@@ -1083,7 +1125,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
     with st.form("ui.new.yaml_editor_form"):
         st.text_area("semantic/semantic_mapping.yaml", key=mapping_key, height=320)
         st.text_area("semantic/cartelle_raw.yaml", key=cartelle_key, height=320)
-        if st.form_submit_button("Salva YAML", type="primary"):
+        if st.form_submit_button("Salva YAML", type="primary", width="stretch"):
             try:
                 _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
                 _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
@@ -1098,12 +1140,12 @@ def _render_new_client_block(logger: logging.Logger) -> None:
     nome_effective = st.session_state.get("ui.new.nome_effective", slug_effective)
     busy_create = bool(st.session_state.get("ui.busy.create_workspace"))
 
-    # 🔁 Bottone UNICO per la creazione (rimosso il duplicato)
+    # 🔁 Bottone UNICO per la creazione
     create_clicked = st.button(
         "Crea Workspace",
         key=f"ui.new.create_workspace_btn.{slug_effective}",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=busy_create,
         help="Crea la struttura su Drive e completa le cartelle locali.",
     )
@@ -1158,7 +1200,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
         if st.button(
             "Vai all'arricchimento semantico",
             key=f"ui.new.go_semantic.{slug_effective}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state["ui.mode"] = "manage"
             st.session_state["ui.manage_slug"] = slug_effective
@@ -1226,7 +1268,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
             "Gestisci",
             key="ui.manage.button",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=not selected,
         ):
             st.session_state["ui.manage_slug"] = selected
@@ -1238,7 +1280,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         if st.button(
             "Elimina",
             key=f"ui.manage.delete_button.{selected or 'none'}",
-            use_container_width=True,
+            width="stretch",
             disabled=not selected,
         ):
             # Apri modale di conferma in un nuovo rerun
@@ -1256,12 +1298,13 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         target = st.session_state.get("ui.manage.confirm_target")
         if target:
             confirm_key = f"ui.manage.confirm_typed.{target}"
-            with st.modal(f"Conferma eliminazione '{target}'", key=f"ui.manage.modal.delete.{target}"):
+
+            def _delete_dialog_body() -> None:
                 st.error("Azione irreversibile. Digita lo slug per confermare e poi premi elimina.")
                 st.text_input("Scrivi lo slug esatto per confermare", key=confirm_key, placeholder=target)
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Annulla", key=f"ui.manage.cancel_delete.{target}", use_container_width=True):
+                    if st.button("Annulla", key=f"ui.manage.cancel_delete.{target}", width="stretch"):
                         st.session_state["ui.manage.confirm_open"] = False
                         st.session_state["ui.manage.confirm_target"] = None
                         st.session_state.pop(confirm_key, None)
@@ -1272,7 +1315,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                         "Elimina definitivamente",
                         key=f"ui.manage.confirm_delete.{target}",
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=not confirmed,
                     ):
                         with st.spinner(f"Elimino '{target}' da locale, DB e Drive..."):
@@ -1291,6 +1334,9 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                             st.rerun()
                         else:
                             st.error(f"Errore eliminazione: {message}")
+
+            # mostra dialog compatibile
+            _ui_dialog(f"Conferma eliminazione '{target}'", _delete_dialog_body)
 
     slug = st.session_state.get("ui.manage_slug")
     if not slug:
@@ -1323,7 +1369,7 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
         saved = st.form_submit_button(
             "Salva YAML",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if saved:
@@ -1385,7 +1431,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         download_clicked = st.button(
             "Scarica da Drive in raw/",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=download_busy or not download_available,
             help="Scarica i PDF da DRIVE_ID/<slug>/raw/ nella cartella locale raw/.",
         )
@@ -1443,7 +1489,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         extract_clicked = st.button(
             "Estrai Tags",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=extract_disabled,
             help="Aggiorna tags_reviewed.yaml analizzando i contenuti in raw/.",
         )
@@ -1474,6 +1520,25 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 
     st.markdown("<a id='section-yaml'></a><a id='section-semantic'></a>", unsafe_allow_html=True)
     st.subheader("Semantica")
+    # 🔄 Aggiorna elenco file su Drive e ricalcola le differenze
+    refresh_col, _ = st.columns([1, 3])
+    if refresh_col.button(
+        "Aggiorna elenco Drive",
+        key=f"ui.manage.refresh_drive.{slug}",
+        help="Rileggi l'albero su Drive e aggiorna le differenze Drive/Locale.",
+        width="stretch",
+    ):
+        try:
+            # forza l’invalidazione di eventuali cache dati usate dai componenti Drive
+            if hasattr(st, "cache_data") and hasattr(st.cache_data, "clear"):
+                st.cache_data.clear()
+        except Exception:
+            pass
+        st.toast("Elenco Drive aggiornato. Ricalcolo in corso…")
+        try:
+            st.rerun()
+        except Exception:
+            pass
     state_val = (get_state(slug) or "").lower()
     eligible_states = {"pronto", "arricchito", "finito"}
 
@@ -1492,7 +1557,11 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 def main() -> None:
     logger = _setup_logging()
     if st is not None:
-        st.set_page_config(page_title="Onboarding NeXT - Clienti", layout="wide")
+        st.set_page_config(
+            page_title="Onboarding NeXT - Clienti",
+            layout="wide",
+            page_icon=str(REPO_ROOT / "assets" / "ico-next.png"),
+        )
 
     phase = st.session_state.get("phase", "landing")
     slug = st.session_state.get("slug")

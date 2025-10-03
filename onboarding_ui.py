@@ -53,15 +53,25 @@ _bootstrap_sys_path()
 # ------------------------------------------------------------------------------
 
 def _page_config() -> None:
-    # Deve essere la PRIMA chiamata Streamlit della pagina
+    # UI: page config deve essere la prima chiamata Streamlit
     st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    # UI: skip-links per accessibilità tastiera
+    st.markdown(
+        "<a href='#main' class='sr-only-focusable'>Salta al contenuto principale</a>",
+        unsafe_allow_html=True,
+    )
 
 def _render_global_error(e: Exception) -> None:
-    st.error("Errore imprevisto. Apri i dettagli tecnici per maggiori informazioni.")
+    # UI: messaggio breve + toast non bloccante
+    try:
+        st.toast("Si è verificato un errore. Dettagli nei log/expander.", icon="⚠️")
+    except Exception:
+        pass
+    st.error("Errore. Apri i dettagli tecnici per maggiori informazioni.")
     with st.expander("Dettagli tecnici", expanded=False):
         st.exception(e)
 

@@ -34,51 +34,61 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             st.markdown("- Stato cliente aggiornato almeno a `pronto`.")
         return
 
-    # 1) Conversione RAW -> BOOK (Markdown)
-    if st.button(
-        "1) Converti PDF in Markdown",
-        key="btn_sem_convert",
-        use_container_width=True,
-        help="Converte i PDF presenti in `raw/` in file Markdown sotto `book/`. Operazione idempotente.",
-    ):
+    # UI: form unica per ridurre rerun e migliorare accessibilità
+    with st.form("semantica_actions", clear_on_submit=False):
+        cols = st.columns(3)
+        with cols[0]:
+            do_convert = st.form_submit_button(
+                "1) Converti PDF in Markdown",
+                help="Converte i PDF presenti in `raw/` in file Markdown sotto `book/`. Operazione idempotente.",
+            )
+        with cols[1]:
+            do_enrich = st.form_submit_button(
+                "2) Arricchisci frontmatter",
+                help="Applica vocabolario revisionato e metadati ai Markdown in `book/`.",
+            )
+        with cols[2]:
+            do_md = st.form_submit_button(
+                "3) Genera SUMMARY e README",
+                type="primary",
+                help="Costruisce/valida `SUMMARY.md` e `README.md` nella cartella `book/`.",
+            )
+
+    def _toast_success(message: str) -> None:
+        toast_fn = getattr(st, "toast", None)
+        if callable(toast_fn):
+            try:
+                toast_fn(message, icon="✅")
+                return
+            except Exception:
+                pass
+        st.success(message)
+
+    if do_convert:
         try:
             ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
             convert_markdown(ctx, log, slug=slug)
-            st.success("Conversione completata.")
-        except Exception as e:
+            _toast_success("Conversione completata.")
+        except Exception as e:  # pragma: no cover - UI
             st.exception(e)
 
-    # 2) Arricchimento frontmatter
-    if st.button(
-        "2) Arricchisci frontmatter",
-        key="btn_sem_enrich",
-        use_container_width=True,
-        help="Applica vocabolario revisionato e metadati ai Markdown in `book/`.",
-    ):
+    if do_enrich:
         try:
             ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
             paths = get_paths(slug)
             base_dir: Path = ctx.base_dir or paths["base"]
             vocab = load_reviewed_vocab(base_dir, log)
             touched = enrich_frontmatter(ctx, log, vocab, slug=slug)
-            st.success(f"Frontmatter arricchiti: {len(touched)}")
-            # Allineamento stato come da flusso esistente
+            _toast_success(f"Frontmatter arricchiti: {len(touched)}")
             set_state(slug, "arricchito")
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - UI
             st.exception(e)
 
-    # 3) Generazione SUMMARY.md e README.md
-    if st.button(
-        "3) Genera SUMMARY e README",
-        key="btn_sem_md",
-        use_container_width=True,
-        help="Costruisce/valida `SUMMARY.md` e `README.md` nella cartella `book/`.",
-    ):
+    if do_md:
         try:
             ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
             write_summary_and_readme(ctx, log, slug=slug)
-            st.success("`SUMMARY.md` e `README.md` generati/validati.")
-            # Allineamento stato come da flusso esistente
+            _toast_success("SUMMARY.md e README.md generati/validati.")
             set_state(slug, "finito")
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - UI
             st.exception(e)
