@@ -1174,6 +1174,10 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         selected = None
     st.session_state["ui.manage.selected_slug"] = selected if selected else None
 
+    # stato UI per conferma eliminazione (init PRIMA dei widget)
+    st.session_state.setdefault("ui.manage.confirm_open", False)
+    st.session_state.setdefault("ui.manage.confirm_target", None)
+
     col_manage, col_delete = st.columns([1, 1])
 
     with col_manage:
@@ -1189,38 +1193,63 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
             st.rerun()
 
     with col_delete:
-        # Conferma sicura con key univoca per slug selezionato
-        confirm_key = f"ui.manage.confirm_typed.{selected or 'none'}"
-        st.text_input(
-            "Digita DELETE per confermare",
-            key=confirm_key,
-            value="",
-            placeholder="DELETE",
-        )
+        # Chiave univoca per evitare duplicate key
         if st.button(
             "Elimina",
             key=f"ui.manage.delete_button.{selected or 'none'}",
             use_container_width=True,
             disabled=not selected,
         ):
-            slug = selected
-            typed = cast(str, st.session_state.get(confirm_key, "")).strip().upper()
-            if slug and typed == "DELETE":
-                with st.spinner(f"Elimino '{slug}' da locale, DB e Drive..."):
-                    ok, message = _ui_delete_client_via_tool(slug)
-                if ok:
-                    st.toast(f"Cliente '{slug}' eliminato!")
-                    st.session_state["ui.manage.feedback"] = ("success", f"Cliente '{slug}' eliminato!")
-                    if slug == st.session_state.get("ui.manage_slug"):
-                        st.session_state.pop("ui.manage_slug", None)
-                    st.session_state["ui.manage.selected_slug"] = None
-                    # pulizia campo conferma
-                    st.session_state[confirm_key] = ""
-                    st.rerun()
-                else:
-                    st.error(f"Errore eliminazione: {message}")
-            else:
-                st.warning("Per confermare, digita esattamente: DELETE")
+            # Apri modale di conferma in un nuovo rerun
+            if selected:
+                st.session_state["ui.manage.confirm_open"] = True
+                st.session_state["ui.manage.confirm_target"] = selected
+                # reset dello stato digitato (prima di renderizzare la text_input)
+                typed_key = f"ui.manage.confirm_typed.{selected}"
+                if typed_key in st.session_state:
+                    st.session_state.pop(typed_key)
+                st.rerun()
+
+    # Modale di conferma eliminazione (gestita fuori dalle colonne)
+    if st.session_state.get("ui.manage.confirm_open"):
+        target = st.session_state.get("ui.manage.confirm_target")
+        if target:
+            confirm_key = f"ui.manage.confirm_typed.{target}"
+            with st.modal(f"Conferma eliminazione '{target}'", key=f"ui.manage.modal.delete.{target}"):
+                st.error("Azione irreversibile. Digita lo slug per confermare e poi premi elimina.")
+                st.text_input("Scrivi lo slug esatto per confermare", key=confirm_key, placeholder=target)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Annulla", key=f"ui.manage.cancel_delete.{target}", use_container_width=True):
+                        st.session_state["ui.manage.confirm_open"] = False
+                        st.session_state["ui.manage.confirm_target"] = None
+                        st.session_state.pop(confirm_key, None)
+                        st.rerun()
+                with c2:
+                    confirmed = st.session_state.get(confirm_key, "") == target
+                    if st.button(
+                        "Elimina definitivamente",
+                        key=f"ui.manage.confirm_delete.{target}",
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not confirmed,
+                    ):
+                        with st.spinner(f"Elimino '{target}' da locale, DB e Drive..."):
+                            ok, message = _ui_delete_client_via_tool(target)
+                        if ok:
+                            # feedback sintetico, niente log dump in UI
+                            st.session_state["ui.manage.feedback"] = ("success", f"Cliente '{target}' eliminato.")
+                            # chiudi modale e ripulisci stato
+                            st.session_state["ui.manage.confirm_open"] = False
+                            st.session_state["ui.manage.confirm_target"] = None
+                            st.session_state.pop(confirm_key, None)
+                            # reset selezione se serviva
+                            if target == st.session_state.get("ui.manage_slug"):
+                                st.session_state.pop("ui.manage_slug", None)
+                            st.session_state["ui.manage.selected_slug"] = None
+                            st.rerun()
+                        else:
+                            st.error(f"Errore eliminazione: {message}")
 
     slug = st.session_state.get("ui.manage_slug")
     if not slug:
