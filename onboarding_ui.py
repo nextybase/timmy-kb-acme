@@ -273,22 +273,36 @@ def _compute_sem_enabled(state: str | None) -> bool:
     """Decide se la tab Semantica è disponibile, in base allo stato client."""
     return _normalize_state(state) in STATE_SEM_READY
 
-def _compute_manage_enabled(state: str | None) -> bool:
+def _compute_manage_enabled(state: str | None, slug: str | None) -> bool:
     """Abilita Gestisci cliente da 'inizializzato' in avanti."""
-    return _normalize_state(state) in STATE_MANAGE_READY
+    normalized = _normalize_state(state)
+    if normalized in STATE_MANAGE_READY:
+        return True
+    return bool((slug or "").strip())
 
 
-def _compute_home_enabled(state: str | None) -> bool:
-    """Home è cliccabile dagli stessi stati che abilitano Gestisci cliente."""
-    return _compute_manage_enabled(state)
+def _compute_home_enabled(state: str | None, slug: str | None) -> bool:
+    """Home è cliccabile in ogni situazione utile (slug presente o stato valido)."""
+    normalized = _normalize_state(state)
+    if normalized in STATE_MANAGE_READY:
+        return True
+    return bool((slug or "").strip())
 
 
 def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
     """Inizializza/riconcilia la tab attiva in sessione, sempre chiamata."""
-    if "active_tab" not in st.session_state or not home_enabled:
+    if "active_tab" not in st.session_state:
+        st.session_state["active_tab"] = TAB_HOME
+        if manage_enabled:
+            st.session_state["active_tab"] = TAB_MANAGE
+        return
+    if not home_enabled:
         st.session_state["active_tab"] = TAB_HOME
         return
     active = st.session_state.get("active_tab", TAB_HOME)
+    if active == TAB_HOME and manage_enabled:
+        st.session_state["active_tab"] = TAB_MANAGE
+        return
     if active == TAB_MANAGE and not manage_enabled:
         st.session_state["active_tab"] = TAB_HOME
     elif active == TAB_SEM and not sem_enabled:
@@ -349,7 +363,7 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
             try:
                 render_manage = getattr(app_mod, "render_manage", None)
                 if callable(render_manage):
-                    render_manage(slug=slug)
+                    render_manage(slug=slug, logger=_setup_logging())
                     return
             except RerunException:
                 raise
@@ -359,7 +373,7 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
             try:
                 render_semantics = getattr(app_mod, "render_semantics", None)
                 if callable(render_semantics):
-                    render_semantics(slug=slug)
+                    render_semantics(slug=slug, logger=_setup_logging())
                     return
             except RerunException:
                 raise
@@ -389,8 +403,8 @@ def run() -> None:
     except Exception:
         pass
 
-    home_enabled = _compute_home_enabled(state)
-    manage_enabled = _compute_manage_enabled(state)
+    home_enabled = _compute_home_enabled(state, slug)
+    manage_enabled = _compute_manage_enabled(state, slug)
     sem_enabled = _compute_sem_enabled(state)
 
     try:

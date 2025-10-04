@@ -85,14 +85,17 @@ def test_compute_sem_enabled():
 def test_compute_manage_and_home_enabled():
     _ensure_streamlit_stub()
     ui = importlib.import_module("onboarding_ui")
-    assert ui._compute_manage_enabled("inizializzato") is True
-    assert ui._compute_manage_enabled("Pronto") is True
-    assert ui._compute_manage_enabled("arricchito") is True
-    assert ui._compute_manage_enabled("finito") is True
-    assert ui._compute_manage_enabled("bozza") is False
-    assert ui._compute_manage_enabled(None) is False
-    assert ui._compute_home_enabled("inizializzato") is True
-    assert ui._compute_home_enabled("bozza") is False
+    assert ui._compute_manage_enabled("inizializzato", slug="demo") is True
+    assert ui._compute_manage_enabled("Pronto", slug=None) is True
+    assert ui._compute_manage_enabled("arricchito", slug="demo") is True
+    assert ui._compute_manage_enabled("finito", slug="demo") is True
+    assert ui._compute_manage_enabled("bozza", slug="demo") is True
+    assert ui._compute_manage_enabled(None, slug="demo") is True
+    assert ui._compute_manage_enabled(None, slug=None) is False
+    assert ui._compute_home_enabled("inizializzato", slug="demo") is True
+    assert ui._compute_home_enabled("bozza", slug="demo") is True
+    assert ui._compute_home_enabled(None, slug="demo") is True
+    assert ui._compute_home_enabled(None, slug=None) is False
 
 
 def test_init_tab_state_resets_tabs(monkeypatch):
@@ -108,6 +111,10 @@ def test_init_tab_state_resets_tabs(monkeypatch):
     streamlit.session_state["active_tab"] = ui.TAB_MANAGE
     ui._init_tab_state(home_enabled=True, manage_enabled=False, sem_enabled=True)
     assert streamlit.session_state["active_tab"] == ui.TAB_HOME
+
+    streamlit.session_state["active_tab"] = ui.TAB_HOME
+    ui._init_tab_state(home_enabled=True, manage_enabled=True, sem_enabled=True)
+    assert streamlit.session_state["active_tab"] == ui.TAB_MANAGE
 
     streamlit.session_state["active_tab"] = ui.TAB_HOME
     ui._init_tab_state(home_enabled=False, manage_enabled=False, sem_enabled=False)
