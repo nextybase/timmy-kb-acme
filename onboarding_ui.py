@@ -36,6 +36,21 @@ STATE_SEM_READY = {"pronto", "arricchito", "finito"}
 
 
 
+def _resolve_slug(slug: str | None) -> str | None:
+    candidates = [
+        slug,
+        st.session_state.get("ui.manage.selected_slug"),
+        st.session_state.get("current_slug"),
+        st.session_state.get("slug"),
+    ]
+    for candidate in candidates:
+        if candidate:
+            trimmed = str(candidate).strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 # ------------------------------------------------------------------------------
 # Path bootstrap: prova ad usare l'helper del repo, con fallback locale
 # ------------------------------------------------------------------------------
@@ -291,15 +306,13 @@ def _compute_home_enabled(state: str | None, slug: str | None) -> bool:
 
 def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
     """Inizializza/riconcilia la tab attiva in sessione, sempre chiamata."""
-    if "active_tab" not in st.session_state:
-        st.session_state["active_tab"] = TAB_HOME
-        if manage_enabled:
-            st.session_state["active_tab"] = TAB_MANAGE
+    active = st.session_state.get("active_tab")
+    if active is None:
+        st.session_state["active_tab"] = TAB_MANAGE if manage_enabled else TAB_HOME
         return
     if not home_enabled:
         st.session_state["active_tab"] = TAB_HOME
         return
-    active = st.session_state.get("active_tab", TAB_HOME)
     if active == TAB_HOME and manage_enabled:
         st.session_state["active_tab"] = TAB_MANAGE
         return
@@ -403,8 +416,11 @@ def run() -> None:
     except Exception:
         pass
 
-    home_enabled = _compute_home_enabled(state, slug)
-    manage_enabled = _compute_manage_enabled(state, slug)
+    resolved_slug = _resolve_slug(slug)
+    if resolved_slug:
+        st.session_state["current_slug"] = resolved_slug
+    home_enabled = _compute_home_enabled(state, resolved_slug)
+    manage_enabled = _compute_manage_enabled(state, resolved_slug)
     sem_enabled = _compute_sem_enabled(state)
 
     try:
@@ -413,8 +429,8 @@ def run() -> None:
         st.session_state["active_tab"] = TAB_HOME
 
     try:
-        _client_header(slug=slug, state=state)
-        _sidebar_quick_actions(slug)
+        _client_header(slug=resolved_slug, state=state)
+        _sidebar_quick_actions(resolved_slug)
     except Exception:
         pass
 
@@ -428,7 +444,7 @@ def run() -> None:
         pass
 
     try:
-        _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), slug)
+        _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), resolved_slug)
     except RerunException:
         raise
     except Exception as e:
