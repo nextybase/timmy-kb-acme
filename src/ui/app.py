@@ -145,9 +145,15 @@ def _render_gate_resolution(
         return
 
     gate_state = st.session_state.setdefault("vision_gate_reasons", {})
+    busy_key = f"vision_gate_busy_{slug}"
+    busy = bool(st.session_state.get(busy_key))
+
+    def _set_busy(flag: bool) -> None:
+        st.session_state[busy_key] = flag
 
     def _clear_gate_state() -> None:
         gate_state.pop(slug, None)
+        st.session_state.pop(busy_key, None)
 
     def _body() -> None:
         st.warning(reason)
@@ -162,28 +168,32 @@ def _render_gate_resolution(
         )
 
         if choice == "Rigenera usando lo stesso PDF":
-            if st.button("Procedi", type="primary"):
+            if st.button("Procedi", type="primary", disabled=busy):
+                _set_busy(True)
                 try:
-                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-                    pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
-                    result = provision_from_vision(
-                        ctx,
-                        logger,
-                        slug=slug,
-                        pdf_path=pdf_path,
-                        force=True,
-                    )
-                    handled_new = _apply_new_client_gate_success(
-                        slug, workspace_dir, logger, result, "YAML rigenerati dal PDF esistente."
-                    )
-                    if not handled_new:
-                        st.session_state["init_result"] = result or {}
-                        show_success("YAML rigenerati dal PDF esistente.")
-                        if "phase" in st.session_state:
-                            st.session_state["phase"] = "ready_to_open"
-                    _clear_gate_state()
+                    with st.spinner("Rigenerazione in corso..."):
+                        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                        pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
+                        result = provision_from_vision(
+                            ctx,
+                            logger,
+                            slug=slug,
+                            pdf_path=pdf_path,
+                            force=True,
+                        )
+                        handled_new = _apply_new_client_gate_success(
+                            slug, workspace_dir, logger, result, "YAML rigenerati dal PDF esistente."
+                        )
+                        if not handled_new:
+                            st.session_state["init_result"] = result or {}
+                            show_success("YAML rigenerati dal PDF esistente.")
+                            if "phase" in st.session_state:
+                                st.session_state["phase"] = "ready_to_open"
+                        _clear_gate_state()
                 except ConfigError as exc:
                     st.error(str(exc))
+                finally:
+                    _set_busy(False)
 
         elif choice == "Carica un nuovo PDF e rigenera":
             uploader_key = f"vision_gate_upl_{slug}"
@@ -192,54 +202,63 @@ def _render_gate_resolution(
                 type=["pdf"],
                 key=uploader_key,
             )
-            if uploaded is not None and st.button("Carica e rigenera", type="primary"):
+            if uploaded is not None and st.button("Carica e rigenera", type="primary", disabled=busy):
                 data = uploaded.read()
                 if not data:
                     st.warning("Il file caricato e' vuoto. Riprova.")
                 else:
+                    _set_busy(True)
                     try:
-                        try:
-                            config_data = _load_config_data(workspace_dir)
-                        except ConfigError:
-                            config_data = {}
-                        client_name = cast(str, (config_data.get("client_name") or slug))
-                        ensure_local_workspace_for_ui(
-                            slug=slug,
-                            client_name=client_name,
-                            vision_statement_pdf=data,
-                        )
-                        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-                        pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
-                        result = provision_from_vision(
-                            ctx,
-                            logger,
-                            slug=slug,
-                            pdf_path=pdf_path,
-                            force=False,
-                        )
+                        with st.spinner("Caricamento e rigenerazione in corso..."):
+                            try:
+                                config_data = _load_config_data(workspace_dir)
+                            except ConfigError:
+                                config_data = {}
+                            client_name = cast(str, (config_data.get("client_name") or slug))
+                            ensure_local_workspace_for_ui(
+                                slug=slug,
+                                client_name=client_name,
+                                vision_statement_pdf=data,
+                            )
+                            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                            pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
+                            result = provision_from_vision(
+                                ctx,
+                                logger,
+                                slug=slug,
+                                pdf_path=pdf_path,
+                                force=False,
+                            )
+                            handled_new = _apply_new_client_gate_success(
+                                slug, workspace_dir, logger, result, "YAML rigenerati dal nuovo PDF."
+                            )
+                            if not handled_new:
+                                st.session_state["init_result"] = result or {}
+                                show_success("YAML rigenerati dal nuovo PDF.")
+                                if "phase" in st.session_state:
+                                    st.session_state["phase"] = "ready_to_open"
+                            _clear_gate_state()
+                    except ConfigError as exc:
+                        st.error(str(exc))
+                    finally:
+                        _set_busy(False)
+
+        else:
+            if st.button("Apri YAML", type="primary", disabled=busy):
+                _set_busy(True)
+                try:
+                    with st.spinner("Apertura YAML in corso..."):
+                        existing = st.session_state.get("init_result") or {}
                         handled_new = _apply_new_client_gate_success(
-                            slug, workspace_dir, logger, result, "YAML rigenerati dal nuovo PDF."
+                            slug, workspace_dir, logger, existing, "YAML disponibili per la revisione."
                         )
                         if not handled_new:
-                            st.session_state["init_result"] = result or {}
-                            show_success("YAML rigenerati dal nuovo PDF.")
+                            st.session_state.setdefault("init_result", {})
                             if "phase" in st.session_state:
                                 st.session_state["phase"] = "ready_to_open"
                         _clear_gate_state()
-                    except ConfigError as exc:
-                        st.error(str(exc))
-
-        else:
-            if st.button("Apri YAML", type="primary"):
-                existing = st.session_state.get("init_result") or {}
-                handled_new = _apply_new_client_gate_success(
-                    slug, workspace_dir, logger, existing, "YAML disponibili per la revisione."
-                )
-                if not handled_new:
-                    st.session_state.setdefault("init_result", {})
-                    if "phase" in st.session_state:
-                        st.session_state["phase"] = "ready_to_open"
-                _clear_gate_state()
+                finally:
+                    _set_busy(False)
 
     _ui_dialog("Artefatti gia' generati", _body)
 
