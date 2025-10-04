@@ -43,6 +43,7 @@ except Exception:  # pragma: no cover
 from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client  # noqa: E402
 from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw  # noqa: E402
 from ui.services.vision_provision import provision_from_vision  # noqa: E402
+from ui.utils.logging import enrich_log_extra  # noqa: E402
 from ui.utils.streamlit_fragments import run_fragment  # noqa: E402
 
 try:
@@ -138,9 +139,12 @@ def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
     try:
         set_state(slug, stato)
     except Exception as exc:  # pragma: no cover
-        logger.warning("ui.client_state_update_failed", extra={"slug": slug, "target_state": stato, "error": str(exc)})
+        logger.warning(
+            "ui.client_state_update_failed",
+            extra=enrich_log_extra({"slug": slug, "target_state": stato, "error": str(exc)}),
+        )
         return False
-    logger.info("ui.client_state_updated", extra={"slug": slug, "state": stato})
+    logger.info("ui.client_state_updated", extra=enrich_log_extra({"slug": slug, "state": stato}))
     return True
 
 
@@ -371,7 +375,7 @@ def _persist_config_value(
     target = cast(Path, ensure_within_and_resolve(workspace_dir, _config_path(workspace_dir)))
     safe_write_text(target, serialized, encoding="utf-8", atomic=True)
     clear_yaml_cache()
-    logger.info("ui.config.updated", extra={"slug": slug, "key": key, "path": str(target)})
+    logger.info("ui.config.updated", extra=enrich_log_extra({"slug": slug, "key": key, "path": str(target)}))
 
 
 def _render_config_widget(slug: str, key: str, value: Any) -> Any:
@@ -526,7 +530,7 @@ def _run_create_local_structure(slug: str, workspace_dir: Path, logger: logging.
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
     cartelle = cast(Path, ensure_within_and_resolve(workspace_dir, _cartelle_path(workspace_dir)))
     create_local_base_structure(ctx, cartelle)
-    logger.info("ui.workspace.local_structure", extra={"slug": slug, "yaml": str(cartelle)})
+    logger.info("ui.workspace.local_structure", extra=enrich_log_extra({"slug": slug, "yaml": str(cartelle)}))
 
 
 def _run_drive_structure(slug: str, workspace_dir: Path, logger: logging.Logger) -> Dict[str, str]:
@@ -568,7 +572,7 @@ def _run_generate_readmes(slug: str, logger: logging.Logger) -> Dict[str, str]:
             ensure_structure=True,
         ),
     )
-    logger.info("ui.workspace.readmes", extra={"slug": slug, "count": len(result)})
+    logger.info("ui.workspace.readmes", extra=enrich_log_extra({"slug": slug, "count": len(result)}))
     return result
 
 
@@ -861,7 +865,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
             if logo_path.exists():
                 st.image(str(logo_path), width="stretch")  # immagini: lasciamo compat (nessun warning)
         except Exception as exc:  # pragma: no cover
-            logger.warning("ui.sidebar.logo_error", extra={"error": str(exc)})
+            logger.warning("ui.sidebar.logo_error", extra=enrich_log_extra({"error": str(exc)}))
 
         st.divider()
         _render_sidebar_client_panel(slug, logger)
@@ -889,16 +893,16 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
                     exit_code = gen_dummy_main(["--slug", active_slug, "--non-interactive"])
                 if int(exit_code) == 0:
                     st.success(f"Dummy generato per '{active_slug}'.")
-                    logger.info("ui.sidebar.dummy_generated", extra={"slug": active_slug})
+                    logger.info("ui.sidebar.dummy_generated", extra=enrich_log_extra({"slug": active_slug}))
                 else:  # pragma: no cover
                     st.error("Generazione dummy terminata con errore.")
                     logger.error(
                         "ui.sidebar.dummy_failed",
-                        extra={"slug": active_slug, "code": int(exit_code)},
+                        extra=enrich_log_extra({"slug": active_slug, "code": int(exit_code)}),
                     )
             except Exception as exc:  # pragma: no cover
                 st.error(f"Errore durante la generazione del dummy: {exc}")
-                logger.exception("ui.sidebar.dummy_exception", extra={"slug": active_slug})
+                logger.exception("ui.sidebar.dummy_exception", extra=enrich_log_extra({"slug": active_slug}))
 
         if st.button("Esci", key="sidebar_exit_btn", type="primary", width="stretch", help="Chiudi l'app"):
             _request_shutdown(logger)
@@ -1302,7 +1306,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
             disabled=not selected,
         ):
             st.session_state["ui.manage_slug"] = selected
-            logger.info("ui.manage.slug_selected", extra={"slug": selected})
+            logger.info("ui.manage.slug_selected", extra=enrich_log_extra({"slug": selected}))
             st.rerun()
 
     with col_delete:
@@ -1411,7 +1415,7 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
             _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
             _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
             st.success("YAML aggiornati.")
-            logger.info("ui.manage.semantic_saved", extra={"slug": slug})
+            logger.info("ui.manage.semantic_saved", extra=enrich_log_extra({"slug": slug}))
         except ConfigError as exc:
             st.error(str(exc))
 
@@ -1455,7 +1459,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     _clear_drive_tree_cache()
                     st.error("Impossibile caricare l'albero Drive")
                     st.caption(f"Dettaglio: {exc}")
-                    logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
+                    logger.warning(
+                        "ui.manage.drive_tree_failed", extra=enrich_log_extra({"slug": slug, "error": str(exc)})
+                    )
                     return {}
 
             drive_index = run_fragment(f"drive_tree.{slug}", _render_tree)
@@ -1482,10 +1488,12 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     status.update(label="Scaricamento completato", state="complete", expanded=False)
                 try:
                     set_state(slug, "pronto")
-                    logger.info("ui.state.updated", extra={"slug": slug, "state": "pronto"})
+                    logger.info("ui.state.updated", extra=enrich_log_extra({"slug": slug, "state": "pronto"}))
                     st.toast("Stato cliente aggiornato a 'pronto'.")
                 except Exception as state_exc:  # pragma: no cover
-                    logger.warning("ui.state.update_failed", extra={"slug": slug, "error": str(state_exc)})
+                    logger.warning(
+                        "ui.state.update_failed", extra=enrich_log_extra({"slug": slug, "error": str(state_exc)})
+                    )
                 _clear_drive_tree_cache()
                 st.success("Scaricamento completato")
                 st.rerun()
@@ -1494,7 +1502,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     status.update(label="Scaricamento interrotto", state="error", expanded=False)
                 st.error("Scaricamento da Drive non riuscito")
                 st.caption(f"Dettaglio: {exc}")
-                logger.warning("ui.manage.download_raw_failed", extra={"slug": slug, "error": str(exc)})
+                logger.warning(
+                    "ui.manage.download_raw_failed", extra=enrich_log_extra({"slug": slug, "error": str(exc)})
+                )
             finally:
                 st.session_state["ui.busy.download_raw"] = False
         elif download_clicked and not download_available:
@@ -1508,7 +1518,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                 except Exception as exc:  # pragma: no cover
                     st.error("Diff Drive/Locale non riuscito")
                     st.caption(f"Dettaglio: {exc}")
-                    logger.warning("ui.manage.diff_failed", extra={"slug": slug, "error": str(exc)})
+                    logger.warning("ui.manage.diff_failed", extra=enrich_log_extra({"slug": slug, "error": str(exc)}))
 
             run_fragment(f"drive_diff.{slug}", _render_diff)
         else:
@@ -1522,7 +1532,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
             except Exception as exc:  # pragma: no cover
                 st.error("Impossibile mostrare tags_reviewed.yaml")
                 st.caption(f"Dettaglio: {exc}")
-                logger.warning("ui.manage.tags_editor_failed", extra={"slug": slug, "error": str(exc)})
+                logger.warning(
+                    "ui.manage.tags_editor_failed", extra=enrich_log_extra({"slug": slug, "error": str(exc)})
+                )
         else:
             st.info("Editor tags non disponibile in questo ambiente.")
 
@@ -1551,7 +1563,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     status.update(label="Estrazione interrotta", state="error", expanded=False)
                 st.error("Estrazione tag non riuscita")
                 st.caption(f"Dettaglio: {exc}")
-                logger.warning("ui.manage.tags_extract_failed", extra={"slug": slug, "error": str(exc)})
+                logger.warning(
+                    "ui.manage.tags_extract_failed", extra=enrich_log_extra({"slug": slug, "error": str(exc)})
+                )
             finally:
                 st.session_state["ui.busy.extract_tags"] = False
         elif extract_clicked and not raw_exists:

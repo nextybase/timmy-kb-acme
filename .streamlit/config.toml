@@ -1,0 +1,5 @@
+[theme]
+base = "light"
+linkUnderline = true
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+headingFontSizes = [36, 30, 24, 20, 18, 16]
