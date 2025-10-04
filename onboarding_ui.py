@@ -257,20 +257,25 @@ def _sidebar_tab_switches(
     *, home_enabled: bool, manage_enabled: bool, sem_enabled: bool
 ) -> None:
     st.sidebar.markdown("### Sezioni")
+    active = st.session_state.get("active_tab", TAB_HOME)
+    label_home = "Home [attiva]" if active == TAB_HOME else "Home"
+    label_manage = "Gestisci cliente [attiva]" if active == TAB_MANAGE else "Gestisci cliente"
+    label_sem = "Semantica [attiva]" if active == TAB_SEM else "Semantica"
+
     to_home = st.sidebar.button(
-        "Home",
+        label_home,
         use_container_width=True,
         disabled=not home_enabled,
         help=None if home_enabled else "Disponibile dopo l'inizializzazione",
     )
     to_manage = st.sidebar.button(
-        "Gestisci cliente",
+        label_manage,
         use_container_width=True,
         disabled=not manage_enabled,
         help=None if manage_enabled else "Disponibile da 'inizializzato'",
     )
     to_sem = st.sidebar.button(
-        "Semantica",
+        label_sem,
         use_container_width=True,
         disabled=not sem_enabled,
         help=None if sem_enabled else "Disponibile quando lo stato è 'pronto'",
