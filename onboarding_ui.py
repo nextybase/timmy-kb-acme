@@ -9,6 +9,12 @@ Onboarding UI entrypoint.
 - Wrapper che lascia passare RerunException (usato da st.rerun) e mostra gli altri errori
   in un expander "Dettagli tecnici".
 - Nessuna modifica alla business-logic: delega a src.ui.app.main()
+
+Aggiornamenti UI (non-breaking):
+- Header compatto con stato cliente + link rapidi.
+- Status/Toast più evidenti per operazioni lunghe (pattern riutilizzabile).
+- Expander "Diagnostica" (percorsi, counts raw/book/semantic, log-tail e download logs).
+- Sidebar con azioni rapide (es. refresh Drive).
 """
 
 from __future__ import annotations
@@ -65,6 +71,7 @@ def _page_config() -> None:
         unsafe_allow_html=True,
     )
 
+
 def _render_global_error(e: Exception) -> None:
     # UI: messaggio breve + toast non bloccante
     try:
@@ -76,6 +83,133 @@ def _render_global_error(e: Exception) -> None:
         st.exception(e)
 
 
+# ----------------------------------------------------------------------
+# UI add-ons (solo presentazione, nessun side-effect di business logic)
+# ----------------------------------------------------------------------
+
+def _client_header(*, slug: str | None, state: str | None) -> None:
+    """Compact header con stato cliente + link rapidi. UI-only, idempotent."""
+    st.markdown("<div id='main'></div>", unsafe_allow_html=True)  # anchor per skip-link
+    if not slug:
+        st.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
+        return
+
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+    with col1:
+        st.subheader(f"Cliente: `{slug}`")
+    with col2:
+        badge = (state or "sconosciuto").lower()
+        st.metric("Stato", badge)
+    with col3:
+        if st.button("Apri workspace", help="Apri la cartella locale del cliente (path in Diagnostica)"):
+            st.toast("Apri workspace: copia/incolla il percorso dalla sezione Diagnostica.", icon="📂")
+    with col4:
+        # Link pubblico alla guida del repo (resta valido anche fuori preview)
+        st.link_button(
+            "Guida UI",
+            "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
+        )
+
+
+def _status_bar():
+    """Area di stato leggera. Usare insieme a st.status nei flussi lunghi."""
+    placeholder = st.empty()
+
+    def update(msg: str, icon: str = "⏳"):
+        try:
+            placeholder.info(f"{icon} {msg}")
+        except Exception:
+            pass
+
+    def clear():
+        placeholder.empty()
+
+    return update, clear
+
+
+def _diagnostics(slug: str | None) -> None:
+    """Expander con info utili al triage. Non tocca la business logic."""
+    import os
+
+    with st.expander("🔎 Diagnostica", expanded=False):
+        if not slug:
+            st.write("Seleziona uno slug per mostrare dettagli.")
+            return
+
+        # Prova a ricostruire base_dir dal contesto del progetto (best-effort, UI only)
+        try:
+            from pipeline.context import ClientContext  # type: ignore
+            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+            base_dir = ctx.base_dir
+        except Exception:
+            base_dir = None
+
+        st.write(f"Base dir: `{base_dir or 'n/d'}`")
+
+        def _count_files(path: str | None) -> int:
+            if not path or not os.path.isdir(path):
+                return 0
+            total = 0
+            for _root, _dirs, files in os.walk(path):
+                total += len(files)
+            return total
+
+        if base_dir:
+            raw = Path(base_dir) / "raw"
+            book = Path(base_dir) / "book"
+            semantic = Path(base_dir) / "semantic"
+            st.write(
+                f"raw/: **{_count_files(str(raw))}** file · "
+                f"book/: **{_count_files(str(book))}** · "
+                f"semantic/: **{_count_files(str(semantic))}**"
+            )
+
+            logs_dir = Path(base_dir) / "logs"
+            if logs_dir.is_dir():
+                latest = None
+                try:
+                    files = sorted(
+                        (p for p in logs_dir.iterdir() if p.is_file()),
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True,
+                    )
+                    latest = files[0] if files else None
+                except Exception:
+                    latest = None
+
+                if latest and latest.is_file():
+                    try:
+                        buf = latest.read_bytes()[-4000:]
+                        st.code(buf.decode(errors="replace"))
+                    except Exception:
+                        st.info("Log non leggibile.")
+
+                # Zip dei log on-the-fly per download
+                import io
+                import zipfile
+
+                mem = io.BytesIO()
+                with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                    for f in logs_dir.iterdir():
+                        if f.is_file():
+                            zf.write(f, arcname=f.name)
+                st.download_button(
+                    "Scarica logs",
+                    data=mem.getvalue(),
+                    file_name=f"{slug}-logs.zip",
+                    mime="application/zip",
+                )
+
+
+def _sidebar_quick_actions(slug: str | None) -> None:
+    st.sidebar.markdown("### Azioni rapide")
+    if st.sidebar.button("Aggiorna elenco Drive"):
+        # semplice invalidazione di eventuale cache UI-side
+        st.session_state.pop("drive_cache_buster", None)
+        st.toast("Richiesta aggiornamento Drive inviata.", icon="🔄")
+    st.sidebar.markdown("---")
+
+
 # ------------------------------------------------------------------------------
 # Entrypoint
 # ------------------------------------------------------------------------------
@@ -83,11 +217,39 @@ def _render_global_error(e: Exception) -> None:
 def run() -> None:
     _page_config()
 
+    # Header + quick actions best-effort (non obbligatori)
+    slug = None
+    state = None
+    try:
+        # Helpers opzionali se esistono
+        from ui.clients_store import get_state  # type: ignore
+        try:
+            from ui.session import get_current_slug  # type: ignore
+            slug = get_current_slug()
+        except Exception:
+            slug = st.session_state.get("current_slug")
+        state = (get_state(slug) or "").strip().lower() if slug else None
+    except Exception:
+        # Se il modulo non esiste in questa build, procediamo senza header
+        pass
+
+    try:
+        _client_header(slug=slug, state=state)
+        _sidebar_quick_actions(slug)
+    except Exception:
+        # Qualsiasi errore UI non deve bloccare l'app
+        pass
+
     # Import ritardato: evita errori prima della config della pagina
     try:
         from src.ui.app import main as app_main  # type: ignore
     except Exception as e:  # noqa: BLE001
         _render_global_error(e)
+        # Diagnostica può aiutare a capire cosa manca
+        try:
+            _diagnostics(slug)
+        except Exception:
+            pass
         return
 
     try:
@@ -97,6 +259,10 @@ def run() -> None:
         raise
     except Exception as e:  # noqa: BLE001
         _render_global_error(e)
+        try:
+            _diagnostics(slug)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
