@@ -1,4 +1,3 @@
-
 # Onboarding UI - Guida a blocchi (v2)
 
 Questa guida descrive l'interfaccia Streamlit utilizzata per l'onboarding dei clienti Timmy-KB. Il layout attuale si basa su blocchi dinamici invece delle vecchie tab statiche.
@@ -45,6 +44,11 @@ L'expander **Diagnostica** nel corpo principale (sotto l'intestazione cliente) o
 - I contenuti restano in sola lettura: nessun runner viene invocato e nessun side-effect viene applicato allo stato Streamlit.
 - I log rispettano le regole di redazione segreti del progetto; l'expander non introduce nuove scritture.
 
+## Tabs & stati cliente
+- Se lo stato non e' disponibile (es. nessuno slug attivo) tutti i pulsanti della barra laterale restano disattivati.
+- Da `inizializzato` in avanti diventano cliccabili sia **Home** sia **Gestisci cliente**.
+- La tab **Semantica** resta riservata agli stati `pronto`, `arricchito` o `finito`.
+
 ## Flusso "Nuovo Cliente"
 1. **Form anagrafica**: campi `Slug (kebab-case)` e `Nome cliente`.
 2. **Upload VisionStatement.pdf**: l'uploader accetta un singolo PDF e lo salva in `config/VisionStatement.pdf`.
@@ -77,26 +81,26 @@ Dopo avere scelto lo slug, la pagina mostra tre blocchi principali affiancati:
      - Sincronizza `tags_reviewed.yaml` e ricarica il testo nell'editor.
      - In caso di errore mostra un messaggio e scrive il motivo nei log.
 
-## Riprendere dopo un’interruzione (gate Vision)
+## Riprendere dopo un'interruzione (gate Vision)
 
-Se interrompi il flusso prima di **Inizializza workspace** e poi riparti con uno **slug** che ha già generato gli YAML (stesso `VisionStatement.pdf` e stesso modello), l’app non si blocca: compare un **dialog** che ti chiede come procedere. Questo accade quando il controllo su `vision_hash` rileva che il PDF è stato già elaborato con la stessa configurazione.
+Se interrompi il flusso prima di **Inizializza workspace** e poi riparti con uno **slug** che ha gia' generato gli YAML (stesso `VisionStatement.pdf` e stesso modello), l'app non si blocca: compare un **dialog** che ti chiede come procedere. Questo accade quando il controllo su `vision_hash` rileva che il PDF e' stato gia' elaborato con la stessa configurazione.
 
 ### Scelte disponibili
 - **Rigenera usando lo stesso PDF**
-  Ricrea gli YAML forzando l’operazione (`force=True`), senza richiedere un nuovo upload. Idempotente.
+  Ricrea gli YAML forzando l'operazione (`force=True`), senza richiedere un nuovo upload. Idempotente.
 - **Carica un nuovo PDF e rigenera**
-  Sostituisci il PDF e rigenera gli YAML. Utile se il documento è stato aggiornato.
+  Sostituisci il PDF e rigenera gli YAML. Utile se il documento e' stato aggiornato.
 - **Annulla e apri gli YAML**
   Nessuna rigenerazione: apri direttamente gli editor per verificare o modificare gli artefatti.
 
-### Cosa aspettarti da l’interfaccia
-- Il dialog mostra il motivo del gate (es. *Già elaborato con lo stesso modello…*).
+### Cosa aspettarti da l'interfaccia
+- Il dialog mostra il motivo del gate (es. *Gia' elaborato con lo stesso modello...*).
 - Stato e avanzamento sono visibili con `st.status`/progress; alla fine compare una notifica di esito (**toast con fallback a success**).
-- Nessun side-effect a import-time, nessuna modifica alla business logic: è un adapter **UI-only**.
+- Nessun side-effect a import-time, nessuna modifica alla business logic: e' un adapter **UI-only**.
 
 ### Linee guida operative
-- Se vuoi ripetere esattamente l’ultimo passaggio, scegli **Rigenera usando lo stesso PDF**.
-- Se il VisionStatement è cambiato, scegli **Carica un nuovo PDF e rigenera**.
+- Se vuoi ripetere esattamente l'ultimo passaggio, scegli **Rigenera usando lo stesso PDF**.
+- Se il VisionStatement e' cambiato, scegli **Carica un nuovo PDF e rigenera**.
 - Se devi solo consultare/modificare, scegli **Annulla e apri gli YAML**.
 
 > Nota: la rigenerazione con lo stesso PDF usa `force=True` per bypassare il gate; le altre operazioni restano invariate. Le notifiche di completamento seguono lo standard repo: `st.toast(...)` con fallback automatico a `st.success(...)`.

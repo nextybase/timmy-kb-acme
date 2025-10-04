@@ -19,11 +19,20 @@ Aggiornamenti UI (non-breaking):
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+
+
+ICON_REFRESH = "\U0001F504"
+
+
+STATE_MANAGE_READY = {"inizializzato", "pronto", "arricchito", "finito"}
+STATE_SEM_READY = {"pronto", "arricchito", "finito"}
+
 
 
 # ------------------------------------------------------------------------------
@@ -57,6 +66,9 @@ _bootstrap_sys_path()
 # ------------------------------------------------------------------------------
 # UI helpers
 # ------------------------------------------------------------------------------
+
+def _normalize_state(state: str | None) -> str:
+    return (state or "").strip().lower()
 
 def _page_config() -> None:
     # UI: page config deve essere la prima chiamata Streamlit
@@ -129,8 +141,6 @@ def _status_bar():
 
 def _diagnostics(slug: str | None) -> None:
     """Expander con info utili al triage. Non tocca la business logic."""
-    import os
-
     with st.expander("🔎 Diagnostica", expanded=False):
         if not slug:
             st.write("Seleziona uno slug per mostrare dettagli.")
@@ -206,9 +216,112 @@ def _sidebar_quick_actions(slug: str | None) -> None:
     if st.sidebar.button("Aggiorna elenco Drive"):
         # semplice invalidazione di eventuale cache UI-side
         st.session_state.pop("drive_cache_buster", None)
-        st.toast("Richiesta aggiornamento Drive inviata.", icon="🔄")
+        st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
+    # il separatore resta qui, per evitare duplicazioni con gli switch delle tab
     st.sidebar.markdown("---")
 
+# ------------------------------------------------------------------------------
+# Tabs helpers / gating
+# ------------------------------------------------------------------------------
+
+TAB_HOME = "home"
+TAB_MANAGE = "gestisci cliente"
+TAB_SEM = "semantica"
+
+def _compute_sem_enabled(state: str | None) -> bool:
+    """Decide se la tab Semantica è disponibile, in base allo stato client."""
+    return _normalize_state(state) in STATE_SEM_READY
+
+def _compute_manage_enabled(state: str | None) -> bool:
+    """Abilita Gestisci cliente da 'inizializzato' in avanti."""
+    return _normalize_state(state) in STATE_MANAGE_READY
+
+
+def _compute_home_enabled(state: str | None) -> bool:
+    """Home è cliccabile dagli stessi stati che abilitano Gestisci cliente."""
+    return _compute_manage_enabled(state)
+
+
+def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
+    """Inizializza/riconcilia la tab attiva in sessione, sempre chiamata."""
+    if "active_tab" not in st.session_state or not home_enabled:
+        st.session_state["active_tab"] = TAB_HOME
+        return
+    active = st.session_state.get("active_tab", TAB_HOME)
+    if active == TAB_MANAGE and not manage_enabled:
+        st.session_state["active_tab"] = TAB_HOME
+    elif active == TAB_SEM and not sem_enabled:
+        st.session_state["active_tab"] = TAB_HOME
+
+def _sidebar_tab_switches(
+    *, home_enabled: bool, manage_enabled: bool, sem_enabled: bool
+) -> None:
+    st.sidebar.markdown("### Sezioni")
+    to_home = st.sidebar.button(
+        "Home",
+        use_container_width=True,
+        disabled=not home_enabled,
+        help=None if home_enabled else "Disponibile dopo l'inizializzazione",
+    )
+    to_manage = st.sidebar.button(
+        "Gestisci cliente",
+        use_container_width=True,
+        disabled=not manage_enabled,
+        help=None if manage_enabled else "Disponibile da 'inizializzato'",
+    )
+    to_sem = st.sidebar.button(
+        "Semantica",
+        use_container_width=True,
+        disabled=not sem_enabled,
+        help=None if sem_enabled else "Disponibile quando lo stato è 'pronto'",
+    )
+    if to_home:
+        st.session_state["active_tab"] = TAB_HOME
+    if to_manage:
+        st.session_state["active_tab"] = TAB_MANAGE
+    if to_sem and sem_enabled:
+        st.session_state["active_tab"] = TAB_SEM
+
+def _render_tabs_router(active: str, slug: str | None) -> None:
+    """Router tab-based. Se i renderer dedicati non esistono, fallback all'app monolitica."""
+    try:
+        from src.ui import app as app_mod  # type: ignore
+    except Exception:
+        app_mod = None
+    else:
+        if active == TAB_HOME:
+            try:
+                render_home = getattr(app_mod, "render_home", None)
+                if callable(render_home):
+                    render_home()
+                    return
+            except RerunException:
+                raise
+            except Exception:
+                pass
+        if active == TAB_MANAGE:
+            try:
+                render_manage = getattr(app_mod, "render_manage", None)
+                if callable(render_manage):
+                    render_manage(slug=slug)
+                    return
+            except RerunException:
+                raise
+            except Exception:
+                pass
+        if active == TAB_SEM:
+            try:
+                render_semantics = getattr(app_mod, "render_semantics", None)
+                if callable(render_semantics):
+                    render_semantics(slug=slug)
+                    return
+            except RerunException:
+                raise
+            except Exception:
+                pass
+
+    from src.ui.app import main as app_main  # type: ignore
+    app_main()
 
 # ------------------------------------------------------------------------------
 # Entrypoint
@@ -217,11 +330,9 @@ def _sidebar_quick_actions(slug: str | None) -> None:
 def run() -> None:
     _page_config()
 
-    # Header + quick actions best-effort (non obbligatori)
     slug = None
     state = None
     try:
-        # Helpers opzionali se esistono
         from ui.clients_store import get_state  # type: ignore
         try:
             from ui.session import get_current_slug  # type: ignore
@@ -230,34 +341,37 @@ def run() -> None:
             slug = st.session_state.get("current_slug")
         state = (get_state(slug) or "").strip().lower() if slug else None
     except Exception:
-        # Se il modulo non esiste in questa build, procediamo senza header
         pass
+
+    home_enabled = _compute_home_enabled(state)
+    manage_enabled = _compute_manage_enabled(state)
+    sem_enabled = _compute_sem_enabled(state)
+
+    try:
+        _init_tab_state(home_enabled, manage_enabled, sem_enabled)
+    except Exception:
+        st.session_state["active_tab"] = TAB_HOME
 
     try:
         _client_header(slug=slug, state=state)
         _sidebar_quick_actions(slug)
     except Exception:
-        # Qualsiasi errore UI non deve bloccare l'app
         pass
 
-    # Import ritardato: evita errori prima della config della pagina
     try:
-        from src.ui.app import main as app_main  # type: ignore
-    except Exception as e:  # noqa: BLE001
-        _render_global_error(e)
-        # Diagnostica può aiutare a capire cosa manca
-        try:
-            _diagnostics(slug)
-        except Exception:
-            pass
-        return
+        _sidebar_tab_switches(
+            home_enabled=home_enabled,
+            manage_enabled=manage_enabled,
+            sem_enabled=sem_enabled,
+        )
+    except Exception:
+        pass
 
     try:
-        app_main()  # nessuna modifica alla business logic
+        _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), slug)
     except RerunException:
-        # NON è un errore: Streamlit usa questa eccezione per gestire st.rerun()
         raise
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _render_global_error(e)
         try:
             _diagnostics(slug)
