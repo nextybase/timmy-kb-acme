@@ -173,9 +173,14 @@ def _render_gate_resolution(
                         pdf_path=pdf_path,
                         force=True,
                     )
-                    st.session_state["init_result"] = result or {}
-                    show_success("YAML rigenerati dal PDF esistente.")
-                    st.session_state["phase"] = "ready_to_open"
+                    handled_new = _apply_new_client_gate_success(
+                        slug, workspace_dir, logger, result, "YAML rigenerati dal PDF esistente."
+                    )
+                    if not handled_new:
+                        st.session_state["init_result"] = result or {}
+                        show_success("YAML rigenerati dal PDF esistente.")
+                        if "phase" in st.session_state:
+                            st.session_state["phase"] = "ready_to_open"
                     _clear_gate_state()
                 except ConfigError as exc:
                     st.error(str(exc))
@@ -212,20 +217,85 @@ def _render_gate_resolution(
                             pdf_path=pdf_path,
                             force=False,
                         )
-                        st.session_state["init_result"] = result or {}
-                        show_success("YAML rigenerati dal nuovo PDF.")
-                        st.session_state["phase"] = "ready_to_open"
+                        handled_new = _apply_new_client_gate_success(
+                            slug, workspace_dir, logger, result, "YAML rigenerati dal nuovo PDF."
+                        )
+                        if not handled_new:
+                            st.session_state["init_result"] = result or {}
+                            show_success("YAML rigenerati dal nuovo PDF.")
+                            if "phase" in st.session_state:
+                                st.session_state["phase"] = "ready_to_open"
                         _clear_gate_state()
                     except ConfigError as exc:
                         st.error(str(exc))
 
         else:
             if st.button("Apri YAML", type="primary"):
-                st.session_state.setdefault("init_result", {})
-                st.session_state["phase"] = "ready_to_open"
+                existing = st.session_state.get("init_result") or {}
+                handled_new = _apply_new_client_gate_success(
+                    slug, workspace_dir, logger, existing, "YAML disponibili per la revisione."
+                )
+                if not handled_new:
+                    st.session_state.setdefault("init_result", {})
+                    if "phase" in st.session_state:
+                        st.session_state["phase"] = "ready_to_open"
                 _clear_gate_state()
 
     _ui_dialog("Artefatti gia' generati", _body)
+
+
+def _apply_new_client_gate_success(
+    slug: str,
+    workspace_dir: Path,
+    logger: logging.Logger,
+    result: Dict[str, Any] | None,
+    success_message: str,
+) -> bool:
+    if st is None:
+        return False
+    slug_candidates = {
+        (st.session_state.get("ui.new.slug") or "").strip(),
+        (st.session_state.get("ui.new.slug_effective") or "").strip(),
+    }
+    slug_candidates = {s for s in slug_candidates if s}
+    if slug not in slug_candidates:
+        return False
+    try:
+        mapping_rel = _mapping_path(workspace_dir)
+        cartelle_rel = _cartelle_path(workspace_dir)
+        mapping_text = _load_yaml_text(workspace_dir, mapping_rel)
+        cartelle_text = _load_yaml_text(workspace_dir, cartelle_rel)
+    except ConfigError as exc:
+        st.error(str(exc))
+        logger.warning("ui.new.vision_refresh_failed", extra={"slug": slug, "error": str(exc)})
+        return True
+
+    yaml_paths: Dict[str, Any] = {}
+    if isinstance(result, dict):
+        yaml_paths = cast(Dict[str, Any], result.get("yaml_paths") or {})
+
+    st.session_state["ui.new.mapping_text"] = mapping_text
+    st.session_state["ui.new.cartelle_text"] = cartelle_text
+    st.session_state["ui.new.yaml_paths"] = yaml_paths
+    st.session_state["ui.new.workspace_dir"] = str(workspace_dir)
+    st.session_state["ui.new.slug_effective"] = slug
+    nome_val = (
+        st.session_state.get("ui.new.nome") or st.session_state.get("ui.new.nome_effective") or slug
+    ).strip() or slug
+    st.session_state["ui.new.nome_effective"] = nome_val
+    st.session_state["ui.new.init_done"] = True
+    st.session_state.setdefault("ui.new.workspace_created", False)
+    st.session_state["ui.busy.init"] = False
+    show_success(success_message)
+    logger.info("ui.new.vision_completed_force", extra={"slug": slug})
+    try:
+        set_state(slug, "nuovo")
+        toast_fn = getattr(st, "toast", None)
+        if callable(toast_fn):
+            toast_fn("Stato cliente aggiornato a 'nuovo'.")
+    except Exception as state_exc:  # pragma: no cover
+        logger.warning("ui.state.update_failed", extra={"slug": slug, "error": str(state_exc)})
+    return True
 
 
 def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
