@@ -208,6 +208,7 @@ def _render_logo() -> None:
         repo_root=REPO_ROOT,
         include_anchor=True,
         subtitle="Verifica slug cliente per avviare l'onboarding.",
+        show_logo=False,
     )
 
 

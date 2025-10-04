@@ -24,7 +24,9 @@ def _ensure_streamlit_stub() -> None:
             def __exit__(self, *_exc: object) -> bool:
                 return False
 
-        stub.sidebar = types.SimpleNamespace(button=_noop, markdown=_noop_none)
+        stub.sidebar = types.SimpleNamespace(
+            button=_noop, markdown=_noop_none, image=_noop_none, link_button=_noop_none
+        )
         stub.button = _noop
         stub.markdown = _noop_none
         stub.toast = _noop_none
@@ -40,6 +42,7 @@ def _ensure_streamlit_stub() -> None:
         stub.title = _noop_none
         stub.caption = _noop_none
         stub.divider = _noop_none
+        stub.header = _noop_none
 
         class _Column:
             def image(self, *_a, **_k):

@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import os
 import sys
+import importlib
 from pathlib import Path
+from typing import Callable, Tuple
 
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
@@ -33,7 +35,6 @@ ICON_REFRESH = "\U0001F504"
 
 STATE_MANAGE_READY = {"inizializzato", "pronto", "arricchito", "finito"}
 STATE_SEM_READY = {"pronto", "arricchito", "finito"}
-
 
 
 def _resolve_slug(slug: str | None) -> str | None:
@@ -55,6 +56,7 @@ def _resolve_slug(slug: str | None) -> str | None:
 # Path bootstrap: prova ad usare l'helper del repo, con fallback locale
 # ------------------------------------------------------------------------------
 
+
 def _ensure_repo_src_on_sys_path() -> None:
     """Aggiunge <repo>/src a sys.path se assente (fallback)."""
     repo_root = Path(__file__).parent.resolve()
@@ -67,11 +69,13 @@ def _bootstrap_sys_path() -> None:
     """Tenta l'helper ufficiale del repo, poi fallback locale."""
     try:
         # Helper già presente nel repo di test/smoke
-        from scripts.smoke_e2e import _add_paths as _repo_add_paths  # type: ignore
-
+        from scripts.smoke_e2e import _add_paths as _repo_add_paths
+    except Exception:
+        _ensure_repo_src_on_sys_path()
+        return
+    try:
         _repo_add_paths()
     except Exception:
-        # Fallback robusto
         _ensure_repo_src_on_sys_path()
 
 
@@ -80,14 +84,16 @@ _bootstrap_sys_path()
 
 REPO_ROOT = Path(__file__).resolve().parent
 
-from ui.utils.branding import get_favicon_path, render_brand_header
+from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
 
 # ------------------------------------------------------------------------------
 # UI helpers
 # ------------------------------------------------------------------------------
 
+
 def _normalize_state(state: str | None) -> str:
     return (state or "").strip().lower()
+
 
 def _page_config() -> None:
     # UI: page config deve essere la prima chiamata Streamlit
@@ -121,50 +127,64 @@ def _render_global_error(e: Exception) -> None:
 # UI add-ons (solo presentazione, nessun side-effect di business logic)
 # ----------------------------------------------------------------------
 
+
 def _client_header(*, slug: str | None, state: str | None) -> None:
-    """Header condiviso con logo e stato cliente."""
-    subtitle = (
-        f"Cliente attivo: `{slug}` - stato `{(state or 'sconosciuto').upper()}`"
-        if slug
-        else "Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing."
-    )
+    """Header della pagina principale con stato cliente."""
+    active_tab = st.session_state.get("active_tab", TAB_HOME)
+    tab_labels = {
+        TAB_HOME: "Panoramica cliente",
+        TAB_MANAGE: "Gestisci cliente",
+        TAB_SEM: "Semantica",
+    }
+
+    if slug:
+        state_value = (state or "").strip()
+        display_name = slug
+        try:
+            from ui.clients_store import get_state as _get_state, get_name as _get_name
+        except Exception:
+            _get_state = _get_name = None
+        if _get_state is not None:
+            try:
+                state_value = (_get_state(slug) or state_value).strip()
+            except Exception:
+                pass
+        if _get_name is not None:
+            try:
+                display_name = (_get_name(slug) or slug).strip()
+            except Exception:
+                pass
+        section = tab_labels.get(active_tab, "Gestisci cliente")
+        subtitle = f"{section} – {display_name} | stato: {state_value or 'n/d'}"
+    else:
+        subtitle = "Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing."
 
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
         subtitle=subtitle,
         include_anchor=True,
+        show_logo=False,
     )
 
     if not slug:
         st.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
         return
 
-    badge = (state or "sconosciuto").lower()
     st.divider()
-    col_state, col_open, col_docs = st.columns([1, 1, 1])
-    with col_state:
-        st.metric("Stato", badge)
-    with col_open:
-        if st.button("Apri workspace", help="Apri la cartella locale del cliente (path in Diagnostica)"):
-            st.toast("Apri workspace: copia/incolla il percorso dalla sezione Diagnostica.", icon="folder")
-    with col_docs:
-        st.link_button(
-            "Guida UI",
-            "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
-        )
 
-def _status_bar():
+
+def _status_bar() -> Tuple[Callable[[str, str], None], Callable[[], None]]:
     """Area di stato leggera. Usare insieme a st.status nei flussi lunghi."""
     placeholder = st.empty()
 
-    def update(msg: str, icon: str = "⏳"):
+    def update(msg: str, icon: str = "ℹ️") -> None:
         try:
             placeholder.info(f"{icon} {msg}")
         except Exception:
             pass
 
-    def clear():
+    def clear() -> None:
         placeholder.empty()
 
     return update, clear
@@ -179,11 +199,15 @@ def _diagnostics(slug: str | None) -> None:
 
         # Prova a ricostruire base_dir dal contesto del progetto (best-effort, UI only)
         try:
-            from pipeline.context import ClientContext  # type: ignore
-            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-            base_dir = ctx.base_dir
+            from pipeline.context import ClientContext
         except Exception:
             base_dir = None
+        else:
+            try:
+                ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                base_dir = ctx.base_dir
+            except Exception:
+                base_dir = None
 
         st.write(f"Base dir: `{base_dir or 'n/d'}`")
 
@@ -242,26 +266,36 @@ def _diagnostics(slug: str | None) -> None:
                 )
 
 
+def _sidebar_brand() -> None:
+    """Logo brand nella sidebar (tema-aware)."""
+    try:
+        render_sidebar_brand(st.sidebar, REPO_ROOT)
+    except Exception:
+        pass
+
+
 def _sidebar_quick_actions(slug: str | None) -> None:
     st.sidebar.markdown("### Azioni rapide")
-    if st.sidebar.button("Home", help="Torna alla schermata principale.", width="stretch"):
-        st.session_state["active_tab"] = TAB_HOME
-    if st.sidebar.button("Aggiorna elenco Drive", width="stretch"):
+    st.sidebar.link_button("Guida UI", "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md")
+    if st.sidebar.button(
+        "Aggiorna elenco Drive",
+        key="sidebar_refresh_drive",
+        width="stretch",
+    ):
         st.session_state.pop("drive_cache_buster", None)
         st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
     if st.sidebar.button(
         "Genera dummy",
-        help="Crea il workspace di esempio per testare il flusso.",
+        key="sidebar_dummy_btn",
         width="stretch",
+        help="Crea il workspace di esempio per testare il flusso.",
     ):
         _generate_dummy_workspace(slug)
-    if st.sidebar.button("Esci", type="primary", help="Chiudi l'app.", width="stretch"):
+    if st.sidebar.button("Esci", type="primary", width="stretch", help="Chiudi l'app"):
         _request_shutdown_safe()
     st.sidebar.markdown("---")
 
-# ------------------------------------------------------------------------------
-# Tabs helpers / gating
-# ------------------------------------------------------------------------------
+
 def _generate_dummy_workspace(slug: str | None) -> None:
     target = (slug or "dummy").strip() or "dummy"
     try:
@@ -285,12 +319,12 @@ def _generate_dummy_workspace(slug: str | None) -> None:
 
 def _request_shutdown_safe() -> None:
     try:
-        from src.ui.app import _request_shutdown  # type: ignore
+        from src.ui.app import _request_shutdown
     except Exception as exc:  # pragma: no cover
         st.sidebar.error(f"Chiusura non disponibile: {exc}")
         return
     try:
-        _request_shutdown(_setup_logging())  # type: ignore[arg-type]
+        _request_shutdown(_setup_logging())
     except Exception as exc:  # pragma: no cover
         st.sidebar.error(f"Impossibile chiudere l'app: {exc}")
 
@@ -299,9 +333,11 @@ TAB_HOME = "home"
 TAB_MANAGE = "gestisci cliente"
 TAB_SEM = "semantica"
 
+
 def _compute_sem_enabled(state: str | None) -> bool:
     """Decide se la tab Semantica è disponibile, in base allo stato client."""
     return _normalize_state(state) in STATE_SEM_READY
+
 
 def _compute_manage_enabled(state: str | None, slug: str | None) -> bool:
     """Abilita Gestisci cliente da 'inizializzato' in avanti."""
@@ -336,9 +372,8 @@ def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool)
     elif active == TAB_SEM and not sem_enabled:
         st.session_state["active_tab"] = TAB_HOME
 
-def _sidebar_tab_switches(
-    *, home_enabled: bool, manage_enabled: bool, sem_enabled: bool
-) -> None:
+
+def _sidebar_tab_switches(*, home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
     st.sidebar.markdown("### Sezioni")
     active = st.session_state.get("active_tab", TAB_HOME)
     label_home = "Home [attiva]" if active == TAB_HOME else "Home"
@@ -376,13 +411,15 @@ def _sidebar_tab_switches(
     if to_sem and sem_enabled:
         st.session_state["active_tab"] = TAB_SEM
 
+
 def _render_tabs_router(active: str, slug: str | None) -> None:
     """Router tab-based. Se i renderer dedicati non esistono, fallback all'app monolitica."""
     try:
-        from src.ui import app as app_mod  # type: ignore
+        app_mod = importlib.import_module("src.ui.app")
     except Exception:
         app_mod = None
-    else:
+
+    if app_mod is not None:
         if active == TAB_HOME:
             try:
                 render_home = getattr(app_mod, "render_home", None)
@@ -414,12 +451,22 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
             except Exception:
                 pass
 
-    from src.ui.app import main as app_main  # type: ignore
+        app_main_candidate = getattr(app_mod, "main", None)
+        if callable(app_main_candidate):
+            app_main_candidate()
+            return
+
+    try:
+        app_main = importlib.import_module("src.ui.app").main
+    except Exception:
+        return
     app_main()
+
 
 # ------------------------------------------------------------------------------
 # Entrypoint
 # ------------------------------------------------------------------------------
+
 
 def run() -> None:
     _page_config()
@@ -427,9 +474,11 @@ def run() -> None:
     slug = None
     state = None
     try:
-        from ui.clients_store import get_state  # type: ignore
+        from ui.clients_store import get_state
+
         try:
-            from ui.session import get_current_slug  # type: ignore
+            from ui.session import get_current_slug
+
             slug = get_current_slug()
         except Exception:
             slug = st.session_state.get("current_slug")
@@ -451,16 +500,17 @@ def run() -> None:
 
     try:
         _client_header(slug=resolved_slug, state=state)
-        _sidebar_quick_actions(resolved_slug)
     except Exception:
         pass
 
     try:
+        _sidebar_brand()
         _sidebar_tab_switches(
             home_enabled=home_enabled,
             manage_enabled=manage_enabled,
             sem_enabled=sem_enabled,
         )
+        _sidebar_quick_actions(resolved_slug)
     except Exception:
         pass
 

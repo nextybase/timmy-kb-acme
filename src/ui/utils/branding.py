@@ -20,8 +20,9 @@ def render_brand_header(
     title: str = DEFAULT_TITLE,
     subtitle: Optional[str] = None,
     include_anchor: bool = False,
+    show_logo: bool = True,
 ) -> None:
-    """Render the shared brand header with theme-aware logo."""
+    """Render the shared brand header with optional logo."""
     if st_module is None:
         return
 
@@ -31,12 +32,23 @@ def render_brand_header(
         except Exception:
             pass
 
+    repo_root_path = Path(repo_root).resolve()
+
+    if not show_logo:
+        try:
+            st_module.title(title)
+            if subtitle:
+                st_module.caption(subtitle)
+        except Exception:
+            pass
+        return
+
     try:
         col_logo, col_text = st_module.columns([1, 3])
     except Exception:
         return
 
-    logo_path = resolve_theme_logo_path(Path(repo_root).resolve())
+    logo_path = resolve_theme_logo_path(repo_root_path)
     try:
         if logo_path.exists():
             col_logo.image(str(logo_path), width="stretch")
@@ -47,5 +59,18 @@ def render_brand_header(
         col_text.title(title)
         if subtitle:
             col_text.caption(subtitle)
+    except Exception:
+        pass
+
+
+def render_sidebar_brand(st_module: Any, repo_root: Path) -> None:
+    """Render only the logo inside the sidebar."""
+    if st_module is None:
+        return
+
+    logo_path = resolve_theme_logo_path(Path(repo_root).resolve())
+    try:
+        if logo_path.exists():
+            st_module.image(str(logo_path), width="stretch")
     except Exception:
         pass
