@@ -37,6 +37,14 @@ La colonna sinistra mostra sempre una sezione fissa con:
 
 La stessa colonna ospita logo, stato del cliente e scorciatoie contestuali (per esempio il link rapido ad 'Apri workspace').
 
+## Diagnostica & log ZIP
+L'expander **Diagnostica** nel corpo principale (sotto l'intestazione cliente) offre un check rapido senza toccare la business logic.
+- Mostra il `base_dir` ricostruito best-effort dal contesto ed evidenzia lo slug corrente (raggiungibile anche tramite lo skip-link di accessibilita).
+- Conta i file presenti nelle cartelle `raw/`, `book/` e `semantic/` per uno snapshot immediato del workspace.
+- Se `logs/` esiste, mostra le ultime ~4 KB dell'ultimo log disponibile (decodifica safe) e fornisce un pulsante **Scarica logs** che genera al volo un archivio ZIP con tutti i file della cartella.
+- I contenuti restano in sola lettura: nessun runner viene invocato e nessun side-effect viene applicato allo stato Streamlit.
+- I log rispettano le regole di redazione segreti del progetto; l'expander non introduce nuove scritture.
+
 ## Flusso "Nuovo Cliente"
 1. **Form anagrafica**: campi `Slug (kebab-case)` e `Nome cliente`.
 2. **Upload VisionStatement.pdf**: l'uploader accetta un singolo PDF e lo salva in `config/VisionStatement.pdf`.
