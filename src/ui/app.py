@@ -1234,14 +1234,33 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             except Exception as state_exc:  # pragma: no cover
                 logger.warning("ui.state.update_failed", extra={"slug": slug_trimmed, "error": str(state_exc)})
         except (ConfigError, RuntimeError) as exc:
-            st.error("Inizializzazione Vision non riuscita")
-            st.caption(f"Dettaglio: {exc}")
-            logger.warning("ui.new.vision_failed", extra={"slug": slug_trimmed, "error": str(exc)})
+            text = str(exc)
+            file_path_attr = getattr(exc, "file_path", None)
+            file_path = str(file_path_attr) if file_path_attr else ""
+            if isinstance(exc, ConfigError) and file_path.endswith(".vision_hash"):
+                gate_state = st.session_state.setdefault("vision_gate_reasons", {})
+                gate_state[slug_trimmed] = text
+                logger.info("ui.new.vision_gate_hit", extra={"slug": slug_trimmed, "error": text})
+            else:
+                st.error("Inizializzazione Vision non riuscita")
+                st.caption(f"Dettaglio: {text}")
+                logger.warning("ui.new.vision_failed", extra={"slug": slug_trimmed, "error": text})
         except Exception:  # pragma: no cover
             st.error("Errore inaspettato durante l'inizializzazione del workspace.")
             logger.exception("ui.new.vision_failed_unexpected", extra={"slug": slug_trimmed})
         finally:
             st.session_state["ui.busy.init"] = False
+
+    init_done = bool(st.session_state.get("ui.new.init_done"))
+
+    gate_state = st.session_state.get("vision_gate_reasons", {})
+    gate_reason = None
+    gate_slug = slug_trimmed or st.session_state.get("ui.new.slug", "").strip()
+    if isinstance(gate_state, dict) and gate_slug:
+        gate_reason = gate_state.get(gate_slug)
+    if gate_reason:
+        workspace_gate = _workspace_dir_for(gate_slug)
+        _render_gate_resolution(gate_slug, workspace_gate, logger, gate_reason)
 
     init_done = bool(st.session_state.get("ui.new.init_done"))
     workspace_dir_str = st.session_state.get("ui.new.workspace_dir") or ""
