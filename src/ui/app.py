@@ -43,7 +43,7 @@ except Exception:  # pragma: no cover
 from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client  # noqa: E402
 from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw  # noqa: E402
 from ui.services.vision_provision import provision_from_vision  # noqa: E402
-from ui.utils.logging import enrich_log_extra  # noqa: E402
+from ui.utils.logging import enrich_log_extra, show_success  # noqa: E402
 from ui.utils.streamlit_fragments import run_fragment  # noqa: E402
 
 try:
@@ -697,7 +697,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
 
                 _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
                 _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
-                st.success("YAML aggiornati.")
+                show_success("YAML aggiornati.")
             except ConfigError as exc:
                 st.error("Salvataggio YAML non riuscito")
                 st.caption(f"Dettaglio: {exc}")
@@ -707,7 +707,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
         if st.button("Crea locale", width="stretch"):
             try:
                 _run_create_local_structure(slug, workspace_dir, logger)
-                st.success("Struttura locale aggiornata.")
+                show_success("Struttura locale aggiornata.")
             except ConfigError as exc:
                 st.error("Salvataggio YAML non riuscito")
                 st.caption(f"Dettaglio: {exc}")
@@ -717,7 +717,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
         if st.button("Crea su Drive", width="stretch"):
             try:
                 created = _run_drive_structure(slug, workspace_dir, logger)
-                st.success(f"Struttura Drive aggiornata (raw={created.get('raw')}).")
+                show_success(f"Struttura Drive aggiornata (raw={created.get('raw')}).")
             except ConfigError as exc:
                 st.error("Salvataggio YAML non riuscito")
                 st.caption(f"Dettaglio: {exc}")
@@ -727,7 +727,7 @@ def _render_workspace_view(slug: str, workspace_dir: Path, logger: logging.Logge
         if st.button("Genera README", width="stretch"):
             try:
                 uploaded = _run_generate_readmes(slug, logger)
-                st.success(f"README caricati: {len(uploaded)}")
+                show_success(f"README caricati: {len(uploaded)}")
             except (ConfigError, RuntimeError) as exc:
                 st.error(str(exc))
 
@@ -1165,7 +1165,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
                 _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
                 _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
                 _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
-                st.success("YAML aggiornati.")
+                show_success("YAML aggiornati.")
             except ConfigError as exc:
                 st.error("Salvataggio YAML non riuscito")
                 st.caption(f"Dettaglio: {exc}")
@@ -1414,7 +1414,7 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
             cartelle_rel.parent.mkdir(parents=True, exist_ok=True)
             _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
             _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
-            st.success("YAML aggiornati.")
+            show_success("YAML aggiornati.")
             logger.info("ui.manage.semantic_saved", extra=enrich_log_extra({"slug": slug}))
         except ConfigError as exc:
             st.error(str(exc))
@@ -1495,7 +1495,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                         "ui.state.update_failed", extra=enrich_log_extra({"slug": slug, "error": str(state_exc)})
                     )
                 _clear_drive_tree_cache()
-                st.success("Scaricamento completato")
+                show_success("Scaricamento completato")
                 st.rerun()
             except Exception as exc:  # pragma: no cover
                 if status is not None:

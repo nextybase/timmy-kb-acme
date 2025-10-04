@@ -6,6 +6,7 @@ import streamlit as st
 
 from ui.clients_store import set_state
 from ui.services.drive_runner import build_drive_from_mapping, download_raw_from_drive, emit_readmes_for_raw
+from ui.utils.logging import show_success
 
 
 class _ProgressFn(Protocol):
@@ -90,7 +91,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                 )
                 progress_bar.progress(100)
                 _update_status("100% · Operazione completata")
-                st.success("Struttura Drive aggiornata.")
+                show_success("Struttura Drive aggiornata.")
                 st.caption(f"IDs cartelle: {ids}")
                 set_state(slug, "inizializzato")
                 log.info({"event": "drive_structure_created", "slug": slug, "ids": ids})
@@ -113,7 +114,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
         ):
             try:
                 result = emit_readmes_for_raw(slug=slug, ensure_structure=True)
-                st.success(f"README creati: {len(result)}")
+                show_success(f"README creati: {len(result)}")
                 log.info({"event": "raw_readmes_uploaded", "slug": slug, "count": len(result)})
                 st.session_state["drive_readmes_done"] = True
             except FileNotFoundError as exc:
@@ -156,7 +157,7 @@ def render_drive_tab(*, log: Any, slug: str) -> None:
                     status.write("100% · Download completato")
                     count = len(res) if hasattr(res, "__len__") else None
                     msg_tail = f" ({count} file)" if count is not None else ""
-                    st.success(f"Download completato{msg_tail}.")
+                    show_success(f"Download completato{msg_tail}.")
                     set_state(slug, "pronto")
                     log.info({"event": "drive_raw_downloaded", "slug": slug, "count": count})
                     st.session_state["raw_downloaded"] = True

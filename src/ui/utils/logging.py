@@ -15,3 +15,16 @@ def enrich_log_extra(base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if user_email:
         extra.setdefault("user", user_email)
     return extra
+
+
+def show_success(message: str) -> None:
+    if st is None:
+        return
+    toast_fn = getattr(st, "toast", None)
+    if callable(toast_fn):
+        try:
+            toast_fn(message)
+            return
+        except Exception:
+            pass
+    st.success(message)
