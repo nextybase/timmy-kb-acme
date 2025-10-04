@@ -144,6 +144,11 @@ def _render_gate_resolution(
     if st is None:
         return
 
+    gate_state = st.session_state.setdefault("vision_gate_reasons", {})
+
+    def _clear_gate_state() -> None:
+        gate_state.pop(slug, None)
+
     def _body() -> None:
         st.warning(reason)
         choice = st.radio(
@@ -171,6 +176,7 @@ def _render_gate_resolution(
                     st.session_state["init_result"] = result or {}
                     show_success("YAML rigenerati dal PDF esistente.")
                     st.session_state["phase"] = "ready_to_open"
+                    _clear_gate_state()
                 except ConfigError as exc:
                     st.error(str(exc))
 
@@ -209,6 +215,7 @@ def _render_gate_resolution(
                         st.session_state["init_result"] = result or {}
                         show_success("YAML rigenerati dal nuovo PDF.")
                         st.session_state["phase"] = "ready_to_open"
+                        _clear_gate_state()
                     except ConfigError as exc:
                         st.error(str(exc))
 
@@ -216,6 +223,7 @@ def _render_gate_resolution(
             if st.button("Apri YAML", type="primary"):
                 st.session_state.setdefault("init_result", {})
                 st.session_state["phase"] = "ready_to_open"
+                _clear_gate_state()
 
     _ui_dialog("Artefatti gia' generati", _body)
 
@@ -854,10 +862,16 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
             file_path_attr = getattr(exc, "file_path", None)
             file_path = str(file_path_attr) if file_path_attr else ""
             if file_path.endswith(".vision_hash"):
-                _render_gate_resolution(slug, workspace_dir, logger, text)
+                gate_state = st.session_state.setdefault("vision_gate_reasons", {})
+                gate_state[slug] = text
             else:
                 st.error(text)
                 _render_debug_expander(workspace_dir)
+
+    gate_state = st.session_state.get("vision_gate_reasons", {})
+    reason = gate_state.get(slug) if isinstance(gate_state, dict) else None
+    if reason:
+        _render_gate_resolution(slug, workspace_dir, logger, reason)
 
     st.button("Torna alla landing", on_click=_back_to_landing)
 
