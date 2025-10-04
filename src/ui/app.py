@@ -6,6 +6,7 @@ import os
 import signal
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, cast
 
@@ -71,6 +72,30 @@ try:
     import streamlit as st
 except Exception:  # pragma: no cover
     st = None
+
+
+def _drive_tree_uncached(slug: str) -> Dict[str, Dict[str, Any]]:
+    if render_drive_tree is None:
+        return {}
+    return cast(Dict[str, Dict[str, Any]], render_drive_tree(slug))
+
+
+if st is not None and hasattr(st, "cache_data"):
+    _drive_tree_cached = cast(
+        Callable[[str], Dict[str, Dict[str, Any]]],
+        st.cache_data(ttl=timedelta(seconds=90))(_drive_tree_uncached),
+    )
+else:
+    _drive_tree_cached = _drive_tree_uncached
+
+
+def _clear_drive_tree_cache() -> None:
+    clear_fn = getattr(_drive_tree_cached, "clear", None)
+    if callable(clear_fn):
+        try:
+            clear_fn()
+        except Exception:  # pragma: no cover
+            pass
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1425,8 +1450,9 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 
             def _render_tree() -> Dict[str, Dict[str, Any]]:
                 try:
-                    return cast(Dict[str, Dict[str, Any]], render_drive_tree(slug))
+                    return _drive_tree_cached(slug)
                 except Exception as exc:  # pragma: no cover
+                    _clear_drive_tree_cache()
                     st.error("Impossibile caricare l'albero Drive")
                     st.caption(f"Dettaglio: {exc}")
                     logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
@@ -1460,6 +1486,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     st.toast("Stato cliente aggiornato a 'pronto'.")
                 except Exception as state_exc:  # pragma: no cover
                     logger.warning("ui.state.update_failed", extra={"slug": slug, "error": str(state_exc)})
+                _clear_drive_tree_cache()
                 st.success("Scaricamento completato")
                 st.rerun()
             except Exception as exc:  # pragma: no cover
@@ -1534,7 +1561,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 
     st.markdown("<a id='section-yaml'></a><a id='section-semantic'></a>", unsafe_allow_html=True)
     st.subheader("Semantica")
-    # 🔄 Aggiorna elenco file su Drive e ricalcola le differenze
+    # Aggiorna elenco file su Drive e ricalcola le differenze
     refresh_col, _ = st.columns([1, 3])
     if refresh_col.button(
         "Aggiorna elenco Drive",
@@ -1542,20 +1569,19 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         help="Rileggi l'albero su Drive e aggiorna le differenze Drive/Locale.",
         width="stretch",
     ):
-        try:
-            # forza l’invalidazione di eventuali cache dati usate dai componenti Drive
-            if hasattr(st, "cache_data") and hasattr(st.cache_data, "clear"):
-                st.cache_data.clear()
-        except Exception:
-            pass
-        st.toast("Elenco Drive aggiornato. Ricalcolo in corso…")
+        _clear_drive_tree_cache()
+        toast_fn = getattr(st, "toast", None)
+        if callable(toast_fn):
+            toast_fn("Elenco Drive aggiornato. Ricalcolo in corso...")
+        else:
+            st.info("Elenco Drive aggiornato. Ricalcolo in corso...")
         try:
             st.rerun()
         except Exception:
             pass
+
     state_val = (get_state(slug) or "").lower()
     eligible_states = {"pronto", "arricchito", "finito"}
-
     if state_val in eligible_states:
         sem_tabs = st.tabs(["Semantica"])
         with sem_tabs[0]:
