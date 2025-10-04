@@ -37,6 +37,33 @@ def _ensure_streamlit_stub() -> None:
         stub.download_button = _noop_none
         stub.set_page_config = _noop_none
         stub.get_option = lambda *_args, **_kwargs: None
+        stub.title = _noop_none
+        stub.caption = _noop_none
+        stub.divider = _noop_none
+
+        class _Column:
+            def image(self, *_a, **_k):
+                return None
+
+            def title(self, *_a, **_k):
+                return None
+
+            def caption(self, *_a, **_k):
+                return None
+
+            def markdown(self, *_a, **_k):
+                return None
+
+            def metric(self, *_a, **_k):
+                return None
+
+            def button(self, *_a, **_k):
+                return False
+
+        def _columns(layout):
+            return [_Column() for _ in layout]
+
+        stub.columns = _columns
         stub.expander = lambda *_args, **_kwargs: _Expander()
         stub.empty = lambda: types.SimpleNamespace(info=_noop_none, empty=_noop_none)
         sys.modules["streamlit"] = stub

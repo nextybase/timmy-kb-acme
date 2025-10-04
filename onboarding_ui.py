@@ -78,6 +78,9 @@ def _bootstrap_sys_path() -> None:
 # Esegui bootstrap path il prima possibile
 _bootstrap_sys_path()
 
+REPO_ROOT = Path(__file__).resolve().parent
+
+from ui.utils.branding import get_favicon_path, render_brand_header
 
 # ------------------------------------------------------------------------------
 # UI helpers
@@ -88,8 +91,7 @@ def _normalize_state(state: str | None) -> str:
 
 def _page_config() -> None:
     # UI: page config deve essere la prima chiamata Streamlit
-    repo_root = Path(__file__).resolve().parent
-    icon_path = repo_root / "assets" / "ico-next.png"
+    icon_path = get_favicon_path(REPO_ROOT)
     page_icon = str(icon_path) if icon_path.exists() else None
     st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
@@ -107,7 +109,7 @@ def _page_config() -> None:
 def _render_global_error(e: Exception) -> None:
     # UI: messaggio breve + toast non bloccante
     try:
-        st.toast("Si è verificato un errore. Dettagli nei log/expander.", icon="⚠️")
+        st.toast("Si è verificato un errore. Dettagli nei log/expander.", icon="info")
     except Exception:
         pass
     st.error("Errore. Apri i dettagli tecnici per maggiori informazioni.")
@@ -120,28 +122,37 @@ def _render_global_error(e: Exception) -> None:
 # ----------------------------------------------------------------------
 
 def _client_header(*, slug: str | None, state: str | None) -> None:
-    """Compact header con stato cliente + link rapidi. UI-only, idempotent."""
-    st.markdown("<div id='main'></div>", unsafe_allow_html=True)  # anchor per skip-link
+    """Header condiviso con logo e stato cliente."""
+    subtitle = (
+        f"Cliente attivo: `{slug}` - stato `{(state or 'sconosciuto').upper()}`"
+        if slug
+        else "Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing."
+    )
+
+    render_brand_header(
+        st_module=st,
+        repo_root=REPO_ROOT,
+        subtitle=subtitle,
+        include_anchor=True,
+    )
+
     if not slug:
         st.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
         return
 
-    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
-    with col1:
-        st.subheader(f"Cliente: `{slug}`")
-    with col2:
-        badge = (state or "sconosciuto").lower()
+    badge = (state or "sconosciuto").lower()
+    st.divider()
+    col_state, col_open, col_docs = st.columns([1, 1, 1])
+    with col_state:
         st.metric("Stato", badge)
-    with col3:
+    with col_open:
         if st.button("Apri workspace", help="Apri la cartella locale del cliente (path in Diagnostica)"):
-            st.toast("Apri workspace: copia/incolla il percorso dalla sezione Diagnostica.", icon="📂")
-    with col4:
-        # Link pubblico alla guida del repo (resta valido anche fuori preview)
+            st.toast("Apri workspace: copia/incolla il percorso dalla sezione Diagnostica.", icon="folder")
+    with col_docs:
         st.link_button(
             "Guida UI",
             "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
         )
-
 
 def _status_bar():
     """Area di stato leggera. Usare insieme a st.status nei flussi lunghi."""
@@ -233,18 +244,18 @@ def _diagnostics(slug: str | None) -> None:
 
 def _sidebar_quick_actions(slug: str | None) -> None:
     st.sidebar.markdown("### Azioni rapide")
-    if st.sidebar.button("Home", help="Torna alla schermata principale.", use_container_width=True):
+    if st.sidebar.button("Home", help="Torna alla schermata principale.", width="stretch"):
         st.session_state["active_tab"] = TAB_HOME
-    if st.sidebar.button("Aggiorna elenco Drive", use_container_width=True):
+    if st.sidebar.button("Aggiorna elenco Drive", width="stretch"):
         st.session_state.pop("drive_cache_buster", None)
         st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
     if st.sidebar.button(
         "Genera dummy",
         help="Crea il workspace di esempio per testare il flusso.",
-        use_container_width=True,
+        width="stretch",
     ):
         _generate_dummy_workspace(slug)
-    if st.sidebar.button("Esci", type="primary", help="Chiudi l'app.", use_container_width=True):
+    if st.sidebar.button("Esci", type="primary", help="Chiudi l'app.", width="stretch"):
         _request_shutdown_safe()
     st.sidebar.markdown("---")
 
@@ -336,7 +347,7 @@ def _sidebar_tab_switches(
 
     to_home = st.sidebar.button(
         label_home,
-        use_container_width=True,
+        width="stretch",
         disabled=not home_enabled,
         help=None if home_enabled else "Disponibile dopo l'inizializzazione",
         type="primary" if active == TAB_HOME else "secondary",
@@ -344,7 +355,7 @@ def _sidebar_tab_switches(
     )
     to_manage = st.sidebar.button(
         label_manage,
-        use_container_width=True,
+        width="stretch",
         disabled=not manage_enabled,
         help=None if manage_enabled else "Disponibile da 'inizializzato'",
         type="primary" if active == TAB_MANAGE else "secondary",
@@ -352,7 +363,7 @@ def _sidebar_tab_switches(
     )
     to_sem = st.sidebar.button(
         label_sem,
-        use_container_width=True,
+        width="stretch",
         disabled=not sem_enabled,
         help=None if sem_enabled else "Disponibile quando lo stato è 'pronto'",
         type="primary" if active == TAB_SEM else "secondary",

@@ -1,6 +1,7 @@
 # src/ui/utils/core.py
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, cast
 
@@ -122,7 +123,12 @@ def resolve_theme_logo_path(repo_root: Path) -> Path:
     assets_dir = Path(repo_root) / "assets"
     default_logo = assets_dir / "next-logo.png"
     dark_logo = assets_dir / "next-logo-bianco.png"
-    if get_theme_base() == "dark" and dark_logo.is_file():
+
+    override = os.getenv("TIMMY_UI_BRAND_THEME")
+    forced_base = override.strip().lower() if override else None
+    base = forced_base or get_theme_base()
+
+    if base == "dark" and dark_logo.is_file():
         return dark_logo
     if default_logo.is_file():
         return default_logo

@@ -24,6 +24,7 @@ from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_t
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read  # noqa: E402
 from pre_onboarding import ensure_local_workspace_for_ui  # noqa: E402
 from src.ui.utils.core import resolve_theme_logo_path  # noqa: E402
+from ui.utils.branding import get_favicon_path, render_brand_header  # noqa: E402
 
 # Queste util potrebbero non essere disponibili in ambienti headless: fallback a None
 try:
@@ -341,20 +342,33 @@ def _current_client_state(slug: Optional[str]) -> str | None:
 
 
 def _render_header(slug: Optional[str]) -> None:
-    # Landmark principale per skip-link
-    st.markdown("<main id='main'></main>", unsafe_allow_html=True)
-    st.title("Onboarding NeXT - Clienti")
-    if not slug:
-        st.caption("Nessun cliente attivo. Crea o seleziona un cliente per iniziare.")
+    if st is None:
         return
-    state = _current_client_state(slug)
-    if state:
-        st.markdown(f"Cliente attivo: **{slug}** — Stato: `{state.upper()}`")
+
+    state = _current_client_state(slug) if slug else None
+    state_label = (state or "n/d").upper() if slug else None
+
+    subtitle: str | None
+    if slug:
+        subtitle = f"Cliente attivo: `{slug}` - stato `{state_label}`"
+    else:
+        subtitle = "Nessun cliente attivo. Crea o seleziona un cliente per iniziare."
+
+    render_brand_header(
+        st_module=st,
+        repo_root=REPO_ROOT,
+        subtitle=subtitle,
+        include_anchor=True,
+    )
+
+    if not slug:
+        return
+
     try:
         with st.sidebar:
             st.markdown("### Cliente")
             st.write(f"**Slug**: `{slug}`")
-            st.write(f"**Stato**: `{(state or 'n/d').upper()}`")
+            st.write(f"**Stato**: `{state_label}`")
             st.divider()
             st.markdown("[Vai a Configurazione](#section-yaml)")
             st.markdown("[Vai a Google Drive](#section-drive)")
@@ -1844,7 +1858,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 def main() -> None:
     logger = _setup_logging()
     if st is not None:
-        icon_path = REPO_ROOT / "assets" / "ico-next.png"
+        icon_path = get_favicon_path(REPO_ROOT)
         page_icon = str(icon_path) if icon_path.exists() else None
         st.set_page_config(
             page_title="Onboarding NeXT - Clienti",

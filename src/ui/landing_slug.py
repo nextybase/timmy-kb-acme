@@ -17,8 +17,8 @@ from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pre_onboarding import ensure_local_workspace_for_ui
 from semantic.validation import validate_context_slug
-from src.ui.utils.core import resolve_theme_logo_path
 from ui.services import vision_provision as vision_services
+from ui.utils.branding import render_brand_header
 
 st: Any | None
 try:  # preferisce runtime soft-fail per import opzionali
@@ -27,6 +27,8 @@ try:  # preferisce runtime soft-fail per import opzionali
     st = _st
 except Exception:  # pragma: no cover
     st = None
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 UI_STATE_PREFIX = "ui."
 
@@ -155,23 +157,6 @@ def _base_dir_for(slug: str) -> Path:
     raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG)
 
 
-def _render_logo() -> None:
-    if st is None:
-        return
-    try:
-        root = Path(__file__).resolve().parents[2]
-        logo = resolve_theme_logo_path(root)
-        if not logo.exists():
-            return
-
-        logo_path = ensure_within_and_resolve(root, logo)
-        left, right = st.columns([4, 1])
-        with right:
-            st.image(str(logo_path), use_column_width=True)
-    except Exception:  # pragma: no cover
-        pass
-
-
 def _st_notify(level: str, message: str) -> None:
     """Invoca st.<level> se disponibile, altrimenti fallback a warning/info.
 
@@ -222,8 +207,13 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     if st is None:
         raise RuntimeError("Streamlit non disponibile per la landing UI.")
 
-    st.markdown("<div style='height: 6vh'></div>", unsafe_allow_html=True)
-    _render_logo()
+    render_brand_header(
+        st_module=st,
+        repo_root=REPO_ROOT,
+        include_anchor=True,
+        subtitle="Verifica slug cliente per avviare l'onboarding.",
+    )
+    st.markdown("<div style='height: 2vh'></div>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns([1, 2, 1])
     slug_state = _state_get("slug", "")
