@@ -51,7 +51,7 @@ typing-inspection==0.4.0
 annotated-types==0.7.0
 
 # Libreria opzionale per l'interfaccia utente (Streamlit)
-streamlit==1.35.0
+streamlit==1.38.0
 
 # === RAG / embeddings ===
 openai==1.55.0

@@ -42,6 +42,7 @@ except Exception:  # pragma: no cover
 from ui.clients_store import ClientEntry, ensure_db, get_state, load_clients, set_state, upsert_client  # noqa: E402
 from ui.services.drive_runner import download_raw_from_drive_with_progress, emit_readmes_for_raw  # noqa: E402
 from ui.services.vision_provision import provision_from_vision  # noqa: E402
+from ui.utils.streamlit_fragments import run_fragment  # noqa: E402
 
 try:
     from ui.components.drive_tree import render_drive_tree
@@ -1421,12 +1422,17 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         st.subheader(f"Albero Drive (DRIVE_ID/{slug})")
         st.caption("Focus su raw/ e sottocartelle.")
         if callable(render_drive_tree):
-            try:
-                drive_index = render_drive_tree(slug)
-            except Exception as exc:  # pragma: no cover
-                st.error("Impossibile caricare l'albero Drive")
-                st.caption(f"Dettaglio: {exc}")
-                logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
+
+            def _render_tree() -> Dict[str, Dict[str, Any]]:
+                try:
+                    return cast(Dict[str, Dict[str, Any]], render_drive_tree(slug))
+                except Exception as exc:  # pragma: no cover
+                    st.error("Impossibile caricare l'albero Drive")
+                    st.caption(f"Dettaglio: {exc}")
+                    logger.warning("ui.manage.drive_tree_failed", extra={"slug": slug, "error": str(exc)})
+                    return {}
+
+            drive_index = run_fragment(f"drive_tree.{slug}", _render_tree)
         else:
             st.info("Albero Drive non disponibile in questo ambiente.")
 
@@ -1468,12 +1474,16 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
             st.warning("Scaricamento da Drive non disponibile in questo ambiente.")
 
         if callable(render_drive_local_diff):
-            try:
-                render_drive_local_diff(slug, drive_index)
-            except Exception as exc:  # pragma: no cover
-                st.error("Diff Drive/Locale non riuscito")
-                st.caption(f"Dettaglio: {exc}")
-                logger.warning("ui.manage.diff_failed", extra={"slug": slug, "error": str(exc)})
+
+            def _render_diff() -> None:
+                try:
+                    render_drive_local_diff(slug, drive_index)
+                except Exception as exc:  # pragma: no cover
+                    st.error("Diff Drive/Locale non riuscito")
+                    st.caption(f"Dettaglio: {exc}")
+                    logger.warning("ui.manage.diff_failed", extra={"slug": slug, "error": str(exc)})
+
+            run_fragment(f"drive_diff.{slug}", _render_diff)
         else:
             st.info("Diff Drive/locale non ancora disponibile.")
 
