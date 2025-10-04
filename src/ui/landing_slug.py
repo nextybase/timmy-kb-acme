@@ -201,6 +201,16 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     return True, slug, client_name
 
 
+# Legacy helper mantenuto per compatibilità con i test esistenti
+def _render_logo() -> None:
+    render_brand_header(
+        st_module=st,
+        repo_root=REPO_ROOT,
+        include_anchor=True,
+        subtitle="Verifica slug cliente per avviare l'onboarding.",
+    )
+
+
 def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
     """Landing slug-first con verifica e bootstrap Vision Statement."""
 
