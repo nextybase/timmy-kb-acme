@@ -1873,33 +1873,27 @@ def render_home(*, slug: str | None = None, logger: logging.Logger | None = None
 
 
 def render_manage(*, slug: str | None, logger: logging.Logger | None = None) -> None:
-    """Gestione cliente: tab Drive e attivita correlate."""
-    if slug is None or not slug.strip():
-        render_home(slug=None, logger=logger)
-        return
-    try:
-        from ui.tabs.drive import render_drive_tab
-    except Exception as exc:  # pragma: no cover
-        if logger:
-            logger.warning("ui.tabs.manage_import_failed", extra={"slug": slug, "error": str(exc)})
-        return
+    """Gestione cliente: riusa la UI completa del flusso Drive."""
     log = logger or _setup_logging()
-    render_drive_tab(log=log, slug=slug.strip())
+    if slug and slug.strip():
+        st.session_state["ui.manage.selected_slug"] = slug.strip()
+    _render_manage_client_block(log)
 
 
 def render_semantics(*, slug: str | None, logger: logging.Logger | None = None) -> None:
     """Tab Semantica: conversione RAW->BOOK e materiali correlati."""
-    if slug is None or not slug.strip():
-        render_home(slug=None, logger=logger)
+    log = logger or _setup_logging()
+    slug_value = (slug or st.session_state.get("ui.manage.selected_slug") or "").strip()
+    if not slug_value:
+        st.info("Seleziona prima un cliente dalla tab Gestisci cliente.")
+        _render_manage_client_block(log)
         return
     try:
         from ui.tabs.semantic import render_semantic_tab
     except Exception as exc:  # pragma: no cover
-        if logger:
-            logger.warning("ui.tabs.semantic_import_failed", extra={"slug": slug, "error": str(exc)})
+        log.warning("ui.tabs.semantic_import_failed", extra={"slug": slug_value, "error": str(exc)})
         return
-    log = logger or _setup_logging()
-    render_semantic_tab(log=log, slug=slug.strip())
+    render_semantic_tab(log=log, slug=slug_value)
 
 
 if __name__ == "__main__":

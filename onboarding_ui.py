@@ -25,6 +25,7 @@ from pathlib import Path
 
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+from src.ui.app import _setup_logging
 
 
 ICON_REFRESH = "\U0001F504"
@@ -213,16 +214,56 @@ def _diagnostics(slug: str | None) -> None:
 
 def _sidebar_quick_actions(slug: str | None) -> None:
     st.sidebar.markdown("### Azioni rapide")
-    if st.sidebar.button("Aggiorna elenco Drive"):
-        # semplice invalidazione di eventuale cache UI-side
+    if st.sidebar.button("Home", help="Torna alla schermata principale.", use_container_width=True):
+        st.session_state["active_tab"] = TAB_HOME
+    if st.sidebar.button("Aggiorna elenco Drive", use_container_width=True):
         st.session_state.pop("drive_cache_buster", None)
         st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
-    # il separatore resta qui, per evitare duplicazioni con gli switch delle tab
+    if st.sidebar.button(
+        "Genera dummy",
+        help="Crea il workspace di esempio per testare il flusso.",
+        use_container_width=True,
+    ):
+        _generate_dummy_workspace(slug)
+    if st.sidebar.button("Esci", type="primary", help="Chiudi l'app.", use_container_width=True):
+        _request_shutdown_safe()
     st.sidebar.markdown("---")
 
 # ------------------------------------------------------------------------------
 # Tabs helpers / gating
 # ------------------------------------------------------------------------------
+def _generate_dummy_workspace(slug: str | None) -> None:
+    target = (slug or "dummy").strip() or "dummy"
+    try:
+        from tools.gen_dummy_kb import main as gen_dummy_main
+    except Exception as exc:  # pragma: no cover
+        st.sidebar.error(f"Generazione dummy non disponibile: {exc}")
+        return
+    with st.spinner(f"Genero dataset dummy per '{target}'..."):
+        try:
+            exit_code = gen_dummy_main(["--slug", target, "--non-interactive"])
+        except SystemExit as sys_exc:  # pragma: no cover
+            exit_code = sys_exc.code or 1
+        except Exception as exc:  # pragma: no cover
+            st.sidebar.error(f"Errore durante la generazione: {exc}")
+            return
+    if int(exit_code) == 0:
+        st.sidebar.success(f"Dummy generato per '{target}'")
+    else:
+        st.sidebar.error("Generazione dummy terminata con errore")
+
+
+def _request_shutdown_safe() -> None:
+    try:
+        from src.ui.app import _request_shutdown  # type: ignore
+    except Exception as exc:  # pragma: no cover
+        st.sidebar.error(f"Chiusura non disponibile: {exc}")
+        return
+    try:
+        _request_shutdown(_setup_logging())  # type: ignore[arg-type]
+    except Exception as exc:  # pragma: no cover
+        st.sidebar.error(f"Impossibile chiudere l'app: {exc}")
+
 
 TAB_HOME = "home"
 TAB_MANAGE = "gestisci cliente"
