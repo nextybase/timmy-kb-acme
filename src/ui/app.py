@@ -146,6 +146,8 @@ def _render_gate_resolution(
 
     gate_state = st.session_state.setdefault("vision_gate_reasons", {})
     busy_key = f"vision_gate_busy_{slug}"
+    choice_key = f"vision_gate_choice_{slug}"
+    upload_key = f"vision_gate_upl_{slug}"
     busy = bool(st.session_state.get(busy_key))
 
     def _set_busy(flag: bool) -> None:
@@ -154,6 +156,25 @@ def _render_gate_resolution(
     def _clear_gate_state() -> None:
         gate_state.pop(slug, None)
         st.session_state.pop(busy_key, None)
+        st.session_state.pop(choice_key, None)
+        st.session_state.pop(upload_key, None)
+
+    def _trigger_rerun() -> None:
+        try:
+            st.rerun()
+        except Exception:
+            pass
+
+    def _handle_success(result: Dict[str, Any] | None, message: str) -> None:
+        handled_new = _apply_new_client_gate_success(slug, workspace_dir, logger, result, message)
+        if not handled_new:
+            st.session_state["init_result"] = result or {}
+            show_success(message)
+            if "phase" in st.session_state:
+                st.session_state["phase"] = "ready_to_open"
+        _clear_gate_state()
+        _set_busy(False)
+        _trigger_rerun()
 
     def _body() -> None:
         st.warning(reason)
@@ -164,7 +185,7 @@ def _render_gate_resolution(
                 "Carica un nuovo PDF e rigenera",
                 "Annulla e apri gli YAML",
             ),
-            key=f"vision_gate_choice_{slug}",
+            key=choice_key,
         )
 
         if choice == "Rigenera usando lo stesso PDF":
@@ -181,26 +202,16 @@ def _render_gate_resolution(
                             pdf_path=pdf_path,
                             force=True,
                         )
-                        handled_new = _apply_new_client_gate_success(
-                            slug, workspace_dir, logger, result, "YAML rigenerati dal PDF esistente."
-                        )
-                        if not handled_new:
-                            st.session_state["init_result"] = result or {}
-                            show_success("YAML rigenerati dal PDF esistente.")
-                            if "phase" in st.session_state:
-                                st.session_state["phase"] = "ready_to_open"
-                        _clear_gate_state()
+                        _handle_success(result, "YAML rigenerati dal PDF esistente.")
                 except ConfigError as exc:
-                    st.error(str(exc))
-                finally:
                     _set_busy(False)
+                    st.error(str(exc))
 
         elif choice == "Carica un nuovo PDF e rigenera":
-            uploader_key = f"vision_gate_upl_{slug}"
             uploaded = st.file_uploader(
                 "Seleziona il nuovo VisionStatement.pdf",
                 type=["pdf"],
-                key=uploader_key,
+                key=upload_key,
             )
             if uploaded is not None and st.button("Carica e rigenera", type="primary", disabled=busy):
                 data = uploaded.read()
@@ -229,19 +240,10 @@ def _render_gate_resolution(
                                 pdf_path=pdf_path,
                                 force=False,
                             )
-                            handled_new = _apply_new_client_gate_success(
-                                slug, workspace_dir, logger, result, "YAML rigenerati dal nuovo PDF."
-                            )
-                            if not handled_new:
-                                st.session_state["init_result"] = result or {}
-                                show_success("YAML rigenerati dal nuovo PDF.")
-                                if "phase" in st.session_state:
-                                    st.session_state["phase"] = "ready_to_open"
-                            _clear_gate_state()
+                            _handle_success(result, "YAML rigenerati dal nuovo PDF.")
                     except ConfigError as exc:
-                        st.error(str(exc))
-                    finally:
                         _set_busy(False)
+                        st.error(str(exc))
 
         else:
             if st.button("Apri YAML", type="primary", disabled=busy):
@@ -249,14 +251,7 @@ def _render_gate_resolution(
                 try:
                     with st.spinner("Apertura YAML in corso..."):
                         existing = st.session_state.get("init_result") or {}
-                        handled_new = _apply_new_client_gate_success(
-                            slug, workspace_dir, logger, existing, "YAML disponibili per la revisione."
-                        )
-                        if not handled_new:
-                            st.session_state.setdefault("init_result", {})
-                            if "phase" in st.session_state:
-                                st.session_state["phase"] = "ready_to_open"
-                        _clear_gate_state()
+                        _handle_success(existing, "YAML disponibili per la revisione.")
                 finally:
                     _set_busy(False)
 
