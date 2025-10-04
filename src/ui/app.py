@@ -1864,14 +1864,12 @@ def main() -> None:
 # Tab renderers usati da ui/onboarding_ui.py per evitare il fallback monolitico
 # ---------------------------------------------------------------------------
 def render_home(*, slug: str | None = None, logger: logging.Logger | None = None) -> None:
-    """Landing/Home: mostra la schermata iniziale con le opzioni principali."""
+    """Landing/Home: usa la landing originale con le azioni Nuovo/Gestisci."""
+    log = logger or _setup_logging()
     try:
-        from ui.landing_slug import render_landing_slug
+        _render_landing(log)
     except Exception as exc:  # pragma: no cover
-        if logger:
-            logger.warning("ui.tabs.home_import_failed", extra={"error": str(exc)})
-        return
-    render_landing_slug(log=logger)
+        log.warning("ui.tabs.home_render_failed", extra={"error": str(exc)})
 
 
 def render_manage(*, slug: str | None, logger: logging.Logger | None = None) -> None:
