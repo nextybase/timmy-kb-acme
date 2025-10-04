@@ -335,18 +335,24 @@ def _sidebar_tab_switches(
         use_container_width=True,
         disabled=not home_enabled,
         help=None if home_enabled else "Disponibile dopo l'inizializzazione",
+        type="primary" if active == TAB_HOME else "secondary",
+        key="tab_home_button",
     )
     to_manage = st.sidebar.button(
         label_manage,
         use_container_width=True,
         disabled=not manage_enabled,
         help=None if manage_enabled else "Disponibile da 'inizializzato'",
+        type="primary" if active == TAB_MANAGE else "secondary",
+        key="tab_manage_button",
     )
     to_sem = st.sidebar.button(
         label_sem,
         use_container_width=True,
         disabled=not sem_enabled,
         help=None if sem_enabled else "Disponibile quando lo stato è 'pronto'",
+        type="primary" if active == TAB_SEM else "secondary",
+        key="tab_sem_button",
     )
     if to_home:
         st.session_state["active_tab"] = TAB_HOME
