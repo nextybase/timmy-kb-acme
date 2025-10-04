@@ -26,11 +26,17 @@
 
 # Treat binaries as binary (no EOL conversions)
 *.png    binary
+*.PNG    binary
 *.jpg    binary
+*.JPG    binary
 *.jpeg   binary
+*.JPEG   binary
 *.gif    binary
+*.GIF    binary
 *.webp   binary
+*.WEBP   binary
 *.ico    binary
+*.ICO    binary
 *.pdf    binary
 *.zip    binary
 *.gz     binary

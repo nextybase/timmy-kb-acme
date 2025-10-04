@@ -88,9 +88,13 @@ def _normalize_state(state: str | None) -> str:
 
 def _page_config() -> None:
     # UI: page config deve essere la prima chiamata Streamlit
+    repo_root = Path(__file__).resolve().parent
+    icon_path = repo_root / "assets" / "ico-next.png"
+    page_icon = str(icon_path) if icon_path.exists() else None
     st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
         layout="wide",
+        page_icon=page_icon,
         initial_sidebar_state="expanded",
     )
     # UI: skip-links per accessibilità tastiera

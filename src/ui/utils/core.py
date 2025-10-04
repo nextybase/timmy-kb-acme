@@ -46,3 +46,84 @@ def safe_write_text(path: Path | str, data: str, *, encoding: str = "utf-8", ato
     Keeps UI layer imports stable; no behavior change.
     """
     _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic)
+
+
+def get_theme_base(default: str = "light") -> str:
+    try:
+        import streamlit as st
+    except Exception:
+        return default
+
+    candidates: list[str] = []
+
+    def _remember(value: object | None) -> None:
+        if isinstance(value, str):
+            value = value.strip()
+            if value:
+                candidates.append(value)
+
+    getter = getattr(st, "get_option", None)
+    if callable(getter):
+        try:
+            _remember(getter("theme.base"))
+        except Exception:
+            pass
+
+    state = getattr(st, "session_state", None)
+
+    def _state_lookup(key: str) -> None:
+        if state is None:
+            return
+        getter_attr = getattr(state, "get", None)
+        try:
+            value = getter_attr(key) if callable(getter_attr) else state[key]
+        except Exception:
+            value = None
+        _remember(value)
+
+    for name in ("theme.base", "theme_base", "_theme_base", "preferred_theme"):
+        _state_lookup(name)
+
+    if state is not None:
+        for ctx_key in ("theme", "_theme", "streamlit_theme"):
+            getter_attr = getattr(state, "get", None)
+            try:
+                theme_ctx = getter_attr(ctx_key) if callable(getter_attr) else state[ctx_key]
+            except Exception:
+                theme_ctx = None
+            if isinstance(theme_ctx, dict):
+                _remember(theme_ctx.get("base"))
+
+    ctx = None
+    try:  # pragma: no cover -- Streamlit internals not available in tests
+        from streamlit.runtime.scriptrunner import script_run_context as _ctx_mod
+
+        ctx = getattr(_ctx_mod, "get_script_run_ctx", lambda: None)()
+    except Exception:
+        ctx = None
+
+    if ctx is not None:
+        session = getattr(ctx, "session", None)
+        client = getattr(session, "client", None) if session is not None else None
+        theme_obj = getattr(client, "theme", None) if client is not None else None
+        _remember(getattr(theme_obj, "base", None))
+        if isinstance(theme_obj, dict):
+            _remember(theme_obj.get("base"))
+        nested = getattr(theme_obj, "_theme", None)
+        if isinstance(nested, dict):
+            _remember(nested.get("base"))
+
+    for candidate in candidates:
+        return candidate.lower()
+    return default
+
+
+def resolve_theme_logo_path(repo_root: Path) -> Path:
+    assets_dir = Path(repo_root) / "assets"
+    default_logo = assets_dir / "next-logo.png"
+    dark_logo = assets_dir / "next-logo-bianco.png"
+    if get_theme_base() == "dark" and dark_logo.is_file():
+        return dark_logo
+    if default_logo.is_file():
+        return default_logo
+    return dark_logo

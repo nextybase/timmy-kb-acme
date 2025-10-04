@@ -14,9 +14,10 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe, validate_slug
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pre_onboarding import ensure_local_workspace_for_ui
 from semantic.validation import validate_context_slug
+from src.ui.utils.core import resolve_theme_logo_path
 from ui.services import vision_provision as vision_services
 
 st: Any | None
@@ -159,24 +160,14 @@ def _render_logo() -> None:
         return
     try:
         root = Path(__file__).resolve().parents[2]
-        logo = root / "assets" / "next-logo.png"
+        logo = resolve_theme_logo_path(root)
         if not logo.exists():
             return
-        import base64 as _b64
 
         logo_path = ensure_within_and_resolve(root, logo)
-        with open_for_read_bytes_selfguard(logo_path) as logo_file:
-            encoded = _b64.b64encode(logo_file.read()).decode("ascii")
         left, right = st.columns([4, 1])
         with right:
-            st.markdown(
-                (
-                    "<img src='data:image/png;base64,"
-                    f"{encoded}"
-                    "' alt='NeXT' style='width:100%;height:auto;display:block;' />"
-                ),
-                unsafe_allow_html=True,
-            )
+            st.image(str(logo_path), use_column_width=True)
     except Exception:  # pragma: no cover
         pass
 

@@ -1,6 +1,7 @@
 import importlib
 import sys
 import types
+from pathlib import Path
 
 
 def _ensure_streamlit_stub() -> None:
@@ -35,6 +36,7 @@ def _ensure_streamlit_stub() -> None:
         stub.write = _noop_none
         stub.download_button = _noop_none
         stub.set_page_config = _noop_none
+        stub.get_option = lambda *_args, **_kwargs: None
         stub.expander = lambda *_args, **_kwargs: _Expander()
         stub.empty = lambda: types.SimpleNamespace(info=_noop_none, empty=_noop_none)
         sys.modules["streamlit"] = stub
@@ -119,3 +121,22 @@ def test_init_tab_state_resets_tabs(monkeypatch):
     streamlit.session_state["active_tab"] = ui.TAB_HOME
     ui._init_tab_state(home_enabled=False, manage_enabled=False, sem_enabled=False)
     assert streamlit.session_state["active_tab"] == ui.TAB_HOME
+
+
+def test_resolve_theme_logo_path_respects_theme(monkeypatch):
+    _ensure_streamlit_stub()
+    streamlit = importlib.import_module("streamlit")
+    core = importlib.import_module("src.ui.utils.core")
+    repo_root = Path(__file__).resolve().parents[1]
+
+    streamlit.session_state.clear()
+    monkeypatch.setattr(streamlit, "get_option", lambda key: "dark" if key == "theme.base" else None, raising=False)
+    assert core.get_theme_base() == "dark"
+    dark_logo = core.resolve_theme_logo_path(repo_root)
+    assert dark_logo.name == "next-logo-bianco.png"
+
+    streamlit.session_state.clear()
+    monkeypatch.setattr(streamlit, "get_option", lambda key: "light" if key == "theme.base" else None, raising=False)
+    assert core.get_theme_base() == "light"
+    light_logo = core.resolve_theme_logo_path(repo_root)
+    assert light_logo.name == "next-logo.png"

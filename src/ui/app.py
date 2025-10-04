@@ -23,6 +23,7 @@ from pipeline.file_utils import safe_write_text  # noqa: E402
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug  # noqa: E402
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read  # noqa: E402
 from pre_onboarding import ensure_local_workspace_for_ui  # noqa: E402
+from src.ui.utils.core import resolve_theme_logo_path  # noqa: E402
 
 # Queste util potrebbero non essere disponibili in ambienti headless: fallback a None
 try:
@@ -1057,9 +1058,9 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
 
     with st.sidebar:
         try:
-            logo_path = REPO_ROOT / "assets" / "next-logo.png"
+            logo_path = resolve_theme_logo_path(REPO_ROOT)
             if logo_path.exists():
-                st.image(str(logo_path), width="stretch")  # immagini: lasciamo compat (nessun warning)
+                st.image(str(logo_path), use_column_width=True)
         except Exception as exc:  # pragma: no cover
             logger.warning("ui.sidebar.logo_error", extra=enrich_log_extra({"error": str(exc)}))
 
@@ -1487,6 +1488,23 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
     st.subheader("Gestisci cliente")
     slugs = [entry.slug for entry in clients]
 
+    active_slug = st.session_state.get("ui.manage_slug")
+    if active_slug and active_slug in slugs:
+        st.session_state["ui.manage.selected_slug"] = active_slug
+        if st.button(
+            "Seleziona un altro cliente",
+            key="ui.manage.change_client",
+            type="secondary",
+            width="stretch",
+            help="Torna alla selezione clienti.",
+        ):
+            st.session_state["ui.manage_slug"] = None
+            st.session_state.pop("ui.manage.selected_slug", None)
+            st.rerun()
+
+        _render_manage_client_view(active_slug, logger)
+        return
+
     selected_slug = st.session_state.get("ui.manage.selected_slug")
     if not selected_slug or selected_slug not in slugs:
         selected_slug = slugs[0] if slugs else None
@@ -1826,10 +1844,12 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
 def main() -> None:
     logger = _setup_logging()
     if st is not None:
+        icon_path = REPO_ROOT / "assets" / "ico-next.png"
+        page_icon = str(icon_path) if icon_path.exists() else None
         st.set_page_config(
             page_title="Onboarding NeXT - Clienti",
             layout="wide",
-            page_icon=str(REPO_ROOT / "assets" / "ico-next.png"),
+            page_icon=page_icon,
         )
 
     phase = st.session_state.get("phase", "landing")
