@@ -31,6 +31,14 @@ La pagina non cambia URL: i blocchi sottostanti si attivano aggiornando `st.sess
 
 ---
 
+## Sidebar: azioni rapide
+La colonna sinistra mostra sempre una sezione fissa con:
+- **Home**: azzera lo stato e riporta alla schermata iniziale (equivalente a `_back_to_landing`).
+- **Genera dummy**: esegue il tool CLI `tools.gen_dummy_kb` per creare un workspace di esempio; mostra spinner e toast con l'esito.
+- **Esci**: invia il segnale di shutdown all'app Streamlit.
+
+La stessa colonna ospita logo, stato del cliente e scorciatoie contestuali (per esempio il link rapido ad 'Apri workspace').
+
 ## Flusso "Nuovo Cliente"
 1. **Form anagrafica**: campi `Slug (kebab-case)` e `Nome cliente`.
 2. **Upload VisionStatement.pdf**: l'uploader accetta un singolo PDF e lo salva in `config/VisionStatement.pdf`.
@@ -75,6 +83,7 @@ All'interno della tab sono disponibili gli editor `semantic_mapping.yaml`, `cart
 - Tutti i salvataggi YAML utilizzano `safe_write_text` con path-safety `ensure_within_and_resolve`.
 - `cartelle_raw.yaml` viene normalizzato automaticamente in formato `{raw: {...}}` quando la Vision restituisce la struttura legacy.
 - Lo stato del cliente viene aggiornato tramite `clients_store.set_state` (ad esempio `inizializzato` dopo la creazione, `pronto` dopo avere popolato `raw/`).
+- L'albero Drive e il diff usano frammenti Streamlit con cache di 90 secondi; il pulsante "Aggiorna elenco Drive" invalida la cache.
 - Gli spinner e i messaggi di esito sono visibili nella pagina corrente: non vengono aperte modali o tab secondarie.
 
 ---
