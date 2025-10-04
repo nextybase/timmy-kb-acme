@@ -27,7 +27,6 @@ google-auth-oauthlib==1.2.0
 spacy==3.7.4
 docker==7.0.0
 fpdf==1.7.2
-GitPython==3.1.43
 PyGithub==2.3.0
 
 # === Test & Dev tools ===
@@ -47,7 +46,6 @@ hypothesis>=6,<7
 
 # === Utility e compatibilità ===
 typing-extensions==4.12.2
-typing-inspection==0.4.0
 annotated-types==0.7.0
 
 # Libreria opzionale per l'interfaccia utente (Streamlit)

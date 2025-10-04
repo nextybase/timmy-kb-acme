@@ -92,3 +92,4 @@ node_modules/
 /Scripts/
 !scripts/
 !scripts/**
+clients_db/
