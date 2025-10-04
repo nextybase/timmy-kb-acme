@@ -851,7 +851,8 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
             logger.info("ui.setup.init_done", extra={"slug": slug})
         except ConfigError as exc:
             text = str(exc)
-            if "elaborato con lo stesso modello" in text:
+            file_path = getattr(exc, "file_path", None) or ""
+            if file_path.endswith(".vision_hash"):
                 _render_gate_resolution(slug, workspace_dir, logger, text)
             else:
                 st.error(text)
