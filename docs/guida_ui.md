@@ -13,11 +13,9 @@ Questa guida descrive l'interfaccia Streamlit utilizzata per l'onboarding dei cl
 
 Avvio rapido:
 ```bash
-# macOS / Linux
-streamlit run src/ui/app.py
 
-# Windows
-py -m streamlit run src/ui/app.py
+streamlit run onboarding_ui.py
+
 ```
 
 ---
@@ -70,6 +68,30 @@ Dopo avere scelto lo slug, la pagina mostra tre blocchi principali affiancati:
      - Aggiorna lo stub tramite `write_tags_review_stub_from_csv`.
      - Sincronizza `tags_reviewed.yaml` e ricarica il testo nell'editor.
      - In caso di errore mostra un messaggio e scrive il motivo nei log.
+
+## Riprendere dopo un’interruzione (gate Vision)
+
+Se interrompi il flusso prima di **Inizializza workspace** e poi riparti con uno **slug** che ha già generato gli YAML (stesso `VisionStatement.pdf` e stesso modello), l’app non si blocca: compare un **dialog** che ti chiede come procedere. Questo accade quando il controllo su `vision_hash` rileva che il PDF è stato già elaborato con la stessa configurazione.
+
+### Scelte disponibili
+- **Rigenera usando lo stesso PDF**
+  Ricrea gli YAML forzando l’operazione (`force=True`), senza richiedere un nuovo upload. Idempotente.
+- **Carica un nuovo PDF e rigenera**
+  Sostituisci il PDF e rigenera gli YAML. Utile se il documento è stato aggiornato.
+- **Annulla e apri gli YAML**
+  Nessuna rigenerazione: apri direttamente gli editor per verificare o modificare gli artefatti.
+
+### Cosa aspettarti da l’interfaccia
+- Il dialog mostra il motivo del gate (es. *Già elaborato con lo stesso modello…*).
+- Stato e avanzamento sono visibili con `st.status`/progress; alla fine compare una notifica di esito (**toast con fallback a success**).
+- Nessun side-effect a import-time, nessuna modifica alla business logic: è un adapter **UI-only**.
+
+### Linee guida operative
+- Se vuoi ripetere esattamente l’ultimo passaggio, scegli **Rigenera usando lo stesso PDF**.
+- Se il VisionStatement è cambiato, scegli **Carica un nuovo PDF e rigenera**.
+- Se devi solo consultare/modificare, scegli **Annulla e apri gli YAML**.
+
+> Nota: la rigenerazione con lo stesso PDF usa `force=True` per bypassare il gate; le altre operazioni restano invariate. Le notifiche di completamento seguono lo standard repo: `st.toast(...)` con fallback automatico a `st.success(...)`.
 
 ### Tab "Semantica"
 La tab appare solo quando lo stato del cliente e' in `{"pronto", "arricchito", "finito"}`. Per stati piu bassi la UI mostra l'avviso:

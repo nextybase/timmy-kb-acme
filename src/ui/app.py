@@ -134,6 +134,92 @@ def _ui_dialog(title: str, body_fn: Callable[[], None]) -> None:
             body_fn()
 
 
+def _render_gate_resolution(
+    slug: str,
+    workspace_dir: Path,
+    logger: logging.Logger,
+    reason: str,
+) -> None:
+    """Mostra dialog per rigenerare o mantenere artefatti Vision esistenti."""
+    if st is None:
+        return
+
+    def _body() -> None:
+        st.warning(reason)
+        choice = st.radio(
+            "Come vuoi procedere?",
+            (
+                "Rigenera usando lo stesso PDF",
+                "Carica un nuovo PDF e rigenera",
+                "Annulla e apri gli YAML",
+            ),
+            key=f"vision_gate_choice_{slug}",
+        )
+
+        if choice == "Rigenera usando lo stesso PDF":
+            if st.button("Procedi", type="primary"):
+                try:
+                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                    pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
+                    result = provision_from_vision(
+                        ctx,
+                        logger,
+                        slug=slug,
+                        pdf_path=pdf_path,
+                        force=True,
+                    )
+                    st.session_state["init_result"] = result or {}
+                    show_success("YAML rigenerati dal PDF esistente.")
+                    st.session_state["phase"] = "ready_to_open"
+                except ConfigError as exc:
+                    st.error(str(exc))
+
+        elif choice == "Carica un nuovo PDF e rigenera":
+            uploader_key = f"vision_gate_upl_{slug}"
+            uploaded = st.file_uploader(
+                "Seleziona il nuovo VisionStatement.pdf",
+                type=["pdf"],
+                key=uploader_key,
+            )
+            if uploaded is not None and st.button("Carica e rigenera", type="primary"):
+                data = uploaded.read()
+                if not data:
+                    st.warning("Il file caricato e' vuoto. Riprova.")
+                else:
+                    try:
+                        try:
+                            config_data = _load_config_data(workspace_dir)
+                        except ConfigError:
+                            config_data = {}
+                        client_name = cast(str, (config_data.get("client_name") or slug))
+                        ensure_local_workspace_for_ui(
+                            slug=slug,
+                            client_name=client_name,
+                            vision_statement_pdf=data,
+                        )
+                        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                        pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
+                        result = provision_from_vision(
+                            ctx,
+                            logger,
+                            slug=slug,
+                            pdf_path=pdf_path,
+                            force=False,
+                        )
+                        st.session_state["init_result"] = result or {}
+                        show_success("YAML rigenerati dal nuovo PDF.")
+                        st.session_state["phase"] = "ready_to_open"
+                    except ConfigError as exc:
+                        st.error(str(exc))
+
+        else:
+            if st.button("Apri YAML", type="primary"):
+                st.session_state.setdefault("init_result", {})
+                st.session_state["phase"] = "ready_to_open"
+
+    _ui_dialog("Artefatti gia' generati", _body)
+
+
 def _update_client_state(logger: logging.Logger, slug: str, stato: str) -> bool:
     """Aggiorna lo stato del cliente registrato, senza interrompere la UI."""
     try:
@@ -764,8 +850,12 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
             st.session_state["phase"] = "ready_to_open"
             logger.info("ui.setup.init_done", extra={"slug": slug})
         except ConfigError as exc:
-            st.error(str(exc))
-            _render_debug_expander(workspace_dir)
+            text = str(exc)
+            if "elaborato con lo stesso modello" in text:
+                _render_gate_resolution(slug, workspace_dir, logger, text)
+            else:
+                st.error(text)
+                _render_debug_expander(workspace_dir)
 
     st.button("Torna alla landing", on_click=_back_to_landing)
 
@@ -799,7 +889,13 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
                     # Rilancia la generazione usando il PDF esistente nel workspace
                     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
                     pdf_path = cast(Path, ensure_within_and_resolve(workspace_dir, _pdf_path(workspace_dir)))
-                    new_result = provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf_path)
+                    new_result = provision_from_vision(
+                        ctx,
+                        logger,
+                        slug=slug,
+                        pdf_path=pdf_path,
+                        force=True,
+                    )
                     yaml_paths_new = new_result.get("yaml_paths") if isinstance(new_result, dict) else {}
                     st.session_state["init_result"] = {"yaml_paths": yaml_paths_new or {}}
                     st.success("YAML rigenerati con successo.")
