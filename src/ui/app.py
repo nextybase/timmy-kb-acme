@@ -1860,5 +1860,49 @@ def main() -> None:
         _render_landing(logger)
 
 
+# ---------------------------------------------------------------------------
+# Tab renderers usati da ui/onboarding_ui.py per evitare il fallback monolitico
+# ---------------------------------------------------------------------------
+def render_home(*, slug: str | None = None, logger: logging.Logger | None = None) -> None:
+    """Landing/Home: mostra la schermata iniziale con le opzioni principali."""
+    try:
+        from ui.landing_slug import render_landing_slug
+    except Exception as exc:  # pragma: no cover
+        if logger:
+            logger.warning("ui.tabs.home_import_failed", extra={"error": str(exc)})
+        return
+    render_landing_slug(log=logger)
+
+
+def render_manage(*, slug: str | None, logger: logging.Logger | None = None) -> None:
+    """Gestione cliente: tab Drive e attivita correlate."""
+    if slug is None or not slug.strip():
+        render_home(slug=None, logger=logger)
+        return
+    try:
+        from ui.tabs.drive import render_drive_tab
+    except Exception as exc:  # pragma: no cover
+        if logger:
+            logger.warning("ui.tabs.manage_import_failed", extra={"slug": slug, "error": str(exc)})
+        return
+    log = logger or _setup_logging()
+    render_drive_tab(log=log, slug=slug.strip())
+
+
+def render_semantics(*, slug: str | None, logger: logging.Logger | None = None) -> None:
+    """Tab Semantica: conversione RAW->BOOK e materiali correlati."""
+    if slug is None or not slug.strip():
+        render_home(slug=None, logger=logger)
+        return
+    try:
+        from ui.tabs.semantic import render_semantic_tab
+    except Exception as exc:  # pragma: no cover
+        if logger:
+            logger.warning("ui.tabs.semantic_import_failed", extra={"slug": slug, "error": str(exc)})
+        return
+    log = logger or _setup_logging()
+    render_semantic_tab(log=log, slug=slug.strip())
+
+
 if __name__ == "__main__":
     main()
