@@ -28,6 +28,7 @@ from typing import Callable, Tuple
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 from src.ui.app import _setup_logging
+from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
 
 
 ICON_REFRESH = "\U0001F504"
@@ -84,7 +85,6 @@ _bootstrap_sys_path()
 
 REPO_ROOT = Path(__file__).resolve().parent
 
-from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
 
 # ------------------------------------------------------------------------------
 # UI helpers

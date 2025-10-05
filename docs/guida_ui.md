@@ -4,6 +4,23 @@ Questa guida descrive l'interfaccia Streamlit utilizzata per l'onboarding dei cl
 
 ---
 
+## Versione e compatibilità Streamlit
+
+L’interfaccia di onboarding Timmy-KB utilizza **Streamlit 1.50.0** .
+Tutta la UI è stata aggiornata per aderire alle **nuove API e linee guida ufficiali**:
+
+- Sostituzione completa di `use_container_width` con il nuovo parametro `width="stretch" | "content"`.
+- Rimozione definitiva di `st.cache` e migrazione ai nuovi decorator `st.cache_data` e `st.cache_resource`.
+- Uniformazione all’uso di `st.rerun` in luogo di `st.experimental_rerun`.
+- Ottimizzazione layout per i nuovi controlli di larghezza e i componenti grafici 1.50+.
+- Compatibilità verificata con Python 3.11 o superiore.
+
+La UI segue le *best practice* più recenti di Streamlit: inizializzazione con `st.set_page_config` come prima chiamata, gestione coerente dello stato con `st.session_state` e separazione chiara tra logica applicativa e presentazione.
+Le modifiche non alterano la logica di business né i flussi di onboarding già documentati.
+
+
+---
+
 ## Prerequisiti
 - Python 3.11 (o superiore) con Streamlit installato
 - Repository clonato e comando eseguito dalla root del progetto
@@ -28,11 +45,12 @@ La pagina non cambia URL: i blocchi sottostanti si attivano aggiornando `st.sess
 
 ---
 
-## Sidebar: azioni rapide
-La colonna sinistra mostra sempre una sezione fissa con:
-- **Home**: azzera lo stato e riporta alla schermata iniziale (equivalente a `_back_to_landing`).
-- **Genera dummy**: esegue il tool CLI `tools.gen_dummy_kb` per creare un workspace di esempio; mostra spinner e toast con l'esito.
-- **Esci**: invia il segnale di shutdown all'app Streamlit.
+## Sidebar: navigazione e azioni rapide
+- **Sezioni**: pulsanti Home, Gestisci cliente e Semantica per cambiare vista; vengono abilitati solo quando lo stato del cliente lo consente e Home riporta sempre alla landing.
+- **Guida UI**: link diretto a questo documento, utile per avere istruzioni contestuali durante l'onboarding.
+- **Aggiorna elenco Drive**: invalida la cache da 90 secondi dell'albero Drive e forza un nuovo fetch dei metadati.
+- **Genera dummy**: esegue `tools.gen_dummy_kb --slug <slug>` mostrando spinner e toast di esito.
+- **Esci**: richiede lo shutdown sicuro dell'app Streamlit.
 
 La stessa colonna ospita logo, stato del cliente e scorciatoie contestuali (per esempio il link rapido ad 'Apri workspace').
 
@@ -63,24 +81,16 @@ Gli editor YAML restano disponibili dopo la creazione per eventuali ritocchi man
 ---
 
 ## Flusso "Gestisci cliente"
-Dopo avere scelto lo slug, la pagina mostra tre blocchi principali affiancati:
+Dopo avere scelto lo slug, la sezione mostra prima il selettore clienti con i pulsanti **Gestisci**/**Elimina** (quest'ultimo apre una dialog di conferma che ripulisce workspace locale, DB e Drive) e poi tre blocchi principali affiancati:
 
 1. **Albero Drive**
    - Mostra la gerarchia a partire da `DRIVE_ID/<slug>/` con focus su `raw/` e relative sottocartelle.
    - Usa `render_drive_tree(slug)` e restituisce un indice dei metadati (tipo, size, mtime).
 
 2. **Diff Drive vs locale**
-   - Confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/` locale.
-   - Espone i conteggi di elementi presenti solo su Drive, solo in locale e le differenze (size/mtime).
-
+   Confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/` locale e include il pulsante **Scarica da Drive in raw/** con barra `st.status`; al termine aggiorna lo stato a `pronto`, invalida la cache Drive e ricalcola le differenze.
 3. **Editor tags_reviewed + Estrai Tags**
-   - Editor YAML per `semantic/tags_reviewed.yaml` con validazione minima.
-   - Pulsante **Estrai Tags** che esegue `run_tags_update(slug)`:
-     - Genera `tags_raw.csv`.
-     - Aggiorna lo stub tramite `write_tags_review_stub_from_csv`.
-     - Sincronizza `tags_reviewed.yaml` e ricarica il testo nell'editor.
-     - In caso di errore mostra un messaggio e scrive il motivo nei log.
-
+   Editor YAML per `semantic/tags_reviewed.yaml` con validazione minima; il pulsante **Estrai Tags** invoca `run_tags_update(slug)`, genera `tags_raw.csv`, aggiorna lo stub tramite `write_tags_review_stub_from_csv`, sincronizza `tags_reviewed.yaml` e usa `st.status` con toast di completamento. In caso di errore mostra un messaggio, scrive il motivo nei log e segnala se `raw/` manca oppure l'adapter non e' disponibile.
 ## Riprendere dopo un'interruzione (gate Vision)
 
 Se interrompi il flusso prima di **Inizializza workspace** e poi riparti con uno **slug** che ha gia' generato gli YAML (stesso `VisionStatement.pdf` e stesso modello), l'app non si blocca: compare un **dialog** che ti chiede come procedere. Questo accade quando il controllo su `vision_hash` rileva che il PDF e' stato gia' elaborato con la stessa configurazione.
@@ -150,7 +160,7 @@ output/
 ---
 
 ## FAQ
-- **Come avvio l'interfaccia?** `streamlit run src/ui/app.py`.
+- **Come avvio l'interfaccia?** `streamlit run onboarding_ui.py` (wrapper che applica header, diagnostica e sidebar); `streamlit run src/ui/app.py` resta disponibile come fallback legacy.
 - **Dove viene salvato il Vision Statement?** In `config/VisionStatement.pdf`.
 - **Perche' non vedo la tab Semantica?** Lo stato del cliente deve essere almeno `pronto`.
 - **Posso usare Estrai Tags senza Drive?** Si, se `raw/` contiene gia' i PDF necessari.
