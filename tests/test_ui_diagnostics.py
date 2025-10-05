@@ -119,3 +119,11 @@ def test_diagnostics_reads_only_tail(stub_streamlit: _StubStreamlit, stub_contex
     assert "line-0" not in shown_text
     assert "line-4999" in shown_text
     assert len(shown_text) <= 4096
+
+
+def test_resolve_slug_normalizes_whitespace(stub_streamlit: _StubStreamlit) -> None:
+    stub_streamlit.session_state.clear()
+    assert onboarding._resolve_slug("  MIXED  ") == "mixed"
+
+    stub_streamlit.session_state["ui.manage.selected_slug"] = "  Secondo  "
+    assert onboarding._resolve_slug(None) == "secondo"

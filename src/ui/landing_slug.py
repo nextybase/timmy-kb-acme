@@ -28,6 +28,20 @@ try:  # preferisce runtime soft-fail per import opzionali
 except Exception:  # pragma: no cover
     st = None
 
+
+def _safe_rerun() -> None:
+    if st is None:
+        return
+    try:
+        from src.ui.app import _safe_streamlit_rerun
+    except Exception:
+        rerun_fn = getattr(st, "rerun", None)
+        if callable(rerun_fn):
+            rerun_fn()
+        return
+    _safe_streamlit_rerun()
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 UI_STATE_PREFIX = "ui."
@@ -122,7 +136,7 @@ def _reset_to_landing() -> None:
             st.session_state.pop(key, None)
     _state_set("slug", "")
     try:
-        st.rerun()
+        _safe_rerun()
     except Exception:
         pass
 
@@ -195,7 +209,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     _state_set("active_section", "Configurazione")
     _state_pop("vision_workflow")
     try:
-        st.rerun()
+        _safe_rerun()
     except Exception:  # pragma: no cover
         pass
     return True, slug, client_name
@@ -481,7 +495,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         _state_set("client_locked", True)
         _state_set("active_section", "Configurazione")
         try:
-            st.rerun()
+            _safe_rerun()
         except Exception:  # pragma: no cover
             pass
 

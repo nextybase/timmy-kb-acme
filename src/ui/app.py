@@ -76,6 +76,17 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
+try:
+    from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+except Exception:  # pragma: no cover
+
+    class RerunException(Exception):  # type: ignore[no-redef]
+        """Fallback when Streamlit does not expose RerunException."""
+
+        def __init__(self, *args: Any, rerun_data: Any | None = None, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.rerun_data = rerun_data
+
 
 def _drive_tree_uncached(slug: str) -> Dict[str, Dict[str, Any]]:
     if render_drive_tree is None:
@@ -99,6 +110,25 @@ def _clear_drive_tree_cache() -> None:
             clear_fn()
         except Exception:  # pragma: no cover
             pass
+
+
+def _safe_streamlit_rerun() -> None:
+    """Trigger a Streamlit rerun when available, tolerating headless runs."""
+    if st is None:
+        return
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
+            rerun_fn()
+        except RerunException:
+            raise
+        return
+    experimental_fn = getattr(st, "experimental_rerun", None)
+    if callable(experimental_fn):
+        try:
+            experimental_fn()
+        except RerunException:
+            raise
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -162,7 +192,7 @@ def _render_gate_resolution(
 
     def _trigger_rerun() -> None:
         try:
-            st.rerun()
+            _safe_streamlit_rerun()
         except Exception:
             pass
 
@@ -1038,7 +1068,7 @@ def _handle_sidebar_navigation(slug: str, target: str) -> None:
     else:
         st.session_state.pop("ui.manage.target", None)
     try:
-        st.rerun()
+        _safe_streamlit_rerun()
     except Exception:
         pass
 
@@ -1084,7 +1114,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
         if st.button("Home", key="sidebar_home_btn", width="stretch", help="Torna alla schermata iniziale."):
             _back_to_landing()
             try:
-                st.rerun()
+                _safe_streamlit_rerun()
             except Exception:
                 pass
 
@@ -1133,7 +1163,7 @@ def _render_sidebar_shortcuts(slug: Optional[str], workspace_dir: Optional[Path]
                         try:
                             _open_workspace(slug, workspace_dir, logger)
                             st.session_state["phase"] = "workspace"
-                            st.rerun()
+                            _safe_streamlit_rerun()
                         except (ConfigError, RuntimeError) as exc:
                             st.error(str(exc))
             else:
@@ -1468,7 +1498,7 @@ def _render_new_client_block(logger: logging.Logger) -> None:
             st.session_state["ui.mode"] = "manage"
             st.session_state["ui.manage_slug"] = slug_effective
             st.session_state["ui.manage.selected_slug"] = slug_effective
-            st.rerun()
+            _safe_streamlit_rerun()
 
 
 def _render_manage_client_block(logger: logging.Logger) -> None:
@@ -1513,7 +1543,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         ):
             st.session_state["ui.manage_slug"] = None
             st.session_state.pop("ui.manage.selected_slug", None)
-            st.rerun()
+            _safe_streamlit_rerun()
 
         _render_manage_client_view(active_slug, logger)
         return
@@ -1553,7 +1583,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
         ):
             st.session_state["ui.manage_slug"] = selected
             logger.info("ui.manage.slug_selected", extra=enrich_log_extra({"slug": selected}))
-            st.rerun()
+            _safe_streamlit_rerun()
 
     with col_delete:
         # Chiave univoca per evitare duplicate key
@@ -1571,7 +1601,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                 typed_key = f"ui.manage.confirm_typed.{selected}"
                 if typed_key in st.session_state:
                     st.session_state.pop(typed_key)
-                st.rerun()
+                _safe_streamlit_rerun()
 
     # Modale di conferma eliminazione (gestita fuori dalle colonne)
     if st.session_state.get("ui.manage.confirm_open"):
@@ -1588,7 +1618,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                         st.session_state["ui.manage.confirm_open"] = False
                         st.session_state["ui.manage.confirm_target"] = None
                         st.session_state.pop(confirm_key, None)
-                        st.rerun()
+                        _safe_streamlit_rerun()
                 with c2:
                     confirmed = st.session_state.get(confirm_key, "") == target
                     if st.button(
@@ -1611,7 +1641,7 @@ def _render_manage_client_block(logger: logging.Logger) -> None:
                             if target == st.session_state.get("ui.manage_slug"):
                                 st.session_state.pop("ui.manage_slug", None)
                             st.session_state["ui.manage.selected_slug"] = None
-                            st.rerun()
+                            _safe_streamlit_rerun()
                         else:
                             st.error(f"Errore eliminazione: {message}")
 
@@ -1755,7 +1785,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     )
                 _clear_drive_tree_cache()
                 show_success("Scaricamento completato")
-                st.rerun()
+                _safe_streamlit_rerun()
             except Exception as exc:  # pragma: no cover
                 if status is not None:
                     status.update(label="Scaricamento interrotto", state="error", expanded=False)
@@ -1816,7 +1846,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
                     status.update(label="Estrazione completata", state="complete", expanded=False)
                 st.success("Estrai Tags completato")
                 st.toast("tags_reviewed.yaml aggiornato.")
-                st.rerun()
+                _safe_streamlit_rerun()
             except Exception as exc:  # pragma: no cover
                 if status is not None:
                     status.update(label="Estrazione interrotta", state="error", expanded=False)
@@ -1849,7 +1879,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         else:
             st.info("Elenco Drive aggiornato. Ricalcolo in corso...")
         try:
-            st.rerun()
+            _safe_streamlit_rerun()
         except Exception:
             pass
 

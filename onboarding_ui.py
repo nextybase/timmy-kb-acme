@@ -49,7 +49,7 @@ def _resolve_slug(slug: str | None) -> str | None:
         if candidate:
             trimmed = str(candidate).strip()
             if trimmed:
-                return trimmed
+                return trimmed.lower()
     return None
 
 
@@ -251,8 +251,14 @@ def _sidebar_quick_actions(slug: str | None) -> None:
         key="sidebar_refresh_drive",
         width="stretch",
     ):
-        st.session_state.pop("drive_cache_buster", None)
-        st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
+        try:
+            from src.ui.app import _clear_drive_tree_cache
+        except ImportError as exc:
+            st.sidebar.warning(f"Cache Drive non disponibile: {exc}")
+        else:
+            _clear_drive_tree_cache()
+            _setup_logging().info("ui.sidebar.drive_cache_cleared")
+            st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
     if st.sidebar.button(
         "Genera dummy",
         key="sidebar_dummy_btn",
@@ -524,7 +530,7 @@ def run() -> None:
     except Exception as e:
         _render_global_error(e)
         try:
-            _diagnostics(slug)
+            _diagnostics(resolved_slug)
         except Exception:
             pass
 
