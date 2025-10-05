@@ -1919,11 +1919,17 @@ def render_home(*, slug: str | None = None, logger: logging.Logger | None = None
 
 
 def render_manage(*, slug: str | None, logger: logging.Logger | None = None) -> None:
-    """Gestione cliente: riusa la UI completa del flusso Drive."""
+    """Gestione cliente con slug già risolto."""
     log = logger or _setup_logging()
-    if slug and slug.strip():
-        st.session_state["ui.manage.selected_slug"] = slug.strip()
-    _render_manage_client_block(log)
+    slug_value = (slug or "").strip()
+    if not slug_value:
+        st.info("Seleziona un cliente per accedere alla gestione.")
+        return
+    try:
+        _render_manage_client_view(slug_value, log)
+    except Exception as exc:  # pragma: no cover
+        log.warning("ui.manage.render_failed", extra=enrich_log_extra({"slug": slug_value, "error": str(exc)}))
+        st.error("Impossibile caricare la gestione del cliente.")
 
 
 def render_semantics(*, slug: str | None, logger: logging.Logger | None = None) -> None:
@@ -1931,8 +1937,7 @@ def render_semantics(*, slug: str | None, logger: logging.Logger | None = None) 
     log = logger or _setup_logging()
     slug_value = (slug or st.session_state.get("ui.manage.selected_slug") or "").strip()
     if not slug_value:
-        st.info("Seleziona prima un cliente dalla tab Gestisci cliente.")
-        _render_manage_client_block(log)
+        st.info("Seleziona prima un cliente per accedere alla sezione Semantica.")
         return
     try:
         from ui.tabs.semantic import render_semantic_tab

@@ -124,36 +124,9 @@ def _render_global_error(e: Exception) -> None:
 
 
 def _client_header(*, slug: str | None, state: str | None) -> None:
-    """Header della pagina principale con stato cliente."""
-    active_tab = st.session_state.get("active_tab", TAB_HOME)
-    tab_labels = {
-        TAB_HOME: "Panoramica cliente",
-        TAB_MANAGE: "Gestisci cliente",
-        TAB_SEM: "Semantica",
-    }
-
-    if slug:
-        state_value = (state or "").strip()
-        display_name = slug
-        try:
-            from ui.clients_store import get_state as _get_state, get_name as _get_name
-        except Exception:
-            _get_state = _get_name = None
-        if _get_state is not None:
-            try:
-                state_value = (_get_state(slug) or state_value).strip()
-            except Exception:
-                pass
-        if _get_name is not None:
-            try:
-                display_name = (_get_name(slug) or slug).strip()
-            except Exception:
-                pass
-        section = tab_labels.get(active_tab, "Gestisci cliente")
-        subtitle = f"{section} – {display_name} | stato: {state_value or 'n/d'}"
-    else:
-        subtitle = "Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing."
-
+    """Header della pagina principale senza caption aggiuntive."""
+    _ = state
+    subtitle = None
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -161,12 +134,9 @@ def _client_header(*, slug: str | None, state: str | None) -> None:
         include_anchor=True,
         show_logo=False,
     )
-
     if not slug:
         st.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
         return
-
-    st.divider()
 
 
 def _status_bar() -> Tuple[Callable[[str, str], None], Callable[[], None]]:
@@ -239,8 +209,12 @@ def _diagnostics(slug: str | None) -> None:
 
                 if latest and latest.is_file():
                     try:
-                        buf = latest.read_bytes()[-4000:]
-                        st.code(buf.decode(errors="replace"))
+                        size = latest.stat().st_size
+                        offset = max(0, size - 4000)
+                        with latest.open('rb') as fh:
+                            fh.seek(offset)
+                            buf = fh.read(4000)
+                        st.code(buf.decode(errors='replace'))
                     except Exception:
                         st.info("Log non leggibile.")
 
@@ -303,18 +277,23 @@ def _sidebar_skiplink_and_quicknav() -> None:
         candidate = getattr(app_mod, name, None)
         if callable(candidate):
             nav_fn = candidate
+            wrapper_attr = "__sidebar_only__"
+            if not getattr(candidate, wrapper_attr, False):
+                def _sidebar_only_nav(*, sidebar: bool = False, __orig=candidate, **kwargs):
+                    if not sidebar:
+                        return None
+                    kwargs["sidebar"] = True
+                    return __orig(**kwargs)
+                setattr(_sidebar_only_nav, wrapper_attr, True)
+                setattr(app_mod, name, _sidebar_only_nav)
+                nav_fn = _sidebar_only_nav
             break
     if nav_fn is None:
         return
     try:
         nav_fn(sidebar=True)
-        return
-    except TypeError:
-        pass
-    except Exception:
-        return
-    try:
-        nav_fn()
+    except RerunException:
+        raise
     except Exception:
         return
 
@@ -527,7 +506,6 @@ def run() -> None:
         pass
 
     try:
-        _sidebar_skiplink_and_quicknav()
         _sidebar_brand()
         _sidebar_tab_switches(
             home_enabled=home_enabled,
@@ -535,6 +513,7 @@ def run() -> None:
             sem_enabled=sem_enabled,
         )
         _sidebar_quick_actions(resolved_slug)
+        _sidebar_skiplink_and_quicknav()
     except Exception:
         pass
 
