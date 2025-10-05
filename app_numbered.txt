@@ -103,7 +103,7 @@
  103:         return val.strip() if isinstance(val, str) else ""
  104:
  105:     def _safe_streamlit_rerun() -> None:
- 106:         fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
+ 106:         fn = getattr(st, "rerun", None)
  107:         if callable(fn):
  108:             try:
  109:                 fn()
