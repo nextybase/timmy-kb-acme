@@ -1,7 +1,32 @@
 from __future__ import annotations
 
 import importlib
+import types
 from typing import Any
+
+try:
+    import streamlit as st
+except ImportError:
+    st = types.SimpleNamespace(
+        error=lambda *args, **kwargs: None,
+        info=lambda *args, **kwargs: None,
+        success=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        set_page_config=lambda *args, **kwargs: None,
+        session_state={},
+    )
+else:
+    for _name in (
+        "error",
+        "info",
+        "success",
+        "warning",
+        "set_page_config",
+    ):
+        if not hasattr(st, _name):
+            setattr(st, _name, lambda *args, **kwargs: None)
+    if not hasattr(st, "session_state"):
+        st.session_state = {}
 
 
 class _StubEmb:

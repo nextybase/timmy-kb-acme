@@ -24,6 +24,19 @@ if "streamlit.runtime.scriptrunner_utils.exceptions" not in sys.modules:
     streamlit_module = types.ModuleType("streamlit")
     streamlit_module.runtime = runtime_module
     streamlit_module.set_page_config = lambda *a, **k: None
+    streamlit_module.error = lambda *a, **k: None
+    streamlit_module.info = lambda *a, **k: None
+    streamlit_module.success = lambda *a, **k: None
+    streamlit_module.warning = lambda *a, **k: None
+    streamlit_module.session_state = {}
+    streamlit_module.sidebar = types.SimpleNamespace(
+        markdown=lambda *a, **k: None,
+        button=lambda *a, **k: False,
+        link_button=lambda *a, **k: None,
+        image=lambda *a, **k: None,
+    )
+    streamlit_module.markdown = lambda *a, **k: None
+    streamlit_module.button = lambda *a, **k: False
 
     sys.modules["streamlit.runtime.scriptrunner_utils.exceptions"] = rerun_module
     sys.modules["streamlit.runtime.scriptrunner_utils"] = scriptrunner_utils
