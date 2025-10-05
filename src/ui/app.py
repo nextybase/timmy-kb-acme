@@ -115,13 +115,12 @@ DialogFactory = Callable[[str], DialogDecorator]
 def _ui_dialog(title: str, body_fn: Callable[[], None]) -> None:
     """
     Version-safe dialog:
-    - prefer st.dialog (>=1.30) / st.experimental_dialog (decorator)
-    - fallback finale: expander "pseudo-modal"
+    - usa st.dialog (>=1.30); se assente ripiega sull'expander "pseudo-modal"
     body_fn: funzione senza argomenti che renderizza il contenuto del dialog.
     """
     if st is None:
         return
-    dlg_raw = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
+    dlg_raw = getattr(st, "dialog", None)
     dlg = cast(Optional[DialogFactory], dlg_raw)
     if dlg is not None:
         decorator: DialogDecorator = dlg(title)
@@ -191,7 +190,7 @@ def _render_gate_resolution(
         )
 
         if choice == "Rigenera usando lo stesso PDF":
-            if st.button("Procedi", type="primary", disabled=busy):
+            if st.button("Procedi", type="primary", width="stretch", disabled=busy):
                 _set_busy(True)
                 try:
                     with st.spinner("Rigenerazione in corso..."):
@@ -215,7 +214,7 @@ def _render_gate_resolution(
                 type=["pdf"],
                 key=upload_key,
             )
-            if uploaded is not None and st.button("Carica e rigenera", type="primary", disabled=busy):
+            if uploaded is not None and st.button("Carica e rigenera", type="primary", width="stretch", disabled=busy):
                 data = uploaded.read()
                 if not data:
                     st.warning("Il file caricato e' vuoto. Riprova.")
@@ -248,7 +247,7 @@ def _render_gate_resolution(
                         st.error(str(exc))
 
         else:
-            if st.button("Apri YAML", type="primary", disabled=busy):
+            if st.button("Apri YAML", type="primary", width="stretch", disabled=busy):
                 _set_busy(True)
                 try:
                     with st.spinner("Apertura YAML in corso..."):
@@ -948,7 +947,7 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     _render_config_editor(workspace_dir, slug, logger)
     pdf_ready = _handle_pdf_upload(workspace_dir, slug, logger)
 
-    if st.button("Inizializza workspace", type="primary", disabled=not pdf_ready):
+    if st.button("Inizializza workspace", type="primary", width="stretch", disabled=not pdf_ready):
         try:
             logger.info("ui.setup.init_start", extra={"slug": slug})
             result = _initialize_workspace(slug, workspace_dir, logger)
@@ -972,7 +971,7 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     if reason:
         _render_gate_resolution(slug, workspace_dir, logger, reason)
 
-    st.button("Torna alla landing", on_click=_back_to_landing)
+    st.button("Torna alla landing", width="content", on_click=_back_to_landing)
 
 
 def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
@@ -996,7 +995,7 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     if mapping_path and cartelle_path:
         confirm_key = f"regen_confirm_{slug}"
         confirm = st.checkbox("Sovrascrivi i file", key=confirm_key, value=False)
-        if st.button("Rigenera YAML"):
+        if st.button("Rigenera YAML", width="stretch"):
             if not confirm:
                 st.warning("Conferma la sovrascrittura per procedere.")
             else:
@@ -1017,14 +1016,14 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
                 except ConfigError as exc:
                     st.error(str(exc))
 
-    if st.button(f"Apri workspace: {slug}", type="primary"):
+    if st.button(f"Apri workspace: {slug}", type="primary", width="stretch"):
         try:
             _open_workspace(slug, workspace_dir, logger)
             st.session_state["phase"] = "workspace"
         except (ConfigError, RuntimeError) as exc:
             st.error(str(exc))
 
-    st.button("Torna alla landing", on_click=_back_to_landing)
+    st.button("Torna alla landing", width="content", on_click=_back_to_landing)
 
 
 def _handle_sidebar_navigation(slug: str, target: str) -> None:

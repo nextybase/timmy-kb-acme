@@ -29,11 +29,11 @@ def render_config_tab(*, log: Any, slug: str, client_name: str) -> None:
     st.caption("Valida o salva il mapping completo")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Valida mapping", key="btn_validate_mapping"):
+        if st.button("Valida mapping", key="btn_validate_mapping", width="stretch"):
             err = validate_categories(cats, normalize_keys=True)
             st.success("Mapping valido.") if not err else st.error(f"Errore: {err}")
     with col2:
-        if st.button("Salva mapping rivisto", key="btn_save_mapping_all"):
+        if st.button("Salva mapping rivisto", key="btn_save_mapping_all", width="stretch"):
             try:
                 new_map = build_mapping(cats, reserved, slug=slug, client_name=client_name, normalize_keys=True)
                 path = save_semantic_mapping(slug, new_map)
