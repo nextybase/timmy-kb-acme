@@ -170,3 +170,58 @@ def test_resolve_theme_logo_path_respects_theme(monkeypatch):
     assert core.get_theme_base() == "light"
     light_logo = core.resolve_theme_logo_path(repo_root)
     assert light_logo.name == "next-logo.png"
+
+
+def test_render_quick_nav_sidebar_targets_correct_container(monkeypatch):
+    _ensure_streamlit_stub()
+    streamlit = importlib.import_module("streamlit")
+    app = importlib.import_module("src.ui.app")
+    importlib.reload(app)
+
+    sidebar_calls: list[tuple[str, str]] = []
+    main_calls: list[tuple[str, str]] = []
+
+    def _sidebar_markdown(text: str, **_kwargs: object) -> None:
+        sidebar_calls.append(("sidebar", text))
+
+    def _main_markdown(text: str, **_kwargs: object) -> None:
+        main_calls.append(("main", text))
+
+    monkeypatch.setattr(streamlit.sidebar, "markdown", _sidebar_markdown, raising=False)
+    monkeypatch.setattr(streamlit, "markdown", _main_markdown, raising=False)
+
+    app.render_quick_nav_sidebar(sidebar=True)
+    assert sidebar_calls and all(target == "sidebar" for target, _ in sidebar_calls)
+    assert not main_calls
+
+    sidebar_calls.clear()
+    main_calls.clear()
+
+    app.render_quick_nav_sidebar()
+    assert main_calls and all(target == "main" for target, _ in main_calls)
+
+
+def test_sidebar_skiplink_and_quicknav_invokes_nav(monkeypatch):
+    _ensure_streamlit_stub()
+    streamlit = importlib.import_module("streamlit")
+    ui = importlib.import_module("onboarding_ui")
+
+    skip_calls: list[str] = []
+
+    def _sidebar_markdown(text: str, **_kwargs: object) -> None:
+        skip_calls.append(text)
+
+    monkeypatch.setattr(streamlit.sidebar, "markdown", _sidebar_markdown, raising=False)
+
+    nav_calls: list[bool] = []
+
+    def _fake_import(name: str):
+        assert name == "src.ui.app"
+        return types.SimpleNamespace(render_quick_nav_sidebar=lambda *, sidebar=False: nav_calls.append(sidebar))
+
+    monkeypatch.setattr(ui, "importlib", types.SimpleNamespace(import_module=_fake_import))
+
+    ui._sidebar_skiplink_and_quicknav()
+
+    assert nav_calls == [True]
+    assert any("#main" in text for text in skip_calls)

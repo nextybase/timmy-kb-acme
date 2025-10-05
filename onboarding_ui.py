@@ -105,11 +105,6 @@ def _page_config() -> None:
         page_icon=page_icon,
         initial_sidebar_state="expanded",
     )
-    # UI: skip-links per accessibilità tastiera
-    st.markdown(
-        "<a href='#main' class='sr-only-focusable'>Salta al contenuto principale</a>",
-        unsafe_allow_html=True,
-    )
 
 
 def _render_global_error(e: Exception) -> None:
@@ -294,6 +289,34 @@ def _sidebar_quick_actions(slug: str | None) -> None:
     if st.sidebar.button("Esci", type="primary", width="stretch", help="Chiudi l'app"):
         _request_shutdown_safe()
     st.sidebar.markdown("---")
+
+
+def _sidebar_skiplink_and_quicknav() -> None:
+    """Inserisce skip-link e navigazione rapida in sidebar (best-effort)."""
+    st.sidebar.markdown("<small><a href='#main' tabindex='0'>Main</a></small>", unsafe_allow_html=True)
+    try:
+        app_mod = importlib.import_module("src.ui.app")
+    except Exception:
+        return
+    nav_fn = None
+    for name in ("render_quick_nav_sidebar", "render_quick_nav", "render_quick_navigation", "quick_nav"):
+        candidate = getattr(app_mod, name, None)
+        if callable(candidate):
+            nav_fn = candidate
+            break
+    if nav_fn is None:
+        return
+    try:
+        nav_fn(sidebar=True)
+        return
+    except TypeError:
+        pass
+    except Exception:
+        return
+    try:
+        nav_fn()
+    except Exception:
+        return
 
 
 def _generate_dummy_workspace(slug: str | None) -> None:
@@ -504,6 +527,7 @@ def run() -> None:
         pass
 
     try:
+        _sidebar_skiplink_and_quicknav()
         _sidebar_brand()
         _sidebar_tab_switches(
             home_enabled=home_enabled,

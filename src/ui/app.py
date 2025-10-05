@@ -1667,6 +1667,20 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
             st.error(str(exc))
 
 
+def render_quick_nav_sidebar(*, sidebar: bool = False) -> None:
+    """Render quick navigation links pointing to main sections."""
+    target = st.sidebar if sidebar else st
+    if target is None:
+        return
+    try:
+        target.markdown("#### Navigazione rapida")
+        target.markdown(
+            "- [Drive](#section-drive)\n" "- [Editor YAML](#section-yaml)\n" "- [Semantica](#section-semantic)"
+        )
+    except Exception:
+        pass
+
+
 def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) -> None:
     logger = logger or logging.getLogger("ui.manage_client")
     workspace_dir = _workspace_dir_for(slug)
@@ -1677,8 +1691,7 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     else:
         st.warning("Workspace locale non trovato. Alcune funzionalita potrebbero non funzionare.")
 
-    st.markdown("#### Navigazione rapida")
-    st.markdown("- [Drive](#section-drive)\n- [Editor YAML](#section-yaml)\n- [Semantica](#section-semantic)")
+    render_quick_nav_sidebar()
 
     raw_dir = workspace_dir / "raw"
     raw_exists = raw_dir.exists() and raw_dir.is_dir()
