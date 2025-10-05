@@ -19,17 +19,17 @@ Aggiornamenti UI (non-breaking):
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
-import importlib
 from pathlib import Path
 from typing import Callable, Tuple
 
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+
 from src.ui.app import _setup_logging
 from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
-
 
 ICON_REFRESH = "\U0001F504"
 
@@ -211,10 +211,10 @@ def _diagnostics(slug: str | None) -> None:
                     try:
                         size = latest.stat().st_size
                         offset = max(0, size - 4000)
-                        with latest.open('rb') as fh:
+                        with latest.open("rb") as fh:
                             fh.seek(offset)
                             buf = fh.read(4000)
-                        st.code(buf.decode(errors='replace'))
+                        st.code(buf.decode(errors="replace"))
                     except Exception:
                         st.info("Log non leggibile.")
 
@@ -285,11 +285,13 @@ def _sidebar_skiplink_and_quicknav() -> None:
             nav_fn = candidate
             wrapper_attr = "__sidebar_only__"
             if not getattr(candidate, wrapper_attr, False):
+
                 def _sidebar_only_nav(*, sidebar: bool = False, __orig=candidate, **kwargs):
                     if not sidebar:
                         return None
                     kwargs["sidebar"] = True
                     return __orig(**kwargs)
+
                 setattr(_sidebar_only_nav, wrapper_attr, True)
                 setattr(app_mod, name, _sidebar_only_nav)
                 nav_fn = _sidebar_only_nav
@@ -349,10 +351,7 @@ def _compute_sem_enabled(state: str | None) -> bool:
 
 def _compute_manage_enabled(state: str | None, slug: str | None) -> bool:
     """Abilita Gestisci cliente da 'inizializzato' in avanti."""
-    normalized = _normalize_state(state)
-    if normalized in STATE_MANAGE_READY:
-        return True
-    return bool((slug or "").strip())
+    return _normalize_state(state) in STATE_MANAGE_READY
 
 
 def _compute_home_enabled(state: str | None, slug: str | None) -> bool:
@@ -422,52 +421,43 @@ def _sidebar_tab_switches(*, home_enabled: bool, manage_enabled: bool, sem_enabl
 
 def _render_tabs_router(active: str, slug: str | None) -> None:
     """Router tab-based. Se i renderer dedicati non esistono, fallback all'app monolitica."""
+    logger = _setup_logging()
     try:
         app_mod = importlib.import_module("src.ui.app")
-    except Exception:
-        app_mod = None
+    except Exception as exc:
+        logger.info("ui.tabs.module_import_failed", extra={"error": str(exc)})
+        raise
 
-    if app_mod is not None:
-        if active == TAB_HOME:
-            try:
-                render_home = getattr(app_mod, "render_home", None)
-                if callable(render_home):
-                    render_home()
-                    return
-            except RerunException:
-                raise
-            except Exception:
-                pass
-        if active == TAB_MANAGE:
-            try:
-                render_manage = getattr(app_mod, "render_manage", None)
-                if callable(render_manage):
-                    render_manage(slug=slug, logger=_setup_logging())
-                    return
-            except RerunException:
-                raise
-            except Exception:
-                pass
-        if active == TAB_SEM:
-            try:
-                render_semantics = getattr(app_mod, "render_semantics", None)
-                if callable(render_semantics):
-                    render_semantics(slug=slug, logger=_setup_logging())
-                    return
-            except RerunException:
-                raise
-            except Exception:
-                pass
+    def _call_renderer(name: str, **kwargs) -> bool:
+        candidate = getattr(app_mod, name, None)
+        if not callable(candidate):
+            return False
+        try:
+            candidate(**kwargs)
+        except RerunException:
+            raise
+        except Exception as exc:
+            event = f"ui.tabs.{name}_failed"
+            extra = {"error": str(exc), "active_tab": active}
+            if "slug" in kwargs and kwargs.get("slug") is not None:
+                extra["slug"] = kwargs["slug"]
+            logger.info(event, extra=extra)
+            raise
+        return True
 
-        app_main_candidate = getattr(app_mod, "main", None)
-        if callable(app_main_candidate):
-            app_main_candidate()
-            return
-
-    try:
-        app_main = importlib.import_module("src.ui.app").main
-    except Exception:
+    if active == TAB_HOME and _call_renderer("render_home"):
         return
+    if active == TAB_MANAGE and _call_renderer("render_manage", slug=slug, logger=logger):
+        return
+    if active == TAB_SEM and _call_renderer("render_semantics", slug=slug, logger=logger):
+        return
+
+    app_main_candidate = getattr(app_mod, "main", None)
+    if callable(app_main_candidate):
+        app_main_candidate()
+        return
+
+    app_main = importlib.import_module("src.ui.app").main
     app_main()
 
 

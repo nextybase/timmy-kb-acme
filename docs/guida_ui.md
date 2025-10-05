@@ -4,22 +4,17 @@ Questa guida descrive l'interfaccia Streamlit utilizzata per l'onboarding dei cl
 
 ---
 
-## Versione e compatibilità Streamlit
+## Versione e compatibilita' Streamlit
 
-L’interfaccia di onboarding Timmy-KB utilizza **Streamlit 1.50.0** .
-Tutta la UI è stata aggiornata per aderire alle **nuove API e linee guida ufficiali**:
+L'interfaccia di onboarding Timmy-KB richiede **Streamlit >= 1.50,<2**.
+La UI aderisce alle API stabili piu' recenti:
 
-- Sostituzione completa di `use_container_width` con il nuovo parametro `width="stretch" | "content"`.
-- Rimozione definitiva di `st.cache` e migrazione ai nuovi decorator `st.cache_data` e `st.cache_resource`.
-- Uniformazione all’uso di `st.rerun` in luogo di `st.experimental_rerun`.
-- Ottimizzazione layout per i nuovi controlli di larghezza e i componenti grafici 1.50+.
-- Compatibilità verificata con Python 3.11 o superiore.
+- Pulsanti e submit usano `width="stretch"` per garantire accessibilita' omogenea.
+- Cache aggiornata con `st.cache_data` e `st.cache_resource`.
+- Solo `st.rerun()` viene utilizzato; tutti i fallback `experimental_*` sono stati rimossi.
+- Compatibilita' verificata con Python 3.11 o superiore.
 
-La UI segue le *best practice* più recenti di Streamlit: inizializzazione con `st.set_page_config` come prima chiamata, gestione coerente dello stato con `st.session_state` e separazione chiara tra logica applicativa e presentazione.
-Le modifiche non alterano la logica di business né i flussi di onboarding già documentati.
-
-
----
+La UI segue le best practice Streamlit: inizializza con `st.set_page_config`, gestisce lo stato tramite `st.session_state` e mantiene separati presentazione e business-logic.
 
 ## Prerequisiti
 - Python 3.11 (o superiore) con Streamlit installato

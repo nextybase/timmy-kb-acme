@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 def _ensure_streamlit_stub() -> None:
     try:
@@ -121,8 +123,8 @@ def test_compute_manage_and_home_enabled():
     assert ui._compute_manage_enabled("Pronto", slug=None) is True
     assert ui._compute_manage_enabled("arricchito", slug="demo") is True
     assert ui._compute_manage_enabled("finito", slug="demo") is True
-    assert ui._compute_manage_enabled("bozza", slug="demo") is True
-    assert ui._compute_manage_enabled(None, slug="demo") is True
+    assert ui._compute_manage_enabled("bozza", slug="demo") is False
+    assert ui._compute_manage_enabled(None, slug="demo") is False
     assert ui._compute_manage_enabled(None, slug=None) is False
     assert ui._compute_home_enabled("inizializzato", slug="demo") is True
     assert ui._compute_home_enabled("bozza", slug="demo") is True
@@ -225,3 +227,47 @@ def test_sidebar_skiplink_and_quicknav_invokes_nav(monkeypatch):
 
     assert nav_calls == [True]
     assert any("#main" in text for text in skip_calls)
+
+
+def test_render_tabs_router_raises_on_error(monkeypatch):
+    _ensure_streamlit_stub()
+    ui = importlib.reload(importlib.import_module("onboarding_ui"))
+    real_import = importlib.import_module
+
+    def _raise_home() -> None:
+        raise RuntimeError("boom")
+
+    dummy_app = types.SimpleNamespace(render_home=_raise_home, main=lambda: None)
+
+    def _fake_import(name: str, *args, **kwargs):
+        if name == "src.ui.app":
+            return dummy_app
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(ui, "importlib", types.SimpleNamespace(import_module=_fake_import))
+
+    with pytest.raises(RuntimeError):
+        ui._render_tabs_router(ui.TAB_HOME, slug=None)
+
+
+def test_render_tabs_router_falls_back_to_main(monkeypatch):
+    _ensure_streamlit_stub()
+    ui = importlib.reload(importlib.import_module("onboarding_ui"))
+    real_import = importlib.import_module
+
+    calls: list[str] = []
+
+    def _main() -> None:
+        calls.append("main")
+
+    dummy_app = types.SimpleNamespace(main=_main)
+
+    def _fake_import(name: str, *args, **kwargs):
+        if name == "src.ui.app":
+            return dummy_app
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(ui, "importlib", types.SimpleNamespace(import_module=_fake_import))
+
+    ui._render_tabs_router(ui.TAB_HOME, slug=None)
+    assert calls == ["main"]

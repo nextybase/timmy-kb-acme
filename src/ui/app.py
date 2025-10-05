@@ -117,18 +117,12 @@ def _safe_streamlit_rerun() -> None:
     if st is None:
         return
     rerun_fn = getattr(st, "rerun", None)
-    if callable(rerun_fn):
-        try:
-            rerun_fn()
-        except RerunException:
-            raise
+    if not callable(rerun_fn):
         return
-    experimental_fn = getattr(st, "experimental_rerun", None)
-    if callable(experimental_fn):
-        try:
-            experimental_fn()
-        except RerunException:
-            raise
+    try:
+        rerun_fn()
+    except RerunException:
+        raise
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1001,7 +995,7 @@ def _render_setup(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     if reason:
         _render_gate_resolution(slug, workspace_dir, logger, reason)
 
-    st.button("Torna alla landing", width="content", on_click=_back_to_landing)
+    st.button("Torna alla landing", width="stretch", on_click=_back_to_landing)
 
 
 def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> None:
@@ -1053,7 +1047,7 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
         except (ConfigError, RuntimeError) as exc:
             st.error(str(exc))
 
-    st.button("Torna alla landing", width="content", on_click=_back_to_landing)
+    st.button("Torna alla landing", width="stretch", on_click=_back_to_landing)
 
 
 def _handle_sidebar_navigation(slug: str, target: str) -> None:

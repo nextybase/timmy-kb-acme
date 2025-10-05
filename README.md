@@ -174,6 +174,7 @@ Avvio:
 ```bash
 streamlit run onboarding_ui.py
 ```
+Requisiti: Streamlit >= 1.50 (solo `st.rerun`, nessun fallback `experimental_*`) e pulsanti/sottomissioni con `width="stretch"` per mantenere l'accessibilita'.
 Guida completa: `docs/guida_ui.md`.
 
 ---
