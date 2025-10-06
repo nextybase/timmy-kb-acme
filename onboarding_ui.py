@@ -23,12 +23,15 @@ import importlib
 import os
 import sys
 from pathlib import Path
-from typing import Callable, Tuple
+from functools import lru_cache
+from typing import Callable, List, Tuple
 
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 
 from src.ui.app import _setup_logging
+from pipeline.exceptions import ConfigError, PathTraversalError
+from pipeline.path_utils import ensure_within_and_resolve
 from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
 from ui.utils.workspace import has_raw_pdfs
 
@@ -177,38 +180,73 @@ def _diagnostics(slug: str | None) -> None:
 
         st.write(f"Base dir: `{base_dir or 'n/d'}`")
 
-        def _count_files(path: str | None) -> int:
+        MAX_DIAGNOSTIC_FILES = 2000
+
+        @lru_cache(maxsize=16)
+        def _count_files(path: str | None) -> tuple[int, bool]:
             if not path or not os.path.isdir(path):
-                return 0
+                return 0, False
             total = 0
             for _root, _dirs, files in os.walk(path):
                 total += len(files)
-            return total
+                if total >= MAX_DIAGNOSTIC_FILES:
+                    return MAX_DIAGNOSTIC_FILES, True
+            return total, False
+
+        def _fmt_count(count: int, truncated: bool) -> str:
+            return f">={count}" if truncated else str(count)
 
         if base_dir:
             raw = Path(base_dir) / "raw"
             book = Path(base_dir) / "book"
             semantic = Path(base_dir) / "semantic"
+            raw_count, raw_truncated = _count_files(str(raw))
+            book_count, book_truncated = _count_files(str(book))
+            semantic_count, semantic_truncated = _count_files(str(semantic))
+
             st.write(
-                f"raw/: **{_count_files(str(raw))}** file · "
-                f"book/: **{_count_files(str(book))}** · "
-                f"semantic/: **{_count_files(str(semantic))}**"
+                "raw/: **{raw}** file \u00b7 book/: **{book}** \u00b7 semantic/: **{semantic}**".format(
+                    raw=_fmt_count(raw_count, raw_truncated),
+                    book=_fmt_count(book_count, book_truncated),
+                    semantic=_fmt_count(semantic_count, semantic_truncated),
+                )
             )
+            if raw_truncated or book_truncated or semantic_truncated:
+                st.caption(f"Conteggio limitato a {MAX_DIAGNOSTIC_FILES} file per directory.")
 
-            logs_dir = Path(base_dir) / "logs"
-            if logs_dir.is_dir():
-                latest = None
+            logs_dir: Path | None
+            try:
+                logs_dir = ensure_within_and_resolve(Path(base_dir), Path(base_dir) / "logs")
+            except (ConfigError, PathTraversalError):
+                logs_dir = None
+
+            safe_log_files: List[Path] = []
+            if logs_dir and logs_dir.is_dir():
                 try:
-                    files = sorted(
-                        (p for p in logs_dir.iterdir() if p.is_file()),
-                        key=lambda p: p.stat().st_mtime,
-                        reverse=True,
-                    )
-                    latest = files[0] if files else None
+                    for entry in logs_dir.iterdir():
+                        if entry.is_symlink():
+                            continue
+                        try:
+                            safe_entry = ensure_within_and_resolve(logs_dir, entry)
+                        except (ConfigError, PathTraversalError):
+                            continue
+                        if safe_entry.is_file():
+                            safe_log_files.append(safe_entry)
                 except Exception:
-                    latest = None
+                    safe_log_files = []
 
-                if latest and latest.is_file():
+                latest = None
+                if safe_log_files:
+                    def _safe_mtime(path: Path) -> float:
+                        try:
+                            return path.stat().st_mtime
+                        except Exception:
+                            return 0.0
+
+                    safe_log_files.sort(key=_safe_mtime, reverse=True)
+                    latest = safe_log_files[0]
+
+                if latest:
                     try:
                         size = latest.stat().st_size
                         offset = max(0, size - 4000)
@@ -219,21 +257,23 @@ def _diagnostics(slug: str | None) -> None:
                     except Exception:
                         st.info("Log non leggibile.")
 
-                # Zip dei log on-the-fly per download
-                import io
-                import zipfile
+                if safe_log_files:
+                    import io
+                    import zipfile
 
-                mem = io.BytesIO()
-                with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                    for f in logs_dir.iterdir():
-                        if f.is_file():
-                            zf.write(f, arcname=f.name)
-                st.download_button(
-                    "Scarica logs",
-                    data=mem.getvalue(),
-                    file_name=f"{slug}-logs.zip",
-                    mime="application/zip",
-                )
+                    mem = io.BytesIO()
+                    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                        for file_path in safe_log_files:
+                            try:
+                                zf.write(file_path, arcname=file_path.name)
+                            except Exception:
+                                continue
+                    st.download_button(
+                        "Scarica logs",
+                        data=mem.getvalue(),
+                        file_name=f"{slug}-logs.zip",
+                        mime="application/zip",
+                    )
 
 
 def _sidebar_brand() -> None:
@@ -245,6 +285,7 @@ def _sidebar_brand() -> None:
 
 
 def _sidebar_quick_actions(slug: str | None) -> None:
+    logger = _setup_logging()
     st.sidebar.markdown("### Azioni rapide")
     st.sidebar.link_button("Guida UI", "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md")
     if st.sidebar.button(
@@ -256,9 +297,16 @@ def _sidebar_quick_actions(slug: str | None) -> None:
             from src.ui.app import _clear_drive_tree_cache
         except ImportError as exc:
             st.sidebar.warning(f"Cache Drive non disponibile: {exc}")
+            logger.warning(
+                "ui.sidebar.drive_cache_import_failed",
+                extra={"error": str(exc), "action": "refresh_drive", "slug": slug},
+            )
         else:
             _clear_drive_tree_cache()
-            _setup_logging().info("ui.sidebar.drive_cache_cleared")
+            logger.info(
+                "ui.sidebar.drive_cache_cleared",
+                extra={"action": "refresh_drive", "slug": slug},
+            )
             st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
     if st.sidebar.button(
         "Genera dummy",
@@ -266,8 +314,13 @@ def _sidebar_quick_actions(slug: str | None) -> None:
         width="stretch",
         help="Crea il workspace di esempio per testare il flusso.",
     ):
+        logger.info(
+            "ui.sidebar.generate_dummy_requested",
+            extra={"slug": slug},
+        )
         _generate_dummy_workspace(slug)
     if st.sidebar.button("Esci", type="primary", width="stretch", help="Chiudi l'app"):
+        logger.info("ui.sidebar.shutdown_requested", extra={"slug": slug})
         _request_shutdown_safe()
     st.sidebar.markdown("---")
 
@@ -472,6 +525,7 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
 
 def run() -> None:
     _page_config()
+    logger = _setup_logging()
 
     slug = None
     state = None
@@ -482,11 +536,18 @@ def run() -> None:
             from ui.session import get_current_slug
 
             slug = get_current_slug()
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "ui.run.get_current_slug_failed",
+                extra={"error": str(exc)},
+            )
             slug = st.session_state.get("current_slug")
         state = (get_state(slug) or "").strip().lower() if slug else None
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(
+            "ui.run.state_load_failed",
+            extra={"stage": "state_init", "error": str(exc)},
+        )
 
     resolved_slug = _resolve_slug(slug)
     if resolved_slug:
@@ -497,13 +558,20 @@ def run() -> None:
 
     try:
         _init_tab_state(home_enabled, manage_enabled, sem_enabled)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "ui.run.init_tab_state_failed",
+            extra={"error": str(exc), "slug": resolved_slug},
+        )
         st.session_state["active_tab"] = TAB_HOME
 
     try:
         _client_header(slug=resolved_slug, state=state)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(
+            "ui.run.client_header_failed",
+            extra={"slug": resolved_slug, "state": state, "error": str(exc)},
+        )
 
     try:
         _sidebar_brand()
@@ -514,19 +582,26 @@ def run() -> None:
         )
         _sidebar_quick_actions(resolved_slug)
         _sidebar_skiplink_and_quicknav()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(
+            "ui.run.sidebar_render_failed",
+            extra={"slug": resolved_slug, "error": str(exc)},
+        )
 
     try:
         _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), resolved_slug)
     except RerunException:
         raise
     except Exception as e:
+        logger.exception(
+            "ui.run.render_router_failed",
+            extra={"active_tab": st.session_state.get("active_tab", TAB_HOME), "slug": resolved_slug, "error": str(e)},
+        )
         _render_global_error(e)
         try:
             _diagnostics(resolved_slug)
-        except Exception:
-            pass
+        except Exception as diag_exc:
+            logger.exception("ui.run.diagnostics_failed", extra={"slug": resolved_slug, "error": str(diag_exc)})
 
 
 if __name__ == "__main__":

@@ -66,6 +66,43 @@ MIN_JSON_SCHEMA = {
 }
 
 
+def _approx_token_count(text: str) -> int:
+    """Stima grezza ≈ 4 char/token. Sufficiente per la decisione AUTO."""
+    return max(1, len(text) // 4)
+
+
+def _split_by_headings(text: str, headings=("Organization", "Vision", "Mission")) -> List[str]:
+    """Spezza il VisionStatement in blocchi/sezioni mantenendo i titoli come ancore semantiche."""
+    import re
+
+    # normalizza righe vuote multiple
+    t = re.sub(r"\n{3,}", "\n\n", text.strip())
+    # split preservando i titoli su riga singola
+    parts = re.split(r"(?m)^(?=(" + "|".join(map(re.escape, headings)) + r")\s*$)", t)
+    sections: List[str] = []
+    for i in range(1, len(parts), 2):
+        title = parts[i].strip()
+        body = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        if title or body:
+            sections.append(f"# {title}\n{body}")
+    return [s for s in sections if s.strip()]
+
+
+def _decide_input_mode(snapshot_text: str, env_override: Optional[str] = None) -> str:
+    """
+    Ritorna 'inline' | 'vector'.
+    Se env = 'inline' | 'vector' forza la scelta, altrimenti AUTO:
+    - inline se token stimati <= 15k e testo lineare (>= 1 sezione riconosciuta)
+    - vector altrimenti
+    """
+    mode = (env_override or os.getenv("VISION_INPUT_MODE") or "auto").lower()
+    if mode in ("inline", "vector"):
+        return mode
+    is_small = _approx_token_count(snapshot_text) <= 15_000
+    has_sections = len(_split_by_headings(snapshot_text)) >= 1
+    return "inline" if (is_small and has_sections) else "vector"
+
+
 def _sha256_of_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -285,34 +322,65 @@ def _call_semantic_mapping_response(
     user_block: str,
     vs_id: str,
     snapshot_text: str,
+    inline_sections: List[str],
 ) -> Dict[str, Any]:
     assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
 
-    system_user_input = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+    use_inline = bool(inline_sections)
+    system_prompt = SYSTEM_PROMPT
+    if use_inline:
+        system_prompt = (
+            SYSTEM_PROMPT
+            + "\n\nDurante QUESTA run: ignora File Search e usa esclusivamente i blocchi [DOC] forniti."
+            + " Produci solo JSON conforme allo schema. Niente testo fuori JSON."
+        )
+
+    # Messaggi
+    system_user_input: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_block},
     ]
+    if use_inline:
+        for i, sec in enumerate(inline_sections, start=1):
+            system_user_input.append({"role": "user", "content": f"[DOC SEZIONE {i}]\n{sec}\n[/DOC]"})
+
     json_schema = {
         "type": "json_schema",
-        "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
+        "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA, "strict": True},
     }
 
     if assistant_id:
-        payload = dict(
-            assistant_id=assistant_id,
-            input=system_user_input,
-            tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-            response_format=json_schema,
-            temperature=0.2,
-        )
+        if use_inline:
+            payload = dict(
+                assistant_id=assistant_id,
+                input=system_user_input,
+                response_format=json_schema,
+                temperature=0.2,
+            )
+        else:
+            payload = dict(
+                assistant_id=assistant_id,
+                input=system_user_input,
+                tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
+                response_format=json_schema,
+                temperature=0.2,
+            )
     else:
-        payload = dict(
-            model=model,
-            input=system_user_input,
-            tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
-            response_format=json_schema,
-            temperature=0.2,
-        )
+        if use_inline:
+            payload = dict(
+                model=model,
+                input=system_user_input,
+                response_format=json_schema,
+                temperature=0.2,
+            )
+        else:
+            payload = dict(
+                model=model,
+                input=system_user_input,
+                tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
+                response_format=json_schema,
+                temperature=0.2,
+            )
 
     responses_ns = getattr(client, "responses", None)
     if responses_ns and hasattr(responses_ns, "create"):
@@ -334,14 +402,17 @@ def _call_semantic_mapping_response(
 
     chat_completions = getattr(getattr(client, "chat", None), "completions", None)
     if chat_completions and hasattr(chat_completions, "create"):
-        trimmed_snapshot = snapshot_text[:_CHAT_COMPLETIONS_MAX_CHARS]
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": (f"{user_block}\n\n" "Vision Statement (testo estratto):\n" f"{trimmed_snapshot}"),
-            },
-        ]
+        if use_inline:
+            messages = system_user_input
+        else:
+            trimmed_snapshot = snapshot_text[:_CHAT_COMPLETIONS_MAX_CHARS]
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (f"{user_block}\n\n" "Vision Statement (testo estratto):\n" f"{trimmed_snapshot}"),
+                },
+            ]
         chat_resp = chat_completions.create(
             model=model,
             messages=messages,
@@ -360,10 +431,10 @@ def _call_semantic_mapping_response(
             content = getattr(message, "content", None)
         if not content:
             raise ConfigError("Chat completions: contenuto vuoto.")
-        import json
+        import json as _json  # evita shadowing
 
         try:
-            data = json.loads(content)
+            data = _json.loads(content)
         except Exception as exc:
             raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
         return data
@@ -480,9 +551,16 @@ def provision_from_vision(
     # 1) Estrazione testo (solo per contesto AI; nessun salvataggio snapshot)
     snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
 
-    # 2) Invocazione AI
+    # 2) Invocazione AI — modalità di input
     client = make_openai_client()
-    vs_id = _create_vector_store_with_pdf(client, safe_pdf)
+    input_mode = _decide_input_mode(snapshot)
+    vs_id: Optional[str] = None
+    inline_sections: Optional[List[str]] = None
+    if input_mode == "vector":
+        vs_id = _create_vector_store_with_pdf(client, safe_pdf)
+    else:
+        # INLINE: usa esclusivamente il testo estratto (spezzato per sezione)
+        inline_sections = _split_by_headings(snapshot)
 
     # Modello: priorità a env VISION_MODEL, fallback al parametro/default
     model_env = os.getenv("VISION_MODEL")
@@ -495,15 +573,20 @@ def provision_from_vision(
         "Contesto cliente:\n"
         f"- slug: {slug}\n"
         f"- client_name: {display_name}\n"
-        "\nVision Statement: vedi documento allegato nel contesto (tool file_search)."
+        + (
+            "\nVision Statement: vedi documento allegato nel contesto (tool file_search)."
+            if input_mode == "vector"
+            else "\nVision Statement: usa SOLO i blocchi DOC forniti qui sotto."
+        )
     )
 
     data = _call_semantic_mapping_response(
         client,
         model=effective_model,
         user_block=user_block,
-        vs_id=vs_id,
+        vs_id=vs_id or "",
         snapshot_text=snapshot,
+        inline_sections=inline_sections or [],
     )
     # HARD GATE: coerenza slug per prevenire leak inter-cliente
     _validate_json_payload(data, expected_slug=slug)
