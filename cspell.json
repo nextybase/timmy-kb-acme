@@ -53,18 +53,18 @@
     "rilasciabile"
   ],
   "flagWords": [
-    "fa��ade",
-    "fail�",
-    "œsuccess�",
-    "side�",
-    "import�",
-    "pathâ",
-    "crossâ",
+    "fa\uFFFD\uFFFDade",
+    "fail\uFFFD\uFFFD\uFFFD",
+    "\u0153success\uFFFD",
+    "side\uFFFD\uFFFD\uFFFD",
+    "import\uFFFD\uFFFD\uFFFD",
+    "path\u00e2",
+    "cross\u00e2",
     "osservabilit",
     "Qualit",
     "utilit",
-    "Preâ",
-    "allâ"
+    "Pre\u00e2",
+    "all\u00e2"
   ],
   "ignoreRegExpList": [
     "/https?:\\/\\/\\S+/",

@@ -39,7 +39,7 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 
 ## Qualità prima dei test (lint & format obbligatori)
 
-Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
+Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `ruff` (lint).
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
 Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
@@ -47,12 +47,12 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 
 **Definition of Done (minimo) per ogni PR:**
 - file formattati (`black`) e import ordinati (`isort`);
-- `flake8` pulito (nessun F/E/W rilevante);
+- `ruff` pulito (nessun F/E/W rilevante);
 - messaggi di log privi di segreti;
 - test esistenti non rotti.
 
 ### Linting & Formatting
-- Ruff è il linter SSoT: replica regole flake8/bandit in Ruff; se manca qualcosa, aggiungi in `pyproject.toml`.
+- Ruff è il linter SSoT: tutte le regole lint vivono in Ruff; se manca qualcosa, estendi `pyproject.toml`.
 - Black e isort: obbligatori per formattazione/ordinamento import.
 
 
@@ -65,7 +65,7 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 - Type check rapidi:
   - Mypy: `make type`
   - Pyright: `make type-pyright` (richiede `pyright` o `npx`)
-- Linting automatico in CI: ogni PR/build passa Black, Ruff e isort. Dove compare Flake8 negli standard, consideralo allineato a Ruff.
+- Linting automatico in CI: ogni PR/build passa Black, Ruff e isort; Ruff è l'unica fonte autorevole per le regole lint.
 
 ---
 

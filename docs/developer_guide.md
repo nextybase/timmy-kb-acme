@@ -95,7 +95,7 @@ python scripts/forbid_control_chars.py --fix <path>
 ---
 
 ## Qualità prima dei test (lint & format obbligatori)
-Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `flake8` (lint).
+Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `ruff` (lint).
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
 Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
@@ -103,19 +103,19 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 
 **Definition of Done (minimo) per ogni PR:**
 - file formattati (`black`) e import ordinati (`isort`);
-- `flake8` pulito (nessun F/E/W rilevante);
+- `ruff` pulito (nessun F/E/W rilevante);
 - messaggi di log privi di segreti;
 - test esistenti non rotti.
 
 **Setup qualità locale (obbligatorio)**
-1. Installa toolchain: `pip install -U pre-commit black isort flake8`.
+1. Installa toolchain: `pip install -U pre-commit black isort ruff`.
 2. Attiva hook: `pre-commit install`.
-3. Editor (VS Code): abilita *format on save* con `black`, lint con `flake8`, `isort` profilo `black`, line-length 120.
+3. Editor (VS Code): abilita *format on save* con `black`, lint con `ruff`, `isort` profilo `black`, line-length 120.
 
 **Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatterà automaticamente).
 Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualità per far arrivare al testing solo codice già pulito.
 
-> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/flake8; nessun segreto nei log".
+> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/ruff; nessun segreto nei log".
 
 ---
 
