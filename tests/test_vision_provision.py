@@ -3,16 +3,19 @@
 # =========================
 from __future__ import annotations
 
+import logging
 import types
 from pathlib import Path
 
 import pytest
 import yaml
 
+fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF/PyMuPDF wheels")
+
 from pipeline.exceptions import ConfigError
 
 # Import modulo sotto test
-from semantic.vision_provision import provision_from_vision
+from semantic.vision_provision import _extract_pdf_text, provision_from_vision
 from semantic.vision_utils import json_to_cartelle_raw_yaml
 
 # ---- Fakes OpenAI -----------------------------------------------------------
@@ -74,9 +77,20 @@ class FakeOpenAI:
 class _NoopLogger:
     def info(self, *args, **kwargs): ...
 
+    def warning(self, *args, **kwargs): ...
+
     def error(self, *args, **kwargs): ...
 
     def exception(self, *args, **kwargs): ...
+
+
+def _write_pdf(path: Path, text: str | None) -> None:
+    doc = fitz.open()
+    doc.new_page()
+    if text:
+        doc[0].insert_text((72, 72), text)
+    doc.save(path)
+    doc.close()
 
 
 class DummyCtx:
@@ -93,8 +107,46 @@ def tmp_workspace(tmp_path: Path) -> Path:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     pdf = base / "config" / "VisionStatement.pdf"
-    pdf.write_bytes(b"%PDF dummy")
+    _write_pdf(pdf, "Vision Statement demo")
     return base
+
+
+# ---- Tests -------------------------------------------------------------------
+
+
+def test_extract_pdf_text_empty(tmp_path, caplog):
+    pdf = tmp_path / "empty.pdf"
+    _write_pdf(pdf, "")
+
+    logger = logging.getLogger("test.extract")
+    with caplog.at_level(logging.INFO):
+        with pytest.raises(ConfigError, match="vuoto"):
+            _extract_pdf_text(pdf, slug="dummy", logger=logger)
+
+    records = [record for record in caplog.records if record.message == "vision_provision.extract_failed"]
+    assert any(getattr(record, "reason", None) == "empty" for record in records)
+
+
+def test_extract_pdf_text_corrupted(tmp_path, caplog):
+    pdf = tmp_path / "corrupted.pdf"
+    pdf.write_bytes(b"not-a-pdf")
+
+    logger = logging.getLogger("test.extract")
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ConfigError, match="illeggibile"):
+            _extract_pdf_text(pdf, slug="dummy", logger=logger)
+
+    records = [record for record in caplog.records if record.message == "vision_provision.extract_failed"]
+    assert any(getattr(record, "reason", None) == "corrupted" for record in records)
+
+
+def test_extract_pdf_text_success(tmp_path):
+    pdf = tmp_path / "sample.pdf"
+    _write_pdf(pdf, "Hello Vision")
+
+    logger = logging.getLogger("test.extract")
+    text_out = _extract_pdf_text(pdf, slug="dummy", logger=logger)
+    assert "Hello Vision" in text_out
 
 
 # ---- Tests -------------------------------------------------------------------
