@@ -1,6 +1,4 @@
-import logging
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -9,36 +7,27 @@ fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyM
 import src.semantic.vision_provision as vp
 
 
-def _write_pdf(path: Path, text: str) -> None:
-    doc = fitz.open()
-    doc.new_page()
-    doc[0].insert_text((72, 72), text)
-    doc.save(path)
-    doc.close()
+def test_provision_uses_client_name_in_prompt(dummy_workspace, dummy_ctx, dummy_logger, monkeypatch):
+    slug = dummy_workspace["slug"]
+    pdf = dummy_workspace["vision_pdf"]
+    mapping_path = dummy_workspace["semantic_mapping"]
+    cartelle_path = dummy_workspace["cartelle_raw"]
+    ctx = dummy_ctx
+    ctx.client_name = "ACME S.p.A."
+    logger = dummy_logger
 
+    seen: dict[str, str] = {}
 
-def test_provision_uses_client_name_in_prompt(tmp_path, monkeypatch):
-    base = tmp_path / "ws"
-    base.mkdir()
-    pdf = base / "config" / "VisionStatement.pdf"
-    pdf.parent.mkdir(parents=True, exist_ok=True)
-    _write_pdf(pdf, "Vision Statement demo")
+    def _fake_vector_store(client, pdf_path):
+        return "vs_dummy"
 
-    # Context con client_name reale
-    ctx = SimpleNamespace(base_dir=base, client_name="ACME S.p.A.")
-    logger = logging.getLogger("test.vision")
-
-    seen = {}
-
-    # Evita rete/SDK reali
-    monkeypatch.setattr(vp, "_create_vector_store_with_pdf", lambda client, pdf_path: "vs_dummy")
+    monkeypatch.setattr(vp, "_create_vector_store_with_pdf", _fake_vector_store)
     monkeypatch.setattr(vp, "make_openai_client", lambda: object())
 
-    def fake_call(client, *, model, user_block, vs_id, snapshot_text):  # type: ignore[no-untyped-def]
+    def fake_call(client, *, model, user_block, vs_id, snapshot_text, inline_sections):  # type: ignore[no-untyped-def]
         seen["user_block"] = user_block
-        # Payload minimo valido per la validazione + conversione YAML
         return {
-            "context": {"slug": "x", "client_name": ctx.client_name},
+            "context": {"slug": slug, "client_name": ctx.client_name},
             "areas": [
                 {"key": "core", "ambito": "A", "descrizione": "D", "keywords": []},
             ],
@@ -46,10 +35,20 @@ def test_provision_uses_client_name_in_prompt(tmp_path, monkeypatch):
 
     monkeypatch.setattr(vp, "_call_semantic_mapping_response", fake_call)
 
-    out = vp.provision_from_vision(ctx, logger, slug="x", pdf_path=pdf)
-    assert Path(out["mapping"]).exists()
-    assert Path(out["cartelle_raw"]).exists()
+    original_mapping = mapping_path.read_text(encoding="utf-8")
+    original_cartelle = cartelle_path.read_text(encoding="utf-8")
 
-    # Il prompt deve includere il client_name reale
+    try:
+        out = vp.provision_from_vision(ctx, logger, slug=slug, pdf_path=pdf)
+        out_mapping = Path(out["mapping"])
+        out_cartelle = Path(out["cartelle_raw"])
+        assert out_mapping == mapping_path
+        assert out_cartelle == cartelle_path
+        assert mapping_path.exists()
+        assert cartelle_path.exists()
+    finally:
+        mapping_path.write_text(original_mapping, encoding="utf-8")
+        cartelle_path.write_text(original_cartelle, encoding="utf-8")
+
     ub = seen.get("user_block", "")
     assert f"client_name: {ctx.client_name}" in ub

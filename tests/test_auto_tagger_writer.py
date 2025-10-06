@@ -20,9 +20,9 @@ def _candidates_min() -> dict[str, dict[str, object]]:
     }
 
 
-def test_render_tags_csv_happy_path(dummy_kb):
-    base: Path = dummy_kb["base"]
-    sem: Path = dummy_kb["semantic"]
+def test_render_tags_csv_happy_path(dummy_workspace):
+    base: Path = dummy_workspace["base"]
+    sem: Path = dummy_workspace["semantic_mapping"].parent
     csv_path = sem / "tags_raw.csv"
 
     render_tags_csv(_candidates_min(), csv_path, base_dir=base)
@@ -33,8 +33,8 @@ def test_render_tags_csv_happy_path(dummy_kb):
     assert "raw/a.pdf" in text
 
 
-def test_render_tags_csv_blocks_outside_base(dummy_kb):
-    base: Path = dummy_kb["base"]
+def test_render_tags_csv_blocks_outside_base(dummy_workspace):
+    base: Path = dummy_workspace["base"]
     outside_csv = base.parent / "outside.csv"
 
     with pytest.raises(PathTraversalError):

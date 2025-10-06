@@ -137,13 +137,35 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 ---
 
+## Linee guida per nuovi test
+
+### Test generici
+- Usa le fixture `dummy_workspace`, `dummy_ctx` e `dummy_logger` per isolare i percorsi cliente.
+  Non creare strutture manuali in `output/` o nel repo: per file temporanei sfrutta `dummy_workspace["base"] / "tmp"`.
+- Gli assert devono riferirsi ai percorsi restituiti dalle fixture (es. `dummy_workspace["config"].exists()`),
+  evitando stringhe di path hard-coded o separatori specifici del sistema.
+- Non impostare variabili d'ambiente legate all'assistente (`OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID`) nei test generici;
+  la fixture `_stable_env` le ripulisce automaticamente.
+- Evita `chdir` manuali o scritture fuori dal workspace dummy e usa i writer atomici gia presenti nel codice.
+
+### Test che richiedono assistant o segreti
+- Marca i test che necessitano dell'assistente con
+  `@pytest.mark.skipif(os.getenv("OBNEXT_ASSISTANT_ID") is None, reason="assistant non configurato")` e imposta
+  l'ID nel test tramite `monkeypatch.setenv(...)`.
+- Per test che usano segreti esterni (es. `DRIVE_ID`, `SERVICE_ACCOUNT_FILE`, `CODEX_API_KEY`) aggiungi marker
+  dedicati (`drive`, `push`, ecc.) e prevedi fallback sicuri quando le variabili non sono presenti.
+- Preferisci mock o fake client (OpenAI, Vision, Drive) e consenti chiamate reali solo in test marcati e protetti da
+  `skipif` o marker opzionali.
+
+
 ## Marker e convenzioni
 
 - `slow` — test lenti/smoke end-to-end.
 - `push` — richiedono `GITHUB_TOKEN`/rete.
 - `drive` — richiedono credenziali/permessi Google Drive (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`).
 - **Logging strutturato:** evento + `extra` con `slug`, `file_path`, `scope` dove applicabile.
-- **Path safety:** tutte le operazioni file-system passano per `ensure_within_and_resolve` + scritture atomiche (`safe_write_text/bytes`).
+- **Path safety:** tutte le operazioni file-system passano per `ensure_within_and_resolve`
+  e scritture atomiche (`safe_write_text/bytes`).
 
 ---
 
@@ -162,5 +184,6 @@ pytest -k "embedding_pruned" -ra
 
 ## Note e manutenzione
 
-- **Aggiornamento documentazione:** mantenere questa pagina allineata quando si aggiungono/cambiano test (nuovi moduli semantic/UI/retriever).
+- **Aggiornamento documentazione:** mantenere questa pagina allineata quando si aggiungono
+  o cambiano test (nuovi moduli semantic/UI/retriever).
 - **Tag review e provisioning:** non sono marcati `slow` ma richiedono fixture workspace/dummy (es. `dummy_kb`).

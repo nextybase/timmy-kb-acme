@@ -19,9 +19,10 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     slug = f"dummy-{int(time.time())}"
 
     # Esegui lo script con base dir forzata al tmp_path del test
+    script = Path(__file__).resolve().parents[1] / "src" / "tools" / "gen_dummy_kb.py"
     cmd = [
         sys.executable,
-        "src/tools/gen_dummy_kb.py",
+        str(script),
         "--slug",
         slug,
         "--base-dir",

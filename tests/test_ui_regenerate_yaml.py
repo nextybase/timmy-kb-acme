@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Tuple
 
 
 class _DummySt:
@@ -36,78 +37,95 @@ class _DummySt:
         self.calls.append(("error", msg))
 
 
-def _write_initial_yaml(base: Path):
-    sem = base / "semantic"
-    sem.mkdir(parents=True, exist_ok=True)
-    (sem / "semantic_mapping.yaml").write_text("context:\n  slug: old\n", encoding="utf-8")
-    (sem / "cartelle_raw.yaml").write_text("version: 1\nfolders: []\n", encoding="utf-8")
+def _override_yaml(workspace: dict[str, Path], *, mapping_text: str, cartelle_text: str) -> Tuple[str, str]:
+    mapping = workspace["semantic_mapping"]
+    cartelle = workspace["cartelle_raw"]
+    original_mapping = mapping.read_text(encoding="utf-8")
+    original_cartelle = cartelle.read_text(encoding="utf-8")
+    mapping.write_text(mapping_text, encoding="utf-8")
+    cartelle.write_text(cartelle_text, encoding="utf-8")
+    return original_mapping, original_cartelle
 
 
-def test_regenerate_requires_confirmation(tmp_path: Path, monkeypatch):
+def test_regenerate_requires_confirmation(dummy_workspace, dummy_logger, monkeypatch):
     import src.ui.app as app
 
-    # Workspace con YAML esistenti e PDF
-    base = tmp_path / "output" / "timmy-kb-sample"
-    (base / "config").mkdir(parents=True, exist_ok=True)
-    (base / "config" / "VisionStatement.pdf").write_bytes(b"%PDF dummy")
-    _write_initial_yaml(base)
+    base = dummy_workspace["base"]
+    mapping_path = dummy_workspace["semantic_mapping"]
+    cartelle_path = dummy_workspace["cartelle_raw"]
+    slug = dummy_workspace["slug"]
+    original_mapping, original_cartelle = _override_yaml(
+        dummy_workspace,
+        mapping_text="context:\n  slug: old\n",
+        cartelle_text="version: 1\nfolders: []\n",
+    )
 
-    # Stato init_result come da ready
-    init = {
-        "yaml_paths": {
-            "mapping": str(base / "semantic" / "semantic_mapping.yaml"),
-            "cartelle_raw": str(base / "semantic" / "cartelle_raw.yaml"),
+    try:
+        init = {
+            "yaml_paths": {
+                "mapping": str(mapping_path),
+                "cartelle_raw": str(cartelle_path),
+            }
         }
-    }
 
-    dummy = _DummySt(click_regenera=True, confirm=False)
-    dummy.session_state["init_result"] = init
-    monkeypatch.setattr(app, "st", dummy, raising=True)
+        dummy = _DummySt(click_regenera=True, confirm=False)
+        dummy.session_state["init_result"] = init
+        monkeypatch.setattr(app, "st", dummy, raising=True)
 
-    # provision finto: se chiamato, scrive contenuto "new"
-    called = {"n": 0}
+        called = {"n": 0}
 
-    def _fake_provision(ctx, logger, *, slug, pdf_path, model="", force=False):
-        called["n"] += 1
-        (base / "semantic" / "semantic_mapping.yaml").write_text("context:\n  slug: new\n", encoding="utf-8")
-        return {"yaml_paths": init["yaml_paths"]}
+        def _fake_provision(ctx, logger, *, slug, pdf_path, model="", force=False):
+            called["n"] += 1
+            mapping_path.write_text("context:\n  slug: new\n", encoding="utf-8")
+            return {"yaml_paths": init["yaml_paths"]}
 
-    monkeypatch.setattr(app, "provision_from_vision", _fake_provision, raising=True)
+        monkeypatch.setattr(app, "provision_from_vision", _fake_provision, raising=True)
 
-    app._render_ready("sample", base, logger=app._setup_logging())
+        app._render_ready(slug, base, logger=dummy_logger)
 
-    # Niente conferma => nessuna chiamata e contenuto invariato
-    assert called["n"] == 0
-    content = (base / "semantic" / "semantic_mapping.yaml").read_text(encoding="utf-8")
-    assert "old" in content
+        assert called["n"] == 0
+        content = mapping_path.read_text(encoding="utf-8")
+        assert "old" in content
+    finally:
+        mapping_path.write_text(original_mapping, encoding="utf-8")
+        cartelle_path.write_text(original_cartelle, encoding="utf-8")
 
 
-def test_regenerate_overwrites_on_confirmation(tmp_path: Path, monkeypatch):
+def test_regenerate_overwrites_on_confirmation(dummy_workspace, dummy_logger, monkeypatch):
     import src.ui.app as app
 
-    base = tmp_path / "output" / "timmy-kb-sample"
-    (base / "config").mkdir(parents=True, exist_ok=True)
-    (base / "config" / "VisionStatement.pdf").write_bytes(b"%PDF dummy")
-    _write_initial_yaml(base)
+    base = dummy_workspace["base"]
+    mapping_path = dummy_workspace["semantic_mapping"]
+    cartelle_path = dummy_workspace["cartelle_raw"]
+    slug = dummy_workspace["slug"]
+    original_mapping, original_cartelle = _override_yaml(
+        dummy_workspace,
+        mapping_text="context:\n  slug: old\n",
+        cartelle_text="version: 1\nfolders: []\n",
+    )
 
-    init = {
-        "yaml_paths": {
-            "mapping": str(base / "semantic" / "semantic_mapping.yaml"),
-            "cartelle_raw": str(base / "semantic" / "cartelle_raw.yaml"),
+    try:
+        init = {
+            "yaml_paths": {
+                "mapping": str(mapping_path),
+                "cartelle_raw": str(cartelle_path),
+            }
         }
-    }
 
-    dummy = _DummySt(click_regenera=True, confirm=True)
-    dummy.session_state["init_result"] = init
-    monkeypatch.setattr(app, "st", dummy, raising=True)
+        dummy = _DummySt(click_regenera=True, confirm=True)
+        dummy.session_state["init_result"] = init
+        monkeypatch.setattr(app, "st", dummy, raising=True)
 
-    def _fake_provision(ctx, logger, *, slug, pdf_path, model="", force=False):
-        (base / "semantic" / "semantic_mapping.yaml").write_text("context:\n  slug: new\n", encoding="utf-8")
-        return {"yaml_paths": init["yaml_paths"]}
+        def _fake_provision(ctx, logger, *, slug, pdf_path, model="", force=False):
+            mapping_path.write_text("context:\n  slug: new\n", encoding="utf-8")
+            return {"yaml_paths": init["yaml_paths"]}
 
-    monkeypatch.setattr(app, "provision_from_vision", _fake_provision, raising=True)
+        monkeypatch.setattr(app, "provision_from_vision", _fake_provision, raising=True)
 
-    app._render_ready("sample", base, logger=app._setup_logging())
+        app._render_ready(slug, base, logger=dummy_logger)
 
-    content = (base / "semantic" / "semantic_mapping.yaml").read_text(encoding="utf-8")
-    assert "new" in content
+        content = mapping_path.read_text(encoding="utf-8")
+        assert "new" in content
+    finally:
+        mapping_path.write_text(original_mapping, encoding="utf-8")
+        cartelle_path.write_text(original_cartelle, encoding="utf-8")

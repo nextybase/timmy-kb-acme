@@ -6,10 +6,9 @@ import src.semantic.vision_provision as vp
 from pipeline.exceptions import ConfigError
 
 
-def test_vector_store_timeout_raises_configerror(tmp_path, monkeypatch):
-    base = tmp_path / "ws"
-    base.mkdir()
-    pdf = base / "config" / "VisionStatement.pdf"
+def test_vector_store_timeout_raises_configerror(dummy_workspace, monkeypatch):
+    tmp_dir = dummy_workspace["base"] / "tmp" / "vector_store_timeout"
+    pdf = tmp_dir / "config" / "VisionStatement.pdf"
     pdf.parent.mkdir(parents=True, exist_ok=True)
     pdf.write_bytes(b"%PDF-1.4\n%dummy\n")
 
