@@ -2,7 +2,19 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF/PyMuPDF wheels")
+
 import src.semantic.vision_provision as vp
+
+
+def _write_pdf(path: Path, text: str) -> None:
+    doc = fitz.open()
+    doc.new_page()
+    doc[0].insert_text((72, 72), text)
+    doc.save(path)
+    doc.close()
 
 
 def test_provision_uses_client_name_in_prompt(tmp_path, monkeypatch):
@@ -10,7 +22,7 @@ def test_provision_uses_client_name_in_prompt(tmp_path, monkeypatch):
     base.mkdir()
     pdf = base / "config" / "VisionStatement.pdf"
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    pdf.write_bytes(b"%PDF-1.4\n%dummy\n")
+    _write_pdf(pdf, "Vision Statement demo")
 
     # Context con client_name reale
     ctx = SimpleNamespace(base_dir=base, client_name="ACME S.p.A.")
