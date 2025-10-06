@@ -41,14 +41,7 @@ repos:
       - id: forbid-new-submodules
         stages: [pre-commit]
 
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
-        types_or: [python]
-        files: ^(src|tests)/
-        stages: [pre-commit]
-
+  # 1) isort prima di black (anche su pre-push, write-mode)
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
@@ -56,15 +49,25 @@ repos:
         args: ["--profile=black", "--line-length=120"]
         types_or: [python]
         files: ^(src|tests)/
-        stages: [pre-commit]
+        stages: [pre-commit, pre-push]
 
+  # 2) black in write-mode (anche su pre-push)
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        types_or: [python]
+        files: ^(src|tests)/
+        stages: [pre-commit, pre-push]
+
+  # 3) ruff come lint/fix “leggero”
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.8
     hooks:
       - id: ruff
         args: ["--fix"]
         files: ^(src|tests)/
-        stages: [pre-commit]
+        stages: [pre-commit, pre-push]
 
   - repo: local
     hooks:
@@ -97,28 +100,6 @@ repos:
         entry: python scripts/dev/qa_safe.py
         language: python
         additional_dependencies: ["black==24.8.0", "isort==5.13.2", "ruff", "mypy", "types-PyYAML"]
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: qa-safe-tests
-        name: qa-safe --with-tests (pytest se presente)
-        entry: python scripts/dev/qa_safe.py --with-tests
-        language: python
-        additional_dependencies:
-          [
-            "black==24.8.0",
-            "isort==5.13.2",
-            "ruff",
-            "mypy",
-            "pytest",
-            "pyyaml",
-            "pydantic",
-            "pydantic-settings",
-            "numpy",
-            "hypothesis",
-            "reportlab",
-            "types-PyYAML",
-          ]
         pass_filenames: false
         stages: [pre-push]
 

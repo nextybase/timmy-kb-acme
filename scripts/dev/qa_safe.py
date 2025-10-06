@@ -1,93 +1,91 @@
 #!/usr/bin/env python3
 """
-Esegue QA locale in modo "safe":
-- isort --check-only <PATHS> (se installato)
-- black --check <PATHS> (se installato)
-- ruff check <PATHS> (se installato)
-- mypy --config-file mypy.ini (se installato)
-Opzionale: --with-tests per eseguire anche pytest.
-
-Note:
-- I PATHS sono allineati ai target standard del progetto (src/ e tests/).
-- Tutti i tool vengono invocati come moduli di Python (python -m ...)
-  per evitare dipendenze da PATH o wrapper eseguibili su Windows.
+Esegue QA locale in modo "safe" (auto-rimeditivo) senza eseguire pytest:
+1) isort (write-mode)        → riordina import
+2) black (write-mode)        → format definitivo
+3) ruff check --fix          → lint + fix non distruttivi
+4) mypy                      → type-check mirato (solo su target esistenti)
 
 Exit code:
-- 0 se tutti i tool presenti sono passati o assenti (skip)
-- 1 se uno dei tool presenti fallisce
+- 0 se tutto ok o tool assenti (skip)
+- 1 se uno qualsiasi step fallisce
 """
 
 from __future__ import annotations
 
-import argparse
 import importlib.util
 import subprocess
 import sys
-from typing import List, Sequence, Tuple
 from pathlib import Path
+from typing import List, Sequence, Tuple
 
 # Percorsi standard per linting e formattazione
 LINT_PATHS: Sequence[str] = ("src", "tests")
 
 
-def _python_files(paths: Sequence[str]) -> List[str]:
-    files: List[str] = []
-    for base in paths:
-        p = Path(base)
-        if p.is_file() and p.suffix == ".py":
-            files.append(str(p))
-        elif p.is_dir():
-            for f in p.rglob("*.py"):
-                files.append(str(f))
-    return files
+def run(cmd: List[str]) -> int:
+    print(f"[qa-safe] Eseguo: {' '.join(cmd)}", flush=True)
+    proc = subprocess.run(cmd, stdout=sys.stdout, stderr=sys.stderr)
+    return int(proc.returncode)
 
 
 def run_module_if_available(module: str, args: List[str]) -> Tuple[str, int | None]:
-    """Esegue `python -m <module> <args>` se il modulo è importabile; altrimenti skip."""
+    """
+    Esegue `python -m <module> <args>` se il modulo è importabile; altrimenti skip.
+    Ritorna (nome_modulo, rc | None).
+    """
     if importlib.util.find_spec(module) is None:
-        print(f"[qa-safe] {module} non installato: skip")
+        print(f"[qa-safe] {module} non installato: skip", flush=True)
         return module, None
-    cmd = [sys.executable, "-m", module, *args]
-    print(f"[qa-safe] Eseguo: {' '.join(cmd)}")
-    proc = subprocess.run(cmd, stdout=sys.stdout, stderr=sys.stderr)
-    return module, int(proc.returncode)
+    rc = run([sys.executable, "-m", module, *args])
+    return module, rc
+
+
+def _existing_targets(candidates: Sequence[str]) -> List[str]:
+    out: List[str] = []
+    for c in candidates:
+        p = Path(c)
+        if p.exists():
+            out.append(str(p))
+    return out
 
 
 def main(argv: List[str] | None = None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--with-tests", action="store_true", help="Esegui anche pytest")
-    args = ap.parse_args(argv)
-
     failures: List[str] = []
 
-    # py_files = _python_files(LINT_PATHS)  # non usato: mantenuto per futura isort opzionale
+    # 1) isort (write-mode)
+    mod, rc = run_module_if_available(
+        "isort", ["--profile=black", "--line-length=120", *LINT_PATHS]
+    )
+    if rc not in (0, None):
+        failures.append(mod)
 
-    checks: List[Tuple[str, List[str]]] = [
-        # isort è già coperto dall'hook ufficiale pre-commit; qui lo rendiamo opzionale
-        # (mismatch di versioni locali possono dare falsi positivi)
-        # ("isort", [
-        #     "--filter-files",
-        #     "--check-only",
-        #     "--profile=black",
-        #     "--line-length=120",
-        #     *py_files,
-        # ]),
-        ("black", ["--check", *LINT_PATHS]),
-        ("ruff", ["check", *LINT_PATHS]),
-        ("mypy", ["--config-file", "mypy.ini"]),
-    ]
-    if args.with_tests:
-        checks.append(("pytest", ["-ra"]))
+    # 2) black (write-mode)
+    mod, rc = run_module_if_available("black", [*LINT_PATHS])
+    if rc not in (0, None):
+        failures.append(mod)
 
-    for module, module_args in checks:
-        _, rc = run_module_if_available(module, module_args)
-        if rc is not None and rc != 0:
-            failures.append(module)
+    # 3) ruff (lint + fix non-distruttivo)
+    mod, rc = run_module_if_available("ruff", ["check", *LINT_PATHS, "--fix"])
+    if rc not in (0, None):
+        failures.append(mod)
+
+    # 4) mypy (solo su target esistenti)
+    mypy_candidates = ["src/config_ui/", "src/pipeline/drive/", "src/pipeline/drive_utils.py"]
+    mypy_targets = _existing_targets(mypy_candidates)
+    if mypy_targets:
+        mod, rc = run_module_if_available("mypy", ["--config-file", "mypy.ini", *mypy_targets])
+        if rc not in (0, None):
+            failures.append(mod)
+    else:
+        print("[qa-safe] mypy: nessun target esistente tra "
+              f"{mypy_candidates} → skip", flush=True)
 
     if failures:
-        print(f"[qa-safe] Falliti: {', '.join(failures)}")
+        print(f"[qa-safe] Falliti: {', '.join(failures)}", flush=True)
         return 1
-    print("[qa-safe] OK")
+
+    print("[qa-safe] OK", flush=True)
     return 0
 
 

@@ -14,7 +14,7 @@ Obiettivo
 Note
 ----
 - Questo file non contiene logica di business: effettua solo import statici e re-export.
-  In questo modo evitiamo import “lazy” a runtime e rischi di cicli/race.
+  In questo modo evitiamo import `lazy` a runtime e rischi di cicli/race.
 - Compat test: riesporta `MIME_FOLDER`, `MIME_PDF` e `MediaIoBaseDownload` per
   compatibilità con i test che monkeypatchano questi simboli a livello di facciata.
 - Gli orchestratori e il resto del codice continuano a importare da qui.
@@ -41,7 +41,7 @@ Download:
 
 Redazione/Logging:
 - La redazione dei log (token, ID) e l'auditing sono gestiti nei moduli implementativi.
-  Questa facciata resta volutamente “thin” e priva di side effect.
+  Questa facciata resta volutamente `thin` e priva di side effect.
 """
 
 from __future__ import annotations

@@ -43,9 +43,43 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ---------- Formatter / Lint allineati (isort→black→ruff) ----------
+
 [tool.black]
 line-length = 120
 target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["timmy_kb", "pipeline", "semantic", "storage", "ui"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+# Allinea gli exclude a pre-commit; comunque i hook limitano a src/ e tests/
+exclude = [
+    "venv", ".venv", "node_modules", "output", "dist", "build", ".gitbook", "docs/_build"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "S"]
+ignore = ["E203", "ANN201", "ANN202", "ANN204", "T201", "B009", "B010", "B023", "B033", "B904", "E402", "S110", "S112", "S311"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S603", "S404", "T201", "B017", "S101", "ANN001", "ANN002", "ANN003", "B008"]
+"src/tools/*" = ["T201", "S110"]
+"src/tag_onboarding.py" = ["E501", "T201", "S608"]
+"src/pipeline/drive/upload.py" = ["S110"]
+"src/pipeline/file_utils.py" = ["S110"]
+"src/pipeline/path_utils.py" = ["S110"]
+"src/pipeline/yaml_utils.py" = ["S110"]
+"src/pipeline/proc_utils.py" = ["S404", "S603"]
+"src/ui/app.py" = ["S404", "S603"]
+"src/storage/tags_store.py" = ["S608"]
+"scripts/*" = ["S603", "S607", "S106"]
+
+# --------------------------- Mypy ---------------------------
 
 [tool.mypy]
 python_version = "3.11"
@@ -72,31 +106,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "github.*"
 ignore_missing_imports = true
-
-[tool.isort]
-profile = "black"
-line_length = 120
-known_first_party = ["timmy_kb", "pipeline", "semantic", "storage", "ui"]
-
-[tool.ruff]
-line-length = 120
-target-version = "py311"
-exclude = ["venv", ".venv"]
-
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "B", "S"]
-ignore = ["E203", "ANN201", "ANN202", "ANN204", "T201", "B009", "B010", "B023", "B033", "B904", "E402", "S110", "S112", "S311"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S603", "S404", "T201", "B017", "S101", "ANN001", "ANN002", "ANN003", "B008"]
-"src/tools/*" = ["T201", "S110"]
-"src/tag_onboarding.py" = ["E501", "T201", "S608"]
-"src/pipeline/drive/upload.py" = ["S110"]
-"src/pipeline/file_utils.py" = ["S110"]
-"src/pipeline/path_utils.py" = ["S110"]
-"src/pipeline/yaml_utils.py" = ["S110"]
-"src/pipeline/proc_utils.py" = ["S404", "S603"]
-"src/ui/app.py" = ["S404", "S603"]
-"src/storage/tags_store.py" = ["S608"]
-"scripts/*" = ["S603", "S607", "S106"]
