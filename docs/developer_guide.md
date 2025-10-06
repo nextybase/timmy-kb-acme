@@ -169,6 +169,7 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 
 ## Vision Statement mapping
 - `semantic.vision_ai.generate(ctx, logger, slug)` risolve i percorsi con `ensure_within_and_resolve`, estrae il testo dal PDF con PyMuPDF e salva sempre uno snapshot (`semantic/vision_statement.txt`) prima di inviare il prompt strutturato al modello `gpt-4.1-mini`.
+- L'estrazione testo dal VisionStatement è fail-fast: PDF corrotto o vuoto producono un ConfigError immediato.
 - Lo YAML risultante (`semantic/semantic_mapping.yaml`) è scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
 - `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` -> exit code 2).
 - I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON->YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).

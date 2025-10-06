@@ -69,6 +69,7 @@ L'expander **Diagnostica** nel corpo principale (sotto l'intestazione cliente) o
    - Copia la configurazione base.
    - Avvia `provision_from_vision` per generare `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`.
    - Mostra gli YAML in due editor a larghezza fissa.
+   > Nota: se il VisionStatement è vuoto o corrotto, l'operazione si interrompe con un ConfigError esplicito.
 4. **Crea Workspace**: esegue i runner esistenti (`_run_create_local_structure`, `_run_drive_structure`, `_run_generate_readmes`) per creare le cartelle in locale e su Drive. Durante la procedura viene mostrato uno spinner; al termine lo stato del cliente passa a `inizializzato`.
 
 Gli editor YAML restano disponibili dopo la creazione per eventuali ritocchi manuali.
