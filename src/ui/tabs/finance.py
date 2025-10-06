@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ui.utils.streamlit_fragments import show_error_with_details
+
 
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     """Determina la base_dir del workspace cliente privilegiando ClientContext.
@@ -107,7 +109,13 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
                     if log:
                         log.info({"event": "finance_import_ok", "slug": slug, "rows": res.get("rows")})
                 except Exception as e:  # pragma: no cover - mostrato in UI
-                    st.exception(e)
+                    show_error_with_details(
+                        log,
+                        "Import CSV non riuscito. Controlla i log per i dettagli.",
+                        e,
+                        event="ui.finance.import_failed",
+                        extra={"slug": slug},
+                    )
                 finally:
                     # Cleanup deterministico anche in caso d'errore
                     try:
@@ -134,4 +142,10 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
             else:
                 st.info("Nessuna metrica importata al momento.")
         except Exception as e:  # pragma: no cover - mostrato in UI
-            st.exception(e)
+            show_error_with_details(
+                log,
+                "Impossibile mostrare le metriche importate. Controlla i log per i dettagli.",
+                e,
+                event="ui.finance.summary_failed",
+                extra={"slug": slug},
+            )

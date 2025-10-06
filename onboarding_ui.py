@@ -30,6 +30,7 @@ from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 
 from src.ui.app import _setup_logging
 from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
+from ui.utils.workspace import has_raw_pdfs
 
 ICON_REFRESH = "\U0001F504"
 
@@ -344,9 +345,12 @@ TAB_MANAGE = "gestisci cliente"
 TAB_SEM = "semantica"
 
 
-def _compute_sem_enabled(state: str | None) -> bool:
-    """Decide se la tab Semantica è disponibile, in base allo stato client."""
-    return _normalize_state(state) in STATE_SEM_READY
+def _compute_sem_enabled(state: str | None, slug: str | None) -> bool:
+    """Decide se la tab Semantica è disponibile, richiede RAW con PDF."""
+    if _normalize_state(state) not in STATE_SEM_READY:
+        return False
+    ready, _raw_dir = has_raw_pdfs(slug)
+    return ready
 
 
 def _compute_manage_enabled(state: str | None, slug: str | None) -> bool:
@@ -407,7 +411,7 @@ def _sidebar_tab_switches(*, home_enabled: bool, manage_enabled: bool, sem_enabl
         label_sem,
         width="stretch",
         disabled=not sem_enabled,
-        help=None if sem_enabled else "Disponibile quando lo stato è 'pronto'",
+        help=None if sem_enabled else "Disponibile quando lo stato è 'pronto' e raw/ contiene PDF",
         type="primary" if active == TAB_SEM else "secondary",
         key="tab_sem_button",
     )
@@ -425,7 +429,7 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
     try:
         app_mod = importlib.import_module("src.ui.app")
     except Exception as exc:
-        logger.info("ui.tabs.module_import_failed", extra={"error": str(exc)})
+        logger.exception("ui.tabs.module_import_failed", extra={"error": str(exc)})
         raise
 
     def _call_renderer(name: str, **kwargs) -> bool:
@@ -441,7 +445,7 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
             extra = {"error": str(exc), "active_tab": active}
             if "slug" in kwargs and kwargs.get("slug") is not None:
                 extra["slug"] = kwargs["slug"]
-            logger.info(event, extra=extra)
+            logger.exception(event, extra=extra)
             raise
         return True
 
@@ -489,7 +493,7 @@ def run() -> None:
         st.session_state["current_slug"] = resolved_slug
     home_enabled = _compute_home_enabled(state, resolved_slug)
     manage_enabled = _compute_manage_enabled(state, resolved_slug)
-    sem_enabled = _compute_sem_enabled(state)
+    sem_enabled = _compute_sem_enabled(state, resolved_slug)
 
     try:
         _init_tab_state(home_enabled, manage_enabled, sem_enabled)

@@ -8,6 +8,8 @@ import streamlit as st
 from pipeline.context import ClientContext
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 from ui.clients_store import get_state, set_state
+from ui.utils.streamlit_fragments import show_error_with_details
+from ui.utils.workspace import has_raw_pdfs
 
 
 def render_semantic_tab(*, log: Any, slug: str) -> None:
@@ -32,6 +34,16 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             st.markdown("- PDF scaricati in `raw/` tramite tab Drive.")
             st.markdown("- README generati in `raw/` (step 2).")
             st.markdown("- Stato cliente aggiornato almeno a `pronto`.")
+        return
+
+    ready, raw_dir = has_raw_pdfs(slug)
+    if not ready:
+        st.warning("Scarica almeno un PDF in `raw/` prima di proseguire con la semantica.")
+        with st.expander("Requisiti per la cartella raw/", expanded=False):
+            st.markdown("- Verifica che `raw/` esista nel workspace locale.")
+            st.markdown("- Assicurati che contenga almeno un file PDF valido.")
+            if raw_dir is not None:
+                st.markdown(f"- Cartella controllata: `{raw_dir}`.")
         return
 
     # UI: form unica per ridurre rerun e migliorare accessibilità
@@ -73,7 +85,13 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             convert_markdown(ctx, log, slug=slug)
             _toast_success("Conversione completata.")
         except Exception as e:  # pragma: no cover - UI
-            st.exception(e)
+            show_error_with_details(
+                log,
+                "Conversione non completata. Controlla i log per i dettagli.",
+                e,
+                event="ui.semantic.convert_failed",
+                extra={"slug": slug},
+            )
 
     if do_enrich:
         try:
@@ -85,7 +103,13 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             _toast_success(f"Frontmatter arricchiti: {len(touched)}")
             set_state(slug, "arricchito")
         except Exception as e:  # pragma: no cover - UI
-            st.exception(e)
+            show_error_with_details(
+                log,
+                "Arricchimento non completato. Controlla i log per i dettagli.",
+                e,
+                event="ui.semantic.enrich_failed",
+                extra={"slug": slug},
+            )
 
     if do_md:
         try:
@@ -94,4 +118,10 @@ def render_semantic_tab(*, log: Any, slug: str) -> None:
             _toast_success("SUMMARY.md e README.md generati/validati.")
             set_state(slug, "finito")
         except Exception as e:  # pragma: no cover - UI
-            st.exception(e)
+            show_error_with_details(
+                log,
+                "Generazione README/SUMMARY non completata. Controlla i log per i dettagli.",
+                e,
+                event="ui.semantic.summary_failed",
+                extra={"slug": slug},
+            )

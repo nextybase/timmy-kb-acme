@@ -12,6 +12,7 @@ from ui.components.mapping_editor import (
     split_mapping,
     validate_categories,
 )
+from ui.utils.streamlit_fragments import show_error_with_details
 
 
 def render_config_tab(*, log: Any, slug: str, client_name: str) -> None:
@@ -40,4 +41,10 @@ def render_config_tab(*, log: Any, slug: str, client_name: str) -> None:
                 log.info({"event": "semantic_mapping_saved_all", "slug": slug, "path": str(path)})
                 st.success("Mapping salvato.")
             except Exception as e:
-                st.exception(e)
+                show_error_with_details(
+                    log,
+                    "Salvataggio mapping non riuscito. Controlla i log per i dettagli.",
+                    e,
+                    event="ui.config.mapping_save_failed",
+                    extra={"slug": slug},
+                )

@@ -7,7 +7,7 @@
 - Niente side-effect in import-time: esegui I/O solo in funzioni/`main`.
 - Orchestratori gestiscono input utente e exit codes; moduli interni non chiamano `sys.exit()`/`input()`.
 - Test: pytest, deterministici, senza rete; mock/bypass per Drive/Git. Solo `.md` in `book/` (i `.md.fp` tollerati).
-- Lint: flake8 + mypy coerenti con `pyproject.toml`; rispetta line-length e regole esistenti.
+- Lint: ruff + mypy coerenti con `pyproject.toml`; rispetta line-length e regole esistenti.
 
 ## Policy aggiuntive (pre-commit)
 

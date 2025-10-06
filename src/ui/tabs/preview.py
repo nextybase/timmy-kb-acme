@@ -4,6 +4,8 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from ui.utils.streamlit_fragments import show_error_with_details
+
 if TYPE_CHECKING:
     # Solo per type-checking; evita import runtime e side-effects
     from pipeline.context import ClientContext
@@ -104,7 +106,13 @@ def render_preview_controls(
                         st.warning(("Docker non risulta attivo. Avvia Docker Desktop e riprova ad avviare la preview."))
                         log.warning("Preview non avviata: Docker non attivo", extra={"error": msg})
                     else:
-                        st.exception(e)
+                        show_error_with_details(
+                            log,
+                            "Impossibile avviare la preview. Controlla i log per i dettagli.",
+                            e,
+                            event="ui.preview.start_failed",
+                            extra={"slug": slug},
+                        )
 
         with cols[1]:
             if st.button(
@@ -130,4 +138,10 @@ def render_preview_controls(
                         }
                     )
                 except Exception as e:
-                    st.exception(e)
+                    show_error_with_details(
+                        log,
+                        "Impossibile fermare la preview. Controlla i log per i dettagli.",
+                        e,
+                        event="ui.preview.stop_failed",
+                        extra={"slug": slug},
+                    )

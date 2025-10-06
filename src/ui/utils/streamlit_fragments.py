@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, TypeVar, cast
+import logging
+from typing import Any, Callable, Optional, TypeVar, cast
+
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover
+    st = cast(Any, None)
 
 try:
     from streamlit import fragment as _fragment_impl
@@ -11,6 +17,38 @@ FragmentCallable = Callable[[Callable[[], None]], Callable[[], None]]
 _FRAGMENT: Optional[FragmentCallable] = cast(Optional[FragmentCallable], _fragment_impl)
 
 T = TypeVar("T")
+
+
+def show_error_with_details(
+    logger: Any | None,
+    message: str,
+    exc: BaseException,
+    *,
+    event: str = "ui.error",
+    extra: dict[str, object] | None = None,
+    show_details: bool = False,
+    expander_label: str = "Dettagli tecnici",
+) -> None:
+    """Renderizza un messaggio sintetico e registra il dettaglio sui log."""
+    log = logger or logging.getLogger(event)
+    log_extra: dict[str, object] = {"error": str(exc), "exception_type": type(exc).__name__}
+    if extra:
+        log_extra.update(extra)
+    try:
+        log.exception(event, extra=log_extra)
+    except Exception:
+        pass
+
+    if st is None:
+        return
+
+    try:
+        st.error(message)
+        if show_details:
+            with st.expander(expander_label, expanded=False):
+                st.exception(exc)
+    except Exception:
+        pass
 
 
 def run_fragment(key: str, body: Callable[[], T]) -> T:

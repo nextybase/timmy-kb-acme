@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 import types
 from pathlib import Path
@@ -106,14 +107,30 @@ def _ensure_streamlit_stub() -> None:
             sys.modules["streamlit.runtime.scriptrunner_utils.exceptions"] = exceptions_mod
 
 
-def test_compute_sem_enabled():
+def test_compute_sem_enabled(monkeypatch, tmp_path):
     _ensure_streamlit_stub()
-    ui = importlib.import_module("onboarding_ui")
-    assert ui._compute_sem_enabled("pronto") is True
-    assert ui._compute_sem_enabled("arricchito") is True
-    assert ui._compute_sem_enabled("finito") is True
-    assert ui._compute_sem_enabled("bozza") is False
-    assert ui._compute_sem_enabled(None) is False
+    ui = importlib.reload(importlib.import_module("onboarding_ui"))
+    slug = "demo"
+
+    # Stato valido ma senza RAW/PDF -> tab disabilitata
+    monkeypatch.setattr(ui, "has_raw_pdfs", lambda value: (False, None), raising=False)
+    assert ui._compute_sem_enabled("pronto", slug) is False
+
+    # Stato valido con RAW popolato -> tab abilitata
+    ready_dir = tmp_path / "raw"
+
+    def _ready(value: str | None) -> tuple[bool, Path | None]:
+        return (value == slug, ready_dir if value == slug else None)
+
+    monkeypatch.setattr(ui, "has_raw_pdfs", _ready, raising=False)
+    assert ui._compute_sem_enabled("pronto", slug) is True
+    assert ui._compute_sem_enabled("arricchito", slug) is True
+    assert ui._compute_sem_enabled("finito", slug) is True
+
+    # Stato non pronto o slug mancante -> sempre False
+    assert ui._compute_sem_enabled("bozza", slug) is False
+    assert ui._compute_sem_enabled(None, slug) is False
+    assert ui._compute_sem_enabled("pronto", None) is False
 
 
 def test_compute_manage_and_home_enabled():
@@ -248,6 +265,34 @@ def test_render_tabs_router_raises_on_error(monkeypatch):
 
     with pytest.raises(RuntimeError):
         ui._render_tabs_router(ui.TAB_HOME, slug=None)
+
+
+def test_render_tabs_router_logs_exception(monkeypatch, caplog):
+    _ensure_streamlit_stub()
+    ui = importlib.reload(importlib.import_module("onboarding_ui"))
+
+    logger = logging.getLogger("ui.tabs.test")
+    monkeypatch.setattr(ui, "_setup_logging", lambda: logger, raising=False)
+
+    def _raise_manage(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    dummy_app = types.SimpleNamespace(render_home=lambda **_: None, render_manage=_raise_manage)
+    real_import = importlib.import_module
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "src.ui.app":
+            return dummy_app
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(ui, "importlib", types.SimpleNamespace(import_module=_fake_import), raising=False)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            ui._render_tabs_router(ui.TAB_MANAGE, slug="demo")
+
+    messages = [record.message for record in caplog.records]
+    assert any("ui.tabs.render_manage_failed" in msg for msg in messages)
 
 
 def test_render_tabs_router_falls_back_to_main(monkeypatch):
