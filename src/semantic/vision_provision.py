@@ -74,23 +74,41 @@ def _sha256_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _extract_pdf_text(pdf_path: Path) -> str:
-    """
-    Estrae uno snapshot testuale dal PDF.
-    Preferisce PyMuPDF (fitz) se disponibile; in alternativa salva un placeholder.
-    """
+def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> str:
+    """Estrae testo dal VisionStatement, fallendo rapidamente per PDF illeggibili o vuoti."""
     try:
         import fitz  # type: ignore
+    except Exception as exc:  # pragma: no cover - dipendenza mancante
+        logger.warning(
+            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
+        )
+        raise ConfigError(
+            "VisionStatement illeggibile: file corrotto o non parsabile", slug=slug, file_path=str(pdf_path)
+        ) from exc
 
-        # Assicura la chiusura del file anche su Windows (evita lock del PDF)
+    try:
         with fitz.open(pdf_path) as doc:  # type: ignore[attr-defined]
             texts: List[str] = []
             for page in doc:
                 texts.append(page.get_text("text"))
-        return "\n".join(texts).strip()
-    except Exception:
-        # Fallback "best effort": non blocca il flusso
-        return "Snapshot non disponibile (PyMuPDF non installato o PDF non leggibile)."
+    except Exception as exc:
+        logger.warning(
+            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
+        )
+        raise ConfigError(
+            "VisionStatement illeggibile: file corrotto o non parsabile", slug=slug, file_path=str(pdf_path)
+        ) from exc
+
+    snapshot = "\n".join(texts).strip()
+    if not snapshot:
+        logger.info(
+            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"}
+        )
+        raise ConfigError(
+            "VisionStatement vuoto: nessun contenuto testuale estraibile", slug=slug, file_path=str(pdf_path)
+        )
+
+    return snapshot
 
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
@@ -268,19 +286,33 @@ def _call_semantic_mapping_response(
     vs_id: str,
     snapshot_text: str,
 ) -> Dict[str, Any]:
-    payload = dict(
-        model=model,
-        input=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_block},
-        ],
-        tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
-        },
-        temperature=0.2,
-    )
+    assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+
+    system_user_input = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_block},
+    ]
+    json_schema = {
+        "type": "json_schema",
+        "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
+    }
+
+    if assistant_id:
+        payload = dict(
+            assistant_id=assistant_id,
+            input=system_user_input,
+            tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
+            response_format=json_schema,
+            temperature=0.2,
+        )
+    else:
+        payload = dict(
+            model=model,
+            input=system_user_input,
+            tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
+            response_format=json_schema,
+            temperature=0.2,
+        )
 
     responses_ns = getattr(client, "responses", None)
     if responses_ns and hasattr(responses_ns, "create"):
@@ -314,10 +346,7 @@ def _call_semantic_mapping_response(
             model=model,
             messages=messages,
             temperature=0.2,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA},
-            },
+            response_format=json_schema,
         )
         choices = getattr(chat_resp, "choices", None)
         if not choices:
@@ -449,7 +478,7 @@ def provision_from_vision(
     # La funzione ora produce esclusivamente i due YAML richiesti.
 
     # 1) Estrazione testo (solo per contesto AI; nessun salvataggio snapshot)
-    snapshot = _extract_pdf_text(safe_pdf)
+    snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
 
     # 2) Invocazione AI
     client = make_openai_client()

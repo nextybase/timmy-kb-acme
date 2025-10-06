@@ -43,11 +43,17 @@ def make_openai_client() -> "OpenAI":
     except ImportError as exc:
         raise ConfigError("OpenAI SDK non disponibile: installa il pacchetto 'openai'.") from exc
 
+    default_headers = {"OpenAI-Beta": "assistants=v2"}
+
     # Qui NON logghiamo la chiave. Eventuali timeout/proxy si aggiungono qui.
     try:
-        return OpenAI(api_key=api_key)
+        return OpenAI(api_key=api_key, default_headers=default_headers)
     except TypeError as exc:
         if "proxies" not in str(exc):
             raise
         # Fallback per httpx>=0.28 (rimozione kwarg proxies).
-        return OpenAI(api_key=api_key, http_client=_build_http_client())
+        return OpenAI(
+            api_key=api_key,
+            http_client=_build_http_client(),
+            default_headers=default_headers,
+        )
