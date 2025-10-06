@@ -79,9 +79,12 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
     try:
         import fitz  # type: ignore
     except Exception as exc:  # pragma: no cover - dipendenza mancante
-        logger.warning(
-            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
-        )
+        log_warning = getattr(logger, "warning", None)
+        if callable(log_warning):
+            log_warning(
+                "vision_provision.extract_failed",
+                extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
+            )
         raise ConfigError(
             "VisionStatement illeggibile: file corrotto o non parsabile", slug=slug, file_path=str(pdf_path)
         ) from exc
@@ -92,18 +95,24 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
             for page in doc:
                 texts.append(page.get_text("text"))
     except Exception as exc:
-        logger.warning(
-            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
-        )
+        log_warning = getattr(logger, "warning", None)
+        if callable(log_warning):
+            log_warning(
+                "vision_provision.extract_failed",
+                extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
+            )
         raise ConfigError(
             "VisionStatement illeggibile: file corrotto o non parsabile", slug=slug, file_path=str(pdf_path)
         ) from exc
 
     snapshot = "\n".join(texts).strip()
     if not snapshot:
-        logger.info(
-            "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"}
-        )
+        log_info = getattr(logger, "info", None)
+        if callable(log_info):
+            log_info(
+                "vision_provision.extract_failed",
+                extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"},
+            )
         raise ConfigError(
             "VisionStatement vuoto: nessun contenuto testuale estraibile", slug=slug, file_path=str(pdf_path)
         )
