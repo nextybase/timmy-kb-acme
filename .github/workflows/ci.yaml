@@ -42,7 +42,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install -U pip wheel
-          pip install black flake8 flake8-bugbear flake8-annotations flake8-bandit flake8-print mypy pytest pytest-cov
+          pip install black ruff mypy pytest pytest-cov
       - name: Docs UTF-8/accents normalization check
         run: |
           python scripts/fix_mojibake.py
@@ -53,8 +53,8 @@ jobs:
           fi
       - name: Black (check)
         run: black --check src tests
-      - name: Flake8
-        run: flake8 src tests
+      - name: Ruff (check)
+        run: ruff check src tests
       - name: Mypy
         run: mypy src
       - name: Pytest (coverage 85%)
