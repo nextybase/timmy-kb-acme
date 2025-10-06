@@ -103,7 +103,8 @@ def _ensure_dependencies() -> types.SimpleNamespace:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Genera una knowledge base dummy per demo/test locali.")
-    p.add_argument("--slug", default="timmy-kb-dummy", help="Slug KB (default: timmy-kb-dummy)")
+    # Default allineato alla suite di test: 'dummy'
+    p.add_argument("--slug", default="dummy", help="Slug KB (default: dummy)")
     p.add_argument("--records", type=int, default=3, help="Numero di record fittizi finanziari (default: 3)")
     p.add_argument(
         "--base-dir",
@@ -338,11 +339,88 @@ def _ensure_dummy_vision_pdf(base: Path, *, slug: str, client_name: str) -> tupl
     return pdf_path, True
 
 
-# ----------------------- STUB SEMANTICI -----------------------
+# ----------------------- RAW/ DOCS & STUB SEMANTICI -----------------------
 
 
-def _ensure_semantic_stubs(base: Path, slug: str, client_name: str) -> dict[str, Any]:
-    """Crea, se mancanti, i due stub YAML: semantic_mapping.yaml e cartelle_raw.yaml."""
+def _ensure_raw_structure(base: Path, *, slug: str, client_name: str) -> dict[str, Any]:
+    """
+    Crea sottocartelle e PDF dummy sotto raw/:
+      - raw/contracts/sample.pdf
+      - raw/reports/sample.pdf
+      - raw/presentations/sample.pdf
+    Ritorna percorsi assoluti creati e lista dei path relativi (per cartelle_raw.yaml).
+    """
+    d = _ensure_dependencies()
+    ensure_within_fn = _require_dependency(d, "ensure_within")
+    safe_write_bytes_fn = _require_dependency(d, "safe_write_bytes")
+
+    categories = ["contracts", "reports", "presentations"]
+    folders_abs: list[Path] = []
+    folders_rel: list[str] = []
+    pdfs_abs: list[Path] = []
+
+    raw_dir = base / "raw"
+    ensure_within_fn(base, raw_dir)
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    for cat in categories:
+        cat_dir = raw_dir / cat
+        ensure_within_fn(base, cat_dir)
+        cat_dir.mkdir(parents=True, exist_ok=True)
+        folders_abs.append(cat_dir)
+        folders_rel.append(str(cat_dir.relative_to(base)).replace("\\", "/"))
+
+        # un PDF per cartella
+        title = f"{client_name} ({slug}) — {cat.capitalize()} — Dummy"
+        pdf_bytes = _make_minimal_pdf_bytes(title)
+        pdf_path = cat_dir / "sample.pdf"
+        safe_write_bytes_fn(pdf_path, pdf_bytes, atomic=True)
+        pdfs_abs.append(pdf_path)
+
+    return {"folders_abs": folders_abs, "folders_rel": folders_rel, "pdfs_abs": pdfs_abs}
+
+
+def _semantic_mapping_payload(slug: str, client_name: str) -> dict[str, Any]:
+    """
+    Costruisce semantic_mapping.yaml secondo la struttura reale:
+    - context
+    - tre aree predefinite con ambito/descrizione/keywords
+    - opzionale blocco synonyms (vuoto ma presente per stabilità schema)
+    """
+    return {
+        "context": {"slug": slug, "client_name": client_name},
+        # aree (chiavi top-level come da pipeline.vision_provision)
+        "contracts": {
+            "ambito": "Contrattualistica e forniture",
+            "descrizione": "Documenti contrattuali, NDA, ordini di acquisto, accordi quadro e appendici.",
+            "keywords": ["contratto", "NDA", "fornitore", "ordine", "appendice"],
+        },
+        "reports": {
+            "ambito": "Reportistica e analisi",
+            "descrizione": "Report periodici, metriche operative, analisi interne e rendicontazioni.",
+            "keywords": ["report", "analisi", "rendiconto", "KPI", "metriche"],
+        },
+        "presentations": {
+            "ambito": "Presentazioni e materiali",
+            "descrizione": "Slide, presentazioni per stakeholder, materiali divulgativi e executive brief.",
+            "keywords": ["presentazione", "slide", "deck", "brief", "stakeholder"],
+        },
+        "synonyms": {
+            # opzionale ma utile: la pipeline accetta questo blocco
+            "contracts": ["contratti", "accordi", "forniture"],
+            "reports": ["rendiconti", "analitiche", "reportistica"],
+            "presentations": ["slide", "deck", "presentazioni"],
+        },
+    }
+
+
+def _ensure_semantic_stubs(
+    base: Path,
+    slug: str,
+    client_name: str,
+    raw_folders_rel: list[str] | None = None,
+) -> dict[str, Any]:
+    """Crea, se mancanti, i due YAML: semantic_mapping.yaml (struttura cliente) e cartelle_raw.yaml."""
     d = _ensure_dependencies()
     ensure_within_fn = _require_dependency(d, "ensure_within")
     safe_write_text_fn = _require_dependency(d, "safe_write_text")
@@ -358,21 +436,19 @@ def _ensure_semantic_stubs(base: Path, slug: str, client_name: str) -> dict[str,
     created_cartelle = False
 
     if not mapping_path.exists():
-        mapping_stub = {
-            "context": {"slug": slug, "client_name": client_name},
-            # nessuna categoria ancora; file valido e leggibile
-        }
+        mapping_payload = _semantic_mapping_payload(slug, client_name)
         safe_write_text_fn(
             mapping_path,
-            yaml.safe_dump(mapping_stub, allow_unicode=True, sort_keys=False, width=100),
+            yaml.safe_dump(mapping_payload, allow_unicode=True, sort_keys=False, width=100),
             encoding="utf-8",
             atomic=True,
         )
         created_mapping = True
 
     if not cartelle_path.exists():
+        folders_value: list[Any] = list(raw_folders_rel or ["raw/contracts", "raw/reports", "raw/presentations"])
         cartelle_stub = {
-            "folders": [],  # il loader si aspetta una lista; 0 cartelle è valido
+            "folders": folders_value,  # lista di path relativi (es. "raw/contracts")
             "meta": {"source": "dummy", "slug": slug},
         }
         safe_write_text_fn(
@@ -513,10 +589,15 @@ def main(argv: list[str] | None = None) -> int:
         # Finanza dummy opzionale
         _maybe_write_dummy_finance(paths["base"], args.records)
 
-        # Config + Vision PDF + stub semantici
+        # RAW: sottocartelle + PDF dummy
+        raw_info = _ensure_raw_structure(paths["base"], slug=args.slug, client_name=client_name)
+
+        # Config + Vision PDF + YAML semantici (struttura cliente + folders raw/*)
         cfg_path, cfg_created = _ensure_config_written(paths["base"], args.slug, client_name)
         pdf_path, pdf_created = _ensure_dummy_vision_pdf(paths["base"], slug=args.slug, client_name=client_name)
-        sem_info = _ensure_semantic_stubs(paths["base"], args.slug, client_name=client_name)
+        sem_info = _ensure_semantic_stubs(
+            paths["base"], args.slug, client_name=client_name, raw_folders_rel=raw_info["folders_rel"]
+        )
 
         # Aggiorna clients_db (repo root)
         db_info = _update_clients_db(
@@ -537,6 +618,8 @@ def main(argv: list[str] | None = None) -> int:
                 "config_created": bool(cfg_created),
                 "vision_pdf": str(pdf_path),
                 "vision_pdf_created": bool(pdf_created),
+                "raw_folders": [str(p) for p in raw_info["folders_abs"]],
+                "raw_pdfs": [str(p) for p in raw_info["pdfs_abs"]],
                 "semantic_mapping": str(sem_info["mapping_path"]),
                 "semantic_mapping_created": bool(sem_info["mapping_created"]),
                 "cartelle_raw": str(sem_info["cartelle_path"]),
