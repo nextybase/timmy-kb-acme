@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib
 import sys
-from pathlib import Path
 
 
 def test_module_import_has_no_side_effects(tmp_path):
@@ -20,7 +19,7 @@ def test_module_import_has_no_side_effects(tmp_path):
     assert getattr(mod, "_fin_import_csv") is None
 
 
-def test_ensure_dependencies_is_idempotent(monkeypatch):
+def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
     """_ensure_dependencies può essere chiamato più volte senza duplicare sys.path."""
     mod = importlib.import_module("src.tools.gen_dummy_kb")
 
@@ -32,7 +31,7 @@ def test_ensure_dependencies_is_idempotent(monkeypatch):
         if path not in sys.path:
             sys.path.insert(0, path)
 
-    monkeypatch.setattr(mod, "SRC_ROOT", Path("/tmp/src"))
+    monkeypatch.setattr(mod, "SRC_ROOT", tmp_path / "src")
 
     # Usa un proxy list che permette di intercettare insert senza monkeypatchare un metodo built-in
     class _PathProxy(list):

@@ -22,6 +22,7 @@ Exit codes:
 import argparse
 import os
 import shutil
+import stat
 import sys
 import time
 from pathlib import Path
@@ -178,7 +179,8 @@ def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
 def _try_remove_readonly(func, path, exc_info):  # noqa: ANN001
     # Callback per shutil.rmtree onerror: rimuove readonly e riprova
     try:
-        os.chmod(path, 0o666)
+        current_mode = os.stat(path).st_mode
+        os.chmod(path, current_mode | stat.S_IWRITE)
     except Exception:
         pass
     try:

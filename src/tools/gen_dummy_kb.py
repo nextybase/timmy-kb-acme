@@ -6,7 +6,7 @@ import argparse
 import sys
 import types
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # Nota: nessun side-effect a import-time (no sys.path mutations, no I/O).
 # Le dipendenze runtime sono risolte lazy in _ensure_dependencies().
@@ -31,6 +31,13 @@ _fin_import_csv = None
 _DEPS: types.SimpleNamespace | None = None
 
 SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
+
+
+def _require_dependency(deps: types.SimpleNamespace, attr: str) -> Any:
+    value = getattr(deps, attr, None)
+    if value is None:
+        raise RuntimeError(f"Dependency '{attr}' unavailable; install required extras or check PATH.")
+    return value
 
 
 def _ensure_dependencies() -> types.SimpleNamespace:
@@ -128,26 +135,27 @@ def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path
 def _write_dummy_docs(book: Path) -> None:
     """Crea due markdown fittizi nella cartella book/."""
     d = _ensure_dependencies()
-    assert d.safe_write_text is not None
+    safe_write_text = _require_dependency(d, "safe_write_text")
     book.mkdir(parents=True, exist_ok=True)
-    d.safe_write_text(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
-    d.safe_write_text(book / "beta.md", "# Beta\n\n", encoding="utf-8", atomic=True)
+    safe_write_text(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
+    safe_write_text(book / "beta.md", "# Beta\n\n", encoding="utf-8", atomic=True)
 
 
 def _write_dummy_summary_readme(book: Path) -> None:
     """Genera SUMMARY.md e README.md fittizi per la knowledge base dummy."""
     d = _ensure_dependencies()
-    assert d.safe_write_text is not None
-    d.safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
-    d.safe_write_text(book / "README.md", "# Dummy KB\n\n", encoding="utf-8", atomic=True)
+    safe_write_text = _require_dependency(d, "safe_write_text")
+    safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
+    safe_write_text(book / "README.md", "# Dummy KB\n\n", encoding="utf-8", atomic=True)
 
 
 def _maybe_write_dummy_finance(base: Path, records: int) -> None:
     """Opzionalmente crea un CSV finanziario dummy e lo importa con le API finance."""
     d = _ensure_dependencies()
-    assert d.ensure_within is not None and d.safe_write_text is not None
+    ensure_within_fn = _require_dependency(d, "ensure_within")
+    safe_write_text = _require_dependency(d, "safe_write_text")
     sem = base / "semantic"
-    d.ensure_within(base, sem)
+    ensure_within_fn(base, sem)
     sem.mkdir(parents=True, exist_ok=True)
 
     if d.fin_import_csv is None or records <= 0:
@@ -164,7 +172,7 @@ def _maybe_write_dummy_finance(base: Path, records: int) -> None:
         wr.writerow(["m_revenue", f"2024Q{i%4+1}", i + 1])
 
     tmp = sem / "dummy-finance.csv"
-    d.safe_write_text(tmp, buf.getvalue(), encoding="utf-8", atomic=True)
+    safe_write_text(tmp, buf.getvalue(), encoding="utf-8", atomic=True)
     try:
         d.fin_import_csv(base, tmp)
     finally:
@@ -175,8 +183,8 @@ def main(argv: list[str] | None = None) -> int:
     """Punto di ingresso CLI per generare un workspace dummy (richiamabile dai test)."""
     args = _parse_args(argv)
     d = _ensure_dependencies()
-    assert d.get_structured_logger is not None
-    log = d.get_structured_logger("tools.gen_dummy_kb")
+    get_logger = _require_dependency(d, "get_structured_logger")
+    log = get_logger("tools.gen_dummy_kb")
 
     try:
         ws_base = make_workspace(args.slug, args.base_dir)

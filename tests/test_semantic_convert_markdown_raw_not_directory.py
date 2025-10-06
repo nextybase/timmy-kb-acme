@@ -21,6 +21,4 @@ def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):
         convert_markdown(ctx, logger, slug="acme")
 
     msg = str(exc.value)
-    assert (
-        ("non è una directory" in msg) or ("non �� una directory" in msg) or ("non" in msg and "una directory" in msg)
-    )
+    assert ("non \u00e8 una directory" in msg) or ("non" in msg and "una directory" in msg)
