@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import validate_slug
 from ui.utils.core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
@@ -130,7 +131,8 @@ def items_to_examples(items: List[Dict[str, str]]) -> List[str]:
 
 def save_semantic_mapping(slug: str, mapping: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
     base_root = Path(base_root)
-    client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{slug}")
+    safe_slug = str(validate_slug(slug))
+    client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     safe_write_text(path, yaml_dump(mapping), encoding="utf-8", atomic=True)
@@ -146,10 +148,11 @@ def load_semantic_mapping(slug: str, *, base_root: Path | str = "output") -> Dic
     Se il file non esiste, solleva FileNotFoundError.
     """
     base_root = Path(base_root)
-    client_root = base_root / f"timmy-kb-{slug}"
+    safe_slug = str(validate_slug(slug))
+    client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
 
-    mapping_path = sem_dir / "semantic_mapping.yaml"
+    mapping_path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     if mapping_path.is_file():
         data = yaml_load(mapping_path)
         return cast(Dict[str, Any], data)
@@ -173,10 +176,9 @@ def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
 def write_raw_structure_yaml(slug: str, structure: Dict[str, Any], *, base_root: Path | str = "output") -> Path:
     """Scrive un YAML sintetico della struttura RAW in semantic/_raw_from_mapping.yaml (locale)."""
     base_root = Path(base_root)
-    sem_dir: Path = ensure_within_and_resolve(
-        base_root / f"timmy-kb-{slug}",
-        base_root / f"timmy-kb-{slug}" / "semantic",
-    )
+    safe_slug = str(validate_slug(slug))
+    client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
+    sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "_raw_from_mapping.yaml")
     safe_write_text(path, yaml_dump(structure), encoding="utf-8", atomic=True)
     return path

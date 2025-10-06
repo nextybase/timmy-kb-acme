@@ -1,8 +1,12 @@
+# src/ui/components/diff_view.py
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+
+from pipeline.path_utils import ensure_within_and_resolve, validate_slug
 
 try:
     import streamlit as st
@@ -23,17 +27,35 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     index: Dict[str, Dict[str, Any]] = {}
     if not raw_dir.exists():
         return index
+
+    # Indichiamo sempre la radice "raw" (come fa l’indice Drive)
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
-    for entry in raw_dir.rglob("*"):
-        rel = entry.relative_to(raw_dir).as_posix()
-        if not rel:
-            continue
-        key = f"raw/{rel}"
-        if entry.is_dir():
-            index[key] = {"type": "dir", "size": None, "mtime": _safe_mtime(entry)}
-        else:
+
+    # Scansione sicura: niente rglob (per evitare follow dei symlink e traversal),
+    # uso os.walk con filtro su symlink e ensure_within_and_resolve per ogni file.
+    for root, dirs, files in os.walk(raw_dir, followlinks=False):
+        base = Path(root)
+
+        # Evita di scendere in symlink a directory
+        dirs[:] = [d for d in dirs if not (base / d).is_symlink()]
+
+        for name in files:
+            candidate = base / name
+            # Salta symlink a file
+            if candidate.is_symlink():
+                continue
             try:
-                stat = entry.stat()
+                safe = ensure_within_and_resolve(raw_dir, candidate)
+            except Exception:
+                # File fuori dal perimetro raw/ (o path sospetto): ignora
+                continue
+
+            rel = safe.relative_to(raw_dir).as_posix()
+            if not rel:
+                continue
+            key = f"raw/{rel}"
+            try:
+                stat = safe.stat()
                 index[key] = {
                     "type": "file",
                     "size": int(stat.st_size),
@@ -41,6 +63,7 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
                 }
             except OSError:  # pragma: no cover
                 index[key] = {"type": "file", "size": None, "mtime": None}
+
     return index
 
 
@@ -88,7 +111,11 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     drive_index = drive_index or {}
     drive_entries = {key: meta for key, meta in drive_index.items() if key == "raw" or key.startswith("raw/")}
 
-    raw_dir = OUTPUT_ROOT / f"timmy-kb-{slug}" / "raw"
+    # Risoluzione sicura del workspace e di raw/
+    safe_slug = str(validate_slug(slug))
+    workspace = ensure_within_and_resolve(OUTPUT_ROOT, OUTPUT_ROOT / f"timmy-kb-{safe_slug}")
+    raw_dir = ensure_within_and_resolve(workspace, workspace / "raw")
+
     local_entries = _build_local_index(raw_dir)
 
     drive_keys = set(drive_entries.keys())

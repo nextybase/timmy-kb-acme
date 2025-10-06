@@ -14,7 +14,7 @@ from typing import cast
 import yaml
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.yaml_utils import clear_yaml_cache
 
 try:
@@ -44,18 +44,17 @@ TAGS_FILE = "tags_reviewed.yaml"
 
 
 def _workspace_root(slug: str) -> Path:
-    root = Path("output") / f"timmy-kb-{slug}"
-    if not root.exists():
+    safe_slug = str(validate_slug(slug))
+    base_root = Path("output")
+    root = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
+    if not Path(root).exists():
         raise ConfigError(f"Workspace locale non trovato: {root}")
-    return root
+    return cast(Path, root)
 
 
 def _semantic_path(slug: str, filename: str) -> Path:
     workspace = _workspace_root(slug)
-    return cast(
-        Path,
-        ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename),
-    )
+    return cast(Path, ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename))
 
 
 def _read_yaml_text(slug: str, filename: str) -> str:
