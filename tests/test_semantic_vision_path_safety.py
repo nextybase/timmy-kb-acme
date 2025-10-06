@@ -14,6 +14,9 @@ class _NoopLogger:
     def error(self, *a, **k):
         pass
 
+    def warning(self, *args, **kwargs):
+        pass
+
 
 class _Ctx:
     def __init__(self, base_dir: Path):

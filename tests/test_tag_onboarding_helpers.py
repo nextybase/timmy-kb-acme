@@ -10,6 +10,9 @@ class _NoopLogger:
     def info(self, *a, **k):
         pass
 
+    def warning(self, *args, **kwargs):
+        pass
+
 
 def test_should_proceed_non_interactive_without_proceed_stops(tmp_path: Path) -> None:
     log = _NoopLogger()
