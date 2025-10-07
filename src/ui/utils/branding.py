@@ -37,6 +37,7 @@ def render_brand_header(
     repo_root: Path,
     subtitle: Optional[str] = None,
     include_anchor: bool = False,
+    show_logo: bool = True,
 ) -> None:
     """Renderizza l’header brand dell’app (logo + titolo + sottotitolo opzionale).
 
@@ -45,6 +46,7 @@ def render_brand_header(
         repo_root: root del repository (per risolvere i path degli asset).
         subtitle: testo facoltativo sotto il titolo.
         include_anchor: se True, aggiunge un’ancora HTML all’inizio della pagina.
+        show_logo: se False evita di mostrare il logo (solo titolo/testi).
     """
     if st_module is None:
         return
@@ -59,7 +61,7 @@ def render_brand_header(
         logo_path = resolve_theme_logo_path(repo_root)
         cols = st_module.columns([1, 5])
         with cols[0]:
-            if logo_path.exists():
+            if show_logo and logo_path.exists():
                 st_module.image(str(logo_path), use_column_width=True)
         with cols[1]:
             st_module.title("Onboarding NeXT – Clienti")

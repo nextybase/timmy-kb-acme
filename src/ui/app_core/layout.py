@@ -34,7 +34,6 @@ def render_client_header(
         repo_root=repo_root,
         subtitle=subtitle,
         include_anchor=True,
-        show_logo=False,
     )
     if not slug:
         st_module.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
