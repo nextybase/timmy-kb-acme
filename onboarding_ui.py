@@ -88,8 +88,8 @@ from src.ui.app_core.state import STATE_SEM_READY, compute_home_enabled, compute
 ICON_REFRESH = "\U0001F504"
 
 
-def _compute_sem_enabled(phase: str | None, slug: str | None) -> bool:
-    """Compat layer: replica la vecchia logica usando eventuali stub patchati dal test."""
+def compute_sem_enabled(phase: str | None, slug: str | None) -> bool:
+    """Compat layer: replica la vecchia logica usando eventuali stub patchati dai test."""
     normalized = normalize_state(phase)
     if normalized not in STATE_SEM_READY:
         return False
@@ -106,6 +106,9 @@ def _compute_sem_enabled(phase: str | None, slug: str | None) -> bool:
 
     ready, _ = probe(slug_value)
     return bool(ready)
+
+
+_compute_sem_enabled = compute_sem_enabled
 
 
 def _compute_manage_enabled(phase: str | None, slug: str | None) -> bool:
