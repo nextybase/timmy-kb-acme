@@ -1,7 +1,7 @@
 # Developer Guide
 <!-- cSpell:ignore dataclass -->
 
-> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy-kb seguendo uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
+> Questa guida descrive regole, flussi e convenzioni per contribuire a timmy‑kb seguendo uno sviluppo rigoroso, idempotente e sicuro sul filesystem.
 
 ---
 
@@ -30,8 +30,8 @@
 
 ## Architettura in breve
 - Orchestratori (CLI e UI) gestiscono l'esperienza utente e coordinano i moduli.
-- `pipeline/*` fornisce utilità cross-cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path-safety.
-- `semantic/*` espone la facade `semantic.api` che coordina conversione PDF->MD, enrichment del frontmatter e indicizzazione.
+- `pipeline/*` fornisce utilità cross‑cutting (path, file I/O, logging, context, validazioni) e rimane privo di accessi di rete; forte path‑safety.
+- `semantic/*` espone la facade `semantic.api` che coordina conversione PDF→MD, enrichment del frontmatter e indicizzazione.
 - Storage locale: workspace per cliente in `output/timmy-kb-<slug>/{raw, book, semantic, config, logs}`.
 - DB SQLite: Single Source of Truth (SSoT) per i tag in runtime (es. `semantic/tags.db`).
 
@@ -58,31 +58,63 @@ La facade `semantic.api` espone gli step principali:
 5. `index_markdown_to_db(ctx, logger, slug, scope, embeddings_client, db_path)`
    - Estrae chunk testuali, calcola embedding, scrive su DB (idempotente) e ritorna KPI coerenti.
 
-> Fase `build_markdown_book`: viene tracciata come singola fase che copre l'intero blocco `convert_markdown -> write_summary_and_readme -> load_reviewed_vocab -> enrich_frontmatter`. Il "successo" è emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
+> Fase `build_markdown_book`: viene tracciata come singola fase che copre l'intero blocco `convert_markdown → write_summary_and_readme → load_reviewed_vocab → enrich_frontmatter`. Il "successo" è emesso solo a enrichment terminato; gli `artifacts` riflettono i soli contenuti effettivi (esclusi `README.md`/`SUMMARY.md`).
 
 ---
 
 ## Regole di sicurezza I/O e path-safety
-- Guardie obbligatorie: usare sempre `ensure_within` / `ensure_within_and_resolve` prima di accedere a file/dir derivati da input esterni o configurazioni.
-- Scritture atomiche: impiegare `safe_write_text`/`safe_write_bytes` per evitare file parziali e condizioni di gara.
-- Append sicuro: usare `safe_append_text` quando serve aggiungere righe (es. audit JSONL); gestisce path-safety, lock file e fsync opzionale.
-- No side-effects a import-time: i moduli non devono mutare `sys.path` né eseguire I/O quando importati.
-- Idempotenza: tutti gli step devono poter essere rieseguiti senza effetti collaterali (cleanup dei temporanei garantito anche in errore).
+- **Guardie obbligatorie**: usare sempre `ensure_within` / `ensure_within_and_resolve` prima di accedere a file/dir derivati da input esterni o configurazioni.
+- **Scritture atomiche**: impiegare `safe_write_text`/`safe_write_bytes` per evitare file parziali e condizioni di gara.
+- **Append sicuro**: usare `safe_append_text` quando serve aggiungere righe (es. audit JSONL); gestisce path‑safety, lock file e fsync opzionale.
+- **No side‑effects a import‑time**: i moduli non devono mutare `sys.path` né eseguire I/O quando importati.
+- **Idempotenza**: tutti gli step devono poter essere rieseguiti senza effetti collaterali (cleanup dei temporanei garantito anche in errore).
+
+### Aggiornamenti Ottobre 2025 — UI `workspace` (slug & scan RAW)
+- **Validazione slug centralizzata**
+  - La UI applica `pipeline.path_utils.validate_slug()` *prima* di risolvere i percorsi (`resolve_raw_dir`).
+  - **Regex ammessa**: `^[a-z0-9-]+$` (kebab‑case). **Non ammessi**: underscore, spazi, maiuscole.
+  - In caso di slug non valido viene sollevata `InvalidSlug` (coerente con il resto della pipeline).
+- **Risoluzione percorsi sicura**
+  - `_fallback_base_dir(slug)` e `resolve_raw_dir(slug)` costruiscono i path passando sempre da `ensure_within_and_resolve`.
+  - `raw/` deve essere *sotto* la base del workspace; traversal e symlink malevoli sono esclusi.
+- **Scansione RAW per presenza PDF**
+  - `has_raw_pdfs(slug)` usa `os.walk(..., followlinks=False)` ed esegue `ensure_within_and_resolve(raw_dir, candidate)` per ogni file trovato.
+  - **Symlink fuori perimetro** (che puntano fuori da `raw/`) vengono **ignorati**; `rglob` non viene usato per evitare follow impliciti.
+- **Cache solo positiva**
+  - Il risultato viene messo in cache (TTL **3s**) **solo se** esiste almeno un PDF valido.
+  - Nessuna **negative‑caching**: in assenza di PDF la cache non viene scritta e, se presente, viene rimossa.
+- **Logging degli errori di scansione**
+  - Gli errori di I/O durante la scansione generano un warning (es.: `_log.warning("Errore durante la scansione di raw/", extra={"slug": slug, "raw_dir": str(raw_dir), "error": str(e)})`) e **non** vengono messi in cache.
+
+**Esempio (pattern consigliato)**
+```python
+from pipeline.path_utils import ensure_within_and_resolve, validate_slug
+
+slug = validate_slug(input_slug.strip().lower())
+raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
+# Scansione sicura
+for root, _dirs, files in os.walk(raw_dir, followlinks=False):
+    for name in files:
+        if name.lower().endswith(".pdf"):
+            candidate = Path(root) / name
+            ensure_within_and_resolve(raw_dir, candidate)
+            # ... usa candidate ...
+```
 
 ---
 
 ## Gestione errori, exit codes e osservabilità
-- Eccezioni tipizzate: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, …) e includere contesto.
-- Contesto obbligatorio: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
-- Orchestratori CLI: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
+- **Eccezioni tipizzate**: usare le exception di progetto (`ConfigError`, `PipelineError`, `ConversionError`, …) e includere contesto.
+- **Contesto obbligatorio**: tutti i `PipelineError` (e derivate) devono includere `slug` e `file_path` quando rilevanti.
+- **Orchestratori CLI**: catturano `ConfigError`/`PipelineError` e mappano su exit codes deterministici tramite `exit_code_for`. Nessun traceback non gestito.
 - `ClientContext.load(require_env=True)`: se le ENV obbligatorie mancano o sono vuote, solleva immediatamente `ConfigError` con messaggio chiaro (mai `KeyError`).
-- Logging strutturato: usare `phase_scope(logger, stage=..., customer=...)` per `phase_started/phase_completed/phase_failed` e valorizzare `artifacts` con numeri reali.
+- **Logging strutturato**: usare `phase_scope(logger, stage=..., customer=...)` per `phase_started/phase_completed/phase_failed` e valorizzare `artifacts` con numeri reali.
 
 ---
 
 ## Controllo caratteri e encoding (UTF-8)
-- `fix-control-chars`: hook pre-commit che ripulisce i file sostituendo i caratteri di controllo vietati e applicando la normalizzazione NFC.
-- `forbid-control-chars`: hook di verifica che blocca il commit se restano caratteri proibiti o file non UTF-8.
+- `fix-control-chars`: hook pre‑commit che ripulisce i file sostituendo i caratteri di controllo vietati e applicando la normalizzazione NFC.
+- `forbid-control-chars`: hook di verifica che blocca il commit se restano caratteri proibiti o file non UTF‑8.
 
 Per forzare i controlli:
 
@@ -96,7 +128,7 @@ python scripts/forbid_control_chars.py --fix <path>
 
 ## Qualità prima dei test (lint & format obbligatori)
 Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `ruff` (lint).
-Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
+Standard: **line‑length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
 Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
 Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l'editor applica `black` in automatico.
@@ -110,18 +142,18 @@ Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, for
 **Setup qualità locale (obbligatorio)**
 1. Installa toolchain: `pip install -U pre-commit black isort ruff`.
 2. Attiva hook: `pre-commit install`.
-3. Editor (VS Code): abilita *format on save* con `black`, lint con `ruff`, `isort` profilo `black`, line-length 120.
+3. Editor (VS Code): abilita *format on save* con `black`, lint con `ruff`, `isort` profilo `black`, line‑length 120.
 
 **Prima di ogni commit**: esegui `pre-commit run --all-files` oppure salva i file (l'editor formatterà automaticamente).
 Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il gate di qualità per far arrivare al testing solo codice già pulito.
 
-> Nota: quando chiedi codice a tool/assistenti (es. Codex), specifica sempre: "rispetta line-length 120, black/isort/ruff; nessun segreto nei log".
+> Nota: quando chiedi codice a tool/assistenti, specifica sempre: "rispetta line‑length 120, black/isort/ruff; nessun segreto nei log".
 
 ---
 
 ## Variabili ambiente e segreti
 - Mantieni chiavi distinte per servizio e ambiente (es. `OPENAI_API_KEY_CODEX` per la UI/RAG e `OPENAI_API_KEY_FOLDER` per i job batch).
-- Popola i secret omonimi in GitHub (Settings -> Secrets and variables -> Actions) per ciascun ambiente CI/CD, evitando valori in chiaro nei log.
+- Popola i secret omonimi in GitHub (Settings → Secrets and variables → Actions) per ciascun ambiente CI/CD, evitando valori in chiaro nei log.
 - In locale carica i segreti tramite `.env` e attiva la redazione (`LOG_REDACTION`) per prevenire tracce accidentali.
 
 ## CI
@@ -132,54 +164,54 @@ Le PR vengono rifiutate se non superano lint/format. I test partono **dopo** il 
 ---
 
 ## Conversione Markdown: policy ufficiale
-- Se `raw/` non esiste -> `ConfigError` con `file_path`.
+- Se `raw/` non esiste → `ConfigError` con `file_path`.
 - Se `raw/` non contiene PDF:
   - Non chiamare il converter (evita segnaposto).
-  - Se `book/` contiene già MD di contenuto -> restituiscili.
-  - Altrimenti -> `ConfigError` (fail-fast, con `file_path=raw/`).
-- Se ci sono PDF in `raw/` -> invocare sempre il converter.
+  - Se `book/` contiene già MD di contenuto → restituiscili.
+  - Altrimenti → `ConfigError` (fail‑fast, con `file_path=raw/`).
+- Se ci sono PDF in `raw/` → invocare sempre il converter.
 - Se in `raw/` i PDF trovati sono tutti non sicuri/symlink/fuori perimetro:
   - Non chiamare il converter.
   - Sollevare `ConfigError` con messaggio esplicito ("solo PDF non sicuri/fuori perimetro") e hint operativo a rimuovere i symlink o spostare i PDF reali dentro `raw/`.
 - Gli `artifacts` conteggiano solo MD di contenuto (escludere `README.md`/`SUMMARY.md`).
-- Categorie symlink: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path-safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
+- **Categorie symlink**: in presenza di categorie che sono link simbolici verso sottocartelle reali, i percorsi vengono risolti e verificati con path‑safety per evitare loop e mismatch; l'emissione del markdown procede senza eccezioni usando la base risolta per il calcolo dei percorsi relativi.
 
 ## Modalità DRY con `safe_pdfs`
 - Se il chiamante fornisce `safe_pdfs` (già validati e risolti all'interno di `ctx.raw_dir`), `convert_files_to_structured_markdown(..., safe_pdfs=...)` **evita qualsiasi discovery implicita** e usa esattamente quell'elenco.
-- Restano invariate le garanzie: path-safety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
+- Restano invariate le garanzie: path‑safety (`ensure_within*/resolve`) e cleanup idempotente dei `.md` orfani in `book/`.
 
 ---
 
 ## Enrichment e vocabolario: comportamento fail-fast
 - SSoT runtime dei tag è sotto `semantic/` (tipicamente DB). L'assenza del DB è ok (nessun enrichment), restituisce `{}`.
-- Errori di path o I/O/DB durante il load -> `ConfigError` con `file_path` (fail-fast, niente fallback silenziosi).
+- Errori di path o I/O/DB durante il load → `ConfigError` con `file_path` (fail‑fast, niente fallback silenziosi).
 - L'enrichment avviene nella fase estesa `build_markdown_book`; una failure blocca il "successo" della fase.
 
-**Nota (Enrichment/Vocabolario - SQLite)**
+**Nota (Enrichment/Vocabolario ‑ SQLite)**
 - Errori SQLite (apertura, query, cursor) durante la lettura del DB sono sempre rimappati a `ConfigError` con `file_path` al DB.
 
 ---
 
 ## Onboarding nuovo cliente (slug non esistente)
 1. **Upload controllato**: la landing UI accetta solo `VisionStatement.pdf`. Il file viene salvato in `config/VisionStatement.pdf` nel workspace del cliente con guardie `ensure_within_and_resolve` e scrittura atomica.
-2. **Genera da Vision (AI)**: dopo l'upload si attiva il pulsante **"Genera da Vision (AI)"**; il click avvia `semantic.vision_provision.provision_from_vision` e mostra la progress bar `[PDF ricevuto] -> [Snapshot] -> [YAML vision] -> [YAML cartelle]`.
+2. **Genera da Vision (AI)**: dopo l'upload si attiva il pulsante **"Genera da Vision (AI)"**; il click avvia `semantic.vision_provision.provision_from_vision` e mostra la progress bar `[PDF ricevuto] → [Snapshot] → [YAML vision] → [YAML cartelle]`.
 3. **Anteprima YAML**: al termine la UI apre un expander con `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml` per l'audit. Questo step crea `semantic/cartelle_raw.yaml` nel workspace e logga hash del PDF e modello usato.
 4. **Approva e crea cartelle**: nessuna cartella `docs/` viene generata finché l'utente non preme **"Approva e crea cartelle"**; il pulsante delega a `pipeline.provision_from_yaml.provision_directories_from_cartelle_raw(...)`, che legge `semantic/cartelle_raw.yaml` e crea la gerarchia in modo idempotente.
 - **Idempotenza**: l'hash del PDF viene salvato in `semantic/.vision_hash`. Se l'utente rilancia con lo stesso file, la UI segnala che gli artefatti esistono già e permette la rigenerazione solo su richiesta esplicita (`force=True` o cambio modello).
 
 ## Vision Statement mapping
 - `semantic.vision_ai.generate(ctx, logger, slug)` risolve i percorsi con `ensure_within_and_resolve`, estrae il testo dal PDF con PyMuPDF e salva sempre uno snapshot (`semantic/vision_statement.txt`) prima di inviare il prompt strutturato al modello `gpt-4.1-mini`.
-- L'estrazione testo dal VisionStatement è fail-fast: PDF corrotto o vuoto producono un ConfigError immediato.
+- L'estrazione testo dal VisionStatement è fail‑fast: PDF corrotto o vuoto producono un `ConfigError` immediato.
 - Lo YAML risultante (`semantic/semantic_mapping.yaml`) è scritto in modo atomico tramite `safe_write_text`; il JSON viene validato rispetto allo schema e i campi mancanti generano `ConfigError` espliciti.
-- `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` -> exit code 2).
-- I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON->YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).
+- `src/tools/gen_vision_yaml.py` carica `.env` via `ensure_dotenv_loaded()`, inizializza il `ClientContext` e mappa gli errori (`ConfigError` → exit code 2).
+- I test `tests/test_vision_ai_module.py` coprono estrazione PDF, conversione JSON→YAML, logging snapshot e i casi di risposta troncata (`finish_reason="length"`).
 
 ---
 
 ## Indexer e KPI DB (inserimenti reali)
-- `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re-run -> `0`).
+- `insert_chunks(...)` ritorna il numero effettivo di righe inserite (idempotenza: re‑run → `0`).
 - L'aggregato in `index_markdown_to_db(...)` usa la somma degli inserimenti reali per KPI/telemetria coerenti.
-- Inizializzazione schema DB: eseguita una sola volta per run e in modalità fail-fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` è `None` viene usato il percorso predefinito di `get_db_path()`).
+- Inizializzazione schema DB: eseguita una sola volta per run e in modalità fail‑fast; eventuali errori di inizializzazione vengono tipizzati come `ConfigError` con `file_path` puntato al DB effettivo (se `db_path` è `None` viene usato il percorso predefinito di `get_db_path()`).
 
 ### Indicizzazione parziale e telemetria
 - Mismatch lunghezze: se `len(embeddings) != len(contents)` si indicizza sul minimo comune (troncamento dei tre array); idempotenza e schema DB invariati.
@@ -205,20 +237,19 @@ semantic.index.done | phase_completed artifacts=0
 - `search` e `search_with_config` restano l'interfaccia per la ricerca completa dopo la calibrazione del limite con config o budget.
 
 ### Ottimizzazione trasparente e metriche
-- Short-circuit: se un candidato espone già un embedding piatto `list[float]`, viene usato direttamente (nessuna normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
+- Short‑circuit: se un candidato espone già un embedding piatto `list[float]`, viene usato direttamente (nessuna normalizzazione completa); l'ordinamento/score rimane invariato rispetto al percorso di normalizzazione.
 - Log `retriever.metrics` include tempi `{total, embed, fetch, score_sort}` e contatori `coerce {short, normalized, skipped}`.
 - Vincoli su `QueryParams.candidate_limit`: intervallo valido `[500, 20000]`.
 
 ### Procedura di calibrazione (p95 ~, qualità invariata)
-- Strumento: `scripts/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground-truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
+- Strumento: `scripts/retriever_benchmark.py` (nessuna rete). Esegue N run per ciascun `candidate_limit` e calcola p95/mean dei tempi (`total_ms`). Se il file query specifica una ground‑truth semplice (chiave `relevant_contains` per ciascuna query), stima anche `hit@k`.
 - Esecuzione rapida:
   - `make bench-retriever` (3 run, k=10, candidate_limit in `{500,1000,2000,5000,10000,20000}`; usa query integrate di fallback)
   - Oppure: `python scripts/retriever_benchmark.py --queries data/queries.json --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000 --slug x --scope book --db data/kb.sqlite`
-- Criterio decisione: scegli la configurazione con `p95` ridotto di almeno ~15% rispetto alla baseline (es. 4000) e perdita `hit@k` +/- 1%.
+- Criterio decisione: scegli la configurazione con `p95` ridotto di almeno ~15% rispetto alla baseline (es. 4000) e perdita `hit@k` ±1%.
 - Applicazione: aggiorna `config/config.yaml` sotto `retriever.candidate_limit`. Il valore viene applicato dal facade `with_config_or_budget(...)` solo quando il chiamante non ha impostato esplicitamente un limite diverso dal default.
 
 Esempio d'uso minimo:
-
 ```python
 from retriever import QueryParams, retrieve_candidates
 
@@ -241,7 +272,7 @@ raw_candidates = retrieve_candidates(params)
 py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/data/retriever_queries.jsonl --limits 500:2500:500 --repetitions 3 --dump-top output/timmy-kb-dummy/logs/calibrazione.jsonl
 ```
 
-- `--limits` accetta sia elenchi separati da virgola (`500,1000,2000`) sia range `start:stop:step`; `--repetitions` ripete la misura; `--dump-top` salva un JSONL con i documenti top-k usando `safe_write_text`.
+- `--limits` accetta sia elenchi separati da virgola (`500,1000,2000`) sia range `start:stop:step`; `--repetitions` ripete la misura; `--dump-top` salva un JSONL con i documenti top‑k usando `safe_write_text`.
 - Log attesi: `retriever_calibrate.start`, più eventi `retriever.raw_candidates` dal wrapper, `retriever_calibrate.run` per ciascun sample e `retriever_calibrate.done` con media finale (se assenti run viene emesso `retriever_calibrate.no_runs`).
 - Il tool non contatta servizi esterni: opera sul DB locale via `retrieve_candidates` e produce output deterministici da usare per aggiornare `candidate_limit` con `with_config_candidate_limit` o `with_config_or_budget`.
 
@@ -256,20 +287,20 @@ py src/tools/retriever_calibrate.py --slug dummy --scope book --queries tests/da
 
 ## Tooling: `gen_dummy_kb.py` e `retriever_calibrate.py`
 - `gen_dummy_kb.py`
-  - Nessun side-effect a import-time; bootstrap delle dipendenze lazy in `_ensure_dependencies()`.
+  - Nessun side‑effect a import‑time; bootstrap delle dipendenze *lazy* in `_ensure_dependencies()`.
   - Supporta `--out <dir>` per generare un workspace esplicito; crea `raw/`, `book/`, `semantic/`, `config/`.
 - `retriever_calibrate.py`
   - Costruisce `QueryParams` reali (slug, scope, query, limite) e usa il wrapper `retrieve_candidates`.
   - Logging strutturato: `retriever_calibrate.start/run/done` con `extra` sempre valorizzato per slug, scope, limite e tempi.
-  - I dump opzionali dei doc top-k passano da `safe_write_text` dopo la guardia `ensure_within_and_resolve`.
+  - I dump opzionali dei doc top‑k passano da `safe_write_text` dopo la guardia `ensure_within_and_resolve`.
 
 ---
 
 ## Qualità del codice: lint, format, typing, test
 - Formatter/Lint: Black, isort, Ruff (config in `pyproject.toml`).
 - Typing: mypy/pyright; preferire type hints espliciti, no `Any` se evitabile.
-- Test: `pytest` con piramide unit -> contract -> smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
-- Pre-commit: hook per lint/format/type e sicurezza (es. gitleaks); i commit devono passare tutti gli hook.
+- Test: `pytest` con piramide unit → contract → smoke E2E; nessuna dipendenza di rete. Marcatori e `addopts` in `pytest.ini`.
+- Pre‑commit: hook per lint/format/type e sicurezza (es. gitleaks); i commit devono passare tutti gli hook.
 
 **Esecuzione locale suggerita**
 ```bash
@@ -277,6 +308,13 @@ make install
 make fmt && make lint && make type
 make test
 ```
+
+### Aggiornamenti test consigliati (Ottobre 2025)
+- `tests/ui/test_workspace_paths.py`
+  - **Slug invalidi**: `cliente 123`, `cliente_prod`, `ACME` ⇒ `InvalidSlug`.
+  - **Traversal/symlink**: link in `raw/` verso file esterni → ignorati; nessun conteggio come PDF.
+  - **Cache flow**: verifica TTL 3s (cache positiva solo quando presente almeno un PDF valido).
+  - **Errore I/O**: permessi negati su sottodir → warning loggato; nessuna cache negativa.
 
 ---
 

@@ -50,7 +50,9 @@
     "validatore",
     "versioniamo",
     "taggata",
-    "rilasciabile"
+    "rilasciabile",
+    "sottodir",
+    "loggato"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",
