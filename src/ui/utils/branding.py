@@ -59,14 +59,14 @@ def render_brand_header(
 
     try:
         logo_path = resolve_theme_logo_path(repo_root)
-        col_logo, col_title = st_module.columns([1, 5])
-        if show_logo and logo_path.exists():
-            col_logo.image(str(logo_path), use_container_width=True)
-        else:
-            col_logo.empty()
-        col_title.title("Onboarding NeXT – Clienti")
-        if subtitle:
-            col_title.caption(subtitle)
+        cols = st_module.columns([1, 5])
+        with cols[0]:
+            if show_logo and logo_path.exists():
+                st_module.image(str(logo_path), use_column_width=True)
+        with cols[1]:
+            st_module.title("Onboarding NeXT – Clienti")
+            if subtitle:
+                st_module.caption(subtitle)
     except Exception:
         # Header non deve mai spezzare il rendering
         pass
@@ -80,6 +80,6 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
         with st_module.sidebar:
             logo_path = resolve_theme_logo_path(repo_root)
             if logo_path.exists():
-                st_module.image(str(logo_path), use_container_width=True)
+                st_module.image(str(logo_path), use_column_width=True)
     except Exception:
         pass
