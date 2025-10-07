@@ -1,76 +1,83 @@
+# src/ui/utils/branding.py
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Optional
 
-from .core import resolve_theme_logo_path
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover
+    st = None
 
-DEFAULT_TITLE = "Onboarding NeXT - Clienti"
+# Usa l’helper centralizzato che sceglie il logo in base al tema
+from src.ui.utils.core import resolve_theme_logo_path
 
 
 def get_favicon_path(repo_root: Path) -> Path:
-    """Return the path to the UI favicon."""
-    return Path(repo_root).resolve() / "assets" / "ico-next.png"
+    """Restituisce il percorso del favicon per l’app.
+
+    Proviamo prima favicon dedicati; in fallback usiamo il logo di tema.
+    """
+    assets = Path(repo_root) / "assets"
+    candidates = [
+        assets / "favicon.png",
+        assets / "favicon.ico",
+        assets / "next-favicon.png",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    # Fallback: usa il logo coerente con il tema
+    return resolve_theme_logo_path(repo_root)
 
 
 def render_brand_header(
     *,
-    st_module: Any,
+    st_module: Any | None,
     repo_root: Path,
-    title: str = DEFAULT_TITLE,
     subtitle: Optional[str] = None,
     include_anchor: bool = False,
-    show_logo: bool = True,
 ) -> None:
-    """Render the shared brand header with optional logo."""
+    """Renderizza l’header brand dell’app (logo + titolo + sottotitolo opzionale).
+
+    Args:
+        st_module: modulo streamlit (passato dall’app); se None, non esegue nulla.
+        repo_root: root del repository (per risolvere i path degli asset).
+        subtitle: testo facoltativo sotto il titolo.
+        include_anchor: se True, aggiunge un’ancora HTML all’inizio della pagina.
+    """
     if st_module is None:
         return
 
     if include_anchor:
         try:
-            st_module.markdown("<main id='main'></main>", unsafe_allow_html=True)
+            st_module.markdown("<a id='top'></a>", unsafe_allow_html=True)
         except Exception:
             pass
 
-    repo_root_path = Path(repo_root).resolve()
-
-    if not show_logo:
-        try:
-            st_module.title(title)
+    try:
+        logo_path = resolve_theme_logo_path(repo_root)
+        cols = st_module.columns([1, 5])
+        with cols[0]:
+            if logo_path.exists():
+                st_module.image(str(logo_path), use_column_width=True)
+        with cols[1]:
+            st_module.title("Onboarding NeXT – Clienti")
             if subtitle:
                 st_module.caption(subtitle)
-        except Exception:
-            pass
-        return
-
-    try:
-        col_logo, col_text = st_module.columns([1, 3])
     except Exception:
-        return
-
-    logo_path = resolve_theme_logo_path(repo_root_path)
-    try:
-        if logo_path.exists():
-            col_logo.image(str(logo_path), width="stretch")
-    except Exception:
-        pass
-
-    try:
-        col_text.title(title)
-        if subtitle:
-            col_text.caption(subtitle)
-    except Exception:
+        # Header non deve mai spezzare il rendering
         pass
 
 
-def render_sidebar_brand(st_module: Any, repo_root: Path) -> None:
-    """Render only the logo inside the sidebar."""
+def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
+    """Renderizza il brand nella sidebar (logo compatto)."""
     if st_module is None:
         return
-
-    logo_path = resolve_theme_logo_path(Path(repo_root).resolve())
     try:
-        if logo_path.exists():
-            st_module.image(str(logo_path), width="stretch")
+        with st_module.sidebar:
+            logo_path = resolve_theme_logo_path(repo_root)
+            if logo_path.exists():
+                st_module.image(str(logo_path), use_column_width=True)
     except Exception:
         pass

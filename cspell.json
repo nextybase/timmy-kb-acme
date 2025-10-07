@@ -52,7 +52,10 @@
     "taggata",
     "rilasciabile",
     "sottodir",
-    "loggato"
+    "loggato",
+    "adattatrici",
+    "rimappaggio",
+    "monkeypatch"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

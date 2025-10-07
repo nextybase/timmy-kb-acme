@@ -11,20 +11,20 @@ from pipeline.path_utils import to_kebab as _to_kebab
 
 
 def to_kebab(s: str) -> str:
-    # Cast conservativo: l'helper di pipeline ritorna str in pratica
+    """Converte una stringa in kebab-case usando l’utility SSoT di pipeline."""
     return str(_to_kebab(s))
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:
-    """Wrapper compatibile che delega alla SSoT `pipeline.path_utils.ensure_within_and_resolve`.
+    """Wrapper SSoT per `pipeline.path_utils.ensure_within_and_resolve`.
 
-    Effettua solo il cast `Path|str` -> `Path` e delega, mantenendo la firma pubblica.
+    Esegue solo il cast `Path|str` → `Path` e delega al backend, mantenendo la firma pubblica.
     """
     return cast(Path, _ensure_within_and_resolve(Path(root), Path(target)))
 
 
 def yaml_load(path: Path) -> Dict[str, Any]:
-    # Centralizza su utility pipeline, mantenendo la stessa firma
+    """Legge YAML dal disco tramite le utility centralizzate di pipeline."""
     from pipeline.yaml_utils import yaml_read
 
     p = Path(path)
@@ -35,21 +35,30 @@ def yaml_load(path: Path) -> Dict[str, Any]:
 
 
 def yaml_dump(data: Dict[str, Any]) -> str:
+    """Serializza un dict in YAML con ordinamento chiavi stabile."""
     import yaml
 
     return yaml.safe_dump(data or {}, allow_unicode=True, sort_keys=True)
 
 
-# UI adapter: expose pipeline safe write with the same friendly signature
-def safe_write_text(path: Path | str, data: str, *, encoding: str = "utf-8", atomic: bool = True) -> None:
+def safe_write_text(
+    path: Path | str,
+    data: str,
+    *,
+    encoding: str = "utf-8",
+    atomic: bool = True,
+    fsync: bool = False,
+) -> None:
+    """Scrive testo su file delegando a `pipeline.file_utils.safe_write_text`.
+
+    Mantiene la **parità di firma** con il backend (incluso `fsync`) per garantire
+    contratti stabili tra UI e pipeline.
     """
-    Thin wrapper around pipeline.file_utils.safe_write_text.
-    Keeps UI layer imports stable; no behavior change.
-    """
-    _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic)
+    _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic, fsync=fsync)
 
 
 def get_theme_base(default: str = "light") -> str:
+    """Restituisce la base del tema Streamlit ('light'/'dark'), con fallback."""
     try:
         import streamlit as st
     except Exception:
@@ -120,6 +129,7 @@ def get_theme_base(default: str = "light") -> str:
 
 
 def resolve_theme_logo_path(repo_root: Path) -> Path:
+    """Restituisce il percorso del logo coerente con il tema corrente."""
     assets_dir = Path(repo_root) / "assets"
     default_logo = assets_dir / "next-logo.png"
     dark_logo = assets_dir / "next-logo-bianco.png"

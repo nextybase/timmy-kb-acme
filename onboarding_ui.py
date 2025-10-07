@@ -326,37 +326,32 @@ def _sidebar_quick_actions(slug: str | None) -> None:
 
 
 def _sidebar_skiplink_and_quicknav() -> None:
-    """Inserisce skip-link e navigazione rapida in sidebar (best-effort)."""
+    """Inserisce skip-link e (se disponibile) la quick-nav in sidebar senza monkeypatch globali."""
+    import streamlit as st  # safe: il test fornisce lo stub
     st.sidebar.markdown("<small><a href='#main' tabindex='0'>Main</a></small>", unsafe_allow_html=True)
+
     try:
+        # IMPORTANT: usa il module-level `importlib` (può essere monkeypatchato nel test)
         app_mod = importlib.import_module("src.ui.app")
     except Exception:
         return
-    nav_fn = None
+
+    # Prova vari nomi noti della quick-nav
     for name in ("render_quick_nav_sidebar", "render_quick_nav", "render_quick_navigation", "quick_nav"):
         candidate = getattr(app_mod, name, None)
-        if callable(candidate):
-            nav_fn = candidate
-            wrapper_attr = "__sidebar_only__"
-            if not getattr(candidate, wrapper_attr, False):
-
-                def _sidebar_only_nav(*, sidebar: bool = False, __orig=candidate, **kwargs):
-                    if not sidebar:
-                        return None
-                    kwargs["sidebar"] = True
-                    return __orig(**kwargs)
-
-                setattr(_sidebar_only_nav, wrapper_attr, True)
-                setattr(app_mod, name, _sidebar_only_nav)
-                nav_fn = _sidebar_only_nav
-            break
-    if nav_fn is None:
-        return
-    try:
-        nav_fn(sidebar=True)
-    except RerunException:
-        raise
-    except Exception:
+        if not callable(candidate):
+            continue
+        try:
+            # Preferisci sidebar=True; se la firma non lo accetta, ripiega alla call semplice
+            candidate(sidebar=True)
+        except TypeError:
+            try:
+                candidate()
+            except Exception:
+                return
+        except Exception:
+            return
+        # Una volta eseguito con successo, esci
         return
 
 

@@ -112,17 +112,32 @@ def _clear_drive_tree_cache() -> None:
             pass
 
 
-def _safe_streamlit_rerun() -> None:
-    """Trigger a Streamlit rerun when available, tolerating headless runs."""
+def _safe_streamlit_rerun(log: Optional[logging.Logger] = None) -> None:
+    """Richiede in modo sicuro un rerun di Streamlit (se disponibile).
+
+    Non solleva errori: in ambienti headless o quando `st.rerun` non è presente,
+    la funzione esce silenziosamente. Se viene passato un logger, registra eventi
+    utili alla diagnostica (invocato/non disponibile/fallito).
+    """
     if st is None:
+        if log:
+            log.info("ui.rerun_unavailable_streamlit_none")
         return
     rerun_fn = getattr(st, "rerun", None)
     if not callable(rerun_fn):
+        if log:
+            log.info("ui.rerun_unavailable_no_callable")
         return
     try:
         rerun_fn()
+        if log:
+            log.debug("ui.rerun_invoked")
     except RerunException:
+        # Streamlit segnala il rerun con eccezione controllata → propaghiamo
         raise
+    except Exception as e:  # pragma: no cover
+        if log:
+            log.info("ui.rerun_failed", extra={"error": str(e)})
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1691,7 +1706,7 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
 
 
 def render_quick_nav_sidebar(*, sidebar: bool = False) -> None:
-    """Render quick navigation links pointing to main sections."""
+    """Renderizza i link di navigazione rapida verso le sezioni principali."""
     target = st.sidebar if sidebar else st
     if target is None:
         return
