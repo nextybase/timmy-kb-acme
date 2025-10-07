@@ -20,11 +20,13 @@ Aggiornamenti UI (non-breaking):
 from __future__ import annotations
 
 import importlib
+import inspect
+import logging
 import os
 import sys
 from pathlib import Path
 from functools import lru_cache
-from typing import Callable, List, Tuple
+from typing import Callable, List
 
 # ------------------------------------------------------------------------------
 # Path bootstrap: deve avvenire PRIMA di ogni import di pacchetto (streamlit/ui/src)
@@ -64,18 +66,72 @@ REPO_ROOT = Path(__file__).resolve().parent
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 
-from src.ui.app import _setup_logging
+from src.ui.app import (
+    _setup_logging,
+    main as app_main,
+    render_home,
+    render_manage,
+    render_semantics,
+)
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.path_utils import ensure_within_and_resolve
-from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
-from ui.utils.workspace import has_raw_pdfs
+from ui.utils.branding import get_favicon_path
+from src.ui.app_core.layout import (
+    render_client_header,
+    render_sidebar_branding,
+    render_sidebar_quick_actions,
+    render_sidebar_skiplink_and_quicknav,
+    render_sidebar_tab_switches,
+)
+from src.ui.app_core.state import STATE_SEM_READY, compute_home_enabled, compute_manage_enabled, normalize_state
 
 ICON_REFRESH = "\U0001F504"
 
-STATE_MANAGE_READY = {"inizializzato", "pronto", "arricchito", "finito"}
-STATE_SEM_READY = {"pronto", "arricchito", "finito"}
+
+def _compute_sem_enabled(phase: str | None, slug: str | None) -> bool:
+    """Compat layer: replica la vecchia logica usando eventuali stub patchati dal test."""
+    normalized = normalize_state(phase)
+    if normalized not in STATE_SEM_READY:
+        return False
+
+    slug_value = (slug or "").strip()
+    if not slug_value:
+        return False
+
+    probe = globals().get("has_raw_pdfs")
+    if not callable(probe):
+        from ui.utils.workspace import has_raw_pdfs as _default_has_raw_pdfs
+
+        probe = _default_has_raw_pdfs
+
+    ready, _ = probe(slug_value)
+    return bool(ready)
 
 
+def _compute_manage_enabled(phase: str | None, slug: str | None) -> bool:
+    """Compatibilità test: delega alla nuova implementazione del core state."""
+    return compute_manage_enabled(phase, slug)
+
+
+def _compute_home_enabled(phase: str | None, slug: str | None) -> bool:
+    """Compatibilità test: delega alla nuova implementazione del core state."""
+    return compute_home_enabled(phase, slug)
+
+
+def _sidebar_skiplink_and_quicknav() -> None:
+    """Compat layer: ripristina skiplink + quick-nav nella sidebar per i test legacy."""
+    try:
+        render_sidebar_skiplink_and_quicknav(st_module=st)
+    except Exception:
+        try:
+            st.sidebar.markdown("<small><a href='#main'>Main</a></small>", unsafe_allow_html=True)
+        except Exception:
+            pass
+
+    app_module = importlib.import_module("src.ui.app")
+    nav = getattr(app_module, "render_quick_nav_sidebar", None)
+    if callable(nav):
+        nav(sidebar=True)
 def _resolve_slug(slug: str | None) -> str | None:
     candidates = [
         slug,
@@ -89,14 +145,6 @@ def _resolve_slug(slug: str | None) -> str | None:
             if trimmed:
                 return trimmed.lower()
     return None
-
-
-# ------------------------------------------------------------------------------
-# UI helpers
-# ------------------------------------------------------------------------------
-
-def _normalize_state(state: str | None) -> str:
-    return (state or "").strip().lower()
 
 
 def _page_config() -> None:
@@ -125,38 +173,6 @@ def _render_global_error(e: Exception) -> None:
 # ----------------------------------------------------------------------
 # UI add-ons (solo presentazione, nessun side-effect di business logic)
 # ----------------------------------------------------------------------
-
-def _client_header(*, slug: str | None, state: str | None) -> None:
-    """Header della pagina principale senza caption aggiuntive."""
-    _ = state
-    subtitle = None
-    render_brand_header(
-        st_module=st,
-        repo_root=REPO_ROOT,
-        subtitle=subtitle,
-        include_anchor=True,
-        show_logo=False,
-    )
-    if not slug:
-        st.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
-        return
-
-
-def _status_bar() -> Tuple[Callable[[str, str], None], Callable[[], None]]:
-    """Area di stato leggera. Usare insieme a st.status nei flussi lunghi."""
-    placeholder = st.empty()
-
-    def update(msg: str, icon: str = "ℹ️") -> None:
-        try:
-            placeholder.info(f"{icon} {msg}")
-        except Exception:
-            pass
-
-    def clear() -> None:
-        placeholder.empty()
-
-    return update, clear
-
 
 def _diagnostics(slug: str | None) -> None:
     """Expander con info utili al triage. Non tocca la business logic."""
@@ -333,86 +349,21 @@ def _diagnostics(slug: str | None) -> None:
                             pass
 
 
-def _sidebar_brand() -> None:
-    """Logo brand nella sidebar (tema-aware)."""
+
+def _refresh_drive_action(logger, slug: str | None) -> tuple[bool, str | None]:
+    """Pulisce la cache Drive notificando l'esito alla sidebar."""
     try:
-        render_sidebar_brand(st.sidebar, REPO_ROOT)
-    except Exception:
-        pass
-
-
-def _sidebar_quick_actions(slug: str | None) -> None:
-    logger = _setup_logging()
-    st.sidebar.markdown("### Azioni rapide")
-    st.sidebar.link_button("Guida UI", "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md")
-    if st.sidebar.button(
-        "Aggiorna elenco Drive",
-        key="sidebar_refresh_drive",
-        width="stretch",
-    ):
-        try:
-            from src.ui.app import _clear_drive_tree_cache
-        except ImportError as exc:
-            st.sidebar.warning(f"Cache Drive non disponibile: {exc}")
-            logger.warning(
-                "ui.sidebar.drive_cache_import_failed",
-                extra={"error": str(exc), "action": "refresh_drive", "slug": slug},
-            )
-        else:
-            _clear_drive_tree_cache()
-            logger.info(
-                "ui.sidebar.drive_cache_cleared",
-                extra={"action": "refresh_drive", "slug": slug},
-            )
-            st.toast("Richiesta aggiornamento Drive inviata.", icon=ICON_REFRESH)
-    if st.sidebar.button(
-        "Genera dummy",
-        key="sidebar_dummy_btn",
-        width="stretch",
-        help="Crea il workspace di esempio per testare il flusso.",
-    ):
-        logger.info(
-            "ui.sidebar.generate_dummy_requested",
-            extra={"slug": slug},
-        )
-        _generate_dummy_workspace(slug)
-    if st.sidebar.button("Esci", type="primary", width="stretch", help="Chiudi l'app"):
-        logger.info("ui.sidebar.shutdown_requested", extra={"slug": slug})
-        _request_shutdown_safe()
-    st.sidebar.markdown("---")
-
-
-def _sidebar_skiplink_and_quicknav() -> None:
-    """Inserisce skip-link e (se disponibile) la quick-nav in sidebar senza monkeypatch globali."""
-    import streamlit as st  # safe: il test fornisce lo stub
-    st.sidebar.markdown("<small><a href='#main' tabindex='0'>Main</a></small>", unsafe_allow_html=True)
-
-    try:
-        # IMPORTANT: usa il module-level `importlib` (può essere monkeypatchato nel test)
-        app_mod = importlib.import_module("src.ui.app")
-    except Exception:
-        return
-
-    # Prova vari nomi noti della quick-nav
-    for name in ("render_quick_nav_sidebar", "render_quick_nav", "render_quick_navigation", "quick_nav"):
-        candidate = getattr(app_mod, name, None)
-        if not callable(candidate):
-            continue
-        try:
-            # Preferisci sidebar=True; se la firma non lo accetta, ripiega alla call semplice
-            candidate(sidebar=True)
-        except TypeError:
-            try:
-                candidate()
-            except Exception:
-                return
-        except Exception:
-            return
-        # Una volta eseguito con successo, esci
-        return
+        from src.ui.app import _clear_drive_tree_cache
+    except ImportError as exc:
+        logger.warning("ui.sidebar.drive_cache_import_failed", extra={"error": str(exc), "action": "refresh_drive", "slug": slug})
+        return False, f"Cache Drive non disponibile: {exc}"
+    _clear_drive_tree_cache()
+    logger.info("ui.sidebar.drive_cache_cleared", extra={"action": "refresh_drive", "slug": slug})
+    return True, None
 
 
 def _generate_dummy_workspace(slug: str | None) -> None:
+    """Invoca il tool di generazione workspace dummy mostrando feedback inline."""
     target = (slug or "dummy").strip() or "dummy"
     try:
         from tools.gen_dummy_kb import main as gen_dummy_main
@@ -434,6 +385,7 @@ def _generate_dummy_workspace(slug: str | None) -> None:
 
 
 def _request_shutdown_safe() -> None:
+    """Richiede la chiusura dell'app gestendo ambienti privi del backend CLI."""
     try:
         from src.ui.app import _request_shutdown
     except Exception as exc:  # pragma: no cover
@@ -448,27 +400,6 @@ def _request_shutdown_safe() -> None:
 TAB_HOME = "home"
 TAB_MANAGE = "gestisci cliente"
 TAB_SEM = "semantica"
-
-
-def _compute_sem_enabled(state: str | None, slug: str | None) -> bool:
-    """Decide se la tab Semantica è disponibile, richiede RAW con PDF."""
-    if _normalize_state(state) not in STATE_SEM_READY:
-        return False
-    ready, _raw_dir = has_raw_pdfs(slug)
-    return ready
-
-
-def _compute_manage_enabled(state: str | None, slug: str | None) -> bool:
-    """Abilita Gestisci cliente da 'inizializzato' in avanti."""
-    return _normalize_state(state) in STATE_MANAGE_READY
-
-
-def _compute_home_enabled(state: str | None, slug: str | None) -> bool:
-    """Home è cliccabile in ogni situazione utile (slug presente o stato valido)."""
-    normalized = _normalize_state(state)
-    if normalized in STATE_MANAGE_READY:
-        return True
-    return bool((slug or "").strip())
 
 
 def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
@@ -489,60 +420,25 @@ def _init_tab_state(home_enabled: bool, manage_enabled: bool, sem_enabled: bool)
         st.session_state["active_tab"] = TAB_HOME
 
 
-def _sidebar_tab_switches(*, home_enabled: bool, manage_enabled: bool, sem_enabled: bool) -> None:
-    st.sidebar.markdown("### Sezioni")
-    active = st.session_state.get("active_tab", TAB_HOME)
-    label_home = "Home [attiva]" if active == TAB_HOME else "Home"
-    label_manage = "Gestisci cliente [attiva]" if active == TAB_MANAGE else "Gestisci cliente"
-    label_sem = "Semantica [attiva]" if active == TAB_SEM else "Semantica"
+def _render_tabs_router(active: str, slug: str | None, logger: logging.Logger | None = None) -> None:
+    """Router tab-based. Delegates ai renderer di src.ui.app."""
+    log = logger or logging.getLogger("ui.tabs.router")
 
-    to_home = st.sidebar.button(
-        label_home,
-        width="stretch",
-        disabled=not home_enabled,
-        help=None if home_enabled else "Disponibile dopo l'inizializzazione",
-        type="primary" if active == TAB_HOME else "secondary",
-        key="tab_home_button",
-    )
-    to_manage = st.sidebar.button(
-        label_manage,
-        width="stretch",
-        disabled=not manage_enabled,
-        help=None if manage_enabled else "Disponibile da 'inizializzato'",
-        type="primary" if active == TAB_MANAGE else "secondary",
-        key="tab_manage_button",
-    )
-    to_sem = st.sidebar.button(
-        label_sem,
-        width="stretch",
-        disabled=not sem_enabled,
-        help=None if sem_enabled else "Disponibile quando lo stato è 'pronto' e raw/ contiene PDF",
-        type="primary" if active == TAB_SEM else "secondary",
-        key="tab_sem_button",
-    )
-    if to_home:
-        st.session_state["active_tab"] = TAB_HOME
-    if to_manage:
-        st.session_state["active_tab"] = TAB_MANAGE
-    if to_sem and sem_enabled:
-        st.session_state["active_tab"] = TAB_SEM
-
-
-def _render_tabs_router(active: str, slug: str | None) -> None:
-    """Router tab-based. Se i renderer dedicati non esistono, fallback all'app monolitica."""
-    logger = _setup_logging()
-    try:
-        app_mod = importlib.import_module("src.ui.app")
-    except Exception as exc:
-        logger.exception("ui.tabs.module_import_failed", extra={"error": str(exc)})
-        raise
-
-    def _call_renderer(name: str, **kwargs) -> bool:
-        candidate = getattr(app_mod, name, None)
-        if not callable(candidate):
-            return False
+    def _call_renderer(name: str, fn: Callable[..., None], **kwargs) -> bool:
         try:
-            candidate(**kwargs)
+            call_kwargs = kwargs
+            if "logger" in kwargs:
+                try:
+                    params = inspect.signature(fn).parameters
+                except (TypeError, ValueError):
+                    params = {}
+                accepts_logger = any(
+                    param.kind is inspect.Parameter.VAR_KEYWORD or key == "logger"
+                    for key, param in params.items()
+                )
+                if not accepts_logger:
+                    call_kwargs = {k: v for k, v in kwargs.items() if k != "logger"}
+            fn(**call_kwargs)
         except RerunException:
             raise
         except Exception as exc:
@@ -550,24 +446,34 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
             extra = {"error": str(exc), "active_tab": active}
             if "slug" in kwargs and kwargs.get("slug") is not None:
                 extra["slug"] = kwargs["slug"]
-            logger.exception(event, extra=extra)
+            log.exception(event, extra=extra)
             raise
         return True
 
-    if active == TAB_HOME and _call_renderer("render_home"):
+    try:
+        app_module = importlib.import_module("src.ui.app")
+    except Exception:
+        app_module = None
+
+    if app_module is None:
+        home_fn: Callable[..., None] | None = render_home
+        manage_fn: Callable[..., None] | None = render_manage
+        sem_fn: Callable[..., None] | None = render_semantics
+        main_fn = app_main
+    else:
+        home_fn = getattr(app_module, "render_home", None)
+        manage_fn = getattr(app_module, "render_manage", None)
+        sem_fn = getattr(app_module, "render_semantics", None)
+        main_fn = getattr(app_module, "main", app_main)
+
+    if active == TAB_HOME and callable(home_fn) and _call_renderer("render_home", home_fn, logger=log):
         return
-    if active == TAB_MANAGE and _call_renderer("render_manage", slug=slug, logger=logger):
+    if active == TAB_MANAGE and callable(manage_fn) and _call_renderer("render_manage", manage_fn, slug=slug, logger=log):
         return
-    if active == TAB_SEM and _call_renderer("render_semantics", slug=slug, logger=logger):
+    if active == TAB_SEM and callable(sem_fn) and _call_renderer("render_semantics", sem_fn, slug=slug, logger=log):
         return
 
-    app_main_candidate = getattr(app_mod, "main", None)
-    if callable(app_main_candidate):
-        app_main_candidate()
-        return
-
-    app_main = importlib.import_module("src.ui.app").main
-    app_main()
+    main_fn()
 
 
 # ------------------------------------------------------------------------------
@@ -593,7 +499,7 @@ def run() -> None:
                 extra={"error": str(exc)},
             )
             slug = st.session_state.get("current_slug")
-        state = (get_state(slug) or "").strip().lower() if slug else None
+        state = normalize_state(get_state(slug)) if slug else None
     except Exception as exc:
         logger.exception(
             "ui.run.state_load_failed",
@@ -603,9 +509,9 @@ def run() -> None:
     resolved_slug = _resolve_slug(slug)
     if resolved_slug:
         st.session_state["current_slug"] = resolved_slug
-    home_enabled = _compute_home_enabled(state, resolved_slug)
-    manage_enabled = _compute_manage_enabled(state, resolved_slug)
-    sem_enabled = _compute_sem_enabled(state, resolved_slug)
+    home_enabled = compute_home_enabled(state, resolved_slug)
+    manage_enabled = compute_manage_enabled(state, resolved_slug)
+    sem_enabled = compute_sem_enabled(state, resolved_slug)
 
     try:
         _init_tab_state(home_enabled, manage_enabled, sem_enabled)
@@ -617,7 +523,12 @@ def run() -> None:
         st.session_state["active_tab"] = TAB_HOME
 
     try:
-        _client_header(slug=resolved_slug, state=state)
+        render_client_header(
+            st_module=st,
+            repo_root=REPO_ROOT,
+            slug=resolved_slug,
+            state=state,
+        )
     except Exception as exc:
         logger.exception(
             "ui.run.client_header_failed",
@@ -625,14 +536,27 @@ def run() -> None:
         )
 
     try:
-        _sidebar_brand()
-        _sidebar_tab_switches(
+        render_sidebar_branding(st_module=st, repo_root=REPO_ROOT)
+        render_sidebar_tab_switches(
+            st_module=st,
+            active_tab_key="active_tab",
+            tab_home=TAB_HOME,
+            tab_manage=TAB_MANAGE,
+            tab_sem=TAB_SEM,
             home_enabled=home_enabled,
             manage_enabled=manage_enabled,
             sem_enabled=sem_enabled,
         )
-        _sidebar_quick_actions(resolved_slug)
-        _sidebar_skiplink_and_quicknav()
+        render_sidebar_quick_actions(
+            st_module=st,
+            slug=resolved_slug,
+            icon_refresh=ICON_REFRESH,
+            refresh_callback=lambda: _refresh_drive_action(logger, resolved_slug),
+            generate_dummy_callback=lambda: _generate_dummy_workspace(resolved_slug),
+            request_shutdown_callback=_request_shutdown_safe,
+            logger=logger,
+        )
+        render_sidebar_skiplink_and_quicknav(st_module=st)
     except Exception as exc:
         logger.exception(
             "ui.run.sidebar_render_failed",
@@ -640,7 +564,7 @@ def run() -> None:
         )
 
     try:
-        _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), resolved_slug)
+        _render_tabs_router(st.session_state.get("active_tab", TAB_HOME), resolved_slug, logger)
     except RerunException:
         raise
     except Exception as e:

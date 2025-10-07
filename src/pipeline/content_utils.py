@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable, TypeAlias, cast
 from urllib.parse import quote
 
-from pipeline.exceptions import PipelineError
+from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.path_utils import ensure_within_and_resolve  # SSoT path-safety forte
 from pipeline.path_utils import ensure_within
@@ -40,7 +40,15 @@ def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) ->
     Delegato a `pipeline.path_utils.ensure_within_and_resolve` per evitare TOCTOU/symlink games
     e mantenere le eccezioni tipizzate della pipeline (es. PathTraversalError/ConfigError).
     """
-    return cast(Path, ensure_within_and_resolve(base_dir, candidate))
+    try:
+        return cast(Path, ensure_within_and_resolve(base_dir, candidate))
+    except PathTraversalError as exc:
+        if slug:
+            message = str(exc)
+            if f"slug={slug}" not in message:
+                message = f"{message} [slug={slug}]"
+            raise PathTraversalError(message) from exc
+        raise
 
 
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
