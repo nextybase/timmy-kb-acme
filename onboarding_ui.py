@@ -3,7 +3,7 @@
 """
 Onboarding UI entrypoint.
 
-- Reuse existing repo helper to add <repo>/src to sys.path (scripts/smoke_e2e._add_paths),
+- Riusa helper esistente per aggiungere <repo>/src a sys.path (scripts/smoke_e2e._add_paths),
   con fallback locale se non disponibile.
 - Configurazione pagina Streamlit come prima istruzione UI.
 - Wrapper che lascia passare RerunException (usato da st.rerun) e mostra gli altri errori
@@ -26,6 +26,41 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Callable, List, Tuple
 
+# ------------------------------------------------------------------------------
+# Path bootstrap: deve avvenire PRIMA di ogni import di pacchetto (streamlit/ui/src)
+# ------------------------------------------------------------------------------
+
+def _ensure_repo_src_on_sys_path() -> None:
+    """Aggiunge <repo>/src a sys.path se assente (fallback)."""
+    repo_root = Path(__file__).parent.resolve()
+    src_dir = repo_root / "src"
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+
+
+def _bootstrap_sys_path() -> None:
+    """Tenta l'helper ufficiale del repo, poi fallback locale."""
+    try:
+        # Helper già presente nel repo di test/smoke
+        from scripts.smoke_e2e import _add_paths as _repo_add_paths  # type: ignore
+    except Exception:
+        _ensure_repo_src_on_sys_path()
+        return
+    try:
+        _repo_add_paths()
+    except Exception:
+        _ensure_repo_src_on_sys_path()
+
+
+# Esegui bootstrap path il prima possibile
+_bootstrap_sys_path()
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+# ------------------------------------------------------------------------------
+# Ora è sicuro importare streamlit e i moduli del progetto
+# ------------------------------------------------------------------------------
+
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 
@@ -36,7 +71,6 @@ from ui.utils.branding import get_favicon_path, render_brand_header, render_side
 from ui.utils.workspace import has_raw_pdfs
 
 ICON_REFRESH = "\U0001F504"
-
 
 STATE_MANAGE_READY = {"inizializzato", "pronto", "arricchito", "finito"}
 STATE_SEM_READY = {"pronto", "arricchito", "finito"}
@@ -58,42 +92,8 @@ def _resolve_slug(slug: str | None) -> str | None:
 
 
 # ------------------------------------------------------------------------------
-# Path bootstrap: prova ad usare l'helper del repo, con fallback locale
-# ------------------------------------------------------------------------------
-
-
-def _ensure_repo_src_on_sys_path() -> None:
-    """Aggiunge <repo>/src a sys.path se assente (fallback)."""
-    repo_root = Path(__file__).parent.resolve()
-    src_dir = repo_root / "src"
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-
-
-def _bootstrap_sys_path() -> None:
-    """Tenta l'helper ufficiale del repo, poi fallback locale."""
-    try:
-        # Helper già presente nel repo di test/smoke
-        from scripts.smoke_e2e import _add_paths as _repo_add_paths
-    except Exception:
-        _ensure_repo_src_on_sys_path()
-        return
-    try:
-        _repo_add_paths()
-    except Exception:
-        _ensure_repo_src_on_sys_path()
-
-
-# Esegui bootstrap path il prima possibile
-_bootstrap_sys_path()
-
-REPO_ROOT = Path(__file__).resolve().parent
-
-
-# ------------------------------------------------------------------------------
 # UI helpers
 # ------------------------------------------------------------------------------
-
 
 def _normalize_state(state: str | None) -> str:
     return (state or "").strip().lower()
@@ -125,7 +125,6 @@ def _render_global_error(e: Exception) -> None:
 # ----------------------------------------------------------------------
 # UI add-ons (solo presentazione, nessun side-effect di business logic)
 # ----------------------------------------------------------------------
-
 
 def _client_header(*, slug: str | None, state: str | None) -> None:
     """Header della pagina principale senza caption aggiuntive."""
@@ -246,34 +245,92 @@ def _diagnostics(slug: str | None) -> None:
                     safe_log_files.sort(key=_safe_mtime, reverse=True)
                     latest = safe_log_files[0]
 
+                # Tail del log più recente (≈4KB) usando SSoT quando disponibile.
                 if latest:
                     try:
                         size = latest.stat().st_size
                         offset = max(0, size - 4000)
-                        with latest.open("rb") as fh:
-                            fh.seek(offset)
-                            buf = fh.read(4000)
+                        try:
+                            # Usa API SSoT per path-safety e lettura binaria protetta
+                            from pipeline.file_utils import open_for_read_bytes_selfguard  # type: ignore
+                        except Exception:
+                            open_for_read_bytes_selfguard = None  # type: ignore[assignment]
+                        if open_for_read_bytes_selfguard:
+                            with open_for_read_bytes_selfguard(latest) as fh:  # type: ignore[misc]
+                                fh.seek(offset)
+                                buf = fh.read(4000)
+                        else:
+                            with latest.open("rb") as fh:
+                                fh.seek(offset)
+                                buf = fh.read(4000)
                         st.code(buf.decode(errors="replace"))
                     except Exception:
                         st.info("Log non leggibile.")
 
+                # Download ZIP dei log (limitato e scritto a chunk su file temporaneo)
                 if safe_log_files:
-                    import io
+                    import tempfile
                     import zipfile
 
-                    mem = io.BytesIO()
-                    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                        for file_path in safe_log_files:
-                            try:
-                                zf.write(file_path, arcname=file_path.name)
-                            except Exception:
-                                continue
-                    st.download_button(
-                        "Scarica logs",
-                        data=mem.getvalue(),
-                        file_name=f"{slug}-logs.zip",
-                        mime="application/zip",
-                    )
+                    # Limiti conservativi per evitare picchi RAM/CPU
+                    MAX_FILES = 50
+                    CHUNK_SIZE = 64 * 1024
+                    MAX_TOTAL_BYTES = 5 * 1024 * 1024  # ~5 MiB di contenuti totali scritti nello zip
+
+                    selected = safe_log_files[:MAX_FILES]
+                    written_total = 0
+
+                    try:
+                        with tempfile.NamedTemporaryFile(prefix=f"{slug}-logs-", suffix=".zip", delete=False) as tmpf:
+                            zip_path = Path(tmpf.name)
+
+                        with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                            for file_path in selected:
+                                if written_total >= MAX_TOTAL_BYTES:
+                                    break
+                                try:
+                                    arcname = file_path.name
+                                    # Apertura in scrittura streaming dentro lo zip
+                                    with zf.open(arcname, mode="w") as zout:
+                                        # Lettura protetta SSoT se disponibile
+                                        try:
+                                            from pipeline.file_utils import open_for_read_bytes_selfguard  # type: ignore
+                                        except Exception:
+                                            open_for_read_bytes_selfguard = None  # type: ignore[assignment]
+                                        if open_for_read_bytes_selfguard:
+                                            src = open_for_read_bytes_selfguard(file_path)  # type: ignore[misc]
+                                        else:
+                                            src = file_path.open("rb")
+
+                                        with src as fh:
+                                            while True:
+                                                if written_total >= MAX_TOTAL_BYTES:
+                                                    break
+                                                chunk = fh.read(min(CHUNK_SIZE, MAX_TOTAL_BYTES - written_total))
+                                                if not chunk:
+                                                    break
+                                                zout.write(chunk)
+                                                written_total += len(chunk)
+                                except Exception:
+                                    # Salta file problematici, non bloccare la UI
+                                    continue
+
+                        # A questo punto lo zip risiede su disco con dimensione limitata.
+                        data = zip_path.read_bytes()
+                        st.download_button(
+                            "Scarica logs",
+                            data=data,
+                            file_name=f"{slug}-logs.zip",
+                            mime="application/zip",
+                        )
+                    except Exception:
+                        st.info("Impossibile preparare l'archivio dei log.")
+                    finally:
+                        try:
+                            if 'zip_path' in locals():
+                                zip_path.unlink(missing_ok=True)
+                        except Exception:
+                            pass
 
 
 def _sidebar_brand() -> None:
@@ -516,7 +573,6 @@ def _render_tabs_router(active: str, slug: str | None) -> None:
 # ------------------------------------------------------------------------------
 # Entrypoint
 # ------------------------------------------------------------------------------
-
 
 def run() -> None:
     _page_config()

@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable, TypeAlias
+from typing import Iterable, TypeAlias, cast
 from urllib.parse import quote
 
-from pipeline.exceptions import ConfigError, PipelineError
+from pipeline.exceptions import PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.path_utils import ensure_within_and_resolve  # SSoT path-safety forte
 from pipeline.path_utils import ensure_within
@@ -35,16 +35,12 @@ def _titleize(name: str) -> str:
 
 
 def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) -> Path:
-    """Wrapper che applica path-safety (via ensure_within) e restituisce il path risolto.
+    """Path-safety SSoT: risolve e valida `candidate` entro `base_dir` in un'unica operazione.
 
-    Mappa gli errori di configurazione in PipelineError per coerenza call-site,
-    includendo sempre lo `slug` quando disponibile.
+    Delegato a `pipeline.path_utils.ensure_within_and_resolve` per evitare TOCTOU/symlink games
+    e mantenere le eccezioni tipizzate della pipeline (es. PathTraversalError/ConfigError).
     """
-    try:
-        ensure_within(base_dir, candidate)
-    except ConfigError as e:
-        raise PipelineError(f"Unsafe directory: {candidate}", slug=slug, file_path=str(candidate)) from e
-    return Path(candidate).resolve()
+    return cast(Path, ensure_within_and_resolve(base_dir, candidate))
 
 
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
