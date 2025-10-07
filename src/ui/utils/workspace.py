@@ -1,12 +1,13 @@
 # src/ui/utils/workspace.py
 from __future__ import annotations
 
+import logging
 import os
 import time
 from pathlib import Path
 from typing import Any, Optional, Tuple, cast
 
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, validate_slug
 
 # Import opzionale di Streamlit senza type: ignore.
 # Se non disponibile, st è un Any con valore None.
@@ -16,6 +17,7 @@ except Exception:  # pragma: no cover
     _st = None
 
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
+_log = logging.getLogger("ui.workspace")
 
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:
@@ -38,14 +40,20 @@ def _load_context_base_dir(slug: str) -> Optional[Path]:
 def _fallback_base_dir(slug: str) -> Path:
     # Usa output/timmy-kb-<slug> ma con guardie path-safe
     root = Path("output")
-    # slug è già normalizzato da resolve_raw_dir; qui non ripetiamo la normalizzazione
+    # slug è già normalizzato/validato da resolve_raw_dir; qui non ripetiamo la normalizzazione
     return cast(Path, ensure_within_and_resolve(root, root / f"timmy-kb-{slug}"))
 
 
 def resolve_raw_dir(slug: str) -> Path:
-    slug_value = slug.strip().lower()
-    if not slug_value:
-        raise ValueError("Slug must be a non-empty string")
+    """
+    Restituisce il path assoluto di raw/ per lo slug dato applicando:
+    - normalizzazione e validazione slug (validate_slug)
+    - guardie di path-safety (ensure_within_and_resolve)
+    """
+    slug_value = (slug or "").strip().lower()
+    # Conforma lo slug alle policy di progetto (solleva InvalidSlug se non valido)
+    validate_slug(slug_value)
+
     base_dir = _load_context_base_dir(slug_value) or _fallback_base_dir(slug_value)
     # Impedisci traversal/symlink: raw deve stare sotto la base del workspace
     return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
@@ -59,8 +67,20 @@ def _dir_mtime(p: Path) -> float:
 
 
 def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
+    """
+    Verifica se esistono PDF entro raw/ per lo slug dato.
+    - TTL cache breve (3s) su risultati POSITIVI (evita caching negativo).
+    - Path-safety su ogni file incontrato durante la scansione.
+    - In caso di errore I/O/logico, non cache-izza il risultato e registra un warning.
+    """
     slug_value = (slug or "").strip().lower()
     if not slug_value:
+        return False, None
+
+    # Validazione coerente con resolve_raw_dir (non solleva verso l'UI in questo helper)
+    try:
+        validate_slug(slug_value)
+    except Exception:
         return False, None
 
     raw_dir = resolve_raw_dir(slug_value)
@@ -98,14 +118,27 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
                 break
             if has_pdf:
                 break
-    except Exception:
+    except Exception as e:
+        # Non scrivere cache negative su errore: segnala e rientra
+        try:
+            _log.warning("Errore durante la scansione di raw/", extra={"error": str(e), "raw_dir": str(raw_dir)})
+        except Exception:
+            pass
         return False, raw_dir
 
     if st is not None and hasattr(st, "session_state"):
-        st.session_state[cache_key] = {
-            "has_pdf": has_pdf,
-            "mtime": _dir_mtime(raw_dir),
-            "ts": now,
-        }
+        if has_pdf:
+            st.session_state[cache_key] = {
+                "has_pdf": True,
+                "mtime": _dir_mtime(raw_dir),
+                "ts": now,
+            }
+        else:
+            # Evita negative-caching: rimuovi eventuale cache precedente
+            try:
+                if cache_key in st.session_state:
+                    del st.session_state[cache_key]
+            except Exception:
+                pass
 
     return has_pdf, raw_dir
