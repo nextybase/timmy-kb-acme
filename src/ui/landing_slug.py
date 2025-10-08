@@ -265,7 +265,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 type="primary",
                 width="stretch",
             )
-        st.button("Esci", on_click=lambda: _request_shutdown(log), width="stretch")
+        st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
 
     if verify_clicked:
         candidate = (slug_input or "").strip()
@@ -432,11 +432,13 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             "semantic/semantic_mapping.yaml",
             value=vision_state.get("mapping_yaml", ""),
             height=280,
+            key="ls_mapping_text",
         )
         updated_cartelle = st.text_area(
             "semantic/cartelle_raw.yaml",
             value=vision_state.get("cartelle_yaml", ""),
             height=280,
+            key="ls_cartelle_text",
         )
         if _safe_form_submit("Valida & Salva"):
             try:

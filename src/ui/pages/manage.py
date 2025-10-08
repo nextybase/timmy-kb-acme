@@ -47,7 +47,7 @@ entered_slug = st.text_input(
     key="manage_slug",
 )
 
-if st.button("Apri workspace", width="stretch"):
+if st.button("Apri workspace", key="manage_open_workspace", width="stretch"):
     set_slug((entered_slug or "").strip())
     st.rerun()
 

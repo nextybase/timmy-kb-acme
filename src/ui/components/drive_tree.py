@@ -176,18 +176,18 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
                 if sub_meta["type"] != "dir":
                     _render_entry_line(f"{slug}/{sub_rel}", sub_meta, depth=1)
                     continue
+                # FLATTEN: nessun expander annidato per le sottocartelle di raw
                 sub_items = _list_children(service, sub["id"])
-                with st.expander(f"raw/{sub_name}/", expanded=False):
-                    _render_entry_line(
-                        f"{slug}/raw/{sub_name}",
-                        sub_meta,
-                        depth=0,
-                        suffix=_summarise_entries(sub_items),
-                    )
-                    for item in sub_items:
-                        item_name = item.get("name") or ""
-                        item_rel = f"raw/{sub_name}/{item_name}"
-                        item_meta = _as_meta(item)
-                        index[item_rel] = item_meta
-                        _render_entry_line(f"{slug}/{item_rel}", item_meta, depth=1)
+                _render_entry_line(
+                    f"{slug}/raw/{sub_name}",
+                    sub_meta,
+                    depth=0,
+                    suffix=_summarise_entries(sub_items),
+                )
+                for item in sub_items:
+                    item_name = item.get("name") or ""
+                    item_rel = f"raw/{sub_name}/{item_name}"
+                    item_meta = _as_meta(item)
+                    index[item_rel] = item_meta
+                    _render_entry_line(f"{slug}/{item_rel}", item_meta, depth=1)
     return index

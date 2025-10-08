@@ -149,22 +149,22 @@ def main() -> None:
     # Controls
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        use_rag = st.toggle("Usa RAG", value=True)
+        use_rag = st.toggle("Usa RAG", value=True, key="coder_use_rag")
     with col2:
-        project_slug = st.text_input("Project slug", value="evagrin")
+        project_slug = st.text_input("Project slug", value="evagrin", key="coder_project_slug")
     with col3:
-        scope = cast(str, st.selectbox("Scope", options=["Timmy", "ClasScrum", "Zeno"], index=0))
+        scope = cast(str, st.selectbox("Scope", options=["Timmy", "ClasScrum", "Zeno"], index=0, key="coder_scope"))
 
-    next_premise = st.text_area("NeXT Premise", height=120)
-    coding_rules = st.text_area("Coding Rules (web)", height=120)
-    task = st.text_area("Task", height=160)
+    next_premise = st.text_area("NeXT Premise", height=120, key="coder_next_premise")
+    coding_rules = st.text_area("Coding Rules (web)", height=120, key="coder_coding_rules")
+    task = st.text_area("Task", height=160, key="coder_task")
 
     st.markdown("### Chat (opzionale)")
-    chat_context = st.text_area("Chat log (append-only)", height=120, value="")
+    chat_context = st.text_area("Chat log (append-only)", height=120, value="", key="coder_chat_log")
 
     # Actions
     c1, c2 = st.columns([1, 1])
-    if c1.button("Compila & Invia a VS Code", width="stretch"):
+    if c1.button("Compila & Invia a VS Code", key="coder_send_to_vscode", width="stretch"):
         retrieved: list[dict] = []
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
@@ -210,7 +210,7 @@ def main() -> None:
         path = write_request(prompt)
         st.success(f"Prompt salvato in {path}")
 
-    if c2.button("Leggi risposta da VS Code", width="stretch"):
+    if c2.button("Leggi risposta da VS Code", key="coder_read_from_vscode", width="stretch"):
         resp = read_response()
         if resp:
             st.markdown(resp)
