@@ -6,7 +6,7 @@ import logging
 import os
 import signal
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Type, cast
+from typing import Any, Callable, Dict, Optional, Protocol, Type, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -28,6 +28,11 @@ from .tabs import semantics as _sem_tab
 ProvisionHandler = Callable[..., Dict[str, Any]]
 provision_from_vision = cast(ProvisionHandler, getattr(_home_tab, "provision_from_vision"))
 RerunException = cast(Type[BaseException], getattr(_home_tab, "RerunException"))
+
+
+class _CopyBaseConfigFunc(Protocol):
+    def __call__(self, workspace_dir: Path, slug: str, logger: logging.Logger) -> Path: ...
+
 
 __all__ = [
     "st",
@@ -139,16 +144,16 @@ def _back_to_landing() -> None:
 def _copy_base_config(workspace_dir: Path, slug: str, logger: logging.Logger) -> Path:
     """Delegato legacy per copiare la config base nel workspace."""
     _bind_streamlit(_home_tab)
-    handler = getattr(_home_tab, "_copy_base_config", None)
-    if not callable(handler):
+    raw_handler = getattr(_home_tab, "_copy_base_config", None)
+    if not callable(raw_handler):
         raise NotImplementedError("_copy_base_config non è più disponibile")  # pragma: no cover
+    handler = cast(_CopyBaseConfigFunc, raw_handler)
     try:
-        result = handler(workspace_dir, slug, logger)
-        return cast(Path, result)
+        return handler(workspace_dir, slug, logger)
     except ConfigError:
-        config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+        config_dir = cast(Path, ensure_within_and_resolve(workspace_dir, workspace_dir / "config"))
         config_dir.mkdir(parents=True, exist_ok=True)
-        config_path = ensure_within_and_resolve(config_dir, config_dir / "config.yaml")
+        config_path = cast(Path, ensure_within_and_resolve(config_dir, config_dir / "config.yaml"))
         if not config_path.exists():
             safe_write_text(config_path, "{}\n", encoding="utf-8", atomic=True)
         logger.warning("ui.setup.base_config_missing", extra={"slug": slug, "path": str(config_path)})

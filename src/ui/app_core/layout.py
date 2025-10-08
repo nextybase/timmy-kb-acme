@@ -1,21 +1,24 @@
-"""Helper per la composizione del layout Streamlit."""
+# src/ui/app_core/layout.py
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""
+UI layout helpers (beta 0).
+
+- Solo funzioni necessarie per header e sidebar.
+- Nessuna retrocompatibilità con router/switcher a tab.
+- Niente API experimental, niente flag di container width.
+- HTML solo tramite st.html(...).
+"""
 
 from __future__ import annotations
 
-import importlib
-import logging
 from pathlib import Path
-from typing import Any, Callable, Tuple
-
-from ui.utils.branding import render_brand_header, render_sidebar_brand
+from typing import Any, Callable, Optional
 
 __all__ = [
     "render_client_header",
-    "build_status_bar",
     "render_sidebar_branding",
     "render_sidebar_quick_actions",
     "render_sidebar_skiplink_and_quicknav",
-    "render_sidebar_tab_switches",
 ]
 
 
@@ -23,191 +26,112 @@ def render_client_header(
     *,
     st_module: Any,
     repo_root: Path,
-    slug: str | None,
-    state: str | None,
+    slug: Optional[str],
+    state: Optional[str] = None,
 ) -> None:
-    """Renderizza l'header principale con il branding del progetto."""
-    _ = state
-    subtitle = None
-    render_brand_header(
-        st_module=st_module,
-        repo_root=repo_root,
-        subtitle=subtitle,
-        include_anchor=True,
-    )
-    if not slug:
-        st_module.info("Nessun cliente selezionato. Usa **Nuovo Cliente** o **Gestisci cliente** dalla landing.")
+    """
+    Header principale della pagina.
 
+    Args:
+        st_module: modulo Streamlit (passa `st`).
+        repo_root: root del repository (non usato, mantenuto per compat).
+        slug: identificativo cliente corrente (se presente).
+        state: eventuale stato/phase normalizzato (se presente).
+    """
+    del repo_root  # mantenuto per compatibilità della firma
 
-def build_status_bar(st_module: Any) -> Tuple[Callable[[str, str], None], Callable[[], None]]:
-    """Restituisce updater/clearer per una status bar leggera."""
-    placeholder = st_module.empty()
-
-    def update(msg: str, icon: str = "??") -> None:
-        try:
-            placeholder.info(f"{icon} {msg}")
-        except Exception:
-            pass
-
-    def clear() -> None:
-        placeholder.empty()
-
-    return update, clear
-
-
-def render_sidebar_branding(*, st_module: Any, repo_root: Path) -> None:
-    """Mostra il brand/logo tematico nella sidebar."""
+    # Ancorina sicura per skiplink
     try:
-        render_sidebar_brand(st_module.sidebar, repo_root)
+        st_module.html("<a id='top'></a>")
     except Exception:
         pass
+
+    st_module.title("Timmy-KB • Onboarding")
+
+    parts: list[str] = []
+    if slug:
+        parts.append(f"Cliente: {slug}")
+    if state:
+        parts.append(f"Stato: {state}")
+    if parts:
+        st_module.caption(" • ".join(parts))
+
+
+def render_sidebar_branding(
+    *,
+    st_module: Any,
+    repo_root: Path,
+) -> None:
+    """
+    Sezione "branding" nella sidebar. Mantiene un profilo minimale e robusto.
+    """
+    del repo_root  # non richiesto in beta0, lasciato per compat della firma
+
+    with st_module.sidebar:
+        st_module.subheader("Onboarding")
+        st_module.text("Interfaccia di gestione Timmy-KB")
+        st_module.divider()
 
 
 def render_sidebar_quick_actions(
     *,
     st_module: Any,
-    slug: str | None,
-    icon_refresh: str,
-    refresh_callback: Callable[[], Tuple[bool, str | None]],
-    generate_dummy_callback: Callable[[], None],
-    request_shutdown_callback: Callable[[], None],
-    logger: logging.Logger,
+    slug: Optional[str],
+    icon_refresh: Optional[str] = None,  # mantenuto per compat; non usato in beta0
+    refresh_callback: Optional[Callable[[], Any]] = None,
+    generate_dummy_callback: Optional[Callable[[], Any]] = None,
+    request_shutdown_callback: Optional[Callable[[], Any]] = None,
+    logger: Optional[Any] = None,
 ) -> None:
-    """Sidebar con azioni rapide (refresh Drive, dummy workspace, shutdown)."""
-    sidebar = st_module.sidebar
-    sidebar.markdown("### Azioni rapide")
-    sidebar.link_button(
-        "Guida UI",
-        "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
-        width="stretch",
-    )
+    """
+    Quick actions standard nella sidebar.
+    Le callback sono opzionali; se presenti, vengono invocate con gestione errori.
+    """
+    del icon_refresh  # non usato in beta0
 
-    if sidebar.button(
-        "Aggiorna elenco Drive",
-        key="sidebar_refresh_drive",
-        width="stretch",
-    ):
-        success, warning_msg = refresh_callback()
-        if success:
+    def _safe_call(cb: Optional[Callable[[], Any]], label: str) -> None:
+        if cb is None:
+            st_module.sidebar.info(f"{label}: non disponibile")
+            return
+        try:
+            cb()
             try:
-                st_module.toast("Richiesta aggiornamento Drive inviata.", icon=icon_refresh)
+                st_module.toast(f"{label}: completata")
             except Exception:
                 pass
-        else:
-            sidebar.warning(warning_msg or "Cache Drive non disponibile.")
+            if logger:
+                logger.info("ui.sidebar.action_done", extra={"action": label, "slug": slug})
+        except Exception as exc:  # pragma: no cover
+            if logger:
+                logger.exception("ui.sidebar.action_failed", extra={"action": label, "slug": slug, "error": str(exc)})
+            st_module.sidebar.error(f"{label}: errore — {exc}")
 
-    if sidebar.button(
-        "Genera dummy",
-        key="sidebar_dummy_btn",
-        width="stretch",
-        help="Crea il workspace di esempio per testare il flusso.",
-    ):
-        logger.info(
-            "ui.sidebar.generate_dummy_requested",
-            extra={"slug": slug},
-        )
-        generate_dummy_callback()
-        # TODO: deduplicare la logica di generazione dummy fra UI e CLI (stesse opzioni/spinner).
+    with st_module.sidebar:
+        st_module.subheader("Azioni rapide")
 
-    if sidebar.button("Esci", type="primary", width="stretch", help="Chiudi l'app"):
-        logger.info("ui.sidebar.shutdown_requested", extra={"slug": slug})
-        request_shutdown_callback()
+        c1, c2, c3 = st_module.columns(3)
+        with c1:
+            if st_module.button("Aggiorna Drive", key="qa_refresh", width="stretch"):
+                _safe_call(refresh_callback, "Aggiorna Drive")
+        with c2:
+            if st_module.button("Dummy KB", key="qa_dummy", width="stretch"):
+                _safe_call(generate_dummy_callback, "Dummy KB")
+        with c3:
+            if st_module.button("Esci", key="qa_exit", width="stretch"):
+                _safe_call(request_shutdown_callback, "Esci")
 
-    sidebar.markdown("---")
+        st_module.divider()
 
 
 def render_sidebar_skiplink_and_quicknav(*, st_module: Any) -> None:
-    """Inserisce skip-link e quick navigation se disponibile."""
-    sidebar = st_module.sidebar
-    skiplink_html = "<small><a href='#main' tabindex='0'>Main</a></small>"
-    html_renderer = getattr(sidebar, "html", None)
-    placeholder_factory = getattr(sidebar, "empty", None)
-    placeholder = placeholder_factory() if callable(placeholder_factory) else None
-    if callable(html_renderer):
+    """
+    Piccola utility di accessibilità e quick-nav.
+    In beta0 teniamo tutto minimale e senza HTML non sicuro.
+    """
+    with st_module.sidebar:
+        st_module.subheader("Navigazione")
+        # Skiplink sicuro verso l'ancora in header
         try:
-            html_renderer(skiplink_html)
-            if placeholder is not None:
-                try:
-                    placeholder.markdown("[Main](#main)")
-                finally:
-                    placeholder.empty()
-            else:
-                sidebar.markdown("[Main](#main)")
+            st_module.html("<a href='#top'>Vai al contenuto</a>")
         except Exception:
-            if placeholder is not None:
-                placeholder.empty()
-    else:
-        sidebar.markdown("[Main](#main)")
-
-    try:
-        app_mod = importlib.import_module("src.ui.app")
-    except Exception:
-        return
-
-    for name in ("render_quick_nav_sidebar", "render_quick_nav", "render_quick_navigation", "quick_nav"):
-        candidate = getattr(app_mod, name, None)
-        if not callable(candidate):
-            continue
-        try:
-            candidate(sidebar=True)
-        except TypeError:
-            try:
-                candidate()
-            except Exception:
-                return
-        except Exception:
-            return
-        return
-    # TODO: centralizzare la ricerca dei nomi quick-nav per evitare this loop replicato altrove.
-
-
-def render_sidebar_tab_switches(
-    *,
-    st_module: Any,
-    active_tab_key: str,
-    tab_home: str,
-    tab_manage: str,
-    tab_sem: str,
-    home_enabled: bool,
-    manage_enabled: bool,
-    sem_enabled: bool,
-) -> None:
-    """Renderizza la sezione di switch tab nella sidebar."""
-    sidebar = st_module.sidebar
-    sidebar.markdown("### Sezioni")
-    active = st_module.session_state.get(active_tab_key, tab_home)
-    label_home = "Home [attiva]" if active == tab_home else "Home"
-    label_manage = "Gestisci cliente [attiva]" if active == tab_manage else "Gestisci cliente"
-    label_sem = "Semantica [attiva]" if active == tab_sem else "Semantica"
-
-    to_home = sidebar.button(
-        label_home,
-        width="stretch",
-        disabled=not home_enabled,
-        help=None if home_enabled else "Disponibile dopo l'inizializzazione",
-        type="primary" if active == tab_home else "secondary",
-        key="tab_home_button",
-    )
-    to_manage = sidebar.button(
-        label_manage,
-        width="stretch",
-        disabled=not manage_enabled,
-        help=None if manage_enabled else "Disponibile da 'inizializzato'",
-        type="primary" if active == tab_manage else "secondary",
-        key="tab_manage_button",
-    )
-    to_sem = sidebar.button(
-        label_sem,
-        width="stretch",
-        disabled=not sem_enabled,
-        help=None if sem_enabled else "Disponibile quando lo stato è 'pronto' e raw/ contiene PDF",
-        type="primary" if active == tab_sem else "secondary",
-        key="tab_sem_button",
-    )
-
-    if to_home:
-        st_module.session_state[active_tab_key] = tab_home
-    if to_manage:
-        st_module.session_state[active_tab_key] = tab_manage
-    if to_sem and sem_enabled:
-        st_module.session_state[active_tab_key] = tab_sem
+            st_module.write("[Vai al contenuto](#top)")

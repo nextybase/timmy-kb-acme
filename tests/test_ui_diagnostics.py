@@ -22,6 +22,33 @@ if "streamlit.runtime.scriptrunner_utils.exceptions" not in sys.modules:
     runtime_module.scriptrunner_utils = scriptrunner_utils
 
     streamlit_module = types.ModuleType("streamlit")
+
+    class _QueryParams(dict):
+        def to_dict(self) -> dict[str, str | list[str]]:
+            return dict(self)
+
+        def from_dict(self, mapping: dict[str, str | list[str]]) -> None:
+            self.clear()
+            self.update(mapping)
+
+        def get_all(self, key: str) -> list[str]:
+            value = self.get(key)
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            return [value]
+
+    class _Navigation:
+        def __init__(self, pages, position="top"):
+            self.pages = pages
+            self.position = position
+
+        def run(self) -> None:  # pragma: no cover - behavior irrilevante per i test
+            return None
+
+    streamlit_module.Page = lambda path, **kwargs: types.SimpleNamespace(path=path, **kwargs)
+    streamlit_module.navigation = lambda pages, position="top": _Navigation(pages, position=position)
     streamlit_module.runtime = runtime_module
     streamlit_module.set_page_config = lambda *a, **k: None
     streamlit_module.error = lambda *a, **k: None
@@ -29,6 +56,7 @@ if "streamlit.runtime.scriptrunner_utils.exceptions" not in sys.modules:
     streamlit_module.success = lambda *a, **k: None
     streamlit_module.warning = lambda *a, **k: None
     streamlit_module.session_state = {}
+    streamlit_module.query_params = _QueryParams()
     streamlit_module.sidebar = types.SimpleNamespace(
         markdown=lambda *a, **k: None,
         button=lambda *a, **k: False,
@@ -41,7 +69,7 @@ if "streamlit.runtime.scriptrunner_utils.exceptions" not in sys.modules:
     sys.modules["streamlit.runtime.scriptrunner_utils.exceptions"] = rerun_module
     sys.modules["streamlit.runtime.scriptrunner_utils"] = scriptrunner_utils
     sys.modules["streamlit.runtime"] = runtime_module
-    sys.modules.setdefault("streamlit", streamlit_module)
+    sys.modules["streamlit"] = streamlit_module
 
 import onboarding_ui as onboarding
 import pipeline.context as pipeline_context

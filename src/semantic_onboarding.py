@@ -28,6 +28,9 @@ def main() -> int:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("semantic.onboarding", run_id=run_id)
 
+    # Inizializza per sicurezza (evita UnboundLocalError nel riepilogo)
+    touched: list[Path] = []
+
     # Carica contesto locale (niente Drive / env obbligatori)
     ctx = ClientContext.load(slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id)
 
@@ -63,9 +66,12 @@ def main() -> int:
     except (ConfigError, PipelineError) as exc:
         # Mappa verso exit code deterministici (no traceback non gestiti)
         logger.exception("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
-        # exit_code_for non è tipizzato: forza int per mypy
-        code: int = int(exit_code_for(exc))
+        code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
         return code
+    except Exception as exc:
+        # Fallback deterministico per errori inattesi non mappati
+        logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
+        return 1
 
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
     summary_extra: dict[str, object] = {}
@@ -74,7 +80,14 @@ def main() -> int:
         book_dir: Path = getattr(ctx, "md_dir", None) or paths["book"]
         summary_path = book_dir / "SUMMARY.md"
         readme_path = book_dir / "README.md"
-        content_mds = list_content_markdown(book_dir)
+
+        try:
+            # Preferisci l'helper (esclude README/SUMMARY dai conteggi)
+            content_mds = list_content_markdown(book_dir)
+        except Exception:
+            # Fallback robusto nel caso l'helper non sia disponibile/rompa
+            content_mds = [p for p in book_dir.rglob("*.md") if p.name not in {"README.md", "SUMMARY.md"}]
+
         summary_extra = {
             "book_dir": str(book_dir),
             "markdown": len(content_mds),

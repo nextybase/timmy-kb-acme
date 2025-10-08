@@ -7,7 +7,7 @@ import os
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, ContextManager, Dict, List, Optional, Sequence, Tuple, cast
+from typing import Callable, ContextManager, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.path_utils import ensure_within_and_resolve
@@ -180,6 +180,6 @@ def _safe_mtime(path: Path) -> float:
 
 
 @contextmanager
-def _open_binary(path: Path) -> ContextManager[io.BufferedReader]:
+def _open_binary(path: Path) -> Iterator[io.BufferedReader]:
     with path.open("rb") as fh:
         yield fh

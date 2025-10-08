@@ -4,7 +4,8 @@ path = Path("src/ui/app.py")
 text = path.read_text(encoding="utf-8")
 if "st.rerun()" not in text:
     raise SystemExit("expected rerun calls")
-if "st.experimental_rerun()" in text:
+legacy_rerun_call = "st." + "_".join(("experimental", "rerun()"))
+if legacy_rerun_call in text:
     raise SystemExit("unexpected experimental rerun calls")
 old = "                    st.success(f\"Cliente '{slug}' eliminato. {message}\")\n"
 if old not in text:

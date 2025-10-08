@@ -129,6 +129,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
+      - id: ui-beta0-compliance
+        name: UI beta0 compliance checks
+        entry: python scripts/dev/check_ui_beta0_compliance.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
 
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.18.1
