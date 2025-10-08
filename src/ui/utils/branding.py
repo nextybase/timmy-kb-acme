@@ -7,7 +7,7 @@ from typing import Any, Optional
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
-    st = None
+    st = None  # type: ignore
 
 # Usa l’helper centralizzato che sceglie il logo in base al tema
 from src.ui.utils.core import resolve_theme_logo_path
@@ -62,7 +62,8 @@ def render_brand_header(
         cols = st_module.columns([1, 5])
         with cols[0]:
             if show_logo and logo_path.exists():
-                st_module.image(str(logo_path), use_column_width=True)
+                # MIGRAZIONE: use_column_width -> use_container_width
+                st_module.image(str(logo_path), use_container_width=True)
         with cols[1]:
             st_module.title("Onboarding NeXT – Clienti")
             if subtitle:
@@ -77,9 +78,11 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
     if st_module is None:
         return
     try:
-        with st_module.sidebar:
-            logo_path = resolve_theme_logo_path(repo_root)
-            if logo_path.exists():
-                st_module.image(str(logo_path), use_column_width=True)
+        logo_path = resolve_theme_logo_path(repo_root)
+        # Supporta sia il passaggio del modulo 'st' sia di 'st.sidebar'
+        sidebar = getattr(st_module, "sidebar", st_module)
+        if logo_path.exists():
+            # MIGRAZIONE: use_column_width -> use_container_width
+            sidebar.image(str(logo_path), use_container_width=True)
     except Exception:
         pass
