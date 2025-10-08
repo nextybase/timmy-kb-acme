@@ -55,7 +55,9 @@
     "loggato",
     "adattatrici",
     "rimappaggio",
-    "monkeypatch"
+    "monkeypatch",
+    "pickleable",
+    "multipagina"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

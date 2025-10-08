@@ -18,6 +18,26 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 - No side-effects a import-time: nessun I/O o lettura di env vars a livello di modulo.
 - Adozione dipendenze: prima di aggiungere una libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e alternative già adottate.
 
+
+---
+
+## Interfaccia Streamlit
+- La versione 1.50.0 di Streamlit comporta significative differenze nel coding.
+
+| Obsoleto                                                               | Sostituisci con                             | Regola d’uso                                                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `st.experimental_get_query_params`, `st.experimental_set_query_params` | `st.query_params`                           | API dict-like: lettura/scrittura atomica, `clear()`, `from_dict()`, `get_all()` per chiavi ripetute.                         |
+| `st.experimental_rerun`                                                | `st.rerun`                                  | Rerun esplicito; rimuovere prefisso experimental.                                                                            |
+| `st.cache`                                                             | `@st.cache_data` **o** `@st.cache_resource` | **Data**: funzioni pure, return pickleable; usare `ttl`/`max_entries`. **Resource**: client/connessioni/modelli thread-safe. |
+| `st.experimental_memo`                                                 | `@st.cache_data`                            | Stesse regole di caching dati.                                                                                               |
+| `st.experimental_singleton`                                            | `@st.cache_resource`                        | Stesse regole di caching risorse.                                                                                            |
+| `st.experimental_data_editor`                                          | `st.data_editor`                            | Cambia formato in `st.session_state` (usare `edited_rows`).                                                                  |
+| Navigazione via directory `pages/`                                     | `st.navigation` + `st.Page`                 | Router unico nell’entrypoint; opzionale `position="top"`. `pages/` ignorata se usi `st.navigation`.                          |
+| `st.experimental_user`                                                 | `st.user`                                   | Oggetto read-only con info utente; per OIDC usare `st.login()`/`st.logout()`.                                                |
+
+Vedi dettagli completi in [streamlit_ui.md](streamlit_ui.md).
+
+
 ---
 
 ## Struttura & naming
