@@ -11,18 +11,19 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
-from ui.app_core.state import STATE_SEM_READY, normalize_state
 from ui.chrome import header, sidebar
 from ui.clients_store import get_state
 from ui.utils import get_slug, set_slug
 
 try:
-    # disponibilità già usata nel router per compute_sem_enabled
     from ui.utils.workspace import has_raw_pdfs
 except Exception:  # pragma: no cover
 
     def has_raw_pdfs(_slug: str | None) -> tuple[bool, str | None]:
         return False, None
+
+
+ALLOWED_STATES = {"pronto", "arricchito", "finito"}
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
@@ -56,7 +57,6 @@ def _run_summary(slug: str) -> None:
 
 
 def _go_preview() -> None:
-    # Naviga alla pagina Preview del nuovo router
     try:
         st.query_params["tab"] = "preview"
     except Exception:
@@ -76,14 +76,11 @@ if not slug:
     st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
     st.stop()
 
-# Gating SSOT: stato cliente idoneo + presenza PDF in raw/
-state = get_state(slug)
-norm_state = normalize_state(state)
-
+state = (get_state(slug) or "").strip().lower()
 ready, raw_dir = has_raw_pdfs(slug)
-if norm_state not in STATE_SEM_READY or not ready:
-    st.info("La semantica sarà disponibile quando lo stato è idoneo e 'raw/' contiene PDF.")
-    st.caption(f"Stato: {norm_state or 'n/d'} · RAW: {raw_dir or 'n/d'}")
+if state not in ALLOWED_STATES or not ready:
+    st.info("La semantica sarà disponibile quando lo stato raggiunge 'pronto' e `raw/` contiene PDF.")
+    st.caption(f"Stato: {state or 'n/d'} — RAW: {raw_dir or 'n/d'}")
     st.stop()
 
 st.subheader("Onboarding semantico")
@@ -114,6 +111,5 @@ with col_b:
             st.error(str(e))
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella generazione: {e}")
-    # Link “soft” alla pagina Preview del router
     if st.button("Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
         _go_preview()
