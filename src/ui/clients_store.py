@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, cast
 
-from pipeline.path_utils import read_text_safe
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 yaml: Any | None
 try:
@@ -32,10 +33,23 @@ except Exception:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Directory e file predefiniti; possono essere sovrascritti via env o monkeypatchati nei test
-DB_DIR: Path = Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "data" / "clients_db"))).resolve()
-DB_FILE: Path = Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))).resolve()
 
+def _resolve_db_path(db_path: Path) -> Path:
+    """
+    Regole:
+    - Se il path è ASSOLUTO: accettalo (utile per test/CI), restituisci .resolve().
+    - Se è RELATIVO: ancoralo a REPO_ROOT ed applica ensure_within_and_resolve.
+    """
+    p = Path(db_path)
+    if p.is_absolute():
+        return p.resolve()
+    candidate = (REPO_ROOT / p).resolve()
+    return cast(Path, ensure_within_and_resolve(REPO_ROOT, candidate))
+
+
+# Directory e file predefiniti; possono essere sovrascritti via env o monkeypatchati nei test
+DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "data" / "clients_db"))))
+DB_FILE: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))))
 
 # --------------------------------------------------------------------------------------
 # Modello dati
@@ -80,19 +94,21 @@ class ClientEntry:
 
 def ensure_db(db_path: Optional[Path] = None) -> Path:
     """
-    Garantisce l'esistenza del file YAML dei clienti; se manca, crea '[]\\n'.
+    Garantisce l'esistenza del file YAML dei clienti; se manca, crea '[]\n'.
     Ritorna il Path effettivo.
     """
-    p = (db_path or DB_FILE).resolve()
+    raw_p = db_path or DB_FILE
+    # Path-safety: se RELATIVO, ancora a REPO_ROOT; se ASSOLUTO, accetta override.
+    p = _resolve_db_path(raw_p)
     p.parent.mkdir(parents=True, exist_ok=True)
     if not p.exists():
-        p.write_text("[]\n", encoding="utf-8")
+        safe_write_text(p, "[]\n", encoding="utf-8", atomic=True)
     return p
 
 
 def get_db_path() -> Path:
     """Ritorna il Path del DB (creando la dir se serve, non il file)."""
-    p = DB_FILE.resolve()
+    p = _resolve_db_path(DB_FILE)
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -117,11 +133,11 @@ def _read_raw_entries(p: Path) -> list[dict[str, Any]]:
 def _write_raw_entries(p: Path, entries: Iterable[ClientEntry]) -> None:
     ensure_db(p)
     if yaml is None:  # pragma: no cover
-        p.write_text("[]\n", encoding="utf-8")
+        safe_write_text(p, "[]\n", encoding="utf-8", atomic=True)
         return
     payload: list[dict[str, Any]] = [e.to_dict() for e in entries]
     txt = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
-    p.write_text(txt, encoding="utf-8")
+    safe_write_text(p, txt, encoding="utf-8", atomic=True)
 
 
 # --------------------------------------------------------------------------------------
@@ -167,13 +183,13 @@ def invalidate_clients_cache() -> None:
 
 def load_clients(db_path: Optional[Path] = None) -> list[ClientEntry]:
     """Carica la lista dei clienti dal DB (cache-ata)."""
-    p = (db_path or get_db_path()).resolve()
+    p = _resolve_db_path(db_path or get_db_path())
     return list(_load_clients_cached(p))
 
 
 def save_clients(entries: Iterable[ClientEntry], db_path: Optional[Path] = None) -> None:
     """Salva l’elenco completo (sovrascrive). Invalida la cache."""
-    p = (db_path or get_db_path()).resolve()
+    p = _resolve_db_path(db_path or get_db_path())
     _write_raw_entries(p, entries)
     invalidate_clients_cache()
 
@@ -212,7 +228,7 @@ def upsert_client(entry: ClientEntry, db_path: Optional[Path] = None) -> ClientE
         stato=entry.stato.strip(),
     )
 
-    p = (db_path or get_db_path()).resolve()
+    p = _resolve_db_path(db_path or get_db_path())
     ensure_db(p)
     items = load_clients(p)
 
@@ -235,7 +251,7 @@ def set_state(slug: str, stato: str, db_path: Optional[Path] = None) -> bool:
     if not slug_norm:
         return False
 
-    p = (db_path or get_db_path()).resolve()
+    p = _resolve_db_path(db_path or get_db_path())
     items = load_clients(p)
     new_state = (stato or "").strip()
 

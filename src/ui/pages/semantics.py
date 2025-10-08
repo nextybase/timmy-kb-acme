@@ -11,7 +11,9 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
+from ui.app_core.state import STATE_SEM_READY, normalize_state
 from ui.chrome import header, sidebar
+from ui.clients_store import get_state
 from ui.utils import get_slug, set_slug
 
 try:
@@ -74,10 +76,14 @@ if not slug:
     st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
     st.stop()
 
+# Gating SSOT: stato cliente idoneo + presenza PDF in raw/
+state = get_state(slug)
+norm_state = normalize_state(state)
+
 ready, raw_dir = has_raw_pdfs(slug)
-if not ready:
-    st.info("La semantica sarà disponibile dopo il download dei PDF in `raw/`.")
-    st.caption(f"RAW: {raw_dir or 'n/d'}")
+if norm_state not in STATE_SEM_READY or not ready:
+    st.info("La semantica sarà disponibile quando lo stato è idoneo e 'raw/' contiene PDF.")
+    st.caption(f"Stato: {norm_state or 'n/d'} · RAW: {raw_dir or 'n/d'}")
     st.stop()
 
 st.subheader("Onboarding semantico")

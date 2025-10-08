@@ -1,134 +1,102 @@
-# Onboarding UI - Guida a blocchi (v2)
+# Onboarding UI – Guida (Beta 0)
 
-Questa guida descrive l'interfaccia Streamlit utilizzata per l'onboarding dei clienti Timmy-KB. Il layout attuale si basa su blocchi dinamici invece delle vecchie tab statiche.
+Questa guida descrive l’interfaccia Streamlit dell’onboarding **Timmy‑KB** così come implementata in **Beta 0**.
 
----
+- **Router nativo**: `st.navigation` + `st.Page` (niente `pages/` legacy, niente router a tab).
+- **Deep‑linking**: `st.query_params` (es. `?slug=acme&tab=semantics`).
+- **Streamlit**: **>= 1.50** (solo API stabili: nessun `experimental_*`, nessun `use_container_width`).
+- **UI**: pulsanti con `width="stretch"`; HTML solo tramite `st.html(...)`.
 
-## Versione e compatibilita' Streamlit
-
-L'interfaccia di onboarding Timmy-KB richiede **Streamlit >= 1.50,<2**.
-La UI aderisce alle API stabili piu' recenti:
-
-- Pulsanti e submit usano `width="stretch"` per garantire accessibilita' omogenea.
-- Cache aggiornata con `st.cache_data` e `st.cache_resource`.
-- Solo `st.rerun()` viene utilizzato; tutti i fallback `experimental_*` sono stati rimossi.
-- Compatibilita' verificata con Python 3.11 o superiore.
-
-La UI segue le best practice Streamlit: inizializza con `st.set_page_config`, gestisce lo stato tramite `st.session_state` e mantiene separati presentazione e business-logic.
-
-## Prerequisiti
-- Python 3.11 (o superiore) con Streamlit installato
-- Repository clonato e comando eseguito dalla root del progetto
-- Credenziali Drive (variabili `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`) per le operazioni remote
-- Opzionale: Docker attivo se si utilizzano componenti aggiuntivi al di fuori del flusso documentato qui
-
-Avvio rapido:
-```bash
-
-streamlit run onboarding_ui.py
-
-```
+> Avvio rapido:
+> ```bash
+> streamlit run onboarding_ui.py
+> ```
 
 ---
 
-## Landing: due pulsanti centrali
-All'apertura vengono mostrati solo due pulsanti centrali:
-- **Nuovo Cliente**
-- **Gestisci cliente**
+## Navigazione & struttura
 
-La pagina non cambia URL: i blocchi sottostanti si attivano aggiornando `st.session_state`.
+La navigazione è **in alto** (top) ed è suddivisa in gruppi:
 
----
+- **Onboarding**
+  - **Home** (`src/ui/pages/home.py`)
+  - **Gestisci cliente** (`src/ui/pages/manage.py`)
+  - **Semantica** (`src/ui/pages/semantics.py`)
+- **Tools**
+  - **Docker Preview** (`src/ui/pages/preview.py`)
+  - **Cleanup** (`src/ui/pages/cleanup.py`)
+  - *(interno, per diagnostica/test)* **Diagnostics** (`src/ui/pages/diagnostics.py`)
 
-## Sidebar: navigazione e azioni rapide
-- **Sezioni**: pulsanti Home, Gestisci cliente e Semantica per cambiare vista; vengono abilitati solo quando lo stato del cliente lo consente e Home riporta sempre alla landing.
-- **Guida UI**: link diretto a questo documento, utile per avere istruzioni contestuali durante l'onboarding.
-- **Aggiorna elenco Drive**: invalida la cache da 90 secondi dell'albero Drive e forza un nuovo fetch dei metadati.
-- **Genera dummy**: esegue `tools.gen_dummy_kb --slug <slug>` mostrando spinner e toast di esito.
-- **Esci**: richiede lo shutdown sicuro dell'app Streamlit.
+> L’entrypoint `onboarding_ui.py` configura la pagina, idrata i **query params** e registra le pagine nel router.
 
-La stessa colonna ospita logo, stato del cliente e scorciatoie contestuali (per esempio il link rapido ad 'Apri workspace').
-
-## Diagnostica & log ZIP
-L'expander **Diagnostica** nel corpo principale (sotto l'intestazione cliente) offre un check rapido senza toccare la business logic.
-- Mostra il `base_dir` ricostruito best-effort dal contesto ed evidenzia lo slug corrente (raggiungibile anche tramite lo skip-link di accessibilita).
-- Conta i file presenti nelle cartelle `raw/`, `book/` e `semantic/` per uno snapshot immediato del workspace.
-- Se `logs/` esiste, mostra le ultime ~4 KB dell'ultimo log disponibile (decodifica safe) e fornisce un pulsante **Scarica logs** che genera al volo un archivio ZIP con tutti i file della cartella.
-- I contenuti restano in sola lettura: nessun runner viene invocato e nessun side-effect viene applicato allo stato Streamlit.
-- I log rispettano le regole di redazione segreti del progetto; l'expander non introduce nuove scritture.
-
-## Tabs & stati cliente
-- Se lo stato non e' disponibile (es. nessuno slug attivo) tutti i pulsanti della barra laterale restano disattivati.
-- Da `inizializzato` in avanti diventano cliccabili sia **Home** sia **Gestisci cliente**.
-- La tab **Semantica** resta riservata agli stati `pronto`, `arricchito` o `finito`.
-
-## Flusso "Nuovo Cliente"
-1. **Form anagrafica**: campi `Slug (kebab-case)` e `Nome cliente`.
-2. **Upload VisionStatement.pdf**: l'uploader accetta un singolo PDF e lo salva in `config/VisionStatement.pdf`.
-3. **Inizializza workspace**: il pulsante resta cliccabile, ma al click verifica slug, nome e PDF. Se manca qualcosa mostra errori espliciti. In caso positivo:
-   - Copia la configurazione base.
-   - Avvia `provision_from_vision` per generare `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`.
-   - Mostra gli YAML in due editor a larghezza fissa.
-   > Nota: se il VisionStatement è vuoto o corrotto, l'operazione si interrompe con un ConfigError esplicito.
-4. **Crea Workspace**: esegue i runner esistenti (`_run_create_local_structure`, `_run_drive_structure`, `_run_generate_readmes`) per creare le cartelle in locale e su Drive. Durante la procedura viene mostrato uno spinner; al termine lo stato del cliente passa a `inizializzato`.
-
-Gli editor YAML restano disponibili dopo la creazione per eventuali ritocchi manuali.
+### Query params supportati
+- `slug`: seleziona il cliente attivo (es. `?slug=acme`).
+- `tab`: percorso pagina (es. `?tab=semantics`). Viene impostato a `home` se mancante.
 
 ---
 
-## Flusso "Gestisci cliente"
-Dopo avere scelto lo slug, la sezione mostra prima il selettore clienti con i pulsanti **Gestisci**/**Elimina** (quest'ultimo apre una dialog di conferma che ripulisce workspace locale, DB e Drive) e poi tre blocchi principali affiancati:
+## Header & Sidebar
 
-1. **Albero Drive**
-   - Mostra la gerarchia a partire da `DRIVE_ID/<slug>/` con focus su `raw/` e relative sottocartelle.
-   - Usa `render_drive_tree(slug)` e restituisce un indice dei metadati (tipo, size, mtime).
+- L’**header** mostra il titolo *“Timmy‑KB • Onboarding”* e, se presente, lo **slug** corrente.
+- La **sidebar** espone **Azioni rapide**:
+  - **Aggiorna Drive**: invalida la cache dell’albero Drive.
+  - **Dummy KB**: genera un dataset locale di prova per lo slug.
+  - **Esci**: shutdown dell’app.
+- Nella sidebar è presente anche il box **Ricerca (retriever)** con i parametri:
+  - *Candidate limit*, *Budget latenza (ms)*, *Auto per budget* (persistono in config cliente).
 
-2. **Diff Drive vs locale**
-   Confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/` locale e include il pulsante **Scarica da Drive in raw/** con barra `st.status`; al termine aggiorna lo stato a `pronto`, invalida la cache Drive e ricalcola le differenze.
-3. **Editor tags_reviewed + Estrai Tags**
-   Editor YAML per `semantic/tags_reviewed.yaml` con validazione minima; il pulsante **Estrai Tags** invoca `run_tags_update(slug)`, genera `tags_raw.csv`, aggiorna lo stub tramite `write_tags_review_stub_from_csv`, sincronizza `tags_reviewed.yaml` e usa `st.status` con toast di completamento. In caso di errore mostra un messaggio, scrive il motivo nei log e segnala se `raw/` manca oppure l'adapter non e' disponibile.
-## Riprendere dopo un'interruzione (gate Vision)
-
-Se interrompi il flusso prima di **Inizializza workspace** e poi riparti con uno **slug** che ha gia' generato gli YAML (stesso `VisionStatement.pdf` e stesso modello), l'app non si blocca: compare un **dialog** che ti chiede come procedere. Questo accade quando il controllo su `vision_hash` rileva che il PDF e' stato gia' elaborato con la stessa configurazione.
-
-### Scelte disponibili
-- **Rigenera usando lo stesso PDF**
-  Ricrea gli YAML forzando l'operazione (`force=True`), senza richiedere un nuovo upload. Idempotente.
-- **Carica un nuovo PDF e rigenera**
-  Sostituisci il PDF e rigenera gli YAML. Utile se il documento e' stato aggiornato.
-- **Annulla e apri gli YAML**
-  Nessuna rigenerazione: apri direttamente gli editor per verificare o modificare gli artefatti.
-
-### Cosa aspettarti da l'interfaccia
-- Il dialog mostra il motivo del gate (es. *Gia' elaborato con lo stesso modello...*).
-- Stato e avanzamento sono visibili con `st.status`/progress; alla fine compare una notifica di esito (**toast con fallback a success**).
-- Nessun side-effect a import-time, nessuna modifica alla business logic: e' un adapter **UI-only**.
-
-### Linee guida operative
-- Se vuoi ripetere esattamente l'ultimo passaggio, scegli **Rigenera usando lo stesso PDF**.
-- Se il VisionStatement e' cambiato, scegli **Carica un nuovo PDF e rigenera**.
-- Se devi solo consultare/modificare, scegli **Annulla e apri gli YAML**.
-
-> Nota: la rigenerazione con lo stesso PDF usa `force=True` per bypassare il gate; le altre operazioni restano invariate. Le notifiche di completamento seguono lo standard repo: `st.toast(...)` con fallback automatico a `st.success(...)`.
-
-### Tab "Semantica"
-La tab appare solo quando lo stato del cliente e' in `{"pronto", "arricchito", "finito"}`. Per stati piu bassi la UI mostra l'avviso:
-> "La semantica sara' disponibile quando lo stato raggiunge 'pronto' (dopo il download dei PDF in raw/)."
-
-All'interno della tab sono disponibili gli editor `semantic_mapping.yaml`, `cartelle_raw.yaml` e `tags_reviewed.yaml` forniti da `ui.components.yaml_editors`.
+> Tutte le azioni mostrano spinner/toast e log strutturati; nessuna API `experimental_*` è usata.
 
 ---
 
-## Note operative
-- Tutti i salvataggi YAML utilizzano `safe_write_text` con path-safety `ensure_within_and_resolve`.
-- `cartelle_raw.yaml` viene normalizzato automaticamente in formato `{raw: {...}}` quando la Vision restituisce la struttura legacy.
-- Lo stato del cliente viene aggiornato tramite `clients_store.set_state` (ad esempio `inizializzato` dopo la creazione, `pronto` dopo avere popolato `raw/`).
-- L'albero Drive e il diff usano frammenti Streamlit con cache di 90 secondi; il pulsante "Aggiorna elenco Drive" invalida la cache.
-- Gli spinner e i messaggi di esito sono visibili nella pagina corrente: non vengono aperte modali o tab secondarie.
+## Pagine
+
+### Home
+Pagina informativa con link rapidi e indicazioni di flusso. Supporta deep‑linking allo **slug** via querystring.
+
+### Gestisci cliente
+- Campo **Slug cliente** con pulsante **Apri workspace** → imposta `slug` nei query params e fa `st.rerun()`.
+- Se uno **slug** è attivo, la pagina ospita tre blocchi affiancati:
+  1) **Albero Drive** – gerarchia da `DRIVE_ID/<slug>/` (focus su `raw/`).
+  2) **Diff Drive vs locale** – confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/`; include **Scarica da Drive in raw/** con `st.status`.
+  3) **Editor tag** – authoring e sync di `semantic/tags_reviewed.yaml`; **Estrai Tags** genera `tags_raw.csv` e aggiorna lo stub.
+
+> Le funzioni Drive hanno guardie: se mancano gli extra (`google-api-python-client`) la UI mostra un messaggio con le istruzioni di installazione.
+
+### Semantica
+Flusso a pulsanti:
+- **Converti PDF in Markdown** → `semantic.api.convert_markdown(...)` (solo PDF **sicuri** in `raw/`).
+- **Arricchisci frontmatter** → `semantic.api.enrich_frontmatter(...)` usando il **vocabolario consolidato**.
+- **Genera README/SUMMARY** → idempotente, valida `book/`.
+- **Anteprima Docker (HonKit)** → delega alla pagina *Docker Preview*.
+
+**Gating**: la pagina è utilizzabile **solo se in `raw/` esistono PDF reali** (niente symlink/fuori perimetro). In caso contrario mostra un avviso e si ferma.
+
+### Docker Preview (Tools)
+Avvia/arresta la preview HonKit in container Docker. Se Docker non è disponibile, la pagina mostra un messaggio esplicito e salta la preview.
+
+### Cleanup (Tools)
+Azioni di pulizia locale per workspace e artefatti temporanei.
+
+### Diagnostics (interno)
+Pagina ausiliaria per i test/smoke. Mostra:
+- `base_dir` del cliente corrente, conteggi `raw/`, `book/`, `semantic/`.
+- **Tail** (≈4 KB) dell’ultimo file in `logs/` con **download ZIP** di tutti i log.
 
 ---
 
-## Struttura del workspace
+## Regole di qualità (Definition of Done – UI Beta 0)
+
+- Solo `st.navigation` + `st.Page` (nessun mix con la cartella `pages/` legacy o router a tab).
+- Stato/URL: `st.query_params` per `slug` e `tab`; deep‑linking funzionante.
+- Zero `experimental_*` e zero `use_container_width`.
+- Caching solo con `@st.cache_data` / `@st.cache_resource`.
+- HTML sanificato con `st.html(...)`.
+- Nessun riferimento a `src/ui/app.py` o `src/ui/tabs/*`.
+
+---
+
+## Struttura workspace cliente
 ```
 output/
   timmy-kb-<slug>/
@@ -138,29 +106,24 @@ output/
       semantic_mapping.yaml
       cartelle_raw.yaml
       tags_reviewed.yaml
+      tags_raw.csv
       tags.db
     config/
       config.yaml
       VisionStatement.pdf
+    logs/
 ```
-`tags.db` resta la fonte dati di runtime; lo YAML serve per authoring e controlli rapidi.
 
----
-
-## Suggerimenti
-- Usa slug in kebab-case (minuscole, numeri e trattini).
-- Rigenera gli artefatti Vision solo quando cambia il PDF.
-- Dopo avere caricato i PDF in Drive, esegui il diff per verificare la sincronizzazione.
-- Mantieni gli YAML coerenti: l'editor valida lo schema prima di salvare.
+> `tags.db` è la SSoT a runtime; lo YAML resta per authoring/validazione.
 
 ---
 
 ## FAQ
-- **Come avvio l'interfaccia?** `streamlit run onboarding_ui.py` (wrapper che applica header, diagnostica e sidebar).
-- **Dove viene salvato il Vision Statement?** In `config/VisionStatement.pdf`.
-- **Perche' non vedo la tab Semantica?** Lo stato del cliente deve essere almeno `pronto`.
-- **Posso usare Estrai Tags senza Drive?** Si, se `raw/` contiene gia' i PDF necessari.
+- **Come avvio l’interfaccia?** `streamlit run onboarding_ui.py`.
+- **Perché non vedo la pagina “Semantica”?** Non risultano PDF in `raw/`. Scaricali da Drive o copia file locali (no symlink).
+- **Posso generare i tag senza Drive?** Sì: usa `--source=local` o popola `raw/` manualmente.
+- **È rimasta retro‑compatibilità con i vecchi tab?** No: il router legacy e i relativi helper sono stati rimossi in Beta 0.
 
 ---
 
-Documento mantenuto in ASCII per evitare problemi di encoding e compatibile con cSpell.
+Documento mantenuto in ASCII per evitare problemi di encoding; cSpell‑friendly.
