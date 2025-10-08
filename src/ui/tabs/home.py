@@ -259,7 +259,12 @@ def _render_ready(slug: str, workspace_dir: Path, logger: logging.Logger) -> Non
     )
     st.session_state[confirm_key] = confirm
 
-    if not st.button("Rigenera YAML", type="primary", key=f"ui.ready.regenera.{slug}"):
+    if not st.button(
+        "Rigenera YAML",
+        type="primary",
+        key=f"ui.ready.regenera.{slug}",
+        width="stretch",
+    ):
         return
 
     if not confirm:

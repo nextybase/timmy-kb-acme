@@ -13,8 +13,8 @@ from ui.utils.workspace import has_raw_pdfs
 
 
 def render_semantic_tab(*, log: Any, slug: str) -> None:
-    """Render the Semantic tab: conversion, enrichment, summary/readme.
-    UI-only layer: does not alter business logic or public APIs.
+    """Tab Semantica: gestisce conversione, arricchimento e sintesi Markdown.
+    Livello solo UI: non modifica la business logic né le API pubbliche.
     """
     st.subheader("Semantica — conversione e arricchimento")
     st.caption(

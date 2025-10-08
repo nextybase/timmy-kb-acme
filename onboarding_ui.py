@@ -184,6 +184,11 @@ def _render_global_error(e: Exception) -> None:
 
 def _diagnostics(slug: str | None) -> None:
     """Expander con info utili al triage. Non tocca la business logic."""
+    try:
+        from pipeline.file_utils import open_for_read_bytes_selfguard as _safe_read_bytes  # type: ignore
+    except Exception:  # pragma: no cover - dipendenza opzionale
+        _safe_read_bytes = None  # type: ignore[assignment]
+
     with st.expander("🔎 Diagnostica", expanded=False):
         if not slug:
             st.write("Seleziona uno slug per mostrare dettagli.")
@@ -274,13 +279,8 @@ def _diagnostics(slug: str | None) -> None:
                     try:
                         size = latest.stat().st_size
                         offset = max(0, size - 4000)
-                        try:
-                            # Usa API SSoT per path-safety e lettura binaria protetta
-                            from pipeline.file_utils import open_for_read_bytes_selfguard  # type: ignore
-                        except Exception:
-                            open_for_read_bytes_selfguard = None  # type: ignore[assignment]
-                        if open_for_read_bytes_selfguard:
-                            with open_for_read_bytes_selfguard(latest) as fh:  # type: ignore[misc]
+                        if _safe_read_bytes:
+                            with _safe_read_bytes(latest) as fh:  # type: ignore[misc]
                                 fh.seek(offset)
                                 buf = fh.read(4000)
                         else:
@@ -317,12 +317,8 @@ def _diagnostics(slug: str | None) -> None:
                                     # Apertura in scrittura streaming dentro lo zip
                                     with zf.open(arcname, mode="w") as zout:
                                         # Lettura protetta SSoT se disponibile
-                                        try:
-                                            from pipeline.file_utils import open_for_read_bytes_selfguard  # type: ignore
-                                        except Exception:
-                                            open_for_read_bytes_selfguard = None  # type: ignore[assignment]
-                                        if open_for_read_bytes_selfguard:
-                                            src = open_for_read_bytes_selfguard(file_path)  # type: ignore[misc]
+                                        if _safe_read_bytes:
+                                            src = _safe_read_bytes(file_path)  # type: ignore[misc]
                                         else:
                                             src = file_path.open("rb")
 
@@ -346,6 +342,7 @@ def _diagnostics(slug: str | None) -> None:
                             data=data,
                             file_name=f"{slug}-logs.zip",
                             mime="application/zip",
+                            width="stretch",
                         )
                     except Exception:
                         st.info("Impossibile preparare l'archivio dei log.")

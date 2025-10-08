@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Type, cast
 
 from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve
 
 try:
     import streamlit as _streamlit  # noqa: F401
@@ -144,12 +146,13 @@ def _copy_base_config(workspace_dir: Path, slug: str, logger: logging.Logger) ->
         result = handler(workspace_dir, slug, logger)
         return cast(Path, result)
     except ConfigError:
-        target = workspace_dir / "config" / "config.yaml"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if not target.exists():
-            target.write_text("{}\n", encoding="utf-8")
-        logger.warning("ui.setup.base_config_missing", extra={"slug": slug, "path": str(target)})
-        return target
+        config_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "config")
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = ensure_within_and_resolve(config_dir, config_dir / "config.yaml")
+        if not config_path.exists():
+            safe_write_text(config_path, "{}\n", encoding="utf-8", atomic=True)
+        logger.warning("ui.setup.base_config_missing", extra={"slug": slug, "path": str(config_path)})
+        return config_path
 
 
 def _render_config_editor(workspace_dir: Path, slug: str, logger: logging.Logger) -> None:

@@ -76,7 +76,11 @@ def render_sidebar_quick_actions(
     """Sidebar con azioni rapide (refresh Drive, dummy workspace, shutdown)."""
     sidebar = st_module.sidebar
     sidebar.markdown("### Azioni rapide")
-    sidebar.link_button("Guida UI", "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md")
+    sidebar.link_button(
+        "Guida UI",
+        "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
+        width="stretch",
+    )
 
     if sidebar.button(
         "Aggiorna elenco Drive",
