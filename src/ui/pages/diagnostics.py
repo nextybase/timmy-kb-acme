@@ -14,7 +14,7 @@ from ui.utils import get_slug, set_slug
 TAIL_BYTES = 4000
 
 
-def _render_counts(base_dir: Path | None) -> None:
+def _render_counts(base_dir: Optional[Path]) -> None:
     """Mostra un riepilogo minimale del workspace (raw/book/semantic)."""
     with st.expander("Workspace", expanded=False):
         if not base_dir:
@@ -40,7 +40,7 @@ def _render_counts(base_dir: Path | None) -> None:
             st.info("Nessun dato disponibile.")
 
 
-def _render_logs(base_dir: Path | None, slug: Optional[str]) -> None:
+def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
     """Mostra la coda del log più recente e offre il download dell’archivio."""
     with st.expander("Log", expanded=False):
         if not base_dir:
@@ -109,6 +109,9 @@ def main() -> None:
     _render_counts(base_dir)
     _render_logs(base_dir, slug)
 
+
+# Esportiamo esplicitamente i simboli usati nei test
+__all__ = ["_render_logs", "_render_counts", "main"]
 
 if __name__ == "__main__":
     main()
