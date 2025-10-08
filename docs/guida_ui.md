@@ -70,7 +70,7 @@ Flusso a pulsanti:
 - **Genera README/SUMMARY** → idempotente, valida `book/`.
 - **Anteprima Docker (HonKit)** → delega alla pagina *Docker Preview*.
 
-**Gating**: la pagina è utilizzabile solo se in `raw/` esistono PDF reali **e se lo stato del cliente risulta tra 'pronto', 'arricchito' o 'finito'**.
+**Gating**: la pagina è utilizzabile solo **se lo stato del cliente risulta tra 'pronto', 'arricchito' o 'finito'**.
 
 
 ### Docker Preview (Tools)

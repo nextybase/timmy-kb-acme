@@ -5,11 +5,9 @@ from typing import Optional
 
 import streamlit as st
 
-from src.pre_onboarding import ensure_local_workspace_for_ui  # già esistente nel progetto
-
-# importa gli helper che già usi nell'app
-from src.ui.chrome import header, sidebar
-from src.ui.utils.query_params import set_slug  # o equivalente helper set_slug(...)
+from src.pre_onboarding import ensure_local_workspace_for_ui
+from ui.chrome import header, sidebar
+from ui.utils.query_params import set_slug
 
 
 def _go_manage() -> None:
@@ -26,9 +24,10 @@ slug = st.text_input("Slug cliente", placeholder="es. acme-srl", key="new_slug")
 name = st.text_input("Nome cliente (opzionale)", placeholder="es. ACME Srl", key="new_name")
 pdf = st.file_uploader("Vision Statement (PDF, opzionale)", type=["pdf"], key="new_vs_pdf")
 
-create = st.button("Crea workspace", type="primary", key="btn_create_client", width="stretch")
+# bottone primario, DoD-compliant
+init_ws = st.button("Inizializza workspace", type="primary", key="btn_init_ws", width="stretch")
 
-if create:
+if init_ws:
     s = (slug or "").strip()
     if not s:
         st.warning("Inserisci uno slug valido.")
@@ -38,7 +37,8 @@ if create:
     try:
         ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
         set_slug(s)
-        st.success("Workspace creato con successo.")
+        st.session_state["vision_init_requested"] = True
+        st.success("Workspace inizializzato. Avvio procedura Vision…")
         _go_manage()
     except Exception as e:  # pragma: no cover
         st.error(f"Impossibile creare il workspace: {e}")

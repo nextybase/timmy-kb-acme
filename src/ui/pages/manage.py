@@ -29,6 +29,23 @@ _render_drive_tree = _safe_get("ui.services.drive:render_drive_tree")
 _render_drive_diff = _safe_get("ui.services.drive:render_drive_diff")
 _render_tags_editor = _safe_get("ui.services.tags:render_tags_editor")
 
+# TODO: collega qui la tua funzione Vision reale e assegna `run_vision`.
+# Esempio: from semantic.api import build_semantic_from_vision as run_vision
+# Se lasci None, la UI mostrera un placeholder informativo.
+run_vision: Callable[[str], None] | None = None  # placeholder
+
+# Consumo flag Vision (impostato da new_client)
+if st.session_state.pop("vision_init_requested", False):
+    pending_slug = get_slug()
+    if not pending_slug:
+        st.warning("Nessuno slug attivo: impossibile avviare la procedura Vision.")
+    elif run_vision is None:
+        st.info("Procedura Vision non collegata: assegna `run_vision(slug)` per generare gli YAML in semantic/.")
+    else:
+        with st.status("Esecuzione Vision...", expanded=True):
+            run_vision(pending_slug)
+        st.success("Vision completata: YAML generati in `semantic/`.")
+
 
 # ---------------- UI ----------------
 
