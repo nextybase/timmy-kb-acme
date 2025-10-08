@@ -380,7 +380,7 @@ def _generate_dummy_workspace(slug: str | None) -> None:
         return
     with st.spinner(f"Genero dataset dummy per '{target}'..."):
         try:
-            exit_code = gen_dummy_main(["--slug", target, "--non-interactive"])
+            exit_code = gen_dummy_main(["--slug", target])
         except SystemExit as sys_exc:  # pragma: no cover
             exit_code = sys_exc.code or 1
         except Exception as exc:  # pragma: no cover
