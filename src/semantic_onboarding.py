@@ -42,14 +42,14 @@ def main() -> int:
     logger.info("cli.semantic_onboarding.started", extra={"slug": slug})
     try:
         # 1) Converti i PDF in Markdown
-        with phase_scope(logger, stage="convert_markdown", customer=slug):
+        with phase_scope(logger, stage="cli.convert_markdown", customer=slug):
             convert_markdown(ctx, logger, slug=slug)
 
         # 2) Arricchisci il frontmatter usando il vocabolario consolidato
         paths = get_paths(slug)
         base_dir: Path = ctx.base_dir or paths["base"]
         vocab = load_reviewed_vocab(base_dir, logger)
-        with phase_scope(logger, stage="enrich_frontmatter", customer=slug) as m:
+        with phase_scope(logger, stage="cli.enrich_frontmatter", customer=slug) as m:
             touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
             try:
                 m.set_artifacts(len(touched))
@@ -57,7 +57,7 @@ def main() -> int:
                 m.set_artifacts(None)
 
         # 3) Genera SUMMARY.md e README.md e valida la cartella book/
-        with phase_scope(logger, stage="write_summary_and_readme", customer=slug):
+        with phase_scope(logger, stage="cli.write_summary_and_readme", customer=slug):
             write_summary_and_readme(ctx, logger, slug=slug)
 
     except (ConfigError, PipelineError) as exc:
