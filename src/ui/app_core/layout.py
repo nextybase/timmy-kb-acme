@@ -34,11 +34,11 @@ def render_client_header(
 
     Args:
         st_module: modulo Streamlit (passa `st`).
-        repo_root: root del repository (non usato, mantenuto per compat).
+        repo_root: root del repository (non usato in beta0).
         slug: identificativo cliente corrente (se presente).
         state: eventuale stato/phase normalizzato (se presente).
     """
-    del repo_root  # mantenuto per compatibilità della firma
+    del repo_root  # non usato in beta0
 
     # Ancorina sicura per skiplink
     try:
@@ -65,7 +65,7 @@ def render_sidebar_branding(
     """
     Sezione "branding" nella sidebar. Mantiene un profilo minimale e robusto.
     """
-    del repo_root  # non richiesto in beta0, lasciato per compat della firma
+    del repo_root  # non richiesto in beta0
 
     with st_module.sidebar:
         st_module.subheader("Onboarding")
@@ -77,7 +77,6 @@ def render_sidebar_quick_actions(
     *,
     st_module: Any,
     slug: Optional[str],
-    icon_refresh: Optional[str] = None,  # mantenuto per compat; non usato in beta0
     refresh_callback: Optional[Callable[[], Any]] = None,
     generate_dummy_callback: Optional[Callable[[], Any]] = None,
     request_shutdown_callback: Optional[Callable[[], Any]] = None,
@@ -87,7 +86,6 @@ def render_sidebar_quick_actions(
     Quick actions standard nella sidebar.
     Le callback sono opzionali; se presenti, vengono invocate con gestione errori.
     """
-    del icon_refresh  # non usato in beta0
 
     def _safe_call(cb: Optional[Callable[[], Any]], label: str) -> None:
         if cb is None:
@@ -104,7 +102,7 @@ def render_sidebar_quick_actions(
         except Exception as exc:  # pragma: no cover
             if logger:
                 logger.exception("ui.sidebar.action_failed", extra={"action": label, "slug": slug, "error": str(exc)})
-            st_module.sidebar.error(f"{label}: errore — {exc}")
+            st_module.sidebar.error(f"{label}: errore: {exc}")
 
     with st_module.sidebar:
         st_module.subheader("Azioni rapide")

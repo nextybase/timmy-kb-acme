@@ -2,11 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
 Onboarding UI entrypoint (beta 0, navigazione nativa).
-
-- Nessuna retrocompatibilità con il router legacy a tab.
-- Navigazione unificata con st.navigation + st.Page.
-- Deep-linking gestito via st.query_params (es. ?tab=home&slug=acme).
-- Bootstrap del path per includere <repo>/src su sys.path.
+- Router nativo Streamlit (st.navigation + st.Page).
+- Deep-linking via st.query_params.
+- Path bootstrap per garantire import di src/.
 """
 
 from __future__ import annotations
@@ -14,12 +12,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# ------------------------------------------------------------------------------
-# Path bootstrap: deve avvenire PRIMA di ogni import di pacchetto (streamlit/ui/src)
-# ------------------------------------------------------------------------------
 
 def _ensure_repo_src_on_sys_path() -> None:
-    """Aggiunge <repo>/src a sys.path se assente (fallback)."""
+    """Aggiunge <repo>/src a sys.path se assente."""
     repo_root = Path(__file__).parent.resolve()
     src_dir = repo_root / "src"
     if str(src_dir) not in sys.path:
@@ -27,9 +22,8 @@ def _ensure_repo_src_on_sys_path() -> None:
 
 
 def _bootstrap_sys_path() -> None:
-    """Tenta l'helper ufficiale del repo, poi fallback locale."""
+    """Prova l'helper ufficiale, altrimenti fallback locale."""
     try:
-        # Helper già presente nel repo di test/smoke
         from scripts.smoke_e2e import _add_paths as _repo_add_paths  # type: ignore
     except Exception:
         _ensure_repo_src_on_sys_path()
@@ -40,31 +34,25 @@ def _bootstrap_sys_path() -> None:
         _ensure_repo_src_on_sys_path()
 
 
-# Esegui bootstrap path il prima possibile
 _bootstrap_sys_path()
-
-# ------------------------------------------------------------------------------
-# Ora è sicuro importare streamlit
-# ------------------------------------------------------------------------------
 
 import streamlit as st  # noqa: E402
 
-# Configurazione pagina Streamlit: prima chiamata UI (no icone per evitare problemi di codifica)
 st.set_page_config(
-    page_title="Timmy-KB • Onboarding",
+    page_title="Timmy-KB - Onboarding",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Propaga/inizializza query params (tab di default)
+
 def _hydrate_query_defaults() -> None:
-    q = st.query_params.to_dict()
-    if "tab" not in q:
+    query = st.query_params.to_dict()
+    if "tab" not in query:
         st.query_params["tab"] = "home"
+
 
 _hydrate_query_defaults()
 
-# Definizione pagine: router nativo (no icone/emote nei parametri)
 pages = {
     "Onboarding": [
         st.Page("src/ui/pages/home.py", title="Home"),
@@ -77,9 +65,8 @@ pages = {
     ],
 }
 
-# Navigazione in top bar per massimizzare l'area contenuto
-nav = st.navigation(pages, position="top")
-nav.run()
+navigation = st.navigation(pages, position="top")
+navigation.run()
 
 
 def _diagnostics(slug: str | None) -> None:
@@ -133,12 +120,12 @@ def _diagnostics(slug: str | None) -> None:
                         buf = latest.read_bytes()[-4000:]
                         st.code(buf.decode(errors="replace"))
                     except Exception:
-                        st.warning("Impossibile leggere il log piu recente.")
+                        st.warning("Impossibile leggere il log più recente.")
 
                     mem = io.BytesIO()
-                    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                        for f in files:
-                            zf.write(f, arcname=f.name)
+                    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+                        for file_path in files:
+                            archive.write(file_path, arcname=file_path.name)
                     st.download_button(
                         "Scarica logs",
                         data=mem.getvalue(),
@@ -148,7 +135,7 @@ def _diagnostics(slug: str | None) -> None:
 
 
 def _resolve_slug(slug: str | None) -> str | None:
-    """Normalizza lo slug partendo da input esplicito o sessione."""
+    """Normalizza lo slug leggendo anche dallo stato sessione."""
     candidates = (
         slug,
         st.session_state.get("ui.manage.selected_slug"),
