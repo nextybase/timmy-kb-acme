@@ -16,6 +16,6 @@ retriever:
   candidate_limit: 4000
   auto_by_budget: false
   latency_budget_ms: 0
-client_name: Prova srl
+client_name: Prova SRL
 semantic_mapping_yaml: timmy-kb-peova\semantic\tags_reviewed.yaml
 vision_statement_pdf: config/VisionStatement.pdf
