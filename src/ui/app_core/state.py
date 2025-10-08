@@ -1,44 +1,46 @@
-"""Helper puri per la gestione dello stato applicativo della UI."""
+# SPDX-License-Identifier: GPL-3.0-or-later
+# src/ui/app_core/state.py
+"""
+State helpers (Beta 0).
+
+- Niente retrocompatibilità con router/switcher a tab.
+- Nessuna dipendenza da util di UI (no has_raw_pdfs, no workspace utils).
+- Le pagine principali restano sempre accessibili; eventuali "gate"
+  sono gestiti localmente nelle pagine (es. Semantica controlla RAW).
+"""
 
 from __future__ import annotations
 
-from ui.utils.workspace import has_raw_pdfs
-
-STATE_MANAGE_READY = {"inizializzato", "pronto", "arricchito", "finito"}
-STATE_SEM_READY = {"pronto", "arricchito", "finito"}
+from typing import Optional
 
 __all__ = [
-    "STATE_MANAGE_READY",
-    "STATE_SEM_READY",
     "normalize_state",
+    "STATE_SEM_READY",
     "compute_home_enabled",
     "compute_manage_enabled",
-    "compute_sem_enabled",
 ]
 
-
-def normalize_state(state: str | None) -> str:
-    """Restituisce lo stato normalizzato (lowercase, trimmed)."""
-    return (state or "").strip().lower()
+# Manteniamo un set di stati "ready" solo per compatibilità con eventuali import.
+STATE_SEM_READY: set[str] = {"ready", "ready_to_open", "open"}
 
 
-def compute_home_enabled(state: str | None, slug: str | None) -> bool:
-    """Determina se la tab Home deve essere abilitata."""
-    normalized = normalize_state(state)
-    if normalized in STATE_MANAGE_READY:
-        return True
-    return bool((slug or "").strip())
+def normalize_state(phase: Optional[str]) -> str:
+    """Normalizza la stringa di stato (lower/trim)."""
+    if phase is None:
+        return ""
+    return str(phase).strip().lower()
 
 
-def compute_manage_enabled(state: str | None, slug: str | None) -> bool:
-    """Determina se la tab Gestisci cliente deve essere abilitata."""
-    _ = slug
-    return normalize_state(state) in STATE_MANAGE_READY
+def compute_home_enabled(state: Optional[str], slug: Optional[str]) -> bool:
+    """La pagina Home è sempre disponibile in Beta 0."""
+    _ = (state, slug)  # non usati
+    return True
 
 
-def compute_sem_enabled(state: str | None, slug: str | None) -> bool:
-    """Determina se la tab Semantica deve essere abilitata."""
-    if normalize_state(state) not in STATE_SEM_READY:
-        return False
-    ready, _ = has_raw_pdfs(slug)
-    return bool(ready)
+def compute_manage_enabled(state: Optional[str], slug: Optional[str]) -> bool:
+    """
+    La pagina Gestisci cliente resta sempre disponibile (creazione/gestione workspace,
+    Drive, diff, tagging). Non dipende dalla presenza di PDF o dallo stato.
+    """
+    _ = (state, slug)  # non usati
+    return True
