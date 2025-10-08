@@ -424,7 +424,7 @@ def download_raw_from_drive_with_progress(
 
         # Secondo pass: prepara dir, registra skip deterministici e mappa etichette
         folder_specs = [
-            (None, "", root_pdfs, base_dir),
+            ("", root_pdfs, base_dir),
             *[
                 (
                     name_map[folder["id"]],

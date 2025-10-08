@@ -22,11 +22,9 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
-import os
 import sys
 from pathlib import Path
-from functools import lru_cache
-from typing import Callable, List
+from typing import Callable
 
 # ------------------------------------------------------------------------------
 # Path bootstrap: deve avvenire PRIMA di ogni import di pacchetto (streamlit/ui/src)
@@ -73,9 +71,8 @@ from src.ui.app import (
     render_manage,
     render_semantics,
 )
-from pipeline.exceptions import ConfigError, PathTraversalError
-from pipeline.path_utils import ensure_within_and_resolve
 from ui.utils.branding import get_favicon_path
+from ui.utils import diagnostics as diag
 from src.ui.app_core.layout import (
     render_client_header,
     render_sidebar_branding,
@@ -183,175 +180,55 @@ def _render_global_error(e: Exception) -> None:
 # ----------------------------------------------------------------------
 
 def _diagnostics(slug: str | None) -> None:
-    """Expander con info utili al triage. Non tocca la business logic."""
-    try:
-        from pipeline.file_utils import open_for_read_bytes_selfguard as _safe_read_bytes  # type: ignore
-    except Exception:  # pragma: no cover - dipendenza opzionale
-        _safe_read_bytes = None  # type: ignore[assignment]
+    '''Expander con info utili al triage. Non tocca la business logic.'''
 
     with st.expander("🔎 Diagnostica", expanded=False):
         if not slug:
             st.write("Seleziona uno slug per mostrare dettagli.")
             return
 
-        # Prova a ricostruire base_dir dal contesto del progetto (best-effort, UI only)
-        try:
-            from pipeline.context import ClientContext
-        except Exception:
-            base_dir = None
-        else:
-            try:
-                ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-                base_dir = ctx.base_dir
-            except Exception:
-                base_dir = None
-
+        base_dir = diag.resolve_base_dir(slug)
         st.write(f"Base dir: `{base_dir or 'n/d'}`")
 
-        MAX_DIAGNOSTIC_FILES = 2000
-
-        @lru_cache(maxsize=16)
-        def _count_files(path: str | None) -> tuple[int, bool]:
-            if not path or not os.path.isdir(path):
-                return 0, False
-            total = 0
-            for _root, _dirs, files in os.walk(path):
-                total += len(files)
-                if total >= MAX_DIAGNOSTIC_FILES:
-                    return MAX_DIAGNOSTIC_FILES, True
-            return total, False
-
-        def _fmt_count(count: int, truncated: bool) -> str:
-            return f">={count}" if truncated else str(count)
-
-        if base_dir:
-            raw = Path(base_dir) / "raw"
-            book = Path(base_dir) / "book"
-            semantic = Path(base_dir) / "semantic"
-            raw_count, raw_truncated = _count_files(str(raw))
-            book_count, book_truncated = _count_files(str(book))
-            semantic_count, semantic_truncated = _count_files(str(semantic))
+        summaries = diag.summarize_workspace_folders(base_dir)
+        if summaries:
+            def _fmt_count(data: tuple[int, bool]) -> str:
+                count, truncated = data
+                return f">={count}" if truncated else str(count)
 
             st.write(
-                "raw/: **{raw}** file \u00b7 book/: **{book}** \u00b7 semantic/: **{semantic}**".format(
-                    raw=_fmt_count(raw_count, raw_truncated),
-                    book=_fmt_count(book_count, book_truncated),
-                    semantic=_fmt_count(semantic_count, semantic_truncated),
+                "raw/: **{raw}** file · book/: **{book}** · semantic/: **{semantic}**".format(
+                    raw=_fmt_count(summaries["raw"]),
+                    book=_fmt_count(summaries["book"]),
+                    semantic=_fmt_count(summaries["semantic"]),
                 )
             )
-            if raw_truncated or book_truncated or semantic_truncated:
-                st.caption(f"Conteggio limitato a {MAX_DIAGNOSTIC_FILES} file per directory.")
+            if any(flag for _, flag in summaries.values()):
+                st.caption(f"Conteggio limitato a {diag.MAX_DIAGNOSTIC_FILES} file per directory.")
 
-            logs_dir: Path | None
-            try:
-                logs_dir = ensure_within_and_resolve(Path(base_dir), Path(base_dir) / "logs")
-            except (ConfigError, PathTraversalError):
-                logs_dir = None
+        log_files = diag.collect_log_files(base_dir)
+        safe_reader = diag.get_safe_reader()
 
-            safe_log_files: List[Path] = []
-            if logs_dir and logs_dir.is_dir():
-                try:
-                    for entry in logs_dir.iterdir():
-                        if entry.is_symlink():
-                            continue
-                        try:
-                            safe_entry = ensure_within_and_resolve(logs_dir, entry)
-                        except (ConfigError, PathTraversalError):
-                            continue
-                        if safe_entry.is_file():
-                            safe_log_files.append(safe_entry)
-                except Exception:
-                    safe_log_files = []
+        latest = log_files[0] if log_files else None
+        if latest:
+            tail = diag.tail_log_bytes(latest, safe_reader=safe_reader)
+            if tail:
+                st.code(tail.decode(errors="replace"))
+            else:
+                st.info("Log non leggibile.")
 
-                latest = None
-                if safe_log_files:
-                    def _safe_mtime(path: Path) -> float:
-                        try:
-                            return path.stat().st_mtime
-                        except Exception:
-                            return 0.0
-
-                    safe_log_files.sort(key=_safe_mtime, reverse=True)
-                    latest = safe_log_files[0]
-
-                # Tail del log più recente (≈4KB) usando SSoT quando disponibile.
-                if latest:
-                    try:
-                        size = latest.stat().st_size
-                        offset = max(0, size - 4000)
-                        if _safe_read_bytes:
-                            with _safe_read_bytes(latest) as fh:  # type: ignore[misc]
-                                fh.seek(offset)
-                                buf = fh.read(4000)
-                        else:
-                            with latest.open("rb") as fh:
-                                fh.seek(offset)
-                                buf = fh.read(4000)
-                        st.code(buf.decode(errors="replace"))
-                    except Exception:
-                        st.info("Log non leggibile.")
-
-                # Download ZIP dei log (limitato e scritto a chunk su file temporaneo)
-                if safe_log_files:
-                    import tempfile
-                    import zipfile
-
-                    # Limiti conservativi per evitare picchi RAM/CPU
-                    MAX_FILES = 50
-                    CHUNK_SIZE = 64 * 1024
-                    MAX_TOTAL_BYTES = 5 * 1024 * 1024  # ~5 MiB di contenuti totali scritti nello zip
-
-                    selected = safe_log_files[:MAX_FILES]
-                    written_total = 0
-
-                    try:
-                        with tempfile.NamedTemporaryFile(prefix=f"{slug}-logs-", suffix=".zip", delete=False) as tmpf:
-                            zip_path = Path(tmpf.name)
-
-                        with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                            for file_path in selected:
-                                if written_total >= MAX_TOTAL_BYTES:
-                                    break
-                                try:
-                                    arcname = file_path.name
-                                    # Apertura in scrittura streaming dentro lo zip
-                                    with zf.open(arcname, mode="w") as zout:
-                                        # Lettura protetta SSoT se disponibile
-                                        if _safe_read_bytes:
-                                            src = _safe_read_bytes(file_path)  # type: ignore[misc]
-                                        else:
-                                            src = file_path.open("rb")
-
-                                        with src as fh:
-                                            while True:
-                                                if written_total >= MAX_TOTAL_BYTES:
-                                                    break
-                                                chunk = fh.read(min(CHUNK_SIZE, MAX_TOTAL_BYTES - written_total))
-                                                if not chunk:
-                                                    break
-                                                zout.write(chunk)
-                                                written_total += len(chunk)
-                                except Exception:
-                                    # Salta file problematici, non bloccare la UI
-                                    continue
-
-                        # A questo punto lo zip risiede su disco con dimensione limitata.
-                        data = zip_path.read_bytes()
-                        st.download_button(
-                            "Scarica logs",
-                            data=data,
-                            file_name=f"{slug}-logs.zip",
-                            mime="application/zip",
-                            width="stretch",
-                        )
-                    except Exception:
-                        st.info("Impossibile preparare l'archivio dei log.")
-                    finally:
-                        try:
-                            if 'zip_path' in locals():
-                                zip_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+        if log_files:
+            archive_bytes = diag.build_logs_archive(log_files, slug=slug, safe_reader=safe_reader)
+            if archive_bytes:
+                st.download_button(
+                    "Scarica logs",
+                    data=archive_bytes,
+                    file_name=f"{slug}-logs.zip",
+                    mime="application/zip",
+                    width="stretch",
+                )
+            else:
+                st.info("Impossibile preparare l'archivio dei log.")
 
 
 
