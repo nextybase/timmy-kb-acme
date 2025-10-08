@@ -85,10 +85,8 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
     assert code == exit_code_for(PipelineError("ws boom"))
 
 
-def test_cli_prints_content_md_count_excludes_readme_summary(tmp_path: Path, monkeypatch: Any, capsys) -> None:
-    """
-    Verifica che il riepilogo CLI conti solo i contenuti reali (esclude README/SUMMARY).
-    """
+def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: Any) -> None:
+    """Verifica che il riepilogo strutturato riporti solo markdown di contenuto."""
     _set_argv("z")
     mod = importlib.import_module("src.semantic_onboarding")
 
@@ -100,12 +98,10 @@ def test_cli_prints_content_md_count_excludes_readme_summary(tmp_path: Path, mon
         raising=True,
     )
 
-    # Simula conversione: genera README.md, SUMMARY.md e 1 content MD
     def _fake_convert(ctx_, logger, slug):
         (ctx_.md_dir / "README.md").write_text("# r\n", encoding="utf-8")
         (ctx_.md_dir / "SUMMARY.md").write_text("# s\n", encoding="utf-8")
         (ctx_.md_dir / "cat.md").write_text("# c\n", encoding="utf-8")
-        # convert_markdown di norma ritorna l'elenco dei markdown di contenuto
         return [ctx_.md_dir / "cat.md"]
 
     monkeypatch.setattr(mod, "convert_markdown", _fake_convert, raising=True)
@@ -118,9 +114,43 @@ def test_cli_prints_content_md_count_excludes_readme_summary(tmp_path: Path, mon
     monkeypatch.setattr(mod, "enrich_frontmatter", lambda *_a, **_k: ["cat.md"], raising=True)
     monkeypatch.setattr(mod, "write_summary_and_readme", lambda *_a, **_k: None, raising=True)
 
+    captured: dict[str, object] = {}
+    original_get_logger = mod.get_structured_logger
+
+    class _TrackingLogger:
+        def __init__(self, base_logger: Any):
+            self._base = base_logger
+            self.summary_extra: dict[str, object] | None = None
+
+        def info(self, msg: str, *args, **kwargs):
+            extra = kwargs.get("extra") or {}
+            if msg == "cli.semantic_onboarding.summary":
+                self.summary_extra = dict(extra)
+            return self._base.info(msg, *args, **kwargs)
+
+        def warning(self, msg: str, *args, **kwargs):
+            return self._base.warning(msg, *args, **kwargs)
+
+        def exception(self, msg: str, *args, **kwargs):
+            return self._base.exception(msg, *args, **kwargs)
+
+        def __getattr__(self, item: str):
+            return getattr(self._base, item)
+
+    def _capture_logger(*args, **kwargs):
+        base_logger = original_get_logger(*args, **kwargs)
+        tracker = _TrackingLogger(base_logger)
+        captured["logger"] = tracker
+        return tracker
+
+    monkeypatch.setattr(mod, "get_structured_logger", _capture_logger, raising=True)
+
     code = mod.main()
     assert code == 0
 
-    out = capsys.readouterr().out
-    # PR2: il conteggio deve escludere README/SUMMARY
-    assert "Markdown generati: 1" in out
+    tracker = captured.get("logger")
+    assert tracker is not None
+    assert tracker.summary_extra is not None
+    assert tracker.summary_extra.get("markdown") == 1
+    assert tracker.summary_extra.get("summary_exists") is True
+    assert tracker.summary_extra.get("readme_exists") is True

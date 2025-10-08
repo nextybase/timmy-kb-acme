@@ -68,24 +68,31 @@ def main() -> int:
         return code
 
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
+    summary_extra: dict[str, object] = {}
     try:
         paths = get_paths(slug)
         book_dir: Path = getattr(ctx, "md_dir", None) or paths["book"]
         summary_path = book_dir / "SUMMARY.md"
         readme_path = book_dir / "README.md"
-        content_mds = list_content_markdown(book_dir)  # <-- PR2: conteggio contenuti reali
-        print("\n== Semantic Onboarding ===")
-        print(f"Slug: {slug}")
-        print(f"Book dir: {book_dir}")
-        print(f"Markdown generati: {len(content_mds)}")  # <-- PR2: solo contenuto (no README/SUMMARY)
-        print(f"Frontmatter arricchiti: {len(touched)}")
-        print(f"SUMMARY.md: {'OK' if summary_path.exists() else 'mancante'}")
-        print(f"README.md: {'OK' if readme_path.exists() else 'mancante'}")
-    except Exception:
-        # Non bloccare l'exit code positivo per errori di stampa riepilogo
-        pass
+        content_mds = list_content_markdown(book_dir)
+        summary_extra = {
+            "book_dir": str(book_dir),
+            "markdown": len(content_mds),
+            "frontmatter": len(touched),
+            "summary_exists": summary_path.exists(),
+            "readme_exists": readme_path.exists(),
+        }
+        logger.info("cli.semantic_onboarding.summary", extra={"slug": slug, **summary_extra})
+    except Exception as exc:
+        logger.warning(
+            "cli.semantic_onboarding.summary_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
 
-    logger.info("cli.semantic_onboarding.completed", extra={"slug": slug, "artifacts": int(len(touched))})
+    logger.info(
+        "cli.semantic_onboarding.completed",
+        extra={"slug": slug, "artifacts": int(len(touched)), **summary_extra},
+    )
     return 0
 
 
