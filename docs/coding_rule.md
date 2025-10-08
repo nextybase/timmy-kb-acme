@@ -24,16 +24,22 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ## Interfaccia Streamlit
 - La versione 1.50.0 di Streamlit comporta significative differenze nel coding.
 
-| Obsoleto                                                               | Sostituisci con                             | Regola d’uso                                                                                                                 |
-| ---------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `st.experimental_get_query_params`, `st.experimental_set_query_params` | `st.query_params`                           | API dict-like: lettura/scrittura atomica, `clear()`, `from_dict()`, `get_all()` per chiavi ripetute.                         |
-| `st.experimental_rerun`                                                | `st.rerun`                                  | Rerun esplicito; rimuovere prefisso experimental.                                                                            |
-| `st.cache`                                                             | `@st.cache_data` **o** `@st.cache_resource` | **Data**: funzioni pure, return pickleable; usare `ttl`/`max_entries`. **Resource**: client/connessioni/modelli thread-safe. |
-| `st.experimental_memo`                                                 | `@st.cache_data`                            | Stesse regole di caching dati.                                                                                               |
-| `st.experimental_singleton`                                            | `@st.cache_resource`                        | Stesse regole di caching risorse.                                                                                            |
-| `st.experimental_data_editor`                                          | `st.data_editor`                            | Cambia formato in `st.session_state` (usare `edited_rows`).                                                                  |
-| Navigazione via directory `pages/`                                     | `st.navigation` + `st.Page`                 | Router unico nell’entrypoint; opzionale `position="top"`. `pages/` ignorata se usi `st.navigation`.                          |
-| `st.experimental_user`                                                 | `st.user`                                   | Oggetto read-only con info utente; per OIDC usare `st.login()`/`st.logout()`.                                                |
+| Area/Componente            | Deprecato                                                 | Usa invece                                      | Note sintetiche |
+|---------------------------|-----------------------------------------------------------|-------------------------------------------------|-----------------|
+| Query string              | `st.experimental_get_query_params` / `st.experimental_set_query_params` | `st.query_params`                               | API dict-like: `clear()`, `from_dict()`, `get_all()`, `to_dict()`. |
+| Rerun                     | `st.experimental_rerun`                                   | `st.rerun`                                      | Rerun esplicito, niente `experimental`. |
+| Caching (generale)        | `st.cache`                                                | `@st.cache_data` / `@st.cache_resource`         | **Data** funzioni pure con `ttl`/`max_entries`; **Resource** per client e connessioni. |
+| Caching (memo)            | `st.experimental_memo`                                    | `@st.cache_data`                                | Unifica sui dati. |
+| Caching (singleton)       | `st.experimental_singleton`                               | `@st.cache_resource`                            | Unifica sulle risorse. |
+| Data editor               | `st.experimental_data_editor`                             | `st.data_editor`                                | Stato: da `edited_cells` → `edited_rows`. |
+| Navigazione               | Directory `pages/`                                        | `st.navigation` + `st.Page`                     | Router unico; `pages/` ignorata se usi `st.navigation`. |
+| User/Auth                 | `st.experimental_user`                                    | `st.user` (+ `st.login()` / `st.logout()`)      | Info utente read-only; OIDC via `login/logout`. |
+| Immagini                  | `use_column_width` / `use_container_width`                | `width="content" | "stretch" | <int>`          | `True`→`"stretch"`, `False`→`"content"`. |
+| Tabelle (`st.dataframe`)  | `use_container_width`                                     | `width="stretch" | "content" | <int>`, `height="auto" | <int>` | Preferisci `"stretch"`. |
+| Editor (`st.data_editor`) | `use_container_width`                                     | `width="stretch" | "content" | <int>`, `height="auto" | <int>` | Allinea anche lo stato. |
+| Matplotlib (`st.pyplot`)  | `use_container_width`, figura globale implicita           | `fig=` esplicito + `width="…"`, `height="…"`    | Passa **sempre** `fig`; globale deprecata. |
+| Graphviz                  | `use_container_width`                                     | `width="stretch" | "content" | <int>`          | Migrazione 1:1. |
+| Bottoni/Link/Download     | `use_container_width`                                     | `width="stretch" | "content" | <int>`          | Uniforma su `width`. |
 
 Vedi dettagli completi in [streamlit_ui.md](streamlit_ui.md).
 

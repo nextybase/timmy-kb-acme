@@ -127,7 +127,12 @@ def _sidebar_skiplink_and_quicknav() -> None:
         render_sidebar_skiplink_and_quicknav(st_module=st)
     except Exception:
         try:
-            st.sidebar.markdown("<small><a href='#main'>Main</a></small>", unsafe_allow_html=True)
+            sidebar = st.sidebar
+            renderer = getattr(sidebar, "html", None)
+            if callable(renderer):
+                renderer("<small><a href='#main'>Main</a></small>")
+            else:
+                sidebar.markdown("[Main](#main)")
         except Exception:
             pass
 

@@ -57,7 +57,10 @@
     "rimappaggio",
     "monkeypatch",
     "pickleable",
-    "multipagina"
+    "multipagina",
+    "matplotlib",
+    "graphviz",
+    "auditare"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

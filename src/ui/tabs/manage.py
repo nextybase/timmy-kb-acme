@@ -335,7 +335,13 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
     download_available = callable(download_raw_from_drive_with_progress)
     extract_busy = bool(st.session_state.get("ui.busy.extract_tags"))
 
-    st.markdown("<a id='section-drive'></a>", unsafe_allow_html=True)
+    anchor_renderer = getattr(st, "html", None)
+    if callable(anchor_renderer):
+        anchor_renderer("<a id='section-drive'></a>")
+    else:
+        safe_write = getattr(st, "write", None)
+        if callable(safe_write):
+            safe_write("")
     col_drive, col_diff, col_tags = st.columns([3, 4, 3])
     drive_index: Dict[str, Dict[str, Any]] = {}
 
@@ -473,7 +479,12 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         elif extract_clicked and not callable(run_tags_update):
             st.warning("Adapter Estrai Tags non disponibile in questo ambiente.")
 
-    st.markdown("<a id='section-yaml'></a><a id='section-semantic'></a>", unsafe_allow_html=True)
+    if callable(anchor_renderer):
+        anchor_renderer("<a id='section-yaml'></a><a id='section-semantic'></a>")
+    else:
+        safe_write = getattr(st, "write", None)
+        if callable(safe_write):
+            safe_write("")
     st.subheader("Semantica")
     refresh_col, _ = st.columns([1, 3])
     if refresh_col.button(

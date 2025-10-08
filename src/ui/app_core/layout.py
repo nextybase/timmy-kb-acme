@@ -114,7 +114,26 @@ def render_sidebar_quick_actions(
 
 def render_sidebar_skiplink_and_quicknav(*, st_module: Any) -> None:
     """Inserisce skip-link e quick navigation se disponibile."""
-    st_module.sidebar.markdown("<small><a href='#main' tabindex='0'>Main</a></small>", unsafe_allow_html=True)
+    sidebar = st_module.sidebar
+    skiplink_html = "<small><a href='#main' tabindex='0'>Main</a></small>"
+    html_renderer = getattr(sidebar, "html", None)
+    placeholder_factory = getattr(sidebar, "empty", None)
+    placeholder = placeholder_factory() if callable(placeholder_factory) else None
+    if callable(html_renderer):
+        try:
+            html_renderer(skiplink_html)
+            if placeholder is not None:
+                try:
+                    placeholder.markdown("[Main](#main)")
+                finally:
+                    placeholder.empty()
+            else:
+                sidebar.markdown("[Main](#main)")
+        except Exception:
+            if placeholder is not None:
+                placeholder.empty()
+    else:
+        sidebar.markdown("[Main](#main)")
 
     try:
         app_mod = importlib.import_module("src.ui.app")

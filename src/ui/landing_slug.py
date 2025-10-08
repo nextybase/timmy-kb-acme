@@ -238,7 +238,14 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         include_anchor=True,
         subtitle="Verifica slug cliente per avviare l'onboarding.",
     )
-    st.markdown("<div style='height: 2vh'></div>", unsafe_allow_html=True)
+    spacer_html = "<div style='height: 2vh'></div>"
+    html_renderer = getattr(st, "html", None)
+    if callable(html_renderer):
+        html_renderer(spacer_html)
+    else:
+        safe_write = getattr(st, "write", None)
+        if callable(safe_write):
+            safe_write("")
 
     c1, c2, c3 = st.columns([1, 2, 1])
     slug_state = _state_get("slug", "")

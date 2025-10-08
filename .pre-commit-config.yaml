@@ -123,6 +123,13 @@ repos:
         files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml))$"
         stages: [pre-commit]
 
+      - id: forbid-streamlit-deprecated
+        name: Forbid deprecated Streamlit APIs
+        entry: python scripts/dev/check_streamlit_deprecations.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.18.1
     hooks:

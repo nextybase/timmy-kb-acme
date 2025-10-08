@@ -47,8 +47,13 @@ def render_preview_controls(
         stop_preview = None
 
     running = bool(st.session_state.get("sem_preview_container"))
-    pill = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
-    st.markdown(f"**Preview Docker:** {pill}", unsafe_allow_html=True)
+    pill_html = "<span class='pill on'>ON</span>" if running else "<span class='pill off'>OFF</span>"
+    pill_text = "ON" if running else "OFF"
+    html_renderer = getattr(st, "html", None)
+    if callable(html_renderer):
+        html_renderer(f"<p><strong>Preview Docker:</strong> {pill_html}</p>")
+    else:
+        st.markdown(f"**Preview Docker:** {pill_text}")
     st.markdown("**4) Preview Docker (HonKit)**")
 
     with st.container(border=True):

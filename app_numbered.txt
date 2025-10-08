@@ -452,7 +452,7 @@
  452:         colA, colB = st.columns([1, 1], gap="large")
  453:
  454:         with colA:
- 455:             st.markdown("<div class='next-card'>", unsafe_allow_html=True)
+ 455:             getattr(st, "html", lambda *a, **k: None)("<div class='next-card'>")
  456:             st.markdown("**1) Conversione RAW → BOOK**")
  457:             st.caption("Converte i PDF in Markdown (cartella book/).")
  458:             if st.button("Converti PDF in Markdown", key="btn_sem_convert", width="stretch"):
@@ -470,7 +470,7 @@
  470:                     _mark_modified_and_bump_once(slug, log, context=context)
  471:                 except Exception as e:
  472:                     st.exception(e)
- 473:             st.markdown("</div>", unsafe_allow_html=True)
+ 473:             getattr(st, "html", lambda *a, **k: None)("</div>")
  474:
  475:             with st.container(border=True):
  476:                 st.markdown("**2) Arricchisci frontmatter**")
@@ -556,7 +556,7 @@
  556:     except Exception:
  557:         st.set_page_config(page_title="NeXT - Onboarding UI", layout="wide")
  558:
- 559:     st.markdown(
+ 559:     getattr(st, "html", lambda *a, **k: None)(
  560:         """
  561:         <style>
  562:         #MainMenu { visibility: hidden; }
@@ -634,8 +634,8 @@
  634:             font-weight: 700;
  635:         }
  636:         </style>
- 637:         """,
- 638:         unsafe_allow_html=True,
+ 637:         """
+ 638:         # HTML iniettato tramite st.html
  639:     )
  640:
  641:     redact = _safe_compute_redact_flag()
@@ -695,10 +695,10 @@
  695:                     with open_for_read_bytes_selfguard(logo_path) as logo_file:
  696:                         _data = logo_file.read()
  697:                     _b64s = _b64.b64encode(_data).decode("ascii")
- 698:                     st.markdown(
+ 698:                     getattr(st, "html", lambda *a, **k: None)(
  699:                         "<img src='data:image/png;base64,{data}' alt='NeXT' "
  700:                         "style='width:100%;height:auto;display:block;' />".format(data=_b64s),
- 701:                         unsafe_allow_html=True,
+ 701:                         # HTML iniettato tramite st.html
  702:                     )
  703:             except Exception:
  704:                 pass

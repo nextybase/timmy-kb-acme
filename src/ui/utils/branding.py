@@ -7,7 +7,7 @@ from typing import Any, Optional
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
-    st = None  # type: ignore
+    st = None
 
 # Usa l’helper centralizzato che sceglie il logo in base al tema
 from src.ui.utils.core import resolve_theme_logo_path
@@ -19,7 +19,7 @@ def get_favicon_path(repo_root: Path) -> Path:
     Proviamo prima favicon dedicati; in fallback usiamo il logo di tema.
     """
     assets = Path(repo_root) / "assets"
-    candidates = [
+    candidates: list[Path] = [
         assets / "favicon.png",
         assets / "favicon.ico",
         assets / "next-favicon.png",
@@ -28,7 +28,7 @@ def get_favicon_path(repo_root: Path) -> Path:
         if p.is_file():
             return p
     # Fallback: usa il logo coerente con il tema
-    return resolve_theme_logo_path(repo_root)
+    return Path(resolve_theme_logo_path(repo_root))
 
 
 def render_brand_header(
@@ -53,7 +53,7 @@ def render_brand_header(
 
     if include_anchor:
         try:
-            st_module.markdown("<a id='top'></a>", unsafe_allow_html=True)
+            st_module.html("<a id='top'></a>")
         except Exception:
             pass
 
@@ -62,8 +62,7 @@ def render_brand_header(
         cols = st_module.columns([1, 5])
         with cols[0]:
             if show_logo and logo_path.exists():
-                # MIGRAZIONE: use_column_width -> use_container_width
-                st_module.image(str(logo_path), use_container_width=True)
+                st_module.image(str(logo_path), width="stretch")
         with cols[1]:
             st_module.title("Onboarding NeXT – Clienti")
             if subtitle:
@@ -82,7 +81,6 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
         # Supporta sia il passaggio del modulo 'st' sia di 'st.sidebar'
         sidebar = getattr(st_module, "sidebar", st_module)
         if logo_path.exists():
-            # MIGRAZIONE: use_column_width -> use_container_width
-            sidebar.image(str(logo_path), use_container_width=True)
+            sidebar.image(str(logo_path), width="stretch")
     except Exception:
         pass
