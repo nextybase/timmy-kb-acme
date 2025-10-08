@@ -156,7 +156,7 @@ output/
 ---
 
 ## FAQ
-- **Come avvio l'interfaccia?** `streamlit run onboarding_ui.py` (wrapper che applica header, diagnostica e sidebar); `streamlit run src/ui/app.py` resta disponibile come fallback legacy.
+- **Come avvio l'interfaccia?** `streamlit run onboarding_ui.py` (wrapper che applica header, diagnostica e sidebar).
 - **Dove viene salvato il Vision Statement?** In `config/VisionStatement.pdf`.
 - **Perche' non vedo la tab Semantica?** Lo stato del cliente deve essere almeno `pronto`.
 - **Posso usare Estrai Tags senza Drive?** Si, se `raw/` contiene gia' i PDF necessari.
