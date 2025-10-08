@@ -316,3 +316,100 @@ def test_render_tabs_router_falls_back_to_main(monkeypatch):
 
     ui._render_tabs_router(ui.TAB_HOME, slug=None)
     assert calls == ["main"]
+
+
+def test_manage_respects_compute_sem_enabled(monkeypatch, tmp_path):
+    _ensure_streamlit_stub()
+    mod = importlib.import_module("src.ui.tabs.manage")
+    calls: dict[str, bool] = {}
+
+    def _collect(label: str) -> None:
+        calls[label] = True
+
+    class _DummyContext:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def write(self, *_args, **_kwargs):
+            return None
+
+        def update(self, *_args, **_kwargs):
+            return None
+
+    class _DummyColumn(_DummyContext):
+        def button(self, *args, **kwargs):
+            return False
+
+    class _DummySt:
+        def __init__(self):
+            self.session_state = {}
+            self.sidebar = types.SimpleNamespace(
+                markdown=lambda *a, **k: None,
+                info=lambda *a, **k: None,
+                error=lambda *a, **k: None,
+                success=lambda *a, **k: None,
+                warning=lambda *a, **k: None,
+            )
+
+        def subheader(self, *args, **kwargs):
+            return None
+
+        def caption(self, *args, **kwargs):
+            return None
+
+        def warning(self, *args, **kwargs):
+            return None
+
+        def info(self, *args, **kwargs):
+            return None
+
+        def error(self, *args, **kwargs):
+            return None
+
+        def toast(self, *args, **kwargs):
+            return None
+
+        def status(self, *args, **kwargs):
+            return _DummyContext()
+
+        def columns(self, layout):
+            return [_DummyColumn() for _ in layout]
+
+        def button(self, *args, **kwargs):
+            return False
+
+        def html(self, *args, **kwargs):
+            return None
+
+        def write(self, *args, **kwargs):
+            return None
+
+        def tabs(self, labels):
+            return [_DummyContext() for _ in labels]
+
+    dummy_st = _DummySt()
+
+    monkeypatch.setattr(mod, "st", dummy_st, raising=False)
+    monkeypatch.setattr(mod, "compute_sem_enabled", lambda state, slug: False, raising=False)
+    monkeypatch.setattr(mod, "edit_semantic_mapping", lambda slug: _collect("mapping"), raising=False)
+    monkeypatch.setattr(mod, "edit_cartelle_raw", lambda slug: _collect("cartelle"), raising=False)
+    monkeypatch.setattr(mod, "render_drive_tree", None, raising=False)
+    monkeypatch.setattr(mod, "render_drive_local_diff", None, raising=False)
+    monkeypatch.setattr(mod, "run_fragment", lambda *_a, **_k: None, raising=False)
+    monkeypatch.setattr(mod, "download_raw_from_drive_with_progress", lambda *a, **k: [], raising=False)
+    monkeypatch.setattr(mod, "set_state", lambda slug, state: None, raising=False)
+    monkeypatch.setattr(mod, "_safe_streamlit_rerun", lambda: None, raising=False)
+    monkeypatch.setattr(mod, "show_success", lambda *_a, **_k: None, raising=False)
+
+    workspace_root = tmp_path / "timmy-kb-demo"
+    raw_dir = workspace_root / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(mod, "_workspace_dir_for", lambda slug: workspace_root, raising=False)
+    monkeypatch.setattr(mod, "get_state", lambda slug: "pronto", raising=False)
+
+    mod._render_manage_client_view("demo", logger=logging.getLogger("test"))
+
+    assert calls == {}

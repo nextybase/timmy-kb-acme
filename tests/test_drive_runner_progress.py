@@ -106,3 +106,40 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
     assert (base_root / "timmy-kb-foo" / "raw" / "cat-a" / "doc2.pdf").as_posix() in written_set
     assert (base_root / "timmy-kb-foo" / "raw" / "cat-b" / "doc3.pdf").as_posix() in written_set
     assert all(p.suffix.lower() == ".pdf" for p in written)
+
+
+def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
+    import ui.services.drive_runner as dr
+
+    class Ctx:
+        slug = "foo"
+        redact_logs = False
+        env = {"DRIVE_ID": "PARENT"}
+
+    monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+    monkeypatch.setattr(dr, "create_drive_folder", lambda *_, **__: "CFID")
+
+    def _fake_folders(service, parent_id):
+        if parent_id == "CFID":
+            return [{"name": "raw", "id": "RAW"}]
+        return []
+
+    monkeypatch.setattr(dr, "_drive_list_folders", _fake_folders)
+    monkeypatch.setattr(
+        dr,
+        "_drive_list_pdfs",
+        lambda svc, folder_id: [{"id": "id0", "name": "root.pdf", "size": "12"}] if folder_id == "RAW" else [],
+    )
+
+    def _fake_downloader(service, remote_root_folder_id, local_root_dir, **kwargs):
+        dest = Path(local_root_dir) / "root.pdf"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"x")
+        return 1
+
+    monkeypatch.setattr(dr, "download_drive_pdfs_to_local", _fake_downloader)
+
+    written = dr.download_raw_from_drive_with_progress("foo", base_root=tmp_path, require_env=False)
+
+    assert any(path.name == "root.pdf" for path in written)

@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import validate_slug
+from pipeline.path_utils import ensure_within_and_resolve, validate_slug
+from src.ui.app_core.state import compute_sem_enabled, normalize_state
 from src.ui.app_services.drive_cache import _clear_drive_tree_cache, get_drive_tree_cache
 from ui.clients_store import get_state, load_clients, set_state
 from ui.services.drive_runner import download_raw_from_drive_with_progress
@@ -143,8 +144,8 @@ def _render_manage_semantic_tab(slug: str, workspace_dir: Path, logger: logging.
         try:
             _validate_yaml_dict(st.session_state[mapping_key], "semantic_mapping.yaml")
             _validate_yaml_dict(st.session_state[cartelle_key], "cartelle_raw.yaml")
-            mapping_rel.parent.mkdir(parents=True, exist_ok=True)
-            cartelle_rel.parent.mkdir(parents=True, exist_ok=True)
+            ensure_within_and_resolve(workspace_dir, mapping_rel.parent).mkdir(parents=True, exist_ok=True)
+            ensure_within_and_resolve(workspace_dir, cartelle_rel.parent).mkdir(parents=True, exist_ok=True)
             _save_yaml_text(workspace_dir, mapping_rel, st.session_state[mapping_key])
             _save_yaml_text(workspace_dir, cartelle_rel, st.session_state[cartelle_key])
             show_success("YAML aggiornati.")
@@ -504,9 +505,8 @@ def _render_manage_client_view(slug: str, logger: logging.Logger | None = None) 
         except Exception:
             pass
 
-    state_val = (get_state(slug) or "").lower()
-    eligible_states = {"pronto", "arricchito", "finito"}
-    if state_val in eligible_states:
+    state_val = normalize_state(get_state(slug))
+    if compute_sem_enabled(state_val, slug):
         sem_tabs = st.tabs(["Semantica"])
         with sem_tabs[0]:
             st.caption("Editor YAML semantici.")

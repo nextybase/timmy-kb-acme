@@ -398,6 +398,7 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
 
     raw_subfolders = _drive_list_folders(svc, raw_id)
+    root_pdfs = _drive_list_pdfs(svc, raw_id)
 
     base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -415,19 +416,25 @@ def download_raw_from_drive_with_progress(
             folder_id = folder["id"]
             by_folder[folder_id] = _drive_list_pdfs(svc, folder_id)
             name_map[folder_id] = folder["name"]
-
-        total = sum(len(v) for v in by_folder.values())
+        total = len(root_pdfs) + sum(len(v) for v in by_folder.values())
         pre_sizes: Dict[str, int] = {}
         label_map: Dict[str, str] = {}
         candidates: List[Path] = []
         done = 0
 
         # Secondo pass: prepara dir, registra skip deterministici e mappa etichette
-        for folder in raw_subfolders:
-            folder_id = folder["id"]
-            folder_name = name_map[folder_id]
-            files = by_folder.get(folder_id, [])
-            dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+        folder_specs = [
+            (None, "", root_pdfs, base_dir),
+            *[
+                (
+                    name_map[folder["id"]],
+                    by_folder.get(folder["id"], []),
+                    ensure_within_and_resolve(base_dir, base_dir / name_map[folder["id"]]),
+                )
+                for folder in raw_subfolders
+            ],
+        ]
+        for folder_name, files, dest_dir in folder_specs:
             dest_dir.mkdir(parents=True, exist_ok=True)
             for f in files:
                 name = f.get("name") or ""
@@ -437,7 +444,7 @@ def download_raw_from_drive_with_progress(
                     safe_name += ".pdf"
                 dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
                 candidates.append(dest)
-                label = f"{folder_name}/{safe_name}"
+                label = f"{folder_name}/{safe_name}" if folder_name else safe_name
                 label_map[str(dest)] = label
                 if dest.exists():
                     try:
@@ -509,6 +516,20 @@ def download_raw_from_drive_with_progress(
         # Pre-scan
         pre_sizes_noprog: Dict[str, int] = {}
         candidates_noprog: List[Path] = []
+        # File direttamente sotto raw/
+        for f in root_pdfs:
+            name = f.get("name") or ""
+            safe_name = sanitize_filename(name) or "file"
+            if not safe_name.lower().endswith(".pdf"):
+                safe_name += ".pdf"
+            dest = ensure_within_and_resolve(base_dir, base_dir / safe_name)
+            candidates_noprog.append(dest)
+            if dest.exists():
+                try:
+                    pre_sizes_noprog[str(dest)] = dest.stat().st_size
+                except OSError:
+                    pre_sizes_noprog[str(dest)] = -1
+
         for folder in raw_subfolders:
             folder_name = folder["name"]
             folder_id = folder["id"]
