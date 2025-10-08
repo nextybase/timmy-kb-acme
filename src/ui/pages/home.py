@@ -6,8 +6,6 @@ import streamlit as st
 from ui.chrome import header, sidebar
 from ui.utils import get_slug, set_slug
 
-st.set_page_config(page_title="Timmy-KB - Home", layout="wide")
-
 slug = get_slug()
 set_slug(slug)
 
