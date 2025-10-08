@@ -1,96 +1,74 @@
+# tests/test_ui_labels.py
 from __future__ import annotations
 
-
-def test_landing_has_new_create_button_label(monkeypatch):
-    import src.ui.landing_slug as landing
-
-    class _Ctx:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    class _DummySt:
-        def __init__(self):
-            self.session_state = {
-                "vision_workflow": {
-                    "slug": "acme",
-                    "verified": True,
-                    "needs_creation": True,
-                    "pdf_bytes": None,
-                    "client_name": "",
-                }
-            }
-            self.buttons: list[str] = []
-
-        def markdown(self, *a, **k):
-            return None
-
-        def columns(self, *a, **k):
-            return [_Ctx(), _Ctx(), _Ctx()]
-
-        def text_input(self, *a, **k):
-            # Return non-empty lowercase slug and a name
-            return "acme"
-
-        def button(self, label: str, *a, **k):
-            self.buttons.append(label)
-            return False
-
-        def file_uploader(self, *a, **k):
-            return None
-
-        def caption(self, *a, **k):
-            return None
-
-        def success(self, *a, **k):
-            return None
-
-        def info(self, *a, **k):
-            return None
-
-    dummy = _DummySt()
-    monkeypatch.setattr(landing, "st", dummy, raising=True)
-    # Avoid logo side effects
-    monkeypatch.setattr(landing, "_render_logo", lambda: None, raising=True)
-
-    # Drive the rendering; ignore return values
-    try:
-        landing.render_landing_slug()
-    except Exception:
-        # Ignore issues from partial st shim
-        pass
-
-    assert any(b == "Crea workspace + carica PDF" for b in dummy.buttons), "Bottone aggiornato non trovato in landing"
+import re
+from pathlib import Path
 
 
-def test_setup_has_inizializza_workspace_label(monkeypatch, tmp_path):
-    import src.ui.app as app
+def _read(repo: Path, rel: str) -> str:
+    p = repo / rel
+    assert p.exists(), f"File mancante: {rel}"
+    return p.read_text(encoding="utf-8", errors="ignore")
 
-    class _DummySt:
-        def __init__(self):
-            self.session_state = {}
-            self.buttons: list[str] = []
 
-        def header(self, *a, **k):
-            return None
+def test_landing_labels_beta0():
+    """Verifica che la landing esponga i label aggiornati per la Beta 0."""
+    repo = Path(__file__).resolve().parents[1]
+    txt = _read(repo, "src/ui/landing_slug.py")
 
-        def caption(self, *a, **k):
-            return None
+    # Bottoni/etichette principali del nuovo flusso
+    assert "Verifica cliente" in txt
+    assert "Crea workspace + carica PDF" in txt
+    assert "Vai alla configurazione" in txt
+    assert "Esci" in txt
 
-        def button(self, label: str, *a, **k):
-            self.buttons.append(label)
-            return False
+    # Editor YAML: etichette dei due editor testuali
+    assert "semantic/semantic_mapping.yaml" in txt
+    assert "semantic/cartelle_raw.yaml" in txt
 
-    # Stub dependencies used in _render_setup
-    monkeypatch.setattr(app, "_copy_base_config", lambda *a, **k: tmp_path / "config.yaml", raising=True)
-    monkeypatch.setattr(app, "_render_config_editor", lambda *a, **k: None, raising=True)
-    monkeypatch.setattr(app, "_handle_pdf_upload", lambda *a, **k: False, raising=True)
 
-    dummy = _DummySt()
-    monkeypatch.setattr(app, "st", dummy, raising=True)
+def test_no_legacy_labels_or_switchers_anymore():
+    """
+    Assicura che non ci siano più label/chiavi legacy nel codice dell'app.
+    Escludiamo i test stessi per evitare falsi positivi (questo file contiene le stringhe vietate).
+    """
+    repo = Path(__file__).resolve().parents[1]
+    app_files: list[Path] = []
 
-    app._render_setup("acme", tmp_path, logger=app._setup_logging())
+    # Scansioniamo solo il codice applicativo (no tests)
+    for root in ("onboarding_ui.py", "src", "ui"):
+        p = repo / root
+        if p.is_file():
+            app_files.append(p)
+        elif p.exists():
+            app_files.extend(f for f in p.rglob("*.py"))
 
-    assert any(b == "Inizializza workspace" for b in dummy.buttons)
+    hay = "\n".join(
+        f.read_text(encoding="utf-8", errors="ignore")
+        for f in app_files
+        if "venv" not in str(f) and ".tox" not in str(f)
+    )
+
+    forbidden = [
+        "Inizializza workspace",  # vecchio bottone di setup
+        "Rigenera YAML",  # vecchia azione di ready
+        "render_sidebar_tab_switches",  # switcher tab legacy
+        "src/ui/tabs",  # percorso legacy
+        "from src.ui.tabs",  # import legacy
+        "import src.ui.tabs",  # import legacy
+    ]
+    for needle in forbidden:
+        assert needle not in hay, f"Residuo legacy trovato nel codice app: {needle!r}"
+
+
+def test_entrypoint_uses_native_navigation():
+    """Controlla che l'entrypoint usi il router nativo e non mischi sistemi."""
+    repo = Path(__file__).resolve().parents[1]
+    entry = _read(repo, "onboarding_ui.py")
+
+    assert "st.navigation(" in entry, "router nativo (st.navigation) mancante"
+    assert "st.Page(" in entry, "st.Page mancante"
+
+    # Evita mescolanze con vecchio sistema a tab
+    forbidden = r"(active_tab|TAB_HOME|TAB_MANAGE|TAB_SEM|_render_tabs_router|render_sidebar_tab_switches)"
+    assert not re.search(forbidden, entry), "riferimenti legacy nell'entrypoint"

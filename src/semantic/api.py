@@ -214,9 +214,9 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     - Se RAW **contiene PDF** → invoca sempre il converter.
     """
     start_ts = time.perf_counter()
-    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
+    base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)
     ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, book_dir)
+    ensure_within(base_dir, md_dir)
 
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
@@ -224,8 +224,8 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     if not raw_dir.is_dir():
         raise ConfigError(f"Percorso RAW non è una directory: {raw_dir}", slug=slug, file_path=raw_dir)
 
-    book_dir.mkdir(parents=True, exist_ok=True)
-    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
+    md_dir.mkdir(parents=True, exist_ok=True)
+    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir, slug=slug)
 
     # Lista PDF sicura prima del phase_scope per decisione di flusso (path-safety per-file)
     safe_pdfs, discarded_unsafe = _collect_safe_pdfs(raw_dir, logger, slug)
@@ -237,11 +237,11 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if safe_pdfs:
             # 🔁 Evita doppia scansione: passa la lista già validata
-            _call_convert_md(_convert_md, shim, book_dir, safe_pdfs=safe_pdfs)
-            content_mds = list_content_markdown(book_dir)
+            _call_convert_md(_convert_md, shim, md_dir, safe_pdfs=safe_pdfs)
+            content_mds = list_content_markdown(md_dir)
         else:
             # RAW senza PDF: non convertire; usa eventuali MD già presenti
-            content_mds = list_content_markdown(book_dir)
+            content_mds = list_content_markdown(md_dir)
 
         try:
             m.set_artifacts(len(content_mds))
@@ -262,7 +262,7 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
             raise ConversionError(
                 "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
                 slug=slug,
-                file_path=book_dir,
+                file_path=md_dir,
             )
         # Nessun PDF sicuro
         if discarded_unsafe > 0:
@@ -303,10 +303,10 @@ def enrich_frontmatter(
     from pipeline.path_utils import read_text_safe
 
     start_ts = time.perf_counter()
-    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
-    ensure_within(base_dir, book_dir)
+    base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
+    ensure_within(base_dir, md_dir)
 
-    mds = sorted_paths(book_dir.glob("*.md"), base=book_dir)
+    mds = sorted_paths(md_dir.glob("*.md"), base=md_dir)
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
 
@@ -316,7 +316,7 @@ def enrich_frontmatter(
             title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
             tags = _guess_tags_for_name(name, vocab, inv=inv)
             try:
-                text = read_text_safe(book_dir, md, encoding="utf-8")
+                text = read_text_safe(md_dir, md, encoding="utf-8")
             except OSError as e:
                 logger.warning(
                     "semantic.frontmatter.read_failed",
@@ -329,7 +329,7 @@ def enrich_frontmatter(
                 continue
             fm = _dump_frontmatter(new_meta)
             try:
-                ensure_within(book_dir, md)
+                ensure_within(md_dir, md)
                 safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
                 touched.append(md)
                 logger.info(
@@ -355,8 +355,8 @@ def enrich_frontmatter(
 
 def write_summary_and_readme(context: ClientContextType, logger: logging.Logger, *, slug: str) -> None:
     start_ts = time.perf_counter()
-    base_dir, raw_dir, book_dir = _resolve_ctx_paths(context, slug)
-    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=book_dir, slug=slug)
+    base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)
+    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir, slug=slug)
 
     errors: list[str] = []
     with phase_scope(logger, stage="write_summary_and_readme", customer=slug) as m:
@@ -365,10 +365,10 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
             _gen_summary(shim)
             logger.info(
                 "semantic.summary.written",
-                extra={"slug": slug, "file_path": str(book_dir / "SUMMARY.md")},
+                extra={"slug": slug, "file_path": str(md_dir / "SUMMARY.md")},
             )
         except Exception as e:  # pragma: no cover
-            summary_path = book_dir / "SUMMARY.md"
+            summary_path = md_dir / "SUMMARY.md"
             # Evento strutturato con stacktrace
             logger.exception(
                 "semantic.summary.failed",
@@ -381,10 +381,10 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
             _gen_readme(shim)
             logger.info(
                 "semantic.readme.written",
-                extra={"slug": slug, "file_path": str(book_dir / "README.md")},
+                extra={"slug": slug, "file_path": str(md_dir / "README.md")},
             )
         except Exception as e:  # pragma: no cover
-            readme_path = book_dir / "README.md"
+            readme_path = md_dir / "README.md"
             # Compat test legacy (se in futuro ci fosse un test analogo)
             logger.error(
                 "Generazione README.md fallita",
@@ -397,10 +397,10 @@ def write_summary_and_readme(context: ClientContextType, logger: logging.Logger,
             errors.append(f"readme: {e}")
 
         if errors:
-            raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
+            raise ConversionError("; ".join(errors), slug=slug, file_path=md_dir)
 
         _validate_md(shim)
-        logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(book_dir)})
+        logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(md_dir)})
         m.set_artifacts(2)
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
@@ -554,6 +554,7 @@ def index_markdown_to_db(
     from datetime import datetime as _dt
 
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
+        # 🔑 init DB UNA SOLA VOLTA (fondamentale per i test di performance)
         try:
             _init_kb_db(db_path)
         except Exception as e:
@@ -624,7 +625,7 @@ def index_markdown_to_db(
             vecs = vecs[:min_len]
 
         original_candidate_count = len(contents)
-        # Filtro embeddings vuoti per-item ? accumula vectors_empty
+        # Filtro embeddings vuoti per-item → accumula vectors_empty
         filtered_contents: list[str] = []
         filtered_paths: list[str] = []
         filtered_vecs: list[list[float]] = []
@@ -708,7 +709,7 @@ def index_markdown_to_db(
                 chunks=[text],
                 embeddings=[list(emb)],
                 db_path=db_path,
-                ensure_schema=False,
+                ensure_schema=False,  # 🔒 evita init ripetuti: schema già creato
             )
 
         logger.info(

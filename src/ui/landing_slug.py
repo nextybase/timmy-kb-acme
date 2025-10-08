@@ -30,16 +30,16 @@ except Exception:  # pragma: no cover
 
 
 def _safe_rerun() -> None:
+    """Richiede un rerun Streamlit se disponibile, senza dipendere da src.ui.app."""
     if st is None:
         return
-    try:
-        from src.ui.app import _safe_streamlit_rerun
-    except Exception:
-        rerun_fn = getattr(st, "rerun", None)
-        if callable(rerun_fn):
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
             rerun_fn()
-        return
-    _safe_streamlit_rerun()
+        except Exception:
+            # In alcune versioni Streamlit può sollevare eccezioni interne di rerun: ignoriamo.
+            pass
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -340,7 +340,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         type=["pdf"],
         accept_multiple_files=False,
         key="ls_pdf",
-        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
+        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
     )
     if uploaded_pdf is not None:
         raw_pdf = uploaded_pdf.read()
