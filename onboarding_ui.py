@@ -65,6 +65,7 @@ _hydrate_query_defaults()
 pages = {
     "Onboarding": [
         st.Page("src/ui/pages/home.py", title="Home"),
+        st.Page("src/ui/pages/new_client.py", title="Nuovo cliente", url_path="new"),
         st.Page("src/ui/pages/manage.py", title="Gestisci cliente", url_path="manage"),
         st.Page("src/ui/pages/semantics.py", title="Semantica", url_path="semantics"),
     ],

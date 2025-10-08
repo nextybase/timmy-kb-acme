@@ -20,13 +20,10 @@ def sidebar(slug: str | None) -> None:
     """Sidebar con azioni rapide e settaggi retriever (persistiti su config.yaml)."""
     with st.sidebar:
         st.subheader("Azioni rapide")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.button("Aggiorna Drive", key="btn_refresh", width="stretch")
-        with col2:
-            st.button("Dummy KB", key="btn_dummy", width="stretch")
-        with col3:
-            st.button("Esci", key="btn_exit", width="stretch")
+        # Disposizione verticale, full-width
+        st.button("Aggiorna Drive", key="btn_refresh", width="stretch")
+        st.button("Dummy KB", key="btn_dummy", width="stretch")
+        st.button("Esci", key="btn_exit", width="stretch")
 
         st.divider()
         st.subheader("Ricerca (retriever)")
