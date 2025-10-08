@@ -6,6 +6,16 @@ import streamlit as st
 
 # SSoT: limiti e persistenza retriever
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
+from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
+
+
+def _on_dummy_kb() -> None:
+    st.session_state["dummy_kb_requested"] = True
+    st.toast("Dummy KB richiesta. Vai su Gestisci cliente per verificare.")
+
+
+def _on_exit() -> None:
+    _shutdown(None)  # compat con firma (_request_shutdown(log))
 
 
 def header(slug: str | None) -> None:
@@ -20,10 +30,15 @@ def sidebar(slug: str | None) -> None:
     """Sidebar con azioni rapide e settaggi retriever (persistiti su config.yaml)."""
     with st.sidebar:
         st.subheader("Azioni rapide")
-        # Disposizione verticale, full-width
+        st.link_button(
+            "Guida UI",
+            url="https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
+        )
         st.button("Aggiorna Drive", key="btn_refresh", width="stretch")
-        st.button("Dummy KB", key="btn_dummy", width="stretch")
-        st.button("Esci", key="btn_exit", width="stretch")
+        if st.button("Dummy KB", key="btn_dummy", width="stretch"):
+            _on_dummy_kb()
+        if st.button("Esci", key="btn_exit", width="stretch"):
+            _on_exit()
 
         st.divider()
         st.subheader("Ricerca (retriever)")
