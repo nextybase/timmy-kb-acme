@@ -34,10 +34,12 @@ _CHAT_COMPLETIONS_MAX_CHARS = 200_000
 # Schema minimo per Structured Outputs (richiede solo 'context' e 'areas')
 MIN_JSON_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "required": ["context", "areas"],
     "properties": {
         "context": {
             "type": "object",
+            "additionalProperties": False,
             "required": ["slug", "client_name"],
             "properties": {
                 "slug": {"type": "string"},
@@ -49,6 +51,7 @@ MIN_JSON_SCHEMA = {
             "minItems": 1,
             "items": {
                 "type": "object",
+                "additionalProperties": False,
                 "required": ["key", "ambito", "descrizione", "keywords"],
                 "properties": {
                     "key": {"type": "string"},
