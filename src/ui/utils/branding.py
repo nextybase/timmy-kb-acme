@@ -59,11 +59,18 @@ def render_brand_header(
 
     try:
         logo_path = resolve_theme_logo_path(repo_root)
-        cols = st_module.columns([1, 5])
-        with cols[0]:
-            if show_logo and logo_path.exists():
+        logo_ok = bool(show_logo) and getattr(logo_path, "exists", lambda: False)()
+
+        if logo_ok:
+            col_logo, col_title = st_module.columns([1, 5])
+            with col_logo:
                 st_module.image(str(logo_path), width="stretch")
-        with cols[1]:
+            with col_title:
+                st_module.title("Onboarding NeXT – Clienti")
+                if subtitle:
+                    st_module.caption(subtitle)
+        else:
+            # Nessun logo → nessuna colonna: niente gap a sinistra
             st_module.title("Onboarding NeXT – Clienti")
             if subtitle:
                 st_module.caption(subtitle)

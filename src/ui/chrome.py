@@ -43,7 +43,7 @@ def header(slug: str | None) -> None:
         repo_root=REPO_ROOT,
         subtitle=subtitle,
         include_anchor=True,
-        show_logo=True,
+        show_logo=False,
     )
 
 
