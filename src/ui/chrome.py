@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 # SSoT: limiti e persistenza retriever
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
+from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
+
+# Root repo per branding (favicon/logo)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _on_dummy_kb() -> None:
@@ -19,22 +25,39 @@ def _on_exit() -> None:
 
 
 def header(slug: str | None) -> None:
-    """Header minimale con ancorina e titolo."""
-    st.html("<a id='top'></a>")  # ancorina sicura
-    st.title("Timmy-KB • Onboarding")
-    if slug:
-        st.caption(f"Cliente: **{slug}**")
+    """Header con branding (favicon, logo, titolo, sottotitolo)."""
+    # set_page_config deve essere chiamato prima di qualsiasi output
+    try:
+        st.set_page_config(
+            page_title="Timmy-KB • Onboarding",
+            layout="wide",
+            page_icon=str(get_favicon_path(REPO_ROOT)),
+        )
+    except Exception:
+        # già chiamato altrove o in rerun: ignora
+        pass
+
+    subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
+    render_brand_header(
+        st_module=st,
+        repo_root=REPO_ROOT,
+        subtitle=subtitle,
+        include_anchor=True,
+        show_logo=True,
+    )
 
 
 def sidebar(slug: str | None) -> None:
     """Sidebar con azioni rapide e settaggi retriever (persistiti su config.yaml)."""
     with st.sidebar:
+        # Logo compatto/tema-aware
+        render_sidebar_brand(st_module=st, repo_root=REPO_ROOT)
         st.subheader("Azioni rapide")
         st.link_button(
             "Guida UI",
             url="https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
+            width="stretch",
         )
-        st.button("Aggiorna Drive", key="btn_refresh", width="stretch")
         if st.button("Dummy KB", key="btn_dummy", width="stretch"):
             _on_dummy_kb()
         if st.button("Esci", key="btn_exit", width="stretch"):

@@ -107,10 +107,7 @@ def render_sidebar_quick_actions(
     with st_module.sidebar:
         st_module.subheader("Azioni rapide")
 
-        c1, c2, c3 = st_module.columns(3)
-        with c1:
-            if st_module.button("Aggiorna Drive", key="qa_refresh", width="stretch"):
-                _safe_call(refresh_callback, "Aggiorna Drive")
+        c2, c3 = st_module.columns(2)
         with c2:
             if st_module.button("Dummy KB", key="qa_dummy", width="stretch"):
                 _safe_call(generate_dummy_callback, "Dummy KB")
