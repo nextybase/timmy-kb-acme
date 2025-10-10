@@ -18,11 +18,11 @@ def get_favicon_path(repo_root: Path) -> Path:
 
     Proviamo prima favicon dedicati; in fallback usiamo il logo di tema.
     """
-    assets = Path(repo_root) / "assets"
+    theme_img = Path(repo_root) / "src" / "ui" / "theme" / "img"
     candidates: list[Path] = [
-        assets / "favicon.png",
-        assets / "favicon.ico",
-        assets / "next-favicon.png",
+        theme_img / "favicon.png",
+        theme_img / "favicon.ico",
+        theme_img / "next-favicon.png",
     ]
     for p in candidates:
         if p.is_file():

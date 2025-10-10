@@ -9,6 +9,7 @@ import streamlit as st
 # SSoT: limiti e persistenza retriever
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
+from ui.theme.css import inject_theme_css
 from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
 
 # Root repo per branding (favicon/logo)
@@ -26,7 +27,6 @@ def _on_exit() -> None:
 
 def header(slug: str | None) -> None:
     """Header con branding (favicon, logo, titolo, sottotitolo)."""
-    # set_page_config deve essere chiamato prima di qualsiasi output
     try:
         st.set_page_config(
             page_title="Timmy-KB • Onboarding",
@@ -34,8 +34,9 @@ def header(slug: str | None) -> None:
             page_icon=str(get_favicon_path(REPO_ROOT)),
         )
     except Exception:
-        # già chiamato altrove o in rerun: ignora
         pass
+
+    inject_theme_css(st)
 
     subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
     render_brand_header(

@@ -11,14 +11,14 @@ from pipeline.path_utils import to_kebab as _to_kebab
 
 
 def to_kebab(s: str) -> str:
-    """Converte una stringa in kebab-case usando l’utility SSoT di pipeline."""
+    """Converte una stringa in kebab-case usando lâ€™utility SSoT di pipeline."""
     return str(_to_kebab(s))
 
 
 def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:
     """Wrapper SSoT per `pipeline.path_utils.ensure_within_and_resolve`.
 
-    Esegue solo il cast `Path|str` → `Path` e delega al backend, mantenendo la firma pubblica.
+    Esegue solo il cast `Path|str` â†’ `Path` e delega al backend, mantenendo la firma pubblica.
     """
     return cast(Path, _ensure_within_and_resolve(Path(root), Path(target)))
 
@@ -51,7 +51,7 @@ def safe_write_text(
 ) -> None:
     """Scrive testo su file delegando a `pipeline.file_utils.safe_write_text`.
 
-    Mantiene la **parità di firma** con il backend (incluso `fsync`) per garantire
+    Mantiene la **paritÃ  di firma** con il backend (incluso `fsync`) per garantire
     contratti stabili tra UI e pipeline.
     """
     _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic, fsync=fsync)
@@ -80,6 +80,10 @@ def get_theme_base(default: str = "light") -> str:
             pass
 
     state = getattr(st, "session_state", None)
+    if state is not None:
+        manual = state.get("_ui_theme_base")
+        if isinstance(manual, str) and manual.strip():
+            return manual.strip().lower()
 
     def _state_lookup(key: str) -> None:
         if state is None:
@@ -130,16 +134,21 @@ def get_theme_base(default: str = "light") -> str:
 
 def resolve_theme_logo_path(repo_root: Path) -> Path:
     """Restituisce il percorso del logo coerente con il tema corrente."""
-    assets_dir = Path(repo_root) / "assets"
-    default_logo = assets_dir / "next-logo.png"
-    dark_logo = assets_dir / "next-logo-bianco.png"
+    theme_img_dir = Path(repo_root) / "src" / "ui" / "theme" / "img"
+    default_logo = theme_img_dir / "next-logo.png"
+    dark_logo = theme_img_dir / "next-logo-bianco.png"
 
     override = os.getenv("TIMMY_UI_BRAND_THEME")
     forced_base = override.strip().lower() if override else None
     base = forced_base or get_theme_base()
+    import logging
+
+    logging.getLogger("ui.brand").info("resolve_theme_logo_path base=%%s override=%%s", base, override)
 
     if base == "dark" and dark_logo.is_file():
         return dark_logo
     if default_logo.is_file():
         return default_logo
-    return dark_logo
+    if dark_logo.is_file():
+        return dark_logo
+    return default_logo
