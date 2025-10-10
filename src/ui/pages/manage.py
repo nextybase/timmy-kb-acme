@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# ui/pages/manage.py
+# src/ui/pages/manage.py
 from __future__ import annotations
 
 from typing import Any, Callable, Optional
@@ -11,10 +11,7 @@ from ui.utils import get_slug, set_slug
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
-    """
-    Importa una funzione se disponibile, altrimenti None.
-    fn_path formato: "package.module:function".
-    """
+    """Importa una funzione se disponibile, altrimenti None. Formato: 'pkg.mod:func'."""
     try:
         pkg, func = fn_path.split(":")
         mod = __import__(pkg, fromlist=[func])
@@ -24,28 +21,25 @@ def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
         return None
 
 
-# Prova ad importare i renderer: se non ci sono mostriamo un messaggio informativo.
+# Usa i "services" (gestiscono cache e bridging verso i component)
 _render_drive_tree = _safe_get("ui.services.drive:render_drive_tree")
 _render_drive_diff = _safe_get("ui.services.drive:render_drive_diff")
-_render_tags_editor = _safe_get("ui.services.tags:render_tags_editor")
+# Niente editor Tag qui: vive nella pagina "Semantica"
 
-# TODO: collega qui la tua funzione Vision reale e assegna `run_vision`.
-# Esempio: from semantic.api import build_semantic_from_vision as run_vision
-# Se lasci None, la UI mostrera un placeholder informativo.
-run_vision: Callable[[str], None] | None = None  # placeholder
+# Se vuoi collegare Vision, assegna qui la funzione: run_vision(slug) -> None
+run_vision: Optional[Callable[[str], None]] = None
 
-# Consumo flag Vision (impostato da new_client)
+# Se new_client ha richiesto Vision, eseguila qui
 if st.session_state.pop("vision_init_requested", False):
     pending_slug = get_slug()
     if not pending_slug:
         st.warning("Nessuno slug attivo: impossibile avviare la procedura Vision.")
     elif run_vision is None:
-        st.info("Procedura Vision non collegata: assegna `run_vision(slug)` per generare gli YAML in semantic/.")
+        st.info("Procedura Vision non collegata: assegna `run_vision(slug)` " "per generare gli YAML in semantic/.")
     else:
         with st.status("Esecuzione Vision...", expanded=True):
             run_vision(pending_slug)
         st.success("Vision completata: YAML generati in `semantic/`.")
-
 
 # ---------------- UI ----------------
 
@@ -72,35 +66,26 @@ if not slug:
     st.info("Inserisci uno slug e premi **Apri workspace**.")
     st.stop()
 
-# Blocchi principali (Drive / Diff / Tag) come da guida UI.
-drive_col, diff_col, tags_col = st.columns((1.2, 1, 1))
+# Due colonne con vista sempre visibile
+col_left, col_right = st.columns(2)
 
-with drive_col:
-    st.markdown("##### Drive")
+with col_left:
+    st.markdown("**Drive: Albero (DRIVE_ID/<slug>)**")
     if _render_drive_tree is not None:
         try:
+            # Restituisce anche l'indice e lo mette in cache per la Diff
             _render_drive_tree(slug)
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella vista Drive: {e}")
     else:
         st.info("Vista Drive non disponibile.")
-
-with diff_col:
-    st.markdown("##### Diff")
+with col_right:
+    st.markdown("**Diff: Drive vs Locale**")
     if _render_drive_diff is not None:
         try:
+            # Usa l'indice cachato (se assente, degrada a indice vuoto)
             _render_drive_diff(slug)
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella vista Diff: {e}")
     else:
         st.info("Vista Diff non disponibile.")
-
-with tags_col:
-    st.markdown("##### Tag")
-    if _render_tags_editor is not None:
-        try:
-            _render_tags_editor(slug)
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore nell'editor Tag: {e}")
-    else:
-        st.info("Editor Tag non disponibile.")

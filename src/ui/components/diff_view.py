@@ -28,7 +28,7 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     if not raw_dir.exists():
         return index
 
-    # Indichiamo sempre la radice "raw" (come fa l’indice Drive)
+    # Indichiamo sempre la radice "raw" (come fa lâ€™indice Drive)
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
 
     # Scansione sicura: niente rglob (per evitare follow dei symlink e traversal),

@@ -49,7 +49,7 @@ def header(slug: str | None) -> None:
     # Inietta skin brand (Lexend, palette, pulsanti, focus) secondo tema scelto
     theme = _current_theme()
     os.environ["TIMMY_UI_BRAND_THEME"] = theme  # per logo dark/light nei resolver
-    inject_theme_css(st, theme=theme)
+    inject_theme_css(st)
 
     subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
     render_brand_header(

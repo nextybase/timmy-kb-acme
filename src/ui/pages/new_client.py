@@ -354,4 +354,4 @@ if current_phase == "ready_to_open" and current_slug:
 
 # STEP 3 - Link finale
 if st.session_state.get(phase_state_key) == "provisioned" and current_slug:
-    st.link_button("Vai a Gestisci cliente", url=f"/manage?slug={current_slug}")
+    st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")
