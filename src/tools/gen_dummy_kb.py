@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import sys
 import types
 from datetime import datetime, timezone
@@ -22,6 +24,7 @@ tail_path = None
 ensure_within = None
 ensure_within_and_resolve = None
 open_for_read_bytes_selfguard = None
+open_for_read = None
 read_text_safe = None
 extract_semantic_candidates = None
 render_tags_csv = None
@@ -67,6 +70,7 @@ def _ensure_dependencies() -> types.SimpleNamespace:
     from pipeline.logging_utils import tail_path as _tail
     from pipeline.path_utils import ensure_within as _ew
     from pipeline.path_utils import ensure_within_and_resolve as _ewr
+    from pipeline.path_utils import open_for_read as _ofrt
     from pipeline.path_utils import open_for_read_bytes_selfguard as _ofr
     from pipeline.path_utils import read_text_safe as _rts
     from semantic.auto_tagger import extract_semantic_candidates as _esc
@@ -89,6 +93,7 @@ def _ensure_dependencies() -> types.SimpleNamespace:
         ensure_within=_ew,
         ensure_within_and_resolve=_ewr,
         open_for_read_bytes_selfguard=_ofr,
+        open_for_read=_ofrt,
         read_text_safe=_rts,
         extract_semantic_candidates=_esc,
         render_tags_csv=_rtc,
@@ -113,6 +118,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Cartella base in cui creare lo slug (default: output). Nei test usare tmp_path.",
     )
     p.add_argument("--client-name", default=None, help="Nome cliente (display). Se omesso: 'Dummy <slug>'")
+    p.add_argument(
+        "--clients-db",
+        default=None,
+        help="Percorso custom per clients_db (default: usa repo_root/clients_db/clients.yaml).",
+    )
     return p.parse_args(argv)
 
 
@@ -470,19 +480,28 @@ def _ensure_semantic_stubs(
 # ----------------------- CLIENTS_DB (repo root) -----------------------
 
 
-def _resolve_clients_db_path() -> Path:
-    """Sceglie un file YAML in <repo_root>/clients_db/. Se non esiste nulla, usa clients.yaml."""
+def _resolve_clients_db_path(explicit: Optional[str] = None) -> tuple[Path, bool]:
+    """
+    Ritorna (path, enforce_repo_safety).
+    - explicit (CLI) ha priorità.
+    - poi CLIENTS_DB_FILE / CLIENTS_DB_DIR (env), senza vincolo repo.
+    - fallback: repo_root/clients_db/clients.yaml (repo-safe).
+    """
+    if explicit:
+        return Path(explicit).expanduser().resolve(), False
+
+    env_file = os.getenv("CLIENTS_DB_FILE")
+    if env_file:
+        return Path(env_file).expanduser().resolve(), False
+
+    env_dir = os.getenv("CLIENTS_DB_DIR")
+    if env_dir:
+        dir_path = Path(env_dir).expanduser().resolve()
+        return (dir_path / "clients.yaml"), False
+
     db_dir = REPO_ROOT / "clients_db"
     db_dir.mkdir(parents=True, exist_ok=True)
-    candidates = [
-        db_dir / "clients.yaml",
-        db_dir / "clients.yml",
-        db_dir / "clients_db.yaml",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]  # default: clients.yaml
+    return (db_dir / "clients.yaml").resolve(), True
 
 
 def _update_clients_db(
@@ -491,6 +510,7 @@ def _update_clients_db(
     base: Path,
     cfg_rel: str = "config/config.yaml",
     pdf_rel: str = "config/VisionStatement.pdf",
+    clients_db: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Aggiunge/aggiorna il cliente in clients_db (idempotente).
@@ -502,13 +522,27 @@ def _update_clients_db(
     ewr = _require_dependency(d, "ensure_within_and_resolve")
     rts = _require_dependency(d, "read_text_safe")
 
-    db_path = _resolve_clients_db_path()
-    safe_db_path = ewr(REPO_ROOT, db_path)
+    db_path, enforce_repo = _resolve_clients_db_path(clients_db)
+    if enforce_repo:
+        safe_db_path = ewr(REPO_ROOT, db_path)
+
+        def reader() -> str:
+            return rts(REPO_ROOT, safe_db_path, encoding="utf-8")
+
+    else:
+        safe_db_path = Path(db_path)
+        safe_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def reader() -> str:
+            ofr_text = _require_dependency(d, "open_for_read")
+            base_dir = safe_db_path.parent
+            with ofr_text(base_dir, safe_db_path, encoding="utf-8") as handle:
+                return handle.read()
 
     existing: Any = None
     if safe_db_path.exists():
         try:
-            text = rts(REPO_ROOT, safe_db_path, encoding="utf-8")
+            text = reader()
             existing = yaml.safe_load(text)
         except Exception:
             existing = None
@@ -567,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     d = _ensure_dependencies()
     get_logger = _require_dependency(d, "get_structured_logger")
+    ensure_within_fn = _require_dependency(d, "ensure_within")
     log = get_logger("tools.gen_dummy_kb")
 
     try:
@@ -574,6 +609,12 @@ def main(argv: list[str] | None = None) -> int:
 
         ws_base = make_workspace(args.slug, args.base_dir)
         paths = _workspace_paths(args.slug, ws_base)
+
+        base_root = Path(args.base_dir).resolve()
+        ensure_within_fn(base_root, paths["base"])
+        if paths["base"].exists():
+            shutil.rmtree(paths["base"])
+
         # Crea le directory minime
         paths["base"].mkdir(parents=True, exist_ok=True)
         paths["raw"].mkdir(parents=True, exist_ok=True)
@@ -606,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
             base=paths["base"],
             cfg_rel="config/config.yaml",
             pdf_rel="config/VisionStatement.pdf",
+            clients_db=args.clients_db,
         )
 
         log.info(

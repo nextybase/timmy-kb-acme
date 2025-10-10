@@ -32,6 +32,7 @@ def dummy_workspace(tmp_path_factory):
     Ritorna un dict con percorsi utili.
     """
     base_parent = tmp_path_factory.mktemp("kbws")
+    clients_db_path = base_parent / "clients_db.yaml"
     rc = gen_dummy_main(
         [
             "--base-dir",
@@ -40,6 +41,8 @@ def dummy_workspace(tmp_path_factory):
             DUMMY_SLUG,
             "--records",
             "0",  # niente finanza per i test generici
+            "--clients-db",
+            str(clients_db_path),
         ]
     )
     assert rc == 0, "gen_dummy_kb.py non è riuscito a creare il workspace"

@@ -49,6 +49,32 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+_MIN_STREAMLIT_VERSION = (1, 50, 0)
+
+
+def _parse_version(raw: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for chunk in raw.split("."):
+        try:
+            parts.append(int(chunk))
+        except ValueError:
+            # stop parsing at first non-numeric segment (e.g. 1.50.0.dev0)
+            break
+    return tuple(parts)
+
+
+def _ensure_streamlit_api() -> None:
+    version = getattr(st, "__version__", "0")
+    if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st, "Page") or not hasattr(st, "navigation"):
+        raise RuntimeError(
+            "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 0. "
+            "Aggiorna con `pip install --upgrade streamlit==1.50.*`."
+        )
+
+
+_ensure_streamlit_api()
+
+
 # Imposta un valore di default della query string per coerenza con deep-linking
 def _hydrate_query_defaults() -> None:
     q = st.query_params.to_dict()

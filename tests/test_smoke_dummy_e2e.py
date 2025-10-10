@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
@@ -16,7 +15,8 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     generazione sotto `tmp_path`, così i test restano self-contained e non
     accumulano cartelle in repository.
     """
-    slug = f"dummy-{int(time.time())}"
+    slug = "dummy"
+    clients_db = tmp_path / "clients_db.yaml"
 
     # Esegui lo script con base dir forzata al tmp_path del test
     script = Path(__file__).resolve().parents[1] / "src" / "tools" / "gen_dummy_kb.py"
@@ -27,6 +27,8 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
         slug,
         "--base-dir",
         str(tmp_path),
+        "--clients-db",
+        str(clients_db),
     ]
     ret = subprocess.run(cmd, check=False, capture_output=True, text=True)
     assert ret.returncode == 0, f"CLI fallita (rc={ret.returncode}). stdout:\n{ret.stdout}\nstderr:\n{ret.stderr}"
