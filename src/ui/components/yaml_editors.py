@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 """
-YAML editors for semantic workspace files.
+Editor YAML per i file semantici.
 
-UI-only: improves labels/help/accessibility without changing business logic or
-side-effects.
 """
 
 import logging

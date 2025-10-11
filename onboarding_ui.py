@@ -44,7 +44,7 @@ _bootstrap_sys_path()
 import streamlit as st  # noqa: E402
 
 st.set_page_config(
-    page_title="Timmy-KB - Onboarding",
+    page_title="Onboarding NeXT - Clienti",
     layout="wide",
     initial_sidebar_state="expanded",
 )
