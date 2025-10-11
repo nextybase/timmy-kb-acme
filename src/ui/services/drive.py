@@ -9,6 +9,14 @@ from ui.components.drive_tree import render_drive_tree as _render_tree_component
 _DRIVE_INDEX_CACHE: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
 
+def invalidate_drive_index(slug: str | None = None) -> None:
+    """Svuota la cache dell'indice Drive per lo slug indicato o per tutti."""
+    if slug:
+        _DRIVE_INDEX_CACHE.pop(slug, None)
+    else:
+        _DRIVE_INDEX_CACHE.clear()
+
+
 def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     """
     Bridge per la pagina Manage: renderizza l'albero Drive e memorizza i metadati

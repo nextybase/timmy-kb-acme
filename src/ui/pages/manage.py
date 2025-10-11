@@ -21,21 +21,14 @@ def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
         return None
 
 
-# Services UI
+# Services (gestiscono cache e bridging verso i component)
 _render_drive_tree = _safe_get("ui.services.drive:render_drive_tree")
 _render_drive_diff = _safe_get("ui.services.drive:render_drive_diff")
+_emit_readmes_for_raw = _safe_get("ui.services.drive_runner:emit_readmes_for_raw")
 
 # Tool di pulizia workspace (locale + DB + Drive)
 # run_cleanup(slug: str, assume_yes: bool = False) -> int
 _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")
-
-
-def _reset_manage_delete_state() -> None:
-    """Ripulisce lo stato dopo la cancellazione drive/local/DB."""
-    set_slug("")
-    st.session_state.pop("__confirm_delete_open", None)
-    st.session_state.pop("__confirm_delete_slug", None)
-    st.session_state.pop("manage_slug", None)
 
 
 # ---------------- UI ----------------
@@ -46,17 +39,7 @@ set_slug(slug)
 header(slug)
 sidebar(slug)
 
-_feedback = st.session_state.pop("manage_cleanup_feedback", None)
-if _feedback:
-    level, message = _feedback
-    if level == "success":
-        st.success(message)
-    elif level == "warning":
-        st.warning(message)
-    else:
-        st.info(message)
-
-# Stato: se lo slug non è settato mostriamo il blocco "Gestione cliente" (input + azioni)
+# Mostra input/pulsanti SOLO se lo slug NON è settato
 if not slug:
     st.subheader("Gestione cliente")
 
@@ -74,7 +57,6 @@ if not slug:
             st.rerun()
 
     with col_b:
-        # Avvio procedura di cancellazione con conferma esplicita
         if st.button("Cancella cliente", key="manage_delete_client", width="stretch"):
             target = (entered_slug or "").strip()
             if not target:
@@ -84,7 +66,7 @@ if not slug:
                 st.session_state["__confirm_delete_open"] = True
                 st.rerun()
 
-    # Dialog di conferma (semplice, gestito a stato)
+    # Dialog di conferma cancellazione
     if st.session_state.get("__confirm_delete_open"):
         target = st.session_state.get("__confirm_delete_slug", "")
         with st.container(border=True):
@@ -104,19 +86,18 @@ if not slug:
                     st.rerun()
             with c2:
                 if st.button("Conferma eliminazione", key="do_delete"):
-                    feedback_payload: tuple[str, str] | None = None
                     if callable(_run_cleanup):
-                        # Esegue in modalità non interattiva con conferma forzata
-                        code = int(_run_cleanup(target, True))  # assume_yes=True  :contentReference[oaicite:2]{index=2}
+                        code = int(_run_cleanup(target, True))  # assume_yes=True
                         if code == 0:
-                            feedback_payload = ("success", f"Cliente '{target}' eliminato correttamente.")
+                            st.success(f"Cliente '{target}' eliminato correttamente.")
+                            set_slug("")
+                            st.session_state.pop("__confirm_delete_open", None)
+                            st.session_state.pop("__confirm_delete_slug", None)
+                            st.rerun()
                         elif code == 3:
-                            feedback_payload = (
-                                "warning",
-                                (
-                                    "Workspace locale e DB rimossi."
-                                    " Cartella Drive non eliminata per permessi insufficienti."
-                                ),
+                            st.warning(
+                                "Workspace locale e DB rimossi. "
+                                "Cartella Drive non eliminata per permessi insufficienti."
                             )
                         elif code == 4:
                             st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
@@ -127,18 +108,14 @@ if not slug:
                             "Funzione di cancellazione non disponibile. Verifica che il modulo "
                             "`src.tools.clean_client_workspace` sia importabile."
                         )
-                    if feedback_payload is not None:
-                        st.session_state["manage_cleanup_feedback"] = feedback_payload
-                        _reset_manage_delete_state()
-                        st.rerun()
-                    else:
-                        st.session_state.pop("__confirm_delete_open", None)
-                        st.session_state.pop("__confirm_delete_slug", None)
+                    # chiude il dialog quando non facciamo rerun
+                    st.session_state.pop("__confirm_delete_open", None)
+                    st.session_state.pop("__confirm_delete_slug", None)
 
     st.info("Inserisci uno slug e premi **Apri workspace** oppure **Cancella cliente**.")
     st.stop()
 
-# Da qui in poi: slug presente → mostriamo direttamente le viste operative
+# Da qui in poi: slug presente → viste operative
 col_left, col_right = st.columns(2)
 
 with col_left:
@@ -158,3 +135,24 @@ with col_right:
             st.error(f"Errore nella vista Diff: {e}")
     else:
         st.info("Vista Diff non disponibile.")
+
+    # --- Azione: Genera README nelle cartelle raw/ (sempre visibile) ---
+    st.markdown("")
+    if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", width="stretch"):
+        if _emit_readmes_for_raw is None:
+            st.error(
+                "Funzione non disponibile. Abilita gli extra Drive: "
+                "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+            )
+        else:
+            try:
+                with st.status("Genero README nelle sottocartelle di raw/…", expanded=True):
+                    # Call “tollerante” a firme diverse
+                    try:
+                        result = _emit_readmes_for_raw(slug=slug, ensure_structure=False, require_env=True)
+                    except TypeError:
+                        result = _emit_readmes_for_raw(slug)  # fallback a firma più semplice
+                n = len(result or {})
+                st.success(f"README creati/aggiornati: {n}")
+            except Exception as e:  # pragma: no cover
+                st.error(f"Impossibile generare i README: {e}")

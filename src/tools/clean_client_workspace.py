@@ -36,6 +36,10 @@ from src.pipeline.exceptions import ConfigError
 from src.pipeline.logging_utils import get_structured_logger
 from src.pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
+# SSoT percorsi registry clienti dalla UI
+from ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
+from ui.clients_store import DB_FILE as CLIENTS_DB_FILE
+
 # Dipendenze Drive (opzionali; usate se disponibili)
 try:
     from src.pipeline.drive.client import get_drive_service  # SSoT per service
@@ -49,8 +53,6 @@ except Exception:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = REPO_ROOT / "output"
-CLIENTS_DB_DIR = REPO_ROOT / "clients_db"
-CLIENTS_DB_FILE = CLIENTS_DB_DIR / "clients.yaml"
 
 LOGGER = get_structured_logger("tools.clean_client_workspace")
 
@@ -409,14 +411,14 @@ def main(argv: Iterable[str] | None = None) -> int:
         slug = _resolve_slug(ns.slug)
         return run_cleanup(slug=slug, assume_yes=bool(ns.yes))
     except ConfigError as e:
-        LOGGER.info("tools.clean_client_workspace.invalid_args", extra={"message": str(e)[:200]})
+        LOGGER.info("tools.clean_client_workspace.invalid_args", extra={"detail": str(e)[:200]})
         print(f"Argomenti non validi: {e}")
         return 2
     except KeyboardInterrupt:
         print("\nInterrotto dall'utente.")
         return 1
     except Exception as e:  # pragma: no cover
-        LOGGER.error("tools.clean_client_workspace.unexpected", extra={"message": str(e)[:200]})
+        LOGGER.error("tools.clean_client_workspace.unexpected", extra={"detail": str(e)[:200]})
         print(f"Errore inatteso: {e}")
         return 1
 

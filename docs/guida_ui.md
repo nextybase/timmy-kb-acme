@@ -1,13 +1,15 @@
-# Onboarding UI – Guida (Beta 0)
+# Guida Onboarding UI
 
-Questa guida descrive l’interfaccia Streamlit dell’onboarding **Timmy‑KB** così come implementata in **Beta 0**.
+Questa guida descrive l’interfaccia Streamlit dell’onboarding **Timmy‑KB** così come implementata attualmente (Beta 0), allineata al codice nel repository.
 
-- **Router nativo**: `st.navigation` + `st.Page` (niente `pages/` legacy, niente router a tab).
+- **Router nativo**: `st.navigation` + `st.Page` (nessuna cartella `pages/` legacy, nessun router a tab).
 - **Deep‑linking**: `st.query_params` (es. `?slug=acme&tab=semantics`).
-- **Streamlit**: **>= 1.50** (solo API stabili: nessun `experimental_*`, nessun `use_container_width`).
+- **Versione Streamlit**: **>= 1.50** (solo API stabili: nessun `experimental_*`, nessun `use_container_width`).
 - **UI**: pulsanti con `width="stretch"`; HTML solo tramite `st.html(...)`.
+- **Tema**: gestione **nativa di Streamlit**. Nessun toggle custom; il CSS brand viene iniettato automaticamente.
 
 > Avvio rapido:
+>
 > ```bash
 > streamlit run onboarding_ui.py
 > ```
@@ -20,9 +22,11 @@ La navigazione è **in alto** (top) ed è suddivisa in gruppi:
 
 - **Onboarding**
   - **Home** (`src/ui/pages/home.py`)
+  - **Nuovo cliente** (`src/ui/pages/new_client.py`)
   - **Gestisci cliente** (`src/ui/pages/manage.py`)
   - **Semantica** (`src/ui/pages/semantics.py`)
 - **Tools**
+  - **Settings** (`src/ui/pages/settings.py`)
   - **Docker Preview** (`src/ui/pages/preview.py`)
   - **Cleanup** (`src/ui/pages/cleanup.py`)
   - *(interno, per diagnostica/test)* **Diagnostics** (`src/ui/pages/diagnostics.py`)
@@ -30,6 +34,7 @@ La navigazione è **in alto** (top) ed è suddivisa in gruppi:
 > L’entrypoint `onboarding_ui.py` configura la pagina, idrata i **query params** e registra le pagine nel router.
 
 ### Query params supportati
+
 - `slug`: seleziona il cliente attivo (es. `?slug=acme`).
 - `tab`: percorso pagina (es. `?tab=semantics`). Viene impostato a `home` se mancante.
 
@@ -37,50 +42,80 @@ La navigazione è **in alto** (top) ed è suddivisa in gruppi:
 
 ## Header & Sidebar
 
-- L’**header** mostra il titolo *“Timmy‑KB • Onboarding”* e, se presente, lo **slug** corrente.
+- L’**header** mostra il titolo e, se presente, lo **slug** corrente. Il CSS brand viene applicato automaticamente.
 - La **sidebar** espone **Azioni rapide**:
-  - **Aggiorna Drive**: invalida la cache dell’albero Drive.
-  - **Dummy KB**: genera un dataset locale di prova per lo slug.
-  - **Esci**: shutdown dell’app.
-- Nella sidebar è presente anche il box **Ricerca (retriever)** con i parametri:
-  - *Candidate limit*, *Budget latenza (ms)*, *Auto per budget* (persistono in config cliente).
+  - **Guida UI**: link alla documentazione del progetto.
+  - **Dummy KB**: pulsante informativo per dataset di prova (flag UI; l’esecuzione della generazione è esterna/da CLI).
+  - **Esci**: arresta l’app in modo controllato.
 
-> Tutte le azioni mostrano spinner/toast e log strutturati; nessuna API `experimental_*` è usata.
+> Nota: il pannello **Retriever** *non* è più in sidebar. È stato spostato nella pagina **Settings**.
 
 ---
 
 ## Pagine
 
 ### Home
-Pagina informativa con link rapidi e indicazioni di flusso. Supporta deep‑linking allo **slug** via querystring.
+
+Pagina informativa con link rapidi. Il bottone/link **Nuovo cliente** porta alla pagina omonima (router nativo).
+
+### Nuovo cliente
+
+Wizard in due step per inizializzare un workspace:
+
+1. **Crea workspace + carica PDF**
+   - Inserisci **slug** (obbligatorio) e opzionalmente **nome** cliente.
+   - Carica **VisionStatement.pdf** (obbligatorio).
+   - Vengono creati `output/timmy-kb-<slug>/config/` e `.../semantic/`, copiato `config.yaml` e salvato `VisionStatement.pdf`.
+2. **Apri workspace**
+   - Esegue la procedura *Vision* e genera `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`.
+   - Se completata, passa allo stato UI *provisioned* e consente la creazione opzionale della struttura su Drive (se configurata).
+
+> Il wizard aggiorna anche il **registro clienti (SSoT)** con lo stato **italiano** `pronto`.
 
 ### Gestisci cliente
-- Campo **Slug cliente** con pulsante **Apri workspace** → imposta `slug` nei query params e fa `st.rerun()`.
-- Se uno **slug** è attivo, la pagina ospita tre blocchi affiancati:
-  1) **Albero Drive** – gerarchia da `DRIVE_ID/<slug>/` (focus su `raw/`).
-  2) **Diff Drive vs locale** – confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/`; include **Scarica da Drive in raw/** con `st.status`.
-  3) **Editor tag** – authoring e sync di `semantic/tags_reviewed.yaml`; **Estrai Tags** genera `tags_raw.csv` e aggiorna lo stub.
 
-> Le funzioni Drive hanno guardie: se mancano gli extra (`google-api-python-client`) la UI mostra un messaggio con le istruzioni di installazione.
+Comportamento condizionato allo **slug** attivo:
+
+- **Se lo slug non è impostato**: mostra il box *Gestione cliente* con input *Slug cliente* e i pulsanti **Apri workspace** e **Cancella cliente** (quest’ultimo richiede conferma esplicita e invoca la pulizia locale/DB/Drive quando disponibile).
+- **Se lo slug è impostato**: mostra due colonne operative:
+  1. **Albero Drive** – gerarchia da `DRIVE_ID/<slug>/` (focus su `raw/`). Se gli extra Drive non sono presenti, appare un messaggio con le istruzioni.
+  2. **Diff Drive vs Locale** – confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/` e supporta lo scaricamento dei file da Drive (quando abilitato).
+
+> Sono state rimosse le vecchie intestazioni “Drive: Albero…” e “Diff: Drive vs Locale” per un look più pulito.
 
 ### Semantica
+
 Flusso a pulsanti:
+
 - **Converti PDF in Markdown** → `semantic.api.convert_markdown(...)` (solo PDF **sicuri** in `raw/`).
 - **Arricchisci frontmatter** → `semantic.api.enrich_frontmatter(...)` usando il **vocabolario consolidato**.
-- **Genera README/SUMMARY** → idempotente, valida `book/`.
+- **Genera README/SUMMARY** → genera `README.md` e `SUMMARY.md` in modo idempotente.
 - **Anteprima Docker (HonKit)** → delega alla pagina *Docker Preview*.
 
-**Gating**: la pagina è utilizzabile solo **se lo stato del cliente risulta tra 'pronto', 'arricchito' o 'finito'**.
+**Gating**: la pagina è utilizzabile solo \*\*se lo stato del cliente è uno tra ``, ``, \*\*`` e `raw/` contiene PDF. Lo stato è letto dal registro SSoT.
 
+### Settings (Tools)
+
+- **Retriever**:
+  - *Candidate limit*, *Budget latenza (ms)*, *Auto per budget*. I valori sono persistenti e impattano la ricerca.
+- **Semantica (YAML)**: editor dedicati per:
+  - `semantic/semantic_mapping.yaml`
+  - `semantic/cartelle_raw.yaml`
+
+> Gli editor YAML sono stati spostati qui da *Gestisci cliente* per mantenere pulita la pagina operativa.
 
 ### Docker Preview (Tools)
-Avvia/arresta la preview HonKit in container Docker. Se Docker non è disponibile, la pagina mostra un messaggio esplicito e salta la preview.
+
+Pagina dedicata all’anteprima HonKit via Docker. Se Docker non è disponibile, la pagina lo segnala e salta l’azione.
 
 ### Cleanup (Tools)
-Azioni di pulizia locale per workspace e artefatti temporanei.
+
+Azioni di pulizia locale per workspace e artefatti temporanei. La cancellazione per‑cliente è esposta anche da *Gestisci cliente* (pulsante **Cancella cliente** con conferma).
 
 ### Diagnostics (interno)
+
 Pagina ausiliaria per i test/smoke. Mostra:
+
 - `base_dir` del cliente corrente, conteggi `raw/`, `book/`, `semantic/`.
 - **Tail** (≈4 KB) dell’ultimo file in `logs/` con **download ZIP** di tutti i log.
 
@@ -89,7 +124,7 @@ Pagina ausiliaria per i test/smoke. Mostra:
 ## Regole di qualità (Definition of Done – UI Beta 0)
 
 - Solo `st.navigation` + `st.Page` (nessun mix con la cartella `pages/` legacy o router a tab).
-- Stato/URL: `st.query_params` per `slug` e `tab`; deep‑linking funzionante.
+- Stato/URL: `st.query_params` per `slug` e `tab`; deep‑linking funzionante e idempotente.
 - Zero `experimental_*` e zero `use_container_width`.
 - Caching solo con `@st.cache_data` / `@st.cache_resource`.
 - HTML sanificato con `st.html(...)`.
@@ -98,6 +133,7 @@ Pagina ausiliaria per i test/smoke. Mostra:
 ---
 
 ## Struttura workspace cliente
+
 ```
 output/
   timmy-kb-<slug>/
@@ -115,15 +151,28 @@ output/
     logs/
 ```
 
-> `tags.db` è la SSoT a runtime; lo YAML resta per authoring/validazione.
+> `tags.db` è la **SSoT a runtime**; gli YAML restano per authoring/validazione.
+
+---
+
+## Stato cliente (terminologia)
+
+Le stringhe di **stato cliente** persistite nel registro sono **in italiano** e usate per il gating della *Semantica*:
+
+- `pronto` → workspace inizializzato correttamente
+- `arricchito` → frontmatter arricchito
+- `finito` → pipeline semantica completata
+
+> Le **fasi UI del wizard** (es. `init`, `ready_to_open`, `provisioned`) sono interne alla pagina *Nuovo cliente* e non vengono persistite nel registro.
 
 ---
 
 ## FAQ
+
 - **Come avvio l’interfaccia?** `streamlit run onboarding_ui.py`.
-- **Perché non vedo la pagina “Semantica”?** Non risultano PDF in `raw/`. Scaricali da Drive o copia file locali (no symlink).
-- **Posso generare i tag senza Drive?** Sì: usa `--source=local` o popola `raw/` manualmente.
-- **È rimasta retro‑compatibilità con i vecchi tab?** No: il router legacy e i relativi helper sono stati rimossi in Beta 0.
+- **Perché non vedo la pagina “Semantica”?** O lo stato non è tra `pronto|arricchito|finito`, oppure non ci sono PDF in `raw/`. Scaricali da Drive o copia file locali (no symlink).
+- **Posso lavorare senza Drive?** Sì: popola `raw/` manualmente e lavora in locale.
+- **Retro‑compatibilità con router/“tab” legacy?** No: il router legacy e i relativi helper sono stati rimossi in Beta 0.
 
 ---
 

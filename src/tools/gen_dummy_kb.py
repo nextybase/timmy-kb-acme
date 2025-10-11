@@ -155,6 +155,7 @@ def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path
 def _write_dummy_docs(book: Path) -> None:
     """Crea due markdown fittizi nella cartella book/."""
     d = _ensure_dependencies()
+
     safe_write_text_fn = _require_dependency(d, "safe_write_text")
     book.mkdir(parents=True, exist_ok=True)
     safe_write_text_fn(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
@@ -518,6 +519,20 @@ def _update_clients_db(
     - Se il file non esiste o è vuoto, crea un dict keyed by slug.
     """
     d = _ensure_dependencies()
+
+    slug_norm = slug.strip()
+    client_name_norm = (client_name or slug_norm).strip() or slug_norm
+
+    if clients_db is None:
+        from ui import clients_store as _store
+
+        existing_entries = _store.get_all()
+        existed = any(e.slug.strip() == slug_norm for e in existing_entries)
+        entry = _store.ClientEntry(slug=slug_norm, nome=client_name_norm, stato="pronto")
+        _store.upsert_client(entry)
+        _store.set_state(slug_norm, "pronto")
+        return {"path": _store.DB_FILE, "created": not existed, "updated": existed}
+
     safe_write_text_fn = _require_dependency(d, "safe_write_text")
     ewr = _require_dependency(d, "ensure_within_and_resolve")
     rts = _require_dependency(d, "read_text_safe")
@@ -548,8 +563,8 @@ def _update_clients_db(
             existing = None
 
     record = {
-        "slug": slug,
-        "name": client_name,
+        "slug": slug_norm,
+        "name": client_name_norm,
         "base": str(base),
         "config": cfg_rel,
         "vision_pdf": pdf_rel,
@@ -561,11 +576,11 @@ def _update_clients_db(
 
     if existing is None:
         # crea dict keyed by slug
-        data = {slug: record}
+        data = {slug_norm: record}
         created = True
     elif isinstance(existing, dict):
-        prev = existing.get(slug)
-        existing[slug] = {**(prev or {}), **record}
+        prev = existing.get(slug_norm)
+        existing[slug_norm] = {**(prev or {}), **record}
         data = existing
         updated = prev is not None
         created = not updated
@@ -573,7 +588,7 @@ def _update_clients_db(
         # lista di record: cerca per slug
         found = False
         for i, item in enumerate(existing):
-            if isinstance(item, dict) and item.get("slug") == slug:
+            if isinstance(item, dict) and item.get("slug") == slug_norm:
                 existing[i] = {**item, **record}
                 found = True
                 updated = True
@@ -584,7 +599,7 @@ def _update_clients_db(
         data = existing
     else:
         # formato ignoto → migra a dict keyed by slug
-        data = {slug: record}
+        data = {slug_norm: record}
         created = True
 
     safe_write_text_fn(

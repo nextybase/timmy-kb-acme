@@ -21,7 +21,7 @@ def _resolve_db_path(target: Path) -> Path:
     return cast(Path, ensure_within_and_resolve(REPO_ROOT, target))
 
 
-DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "data" / "clients_db"))))
+DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "clients_db"))))
 DB_FILE: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))))
 
 

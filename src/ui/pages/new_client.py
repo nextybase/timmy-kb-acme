@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ import streamlit as st
 
 from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
+from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.utils.query_params import set_slug
 
 # Vision (provisioning completo: mapping + cartelle_raw)
@@ -59,6 +61,10 @@ def _semantic_dir_client(slug: str) -> Path:
 
 def _config_dir_repo() -> Path:
     return _repo_root() / "config"
+
+
+def _semantic_dir_repo() -> Path:
+    return _repo_root() / "semantic"
 
 
 def _repo_pdf_path() -> Path:
@@ -129,9 +135,12 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) ->
 
 
 # Registry unificato (SSoT) via ui.clients_store
-def _upsert_client_registry(slug: str, client_name: str) -> None:
+def _upsert_client_registry(slug: str, client_name: str, drive_ids: dict[str, str]) -> None:
     """
     Allinea il registro clienti (SSoT) impostando lo stato **pronto**.
+    Nota: gli ID Drive (se presenti) possono essere gestiti da clients_store
+    in step successivi; qui garantiamo la presenza del cliente e lo stato valido
+    per il gating della pagina Semantica.
     """
     entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato="pronto")
     upsert_client(entry)
@@ -144,12 +153,13 @@ sidebar(None)
 
 st.subheader("Nuovo cliente")
 
-# Stato pagina: "init" | "ready_to_open" | "provisioned"
+# NOTA: le variabili qui sotto rappresentano **fasi UI** del wizard (NON lo stato cliente persistito)
+# Fasi UI (italiano): "iniziale" | "pronto_apertura" | "predisposto"
 slug_state_key = "new_client.slug"
 phase_state_key = "new_client.phase"
 
 current_slug = st.session_state.get(slug_state_key, "")
-current_phase = st.session_state.get(phase_state_key, "init")
+current_phase = st.session_state.get(phase_state_key, UI_PHASE_INIT)
 
 # Input
 slug = st.text_input(
@@ -157,34 +167,34 @@ slug = st.text_input(
     placeholder="es. acme-srl",
     key="new_slug",
     value=current_slug or "",
-    disabled=(current_phase in ("ready_to_open", "provisioned")),
+    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
 )
 name = st.text_input(
     "Nome cliente (opzionale)",
     placeholder="es. ACME Srl",
     key="new_name",
-    disabled=(current_phase in ("ready_to_open", "provisioned")),
+    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
 )
 pdf = st.file_uploader(
     "Vision Statement (PDF)",
     type=["pdf"],
     key="new_vs_pdf",
-    disabled=(current_phase in ("ready_to_open", "provisioned")),
+    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
     help="Obbligatorio: sarà salvato come config/VisionStatement.pdf",
 )
 
 candidate_slug = (slug or "").strip()
 
-# Se la struttura cliente esiste già, passa alla fase 2
-if candidate_slug and current_phase == "init":
+# Se la struttura cliente esiste già, passa alla fase "pronto_apertura"
+if candidate_slug and current_phase == UI_PHASE_INIT:
     if _config_dir_client(candidate_slug).exists():
         st.session_state[slug_state_key] = candidate_slug
-        st.session_state[phase_state_key] = "ready_to_open"
+        st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
         current_slug = candidate_slug
-        current_phase = "ready_to_open"
+        current_phase = UI_PHASE_READY_TO_OPEN
 
 # STEP 1 - Crea workspace + carica PDF (crea e poi "materializza" in output/timmy-kb-<slug>)
-if current_phase == "init":
+if current_phase == UI_PHASE_INIT:
     if st.button("Crea workspace + carica PDF", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
         if not s:
@@ -208,20 +218,20 @@ if current_phase == "init":
             # 3) stato UI
             set_slug(s)  # query param
             st.session_state[slug_state_key] = s
-            st.session_state[phase_state_key] = "ready_to_open"
+            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
             st.session_state["client_name"] = name or ""
             current_slug = s
-            current_phase = "ready_to_open"
+            current_phase = UI_PHASE_READY_TO_OPEN
             st.success("Workspace creato con successo.")
         except Exception as e:  # pragma: no cover
             st.error(f"Impossibile creare il workspace: {e}")
 
 # Stato
-if current_phase in ("ready_to_open", "provisioned") and current_slug:
+if current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
     st.info(f"Workspace per **{current_slug}** inizializzato.")
 
 # STEP 2 - Apri workspace (Vision + Drive)
-if current_phase == "ready_to_open" and current_slug:
+if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
     client_pdf = _client_pdf_path(current_slug)
     if not client_pdf.exists():
         st.error(
@@ -250,12 +260,12 @@ if current_phase == "ready_to_open" and current_slug:
 
             if _exists_semantic_files(current_slug):
                 # Aggiorna fase UI
-                st.session_state[phase_state_key] = "provisioned"
+                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
                 st.success("YAML generati in `semantic/`.")
 
                 # Assicura subito registro SSoT (anche se Drive non è configurato)
                 display_name = st.session_state.get("client_name") or (name or current_slug)
-                _upsert_client_registry(current_slug, display_name)
+                _upsert_client_registry(current_slug, display_name, {})
 
                 # ---- Creazione struttura su Google Drive (post-Vision) ----
                 if build_drive_from_mapping is None:
@@ -279,19 +289,20 @@ if current_phase == "ready_to_open" and current_slug:
                             client_name=display_name,
                             progress=_cb,
                         )
-                        # Registry SSoT già presente: lo stato resta "pronto"
+                        # Registry SSoT già creato: manteniamo stato "pronto"
+                        _upsert_client_registry(current_slug, display_name, ids or {})
                         st.success(f"Struttura Drive creata: {ids}")
                     except Exception as e:
                         st.error(f"Errore durante la creazione struttura Drive: {e}")
             else:
                 st.error(
-                    f"Vision terminata ma i file attesi non sono presenti in `{_semantic_dir_client(current_slug)}`."
+                    "Vision terminata ma i file attesi non sono presenti in " f"`{_semantic_dir_client(current_slug)}`."
                 )
         except Exception as e:  # pragma: no cover
             st.error(f"Errore durante la Vision: {e}")
 
 # STEP 3 - Link finale
-if st.session_state.get(phase_state_key) == "provisioned" and current_slug:
+if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and current_slug:
     # Assicura comunque la presenza nel registry SSoT
-    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug)
+    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug, {})
     st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")

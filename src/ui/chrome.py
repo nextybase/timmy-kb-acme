@@ -6,8 +6,11 @@ from pathlib import Path
 
 import streamlit as st
 
+from src.tools.gen_dummy_kb import main as run_dummy_kb  # tool CLI → int
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
+from ui.services.drive import invalidate_drive_index
 from ui.theme.css import inject_theme_css
+from ui.utils import get_slug
 from ui.utils.branding import render_brand_header, render_sidebar_brand
 
 # Root repo per branding (favicon/logo)
@@ -16,8 +19,23 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ---------- helpers ----------
 def _on_dummy_kb() -> None:
-    st.session_state["dummy_kb_requested"] = True
-    st.toast("Dummy KB richiesta. Vai su Gestisci cliente per verificare.")
+    """Genera una KB di esempio per lo slug corrente (o 'dummy') e aggiorna le viste."""
+    slug = get_slug() or (st.query_params.get("slug") or "dummy")
+    with st.spinner("Genero dataset dummy..."):
+        try:
+            code = int(run_dummy_kb(["--slug", slug]))
+        except Exception as e:
+            st.error(f"Generazione Dummy KB fallita: {e}")
+            return
+    if code == 0:
+        invalidate_drive_index(slug)
+        st.toast(f"Dummy KB pronta per '{slug}'.")
+        try:
+            st.rerun()
+        except Exception:
+            pass
+    else:
+        st.error(f"Generazione Dummy KB fallita (code={code}).")
 
 
 def _on_exit() -> None:
@@ -28,11 +46,10 @@ def _on_exit() -> None:
 def header(slug: str | None) -> None:
     """
     Header della UI.
-    Nota: l'unica chiamata a `st.set_page_config(...)` deve stare nell'entrypoint
-    (onboarding_ui.py). Qui iniettiamo solo il CSS brand e rendiamo l'header.
+    Nota: l'unica chiamata a `st.set_page_config(...)` sta nell'entrypoint.
+    Qui iniettiamo solo il CSS brand e rendiamo l'header.
     """
-    # CSS brand early-inject (tema gestito nativamente da Streamlit)
-    inject_theme_css(st)
+    inject_theme_css(st)  # CSS brand early-inject (tema gestito nativamente)
 
     subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
     render_brand_header(
@@ -52,15 +69,19 @@ def sidebar(slug: str | None) -> None:
 
         st.subheader("Azioni rapide")
 
-        # Guida UI full-width
         st.link_button(
             "Guida UI",
             url="https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
             width="stretch",
         )
 
+        if st.button("Aggiorna Drive", key="btn_drive_refresh", width="stretch"):
+            invalidate_drive_index(slug)
+            st.toast("Cache Drive aggiornata.")
+
         if st.button("Dummy KB", key="btn_dummy", width="stretch"):
             _on_dummy_kb()
+
         if st.button("Esci", key="btn_exit", type="primary", width="stretch"):
             _on_exit()
 
