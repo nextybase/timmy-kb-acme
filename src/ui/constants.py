@@ -24,3 +24,8 @@ KNOWN_CLIENT_STATES = {"nuovo", "pronto", "arricchito", "finito"}
 
 # Nota: le fasi UI NON sono persistite nel registry clienti.
 # Esempi (solo UI): {"init", "ready_to_open", "provisioned"}
+
+# Fasi UI (wizard Nuovo cliente) -- restano stringhe inglesi per compatibilita
+UI_PHASE_INIT = "init"
+UI_PHASE_READY_TO_OPEN = "ready_to_open"
+UI_PHASE_PROVISIONED = "provisioned"

@@ -119,7 +119,8 @@ def filtered(limit: int):
 
 - Ogni widget ha `key` esplicito; stato condiviso via `st.session_state`.
 - Layout nidificati max **2 livelli** per leggibilità (anche mobile).
-- Tema runtime: `st.context.theme` (`"light" | "dark"`); usa micro-pattern coerenti (`st.badge`, `st.status`, `st.metric`).
+- Tema runtime: `st.get_option("theme.base")`; lascia a Streamlit la gestione del toggle.
+  Il CSS brand viene iniettato senza interferire con il tema.
 
 ---
 

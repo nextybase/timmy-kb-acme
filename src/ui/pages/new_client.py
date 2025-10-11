@@ -204,7 +204,7 @@ if current_phase == UI_PHASE_INIT:
         if pdf is None:
             st.error("Carica il Vision Statement (PDF) prima di procedere.")
             st.stop()
-        pdf_bytes: Optional[bytes] = pdf.read() if pdf is not None else None
+        pdf_bytes: Optional[bytes] = pdf.getvalue() if pdf is not None else None
         if not pdf_bytes:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
