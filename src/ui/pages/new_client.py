@@ -61,10 +61,6 @@ def _config_dir_repo() -> Path:
     return _repo_root() / "config"
 
 
-def _semantic_dir_repo() -> Path:
-    return _repo_root() / "semantic"
-
-
 def _repo_pdf_path() -> Path:
     return _config_dir_repo() / "VisionStatement.pdf"
 
@@ -133,12 +129,9 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) ->
 
 
 # Registry unificato (SSoT) via ui.clients_store
-def _upsert_client_registry(slug: str, client_name: str, drive_ids: dict[str, str]) -> None:
+def _upsert_client_registry(slug: str, client_name: str) -> None:
     """
     Allinea il registro clienti (SSoT) impostando lo stato **pronto**.
-    Nota: gli ID Drive (se presenti) possono essere gestiti da clients_store
-    in step successivi; qui garantiamo la presenza del cliente e lo stato valido
-    per il gating della pagina Semantica.
     """
     entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato="pronto")
     upsert_client(entry)
@@ -262,7 +255,7 @@ if current_phase == "ready_to_open" and current_slug:
 
                 # Assicura subito registro SSoT (anche se Drive non è configurato)
                 display_name = st.session_state.get("client_name") or (name or current_slug)
-                _upsert_client_registry(current_slug, display_name, {})
+                _upsert_client_registry(current_slug, display_name)
 
                 # ---- Creazione struttura su Google Drive (post-Vision) ----
                 if build_drive_from_mapping is None:
@@ -286,14 +279,13 @@ if current_phase == "ready_to_open" and current_slug:
                             client_name=display_name,
                             progress=_cb,
                         )
-                        # Registry SSoT già creato: manteniamo stato "pronto"
-                        _upsert_client_registry(current_slug, display_name, ids or {})
+                        # Registry SSoT già presente: lo stato resta "pronto"
                         st.success(f"Struttura Drive creata: {ids}")
                     except Exception as e:
                         st.error(f"Errore durante la creazione struttura Drive: {e}")
             else:
                 st.error(
-                    "Vision terminata ma i file attesi non sono presenti in " f"`{_semantic_dir_client(current_slug)}`."
+                    f"Vision terminata ma i file attesi non sono presenti in `{_semantic_dir_client(current_slug)}`."
                 )
         except Exception as e:  # pragma: no cover
             st.error(f"Errore durante la Vision: {e}")
@@ -301,5 +293,5 @@ if current_phase == "ready_to_open" and current_slug:
 # STEP 3 - Link finale
 if st.session_state.get(phase_state_key) == "provisioned" and current_slug:
     # Assicura comunque la presenza nel registry SSoT
-    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug, {})
+    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug)
     st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")
