@@ -1,17 +1,43 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
-# Colori
-COLOR_TEXT = "#333333"
-COLOR_BG = "#ffffff"
-COLOR_DARK = "#31383f"  # nav / bottoni base
-COLOR_ACCENT = "#ffc100"  # hover/cta giallo
-COLOR_LINK = "#23527b"
-COLOR_OCEAN = "#006699"  # hero
+from types import SimpleNamespace
 
-# Tipografia
-FONT_FAMILY = '"Lexend", Tahoma, sans-serif'
-H1_SIZE_PX = 36  # per tua scelta
+# Palette LIGHT (default)
+_LIGHT = dict(
+    COLOR_TEXT="#333333",
+    COLOR_BG="#ffffff",
+    COLOR_DARK="#31383f",  # nav / bottoni base
+    COLOR_ACCENT="#ffc100",  # CTA giallo
+    COLOR_LINK="#23527b",
+    COLOR_OCEAN="#006699",
+    FONT_FAMILY='"Lexend", Tahoma, sans-serif',
+    H1_SIZE_PX=36,
+    RADIUS_M=10,
+    INSET_HIGHLIGHT="#ffffff66",
+)
 
-# Spaziatura / Raggi / Effetti
-RADIUS_M = 10
-INSET_HIGHLIGHT = "#ffffff66"  # box-shadow inset
+# Palette DARK
+_DARK = dict(
+    COLOR_TEXT="#e6e6e6",
+    COLOR_BG="#0f1218",
+    COLOR_DARK="#1f2530",
+    COLOR_ACCENT="#ffc100",
+    COLOR_LINK="#8ab4f8",
+    COLOR_OCEAN="#5aa7ff",
+    FONT_FAMILY='"Lexend", Tahoma, sans-serif',
+    H1_SIZE_PX=36,
+    RADIUS_M=10,
+    INSET_HIGHLIGHT="#00000055",
+)
+
+
+def resolve_tokens(base: str | None) -> SimpleNamespace:
+    base = (base or "light").strip().lower()
+    return SimpleNamespace(**(_DARK if base == "dark" else _LIGHT))
+
+
+# Per retro-compatibilità (code che importasse costanti)
+# NB: non usate queste costanti in nuovo codice: usate resolve_tokens().
+for k, v in _LIGHT.items():
+    globals()[k] = v

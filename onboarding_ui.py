@@ -96,6 +96,7 @@ pages = {
         st.Page("src/ui/pages/semantics.py", title="Semantica", url_path="semantics"),
     ],
     "Tools": [
+        st.Page("src/ui/pages/settings.py", title="Settings", url_path="settings"),
         st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
         st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
         st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),

@@ -13,5 +13,11 @@ header(slug)
 sidebar(slug)
 
 st.subheader("Benvenuto!")
-st.write("Scegli una sezione dal menu in alto per iniziare.")
-st.link_button("Guida UI (Streamlit)", "docs/guida_ui.md", width="stretch")
+st.write("Scegli una sezione dal menu in alto per iniziare o crea un nuovo cliente.")
+
+if st.button("Nuovo cliente", key="btn_go_new", width="stretch"):
+    try:
+        st.query_params["tab"] = "new"
+    except Exception:
+        pass
+    st.rerun()

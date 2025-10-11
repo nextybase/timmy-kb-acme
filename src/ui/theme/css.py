@@ -4,32 +4,49 @@ from __future__ import annotations
 from textwrap import dedent
 from typing import Any
 
+from ui.utils.core import get_theme_base  # nuovo import
+
 from . import tokens as T
 
 
 def inject_theme_css(st_module: Any) -> None:
-    """Inietta il CSS del brand una sola volta per sessione."""
-    if getattr(st_module.session_state, "_theme_css_injected", False):
+    """
+    Inietta il CSS del brand. Se la base del tema cambia (light/dark),
+    forza una nuova iniezione.
+    """
+    base = get_theme_base()
+    # Se il tema è cambiato rispetto al precedente, invalida la cache di iniezione
+    prev = st_module.session_state.get("_ui_theme_base")
+    if prev != base:
+        st_module.session_state["_theme_css_injected"] = False
+
+    if st_module.session_state.get("_theme_css_injected", False):
         return
+
+    TT = T.resolve_tokens(base)
 
     css = f"""
     /* ====== NeXT.AI Theme (Streamlit) ====== */
     :root {{
-      --brand-text: {T.COLOR_TEXT};
-      --brand-bg: {T.COLOR_BG};
-      --brand-dark: {T.COLOR_DARK};
-      --brand-accent: {T.COLOR_ACCENT};
-      --brand-link: {T.COLOR_LINK};
-      --brand-ocean: {T.COLOR_OCEAN};
-      --radius-m: {T.RADIUS_M}px;
+      --brand-text: {TT.COLOR_TEXT};
+      --brand-bg: {TT.COLOR_BG};
+      --brand-dark: {TT.COLOR_DARK};
+      --brand-accent: {TT.COLOR_ACCENT};
+      --brand-link: {TT.COLOR_LINK};
+      --brand-ocean: {TT.COLOR_OCEAN};
+      --radius-m: {TT.RADIUS_M}px;
     }}
 
     /* Font */
     @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;500&display=swap');
-    html, body, .stApp {{ font-family: {T.FONT_FAMILY} !important; }}
+    html, body, .stApp {{
+      font-family: {TT.FONT_FAMILY} !important;
+      background: var(--brand-bg);
+      color: var(--brand-text);
+    }}
 
     /* Titoli */
-    h1, .stMarkdown h1 {{ font-weight: 500; letter-spacing: -0.5px; font-size: {T.H1_SIZE_PX}px; }}
+    h1, .stMarkdown h1 {{ font-weight: 500; letter-spacing: -0.5px; font-size: {TT.H1_SIZE_PX}px; }}
     h2, .stMarkdown h2 {{ font-weight: 500; }}
 
     /* Link */
@@ -39,10 +56,22 @@ def inject_theme_css(st_module: Any) -> None:
     /* Pulsanti nativi */
     .stButton>button, .stLinkButton>button {{
       border-radius: var(--radius-m);
-      box-shadow: inset 0 1px {T.INSET_HIGHLIGHT};
+      box-shadow: inset 0 1px {TT.INSET_HIGHLIGHT};
     }}
-    .stButton>button {{ background: var(--brand-dark); color: #fff; }}
-    .stButton>button:hover {{ background: var(--brand-accent); color: var(--brand-dark); }}
+    /* default (secondary) */
+    .stButton>button[data-testid="baseButton-secondary"] {{
+      background: var(--brand-dark); color: #fff; border: none;
+    }}
+    .stButton>button[data-testid="baseButton-secondary"]:hover {{
+      background: var(--brand-accent); color: var(--brand-dark);
+    }}
+    /* primary = arancione (usato per "Esci") */
+    .stButton>button[data-testid="baseButton-primary"] {{
+      background: var(--brand-accent); color: var(--brand-dark); border: none;
+    }}
+    .stButton>button[data-testid="baseButton-primary"]:hover {{
+      filter: brightness(0.95);
+    }}
 
     /* Link button full width */
     .stLinkButton>button {{ width: 100%; }}
@@ -52,16 +81,5 @@ def inject_theme_css(st_module: Any) -> None:
     """
 
     st_module.html(f"<style>{dedent(css)}</style>")
-    theme_base = None
-    getter = getattr(st_module, "get_option", None)
-    if callable(getter):
-        try:
-            raw_base = getter("theme.base")
-            if isinstance(raw_base, str) and raw_base.strip():
-                theme_base = raw_base.strip().lower()
-        except Exception:
-            theme_base = None
-    if theme_base:
-        st_module.session_state["_ui_theme_base"] = theme_base
-
-    st_module.session_state._theme_css_injected = True
+    st_module.session_state["_ui_theme_base"] = base
+    st_module.session_state["_theme_css_injected"] = True
