@@ -1,7 +1,0 @@
-[theme]
-base = "light"
-primaryColor = "#ffc100"         # accent giallo
-backgroundColor = "#ffffff"       # sfondo
-secondaryBackgroundColor = "#f6f7f9"
-textColor = "#333333"
-font = "sans serif"               # Lexend via CSS (sotto)

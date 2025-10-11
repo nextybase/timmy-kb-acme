@@ -1,7 +1,6 @@
 # src/ui/utils/core.py
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict, cast
 
@@ -82,15 +81,12 @@ def get_theme_base(default: str = "light") -> str:
         except Exception:
             option_base = None
 
-    # 2) Override da variabile d'ambiente (fallback legacy)
-    env_base: str | None = _normalize(os.getenv("TIMMY_UI_BRAND_THEME"))
-
-    # 3) Eventuale override manuale già presente in sessione
+    # 2) Eventuale override manuale già presente in sessione
     session_base: str | None = None
     if state is not None:
         session_base = _normalize(state.get("brand_theme")) or _normalize(state.get("_ui_theme_base"))
 
-    # 4) Fallback da contesto runtime (caso legacy)
+    # 3) Fallback da contesto runtime (caso legacy)
     runtime_base: str | None = None
     try:  # pragma: no cover -- Streamlit internals non disponibili in test
         from streamlit.runtime.scriptrunner import script_run_context as _ctx_mod
@@ -109,7 +105,7 @@ def get_theme_base(default: str = "light") -> str:
         if runtime_base is None and isinstance(nested, dict):
             runtime_base = _normalize(nested.get("base"))
 
-    base = option_base or session_base or env_base or runtime_base or _normalize(default) or "light"
+    base = option_base or session_base or runtime_base or _normalize(default) or "light"
 
     if state is not None:
         state["brand_theme"] = base
