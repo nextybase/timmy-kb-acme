@@ -185,17 +185,9 @@ pdf = st.file_uploader(
 
 candidate_slug = (slug or "").strip()
 
-# Se la struttura cliente esiste già, passa alla fase "pronto_apertura"
-if candidate_slug and current_phase == UI_PHASE_INIT:
-    if _config_dir_client(candidate_slug).exists():
-        st.session_state[slug_state_key] = candidate_slug
-        st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-        current_slug = candidate_slug
-        current_phase = UI_PHASE_READY_TO_OPEN
-
-# STEP 1 - Crea workspace + carica PDF (crea e poi "materializza" in output/timmy-kb-<slug>)
+# STEP 1 - Inizializza Workspace (crea struttura + salva PDF + Vision → YAML)
 if current_phase == UI_PHASE_INIT:
-    if st.button("Crea workspace + carica PDF", type="primary", key="btn_init_ws", width="stretch"):
+    if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
         if not s:
             st.warning("Inserisci uno slug valido.")
@@ -209,20 +201,32 @@ if current_phase == UI_PHASE_INIT:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
         try:
-            # 1) crea struttura base + salva config.yaml + VisionStatement.pdf
             ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
-
-            # 2) materializza i file nella cartella cliente sotto output/
             _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
 
-            # 3) stato UI
-            set_slug(s)  # query param
-            st.session_state[slug_state_key] = s
-            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-            st.session_state["client_name"] = name or ""
-            current_slug = s
-            current_phase = UI_PHASE_READY_TO_OPEN
-            st.success("Workspace creato con successo.")
+            _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
+            ui_logger = _ui_logger()
+            ctx = _UIContext(base_dir=_client_base(s))
+            try:
+                provision_from_vision(
+                    ctx=ctx,
+                    logger=ui_logger,
+                    slug=s,
+                    pdf_path=str(_client_pdf_path(s)),
+                )
+            except TypeError:
+                provision_from_vision(s, str(_client_pdf_path(s)))
+
+            if _exists_semantic_files(s):
+                set_slug(s)
+                st.session_state[slug_state_key] = s
+                st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
+                st.session_state["client_name"] = name or ""
+                current_slug = s
+                current_phase = UI_PHASE_READY_TO_OPEN
+                st.success("Workspace inizializzato e YAML generati.")
+            else:
+                st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
         except Exception as e:  # pragma: no cover
             st.error(f"Impossibile creare il workspace: {e}")
 
@@ -230,79 +234,38 @@ if current_phase == UI_PHASE_INIT:
 if current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
     st.info(f"Workspace per **{current_slug}** inizializzato.")
 
-# STEP 2 - Apri workspace (Vision + Drive)
+# STEP 2 - Apri workspace (solo Drive + finalizzazione stato)
 if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
-    client_pdf = _client_pdf_path(current_slug)
-    if not client_pdf.exists():
-        st.error(
-            "Manca config/VisionStatement.pdf nel workspace cliente. Torna allo step precedente e ricarica il PDF."
-        )
+    if not _exists_semantic_files(current_slug):
+        st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
     if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
-        try:
-            _semantic_dir_client(current_slug).mkdir(parents=True, exist_ok=True)
+        display_name = st.session_state.get("client_name") or (name or current_slug)
+        _upsert_client_registry(current_slug, display_name, {})
 
-            ui_logger = _ui_logger()
-            with st.status("Eseguo Vision...", expanded=True) as status:
-                ctx = _UIContext(base_dir=_client_base(current_slug))
-                try:
-                    provision_from_vision(
-                        ctx=ctx,
-                        logger=ui_logger,
-                        slug=current_slug,
-                        pdf_path=str(client_pdf),
-                    )
-                except TypeError:
-                    # Firme alternative (manteniamo guardia hard sul PDF)
-                    provision_from_vision(current_slug, str(client_pdf))
-                status.update(label="Vision completata.", state="complete")
+        if build_drive_from_mapping is None:
+            st.warning(
+                "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
+                "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
+            )
+        else:
+            prog = st.progress(0)
+            info = st.empty()
 
-            if _exists_semantic_files(current_slug):
-                # Aggiorna fase UI
-                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
-                st.success("YAML generati in `semantic/`.")
+            def _cb(step: int, total: int, label: str) -> None:
+                pct = int(step * 100 / max(total, 1))
+                prog.progress(pct)
+                info.markdown(f"{pct}% - {label}")
 
-                # Assicura subito registro SSoT (anche se Drive non è configurato)
-                display_name = st.session_state.get("client_name") or (name or current_slug)
-                _upsert_client_registry(current_slug, display_name, {})
-
-                # ---- Creazione struttura su Google Drive (post-Vision) ----
-                if build_drive_from_mapping is None:
-                    st.warning(
-                        "Funzionalità Drive non disponibili. "
-                        "Installa gli extra: `pip install .[drive]` e imposta "
-                        "`DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
-                    )
-                else:
-                    prog = st.progress(0)
-                    info = st.empty()
-
-                    def _cb(step: int, total: int, label: str) -> None:
-                        pct = int(step * 100 / max(total, 1))
-                        prog.progress(pct)
-                        info.markdown(f"{pct}% - {label}")
-
-                    try:
-                        ids = build_drive_from_mapping(
-                            slug=current_slug,
-                            client_name=display_name,
-                            progress=_cb,
-                        )
-                        # Registry SSoT già creato: manteniamo stato "pronto"
-                        _upsert_client_registry(current_slug, display_name, ids or {})
-                        st.success(f"Struttura Drive creata: {ids}")
-                    except Exception as e:
-                        st.error(f"Errore durante la creazione struttura Drive: {e}")
-            else:
-                st.error(
-                    "Vision terminata ma i file attesi non sono presenti in " f"`{_semantic_dir_client(current_slug)}`."
-                )
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore durante la Vision: {e}")
+            try:
+                ids = build_drive_from_mapping(slug=current_slug, client_name=display_name, progress=_cb)
+                _upsert_client_registry(current_slug, display_name, ids or {})
+                st.success(f"Struttura Drive creata: {ids}")
+            except Exception as e:
+                st.error(f"Errore durante la creazione struttura Drive: {e}")
 
 # STEP 3 - Link finale
-if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and current_slug:
-    # Assicura comunque la presenza nel registry SSoT
+if st.session_state.get(phase_state_key) in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
     _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug, {})
     st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")

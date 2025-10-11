@@ -60,15 +60,15 @@ Pagina informativa con link rapidi. Il bottone/link **Nuovo cliente** porta alla
 
 ### Nuovo cliente
 
-Wizard in due step per inizializzare un workspace:
+Wizard in due step:
 
-1. **Crea workspace + carica PDF**
-   - Inserisci **slug** (obbligatorio) e opzionalmente **nome** cliente.
-   - Carica **VisionStatement.pdf** (obbligatorio).
-   - Vengono creati `output/timmy-kb-<slug>/config/` e `.../semantic/`, copiato `config.yaml` e salvato `VisionStatement.pdf`.
+1. **Inizializza Workspace**
+   - Inserisci **slug** (obbligatorio) e (opzionale) **nome** cliente.
+   - Carica **VisionStatement.pdf**.
+   - La UI crea la struttura locale, salva `config.yaml` e il PDF ed **esegue Vision** generando i due YAML richiesti (`semantic_mapping.yaml`, `cartelle_raw.yaml`).
 2. **Apri workspace**
-   - Esegue la procedura *Vision* e genera `semantic/semantic_mapping.yaml` e `semantic/cartelle_raw.yaml`.
-   - Se completata, passa allo stato UI *provisioned* e consente la creazione opzionale della struttura su Drive (se configurata).
+   - Crea la struttura su **Drive** (se configurata), finalizza le cartelle locali e aggiorna il **registro clienti (SSoT)** con stato `pronto`.
+   - Non riesegue Vision.
 
 > Il wizard aggiorna anche il **registro clienti (SSoT)** con lo stato **italiano** `pronto`.
 
