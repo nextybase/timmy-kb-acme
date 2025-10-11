@@ -10,7 +10,7 @@ from . import tokens as T
 
 
 def _current_base(st_module: Any) -> str:
-    base = get_theme_base()
+    base: str = get_theme_base()
     st_module.session_state["brand_theme"] = base
     return base
 
