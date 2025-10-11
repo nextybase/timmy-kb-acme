@@ -48,28 +48,26 @@ set_slug(slug)
 header(slug)
 sidebar(slug)
 
-st.subheader("Gestione cliente")
-
-entered_slug = st.text_input(
-    "Slug cliente",
-    value=slug or "",
-    placeholder="es. acme",
-    key="manage_slug",
-)
-
-if st.button("Apri workspace", key="manage_open_workspace", width="stretch"):
-    set_slug((entered_slug or "").strip())
-    st.rerun()
-
+# Mostra input/pulsante SOLO se lo slug NON è settato
 if not slug:
+    entered_slug = st.text_input(
+        "Slug cliente",
+        value="",
+        placeholder="es. acme",
+        key="manage_slug",
+    )
+
+    if st.button("Apri workspace", key="manage_open_workspace", width="stretch"):
+        set_slug((entered_slug or "").strip())
+        st.rerun()
+
     st.info("Inserisci uno slug e premi **Apri workspace**.")
     st.stop()
 
-# Due colonne: Albero Drive e Diff (niente più editor nella pagina Manage)
+# Da qui in poi: slug presente → mostra direttamente le viste operative
 col_left, col_right = st.columns(2)
 
 with col_left:
-    st.markdown("**Drive: Albero (DRIVE_ID/<slug>)**")
     if _render_drive_tree is not None:
         try:
             _render_drive_tree(slug)  # restituisce anche indice cachato
@@ -79,7 +77,6 @@ with col_left:
         st.info("Vista Drive non disponibile.")
 
 with col_right:
-    st.markdown("**Diff: Drive vs Locale**")
     if _render_drive_diff is not None:
         try:
             _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
