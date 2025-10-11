@@ -2,11 +2,27 @@
 # src/ui/pages/settings.py
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 import streamlit as st
 
 from ui.chrome import header, sidebar
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
 from ui.utils import get_slug, set_slug
+
+# ---- Tipi per gli editor YAML ----
+YamlEditor = Callable[[str], None]
+
+# Editor YAML (mapping e cartelle) con fallback sicuro
+try:
+    from ui.components.yaml_editors import edit_cartelle_raw as _edit_cartelle_raw
+    from ui.components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
+
+    edit_semantic_mapping: Optional[YamlEditor] = _edit_semantic_mapping
+    edit_cartelle_raw: Optional[YamlEditor] = _edit_cartelle_raw
+except Exception:
+    edit_semantic_mapping = None
+    edit_cartelle_raw = None
 
 slug = get_slug()
 set_slug(slug)
@@ -16,6 +32,7 @@ sidebar(slug)
 
 st.subheader("Impostazioni")
 
+# ---------------- Retriever ----------------
 st.markdown("### Retriever")
 curr_limit, curr_budget_ms, curr_auto = get_retriever_settings()
 
@@ -39,9 +56,32 @@ new_budget_ms = st.number_input(
 )
 new_auto = st.toggle("Auto per budget", value=curr_auto, key="retr_auto_page")
 
-if (int(new_limit), int(new_budget_ms), bool(new_auto)) != (int(curr_limit), int(curr_budget_ms), bool(curr_auto)):
+if (int(new_limit), int(new_budget_ms), bool(new_auto)) != (
+    int(curr_limit),
+    int(curr_budget_ms),
+    bool(curr_auto),
+):
     set_retriever_settings(int(new_limit), int(new_budget_ms), bool(new_auto))
     try:
         st.toast("Impostazioni retriever salvate")
     except Exception:
         pass
+
+# ---------------- Semantica (YAML) ----------------
+st.markdown("---")
+st.markdown("### Semantica (YAML)")
+
+if not slug:
+    st.info("Imposta uno **slug** nella pagina Gestisci cliente per modificare i file YAML del workspace.")
+else:
+    col_map, col_cart = st.columns(2)
+    with col_map:
+        if callable(edit_semantic_mapping):
+            edit_semantic_mapping(slug)  # semantic/semantic_mapping.yaml
+        else:
+            st.info("Editor mapping non disponibile.")
+    with col_cart:
+        if callable(edit_cartelle_raw):
+            edit_cartelle_raw(slug)  # semantic/cartelle_raw.yaml
+        else:
+            st.info("Editor cartelle non disponibile.")

@@ -2,13 +2,10 @@
 from __future__ import annotations
 
 import logging
-import shutil
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
 import streamlit as st
-import yaml
 
 from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
@@ -26,8 +23,9 @@ else:
         from semantic.vision_provision import provision_from_vision as _provision_from_vision  # pragma: no cover
     provision_from_vision = cast(ProvisionCallable, _provision_from_vision)
 
-from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.file_utils import safe_write_bytes, safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read, read_text_safe
+from ui.clients_store import ClientEntry, set_state, upsert_client
 
 BuildDriveCallable = Callable[..., Dict[str, str]]
 try:
@@ -99,14 +97,14 @@ def _ui_logger() -> logging.Logger:
     return log
 
 
-def _mirror_repo_config_into_client(slug: str, pdf_bytes: Optional[bytes]) -> None:
+def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) -> None:
     """
     Porta i file generati/salvati in REPO_ROOT/{config,semantic}
     dentro REPO_ROOT/output/timmy-kb-<slug>/{config,semantic}.
-    - Copia config.yaml dalla root nel config del cliente.
+    - Copia config.yaml dalla root nel config del cliente in modo **atomico** e path-safe.
     - Scrive VisionStatement.pdf nel config del cliente:
       * usa pdf_bytes se presenti (upload corrente)
-      * altrimenti copia quello della root se esiste.
+      * altrimenti copia quello della root se esiste (sempre path-safe e atomico).
     """
     repo_cfg = _config_dir_repo()
     cli_cfg = _config_dir_client(slug)
@@ -115,93 +113,36 @@ def _mirror_repo_config_into_client(slug: str, pdf_bytes: Optional[bytes]) -> No
     cli_cfg.mkdir(parents=True, exist_ok=True)
     cli_sem.mkdir(parents=True, exist_ok=True)
 
-    # 1) config.yaml
-    src_cfg_yaml = repo_cfg / "config.yaml"
-    dst_cfg_yaml = cli_cfg / "config.yaml"
-    if src_cfg_yaml.exists():
-        shutil.copy2(src_cfg_yaml, dst_cfg_yaml)
+    # 1) config.yaml (path-safe + atomic write)
+    src_cfg_yaml = ensure_within_and_resolve(repo_cfg, repo_cfg / "config.yaml")
+    dst_cfg_yaml = ensure_within_and_resolve(cli_cfg, cli_cfg / "config.yaml")
+    if Path(src_cfg_yaml).exists():
+        payload = read_text_safe(repo_cfg, Path(src_cfg_yaml), encoding="utf-8")
+        safe_write_text(Path(dst_cfg_yaml), payload, encoding="utf-8", atomic=True)
 
-    # 2) VisionStatement.pdf
-    dst_pdf = _client_pdf_path(slug)
+    # 2) VisionStatement.pdf (path-safe + atomic write)
+    dst_pdf = ensure_within_and_resolve(cli_cfg, _client_pdf_path(slug))
     if pdf_bytes is not None:
-        dst_pdf.write_bytes(pdf_bytes)
+        safe_write_bytes(Path(dst_pdf), pdf_bytes, atomic=True)
     else:
-        src_pdf = _repo_pdf_path()
-        if src_pdf.exists():
-            shutil.copy2(src_pdf, dst_pdf)
+        src_pdf = ensure_within_and_resolve(repo_cfg, _repo_pdf_path())
+        if Path(src_pdf).exists():
+            # Lettura sicura tramite open_for_read (niente read_bytes diretto)
+            with open_for_read(repo_cfg, Path(src_pdf), mode="rb") as fh:
+                safe_write_bytes(Path(dst_pdf), fh.read(), atomic=True)
 
 
-def _clients_db_file() -> Path:
-    repo = _repo_root()
-    db_dir = repo / "clients_db"
-    db_dir.mkdir(parents=True, exist_ok=True)
-    resolved = ensure_within_and_resolve(repo, db_dir / "clients.yaml")
-    return cast(Path, resolved)
-
-
-def _update_clients_registry(slug: str, client_name: str, drive_ids: Dict[str, str], *, logger: logging.Logger) -> None:
-    db_file = _clients_db_file()
-    try:
-        raw = read_text_safe(_repo_root(), db_file, encoding="utf-8")
-        data = yaml.safe_load(raw) or {}
-    except FileNotFoundError:
-        data = {}
-    except Exception as exc:  # pragma: no cover - fallback a struttura vuota
-        logger.warning(
-            "ui.new_client.clients_db.read_error",
-            extra={"slug": slug, "path": str(db_file), "error": str(exc)[:200]},
-        )
-        data = {}
-
-    if not isinstance(data, dict):
-        data = {}
-
-    clients = data.get("clients")
-    if not isinstance(clients, list):
-        clients = []
-
-    drive_payload = {k: str(v) for k, v in (drive_ids or {}).items() if v}
-    entry = {
-        "slug": slug,
-        "nome": (client_name or "").strip() or slug,
-        "stato": "provisioned",
-        "drive": drive_payload,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    updated = False
-    new_clients: list[dict[str, Any]] = []
-    for item in clients:
-        if isinstance(item, dict) and item.get("slug") == slug:
-            merged = dict(item)
-            for key, value in entry.items():
-                if key == "drive":
-                    continue
-                merged[key] = value
-            existing_drive = merged.get("drive")
-            if isinstance(existing_drive, dict):
-                merged["drive"] = {**existing_drive, **drive_payload}
-            else:
-                merged["drive"] = drive_payload
-            new_clients.append(merged)
-            updated = True
-        else:
-            new_clients.append(item)
-
-    if not updated:
-        new_clients.insert(0, entry)
-
-    data["clients"] = new_clients
-    safe_write_text(
-        db_file,
-        yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=100),
-        encoding="utf-8",
-        atomic=True,
-    )
-    logger.info(
-        "ui.new_client.clients_db.updated",
-        extra={"slug": slug, "path": str(db_file), "updated": updated},
-    )
+# Registry unificato (SSoT) via ui.clients_store
+def _upsert_client_registry(slug: str, client_name: str, drive_ids: dict[str, str]) -> None:
+    """
+    Allinea il registro clienti (SSoT) impostando lo stato **pronto**.
+    Nota: gli ID Drive (se presenti) possono essere gestiti da clients_store
+    in step successivi; qui garantiamo la presenza del cliente e lo stato valido
+    per il gating della pagina Semantica.
+    """
+    entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato="pronto")
+    upsert_client(entry)
+    set_state(slug, "pronto")
 
 
 # --------- UI ---------
@@ -315,8 +256,13 @@ if current_phase == "ready_to_open" and current_slug:
                 status.update(label="Vision completata.", state="complete")
 
             if _exists_semantic_files(current_slug):
+                # Aggiorna fase UI
                 st.session_state[phase_state_key] = "provisioned"
-                st.success("YAML generati in `semantic/`. Creo la struttura su Google Drive…")
+                st.success("YAML generati in `semantic/`.")
+
+                # Assicura subito registro SSoT (anche se Drive non è configurato)
+                display_name = st.session_state.get("client_name") or (name or current_slug)
+                _upsert_client_registry(current_slug, display_name, {})
 
                 # ---- Creazione struttura su Google Drive (post-Vision) ----
                 if build_drive_from_mapping is None:
@@ -334,14 +280,14 @@ if current_phase == "ready_to_open" and current_slug:
                         prog.progress(pct)
                         info.markdown(f"{pct}% - {label}")
 
-                    display_name = st.session_state.get("client_name") or (name or current_slug)
                     try:
                         ids = build_drive_from_mapping(
                             slug=current_slug,
                             client_name=display_name,
                             progress=_cb,
                         )
-                        _update_clients_registry(current_slug, display_name, ids, logger=ui_logger)
+                        # Registry SSoT già creato: manteniamo stato "pronto"
+                        _upsert_client_registry(current_slug, display_name, ids or {})
                         st.success(f"Struttura Drive creata: {ids}")
                     except Exception as e:
                         st.error(f"Errore durante la creazione struttura Drive: {e}")
@@ -354,4 +300,6 @@ if current_phase == "ready_to_open" and current_slug:
 
 # STEP 3 - Link finale
 if st.session_state.get(phase_state_key) == "provisioned" and current_slug:
+    # Assicura comunque la presenza nel registry SSoT
+    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug, {})
     st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")

@@ -24,7 +24,6 @@ def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
 # Usa i "services" (gestiscono cache e bridging verso i component)
 _render_drive_tree = _safe_get("ui.services.drive:render_drive_tree")
 _render_drive_diff = _safe_get("ui.services.drive:render_drive_diff")
-# Niente editor Tag qui: vive nella pagina "Semantica"
 
 # Se vuoi collegare Vision, assegna qui la funzione: run_vision(slug) -> None
 run_vision: Optional[Callable[[str], None]] = None
@@ -35,7 +34,7 @@ if st.session_state.pop("vision_init_requested", False):
     if not pending_slug:
         st.warning("Nessuno slug attivo: impossibile avviare la procedura Vision.")
     elif run_vision is None:
-        st.info("Procedura Vision non collegata: assegna `run_vision(slug)` " "per generare gli YAML in semantic/.")
+        st.info("Procedura Vision non collegata: assegna `run_vision(slug)` per generare gli YAML in semantic/.")
     else:
         with st.status("Esecuzione Vision...", expanded=True):
             run_vision(pending_slug)
@@ -66,25 +65,24 @@ if not slug:
     st.info("Inserisci uno slug e premi **Apri workspace**.")
     st.stop()
 
-# Due colonne con vista sempre visibile
+# Due colonne: Albero Drive e Diff (niente più editor nella pagina Manage)
 col_left, col_right = st.columns(2)
 
 with col_left:
     st.markdown("**Drive: Albero (DRIVE_ID/<slug>)**")
     if _render_drive_tree is not None:
         try:
-            # Restituisce anche l'indice e lo mette in cache per la Diff
-            _render_drive_tree(slug)
+            _render_drive_tree(slug)  # restituisce anche indice cachato
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella vista Drive: {e}")
     else:
         st.info("Vista Drive non disponibile.")
+
 with col_right:
     st.markdown("**Diff: Drive vs Locale**")
     if _render_drive_diff is not None:
         try:
-            # Usa l'indice cachato (se assente, degrada a indice vuoto)
-            _render_drive_diff(slug)
+            _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella vista Diff: {e}")
     else:

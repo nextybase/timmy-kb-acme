@@ -8,7 +8,7 @@ import streamlit as st
 
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
 from ui.theme.css import inject_theme_css
-from ui.utils.branding import get_favicon_path, render_brand_header, render_sidebar_brand
+from ui.utils.branding import render_brand_header, render_sidebar_brand
 
 # Root repo per branding (favicon/logo)
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,17 +26,14 @@ def _on_exit() -> None:
 
 # ---------- layout ----------
 def header(slug: str | None) -> None:
-    # Inizializza/preleva la preferenza
-    try:
-        st.set_page_config(
-            page_title="Timmy-KB • Onboarding",
-            layout="wide",
-            page_icon=str(get_favicon_path(REPO_ROOT)),
-        )
-    except Exception:
-        pass
-
+    """
+    Header della UI.
+    Nota: l'unica chiamata a `st.set_page_config(...)` deve stare nell'entrypoint
+    (onboarding_ui.py). Qui iniettiamo solo il CSS brand e rendiamo l'header.
+    """
+    # CSS brand early-inject (tema gestito nativamente da Streamlit)
     inject_theme_css(st)
+
     subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
     render_brand_header(
         st_module=st,
