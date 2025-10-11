@@ -153,21 +153,31 @@ def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
                 extra={"slug": slug, "folder_id": _redact(folder_id)},
             )
             return True, "Cartella cliente su Drive eliminata."
-        except HttpError as e:
-            status = getattr(getattr(e, "resp", None), "status", None)
+        except HttpError as he:  # pragma: no cover
+            status = getattr(getattr(he, "resp", None), "status", None)
+            if status == 404:
+                logger.info(
+                    "tools.clean_client_workspace.drive.not_found",
+                    extra={"slug": slug, "detail": f"fileId non trovato (slug={slug})"},
+                )
+                return True, "Cartella Drive non trovata (ok)."
             logger.info(
                 "tools.clean_client_workspace.drive.delete_failed",
-                extra={"slug": slug, "status": status, "folder_id": _redact(folder_id)},
+                extra={"slug": slug, "detail": str(he)[:200]},
             )
-            if status in (401, 403):  # permesso mancante
-                return False, "Permessi Drive insufficienti per eliminare la cartella."
-            raise
+            return False, "Eliminazione su Drive non riuscita, si prosegue con cleanup locale/DB."
+        except Exception as e:  # pragma: no cover
+            logger.info(
+                "tools.clean_client_workspace.drive.unexpected",
+                extra={"slug": slug, "detail": str(e)[:200]},
+            )
+            return False, "Errore inatteso Drive: si prosegue con cleanup locale/DB."
     except ConfigError as e:
         logger.info("tools.clean_client_workspace.drive.ctx_error", extra={"slug": slug, "message": str(e)[:200]})
         # Non blocchiamo: continuiamo con la porzione locale/DB
         return True, "Contesto Drive non disponibile: salto rimozione Drive."
     except Exception as e:  # pragma: no cover
-        logger.info("tools.clean_client_workspace.drive.unexpected", extra={"slug": slug, "message": str(e)[:200]})
+        logger.info("tools.clean_client_workspace.drive.unexpected", extra={"slug": slug, "detail": str(e)[:200]})
         return False, f"Errore inatteso Drive: {e}"
 
 
