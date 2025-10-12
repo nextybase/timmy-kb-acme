@@ -11,10 +11,9 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
-from ui.chrome import header, sidebar
+from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.constants import SEMANTIC_READY_STATES
-from ui.utils import require_active_slug
 
 try:
     from ui.utils.workspace import has_raw_pdfs
@@ -79,13 +78,10 @@ def _go_preview() -> None:
 
 # ---------------- UI ----------------
 
-slug = require_active_slug()
-
-header(slug)
-sidebar(slug)
+slug = render_chrome_then_require()
 
 try:
-    from streamlit.runtime.scriptrunner import get_script_run_ctx  # type: ignore[attr-defined]
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
 except Exception:
     _HAS_STREAMLIT_CONTEXT = False
 else:

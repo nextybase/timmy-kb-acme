@@ -7,9 +7,8 @@ from typing import Optional
 
 import streamlit as st
 
-from ui.chrome import header, sidebar
+from ui.chrome import render_chrome_then_require
 from ui.utils import diagnostics as diag  # verrà monkeypatchato nei test
-from ui.utils import require_active_slug
 
 TAIL_BYTES = 4000
 
@@ -87,10 +86,7 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
 
 def main() -> None:
     """Pagina Diagnostica: header, sidebar, counts e log tail."""
-    slug = require_active_slug()
-
-    header(slug)
-    sidebar(slug)
+    slug = render_chrome_then_require()
 
     st.subheader("Diagnostica")
 

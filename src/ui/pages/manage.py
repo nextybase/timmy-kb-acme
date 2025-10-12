@@ -2,12 +2,14 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 import streamlit as st
 
-from ui.chrome import header, sidebar
-from ui.utils import require_active_slug
+from pipeline.yaml_utils import yaml_read
+from ui.chrome import render_chrome_then_require
+from ui.utils import set_slug
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -31,12 +33,75 @@ _emit_readmes_for_raw = _safe_get("ui.services.drive_runner:emit_readmes_for_raw
 _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")
 
 
+# ---------------- Helpers ----------------
+
+
+def _repo_root() -> Path:
+    # manage.py -> pages -> ui -> src -> REPO_ROOT
+    return Path(__file__).resolve().parents[3]
+
+
+def _clients_db_path() -> Path:
+    return _repo_root() / "clients_db" / "clients.yaml"
+
+
+def _load_clients() -> list[dict[str, Any]]:
+    """Carica l'elenco clienti dal DB (lista di dict normalizzata)."""
+    try:
+        path = _clients_db_path()
+        if not path.exists():
+            return []
+        data = yaml_read(path.parent, path)
+        if isinstance(data, list):
+            return [dict(item) for item in data if isinstance(item, dict)]
+        if isinstance(data, dict):
+            normalized: list[dict[str, Any]] = []
+            for slug_key, payload in data.items():
+                record = dict(payload) if isinstance(payload, dict) else {}
+                record.setdefault("slug", slug_key)
+                normalized.append(record)
+            return normalized
+    except Exception:
+        pass
+    return []
+
+
 # ---------------- UI ----------------
 
-slug = require_active_slug()
+slug = render_chrome_then_require(allow_without_slug=True)
 
-header(slug)
-sidebar(slug)
+if not slug:
+    st.subheader("Seleziona cliente")
+    clients = _load_clients()
+
+    if not clients:
+        st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
+        st.html('<a href="/new?tab=home" target="_self">➕ Crea nuovo cliente</a>')
+        st.stop()
+
+    options: list[tuple[str, str]] = []
+    for client in clients:
+        slug_value = (client.get("slug") or "").strip()
+        if not slug_value:
+            continue
+        name = (client.get("nome") or slug_value).strip()
+        state = (client.get("stato") or "n/d").strip()
+        label = f"{name} ({slug_value}) — {state}"
+        options.append((label, slug_value))
+
+    if not options:
+        st.info("Nessun cliente valido trovato nel registro.")
+        st.stop()
+
+    labels = [label for label, _ in options]
+    selected_label = st.selectbox("Cliente", labels, index=0, key="manage_select_slug")
+    if st.button("Usa questo cliente", type="primary"):
+        chosen = dict(options).get(selected_label)
+        if chosen:
+            set_slug(chosen)
+        st.rerun()
+
+    st.stop()
 
 # Da qui in poi: slug presente → viste operative
 col_left, col_right = st.columns(2)

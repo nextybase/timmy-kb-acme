@@ -11,7 +11,7 @@ import streamlit as st
 from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
-from ui.utils.query_params import set_slug
+from ui.utils import set_slug
 
 # Vision (provisioning completo: mapping + cartelle_raw)
 ProvisionCallable = Callable[..., Any]

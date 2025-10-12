@@ -5,6 +5,7 @@ from .branding import get_favicon_path, render_brand_header, render_sidebar_bran
 from .core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
 
 # 🔄 passa a slug manager unificato
+from .slug import clear_active_slug, clear_slug
 from .slug import get_active_slug as get_slug
 from .slug import require_active_slug
 from .slug import set_active_slug as set_slug
@@ -18,6 +19,8 @@ __all__: list[str] = [
     "get_favicon_path",
     "render_brand_header",
     "render_sidebar_brand",
+    "clear_active_slug",
+    "clear_slug",
     "get_slug",
     "set_slug",
     "require_active_slug",

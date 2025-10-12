@@ -6,9 +6,8 @@ from typing import Callable, Optional
 
 import streamlit as st
 
-from ui.chrome import header, sidebar
+from ui.chrome import render_chrome_then_require
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
-from ui.utils import require_active_slug
 
 # ---- Tipi per gli editor YAML ----
 YamlEditor = Callable[[str], None]
@@ -24,10 +23,7 @@ except Exception:
     edit_semantic_mapping = None
     edit_cartelle_raw = None
 
-slug = require_active_slug()
-
-header(slug)
-sidebar(slug)
+slug = render_chrome_then_require()
 
 st.subheader("Impostazioni")
 

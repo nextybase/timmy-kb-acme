@@ -8,8 +8,8 @@ from typing import Any, Callable, Optional
 import streamlit as st
 
 from pipeline.yaml_utils import yaml_read
-from ui.chrome import header, sidebar
-from ui.utils import require_active_slug, resolve_raw_dir, set_slug
+from ui.chrome import render_chrome_then_require
+from ui.utils import resolve_raw_dir, set_slug
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -75,9 +75,10 @@ def _redirect_home() -> None:
 
 
 # ---- UI chrome ----
-slug = require_active_slug()  # blocca la pagina se non hai selezionato uno slug
-header(slug)
-sidebar(slug)
+slug = render_chrome_then_require(allow_without_slug=True)
+if not slug:
+    st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
+    st.stop()
 
 st.subheader("Cleanup")
 st.write("Strumenti di pulizia del workspace e **cancellazione definitiva** del cliente.")

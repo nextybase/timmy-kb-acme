@@ -7,15 +7,11 @@ import streamlit as st
 from adapters.preview import start_preview, stop_preview
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
-from ui.chrome import header, sidebar
-from ui.utils import require_active_slug
+from ui.chrome import render_chrome_then_require
 
 st.subheader("Preview Docker (HonKit)")
 
-slug = require_active_slug()
-
-header(slug)
-sidebar(slug)
+slug = render_chrome_then_require()
 
 try:
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)

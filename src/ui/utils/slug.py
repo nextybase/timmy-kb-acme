@@ -18,7 +18,7 @@ _PERSIST_PATH = Path(__file__).resolve().parents[2] / "clients_db" / "ui_state.j
 
 def _has_streamlit_context() -> bool:
     try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx  # type: ignore[attr-defined]
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
     except Exception:
         return False
     return get_script_run_ctx() is not None
@@ -89,6 +89,34 @@ def set_active_slug(slug: Optional[str], *, persist: bool = True, update_query: 
         _save_persisted(s)
     if update_query:
         _qp_set(s or None)
+
+
+def clear_active_slug(*, persist: bool = True, update_query: bool = True) -> None:
+    """
+    Azzera lo slug attivo su tutti i layer:
+    - session_state
+    - persistenza (clients_db/ui_state.json)
+    - querystring (?slug)
+    """
+    # 1) session
+    st.session_state.pop("__active_slug", None)
+    # 2) persistenza
+    if persist:
+        _save_persisted("")
+    # 3) querystring
+    if update_query:
+        try:
+            _qp_set(None)  # rimuovi il param se supportato
+        except Exception:
+            try:
+                _qp_set("")  # fallback: vuoto
+            except Exception:
+                pass
+
+
+# alias comodo
+def clear_slug() -> None:
+    clear_active_slug()
 
 
 def require_active_slug() -> str:

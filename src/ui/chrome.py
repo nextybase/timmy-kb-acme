@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional, cast
 
 import streamlit as st
 
+from pipeline.yaml_utils import yaml_read
 from src.tools.gen_dummy_kb import main as run_dummy_kb  # tool CLI → int
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
 from ui.services.drive import invalidate_drive_index
 from ui.theme.css import inject_theme_css
-from ui.utils import get_slug
+from ui.utils import clear_active_slug, get_slug, require_active_slug
 from ui.utils.branding import render_brand_header, render_sidebar_brand
 
 # Root repo per branding (favicon/logo)
@@ -62,10 +64,62 @@ def header(slug: str | None) -> None:
 
 
 def sidebar(slug: str | None) -> None:
-    """Sidebar con brand e azioni rapide."""
+    """Sidebar con brand, stato cliente e azioni rapide."""
+
+    def _repo_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _clients_db_path() -> Path:
+        return _repo_root() / "clients_db" / "clients.yaml"
+
+    def _client_display_name(active_slug: Optional[str]) -> str:
+        if not active_slug:
+            return "—"
+        try:
+            db_path = _clients_db_path()
+            if db_path.exists():
+                data = yaml_read(db_path.parent, db_path)
+                if isinstance(data, list):
+                    records = data
+                elif isinstance(data, dict):
+                    records = [{**(value or {}), "slug": key} for key, value in data.items()]
+                else:
+                    records = []
+                for record in records:
+                    if (record or {}).get("slug", "").strip().lower() == active_slug.strip().lower():
+                        name = (record or {}).get("nome", "") or ""
+                        return name.strip() or active_slug
+        except Exception:
+            pass
+        return active_slug
+
     with st.sidebar:
+        has_slug = bool(slug)
+
         # Logo compatto tema-aware
         render_sidebar_brand(st_module=st, repo_root=REPO_ROOT)
+
+        display_name = _client_display_name(slug)
+        # Stato cliente sempre visibile (enfasi maggiore)
+        st.html(
+            f"""
+            <div style="font-size:1.05rem;font-weight:700;margin:0 0 .5rem 0;">
+              Cliente attivo: <span style="font-weight:800">{display_name}</span>
+            </div>
+            """,
+        )
+        if not has_slug:
+            st.html(
+                """
+                <a href="/manage" target="_self"
+                   style="display:block;width:100%;text-align:center;
+                          padding:.55rem .9rem;border-radius:.6rem;
+                          background:#0f62fe;color:#fff;text-decoration:none;
+                          box-shadow:0 1px 2px rgba(0,0,0,.08);">
+                   Seleziona cliente
+                </a>
+                """,
+            )
 
         st.subheader("Azioni rapide")
 
@@ -75,16 +129,56 @@ def sidebar(slug: str | None) -> None:
             width="stretch",
         )
 
-        if st.button("Aggiorna Drive", key="btn_drive_refresh", width="stretch"):
+        if st.button(
+            "Aggiorna Drive",
+            key="btn_drive_refresh",
+            help="Richiede un cliente selezionato",
+            disabled=not has_slug,
+            width="stretch",
+        ):
             invalidate_drive_index(slug)
             st.toast("Cache Drive aggiornata.")
 
-        if st.button("Dummy KB", key="btn_dummy", width="stretch"):
+        # Azioni con stato
+        if st.button(
+            "Dummy KB",
+            key="btn_dummy",
+            disabled=not has_slug,
+            help="Genera un dataset demo per il cliente corrente",
+            width="stretch",
+        ):
             _on_dummy_kb()
 
-        if st.button("Esci", key="btn_exit", type="primary", width="stretch"):
+        if st.button(
+            "Esci",
+            key="btn_exit",
+            type="primary",
+            width="stretch",
+        ):
             _on_exit()
 
-        # Facoltativo: contesto corrente
-        if slug:
-            st.caption(f"Cliente attivo: **{slug}**")
+        st.markdown("---")
+        if st.button(
+            "Azzera selezione cliente",
+            help="Rimuove lo slug attivo e torna alla Home",
+            disabled=not has_slug,
+            width="stretch",
+        ):
+            clear_active_slug()
+            st.rerun()
+
+
+def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:
+    """
+    Renderizza header + sidebar e ritorna lo slug attivo.
+
+    Args:
+        allow_without_slug: se False (default), richiede uno slug valido (blocca la pagina
+            come require_active_slug). Se True, non blocca e ritorna lo slug (o None).
+    """
+    slug = cast(Optional[str], get_slug())
+    header(slug)
+    sidebar(slug)
+    if allow_without_slug:
+        return slug
+    return cast(str, require_active_slug())
