@@ -2,6 +2,8 @@
 # src/ui/pages/cleanup.py
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -28,6 +30,9 @@ def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
 # Prova entrambe le forme del modulo, a seconda del run-path.
 _run_cleanup = _safe_get("tools.clean_client_workspace:run_cleanup") or _safe_get(
     "src.tools.clean_client_workspace:run_cleanup"
+)
+_perform_cleanup = _safe_get("tools.clean_client_workspace:perform_cleanup") or _safe_get(
+    "src.tools.clean_client_workspace:perform_cleanup"
 )
 
 
@@ -128,33 +133,72 @@ if st.session_state.get("__cleanup_confirm_open"):
                 st.rerun()
         with c2:
             if st.button("Conferma eliminazione", key="cleanup_do_delete"):
-                current = _run_cleanup
-                if not callable(current):
-                    current = _load_run_cleanup()
-                if not callable(current):
-                    st.error(
-                        "Funzione di cancellazione non disponibile. "
-                        "Verifica che `tools.clean_client_workspace` sia importabile (con o senza prefisso `src`)."
-                    )
+                code: Optional[int] = None
+                messages: list[tuple[str, str]] = []
+                runner_error = None
+
+                if callable(_perform_cleanup):
+                    try:
+                        results = _perform_cleanup(target, client_name=client_name)
+                        code = int(results.get("exit_code", 1))
+                        for section in ("drive", "local", "registry"):
+                            info = results.get(section) or {}
+                            message = info.get("message")
+                            if message:
+                                messages.append((section.upper(), message))
+                    except Exception as exc:
+                        runner_error = exc
+                else:
+                    runner = _run_cleanup or _load_run_cleanup()
+                    if not callable(runner):
+                        st.error(
+                            "Funzione di cancellazione non disponibile. "
+                            "Verifica che `tools.clean_client_workspace` sia importabile (con o senza prefisso `src`)."
+                        )
+                        st.session_state.pop("__cleanup_confirm_open", None)
+                        st.session_state.pop("__cleanup_confirm_slug", None)
+                        runner_error = RuntimeError("Funzione run_cleanup non disponibile")
+                    else:
+                        buffer = io.StringIO()
+                        try:
+                            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                                code = int(runner(target, True))  # assume_yes=True
+                        except Exception as exc:
+                            runner_error = exc
+                        captured = buffer.getvalue().strip()
+                        if captured:
+                            messages.append(("LOG", captured))
+
+                if runner_error is not None:
+                    st.error(f"Errore durante la cancellazione: {runner_error}")
+                    st.session_state.pop("__cleanup_confirm_open", None)
+                    st.session_state.pop("__cleanup_confirm_slug", None)
+                elif code is None:
+                    st.error("Risultato della cancellazione non disponibile.")
                     st.session_state.pop("__cleanup_confirm_open", None)
                     st.session_state.pop("__cleanup_confirm_slug", None)
                 else:
-                    with st.status(f"Elimino il cliente **{client_name}**…", expanded=True):
-                        code = int(current(target, True))  # assume_yes=True
+                    with st.status(f"Elimino il cliente **{client_name}**…", expanded=True) as status:
+                        for label, message in messages:
+                            status.write(f"[{label}] {message}")
+
                     if code == 0:
                         st.success(f"Cliente '{client_name}' eliminato correttamente.")
-                        set_slug("")  # rimuove lo slug attivo (query + session + persistenza)
+                        set_slug("")
                         st.session_state.pop("__cleanup_confirm_open", None)
                         st.session_state.pop("__cleanup_confirm_slug", None)
-                        _redirect_home()  # torna alla home completa
+                        _redirect_home()
                     elif code == 3:
                         st.warning("Workspace locale e DB rimossi. Cartella Drive non eliminata per permessi/driver.")
-                        set_slug("")  # pulisco selezione corrente
+                        set_slug("")
+                        st.session_state.pop("__cleanup_confirm_open", None)
+                        st.session_state.pop("__cleanup_confirm_slug", None)
                         _redirect_home()
                     elif code == 4:
                         st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
+                        st.session_state.pop("__cleanup_confirm_open", None)
+                        st.session_state.pop("__cleanup_confirm_slug", None)
                     else:
                         st.error("Operazione completata con avvisi o errori parziali.")
-                    # chiude il dialogo se non abbiamo fatto redirect/rerun
-                    st.session_state.pop("__cleanup_confirm_open", None)
-                    st.session_state.pop("__cleanup_confirm_slug", None)
+                        st.session_state.pop("__cleanup_confirm_open", None)
+                        st.session_state.pop("__cleanup_confirm_slug", None)

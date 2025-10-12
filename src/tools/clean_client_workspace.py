@@ -26,7 +26,8 @@ import stat
 import sys
 import time
 from pathlib import Path
-from typing import Any, Iterable, Optional, Tuple, cast
+from types import SimpleNamespace
+from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 
 from src.pipeline.context import ClientContext
 from src.pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
@@ -87,52 +88,153 @@ def _confirm_irreversible(slug: str, assume_yes: bool) -> bool:
 # --------------------------------------------------------------------------------------
 
 
-def _find_slug_folder_id(service: Any, drive_parent_id: str, slug: str) -> Optional[str]:
-    """Trova l'ID della cartella `<slug>` sotto DRIVE_ID usando la facciata Drive."""
+def _collect_drive_folder_candidates(
+    service: Any,
+    drive_parent_id: str,
+    slug: str,
+    client_name: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """
+    Ritorna una lista di possibili cartelle Drive da eliminare e i termini di ricerca utilizzati.
+    """
+    candidates: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    used_terms: List[str] = []
+
+    def _record(item: Dict[str, Any]) -> None:
+        file_id = cast(Optional[str], item.get("id"))
+        if not file_id or file_id in seen_ids:
+            return
+        seen_ids.add(file_id)
+        candidates.append({"id": file_id, "name": item.get("name"), "parents": item.get("parents")})
+
     sanitized_slug = slug.replace("'", "\\'")
     query = f"name = '{sanitized_slug}' and mimeType = '{MIME_FOLDER_CACHED}' and trashed = false"
-    for item in list_drive_files(service, drive_parent_id, query=query, fields="files(id,name,mimeType)"):
-        file_id = cast(Optional[str], item.get("id"))
-        if file_id:
-            return file_id
-    return None
+    for item in list_drive_files(
+        service,
+        drive_parent_id,
+        query=query,
+        fields="files(id,name,mimeType,parents)",
+    ):
+        _record(item)
+    used_terms.append(sanitized_slug)
+
+    search_terms: List[str] = [
+        slug,
+        f"timmy-kb-{slug}",
+        slug.replace("-", " "),
+        slug.replace("-", "_"),
+    ]
+    if client_name:
+        search_terms.append(client_name)
+        search_terms.append(client_name.replace("-", " "))
+
+    seen_terms: set[str] = set()
+    for term in search_terms:
+        clean = (term or "").strip()
+        if not clean:
+            continue
+        key = clean.lower()
+        if key in seen_terms:
+            continue
+        seen_terms.add(key)
+        sanitized = clean.replace("'", "\\'")
+        resp = (
+            service.files()
+            .list(
+                q=f"name contains '{sanitized}' and mimeType = '{MIME_FOLDER_CACHED}' and trashed = false",
+                fields="files(id,name,parents)",
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+                driveId=drive_parent_id,
+                corpora="drive",
+                pageSize=100,
+            )
+            .execute()
+        )
+        used_terms.append(sanitized)
+        for item in resp.get("files", []):
+            _record(item)
+
+    return candidates, used_terms
 
 
-def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+def _delete_on_drive_if_present(
+    slug: str,
+    logger=LOGGER,
+    client_name: Optional[str] = None,
+) -> Tuple[bool, str]:
     """
     Prova a eliminare la cartella cliente su Drive. Idempotente.
     Ritorna (ok, messaggio); ok=False solo per errori di permesso o dipendenze.
     """
     try:
-        # Carico il contesto per ottenere ENV e Drive service.
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
-        service = get_drive_service(ctx)
-        drive_parent_id = (ctx.env or {}).get("DRIVE_ID")
+        env_vars = ClientContext._load_env(require_env=True)  # type: ignore[attr-defined]
+        drive_parent_id = (env_vars or {}).get("DRIVE_ID")
         if not drive_parent_id:
             logger.info("tools.clean_client_workspace.drive.no_parent", extra={"slug": slug})
             return True, "DRIVE_ID non impostato: nessuna cartella da rimuovere (skip)."
 
-        folder_id = _find_slug_folder_id(service, drive_parent_id, slug)
-        if not folder_id:
+        ctx_stub = SimpleNamespace(
+            slug=slug,
+            env=env_vars,
+            run_id=None,
+            redact_logs=False,
+            repo_root_dir=None,
+            config_path=None,
+            config_dir=None,
+            log_dir=None,
+        )
+        service = get_drive_service(ctx_stub)
+
+        matches, search_terms = _collect_drive_folder_candidates(
+            service, drive_parent_id, slug, client_name=client_name
+        )
+        if not matches:
             logger.info(
                 "tools.clean_client_workspace.drive.folder_absent",
                 extra={"slug": slug, "drive_parent": _redact(drive_parent_id)},
             )
-            return True, "Cartella cliente su Drive assente (ok)."
+            terms_desc = ", ".join(search_terms[:5]) if search_terms else "n/d"
+            return True, f"Cartella cliente su Drive assente (ok). Termini usati: {terms_desc}."
 
-        try:
-            delete_drive_file(service, folder_id)
-            logger.info(
-                "tools.clean_client_workspace.drive.folder_deleted",
-                extra={"slug": slug, "folder_id": _redact(folder_id)},
+        deleted: list[Dict[str, Any]] = []
+        failures: list[str] = []
+        for item in matches:
+            file_id = cast(Optional[str], item.get("id"))
+            if not file_id:
+                continue
+            try:
+                delete_drive_file(service, file_id)
+                deleted.append(item)
+            except Exception as e:  # pragma: no cover
+                failures.append(str(e))
+
+        if failures:
+            logger.warning(
+                "tools.clean_client_workspace.drive.partial",
+                extra={
+                    "slug": slug,
+                    "errors": failures[:3],
+                    "deleted": [_redact(cast(str, item.get("id"))) for item in deleted],
+                    "search_terms": search_terms,
+                },
             )
-            return True, "Cartella cliente su Drive eliminata."
-        except Exception as e:  # pragma: no cover
-            logger.info(
-                "tools.clean_client_workspace.drive.unexpected",
-                extra={"slug": slug, "detail": str(e)[:200]},
-            )
-            return False, "Errore inatteso Drive: si prosegue con cleanup locale/DB."
+            return False, "Alcune cartelle Drive non sono state eliminate: verificare i log."
+
+        logger.info(
+            "tools.clean_client_workspace.drive.folder_deleted",
+            extra={
+                "slug": slug,
+                "deleted": [_redact(cast(str, item.get("id"))) for item in deleted],
+                "names": [item.get("name") for item in deleted],
+                "search_terms": search_terms,
+            },
+        )
+        deleted_names = ", ".join(filter(None, (str(item.get("name") or "").strip() for item in deleted)))
+        if deleted_names:
+            return True, f"Cartelle Drive eliminate: {deleted_names}."
+        return True, "Cartella cliente su Drive eliminata."
     except ConfigError as e:
         logger.info("tools.clean_client_workspace.drive.ctx_error", extra={"slug": slug, "message": str(e)[:200]})
         # Non blocchiamo: continuiamo con la porzione locale/DB
@@ -287,6 +389,34 @@ def _remove_from_clients_db(slug: str, logger=LOGGER) -> Tuple[bool, str]:
         return False, f"Errore aggiornando il DB clienti: {e}"
 
 
+def perform_cleanup(slug: str, client_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Esegue la sequenza di cleanup (Drive → locale → registry) e ritorna dettagli.
+    """
+    results: Dict[str, Any] = {}
+
+    ok_drive, msg_drive = _delete_on_drive_if_present(slug, LOGGER, client_name=client_name)
+    results["drive"] = {"ok": bool(ok_drive), "message": msg_drive}
+
+    ok_local, msg_local = _delete_local_workspace(slug, LOGGER)
+    results["local"] = {"ok": bool(ok_local), "message": msg_local}
+    if not ok_local:
+        results["exit_code"] = 4
+        return results
+
+    ok_db, msg_db = _remove_from_clients_db(slug, LOGGER)
+    results["registry"] = {"ok": bool(ok_db), "message": msg_db}
+
+    if not ok_db:
+        results["exit_code"] = 1
+    elif not ok_drive:
+        results["exit_code"] = 3
+    else:
+        results["exit_code"] = 0
+
+    return results
+
+
 # --------------------------------------------------------------------------------------
 # Orchestrazione
 # --------------------------------------------------------------------------------------
@@ -309,39 +439,25 @@ def run_cleanup(slug: str, assume_yes: bool = False) -> int:
         print("Operazione annullata.")
         return 0
 
-    # 1) Drive
-    ok_drive, msg_drive = _delete_on_drive_if_present(slug, LOGGER)
-    if msg_drive:
-        print(msg_drive)
-    if not ok_drive:
-        # Proseguiamo comunque con locale + DB, ma segnaliamo exit speciale se tutto il resto va bene
-        drive_error = True
-    else:
-        drive_error = False
+    entry_name: Optional[str] = None
+    for entry in _load_clients():
+        if entry.slug.strip().lower() == slug.strip().lower():
+            entry_name = entry.nome
+            break
 
-    # 2) Locale
-    ok_local, msg_local = _delete_local_workspace(slug, LOGGER)
-    if msg_local:
-        print(msg_local)
-    if not ok_local:
+    results = perform_cleanup(slug, client_name=entry_name)
+
+    for key in ("drive", "local", "registry"):
+        info = results.get(key) or {}
+        message = info.get("message")
+        if message:
+            print(message)
+
+    exit_code = int(results.get("exit_code", 1))
+    if exit_code == 4:
         print("Errore: rimozione locale incompleta.")
-        # Non ha senso procedere: lo stato locale è incoerente
-        return 4
-
-    # 3) DB
-    ok_db, msg_db = _remove_from_clients_db(slug, LOGGER)
-    if msg_db:
-        print(msg_db)
-    if not ok_db:
-        # Non blocchiamo: il workspace è stato rimosso, ma segnaliamo errore generico
-        return 1
-
-    LOGGER.info("tools.clean_client_workspace.done", extra={"slug": slug})
-
-    if drive_error:
-        # Locale + DB ok, Drive ko per permessi / dipendenze
-        return 3
-    return 0
+    LOGGER.info("tools.clean_client_workspace.done", extra={"slug": slug, "exit_code": exit_code})
+    return exit_code
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
