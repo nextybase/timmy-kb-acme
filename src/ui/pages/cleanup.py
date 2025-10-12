@@ -2,9 +2,6 @@
 # src/ui/pages/cleanup.py
 from __future__ import annotations
 
-import importlib
-import importlib.util
-import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -15,50 +12,30 @@ from ui.clients_store import load_clients as _load_clients
 from ui.utils import resolve_raw_dir, set_slug
 
 
-def _repo_root() -> Path:
-    # cleanup.py -> pages -> ui -> src -> REPO_ROOT
-    return Path(__file__).resolve().parents[3]
-
-
-def _load_run_cleanup() -> Optional[Callable[..., Any]]:
-    """
-    Trova `run_cleanup` provando namespace multipli e, in fallback, il file locale.
-    """
-    candidates = [
-        ("src.tools.clean_client_workspace", "run_cleanup"),
-        ("tools.clean_client_workspace", "run_cleanup"),
-    ]
-    for module_name, func_name in candidates:
-        try:
-            module = importlib.import_module(module_name)
-            func = getattr(module, func_name, None)
-            if callable(func):
-                return func
-        except Exception:
-            continue
-
-    repo = _repo_root()
-    if str(repo) not in sys.path:
-        sys.path.insert(0, str(repo))
-
-    file_path = repo / "src" / "tools" / "clean_client_workspace.py"
-    if file_path.exists():
-        spec = importlib.util.spec_from_file_location("_cleanup_cli", file_path)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            try:
-                spec.loader.exec_module(module)  # type: ignore[attr-defined]
-                func = getattr(module, "run_cleanup", None)
-                if callable(func):
-                    return func
-            except Exception:
-                pass
-    return None
+def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
+    """Importa una funzione se disponibile, altrimenti None. Formato: 'pkg.mod:func'."""
+    try:
+        pkg, func = fn_path.split(":")
+        mod = __import__(pkg, fromlist=[func])
+        fn = getattr(mod, func, None)
+        return fn if callable(fn) else None
+    except Exception:
+        return None
 
 
 # Orchestratore di cancellazione (locale + DB + Drive)
 # run_cleanup(slug: str, assume_yes: bool = False) -> int
-_run_cleanup = _load_run_cleanup()
+# Prova entrambe le forme del modulo, a seconda del run-path.
+_run_cleanup = _safe_get("tools.clean_client_workspace:run_cleanup") or _safe_get(
+    "src.tools.clean_client_workspace:run_cleanup"
+)
+
+
+def _load_run_cleanup() -> Optional[Callable[..., Any]]:
+    """Tenta di ricaricare `run_cleanup` dai namespace supportati."""
+    return _safe_get("tools.clean_client_workspace:run_cleanup") or _safe_get(
+        "src.tools.clean_client_workspace:run_cleanup"
+    )
 
 
 def _client_display_name(slug: str) -> str:
