@@ -135,11 +135,10 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) ->
 
 
 # Registry unificato (SSoT) via ui.clients_store
-def _upsert_client_registry(slug: str, client_name: str, drive_ids: dict[str, str]) -> None:
+def _upsert_client_registry(slug: str, client_name: str) -> None:
     """
     Allinea il registro clienti (SSoT) impostando lo stato **pronto**.
-    Nota: gli ID Drive (se presenti) possono essere gestiti da clients_store
-    in step successivi; qui garantiamo la presenza del cliente e lo stato valido
+    Qui garantiamo la presenza del cliente e lo stato valido
     per il gating della pagina Semantica.
     """
     entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato="pronto")
@@ -242,7 +241,7 @@ if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
 
     if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
         display_name = st.session_state.get("client_name") or (name or current_slug)
-        _upsert_client_registry(current_slug, display_name, {})
+        _upsert_client_registry(current_slug, display_name)
 
         if build_drive_from_mapping is None:
             st.warning(
@@ -260,12 +259,12 @@ if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
 
             try:
                 ids = build_drive_from_mapping(slug=current_slug, client_name=display_name, progress=_cb)
-                _upsert_client_registry(current_slug, display_name, ids or {})
+                _upsert_client_registry(current_slug, display_name)
                 st.success(f"Struttura Drive creata: {ids}")
             except Exception as e:
                 st.error(f"Errore durante la creazione struttura Drive: {e}")
 
 # STEP 3 - Link finale
 if st.session_state.get(phase_state_key) in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
-    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug, {})
+    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug)
     st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")
