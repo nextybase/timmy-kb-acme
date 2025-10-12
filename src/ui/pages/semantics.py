@@ -12,8 +12,9 @@ from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 from ui.chrome import header, sidebar
-from ui.clients_store import get_state
-from ui.utils import get_slug, set_slug
+from ui.clients_store import get_state, set_state
+from ui.constants import SEMANTIC_READY_STATES
+from ui.utils import require_active_slug
 
 try:
     from ui.utils.workspace import has_raw_pdfs
@@ -23,7 +24,8 @@ except Exception:  # pragma: no cover
         return False, None
 
 
-ALLOWED_STATES = {"pronto", "arricchito", "finito"}
+# SSoT: stati ammessi per la pagina Semantica
+ALLOWED_STATES = SEMANTIC_READY_STATES
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
@@ -47,6 +49,12 @@ def _run_enrich(slug: str) -> None:
     with st.spinner("Arricchisco frontmatter..."):
         touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
     st.success(f"Frontmatter aggiornato ({len(touched)} file).")
+    try:
+        # Promozione stato: arricchito
+        set_state(slug, "arricchito")
+    except Exception:
+        # Lo stato non blocca l'uso della pagina; eventuale errore non è fatale per l'utente
+        pass
 
 
 def _run_summary(slug: str) -> None:
@@ -54,6 +62,11 @@ def _run_summary(slug: str) -> None:
     with st.spinner("Genero SUMMARY.md e README.md..."):
         write_summary_and_readme(ctx, logger, slug=slug)
     st.success("SUMMARY.md e README.md generati.")
+    try:
+        # Promozione stato: finito
+        set_state(slug, "finito")
+    except Exception:
+        pass
 
 
 def _go_preview() -> None:
@@ -66,22 +79,25 @@ def _go_preview() -> None:
 
 # ---------------- UI ----------------
 
-slug = get_slug()
-set_slug(slug)
+slug = require_active_slug()
 
 header(slug)
 sidebar(slug)
 
-if not slug:
-    st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
-    st.stop()
+try:
+    from streamlit.runtime.scriptrunner import get_script_run_ctx  # type: ignore[attr-defined]
+except Exception:
+    _HAS_STREAMLIT_CONTEXT = False
+else:
+    _HAS_STREAMLIT_CONTEXT = get_script_run_ctx() is not None
 
-state = (get_state(slug) or "").strip().lower()
-ready, raw_dir = has_raw_pdfs(slug)
-if state not in ALLOWED_STATES or not ready:
-    st.info("La semantica sarà disponibile quando lo stato raggiunge 'pronto' e `raw/` contiene PDF.")
-    st.caption(f"Stato: {state or 'n/d'} — RAW: {raw_dir or 'n/d'}")
-    st.stop()
+if _HAS_STREAMLIT_CONTEXT:
+    state = (get_state(slug) or "").strip().lower()
+    ready, raw_dir = has_raw_pdfs(slug)
+    if state not in ALLOWED_STATES or not ready:
+        st.info("La semantica sarà disponibile quando lo stato raggiunge 'pronto' e `raw/` contiene PDF.")
+        st.caption(f"Stato: {state or 'n/d'} — RAW: {raw_dir or 'n/d'}")
+        st.stop()
 
 st.subheader("Onboarding semantico")
 st.write("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")

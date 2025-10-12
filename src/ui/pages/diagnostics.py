@@ -9,7 +9,7 @@ import streamlit as st
 
 from ui.chrome import header, sidebar
 from ui.utils import diagnostics as diag  # verrà monkeypatchato nei test
-from ui.utils import get_slug, set_slug
+from ui.utils import require_active_slug
 
 TAIL_BYTES = 4000
 
@@ -87,17 +87,12 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
 
 def main() -> None:
     """Pagina Diagnostica: header, sidebar, counts e log tail."""
-    slug = get_slug()
-    set_slug(slug)
+    slug = require_active_slug()
 
     header(slug)
     sidebar(slug)
 
     st.subheader("Diagnostica")
-
-    if not slug:
-        st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
-        st.stop()
 
     try:
         base_dir = diag.resolve_base_dir(slug)

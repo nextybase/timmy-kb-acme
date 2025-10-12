@@ -8,7 +8,7 @@ import streamlit as st
 
 from ui.chrome import header, sidebar
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
-from ui.utils import get_slug, set_slug
+from ui.utils import require_active_slug
 
 # ---- Tipi per gli editor YAML ----
 YamlEditor = Callable[[str], None]
@@ -24,8 +24,7 @@ except Exception:
     edit_semantic_mapping = None
     edit_cartelle_raw = None
 
-slug = get_slug()
-set_slug(slug)
+slug = require_active_slug()
 
 header(slug)
 sidebar(slug)
@@ -71,17 +70,14 @@ if (int(new_limit), int(new_budget_ms), bool(new_auto)) != (
 st.markdown("---")
 st.markdown("### Semantica (YAML)")
 
-if not slug:
-    st.info("Imposta uno **slug** nella pagina Gestisci cliente per modificare i file YAML del workspace.")
-else:
-    col_map, col_cart = st.columns(2)
-    with col_map:
-        if callable(edit_semantic_mapping):
-            edit_semantic_mapping(slug)  # semantic/semantic_mapping.yaml
-        else:
-            st.info("Editor mapping non disponibile.")
-    with col_cart:
-        if callable(edit_cartelle_raw):
-            edit_cartelle_raw(slug)  # semantic/cartelle_raw.yaml
-        else:
-            st.info("Editor cartelle non disponibile.")
+col_map, col_cart = st.columns(2)
+with col_map:
+    if callable(edit_semantic_mapping):
+        edit_semantic_mapping(slug)  # semantic/semantic_mapping.yaml
+    else:
+        st.info("Editor mapping non disponibile.")
+with col_cart:
+    if callable(edit_cartelle_raw):
+        edit_cartelle_raw(slug)  # semantic/cartelle_raw.yaml
+    else:
+        st.info("Editor cartelle non disponibile.")

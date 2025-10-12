@@ -8,19 +8,14 @@ from adapters.preview import start_preview, stop_preview
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
 from ui.chrome import header, sidebar
-from ui.utils import get_slug, set_slug
+from ui.utils import require_active_slug
 
 st.subheader("Preview Docker (HonKit)")
 
-slug = get_slug()
-set_slug(slug)
+slug = require_active_slug()
 
 header(slug)
 sidebar(slug)
-
-if not slug:
-    st.info("Seleziona uno slug cliente per controllare la preview.")
-    st.stop()
 
 try:
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)

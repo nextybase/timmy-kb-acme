@@ -152,8 +152,7 @@ sidebar(None)
 
 st.subheader("Nuovo cliente")
 
-# NOTA: le variabili qui sotto rappresentano **fasi UI** del wizard (NON lo stato cliente persistito)
-# Fasi UI (italiano): "iniziale" | "pronto_apertura" | "predisposto"
+# Chiavi di stato UI (effimere, non persistite)
 slug_state_key = "new_client.slug"
 phase_state_key = "new_client.phase"
 
@@ -182,9 +181,14 @@ pdf = st.file_uploader(
     help="Obbligatorio: sarà salvato come config/VisionStatement.pdf",
 )
 
+# Slug determinato localmente (non cambiamo fasi/stati finché non premi i pulsanti)
 candidate_slug = (slug or "").strip()
+effective_slug = (current_slug or candidate_slug) or ""
 
+# ------------------------------------------------------------------
 # STEP 1 - Inizializza Workspace (crea struttura + salva PDF + Vision → YAML)
+# VISIBILE solo quando la fase UI è INIT
+# ------------------------------------------------------------------
 if current_phase == UI_PHASE_INIT:
     if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
@@ -199,6 +203,7 @@ if current_phase == UI_PHASE_INIT:
         if not pdf_bytes:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
+
         try:
             ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
             _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
@@ -206,42 +211,52 @@ if current_phase == UI_PHASE_INIT:
             _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
             ui_logger = _ui_logger()
             ctx = _UIContext(base_dir=_client_base(s))
-            try:
-                provision_from_vision(
-                    ctx=ctx,
-                    logger=ui_logger,
-                    slug=s,
-                    pdf_path=str(_client_pdf_path(s)),
-                )
-            except TypeError:
-                provision_from_vision(s, str(_client_pdf_path(s)))
+
+            # Loader visivo durante Vision
+            with st.status("Eseguo Vision…", expanded=True) as status:
+                try:
+                    provision_from_vision(
+                        ctx=ctx,
+                        logger=ui_logger,
+                        slug=s,
+                        pdf_path=str(_client_pdf_path(s)),
+                    )
+                except TypeError:
+                    provision_from_vision(s, str(_client_pdf_path(s)))
+                status.update(label="Vision completata.", state="complete")
 
             if _exists_semantic_files(s):
+                # SSoT: dopo Vision il cliente è "nuovo"
+                entry = ClientEntry(slug=s, nome=(name or "").strip() or s, stato="nuovo")
+                upsert_client(entry)
+                set_state(s, "nuovo")
+
+                # Aggiorna immediatamente contesto UI (fa sparire "Inizializza" e mostra "Apri")
                 set_slug(s)
                 st.session_state[slug_state_key] = s
                 st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
                 st.session_state["client_name"] = name or ""
-                current_slug = s
-                current_phase = UI_PHASE_READY_TO_OPEN
                 st.success("Workspace inizializzato e YAML generati.")
+                st.rerun()  # <-- forza il rerender per far comparire "Apri workspace"
             else:
                 st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
         except Exception as e:  # pragma: no cover
             st.error(f"Impossibile creare il workspace: {e}")
 
-# Stato
-if current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
-    st.info(f"Workspace per **{current_slug}** inizializzato.")
-
+# ------------------------------------------------------------------
 # STEP 2 - Apri workspace (solo Drive + finalizzazione stato)
-if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
-    if not _exists_semantic_files(current_slug):
+# VISIBILE solo quando la fase UI è READY_TO_OPEN
+# ------------------------------------------------------------------
+if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
+    st.session_state.get(slug_state_key) or effective_slug
+):
+    eff = st.session_state.get(slug_state_key) or effective_slug
+    if not _exists_semantic_files(eff):
         st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
     if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
-        display_name = st.session_state.get("client_name") or (name or current_slug)
-        _upsert_client_registry(current_slug, display_name)
+        display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
             st.warning(
@@ -258,13 +273,30 @@ if current_phase == UI_PHASE_READY_TO_OPEN and current_slug:
                 info.markdown(f"{pct}% - {label}")
 
             try:
-                ids = build_drive_from_mapping(slug=current_slug, client_name=display_name, progress=_cb)
-                _upsert_client_registry(current_slug, display_name)
-                st.success(f"Struttura Drive creata: {ids}")
+                _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
+                # Drive OK → stato "pronto" e fase PROVISIONED
+                _upsert_client_registry(eff, display_name)
+                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+                st.success("Struttura Drive creata correttamente.")
+                st.rerun()  # <-- forza il rerender per mostrare il link finale
             except Exception as e:
                 st.error(f"Errore durante la creazione struttura Drive: {e}")
 
+# ------------------------------------------------------------------
 # STEP 3 - Link finale
-if st.session_state.get(phase_state_key) in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED) and current_slug:
-    _upsert_client_registry(current_slug, st.session_state.get("client_name", "") or current_slug)
-    st.markdown(f"[Vai a Gestisci cliente](/manage?slug={current_slug})")
+# VISIBILE solo quando la fase UI è PROVISIONED
+# ------------------------------------------------------------------
+if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
+    st.session_state.get(slug_state_key) or effective_slug
+):
+    eff = st.session_state.get(slug_state_key) or effective_slug
+    # Link nella STESSA scheda (target=_self) tramite blocco HTML esplicito.
+    st.html(
+        f"""
+        <a href="/manage?slug={eff}" target="_self"
+        style="display:inline-block;padding:0.5rem 1rem;border-radius:0.5rem;
+                background:#0f62fe;color:#fff;text-decoration:none;">
+        Vai a Gestisci cliente
+        </a>
+        """
+    )

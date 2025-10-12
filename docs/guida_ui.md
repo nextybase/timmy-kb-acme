@@ -92,7 +92,8 @@ Flusso a pulsanti:
 - **Genera README/SUMMARY** → genera `README.md` e `SUMMARY.md` in modo idempotente.
 - **Anteprima Docker (HonKit)** → delega alla pagina *Docker Preview*.
 
-**Gating**: la pagina è utilizzabile solo \*\*se lo stato del cliente è uno tra ``, ``, \*\*`` e `raw/` contiene PDF. Lo stato è letto dal registro SSoT.
+**Gating**: la pagina è utilizzabile solo se lo **stato cliente** è uno tra `pronto`, `arricchito`, `finito` **e** `raw/` contiene PDF.
+Lo stato è letto dal registro SSoT (`clients_db/clients.yaml`).
 
 ### Settings (Tools)
 
