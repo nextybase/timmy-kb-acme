@@ -2,53 +2,72 @@
 # src/ui/pages/cleanup.py
 from __future__ import annotations
 
+import importlib
+import importlib.util
+import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import streamlit as st
 
-from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
+from ui.clients_store import load_clients as _load_clients
 from ui.utils import resolve_raw_dir, set_slug
 
 
-def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
-    """Importa una funzione se disponibile, altrimenti None. Formato: 'pkg.mod:func'."""
-    try:
-        pkg, func = fn_path.split(":")
-        mod = __import__(pkg, fromlist=[func])
-        fn = getattr(mod, func, None)
-        return fn if callable(fn) else None
-    except Exception:
-        return None
-
-
-# Orchestratore di cancellazione (locale + DB + Drive)
-# run_cleanup(slug: str, assume_yes: bool = False) -> int
-_run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")
-
-
-# ---- Helpers ----
 def _repo_root() -> Path:
     # cleanup.py -> pages -> ui -> src -> REPO_ROOT
     return Path(__file__).resolve().parents[3]
 
 
-def _clients_db_path() -> Path:
-    return _repo_root() / "clients_db" / "clients.yaml"
+def _load_run_cleanup() -> Optional[Callable[..., Any]]:
+    """
+    Trova `run_cleanup` provando namespace multipli e, in fallback, il file locale.
+    """
+    candidates = [
+        ("src.tools.clean_client_workspace", "run_cleanup"),
+        ("tools.clean_client_workspace", "run_cleanup"),
+    ]
+    for module_name, func_name in candidates:
+        try:
+            module = importlib.import_module(module_name)
+            func = getattr(module, func_name, None)
+            if callable(func):
+                return func
+        except Exception:
+            continue
+
+    repo = _repo_root()
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+
+    file_path = repo / "src" / "tools" / "clean_client_workspace.py"
+    if file_path.exists():
+        spec = importlib.util.spec_from_file_location("_cleanup_cli", file_path)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            try:
+                spec.loader.exec_module(module)  # type: ignore[attr-defined]
+                func = getattr(module, "run_cleanup", None)
+                if callable(func):
+                    return func
+            except Exception:
+                pass
+    return None
+
+
+# Orchestratore di cancellazione (locale + DB + Drive)
+# run_cleanup(slug: str, assume_yes: bool = False) -> int
+_run_cleanup = _load_run_cleanup()
 
 
 def _client_display_name(slug: str) -> str:
-    """Legge il nome cliente dal DB; fallback allo slug."""
+    """Recupera il nome cliente dal registry SSoT; fallback allo slug."""
     try:
-        dbp = _clients_db_path()
-        if dbp.exists():
-            data = yaml_read(dbp.parent, dbp)
-            records = data if isinstance(data, list) else []
-            for rec in records:
-                if (rec or {}).get("slug", "").strip().lower() == slug.strip().lower():
-                    name = (rec or {}).get("nome", "") or ""
-                    return name.strip() or slug
+        for entry in _load_clients():
+            if entry.slug.strip().lower() == slug.strip().lower():
+                name = (entry.nome or "").strip()
+                return name or entry.slug
     except Exception:
         pass
     return slug
@@ -132,16 +151,19 @@ if st.session_state.get("__cleanup_confirm_open"):
                 st.rerun()
         with c2:
             if st.button("Conferma eliminazione", key="cleanup_do_delete"):
-                if not callable(_run_cleanup):
+                current = _run_cleanup
+                if not callable(current):
+                    current = _load_run_cleanup()
+                if not callable(current):
                     st.error(
                         "Funzione di cancellazione non disponibile. "
-                        "Verifica che `src.tools.clean_client_workspace` sia importabile."
+                        "Verifica che `tools.clean_client_workspace` sia importabile (con o senza prefisso `src`)."
                     )
                     st.session_state.pop("__cleanup_confirm_open", None)
                     st.session_state.pop("__cleanup_confirm_slug", None)
                 else:
                     with st.status(f"Elimino il cliente **{client_name}**…", expanded=True):
-                        code = int(_run_cleanup(target, True))  # assume_yes=True
+                        code = int(current(target, True))  # assume_yes=True
                     if code == 0:
                         st.success(f"Cliente '{client_name}' eliminato correttamente.")
                         set_slug("")  # rimuove lo slug attivo (query + session + persistenza)
@@ -149,9 +171,9 @@ if st.session_state.get("__cleanup_confirm_open"):
                         st.session_state.pop("__cleanup_confirm_slug", None)
                         _redirect_home()  # torna alla home completa
                     elif code == 3:
-                        st.warning(
-                            "Workspace locale e DB rimossi. " "Cartella Drive non eliminata per permessi insufficienti."
-                        )
+                        st.warning("Workspace locale e DB rimossi. Cartella Drive non eliminata per permessi/driver.")
+                        set_slug("")  # pulisco selezione corrente
+                        _redirect_home()
                     elif code == 4:
                         st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
                     else:

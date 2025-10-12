@@ -26,12 +26,10 @@ import stat
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple, cast
-
-import yaml
-from googleapiclient.errors import HttpError
+from typing import Any, Iterable, Optional, Tuple, cast
 
 from src.pipeline.context import ClientContext
+from src.pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
 from src.pipeline.exceptions import ConfigError
 from src.pipeline.logging_utils import get_structured_logger
 from src.pipeline.path_utils import ensure_within, ensure_within_and_resolve
@@ -39,12 +37,10 @@ from src.pipeline.path_utils import ensure_within, ensure_within_and_resolve
 # SSoT percorsi registry clienti dalla UI
 from ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
 from ui.clients_store import DB_FILE as CLIENTS_DB_FILE
+from ui.clients_store import load_clients as _load_clients
+from ui.clients_store import save_clients as _save_clients
 
-# Dipendenze Drive (opzionali; usate se disponibili)
-try:
-    from src.pipeline.drive.client import get_drive_service  # SSoT per service
-except Exception:  # pragma: no cover
-    get_drive_service = None  # type: ignore[assignment]
+MIME_FOLDER_CACHED = MIME_FOLDER
 
 
 # --------------------------------------------------------------------------------------
@@ -91,35 +87,15 @@ def _confirm_irreversible(slug: str, assume_yes: bool) -> bool:
 # --------------------------------------------------------------------------------------
 
 
-def _drive_find_client_folder_id(service: Any, drive_parent_id: str, slug: str) -> Optional[str]:
-    q = (
-        f"name = '{slug}' and '{drive_parent_id}' in parents and "
-        "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-    )
-
-    def _call() -> Dict[str, Any]:
-        return (
-            service.files()
-            .list(
-                q=q,
-                spaces="drive",
-                fields="files(id,name)",
-                pageSize=10,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-
-    resp = cast(Dict[str, Any], _call())
-    files = cast(Iterable[Dict[str, Any]], resp.get("files", []))
-    for f in files:
-        return cast(str, f.get("id"))
+def _find_slug_folder_id(service: Any, drive_parent_id: str, slug: str) -> Optional[str]:
+    """Trova l'ID della cartella `<slug>` sotto DRIVE_ID usando la facciata Drive."""
+    sanitized_slug = slug.replace("'", "\\'")
+    query = f"name = '{sanitized_slug}' and mimeType = '{MIME_FOLDER_CACHED}' and trashed = false"
+    for item in list_drive_files(service, drive_parent_id, query=query, fields="files(id,name,mimeType)"):
+        file_id = cast(Optional[str], item.get("id"))
+        if file_id:
+            return file_id
     return None
-
-
-def _drive_delete_by_id(service: Any, file_id: str) -> None:
-    service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
 
 
 def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
@@ -127,20 +103,16 @@ def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
     Prova a eliminare la cartella cliente su Drive. Idempotente.
     Ritorna (ok, messaggio); ok=False solo per errori di permesso o dipendenze.
     """
-    if get_drive_service is None:
-        logger.info("tools.clean_client_workspace.drive.unavailable")
-        return False, "Funzionalità Drive non disponibili (dipendenze assenti)."
-
     try:
         # Carico il contesto per ottenere ENV e Drive service.
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
         service = get_drive_service(ctx)
         drive_parent_id = (ctx.env or {}).get("DRIVE_ID")
         if not drive_parent_id:
             logger.info("tools.clean_client_workspace.drive.no_parent", extra={"slug": slug})
             return True, "DRIVE_ID non impostato: nessuna cartella da rimuovere (skip)."
 
-        folder_id = _drive_find_client_folder_id(service, drive_parent_id, slug)
+        folder_id = _find_slug_folder_id(service, drive_parent_id, slug)
         if not folder_id:
             logger.info(
                 "tools.clean_client_workspace.drive.folder_absent",
@@ -149,25 +121,12 @@ def _delete_on_drive_if_present(slug: str, logger=LOGGER) -> Tuple[bool, str]:
             return True, "Cartella cliente su Drive assente (ok)."
 
         try:
-            _drive_delete_by_id(service, folder_id)
+            delete_drive_file(service, folder_id)
             logger.info(
                 "tools.clean_client_workspace.drive.folder_deleted",
                 extra={"slug": slug, "folder_id": _redact(folder_id)},
             )
             return True, "Cartella cliente su Drive eliminata."
-        except HttpError as he:  # pragma: no cover
-            status = getattr(getattr(he, "resp", None), "status", None)
-            if status == 404:
-                logger.info(
-                    "tools.clean_client_workspace.drive.not_found",
-                    extra={"slug": slug, "detail": f"fileId non trovato (slug={slug})"},
-                )
-                return True, "Cartella Drive non trovata (ok)."
-            logger.info(
-                "tools.clean_client_workspace.drive.delete_failed",
-                extra={"slug": slug, "detail": str(he)[:200]},
-            )
-            return False, "Eliminazione su Drive non riuscita, si prosegue con cleanup locale/DB."
         except Exception as e:  # pragma: no cover
             logger.info(
                 "tools.clean_client_workspace.drive.unexpected",
@@ -301,6 +260,9 @@ def _delete_local_workspace(slug: str, logger=LOGGER) -> Tuple[bool, str]:
 
 
 def _remove_from_clients_db(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+    """
+    Rimuove lo slug dal registry clienti delegando all'SSoT `ui.clients_store`.
+    """
     try:
         db_dir = ensure_within_and_resolve(REPO_ROOT, CLIENTS_DB_DIR)
         db_file = ensure_within_and_resolve(db_dir, CLIENTS_DB_FILE)
@@ -309,28 +271,15 @@ def _remove_from_clients_db(slug: str, logger=LOGGER) -> Tuple[bool, str]:
             logger.info("tools.clean_client_workspace.db.absent", extra={"slug": slug, "path": str(db_file)})
             return True, "DB clienti assente (ok)."
 
-        with db_file.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        entries = _load_clients()
+        before = len(entries)
+        remaining = [entry for entry in entries if entry.slug.strip().lower() != slug.strip().lower()]
 
-        if not isinstance(data, dict):
-            data = {}
-
-        items = data.get("clients")
-        if not isinstance(items, list):
-            items = []
-
-        new_items = [it for it in items if not (isinstance(it, dict) and it.get("slug") == slug)]
-
-        if len(new_items) == len(items):
+        if len(remaining) == before:
             logger.info("tools.clean_client_workspace.db.no_entry", extra={"slug": slug})
             return True, "Record non presente nel DB (ok)."
 
-        data["clients"] = new_items
-        tmp = db_file.with_suffix(".yaml.tmp")
-        with tmp.open("w", encoding="utf-8", newline="\n") as f:
-            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
-        tmp.replace(db_file)
-
+        _save_clients(remaining)
         logger.info("tools.clean_client_workspace.db.entry_removed", extra={"slug": slug, "path": str(db_file)})
         return True, "Record rimosso dal DB clienti."
     except Exception as e:  # pragma: no cover
