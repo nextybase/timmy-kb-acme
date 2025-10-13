@@ -1,7 +1,8 @@
 # src/ui/utils/query_params.py
 from __future__ import annotations
 
-from typing import Any, List, Optional, Union, cast
+from collections.abc import MutableMapping
+from typing import Any, Optional, cast
 
 try:
     import streamlit as st
@@ -17,12 +18,27 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
     st = cast(Any, _StreamlitStub())
 
 
+QueryParams = MutableMapping[str, Any]
+
+
+def _query_params() -> QueryParams | None:
+    params = getattr(st, "query_params", None)
+    if params is None:
+        return None
+    if isinstance(params, MutableMapping):
+        return params
+    return cast(QueryParams, params)
+
+
 def get_slug() -> Optional[str]:
     """
     Legge 'slug' dai query params e lo normalizza.
     Gestisce il caso in cui Streamlit restituisca una lista.
     """
-    raw: Union[str, List[str], None] = st.query_params.get("slug")
+    params = _query_params()
+    if params is None:
+        return None
+    raw = params.get("slug")
     if isinstance(raw, list):
         raw = raw[0] if raw else None
     if isinstance(raw, str):
@@ -33,12 +49,15 @@ def get_slug() -> Optional[str]:
 
 def set_slug(slug: Optional[str]) -> None:
     """Imposta o rimuove 'slug' nei query params dopo normalizzazione."""
+    params = _query_params()
+    if params is None:
+        return
     normalized = (slug or "").strip().lower()
     if normalized:
-        st.query_params["slug"] = normalized
+        params["slug"] = normalized
         return
 
     try:
-        del st.query_params["slug"]
+        del params["slug"]
     except KeyError:
         pass

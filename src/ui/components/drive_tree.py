@@ -143,7 +143,7 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     root_meta = _as_meta(slug_folder)
     st.subheader(f"Albero Drive (DRIVE_ID/{slug})")
     st.caption("Focus su raw/ e sottocartelle.")
-    root_container = st.expander(f"Drive :: {slug}", expanded=True)
+    root_container = st.expander(f"Drive :: {slug}", expanded=False)
     with root_container:
         children = _list_children(service, slug_folder["id"])
         index["./"] = root_meta

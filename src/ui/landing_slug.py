@@ -499,7 +499,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             finally:
                 _state_set("vision_workflow", vision_state)
 
-    if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary"):
+    if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary", width="stretch"):
         vision_state["workspace_committed"] = True
         _state_set("vision_workflow", vision_state)
         _state_set("client_locked", True)

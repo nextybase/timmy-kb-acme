@@ -78,6 +78,7 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
                     data=archive,
                     file_name=f"{(slug or 'logs')}.zip",
                     mime="application/zip",
+                    width="stretch",
                 )
         except Exception:
             # best-effort: la pagina resta utilizzabile anche senza archivio

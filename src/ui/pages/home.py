@@ -25,4 +25,4 @@ if hasattr(st, "page_link"):
     )
 else:
     # Fallback per versioni più vecchie: link diretto al path registrato
-    st.link_button("Nuovo cliente", url="/new")
+    st.link_button("Nuovo cliente", url="/new?tab=new", width="stretch")

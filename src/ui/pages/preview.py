@@ -21,7 +21,7 @@ except Exception as e:
 else:
     col_start, col_stop = st.columns(2)
     with col_start:
-        if st.button("Avvia preview", key="btn_preview_start"):
+        if st.button("Avvia preview", key="btn_preview_start", width="stretch"):
             try:
                 name = start_preview(ctx, logger)
                 st.session_state["preview_container"] = name
@@ -29,7 +29,7 @@ else:
             except Exception as exc:
                 st.error(f"Impossibile avviare la preview: {exc}")
     with col_stop:
-        if st.button("Arresta preview", key="btn_preview_stop"):
+        if st.button("Arresta preview", key="btn_preview_stop", width="stretch"):
             try:
                 stop_preview(logger, container_name=st.session_state.get("preview_container"))
                 st.session_state.pop("preview_container", None)

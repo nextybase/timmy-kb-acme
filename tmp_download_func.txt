@@ -1,0 +1,214 @@
+def download_raw_from_drive_with_progress(
+    slug: str,
+    *,
+    base_root: Path | str = "output",
+    require_env: bool = True,
+    overwrite: bool = False,
+    logger: Optional[logging.Logger] = None,
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+) -> List[Path]:
+    # Guard specifica per il download: richiede solo funzioni necessarie
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if not callable(download_drive_pdfs_to_local):
+        missing.append("download_drive_pdfs_to_local")
+    if missing:
+        raise RuntimeError(
+            "Funzionalità Google Drive non disponibili nella UI (download): "
+            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+        )
+    assert get_drive_service is not None
+    assert create_drive_folder is not None
+    assert download_drive_pdfs_to_local is not None
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = logger or _get_logger(ctx)
+    svc = get_drive_service(ctx)
+
+    parent_id = ctx.env.get("DRIVE_ID")
+    if not parent_id:
+        raise RuntimeError("DRIVE_ID non impostato.")
+
+    client_folder_id = create_drive_folder(svc, slug, parent_id, bool(getattr(ctx, "redact_logs", False)))
+    sub = _drive_list_folders(svc, client_folder_id)
+    name_to_id = {d["name"]: d["id"] for d in sub}
+    raw_id = name_to_id.get("raw")
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
+
+    raw_subfolders = _drive_list_folders(svc, raw_id)
+    root_pdfs = _drive_list_pdfs(svc, raw_id)
+
+    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    written: List[Path] = []
+
+    if on_progress:
+        # progress_cb: on_progress is guaranteed non-None here
+        progress_cb: Callable[[int, int, str], None] = on_progress
+
+        # Pre-scan: raccogli lista file per folder e calcola total una sola volta
+        by_folder: Dict[str, List[Dict[str, str]]] = {}
+        name_map: Dict[str, str] = {}
+        for folder in raw_subfolders:
+            folder_id = folder["id"]
+            by_folder[folder_id] = _drive_list_pdfs(svc, folder_id)
+            name_map[folder_id] = folder["name"]
+        total = len(root_pdfs) + sum(len(v) for v in by_folder.values())
+        pre_sizes: Dict[str, int] = {}
+        label_map: Dict[str, str] = {}
+        candidates: List[Path] = []
+        done = 0
+
+        # Secondo pass: prepara dir, registra skip deterministici e mappa etichette
+        folder_specs = [
+            ("", root_pdfs, base_dir),
+            *[
+                (
+                    name_map[folder["id"]],
+                    by_folder.get(folder["id"], []),
+                    ensure_within_and_resolve(base_dir, base_dir / name_map[folder["id"]]),
+                )
+                for folder in raw_subfolders
+            ],
+        ]
+        for folder_name, files, dest_dir in folder_specs:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                name = f.get("name") or ""
+                remote_size = int(f.get("size") or 0)
+                safe_name = sanitize_filename(name) or "file"
+                if not safe_name.lower().endswith(".pdf"):
+                    safe_name += ".pdf"
+                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+                candidates.append(dest)
+                label = f"{folder_name}/{safe_name}" if folder_name else safe_name
+                label_map[str(dest)] = label
+                if dest.exists():
+                    try:
+                        pre_sizes[str(dest)] = dest.stat().st_size
+                    except OSError:
+                        pre_sizes[str(dest)] = -1
+                # Conta subito gli skip deterministici (stessa size e no overwrite)
+                try:
+                    if dest.exists() and not overwrite and remote_size > 0 and dest.stat().st_size == remote_size:
+                        log.info("raw.download.skip.exists", extra={"file_path": str(dest)})
+                        done += 1
+                        progress_cb(done, total, label)
+                except OSError:
+                    # Non interrompere il flusso per errori di stat() su Windows
+                    log.debug("pre-scan.stat.failed", extra={"file_path": str(dest)}, exc_info=True)
+
+        # Adapter di progress: intercetta i log del downloader pipeline
+        class _ProgressHandler(logging.Handler):
+            def __init__(self, *, total: int, start_done: int, label_map: Dict[str, str]) -> None:
+                super().__init__(level=logging.INFO)
+                self.total = total
+                self.done = start_done
+                self.label_map = label_map
+
+            def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
+                try:
+                    if record.name == "pipeline.drive.download" and record.getMessage() == "download.ok":
+                        path = getattr(record, "file_path", None) or record.__dict__.get("file_path")
+                        label = self.label_map.get(str(path), str(path) if path else "-")
+                        self.done += 1
+                        try:
+                            progress_cb(self.done, self.total, label)
+                        except Exception:
+                            # Non deve mai spezzare il logging della pipeline
+                            logging.getLogger("ui.services.drive_runner").debug(
+                                "progress.callback.failed", exc_info=True
+                            )
+                except Exception:
+                    # Evita try/except/pass silenziosi: traccia in debug
+                    logging.getLogger("ui.services.drive_runner").debug("progress.emit.failed", exc_info=True)
+
+        dl_logger = get_structured_logger("pipeline.drive.download", context=ctx)
+        ph = _ProgressHandler(total=total, start_done=done, label_map=label_map)
+        dl_logger.addHandler(ph)
+        try:
+            # Esegui il download delegato
+            download_drive_pdfs_to_local(
+                svc,
+                raw_id,
+                base_dir,
+                progress=False,
+                context=ctx,
+                redact_logs=bool(getattr(ctx, "redact_logs", False)),
+            )
+        finally:
+            dl_logger.removeHandler(ph)
+
+        # Post-scan per comporre la lista dei file nuovi/aggiornati
+        for dest in candidates:
+            try:
+                size_now = dest.stat().st_size
+            except OSError:
+                continue
+            size_prev = pre_sizes.get(str(dest), None)
+            if size_prev is None or size_prev != size_now:
+                written.append(dest)
+    else:
+        # Nessun progress: singolo passaggio senza pre-scan
+        # Pre-scan
+        pre_sizes_noprog: Dict[str, int] = {}
+        candidates_noprog: List[Path] = []
+        # File direttamente sotto raw/
+        for f in root_pdfs:
+            name = f.get("name") or ""
+            safe_name = sanitize_filename(name) or "file"
+            if not safe_name.lower().endswith(".pdf"):
+                safe_name += ".pdf"
+            dest = ensure_within_and_resolve(base_dir, base_dir / safe_name)
+            candidates_noprog.append(dest)
+            if dest.exists():
+                try:
+                    pre_sizes_noprog[str(dest)] = dest.stat().st_size
+                except OSError:
+                    pre_sizes_noprog[str(dest)] = -1
+
+        for folder in raw_subfolders:
+            folder_name = folder["name"]
+            folder_id = folder["id"]
+            files = _drive_list_pdfs(svc, folder_id)
+            dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                name = f.get("name") or ""
+                safe_name = sanitize_filename(name) or "file"
+                if not safe_name.lower().endswith(".pdf"):
+                    safe_name += ".pdf"
+                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+                candidates_noprog.append(dest)
+                if dest.exists():
+                    try:
+                        pre_sizes_noprog[str(dest)] = dest.stat().st_size
+                    except OSError:
+                        pre_sizes_noprog[str(dest)] = -1
+
+        # Download via pipeline
+        download_drive_pdfs_to_local(
+            svc,
+            raw_id,
+            base_dir,
+            progress=False,
+            context=ctx,
+            redact_logs=bool(getattr(ctx, "redact_logs", False)),
+        )
+
+        # Post-scan: costruisci lista dei file nuovi/aggiornati
+        for dest in candidates_noprog:
+            try:
+                size_now = dest.stat().st_size
+            except OSError:
+                continue
+            size_prev = pre_sizes_noprog.get(str(dest), None)
+            if size_prev is None or size_prev != size_now:
+                written.append(dest)
+
+    log.info("raw.download.summary", extra={"count": len(written)})
+    return written

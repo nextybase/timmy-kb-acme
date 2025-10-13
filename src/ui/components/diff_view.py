@@ -195,7 +195,7 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
         else:
             st.caption("Nessun elemento solo locale.")
 
-    with st.expander("Differenze dimensione/mtime", expanded=True):
+    with st.expander("Differenze dimensione/mtime", expanded=False):
         if differences:
             st.table(differences)
         else:

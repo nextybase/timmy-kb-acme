@@ -125,7 +125,7 @@ else:
 
     # Schermata iniziale
     login_url = _build_auth_url(st.session_state["oauth_state"], st.session_state["oauth_nonce"])
-    st.link_button("Accedi con Google", login_url)
+    st.link_button("Accedi con Google", login_url, width="stretch")
 
     with st.expander("Diagnostica (locale)"):
         st.code(

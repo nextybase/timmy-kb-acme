@@ -9,6 +9,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
 
+create_drive_folder: Callable[..., Any] | None
+create_drive_structure_from_yaml: Callable[..., Any] | None
+download_drive_pdfs_to_local: Callable[..., Any] | None
+get_drive_service: Callable[[ClientContext], Any] | None
+upload_config_to_drive_folder: Callable[..., Any] | None
+
 try:
     import pipeline.drive_utils as _du
 
@@ -55,7 +61,7 @@ def _require_drive_utils_ui() -> None:
         missing.append("upload_config_to_drive_folder")
     if missing:
         raise RuntimeError(
-            "Funzionalit├á Google Drive non disponibili nella UI: "
+            "Funzionalitâ”œÃ¡ Google Drive non disponibili nella UI: "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
 
@@ -79,6 +85,13 @@ def build_drive_from_mapping(
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
     _require_drive_utils_ui()
+    if (
+        get_drive_service is None
+        or create_drive_folder is None
+        or create_drive_structure_from_yaml is None
+        or upload_config_to_drive_folder is None
+    ):
+        raise RuntimeError("Funzionalità Google Drive non disponibili. Installa gli extra `pip install .[drive]`.")
     # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
@@ -92,16 +105,17 @@ def build_drive_from_mapping(
     total_steps = 3
     step = 0
     client_folder_id = create_drive_folder(
-        svc, slug, parent_id=drive_parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+        svc,
+        slug,
+        parent_id=drive_parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
     step += 1
     if progress:
         progress(step, total_steps, "Cartella cliente creata")
 
     # Upload config.yaml nella cartella cliente
-    upload_config_to_drive_folder(
-        svc, ctx, parent_id=client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
-    )
+    upload_config_to_drive_folder(svc, ctx, client_folder_id, bool(getattr(ctx, "redact_logs", False)))
     step += 1
     if progress:
         progress(step, total_steps, "config.yaml caricato")
@@ -112,7 +126,7 @@ def build_drive_from_mapping(
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
     created_map = create_drive_structure_from_yaml(
-        svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+        svc, tmp_yaml, client_folder_id, bool(getattr(ctx, "redact_logs", False))
     )
     step += 1
     if progress:
@@ -262,6 +276,8 @@ def emit_readmes_for_raw(
     Upload in ciascuna sottocartella. Ritorna {category_name -> file_id}
     """
     _require_drive_utils_ui()
+    if get_drive_service is None or create_drive_folder is None:
+        raise RuntimeError("Funzioni Drive non disponibili.")
     # Carica .env per SERVICE_ACCOUNT_FILE/DRIVE_ID se disponibile
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
@@ -275,15 +291,20 @@ def emit_readmes_for_raw(
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
     client_folder_id = create_drive_folder(
-        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+        svc,
+        slug,
+        parent_id=parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
 
     raw_id: Optional[str] = None
     if ensure_structure:
+        if create_drive_structure_from_yaml is None:
+            raise RuntimeError("create_drive_structure_from_yaml non disponibile.")
         structure = mapping_to_raw_structure(mapping)
         tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
         created_map = create_drive_structure_from_yaml(
-            svc, tmp_yaml, client_folder_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+            svc, tmp_yaml, client_folder_id, bool(getattr(ctx, "redact_logs", False))
         )
         raw_id = created_map.get("raw")
     else:
@@ -377,9 +398,11 @@ def download_raw_from_drive_with_progress(
         missing.append("download_drive_pdfs_to_local")
     if missing:
         raise RuntimeError(
-            "Funzionalità Google Drive non disponibili nella UI (download): "
+            "FunzionalitÃ  Google Drive non disponibili nella UI (download): "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
+    if get_drive_service is None or create_drive_folder is None or download_drive_pdfs_to_local is None:
+        raise RuntimeError("Funzioni Drive richieste per il download assenti nonostante i controlli preliminari.")
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -389,7 +412,10 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("DRIVE_ID non impostato.")
 
     client_folder_id = create_drive_folder(
-        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
+        svc,
+        slug,
+        parent_id=parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
     sub = _drive_list_folders(svc, client_folder_id)
     name_to_id = {d["name"]: d["id"] for d in sub}
@@ -571,3 +597,103 @@ def download_raw_from_drive_with_progress(
 
     log.info("raw.download.summary", extra={"count": len(written)})
     return written
+
+
+# Verifica conflitti tra file su Drive e in locale
+
+
+def plan_raw_download(slug: str, require_env: bool = True) -> Tuple[List[str], List[str]]:
+    """
+    Restituisce (conflicts, labels):
+      - conflicts: path relativi (rispetto a output/timmy-kb-<slug>/raw) dei file che esistono giÃ  in locale
+      - labels:   path relativi di TUTTE le destinazioni previste (preview del piano di download)
+
+    Dipendenze interne a questo modulo:
+      - ClientContext.load(...)
+      - get_drive_service(ctx)
+      - create_drive_folder(service, slug, parent_id, redact_logs)
+      - _drive_list_folders(service, parent_id)
+      - _drive_list_pdfs(service, parent_id)
+      - sanitize_filename(name)
+      - ensure_within_and_resolve(base_dir, path)
+
+    Lancia RuntimeError in caso di prerequisiti mancanti (es. DRIVE_ID non impostato).
+    """
+    _require_drive_utils_ui()
+    if not callable(get_drive_service) or not callable(create_drive_folder):
+        raise RuntimeError("Funzioni Drive non disponibili.")
+    if get_drive_service is None or create_drive_folder is None:
+        raise RuntimeError("Funzioni Drive non disponibili.")
+
+    folder_lister = _drive_list_folders
+    pdf_lister = _drive_list_pdfs
+    filename_sanitizer = sanitize_filename
+    path_resolver = ensure_within_and_resolve
+
+    # Carica contesto e service
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    except TypeError:
+        # compat firma
+        ctx = ClientContext.load(slug=slug, interactive=False)
+    service = get_drive_service(ctx)
+
+    parent_id = ctx.env.get("DRIVE_ID")
+    if not parent_id:
+        raise RuntimeError("DRIVE_ID non impostato.")
+
+    client_folder_id = create_drive_folder(
+        service,
+        slug,
+        parent_id=parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+
+    # Individua cartella raw del cliente
+    sub = folder_lister(service, client_folder_id)
+    name_to_id = {d["name"]: d["id"] for d in sub}
+    raw_id = name_to_id.get("raw")
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura di base.")
+
+    # Listing PDF in raw/ e sottocartelle
+    raw_subfolders = folder_lister(service, raw_id)
+    root_pdfs = pdf_lister(service, raw_id)
+
+    base_dir = Path("output") / f"timmy-kb-{slug}" / "raw"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    conflicts: List[str] = []
+    labels: List[str] = []
+
+    # File direttamente in raw/
+    for f in root_pdfs:
+        name = (f.get("name") or "").strip()
+        safe_name = filename_sanitizer(name) or "file"
+        if not safe_name.lower().endswith(".pdf"):
+            safe_name += ".pdf"
+        dest = Path(path_resolver(base_dir, base_dir / safe_name))
+        label = safe_name
+        labels.append(label)
+        if Path(dest).exists():
+            conflicts.append(label)
+
+    # File nelle sottocartelle
+    for folder in raw_subfolders:
+        folder_name = folder["name"]
+        folder_id = folder["id"]
+        files = pdf_lister(service, folder_id)
+        dest_dir = Path(path_resolver(base_dir, base_dir / folder_name))
+        Path(dest_dir).mkdir(parents=True, exist_ok=True)
+        for f in files:
+            name = (f.get("name") or "").strip()
+            safe_name = filename_sanitizer(name) or "file"
+            if not safe_name.lower().endswith(".pdf"):
+                safe_name += ".pdf"
+            dest = Path(path_resolver(dest_dir, Path(dest_dir) / safe_name))
+            label = f"{folder_name}/{safe_name}"
+            labels.append(label)
+            if Path(dest).exists():
+                conflicts.append(label)
+
+    return conflicts, labels

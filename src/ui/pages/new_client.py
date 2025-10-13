@@ -195,7 +195,7 @@ effective_slug = (current_slug or candidate_slug) or ""
 # VISIBILE solo quando la fase UI è INIT
 # ------------------------------------------------------------------
 if current_phase == UI_PHASE_INIT:
-    if st.button("Inizializza Workspace", type="primary", key="btn_init_ws"):
+    if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
         if not s:
             st.warning("Inserisci uno slug valido.")
@@ -260,7 +260,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
-    if st.button("Apri workspace", key="btn_open_ws"):
+    if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
         display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
