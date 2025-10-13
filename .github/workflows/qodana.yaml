@@ -69,6 +69,6 @@ jobs:
       - name: Upload SARIF to GitHub Code Scanning
         if: always() && steps.sarif.outputs.has_sarif == 'true'
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ./.qodana/qodana.sarif.json
