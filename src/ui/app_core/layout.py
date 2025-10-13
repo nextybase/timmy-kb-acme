@@ -109,10 +109,10 @@ def render_sidebar_quick_actions(
 
         c2, c3 = st_module.columns(2)
         with c2:
-            if st_module.button("Dummy KB", key="qa_dummy", width="stretch"):
+            if st_module.button("Dummy KB", key="qa_dummy"):
                 _safe_call(generate_dummy_callback, "Dummy KB")
         with c3:
-            if st_module.button("Esci", key="qa_exit", width="stretch"):
+            if st_module.button("Esci", key="qa_exit"):
                 _safe_call(request_shutdown_callback, "Esci")
 
         st_module.divider()

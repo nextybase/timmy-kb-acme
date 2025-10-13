@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
@@ -25,8 +26,10 @@ else:
         from semantic.vision_provision import provision_from_vision as _provision_from_vision  # pragma: no cover
     provision_from_vision = cast(ProvisionCallable, _provision_from_vision)
 
-from pipeline.file_utils import safe_write_bytes, safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read, read_text_safe
+from pipeline.config_utils import merge_client_config_from_template
+from pipeline.context import ClientContext
+from pipeline.file_utils import safe_write_bytes
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read
 from ui.clients_store import ClientEntry, set_state, upsert_client
 
 BuildDriveCallable = Callable[..., Dict[str, str]]
@@ -39,6 +42,9 @@ if _build_drive_from_mapping_impl is not None:
     build_drive_from_mapping: Optional[BuildDriveCallable] = cast(BuildDriveCallable, _build_drive_from_mapping_impl)
 else:
     build_drive_from_mapping = None
+
+UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
+LOGGER = logging.getLogger("ui.new_client")
 
 
 # --------- helper ---------
@@ -117,10 +123,9 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) ->
 
     # 1) config.yaml (path-safe + atomic write)
     src_cfg_yaml = ensure_within_and_resolve(repo_cfg, repo_cfg / "config.yaml")
-    dst_cfg_yaml = ensure_within_and_resolve(cli_cfg, cli_cfg / "config.yaml")
     if Path(src_cfg_yaml).exists():
-        payload = read_text_safe(repo_cfg, Path(src_cfg_yaml), encoding="utf-8")
-        safe_write_text(Path(dst_cfg_yaml), payload, encoding="utf-8", atomic=True)
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        merge_client_config_from_template(ctx, Path(src_cfg_yaml))
 
     # 2) VisionStatement.pdf (path-safe + atomic write)
     dst_pdf = ensure_within_and_resolve(cli_cfg, _client_pdf_path(slug))
@@ -190,7 +195,7 @@ effective_slug = (current_slug or candidate_slug) or ""
 # VISIBILE solo quando la fase UI è INIT
 # ------------------------------------------------------------------
 if current_phase == UI_PHASE_INIT:
-    if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
+    if st.button("Inizializza Workspace", type="primary", key="btn_init_ws"):
         s = candidate_slug
         if not s:
             st.warning("Inserisci uno slug valido.")
@@ -255,14 +260,22 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
-    if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
+    if st.button("Apri workspace", key="btn_open_ws"):
         display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
-            st.warning(
-                "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
-                "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
-            )
+            if UI_ALLOW_LOCAL_ONLY:
+                LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+                _upsert_client_registry(eff, display_name)
+                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+                st.session_state["client_name"] = display_name
+                st.success("Drive non configurato, continuo in locale.")
+                st.rerun()
+            else:
+                st.warning(
+                    "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
+                    "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
+                )
         else:
             prog = st.progress(0)
             info = st.empty()

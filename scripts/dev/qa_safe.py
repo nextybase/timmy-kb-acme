@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Esegue QA locale in modo "safe" (auto-rimeditivo) senza eseguire pytest:
+Esegue QA locale in modo "safe" (auto-rimeditivo) con una smoke suite:
 1) isort (write-mode)        → riordina import
 2) black (write-mode)        → format definitivo
 3) ruff check --fix          → lint + fix non distruttivi
 4) mypy                      → type-check mirato (solo su target esistenti)
+5) pytest                    → smoke ui/retriever/smoke
 
 Exit code:
 - 0 se tutto ok o tool assenti (skip)
@@ -80,6 +81,16 @@ def main(argv: List[str] | None = None) -> int:
     else:
         print("[qa-safe] mypy: nessun target esistente tra "
               f"{mypy_candidates} → skip", flush=True)
+
+    # 5) pytest (smoke UI/retriever)
+    smoke_targets = ["tests/ui", "tests/retriever", "tests/smoke"]
+    existing_smoke = _existing_targets(smoke_targets)
+    if existing_smoke:
+        mod, rc = run_module_if_available("pytest", ["-q", *existing_smoke])
+        if rc not in (0, None):
+            failures.append(mod)
+    else:
+        print(f"[qa-safe] pytest: nessun target esistente tra {smoke_targets} → skip", flush=True)
 
     if failures:
         print(f"[qa-safe] Falliti: {', '.join(failures)}", flush=True)

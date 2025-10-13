@@ -3,17 +3,34 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
+
+    class _StreamlitStub:
+        def __init__(self) -> None:
+            self.session_state: dict[str, Any] = {}
+
+        def info(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        def stop(self, *_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("Streamlit non disponibile in questo contesto")
+
+    st = cast(Any, _StreamlitStub())
 
 # Manteniamo compat con l'attuale gestione querystring
-from pipeline.path_utils import read_text_safe
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.utils.query_params import get_slug as _qp_get
 from ui.utils.query_params import set_slug as _qp_set
 
 _PERSIST_PATH = Path(__file__).resolve().parents[2] / "clients_db" / "ui_state.json"
+LOGGER = logging.getLogger("ui.slug")
 
 
 def _has_streamlit_context() -> bool:
@@ -46,9 +63,12 @@ def _load_persisted() -> Optional[str]:
 
 def _save_persisted(slug: Optional[str]) -> None:
     try:
-        _PERSIST_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with _PERSIST_PATH.open("w", encoding="utf-8") as fh:
-            json.dump({"active_slug": slug or ""}, fh)
+        base_dir = _PERSIST_PATH.parent
+        base_dir.mkdir(parents=True, exist_ok=True)
+        safe_path = ensure_within_and_resolve(base_dir, _PERSIST_PATH)
+        payload = json.dumps({"active_slug": slug or ""}, ensure_ascii=False) + "\n"
+        safe_write_text(Path(safe_path), payload, encoding="utf-8", atomic=True)
+        LOGGER.info("ui.slug.persisted", extra={"path": str(safe_path)})
     except Exception:
         # la UI non deve rompersi per errori di persistenza
         pass

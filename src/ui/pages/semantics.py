@@ -4,8 +4,73 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import contextmanager
+from typing import Any, Iterator, Literal, cast
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
+
+    class _FunctionStub:
+        """No-op callable/context manager usato per simulare API Streamlit."""
+
+        def __call__(self, *args: Any, **kwargs: Any) -> "_FunctionStub":
+            return self
+
+        def __enter__(self) -> "_FunctionStub":
+            return self
+
+        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
+            return False
+
+        def __getattr__(self, name: str) -> "_FunctionStub":
+            return self
+
+        def __bool__(self) -> bool:
+            return False
+
+    class _StreamlitStub:
+        def __init__(self) -> None:
+            self.session_state: dict[str, Any] = {}
+            self.query_params: dict[str, str] = {}
+            self.sidebar = _FunctionStub()
+
+        def __getattr__(self, name: str) -> Any:
+            if name == "stop":
+
+                def _stop(*_args: Any, **_kwargs: Any) -> None:
+                    raise RuntimeError("Streamlit stop non disponibile nel fallback")
+
+                return _stop
+            if name == "rerun":
+
+                def _rerun(*_args: Any, **_kwargs: Any) -> None:
+                    raise RuntimeError("Streamlit rerun non disponibile nel fallback")
+
+                return _rerun
+            if name == "spinner":
+
+                @contextmanager
+                def _spinner(*_args: Any, **_kwargs: Any) -> Iterator[None]:
+                    yield None
+
+                return _spinner
+            if name == "columns":
+
+                def _columns(spec: Any) -> tuple[_FunctionStub, ...]:
+                    if isinstance(spec, (list, tuple)):
+                        count = len(spec)
+                    else:
+                        try:
+                            count = int(spec)
+                        except Exception:
+                            count = 0
+                    return tuple(_FunctionStub() for _ in range(max(count, 0)))
+
+                return _columns
+            return _FunctionStub()
+
+    st = cast(Any, _StreamlitStub())
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
@@ -100,14 +165,14 @@ st.write("Conversione PDF → Markdown, arricchimento del frontmatter e generazi
 
 col_a, col_b = st.columns(2)
 with col_a:
-    if st.button("Converti PDF in Markdown", key="btn_convert", width="stretch"):
+    if st.button("Converti PDF in Markdown", key="btn_convert"):
         try:
             _run_convert(slug)
         except (ConfigError, ConversionError) as e:
             st.error(str(e))
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella conversione: {e}")
-    if st.button("Arricchisci frontmatter", key="btn_enrich", width="stretch"):
+    if st.button("Arricchisci frontmatter", key="btn_enrich"):
         try:
             _run_enrich(slug)
         except (ConfigError, ConversionError) as e:
@@ -116,12 +181,12 @@ with col_a:
             st.error(f"Errore nell'arricchimento: {e}")
 
 with col_b:
-    if st.button("Genera README/SUMMARY", key="btn_generate", width="stretch"):
+    if st.button("Genera README/SUMMARY", key="btn_generate"):
         try:
             _run_summary(slug)
         except (ConfigError, ConversionError) as e:
             st.error(str(e))
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella generazione: {e}")
-    if st.button("Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
+    if st.button("Anteprima Docker (HonKit)", key="btn_preview"):
         _go_preview()

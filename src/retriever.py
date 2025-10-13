@@ -365,7 +365,14 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     if params.k == 0:
         return []
     if not params.query.strip():
-        LOGGER.warning("query vuota dopo strip; ritorno []")
+        LOGGER.warning(
+            "retriever.query.invalid",
+            extra={
+                "reason": "empty_query",
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+            },
+        )
         return []
     if params.candidate_limit == 0:
         return []
@@ -381,7 +388,14 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     q_vecs = normalize_embeddings(q_raw)
     # Verifiche esplicite di vuoto
     if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
-        LOGGER.warning("Empty query embedding; returning no results")
+        LOGGER.warning(
+            "retriever.query.invalid",
+            extra={
+                "reason": "empty_embedding",
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+            },
+        )
         return []
     qv = q_vecs[0]
 

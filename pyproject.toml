@@ -37,6 +37,10 @@ drive = [
     "requests-oauthlib==2.0.0",
 ]
 
+tests = [
+    "pytest>=8.0.0",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

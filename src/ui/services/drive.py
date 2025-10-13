@@ -1,37 +1,31 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any, Dict, cast
+from typing import Any, Callable, Dict
 
+from ui.app_services.drive_cache import _clear_drive_tree_cache, get_drive_tree_cache
 from ui.components.diff_view import render_drive_local_diff as _render_diff_component
-from ui.components.drive_tree import render_drive_tree as _render_tree_component
-
-_DRIVE_INDEX_CACHE: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
 
 def invalidate_drive_index(slug: str | None = None) -> None:
-    """Svuota la cache dell'indice Drive per lo slug indicato o per tutti."""
-    if slug:
-        _DRIVE_INDEX_CACHE.pop(slug, None)
-    else:
-        _DRIVE_INDEX_CACHE.clear()
+    """Svuota la cache dell'indice Drive (delegato alla cache centralizzata)."""
+    try:
+        _clear_drive_tree_cache()
+    except Exception:
+        pass
 
 
 def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Bridge per la pagina Manage: renderizza l'albero Drive e memorizza i metadati
-    per il successivo confronto locale.
-    """
-    index = cast(Dict[str, Dict[str, Any]], _render_tree_component(slug))
-    _DRIVE_INDEX_CACHE[slug] = index
-    return index
+    """Renderizza l'albero Drive usando la cache centralizzata (st.cache_data)."""
+    getter: Callable[[str], Dict[str, Dict[str, Any]]] = get_drive_tree_cache()
+    return getter(slug)
 
 
 def render_drive_diff(slug: str) -> None:
-    """
-    Mostra la vista diff Drive vs locale riutilizzando l'indice calcolato.
-    Se la vista Drive non è stata renderizzata in precedenza, la funzione
-    degrada con un indice vuoto.
-    """
-    index = _DRIVE_INDEX_CACHE.get(slug)
+    """Mostra la diff Drive↔locale riutilizzando la cache centralizzata."""
+    try:
+        getter: Callable[[str], Dict[str, Dict[str, Any]]] = get_drive_tree_cache()
+        index = getter(slug)
+    except Exception:
+        index = {}
     _render_diff_component(slug, index)

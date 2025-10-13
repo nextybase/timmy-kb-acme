@@ -1,9 +1,20 @@
 # src/ui/utils/query_params.py
 from __future__ import annotations
 
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union, cast
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
+
+    class _QueryParams(dict[str, str]):
+        pass
+
+    class _StreamlitStub:
+        def __init__(self) -> None:
+            self.query_params: _QueryParams = _QueryParams()
+
+    st = cast(Any, _StreamlitStub())
 
 
 def get_slug() -> Optional[str]:

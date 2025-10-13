@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Iterator, Optional, cast
 
 import streamlit as st
 
 from pipeline.yaml_utils import yaml_read
-from src.tools.gen_dummy_kb import main as run_dummy_kb  # tool CLI → int
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
 from ui.services.drive import invalidate_drive_index
 from ui.theme.css import inject_theme_css
@@ -21,23 +21,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ---------- helpers ----------
 def _on_dummy_kb() -> None:
-    """Genera una KB di esempio per lo slug corrente (o 'dummy') e aggiorna le viste."""
-    slug = get_slug() or (st.query_params.get("slug") or "dummy")
-    with st.spinner("Genero dataset dummy..."):
-        try:
-            code = int(run_dummy_kb(["--slug", slug]))
-        except Exception as e:
-            st.error(f"Generazione Dummy KB fallita: {e}")
-            return
-    if code == 0:
-        invalidate_drive_index(slug)
-        st.toast(f"Dummy KB pronta per '{slug}'.")
-        try:
-            st.rerun()
-        except Exception:
-            pass
-    else:
-        st.error(f"Generazione Dummy KB fallita (code={code}).")
+    """Mostra istruzioni per generare la Dummy KB via CLI (nessun side-effect dalla UI)."""
+    slug = get_slug() or "dummy"
+    st.info(
+        f"Esegui da terminale:\n\n`py src/tools/gen_dummy_kb.py --slug {slug}`\n\n"
+        "Questa azione può richiedere risorse/tempo: per questo si esegue solo via CLI."
+    )
 
 
 def _on_exit() -> None:
@@ -93,15 +82,34 @@ def sidebar(slug: str | None) -> None:
             pass
         return active_slug
 
-    with st.sidebar:
+    entry: Any = getattr(st, "sidebar", None)
+
+    @contextmanager
+    def _sidebar_scope(sidebar_obj: Any) -> Iterator[Any]:
+        if sidebar_obj and hasattr(sidebar_obj, "__enter__") and hasattr(sidebar_obj, "__exit__"):
+            with sidebar_obj:
+                yield sidebar_obj
+        else:
+            yield sidebar_obj or st
+
+    with _sidebar_scope(entry) as panel:
+        ui = panel or st
+
+        def _call(method: str, *args: Any, **kwargs: Any) -> Any:
+            fn = getattr(ui, method, None)
+            if not callable(fn):
+                fn = getattr(st, method, None)
+            if callable(fn):
+                return fn(*args, **kwargs)
+            return None
+
         has_slug = bool(slug)
 
-        # Logo compatto tema-aware
         render_sidebar_brand(st_module=st, repo_root=REPO_ROOT)
 
         display_name = _client_display_name(slug)
-        # Stato cliente sempre visibile (enfasi maggiore)
-        st.html(
+        _call(
+            "html",
             f"""
             <div style="font-size:1.05rem;font-weight:700;margin:0 0 .5rem 0;">
               Cliente attivo: <span style="font-weight:800">{display_name}</span>
@@ -109,7 +117,8 @@ def sidebar(slug: str | None) -> None:
             """,
         )
         if not has_slug:
-            st.html(
+            _call(
+                "html",
                 """
                 <a href="/manage" target="_self"
                    style="display:block;width:100%;text-align:center;
@@ -121,51 +130,62 @@ def sidebar(slug: str | None) -> None:
                 """,
             )
 
-        st.subheader("Azioni rapide")
+        _call("subheader", "Azioni rapide")
 
-        st.link_button(
+        _call(
+            "link_button",
             "Guida UI",
             url="https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
             width="stretch",
         )
 
-        if st.button(
+        btn = _call(
+            "button",
             "Aggiorna Drive",
             key="btn_drive_refresh",
             help="Richiede un cliente selezionato",
             disabled=not has_slug,
             width="stretch",
-        ):
+        )
+        if btn:
             invalidate_drive_index(slug)
-            st.toast("Cache Drive aggiornata.")
+            getattr(st, "toast", lambda *_a, **_k: None)("Cache Drive aggiornata.")
 
-        # Azioni con stato
-        if st.button(
+        btn = _call(
+            "button",
             "Dummy KB",
             key="btn_dummy",
             disabled=not has_slug,
             help="Genera un dataset demo per il cliente corrente",
             width="stretch",
-        ):
+        )
+        if btn:
             _on_dummy_kb()
 
-        if st.button(
+        btn = _call(
+            "button",
             "Esci",
             key="btn_exit",
             type="primary",
             width="stretch",
-        ):
+        )
+        if btn:
             _on_exit()
 
-        st.markdown("---")
-        if st.button(
+        _call("markdown", "---")
+        btn = _call(
+            "button",
             "Azzera selezione cliente",
             help="Rimuove lo slug attivo e torna alla Home",
             disabled=not has_slug,
             width="stretch",
-        ):
+        )
+        if btn:
             clear_active_slug()
-            st.rerun()
+            try:
+                getattr(st, "rerun", lambda: None)()
+            except Exception:
+                pass
 
 
 def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:

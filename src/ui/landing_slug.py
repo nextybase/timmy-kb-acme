@@ -263,9 +263,9 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             verify_clicked = _safe_form_submit(
                 "Verifica cliente",
                 type="primary",
-                width="stretch",
             )
-        st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
+        if bool(os.getenv("UI_ALLOW_EXIT", "").strip()):
+            st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
 
     if verify_clicked:
         candidate = (slug_input or "").strip()
@@ -318,7 +318,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
     workspace_exists = workspace_dir.exists()
 
     if slug_submitted:
-        if workspace_exists:
+        if workspace_exists and not vision_state.get("workspace_created"):
             return _enter_existing_workspace(slug, vision_state.get("client_name", ""))
         vision_state["verified"] = True
         vision_state["needs_creation"] = True
@@ -488,6 +488,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                     log.exception("landing.save_yaml_failed", extra={"slug": slug})
                 if st is not None:
                     st.error(str(exc))
+                raise
             except Exception:  # pragma: no cover
                 if log:
                     log.exception("landing.save_yaml_failed", extra={"slug": slug})
@@ -498,7 +499,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             finally:
                 _state_set("vision_workflow", vision_state)
 
-    if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary", width="stretch"):
+    if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary"):
         vision_state["workspace_committed"] = True
         _state_set("vision_workflow", vision_state)
         _state_set("client_locked", True)

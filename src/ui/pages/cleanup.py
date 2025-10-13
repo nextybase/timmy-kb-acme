@@ -108,6 +108,7 @@ if st.button(
     key="cleanup_open_confirm",
     type="secondary",
     help="Rimozione completa: locale, DB e Drive",
+    width="stretch",
 ):
     st.session_state["__cleanup_confirm_open"] = True
     st.session_state["__cleanup_confirm_slug"] = slug
@@ -127,12 +128,12 @@ if st.session_state.get("__cleanup_confirm_open"):
         )
         c1, c2 = st.columns([1, 1])
         with c1:
-            if st.button("Annulla", key="cleanup_cancel"):
+            if st.button("Annulla", key="cleanup_cancel", width="stretch"):
                 st.session_state.pop("__cleanup_confirm_open", None)
                 st.session_state.pop("__cleanup_confirm_slug", None)
                 st.rerun()
         with c2:
-            if st.button("Conferma eliminazione", key="cleanup_do_delete"):
+            if st.button("Conferma eliminazione", key="cleanup_do_delete", width="stretch"):
                 code: Optional[int] = None
                 messages: list[tuple[str, str]] = []
                 runner_error = None

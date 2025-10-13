@@ -64,7 +64,7 @@ def render_brand_header(
         if logo_ok:
             col_logo, col_title = st_module.columns([1, 5])
             with col_logo:
-                st_module.image(str(logo_path), width="stretch")
+                st_module.image(str(logo_path))
             with col_title:
                 st_module.title("Onboarding NeXT – Clienti")
                 if subtitle:
@@ -88,6 +88,6 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
         # Supporta sia il passaggio del modulo 'st' sia di 'st.sidebar'
         sidebar = getattr(st_module, "sidebar", st_module)
         if logo_path.exists():
-            sidebar.image(str(logo_path), width="stretch")
+            sidebar.image(str(logo_path))
     except Exception:
         pass

@@ -99,7 +99,17 @@ repos:
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python scripts/dev/qa_safe.py
         language: python
-        additional_dependencies: ["black==24.8.0", "isort==5.13.2", "ruff", "mypy", "types-PyYAML"]
+        additional_dependencies: [
+            "black==24.8.0",
+            "isort==5.13.2",
+            "ruff",
+            "mypy",
+            "types-PyYAML",
+            "PyYAML==6.0.1",
+            "pytest",
+            "pydantic==2.11.7",
+            "pydantic-settings==2.0.0",
+        ]
         pass_filenames: false
         stages: [pre-push]
 

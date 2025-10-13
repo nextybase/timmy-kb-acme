@@ -56,7 +56,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, read_text_safe
 
 logger = get_structured_logger("pipeline.config_utils")
 
@@ -242,6 +242,87 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
 # ----------------------------------------------------------
 #  Merge incrementale su config.yaml con backup
 # ----------------------------------------------------------
+def merge_client_config_from_template(
+    context: ClientContext,
+    template_path: Path,
+    preserve_keys: tuple[str, ...] = ("client_name", "vision_statement_pdf", "slug"),
+    logger: logging.Logger | None = None,
+) -> Path:
+    """Unisce il config cliente con il template mantenendo chiavi sensibili."""
+    if context.config_path is None or context.base_dir is None:
+        raise PipelineError("Contesto incompleto: config_path/base_dir mancanti", slug=context.slug)
+
+    config_path = cast(Path, context.config_path)
+    base_dir = cast(Path, context.base_dir)
+    log = logger or globals().get("logger")
+
+    if not template_path.exists():
+        return config_path
+
+    template_payload: dict[str, Any] = {}
+    try:
+        template_text = read_text_safe(template_path.parent, template_path, encoding="utf-8")
+        template_payload = yaml.safe_load(template_text) if template_text else {}
+    except FileNotFoundError:
+        return config_path
+    except Exception as exc:  # pragma: no cover
+        raise ConfigError(f"Errore lettura template config {template_path}: {exc}") from exc
+
+    template_data: dict[str, Any] = dict(template_payload or {})
+
+    existing_data: dict[str, Any] = {}
+    if config_path.exists():
+        backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
+        shutil.copy(config_path, backup_path)
+        if log:
+            log.info("config.client.backup", extra={"slug": context.slug, "path": str(backup_path)})
+
+        try:
+            from pipeline.yaml_utils import yaml_read
+
+            current = yaml_read(config_path.parent, config_path) or {}
+            if isinstance(current, dict):
+                existing_data = dict(current)
+        except Exception as exc:
+            raise ConfigError(f"Errore lettura config esistente {config_path}: {exc}") from exc
+
+    preserve_set = set(preserve_keys)
+
+    def _merge_dict(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+        result: dict[str, Any] = dict(base)
+        for key, value in overrides.items():
+            if key in preserve_set:
+                result[key] = value
+                continue
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = _merge_dict(cast(dict[str, Any], result[key]), value)
+            else:
+                result[key] = value
+        return result
+
+    merged: dict[str, Any] = _merge_dict(template_data, existing_data)
+
+    ensure_within(base_dir, config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        serialized = yaml.safe_dump(merged, sort_keys=False, allow_unicode=True)
+        safe_write_text(config_path, serialized, encoding="utf-8", atomic=True)
+    except Exception as exc:  # pragma: no cover
+        raise ConfigError(f"Errore scrittura config {config_path}: {exc}") from exc
+
+    if log:
+        log.info(
+            "config.client.merged",
+            extra={
+                "slug": context.slug,
+                "dst": str(config_path),
+                "preserved": list(preserve_keys),
+            },
+        )
+
+    return config_path
+
+
 def update_config_with_drive_ids(
     context: ClientContext,
     updates: dict[str, Any],
@@ -303,6 +384,7 @@ __all__ = [
     "write_client_config_file",
     "get_client_config",
     "validate_preonboarding_environment",
+    "merge_client_config_from_template",
     "update_config_with_drive_ids",
     "bump_n_ver_if_needed",
     "set_data_ver_today",

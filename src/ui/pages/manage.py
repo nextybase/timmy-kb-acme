@@ -10,6 +10,7 @@ import streamlit as st
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.utils import set_slug
+from ui.utils.workspace import has_raw_pdfs
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -76,7 +77,7 @@ if not slug:
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
-        st.html('<a href="/new?tab=home" target="_self">➕ Crea nuovo cliente</a>')
+        st.html('<a href="/new?tab=new" target="_self">➕ Crea nuovo cliente</a>')
         st.stop()
 
     options: list[tuple[str, str]] = []
@@ -95,7 +96,7 @@ if not slug:
 
     labels = [label for label, _ in options]
     selected_label = st.selectbox("Cliente", labels, index=0, key="manage_select_slug")
-    if st.button("Usa questo cliente", type="primary"):
+    if st.button("Usa questo cliente", type="primary", width="stretch"):
         chosen = dict(options).get(selected_label)
         if chosen:
             set_slug(chosen)
@@ -104,43 +105,47 @@ if not slug:
     st.stop()
 
 # Da qui in poi: slug presente → viste operative
-col_left, col_right = st.columns(2)
+if _render_drive_tree is not None:
+    try:
+        _render_drive_tree(slug)  # restituisce anche indice cachato
+    except Exception as e:  # pragma: no cover
+        st.error(f"Errore nella vista Drive: {e}")
+else:
+    st.info("Vista Drive non disponibile.")
 
-with col_left:
-    if _render_drive_tree is not None:
-        try:
-            _render_drive_tree(slug)  # restituisce anche indice cachato
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore nella vista Drive: {e}")
+if _render_drive_diff is not None:
+    try:
+        _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
+    except Exception as e:  # pragma: no cover
+        st.error(f"Errore nella vista Diff: {e}")
+else:
+    st.info("Vista Diff non disponibile.")
+
+# --- Azione: Genera README nelle cartelle raw/ (sempre visibile) ---
+st.markdown("")
+if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes"):
+    if _emit_readmes_for_raw is None:
+        st.error(
+            "Funzione non disponibile. Abilita gli extra Drive: "
+            "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+        )
     else:
-        st.info("Vista Drive non disponibile.")
-
-with col_right:
-    if _render_drive_diff is not None:
         try:
-            _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
+            with st.status("Genero README nelle sottocartelle di raw/…", expanded=True):
+                # Call “tollerante” a firme diverse
+                try:
+                    result = _emit_readmes_for_raw(slug=slug, ensure_structure=True, require_env=True)
+                except TypeError:
+                    result = _emit_readmes_for_raw(slug, ensure_structure=True)  # fallback a firma più semplice
+            n = len(result or {})
+            st.success(f"README creati/aggiornati: {n}")
         except Exception as e:  # pragma: no cover
-            st.error(f"Errore nella vista Diff: {e}")
-    else:
-        st.info("Vista Diff non disponibile.")
+            st.error(f"Impossibile generare i README: {e}")
 
-    # --- Azione: Genera README nelle cartelle raw/ (sempre visibile) ---
-    st.markdown("")
-    if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", width="stretch"):
-        if _emit_readmes_for_raw is None:
-            st.error(
-                "Funzione non disponibile. Abilita gli extra Drive: "
-                "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
-            )
-        else:
-            try:
-                with st.status("Genero README nelle sottocartelle di raw/…", expanded=True):
-                    # Call “tollerante” a firme diverse
-                    try:
-                        result = _emit_readmes_for_raw(slug=slug, ensure_structure=False, require_env=True)
-                    except TypeError:
-                        result = _emit_readmes_for_raw(slug)  # fallback a firma più semplice
-                n = len(result or {})
-                st.success(f"README creati/aggiornati: {n}")
-            except Exception as e:  # pragma: no cover
-                st.error(f"Impossibile generare i README: {e}")
+st.markdown("")
+if st.button("Rileva PDF in raw/", key="btn_probe_raw", width="stretch"):
+    ready, raw_path = has_raw_pdfs(slug)
+    if ready:
+        st.success(f"PDF rilevati in `{raw_path}`.")
+    else:
+        st.warning(f"Nessun PDF trovato in `{raw_path}`.")
