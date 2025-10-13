@@ -114,8 +114,13 @@ def build_drive_from_mapping(
     if progress:
         progress(step, total_steps, "Cartella cliente creata")
 
-    # Upload config.yaml nella cartella cliente
-    upload_config_to_drive_folder(svc, ctx, client_folder_id, bool(getattr(ctx, "redact_logs", False)))
+    # Upload config.yaml nella cartella cliente (il 4° parametro è keyword-only)
+    upload_config_to_drive_folder(
+        svc,
+        ctx,
+        client_folder_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
     step += 1
     if progress:
         progress(step, total_steps, "config.yaml caricato")
@@ -126,7 +131,10 @@ def build_drive_from_mapping(
     tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
 
     created_map = create_drive_structure_from_yaml(
-        svc, tmp_yaml, client_folder_id, bool(getattr(ctx, "redact_logs", False))
+        svc,
+        tmp_yaml,
+        client_folder_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
     step += 1
     if progress:

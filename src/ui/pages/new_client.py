@@ -13,6 +13,7 @@ from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.utils import set_slug
+from ui.utils.html import esc_url_component
 
 # Vision (provisioning completo: mapping + cartelle_raw)
 ProvisionCallable = Callable[..., Any]
@@ -303,13 +304,24 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
     st.session_state.get(slug_state_key) or effective_slug
 ):
     eff = st.session_state.get(slug_state_key) or effective_slug
-    # Link nella STESSA scheda (target=_self) tramite blocco HTML esplicito.
-    st.html(
-        f"""
-        <a href="/manage?slug={eff}" target="_self"
-        style="display:inline-block;padding:0.5rem 1rem;border-radius:0.5rem;
-                background:#0f62fe;color:#fff;text-decoration:none;">
-        Vai a Gestisci cliente
-        </a>
-        """
-    )
+    eff_q = esc_url_component(eff)
+    if hasattr(st, "page_link"):
+        try:
+            st.page_link(
+                "src/ui/pages/manage.py",
+                label="Vai a Gestisci cliente",
+                icon="➡️",
+                args={"slug": eff},
+            )
+        except Exception:
+            st.link_button("Vai a Gestisci cliente", f"/manage?slug={eff_q}", width="stretch")
+    else:
+        st.html(
+            f"""
+            <a href="/manage?slug={eff_q}" target="_self"
+            style="display:inline-block;padding:0.5rem 1rem;border-radius:0.5rem;
+                    background:#0f62fe;color:#fff;text-decoration:none;">
+            Vai a Gestisci cliente
+            </a>
+            """
+        )

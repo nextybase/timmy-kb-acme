@@ -2,6 +2,7 @@
 # src/ui/clients_store.py
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ def _resolve_db_path(target: Path) -> Path:
 
 DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "clients_db"))))
 DB_FILE: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))))
+
+LOG = logging.getLogger("ui.clients_store")
 
 
 @dataclass
@@ -102,14 +105,26 @@ def set_state(slug: str, new_state: str) -> bool:
         return False
     entries = load_clients()
     changed = False
+    found = False
     for i, e in enumerate(entries):
         if e.slug.strip() == slug_norm:
+            found = True
             if e.stato != new_state:
                 entries[i] = ClientEntry(slug=e.slug, nome=e.nome, stato=new_state)
                 changed = True
             break
     if changed:
         save_clients(entries)
+        try:
+            LOG.info("client_state_updated", extra={"slug": slug_norm, "state": new_state})
+        except Exception:
+            pass
+    else:
+        try:
+            event = "client_state_noop" if found else "client_state_missing"
+            LOG.warning(event, extra={"slug": slug_norm, "state": new_state})
+        except Exception:
+            pass
     return changed
 
 
