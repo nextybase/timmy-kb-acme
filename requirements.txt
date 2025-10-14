@@ -56,6 +56,6 @@ requests-oauthlib==2.0.0
 
 # === NLP keywords extraction ===
 sentence-transformers==2.7.0
-scikit-learn==1.5.1
+scikit-learn==1.7.2
 yake==0.4.8
 torch==2.8.0
