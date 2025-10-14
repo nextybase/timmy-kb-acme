@@ -1,4 +1,4 @@
-# Suite di test
+# Test Suite (v2.1.0)
 
 Questa guida riflette l'assetto reale della suite Pytest del repo, raggruppa i file per categoria e indica marker/flag utili. Vale per esecuzione locale e per CI.
 

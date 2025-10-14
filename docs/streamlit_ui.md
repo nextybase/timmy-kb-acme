@@ -1,4 +1,4 @@
-# Streamlit (UI) — Regole 2025 · Add-on a `coding_rule.md`
+# Streamlit (UI) - Regole 2025 - Add-on a `coding_rule.md` (v2.1.0)
 
 **Baseline**: target `Streamlit==1.50.*` (compat ≥ 1.45). Evitare API `experimental`/`beta` in produzione.
 

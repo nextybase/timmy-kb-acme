@@ -1,4 +1,4 @@
-# Timmy-KB - Documentazione (v1.9.6)
+# Timmy-KB - Documentazione (v2.1.0)
 
 Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida utente, guida sviluppatore, policy operative e regole di versioning.
 

@@ -1,4 +1,4 @@
-# Timmy-KB - Coding Rules (v1.9.6)
+# Timmy-KB - Coding Rules (v2.1.0)
 <!-- cSpell:ignore Novita -->
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.

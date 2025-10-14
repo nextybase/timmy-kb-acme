@@ -1,4 +1,4 @@
-# Guida Onboarding UI
+# Guida Onboarding UI (v2.1.0)
 
 Questa guida descrive l’interfaccia Streamlit dell’onboarding **Timmy‑KB** così come implementata attualmente (Beta 0), allineata al codice nel repository.
 

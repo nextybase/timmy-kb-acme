@@ -1,4 +1,4 @@
-# Timmy KB - README (v1.9.5)
+# Timmy KB - README (v2.1.0)
 
 [![Bench Embeddings Normalization](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/bench.yml) [![Docs Spellcheck](https://github.com/nextybase/timmy-kb-acme/actions/workflows/docs-spellcheck.yml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/docs-spellcheck.yml)
 
@@ -31,7 +31,7 @@ Per dettagli vedi anche: `docs/developer_guide.md` (Indexer & Retriever) e la nu
 - Sintomi: `phase_scope` con `artifact_count=0`, log `semantic.index.no_valid_contents` e (se presenti) unico `semantic.index.skips` con `{skipped_io, skipped_no_text, vectors_empty}`.
 - Azione: verifica i `.md` in `book/` (non vuoti), controlla warning `semantic.index.read_failed` ed esito del client embeddings (no vettori vuoti).
 
-## Novità v1.9.5
+## Novità v2.1.0
 
 - Vision Statement pipeline: `src/semantic/vision_ai.py` estrae il testo dal PDF, lo salva in `semantic/vision_statement.txt` e genera il mapping JSON/YAML via `gpt-4.1-mini`.
 - CLI `py src/tools/gen_vision_yaml.py --slug <slug>` carica `.env` automaticamente, valida i percorsi e produce `semantic/semantic_mapping.yaml`.
