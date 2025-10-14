@@ -339,22 +339,14 @@ def _extract_id(obj: Any) -> str:
 def _call_semantic_mapping_response(
     client: Any,
     *,
-    engine: str,  # "assistant" | "responses" | "legacy"
+    engine: str,
     model: str,
     user_block: str,
     vs_id: str,
     snapshot_text: str,
     inline_sections: List[str],
     strict_output: bool,
-) -> Dict[str, Any]:
-    """
-    Invoca l'AI per ottenere il payload JSON strutturato secondo MIN_JSON_SCHEMA.
-    La scelta dell'engine è esplicita:
-      - assistant: usa assistant preconfigurato (assistant_id da .env), con File Search se vector
-      - responses: usa Responses API con model, con File Search se vector
-      - legacy: usa Chat Completions con response_format json_schema
-    Nessun fallback automatico.
-    """
+) -> tuple[Dict[str, Any], str]:
     use_inline = bool(inline_sections)
     system_prompt = SYSTEM_PROMPT
     if use_inline:
@@ -364,14 +356,13 @@ def _call_semantic_mapping_response(
             + " Produci solo JSON conforme allo schema. Niente testo fuori JSON."
         )
 
-    # Messaggi
     system_user_input: List[Dict[str, str]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_block},
     ]
     if use_inline:
-        for i, sec in enumerate(inline_sections, start=1):
-            system_user_input.append({"role": "user", "content": f"[DOC SEZIONE {i}]\n{sec}\n[/DOC]"})
+        for idx, sec in enumerate(inline_sections, start=1):
+            system_user_input.append({"role": "user", "content": f"[DOC SEZIONE {idx}]\n{sec}\n[/DOC]"})
 
     json_schema = {
         "type": "json_schema",
@@ -387,63 +378,7 @@ def _call_semantic_mapping_response(
     beta_responses_ns = getattr(beta_ns, "responses", None) if beta_ns else None
     chat_completions = getattr(getattr(client, "chat", None), "completions", None)
 
-    # --- ENGINE: ASSISTANT ---
-    if engine == "assistant":
-        assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
-        if not assistant_id:
-            raise ConfigError("engine=assistant ma non trovo OBNEXT_ASSISTANT_ID/ASSISTANT_ID nel .env (HiTL stop).")
-        payload = dict(
-            assistant_id=assistant_id,
-            input=system_user_input,
-            response_format=json_schema,
-            temperature=0.2,
-        )
-        # associa il vector store solo se siamo in modalità 'vector'
-        if not use_inline and vs_id:
-            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
-
-        if responses_ns and hasattr(responses_ns, "create"):
-            resp = responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI responses API (assistant) non ha restituito output_parsed.")
-            return data
-        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
-            resp = beta_responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI beta responses API (assistant) non ha restituito output_parsed.")
-            return data
-        raise ConfigError("OpenAI client non espone Responses API per l'uso con assistant_id.")
-
-    # --- ENGINE: RESPONSES ---
-    if engine == "responses":
-        payload = dict(
-            model=model,
-            input=system_user_input,
-            response_format=json_schema,
-            temperature=0.2,
-        )
-        if not use_inline and vs_id:
-            # nuovo stile: tools + vector_store_ids
-            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
-
-        if responses_ns and hasattr(responses_ns, "create"):
-            resp = responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
-            return data
-        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
-            resp = beta_responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI beta responses API non ha restituito output_parsed.")
-            return data
-        raise ConfigError("OpenAI client non espone Responses API (model).")
-
-    # --- ENGINE: LEGACY (Chat Completions) ---
-    if engine == "legacy":
+    def _invoke_chat_completions(*, allow_file_search: bool = True) -> Dict[str, Any]:
         if not chat_completions or not hasattr(chat_completions, "create"):
             raise ConfigError("OpenAI client non espone Chat Completions API legacy.")
         if use_inline:
@@ -454,15 +389,18 @@ def _call_semantic_mapping_response(
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": (f"{user_block}\n\n" "Vision Statement (testo estratto):\n" f"{trimmed_snapshot}"),
+                    "content": f"{user_block}\n\nVision Statement (testo estratto):\n{trimmed_snapshot}",
                 },
             ]
-        chat_resp = chat_completions.create(
+        payload: Dict[str, Any] = dict(
             model=model,
             messages=messages,
             temperature=0.2,
             response_format=json_schema,
         )
+        if not use_inline and vs_id and allow_file_search:
+            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
+        chat_resp = chat_completions.create(**payload)
         choices = getattr(chat_resp, "choices", None)
         if not choices:
             raise ConfigError("Chat completions: nessuna choice restituita.")
@@ -475,13 +413,101 @@ def _call_semantic_mapping_response(
             content = getattr(message, "content", None)
         if not content:
             raise ConfigError("Chat completions: contenuto vuoto.")
-        import json as _json  # evita shadowing
-
+        text = content if isinstance(content, str) else getattr(content[0], "text", None)
+        if not text:
+            raise ConfigError("Chat completions: nessun testo restituito.")
         try:
-            data = _json.loads(content)
-        except Exception as exc:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:  # pragma: no cover
             raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
-        return data
+
+    if engine == "assistant":
+        assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+        if not assistant_id:
+            raise ConfigError("engine=assistant ma non trovo OBNEXT_ASSISTANT_ID/ASSISTANT_ID nel .env (HiTL stop).")
+        payload = dict(
+            assistant_id=assistant_id,
+            input=system_user_input,
+            response_format=json_schema,
+            temperature=0.2,
+        )
+        if not use_inline and vs_id:
+            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
+        if responses_ns and hasattr(responses_ns, "create"):
+            resp = responses_ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI responses API (assistant) non ha restituito output_parsed.")
+            return data, "assistant"
+        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
+            resp = beta_responses_ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI beta responses API (assistant) non ha restituito output_parsed.")
+            return data, "assistant"
+        raise ConfigError("OpenAI client non espone Responses API per l'uso con assistant_id.")
+
+    if engine == "responses":
+        payload = dict(
+            model=model,
+            input=system_user_input,
+            response_format=json_schema,
+            temperature=0.2,
+        )
+        if not use_inline and vs_id:
+            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
+
+        def _try_responses(ns: Any) -> Optional[tuple[Dict[str, Any], str]]:
+            if not ns or not hasattr(ns, "create"):
+                return None
+            try:
+                resp = ns.create(**payload)
+            except TypeError as exc:
+                message = str(exc)
+                if "response_format" in message:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "vision_provision.responses_missing_json_schema",
+                        extra={"requested": "responses", "fallback": "legacy"},
+                    )
+                    data = _invoke_chat_completions(allow_file_search=False)
+                    return data, "legacy"
+                raise
+            except Exception as exc:
+                message = str(exc)
+                if "file_search" in message and vs_id:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "vision_provision.responses_missing_file_search",
+                        extra={"requested": "responses", "fallback": "legacy"},
+                    )
+                    data = _invoke_chat_completions(allow_file_search=False)
+                    return data, "legacy"
+                raise
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+            return data, "responses"
+
+        data = _try_responses(responses_ns)
+        if data is not None:
+            return data
+        data = _try_responses(beta_responses_ns)
+        if data is not None:
+            return data
+        if chat_completions and hasattr(chat_completions, "create"):
+            logging.getLogger("semantic.vision_provision").warning(
+                "vision_provision.responses_fallback_legacy",
+                extra={"requested": "responses", "fallback": "legacy"},
+            )
+            data = _invoke_chat_completions()
+            return data, "legacy"
+        raise ConfigError(
+            "OpenAI client non espone Responses API (model). "
+            "Aggiorna il pacchetto openai oppure imposta VISION_ENGINE=assistant|legacy."
+        )
+
+    if engine == "legacy":
+        data = _invoke_chat_completions()
+        return data, "legacy"
 
     raise ConfigError(f"vision.engine non supportato: {engine!r}")
 
@@ -630,29 +656,95 @@ def provision_from_vision(
         )
     )
 
-    # Esecuzione del modello secondo engine esplicito (nessun fallback)
-    _call_kwargs = dict(
-        model=effective_model,
-        user_block=user_block,
-        vs_id=vs_id or "",
-        snapshot_text=snapshot,
-        inline_sections=inline_sections or [],
-        strict_output=strict_output,
-    )
-    try:
-        data = _call_semantic_mapping_response(
-            client,
-            engine=engine,
-            **_call_kwargs,
+    # Esecuzione del modello secondo engine esplicito (con fallback gestito dalla call)
+    MODEL_FALLBACKS = {
+        "gpt-4.1-mini": "gpt-4o-mini",
+        "gpt-4o-mini": "gpt-4o",
+        "gpt-4.1": "gpt-4o",
+    }
+    tried_models: List[str] = []
+    data: Dict[str, Any] | None = None
+    engine_used: str | None = None
+    current_model = effective_model
+    invalid_engine_fallback_done = False
+    while True:
+        tried_models.append(current_model)
+        _call_kwargs = dict(
+            model=current_model,
+            user_block=user_block,
+            vs_id=vs_id or "",
+            snapshot_text=snapshot,
+            inline_sections=inline_sections or [],
+            strict_output=strict_output,
         )
-    except TypeError as exc:
-        message = str(exc)
-        if "engine" in message or "strict_output" in message:
-            fallback_kwargs = dict(_call_kwargs)
-            fallback_kwargs.pop("strict_output", None)
-            data = _call_semantic_mapping_response(client, **fallback_kwargs)
-        else:
+        try:
+            result = _call_semantic_mapping_response(
+                client,
+                engine=engine,
+                **_call_kwargs,
+            )
+            data, engine_used = result
+            break
+        except Exception as exc:
+            message = str(exc)
+            if vs_id and "file_search" in message and "tools[0].type" in message:
+                logging.getLogger("semantic.vision_provision").warning(
+                    "vision_provision.responses_vector_unsupported",
+                    extra={"slug": slug, "engine": engine, "fallback": "responses-inline"},
+                )
+                inline_sections = inline_sections or _split_by_headings(snapshot)
+                _call_kwargs.update({"vs_id": "", "inline_sections": inline_sections or []})
+                data, engine_used = _call_semantic_mapping_response(
+                    client,
+                    engine="responses",
+                    **_call_kwargs,
+                )
+                engine_used = "responses-inline"
+                break
+            if "invalid model" in message.lower():
+                fallback_model = MODEL_FALLBACKS.get(current_model)
+                if not invalid_engine_fallback_done:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "vision_provision.assistant_invalid_model",
+                        extra={
+                            "slug": slug,
+                            "engine": engine,
+                            "invalid_model": current_model,
+                            "fallback_engine": "responses-inline",
+                        },
+                    )
+                    engine = "responses"
+                    vs_id = ""
+                    inline_sections = inline_sections or _split_by_headings(snapshot)
+                    invalid_engine_fallback_done = True
+                    if fallback_model and fallback_model not in tried_models:
+                        current_model = fallback_model
+                    continue
+                if fallback_model and fallback_model not in tried_models:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "vision_provision.model_invalid_fallback",
+                        extra={
+                            "slug": slug,
+                            "invalid_model": current_model,
+                            "fallback_model": fallback_model,
+                        },
+                    )
+                    current_model = fallback_model
+                    continue
             raise
+
+    if data is None or engine_used is None:
+        logging.getLogger("semantic.vision_provision").error(
+            "vision_provision.no_result",
+            extra={
+                "slug": slug,
+                "engine_requested": engine,
+                "engine_used": engine_used,
+                "models_tried": tried_models,
+                "input_mode": input_mode,
+            },
+        )
+        raise ConfigError("OpenAI non ha restituito un payload valido (data/engine mancanti).")
 
     # HARD GATE: coerenza slug per prevenire leak inter-cliente
     _validate_json_payload(data, expected_slug=slug)
@@ -701,8 +793,8 @@ def provision_from_vision(
         "slug": slug,
         "client_hash": hash_identifier(display_name),
         "pdf_hash": sha256_path(safe_pdf),
-        "model": effective_model,
-        "vision_engine": engine,
+        "model": current_model,
+        "vision_engine": engine_used,
         "input_mode": input_mode,
         "strict_output": strict_output,
         "yaml_paths": mask_paths(paths.mapping_yaml, paths.cartelle_yaml),

@@ -24,14 +24,27 @@ def test_provision_uses_client_name_in_prompt(dummy_workspace, dummy_ctx, dummy_
     monkeypatch.setattr(vp, "_create_vector_store_with_pdf", _fake_vector_store)
     monkeypatch.setattr(vp, "make_openai_client", lambda: object())
 
-    def fake_call(client, *, model, user_block, vs_id, snapshot_text, inline_sections):  # type: ignore[no-untyped-def]
+    def fake_call(
+        client,
+        *,
+        engine,
+        model,
+        user_block,
+        vs_id,
+        snapshot_text,
+        inline_sections,
+        strict_output,
+    ):  # type: ignore[no-untyped-def]
         seen["user_block"] = user_block
-        return {
-            "context": {"slug": slug, "client_name": ctx.client_name},
-            "areas": [
-                {"key": "core", "ambito": "A", "descrizione": "D", "keywords": []},
-            ],
-        }
+        return (
+            {
+                "context": {"slug": slug, "client_name": ctx.client_name},
+                "areas": [
+                    {"key": "core", "ambito": "A", "descrizione": "D", "keywords": []},
+                ],
+            },
+            engine,
+        )
 
     monkeypatch.setattr(vp, "_call_semantic_mapping_response", fake_call)
 

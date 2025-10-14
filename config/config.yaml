@@ -47,5 +47,5 @@ retriever:
 # i file semantic_mapping.yaml. e cartelle_raw,yaml.
 vision:
   engine: assistant        # default
-  model: gpt-4o-mini       # usato solo se engine=responses|legacy
+  model: gpt-4o-mini-2024-07-18  # usato solo se engine=responses|legacy
   strict_output: true

@@ -2,6 +2,7 @@
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 from contextlib import contextmanager
@@ -256,6 +257,14 @@ if current_phase == UI_PHASE_INIT:
                         pdf_path=str(_client_pdf_path(s)),
                     )
                 except TypeError:
+                    # Ambienti legacy (signature diversa) vengono gestiti
+                    # solo se la funzione non accetta i nuovi parametri kw.
+                    try:
+                        sig = inspect.signature(provision_from_vision)
+                    except (ValueError, TypeError):
+                        sig = None
+                    if sig is not None and {"slug", "pdf_path"}.issubset(sig.parameters):
+                        raise
                     provision_from_vision(s, str(_client_pdf_path(s)))
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Vision completata.", state="complete")
