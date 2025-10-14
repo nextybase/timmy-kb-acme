@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/services/drive_runner.py
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ except Exception:  # pragma: no cover
     download_drive_pdfs_to_local = None
     get_drive_service = None
     upload_config_to_drive_folder = None
+
 from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.path_utils import sanitize_filename
 
@@ -61,7 +63,7 @@ def _require_drive_utils_ui() -> None:
         missing.append("upload_config_to_drive_folder")
     if missing:
         raise RuntimeError(
-            "Funzionalitâ”œÃ¡ Google Drive non disponibili nella UI: "
+            "Funzionalità Google Drive non disponibili nella UI: "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
 
@@ -92,6 +94,7 @@ def build_drive_from_mapping(
         or upload_config_to_drive_folder is None
     ):
         raise RuntimeError("Funzionalità Google Drive non disponibili. Installa gli extra `pip install .[drive]`.")
+
     # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
@@ -286,6 +289,7 @@ def emit_readmes_for_raw(
     _require_drive_utils_ui()
     if get_drive_service is None or create_drive_folder is None:
         raise RuntimeError("Funzioni Drive non disponibili.")
+
     # Carica .env per SERVICE_ACCOUNT_FILE/DRIVE_ID se disponibile
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
@@ -312,7 +316,10 @@ def emit_readmes_for_raw(
         structure = mapping_to_raw_structure(mapping)
         tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
         created_map = create_drive_structure_from_yaml(
-            svc, tmp_yaml, client_folder_id, bool(getattr(ctx, "redact_logs", False))
+            svc,
+            tmp_yaml,
+            client_folder_id,
+            redact_logs=bool(getattr(ctx, "redact_logs", False)),
         )
         raw_id = created_map.get("raw")
     else:
@@ -406,11 +413,12 @@ def download_raw_from_drive_with_progress(
         missing.append("download_drive_pdfs_to_local")
     if missing:
         raise RuntimeError(
-            "FunzionalitÃ  Google Drive non disponibili nella UI (download): "
+            "Funzionalità Google Drive non disponibili nella UI (download): "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
     if get_drive_service is None or create_drive_folder is None or download_drive_pdfs_to_local is None:
         raise RuntimeError("Funzioni Drive richieste per il download assenti nonostante i controlli preliminari.")
+
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = logger or _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -440,7 +448,7 @@ def download_raw_from_drive_with_progress(
     written: List[Path] = []
 
     if on_progress:
-        # progress_cb: on_progress is guaranteed non-None here
+        # progress_cb: on_progress è garantito non-None qui
         progress_cb: Callable[[int, int, str], None] = on_progress
 
         # Pre-scan: raccogli lista file per folder e calcola total una sola volta
@@ -535,6 +543,8 @@ def download_raw_from_drive_with_progress(
             )
         finally:
             dl_logger.removeHandler(ph)
+        # Aggiorna il contatore per riflettere gli avanzamenti del handler
+        done = ph.done
 
         # Post-scan per comporre la lista dei file nuovi/aggiornati
         for dest in candidates:
@@ -545,9 +555,15 @@ def download_raw_from_drive_with_progress(
             size_prev = pre_sizes.get(str(dest), None)
             if size_prev is None or size_prev != size_now:
                 written.append(dest)
+
+        # Completa la barra solo se non abbiamo già raggiunto il totale (compat con i test)
+        if done < total:
+            try:
+                progress_cb(total, total, "Completato")
+            except Exception:
+                pass
     else:
         # Nessun progress: singolo passaggio senza pre-scan
-        # Pre-scan
         pre_sizes_noprog: Dict[str, int] = {}
         candidates_noprog: List[Path] = []
         # File direttamente sotto raw/
@@ -575,7 +591,7 @@ def download_raw_from_drive_with_progress(
                 safe_name = sanitize_filename(name) or "file"
                 if not safe_name.lower().endswith(".pdf"):
                     safe_name += ".pdf"
-                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
+                dest = ensure_within_and_resolve(dest_dir, Path(dest_dir) / safe_name)
                 candidates_noprog.append(dest)
                 if dest.exists():
                     try:
@@ -607,13 +623,17 @@ def download_raw_from_drive_with_progress(
     return written
 
 
-# Verifica conflitti tra file su Drive e in locale
+# ===== Verifica conflitti tra file su Drive e in locale ========================
 
 
-def plan_raw_download(slug: str, require_env: bool = True) -> Tuple[List[str], List[str]]:
+def plan_raw_download(
+    slug: str,
+    require_env: bool = True,
+    base_root: Path | str = "output",
+) -> Tuple[List[str], List[str]]:
     """
     Restituisce (conflicts, labels):
-      - conflicts: path relativi (rispetto a output/timmy-kb-<slug>/raw) dei file che esistono giÃ  in locale
+      - conflicts: path relativi (rispetto a output/timmy-kb-<slug>/raw) dei file che esistono già in locale
       - labels:   path relativi di TUTTE le destinazioni previste (preview del piano di download)
 
     Dipendenze interne a questo modulo:
@@ -668,7 +688,7 @@ def plan_raw_download(slug: str, require_env: bool = True) -> Tuple[List[str], L
     raw_subfolders = folder_lister(service, raw_id)
     root_pdfs = pdf_lister(service, raw_id)
 
-    base_dir = Path("output") / f"timmy-kb-{slug}" / "raw"
+    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
     base_dir.mkdir(parents=True, exist_ok=True)
 
     conflicts: List[str] = []

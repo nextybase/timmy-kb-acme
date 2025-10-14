@@ -14,6 +14,7 @@ from ui.services.drive import invalidate_drive_index
 from ui.theme.css import inject_theme_css
 from ui.utils import clear_active_slug, get_slug, require_active_slug
 from ui.utils.branding import render_brand_header, render_sidebar_brand
+from ui.utils.html import esc_text
 
 # Root repo per branding (favicon/logo)
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -107,7 +108,7 @@ def sidebar(slug: str | None) -> None:
 
         render_sidebar_brand(st_module=st, repo_root=REPO_ROOT)
 
-        display_name = _client_display_name(slug)
+        display_name = esc_text(_client_display_name(slug))
         _call(
             "html",
             f"""
