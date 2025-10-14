@@ -48,6 +48,14 @@ jobs:
             mypy==1.11.2 \
             pytest==8.3.2 \
             pytest-cov==5.0.0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Secrets scan
+        run: gitleaks detect --redact --no-git -v
       - name: Docs UTF-8/accents normalization check
         run: |
           python scripts/fix_mojibake.py
