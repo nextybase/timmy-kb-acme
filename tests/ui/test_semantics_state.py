@@ -17,6 +17,7 @@ def _patch_streamlit_semantics(monkeypatch, sem) -> None:
     # patch dei metodi usati nei runner
     monkeypatch.setattr(sem.st, "spinner", _spinner, raising=False)
     monkeypatch.setattr(sem.st, "success", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(sem.st, "button", lambda *a, **k: False, raising=False)
 
 
 def test_semantics_gating_uses_ssot_constants():

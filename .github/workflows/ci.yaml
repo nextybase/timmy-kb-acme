@@ -36,13 +36,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
-          python -m pip install -U pip wheel
-          pip install black ruff mypy pytest pytest-cov
+          python -m pip install --disable-pip-version-check pip==24.2 wheel==0.44.0
+          pip install --disable-pip-version-check \
+            black==24.8.0 \
+            ruff==0.6.4 \
+            mypy==1.11.2 \
+            pytest==8.3.2 \
+            pytest-cov==5.0.0
       - name: Docs UTF-8/accents normalization check
         run: |
           python scripts/fix_mojibake.py
@@ -60,7 +65,7 @@ jobs:
       - name: Pytest (coverage 85%)
         run: pytest -ra --cov=src --cov-report=xml --cov-fail-under=85
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
         with:
           name: coverage-xml
           path: coverage.xml

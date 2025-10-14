@@ -99,6 +99,14 @@ def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
     return ctx, logger
 
 
+def _safe_button(label: str, **kwargs: Any) -> bool:
+    try:
+        return bool(st.button(label, **kwargs))
+    except TypeError:
+        kwargs.pop("width", None)
+        return bool(st.button(label, **kwargs))
+
+
 def _run_convert(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
     with st.spinner("Converto PDF in Markdown..."):
@@ -165,14 +173,14 @@ st.write("Conversione PDF → Markdown, arricchimento del frontmatter e generazi
 
 col_a, col_b = st.columns(2)
 with col_a:
-    if st.button("Converti PDF in Markdown", key="btn_convert", width="stretch"):
+    if _safe_button("Converti PDF in Markdown", key="btn_convert", width="stretch"):
         try:
             _run_convert(slug)
         except (ConfigError, ConversionError) as e:
             st.error(str(e))
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella conversione: {e}")
-    if st.button("Arricchisci frontmatter", key="btn_enrich", width="stretch"):
+    if _safe_button("Arricchisci frontmatter", key="btn_enrich", width="stretch"):
         try:
             _run_enrich(slug)
         except (ConfigError, ConversionError) as e:
@@ -181,12 +189,12 @@ with col_a:
             st.error(f"Errore nell'arricchimento: {e}")
 
 with col_b:
-    if st.button("Genera README/SUMMARY", key="btn_generate", width="stretch"):
+    if _safe_button("Genera README/SUMMARY", key="btn_generate", width="stretch"):
         try:
             _run_summary(slug)
         except (ConfigError, ConversionError) as e:
             st.error(str(e))
         except Exception as e:  # pragma: no cover
             st.error(f"Errore nella generazione: {e}")
-    if st.button("Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
+    if _safe_button("Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
         _go_preview()

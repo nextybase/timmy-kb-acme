@@ -49,11 +49,11 @@ jobs:
           else
             echo "GITHUB_TOKEN is missing" >&2
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with:
           python-version: '3.11'
 
@@ -66,8 +66,8 @@ jobs:
 
       - name: Install runtime deps (editable)
         run: |
-          python -m pip install -U pip wheel
-          pip install -e .
+          python -m pip install --disable-pip-version-check pip==24.2 wheel==0.44.0
+          pip install --disable-pip-version-check -e .
 
       - name: Run E2E smoke script
         run: |
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
         with:
           name: e2e-smoke-${{ github.run_id }}
           if-no-files-found: ignore

@@ -28,6 +28,7 @@ from semantic.validation import validate_context_slug
 from semantic.vision_ai import SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
 from src.ai.client_factory import make_openai_client
+from src.security.masking import hash_identifier, mask_paths, sha256_path
 
 _CHAT_COMPLETIONS_MAX_CHARS = 200_000
 
@@ -636,10 +637,10 @@ def provision_from_vision(
     record = {
         "ts": ts,
         "slug": slug,
-        "client_name": display_name,
-        "pdf": str(safe_pdf),
+        "client_hash": hash_identifier(display_name),
+        "pdf_hash": sha256_path(safe_pdf),
         "model": effective_model,
-        "yaml_paths": {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)},
+        "yaml_paths": mask_paths(paths.mapping_yaml, paths.cartelle_yaml),
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)

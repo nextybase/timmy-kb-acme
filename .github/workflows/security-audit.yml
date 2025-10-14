@@ -14,13 +14,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install pip-audit
         run: |
-          python -m pip install -U pip
-          pip install pip-audit
+          python -m pip install --require-hashes \
+            pip==24.2 --hash=sha256:2cd581cf58ab7fcfca4ce8efa6dcacd0de5bf8d0a3eb9ec927e07405f4d9e2a2
+          pip install --require-hashes \
+            pip-audit==2.7.2 --hash=sha256:49907430115baacb8bb7ffc1a2b689acfeac9d8534a43bffad3c73f8d8b32d52
       - name: Run pip-audit (soft gate on PR, hard on main/schedule)
         shell: bash
         continue-on-error: ${{ github.event_name == 'pull_request' }}

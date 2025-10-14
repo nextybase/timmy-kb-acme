@@ -1,0 +1,14 @@
+# requirements-dev.txt
+# Strumenti di sviluppo e test (installazione opzionale per contributor).
+black==24.8.0
+isort==5.13.2
+ruff==0.6.4
+mypy==1.11.2
+pytest==8.3.2
+pytest-cov==5.0.0
+hypothesis==6.112.2
+types-PyYAML==6.0.12.20240808
+types-requests==2.32.4.20250809
+pre-commit==4.3.0
+pre-commit-hooks==4.6.0
+pip-audit==2.7.2
