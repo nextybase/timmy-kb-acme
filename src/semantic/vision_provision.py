@@ -29,8 +29,22 @@ from semantic.vision_ai import SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
 from src.ai.client_factory import make_openai_client
 from src.security.masking import hash_identifier, mask_paths, sha256_path
+from src.security.retention import purge_old_artifacts
 
 _CHAT_COMPLETIONS_MAX_CHARS = 200_000
+_SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
+
+
+def _snapshot_retention_days() -> int:
+    raw = os.getenv("VISION_SNAPSHOT_RETENTION_DAYS", "").strip()
+    if not raw:
+        return _SNAPSHOT_RETENTION_DAYS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        return _SNAPSHOT_RETENTION_DAYS_DEFAULT
+    return max(0, value)
+
 
 # Schema minimo per Structured Outputs (richiede solo 'context' e 'areas')
 MIN_JSON_SCHEMA = {
@@ -644,6 +658,16 @@ def provision_from_vision(
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
+
+    retention_days = _snapshot_retention_days()
+    if retention_days > 0:
+        try:
+            purge_old_artifacts(paths.base_dir, retention_days)
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning(
+                "vision_provision.retention.failed",
+                extra={"slug": slug, "error": str(exc), "days": retention_days},
+            )
 
     # Ritorna solo i path dei due YAML richiesti
     return {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
