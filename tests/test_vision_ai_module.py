@@ -140,6 +140,53 @@ def test_generate_creates_yaml_and_snapshot(tmp_path: Path, monkeypatch: pytest.
     assert completions.last_kwargs["model"] == vision_ai._MODEL
 
 
+def test_snapshot_content_is_redacted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pii_text = "Codice RSSMRA85T10A562S e contatto persona@example.com"
+    ctx = _make_context(tmp_path, slug="pii", pdf_text=pii_text)
+    payload = {
+        "context": {"slug": "pii", "client_name": "PII Corp"},
+        "areas": [
+            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "keywords": ["Doc"]},
+            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "keywords": ["Doc2"]},
+            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "keywords": ["Doc3"]},
+        ],
+    }
+    completions = FakeCompletions(payload)
+    fake_client = FakeClient(completions)
+    monkeypatch.setattr(vision_ai, "make_openai_client", lambda: fake_client)
+
+    vision_ai.generate(ctx, logging.getLogger("test"), slug="pii")
+
+    snapshot_path = ctx.base_dir / "semantic" / vision_ai._TEXT_SNAPSHOT_NAME
+    content = snapshot_path.read_text(encoding="utf-8")
+    assert "[[REDACTED:CF]]" in content
+    assert "[[REDACTED:EMAIL]]" in content
+    assert "RSSMRA85T10A562S" not in content
+    assert "persona@example.com" not in content
+
+
+def test_snapshot_skipped_when_flag_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = _make_context(tmp_path, slug="nosnap", pdf_text="Missione e Visione")
+    ctx.env["VISION_SAVE_SNAPSHOT"] = "false"
+    ctx.env["_VISION_SAVE_SNAPSHOT_BOOL"] = False
+    payload = {
+        "context": {"slug": "nosnap", "client_name": "No Snap Corp"},
+        "areas": [
+            {"key": "area-uno", "ambito": "Ambito", "descrizione": "Desc", "keywords": ["Doc"]},
+            {"key": "area-due", "ambito": "Secondo", "descrizione": "Dettagli", "keywords": ["Doc2"]},
+            {"key": "area-tre", "ambito": "Terzo", "descrizione": "Info", "keywords": ["Doc3"]},
+        ],
+    }
+    completions = FakeCompletions(payload)
+    fake_client = FakeClient(completions)
+    monkeypatch.setattr(vision_ai, "make_openai_client", lambda: fake_client)
+
+    vision_ai.generate(ctx, logging.getLogger("test"), slug="nosnap")
+
+    snapshot_path = ctx.base_dir / "semantic" / vision_ai._TEXT_SNAPSHOT_NAME
+    assert not snapshot_path.exists()
+
+
 def test_generate_raises_on_finish_reason_length(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = _make_context(tmp_path, slug="overflow")
     payload = {

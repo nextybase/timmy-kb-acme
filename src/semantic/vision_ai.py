@@ -14,6 +14,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, is_valid_slug
+from semantic.redaction import redact_sensitive_tokens
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # factory centralizzato
 
@@ -104,6 +105,20 @@ def _extract_pdf_text(pdf_path: Path) -> str:
         return combined[:_MAX_VISION_CHARS]
     finally:
         document.close()
+
+
+def _should_save_snapshot(ctx: ClientContext) -> bool:
+    env_map = cast(Dict[str, Any], getattr(ctx, "env", {}) or {})
+    flag = env_map.get("_VISION_SAVE_SNAPSHOT_BOOL")
+    if isinstance(flag, bool):
+        return flag
+    raw_flag = env_map.get("VISION_SAVE_SNAPSHOT")
+    if raw_flag is None:
+        return True
+    if isinstance(raw_flag, bool):
+        return raw_flag
+    lowered = str(raw_flag).strip().lower()
+    return lowered not in {"0", "false", "no", "off"}
 
 
 @dataclass(frozen=True)
@@ -223,11 +238,21 @@ def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, mode
     client = make_openai_client()
 
     pdf_text = _extract_pdf_text(pdf_path)
-    safe_write_text(paths.text_snapshot, pdf_text)
-    logger.info(
-        "vision_ai.text_dump",
-        extra={"slug": slug, "chars": len(pdf_text), "path": str(paths.text_snapshot)},
-    )
+    redacted_snapshot = redact_sensitive_tokens(pdf_text)
+    if _should_save_snapshot(ctx):
+        safe_write_text(paths.text_snapshot, redacted_snapshot, atomic=True)
+        logger.info(
+            "vision_ai.text_dump",
+            extra={
+                "slug": slug,
+                "chars": len(redacted_snapshot),
+                "path": str(paths.text_snapshot),
+            },
+        )
+        if pdf_text != redacted_snapshot:
+            logger.info("vision_ai.snapshot.redacted", extra={"slug": slug})
+    else:
+        logger.info("vision_ai.snapshot.disabled", extra={"slug": slug})
 
     client_name = ctx.client_name or (ctx.settings or {}).get("client_name") or slug
     user_block = (

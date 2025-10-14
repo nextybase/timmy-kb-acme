@@ -329,11 +329,13 @@ class ClientContext:
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)
+        env_vars["VISION_SAVE_SNAPSHOT"] = get_env_var("VISION_SAVE_SNAPSHOT", default=None)
         # NEW: override del root repo (sposta output altrove)
         env_vars["REPO_ROOT_DIR"] = get_env_var("REPO_ROOT_DIR", default=None)
 
         # Versione booleana di CI per chiamanti legacy
         env_vars["_CI_BOOL"] = get_bool("CI", default=False)
+        env_vars["_VISION_SAVE_SNAPSHOT_BOOL"] = get_bool("VISION_SAVE_SNAPSHOT", default=True)
 
         return env_vars
 
