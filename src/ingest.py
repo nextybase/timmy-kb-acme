@@ -259,3 +259,20 @@ def ingest_folder(
         },
     )
     return {"files": count_files, "chunks": total_chunks}
+
+
+# --- utils Vision (small, non-breaking) ---
+def get_vision_cfg(cfg: dict | None) -> dict:
+    """
+    Restituisce la configurazione Vision normalizzata.
+    - Se il file di config non specifica nulla, l'engine predefinito resta `responses`
+      per garantire compatibilit�� out-of-the-box (nessun requisito su assistant_id).
+    - I progetti che desiderano usare un assistant dedicato possono impostare
+      esplicitamente `vision.engine: assistant` nel config cliente/repo.
+    """
+    v = (cfg or {}).get("vision") or {}
+    return {
+        "engine": v.get("engine", "responses"),  # assistant | responses | legacy
+        "model": v.get("model", "gpt-4o-mini"),  # usato se responses|legacy
+        "strict_output": bool(v.get("strict_output", True)),
+    }

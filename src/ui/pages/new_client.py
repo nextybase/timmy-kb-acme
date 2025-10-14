@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, cast
 
 import streamlit as st
 
@@ -46,6 +47,22 @@ else:
 
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
 LOGGER = logging.getLogger("ui.new_client")
+
+
+# --------- status helper ---------
+
+
+@contextmanager
+def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
+    clean_label = label.rstrip(" .…")
+    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
+    with st.status(label, **kwargs) as status:
+        try:
+            yield status
+        except Exception as exc:
+            if status is not None and hasattr(status, "update"):
+                status.update(label=f"{error_prefix}: {exc}", state="error")
+            raise
 
 
 # --------- helper ---------
@@ -211,15 +228,26 @@ if current_phase == UI_PHASE_INIT:
             st.stop()
 
         try:
-            ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
-            _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
+            with status_guard(
+                "Preparo il workspace locale...",
+                expanded=True,
+                error_label="Errore durante la preparazione del workspace",
+            ) as status:
+                ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
+                _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
+                _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
+                if status is not None and hasattr(status, "update"):
+                    status.update(label="Workspace locale pronto.", state="complete")
 
-            _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
             ui_logger = _ui_logger()
             ctx = _UIContext(base_dir=_client_base(s))
 
             # Loader visivo durante Vision
-            with st.status("Eseguo Vision…", expanded=True) as status:
+            with status_guard(
+                "Eseguo Vision…",
+                expanded=True,
+                error_label="Errore durante Vision",
+            ) as status:
                 try:
                     provision_from_vision(
                         ctx=ctx,
@@ -229,7 +257,8 @@ if current_phase == UI_PHASE_INIT:
                     )
                 except TypeError:
                     provision_from_vision(s, str(_client_pdf_path(s)))
-                status.update(label="Vision completata.", state="complete")
+                if status is not None and hasattr(status, "update"):
+                    status.update(label="Vision completata.", state="complete")
 
             if _exists_semantic_files(s):
                 # SSoT: dopo Vision il cliente è "nuovo"
@@ -278,17 +307,25 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                     "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
                 )
         else:
-            prog = st.progress(0)
-            info = st.empty()
-
-            def _cb(step: int, total: int, label: str) -> None:
-                pct = int(step * 100 / max(total, 1))
-                prog.progress(pct)
-                info.markdown(f"{pct}% - {label}")
-
             try:
-                _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
-                # Drive OK → stato "pronto" e fase PROVISIONED
+                with status_guard(
+                    "Provisiono la struttura Drive...",
+                    expanded=True,
+                    error_label="Errore durante il provisioning Drive",
+                ) as status:
+
+                    def _cb(step: int, total: int, label: str) -> None:
+                        pct = int(step * 100 / max(total, 1))
+                        if status is not None and hasattr(status, "update"):
+                            status.update(
+                                label=f"Provisiono la struttura Drive... {pct}% - {label}",
+                                state="running",
+                            )
+
+                    _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
+                    if status is not None and hasattr(status, "update"):
+                        status.update(label="Struttura Drive creata correttamente.", state="complete")
+
                 _upsert_client_registry(eff, display_name)
                 st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
                 st.success("Struttura Drive creata correttamente.")

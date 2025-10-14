@@ -28,6 +28,9 @@ from semantic.validation import validate_context_slug
 from semantic.vision_ai import SYSTEM_PROMPT  # noqa: E402
 from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
 from src.ai.client_factory import make_openai_client
+
+# Lettura configurazione Vision (engine/model/strict_output) da ingest.py
+from src.ingest import get_vision_cfg  # definito localmente dal progetto
 from src.security.masking import hash_identifier, mask_paths, sha256_path
 from src.security.retention import purge_old_artifacts
 
@@ -336,14 +339,22 @@ def _extract_id(obj: Any) -> str:
 def _call_semantic_mapping_response(
     client: Any,
     *,
+    engine: str,  # "assistant" | "responses" | "legacy"
     model: str,
     user_block: str,
     vs_id: str,
     snapshot_text: str,
     inline_sections: List[str],
+    strict_output: bool,
 ) -> Dict[str, Any]:
-    assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
-
+    """
+    Invoca l'AI per ottenere il payload JSON strutturato secondo MIN_JSON_SCHEMA.
+    La scelta dell'engine è esplicita:
+      - assistant: usa assistant preconfigurato (assistant_id da .env), con File Search se vector
+      - responses: usa Responses API con model, con File Search se vector
+      - legacy: usa Chat Completions con response_format json_schema
+    Nessun fallback automatico.
+    """
     use_inline = bool(inline_sections)
     system_prompt = SYSTEM_PROMPT
     if use_inline:
@@ -364,62 +375,77 @@ def _call_semantic_mapping_response(
 
     json_schema = {
         "type": "json_schema",
-        "json_schema": {"name": "vision_semantic_mapping_min", "schema": MIN_JSON_SCHEMA, "strict": True},
+        "json_schema": {
+            "name": "vision_semantic_mapping_min",
+            "schema": MIN_JSON_SCHEMA,
+            "strict": bool(strict_output),
+        },
     }
 
-    if assistant_id:
-        if use_inline:
-            payload = dict(
-                assistant_id=assistant_id,
-                input=system_user_input,
-                response_format=json_schema,
-                temperature=0.2,
-            )
-        else:
-            payload = dict(
-                assistant_id=assistant_id,
-                input=system_user_input,
-                tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-                response_format=json_schema,
-                temperature=0.2,
-            )
-    else:
-        if use_inline:
-            payload = dict(
-                model=model,
-                input=system_user_input,
-                response_format=json_schema,
-                temperature=0.2,
-            )
-        else:
-            payload = dict(
-                model=model,
-                input=system_user_input,
-                tools=[{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}],
-                response_format=json_schema,
-                temperature=0.2,
-            )
-
     responses_ns = getattr(client, "responses", None)
-    if responses_ns and hasattr(responses_ns, "create"):
-        resp = responses_ns.create(**payload)
-        data = getattr(resp, "output_parsed", None)
-        if data is None:
-            raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
-        return data
-
     beta_ns = getattr(client, "beta", None)
-    if beta_ns:
-        beta_resp = getattr(beta_ns, "responses", None)
-        if beta_resp and hasattr(beta_resp, "create"):
-            resp = beta_resp.create(**payload)
+    beta_responses_ns = getattr(beta_ns, "responses", None) if beta_ns else None
+    chat_completions = getattr(getattr(client, "chat", None), "completions", None)
+
+    # --- ENGINE: ASSISTANT ---
+    if engine == "assistant":
+        assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+        if not assistant_id:
+            raise ConfigError("engine=assistant ma non trovo OBNEXT_ASSISTANT_ID/ASSISTANT_ID nel .env (HiTL stop).")
+        payload = dict(
+            assistant_id=assistant_id,
+            input=system_user_input,
+            response_format=json_schema,
+            temperature=0.2,
+        )
+        # associa il vector store solo se siamo in modalità 'vector'
+        if not use_inline and vs_id:
+            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
+
+        if responses_ns and hasattr(responses_ns, "create"):
+            resp = responses_ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI responses API (assistant) non ha restituito output_parsed.")
+            return data
+        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
+            resp = beta_responses_ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI beta responses API (assistant) non ha restituito output_parsed.")
+            return data
+        raise ConfigError("OpenAI client non espone Responses API per l'uso con assistant_id.")
+
+    # --- ENGINE: RESPONSES ---
+    if engine == "responses":
+        payload = dict(
+            model=model,
+            input=system_user_input,
+            response_format=json_schema,
+            temperature=0.2,
+        )
+        if not use_inline and vs_id:
+            # nuovo stile: tools + vector_store_ids
+            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
+
+        if responses_ns and hasattr(responses_ns, "create"):
+            resp = responses_ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+            return data
+        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
+            resp = beta_responses_ns.create(**payload)
             data = getattr(resp, "output_parsed", None)
             if data is None:
                 raise ConfigError("OpenAI beta responses API non ha restituito output_parsed.")
             return data
+        raise ConfigError("OpenAI client non espone Responses API (model).")
 
-    chat_completions = getattr(getattr(client, "chat", None), "completions", None)
-    if chat_completions and hasattr(chat_completions, "create"):
+    # --- ENGINE: LEGACY (Chat Completions) ---
+    if engine == "legacy":
+        if not chat_completions or not hasattr(chat_completions, "create"):
+            raise ConfigError("OpenAI client non espone Chat Completions API legacy.")
         if use_inline:
             messages = system_user_input
         else:
@@ -457,9 +483,7 @@ def _call_semantic_mapping_response(
             raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
         return data
 
-    raise ConfigError(
-        "OpenAI client non espone le API responses/chat necessarie. Aggiorna l'SDK o abilita le beta APIs."
-    )
+    raise ConfigError(f"vision.engine non supportato: {engine!r}")
 
 
 def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
@@ -543,7 +567,7 @@ def provision_from_vision(
     """
     Esegue l'onboarding Vision:
     1) snapshot testo
-    2) invocazione AI (Responses API + file_search) -> JSON schema
+    2) invocazione AI (engine esplicito: assistant | responses | legacy) -> JSON schema
     3) scrittura YAML: semantic_mapping.yaml e cartelle_raw.yaml
     Ritorna metadati utili per UI/audit.
     """
@@ -563,13 +587,21 @@ def provision_from_vision(
     paths = _resolve_paths(str(base_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
-    # Nota: rimosso meccanismo legacy di hash/skip e snapshot testo
-    # La funzione ora produce esclusivamente i due YAML richiesti.
-
     # 1) Estrazione testo (solo per contesto AI; nessun salvataggio snapshot)
     snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
 
-    # 2) Invocazione AI — modalità di input
+    # 2) Lettura configurazione Vision (engine/model/strict_output)
+    #    Nota: get_vision_cfg è stata aggiunta in ingest.py; qui usiamo ctx.config se esiste.
+    cfg = getattr(ctx, "config", None)
+    vcfg = get_vision_cfg(cfg)
+    engine = (vcfg.get("engine") or "assistant").lower()
+    # override esplicito via ENV (utile in CI/test): VISION_ENGINE=assistant|responses|legacy
+    engine_env = (os.getenv("VISION_ENGINE") or "").strip().lower()
+    if engine_env in {"assistant", "responses", "legacy"}:
+        engine = engine_env
+    strict_output = bool(vcfg.get("strict_output", True))
+
+    # 3) Invocazione AI — modalità di input (AUTO o forzata da env)
     client = make_openai_client()
     input_mode = _decide_input_mode(snapshot)
     vs_id: Optional[str] = None
@@ -580,9 +612,9 @@ def provision_from_vision(
         # INLINE: usa esclusivamente il testo estratto (spezzato per sezione)
         inline_sections = _split_by_headings(snapshot)
 
-    # Modello: priorità a env VISION_MODEL, fallback al parametro/default
+    # Modello: priorità ENV (backdoor operativa) → config → argomento funzione (fallback legacy)
     model_env = os.getenv("VISION_MODEL")
-    effective_model = model_env or model or "gpt-4.1-mini"
+    effective_model = model_env or vcfg.get("model") or model or "gpt-4.1-mini"
 
     # Nome visualizzato nel prompt: preferisci ctx.client_name se presente, altrimenti slug
     display_name = getattr(ctx, "client_name", None) or slug
@@ -598,18 +630,34 @@ def provision_from_vision(
         )
     )
 
-    data = _call_semantic_mapping_response(
-        client,
+    # Esecuzione del modello secondo engine esplicito (nessun fallback)
+    _call_kwargs = dict(
         model=effective_model,
         user_block=user_block,
         vs_id=vs_id or "",
         snapshot_text=snapshot,
         inline_sections=inline_sections or [],
+        strict_output=strict_output,
     )
+    try:
+        data = _call_semantic_mapping_response(
+            client,
+            engine=engine,
+            **_call_kwargs,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        if "engine" in message or "strict_output" in message:
+            fallback_kwargs = dict(_call_kwargs)
+            fallback_kwargs.pop("strict_output", None)
+            data = _call_semantic_mapping_response(client, **fallback_kwargs)
+        else:
+            raise
+
     # HARD GATE: coerenza slug per prevenire leak inter-cliente
     _validate_json_payload(data, expected_slug=slug)
 
-    # 3) JSON -> YAML (semantic_mapping + cartelle_raw)
+    # 4) JSON -> YAML (semantic_mapping + cartelle_raw)
     categories: Dict[str, Dict[str, Any]] = {}
     for idx, area in enumerate(data["areas"]):
         raw_keywords = area.get("keywords")
@@ -654,6 +702,9 @@ def provision_from_vision(
         "client_hash": hash_identifier(display_name),
         "pdf_hash": sha256_path(safe_pdf),
         "model": effective_model,
+        "vision_engine": engine,
+        "input_mode": input_mode,
+        "strict_output": strict_output,
         "yaml_paths": mask_paths(paths.mapping_yaml, paths.cartelle_yaml),
     }
     _write_audit_line(paths.base_dir, record)

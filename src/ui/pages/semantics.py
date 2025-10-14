@@ -72,6 +72,20 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
 
     st = cast(Any, _StreamlitStub())
 
+
+@contextmanager
+def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
+    clean_label = label.rstrip(" .…")
+    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
+    with st.status(label, **kwargs) as status:
+        try:
+            yield status
+        except Exception as exc:
+            if status is not None and hasattr(status, "update"):
+                status.update(label=f"{error_prefix}: {exc}", state="error")
+            raise
+
+
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
@@ -109,18 +123,28 @@ def _safe_button(label: str, **kwargs: Any) -> bool:
 
 def _run_convert(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
-    with st.spinner("Converto PDF in Markdown..."):
+    with status_guard(
+        "Converto PDF in Markdown...",
+        expanded=True,
+        error_label="Errore durante la conversione",
+    ) as status:
         files = convert_markdown(ctx, logger, slug=slug)
-    st.success(f"Conversione completata ({len(files)} file di contenuto).")
+        if status is not None and hasattr(status, "update"):
+            status.update(label=f"Conversione completata ({len(files)} file di contenuto).", state="complete")
 
 
 def _run_enrich(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base_dir, logger)
-    with st.spinner("Arricchisco frontmatter..."):
+    with status_guard(
+        "Arricchisco il frontmatter...",
+        expanded=True,
+        error_label="Errore durante l'arricchimento",
+    ) as status:
         touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
-    st.success(f"Frontmatter aggiornato ({len(touched)} file).")
+        if status is not None and hasattr(status, "update"):
+            status.update(label=f"Frontmatter aggiornato ({len(touched)} file).", state="complete")
     try:
         # Promozione stato: arricchito
         set_state(slug, "arricchito")
@@ -131,9 +155,14 @@ def _run_enrich(slug: str) -> None:
 
 def _run_summary(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
-    with st.spinner("Genero SUMMARY.md e README.md..."):
+    with status_guard(
+        "Genero SUMMARY.md e README.md...",
+        expanded=True,
+        error_label="Errore durante la generazione",
+    ) as status:
         write_summary_and_readme(ctx, logger, slug=slug)
-    st.success("SUMMARY.md e README.md generati.")
+        if status is not None and hasattr(status, "update"):
+            status.update(label="SUMMARY.md e README.md generati.", state="complete")
     try:
         # Promozione stato: finito
         set_state(slug, "finito")

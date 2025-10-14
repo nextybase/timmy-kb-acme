@@ -101,7 +101,14 @@ def sidebar(slug: str | None) -> None:
             if not callable(fn):
                 fn = getattr(st, method, None)
             if callable(fn):
-                return fn(*args, **kwargs)
+                try:
+                    return fn(*args, **kwargs)
+                except TypeError:
+                    if "width" in kwargs:
+                        safe_kwargs = dict(kwargs)
+                        safe_kwargs.pop("width", None)
+                        return fn(*args, **safe_kwargs)
+                    raise
             return None
 
         has_slug = bool(slug)

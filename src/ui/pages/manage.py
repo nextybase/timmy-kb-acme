@@ -2,8 +2,9 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Iterator, Optional, TypeVar
 
 import streamlit as st
 
@@ -36,6 +37,20 @@ _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
 _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")  # noqa: F401
+
+
+# ---------------- Status helper ----------------
+@contextmanager
+def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
+    clean_label = label.rstrip(" .…")
+    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
+    with st.status(label, **kwargs) as status:
+        try:
+            yield status
+        except Exception as exc:
+            if status is not None and hasattr(status, "update"):
+                status.update(label=f"{error_prefix}: {exc}", state="error")
+            raise
 
 
 # ---------------- Helpers ----------------
@@ -146,13 +161,18 @@ if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", width="str
         )
     else:
         try:
-            with st.status("Genero README nelle sottocartelle di raw/…", expanded=True):
+            with status_guard(
+                "Genero README nelle sottocartelle di raw/…",
+                expanded=True,
+                error_label="Errore durante la generazione dei README",
+            ) as status:
                 try:
                     result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True, require_env=True)
                 except TypeError:
                     result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True)
-            n = len(result or {})
-            st.success(f"README creati/aggiornati: {n}")
+                count = len(result or {})
+                if status is not None and hasattr(status, "update"):
+                    status.update(label=f"README creati/aggiornati: {count}", state="complete")
 
             # Invalida cache e refresh
             try:
@@ -210,7 +230,11 @@ if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", width=
             return
         if c2.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
             try:
-                with st.status("Scarico file da Drive…", expanded=True):
+                with status_guard(
+                    "Scarico file da Drive…",
+                    expanded=True,
+                    error_label="Errore durante il download",
+                ) as status:
                     download_fn = _download_with_progress or _download_simple
                     if download_fn is None:
                         raise RuntimeError("Funzione di download non disponibile.")
@@ -223,7 +247,9 @@ if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", width=
                         )
                     except TypeError:
                         paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
-                st.success(f"Download completato. File nuovi/aggiornati: {len(paths or [])}.")
+                    count = len(paths or [])
+                    if status is not None and hasattr(status, "update"):
+                        status.update(label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete")
 
                 try:
                     if _invalidate_drive_index is not None:

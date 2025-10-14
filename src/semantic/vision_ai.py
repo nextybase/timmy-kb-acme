@@ -230,6 +230,11 @@ def _message_content_to_text(message_content: Any) -> str:
     return "".join(text_parts).strip()
 
 
+def build_llm_payload(user_block: str, redacted_text: str) -> str:
+    """Costruisce il prompt utente usando il testo redatto (no PII in chiaro)."""
+    return f"{user_block}\n\nVision Statement (testo estratto, redatto):\n{redacted_text}"
+
+
 def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, model: str = _MODEL) -> Dict[str, Any]:
     """Genera semantic_mapping.yaml e cartelle_raw.yaml e restituisce i path."""
     paths = _resolve_paths(ctx, slug)
@@ -261,7 +266,9 @@ def generate_pair(ctx: ClientContext, logger: logging.Logger, *, slug: str, mode
         f"- client_name: {client_name}\n"
         "\nVision Statement: testo estratto dal PDF (troncato a 200k caratteri)."
     )
-    user_prompt = f"{user_block}\n\nVision Statement (testo estratto):\n{pdf_text}"
+
+    # PATCH: usa il testo redatto anche per il prompt al modello
+    user_prompt = build_llm_payload(user_block, redacted_snapshot)
 
     try:
         response = client.chat.completions.create(
