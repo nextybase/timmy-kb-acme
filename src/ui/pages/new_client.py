@@ -259,6 +259,7 @@ if current_phase == UI_PHASE_INIT:
                 except TypeError:
                     # Ambienti legacy (signature diversa) vengono gestiti
                     # solo se la funzione non accetta i nuovi parametri kw.
+                    sig: Optional[inspect.Signature]
                     try:
                         sig = inspect.signature(provision_from_vision)
                     except (ValueError, TypeError):

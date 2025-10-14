@@ -347,23 +347,18 @@ def _call_semantic_mapping_response(
     inline_sections: List[str],
     strict_output: bool,
 ) -> tuple[Dict[str, Any], str]:
+    """
+    Invoca il modello secondo l'engine richiesto:
+      - assistant: usa assistant_id preconfigurato. Nessun messaggio 'system' in input;
+      override run-level via 'instructions'.
+      - responses: usa Responses API con 'model'. 'tools' e 'tool_resources' separati per File Search.
+      - legacy: Chat Completions; nessun File Search (non supportato).
+    Ritorna (payload_json, engine_usato).
+    """
+    logger = logging.getLogger("semantic.vision_provision")
     use_inline = bool(inline_sections)
-    system_prompt = SYSTEM_PROMPT
-    if use_inline:
-        system_prompt = (
-            SYSTEM_PROMPT
-            + "\n\nDurante QUESTA run: ignora File Search e usa esclusivamente i blocchi [DOC] forniti."
-            + " Produci solo JSON conforme allo schema. Niente testo fuori JSON."
-        )
 
-    system_user_input: List[Dict[str, str]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_block},
-    ]
-    if use_inline:
-        for idx, sec in enumerate(inline_sections, start=1):
-            system_user_input.append({"role": "user", "content": f"[DOC SEZIONE {idx}]\n{sec}\n[/DOC]"})
-
+    # JSON schema strict per structured outputs
     json_schema = {
         "type": "json_schema",
         "json_schema": {
@@ -373,143 +368,229 @@ def _call_semantic_mapping_response(
         },
     }
 
+    def _make_user_msgs() -> List[Dict[str, str]]:
+        """Costruisce SOLO messaggi USER (niente 'system' qui)."""
+        msgs: List[Dict[str, str]] = [{"role": "user", "content": user_block}]
+        if use_inline:
+            for i, sec in enumerate(inline_sections, start=1):
+                msgs.append({"role": "user", "content": f"[DOC SEZIONE {i}]\n{sec}\n[/DOC]"})
+        return msgs
+
+    run_instructions = (
+        "Durante QUESTA run: ignora File Search e usa esclusivamente i blocchi [DOC] forniti. "
+        "Produci solo JSON conforme allo schema. Niente testo fuori JSON."
+        if use_inline
+        else None
+    )
+
     responses_ns = getattr(client, "responses", None)
     beta_ns = getattr(client, "beta", None)
     beta_responses_ns = getattr(beta_ns, "responses", None) if beta_ns else None
     chat_completions = getattr(getattr(client, "chat", None), "completions", None)
 
-    def _invoke_chat_completions(*, allow_file_search: bool = True) -> Dict[str, Any]:
-        if not chat_completions or not hasattr(chat_completions, "create"):
-            raise ConfigError("OpenAI client non espone Chat Completions API legacy.")
-        if use_inline:
-            messages = system_user_input
-        else:
-            trimmed_snapshot = snapshot_text[:_CHAT_COMPLETIONS_MAX_CHARS]
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"{user_block}\n\nVision Statement (testo estratto):\n{trimmed_snapshot}",
-                },
-            ]
-        payload: Dict[str, Any] = dict(
-            model=model,
-            messages=messages,
-            temperature=0.2,
-            response_format=json_schema,
-        )
-        if not use_inline and vs_id and allow_file_search:
-            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
-        chat_resp = chat_completions.create(**payload)
-        choices = getattr(chat_resp, "choices", None)
-        if not choices:
-            raise ConfigError("Chat completions: nessuna choice restituita.")
-        first = choices[0]
-        message = getattr(first, "message", None) or getattr(first, "delta", None) or first
-        content = None
-        if isinstance(message, dict):
-            content = message.get("content")
-        else:
-            content = getattr(message, "content", None)
-        if not content:
-            raise ConfigError("Chat completions: contenuto vuoto.")
-        text = content if isinstance(content, str) else getattr(content[0], "text", None)
-        if not text:
-            raise ConfigError("Chat completions: nessun testo restituito.")
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as exc:  # pragma: no cover
-            raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
-
+    # --- ENGINE: ASSISTANT ---
     if engine == "assistant":
         assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
         if not assistant_id:
             raise ConfigError("engine=assistant ma non trovo OBNEXT_ASSISTANT_ID/ASSISTANT_ID nel .env (HiTL stop).")
-        payload = dict(
-            assistant_id=assistant_id,
-            input=system_user_input,
-            response_format=json_schema,
-            temperature=0.2,
-        )
-        if not use_inline and vs_id:
-            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
-        if responses_ns and hasattr(responses_ns, "create"):
-            resp = responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI responses API (assistant) non ha restituito output_parsed.")
-            return data, "assistant"
-        if beta_responses_ns and hasattr(beta_responses_ns, "create"):
-            resp = beta_responses_ns.create(**payload)
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI beta responses API (assistant) non ha restituito output_parsed.")
-            return data, "assistant"
-        raise ConfigError("OpenAI client non espone Responses API per l'uso con assistant_id.")
 
+        payload: Dict[str, Any] = {
+            "assistant_id": assistant_id,
+            "input": _make_user_msgs(),
+            "response_format": json_schema,
+            "temperature": 0.2,
+        }
+        if run_instructions:
+            payload["instructions"] = run_instructions
+        # In vector mode non aggiungiamo 'tools' (sono nel profilo Assistant); passiamo solo le risorse della run.
+        if (not use_inline) and vs_id:
+            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
+
+        target_ns = responses_ns or beta_responses_ns
+        if not target_ns or not hasattr(target_ns, "create"):
+            raise ConfigError("OpenAI client non espone Responses API per l'uso con assistant_id.")
+        resp = target_ns.create(**payload)  # type: ignore[call-arg]
+        data = getattr(resp, "output_parsed", None)
+        if data is None:
+            raise ConfigError("OpenAI responses API (assistant) non ha restituito output_parsed.")
+        return data, "assistant"
+
+    # --- ENGINE: RESPONSES (model) ---
     if engine == "responses":
-        payload = dict(
-            model=model,
-            input=system_user_input,
-            response_format=json_schema,
-            temperature=0.2,
-        )
-        if not use_inline and vs_id:
-            payload["tools"] = [{"type": "file_search", "file_search": {"vector_store_ids": [vs_id]}}]
+        # Qui possiamo usare 'system' perché NON stiamo passando assistant_id.
+        input_msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        input_msgs += _make_user_msgs()
+
+        payload: Dict[str, Any] = {
+            "model": model,
+            "input": input_msgs,
+            "response_format": json_schema,
+            "temperature": 0.2,
+        }
+        if run_instructions:
+            payload["instructions"] = run_instructions
+
+        # File Search (solo se NON inline): tools + tool_resources separati (schema corretto).
+        if (not use_inline) and vs_id:
+            payload["tools"] = [{"type": "file_search"}]
+            payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
 
         def _try_responses(ns: Any) -> Optional[tuple[Dict[str, Any], str]]:
             if not ns or not hasattr(ns, "create"):
                 return None
             try:
                 resp = ns.create(**payload)
+                data = getattr(resp, "output_parsed", None)
+                if data is None:
+                    raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+                label = "responses-vector" if ((not use_inline) and vs_id) else "responses-inline"
+                return data, label
             except TypeError as exc:
-                message = str(exc)
-                if "response_format" in message:
-                    logging.getLogger("semantic.vision_provision").warning(
+                # Build senza json_schema: fallback a legacy senza file_search
+                if "response_format" in str(exc).lower():
+                    logger.warning(
                         "vision_provision.responses_missing_json_schema",
                         extra={"requested": "responses", "fallback": "legacy"},
                     )
-                    data = _invoke_chat_completions(allow_file_search=False)
+                    if not chat_completions or not hasattr(chat_completions, "create"):
+                        raise
+                    data = _invoke_chat_completions_legacy(
+                        chat_completions=chat_completions,
+                        model=model,
+                        snapshot_text=snapshot_text,
+                        user_block=user_block,
+                        use_inline=use_inline,
+                        inline_sections=inline_sections,
+                    )
                     return data, "legacy"
                 raise
             except Exception as exc:
-                message = str(exc)
-                if "file_search" in message and vs_id:
-                    logging.getLogger("semantic.vision_provision").warning(
+                # Alcune build rifiutano file_search in responses: fallback a legacy inline
+                msg = str(exc)
+                if ("file_search" in msg.lower()) and vs_id:
+                    logger.warning(
                         "vision_provision.responses_missing_file_search",
                         extra={"requested": "responses", "fallback": "legacy"},
                     )
-                    data = _invoke_chat_completions(allow_file_search=False)
+                    if not chat_completions or not hasattr(chat_completions, "create"):
+                        raise
+                    data = _invoke_chat_completions_legacy(
+                        chat_completions=chat_completions,
+                        model=model,
+                        snapshot_text=snapshot_text,
+                        user_block=user_block,
+                        use_inline=True,  # forziamo inline nel fallback
+                        inline_sections=inline_sections,
+                    )
                     return data, "legacy"
                 raise
-            data = getattr(resp, "output_parsed", None)
-            if data is None:
-                raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
-            return data, "responses"
 
-        data = _try_responses(responses_ns)
-        if data is not None:
-            return data
-        data = _try_responses(beta_responses_ns)
-        if data is not None:
-            return data
+        out = _try_responses(responses_ns)
+        if out is not None:
+            return out
+        out = _try_responses(beta_responses_ns)
+        if out is not None:
+            return out
+
+        # Fallback finale su legacy
         if chat_completions and hasattr(chat_completions, "create"):
-            logging.getLogger("semantic.vision_provision").warning(
+            logger.warning(
                 "vision_provision.responses_fallback_legacy",
                 extra={"requested": "responses", "fallback": "legacy"},
             )
-            data = _invoke_chat_completions()
+            data = _invoke_chat_completions_legacy(
+                chat_completions=chat_completions,
+                model=model,
+                snapshot_text=snapshot_text,
+                user_block=user_block,
+                use_inline=use_inline,
+                inline_sections=inline_sections,
+            )
             return data, "legacy"
+
         raise ConfigError(
             "OpenAI client non espone Responses API (model). "
             "Aggiorna il pacchetto openai oppure imposta VISION_ENGINE=assistant|legacy."
         )
 
+    # --- ENGINE: LEGACY (chat completions) ---
     if engine == "legacy":
-        data = _invoke_chat_completions()
+        if not chat_completions or not hasattr(chat_completions, "create"):
+            raise ConfigError("OpenAI client non espone Chat Completions API legacy.")
+        data = _invoke_chat_completions_legacy(
+            chat_completions=chat_completions,
+            model=model,
+            snapshot_text=snapshot_text,
+            user_block=user_block,
+            use_inline=use_inline,
+            inline_sections=inline_sections,
+        )
         return data, "legacy"
 
     raise ConfigError(f"vision.engine non supportato: {engine!r}")
+
+
+def _invoke_chat_completions_legacy(
+    *,
+    chat_completions: Any,
+    model: str,
+    snapshot_text: str,
+    user_block: str,
+    use_inline: bool,
+    inline_sections: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Fallback su Chat Completions:
+    - mantiene SYSTEM_PROMPT come 'system'
+    - NON usa File Search (non supportato)
+    - forza response_format=json_schema (se supportato dalla build)
+    """
+    if use_inline:
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_block},
+        ]
+        for i, sec in enumerate(inline_sections or [], start=1):
+            messages.append({"role": "user", "content": f"[DOC SEZIONE {i}]\n{sec}\n[/DOC]"})
+    else:
+        trimmed_snapshot = snapshot_text[:_CHAT_COMPLETIONS_MAX_CHARS]
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"{user_block}\n\nVision Statement (testo estratto):\n{trimmed_snapshot}"},
+        ]
+
+    chat_resp = chat_completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "vision_semantic_mapping_min",
+                "schema": MIN_JSON_SCHEMA,
+                "strict": True,
+            },
+        },
+    )
+    choices = getattr(chat_resp, "choices", None)
+    if not choices:
+        raise ConfigError("Chat completions: nessuna choice restituita.")
+    first = choices[0]
+    message = getattr(first, "message", None) or getattr(first, "delta", None) or first
+    content = None
+    if isinstance(message, dict):
+        content = message.get("content")
+    else:
+        content = getattr(message, "content", None)
+    if not content:
+        raise ConfigError("Chat completions: contenuto vuoto.")
+    text = content if isinstance(content, str) else getattr(content[0], "text", None)
+    if not text:
+        raise ConfigError("Chat completions: nessun testo restituito.")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
 
 
 def _create_vector_store_with_pdf(client, pdf_path: Path) -> str:
