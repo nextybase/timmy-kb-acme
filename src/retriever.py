@@ -27,7 +27,7 @@ from dataclasses import MISSING, dataclass, replace
 from heapq import nlargest
 from itertools import tee
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
@@ -339,7 +339,13 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     return candidates
 
 
-def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dict[str, Any]]:
+def search(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    *,
+    authorizer: Callable[[QueryParams], None] | None = None,
+    throttle_check: Callable[[QueryParams], None] | None = None,
+) -> list[dict[str, Any]]:
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
@@ -360,6 +366,10 @@ def search(params: QueryParams, embeddings_client: EmbeddingsClient) -> list[dic
     - Se batch/vettore è vuoto: warning e `[]`.
     """
     _validate_params(params)
+    if authorizer is not None:
+        authorizer(params)
+    if throttle_check is not None:
+        throttle_check(params)
 
     # Soft-fail per input non utili
     if params.k == 0:
@@ -609,6 +619,9 @@ def search_with_config(
     params: QueryParams,
     config: Optional[dict[str, Any]],
     embeddings_client: EmbeddingsClient,
+    *,
+    authorizer: Callable[[QueryParams], None] | None = None,
+    throttle_check: Callable[[QueryParams], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Esegue `with_config_or_budget(...)` e poi `search(...)`.
 
@@ -620,7 +633,12 @@ def search_with_config(
         results = search_with_config(params, cfg, embeddings)
     """
     effective = with_config_or_budget(params, config)
-    return search(effective, embeddings_client)
+    return search(
+        effective,
+        embeddings_client,
+        authorizer=authorizer,
+        throttle_check=throttle_check,
+    )
 
 
 def preview_effective_candidate_limit(

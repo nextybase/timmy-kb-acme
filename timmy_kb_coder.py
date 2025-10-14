@@ -36,6 +36,8 @@ from src.ingest import OpenAIEmbeddings
 from src.kb_db import get_db_path, init_db
 from src.prompt_builder import build_prompt
 from src.retriever import QueryParams, search_with_config  # <-- usa la facade
+from src.security.authorization import authorizer_session
+from src.security.throttle import throttle_token_bucket
 from src.vscode_bridge import read_response, write_request
 
 st: Any | None
@@ -179,7 +181,13 @@ def main() -> None:
                 )
                 # carica (se c'è) il config del cliente per allineare candidate_limit/budget
                 cfg = _load_client_cfg(project_slug)
-                retrieved = search_with_config(params, cfg, emb_client)
+                retrieved = search_with_config(
+                    params,
+                    cfg,
+                    emb_client,
+                    authorizer=authorizer_session,
+                    throttle_check=throttle_token_bucket,
+                )
             except Exception as e:  # pragma: no cover - mostra feedback in UI
                 LOGGER.exception(
                     "coder.search.error",
