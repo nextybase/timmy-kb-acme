@@ -1,6 +1,6 @@
 # requirements-dev.txt
 # Strumenti di sviluppo e test (installazione opzionale per contributor).
-black==24.8.0
+black==24.10.0
 isort==5.13.2
 ruff==0.6.4
 mypy==1.11.2
