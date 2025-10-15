@@ -3,23 +3,30 @@
 Funzioni:
 - ingest_path(project_slug, scope, path, version, meta)
 - ingest_folder(project_slug, scope, folder_glob, version, meta)
+- get_vision_cfg(cfg)
 
 Legge file di testo, li divide in chunk, calcola le embedding e le salva in SQLite
 tramite kb_db.insert_chunks. Salta i file binari. Registra un riepilogo nei log.
+
+Nota Vision: il flusso Vision è ora **inline-only** e delega tutta l’elaborazione
+all’Assistant preconfigurato. Non esistono più modalità vector/attachments/fallback.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from glob import glob
 from pathlib import Path
 from types import ModuleType
 from typing import Any, List, Optional, Sequence, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 
-from .kb_db import insert_chunks
+# IMPORT ASSOLUTO: trattiamo src/ come package
+from src.kb_db import insert_chunks
 
 LOGGER = logging.getLogger("timmy_kb.ingest")
 
@@ -139,8 +146,7 @@ def ingest_path(
     *,
     base_dir: Optional[Path] = None,
 ) -> int:
-    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero"
-    "di chunk."""
+    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
     p = Path(path)
     base = Path(base_dir) if base_dir is not None else p.parent
     if not p.exists() or not p.is_file():
@@ -261,18 +267,25 @@ def ingest_folder(
     return {"files": count_files, "chunks": total_chunks}
 
 
-# --- utils Vision (small, non-breaking) ---
+# --- Vision config (inline-only, assistant) ---
 def get_vision_cfg(cfg: dict | None) -> dict:
     """
-    Restituisce la configurazione Vision normalizzata.
-    - Se il file di config non specifica nulla, l'engine predefinito resta `responses`
-      per garantire compatibilit�� out-of-the-box (nessun requisito su assistant_id).
-    - I progetti che desiderano usare un assistant dedicato possono impostare
-      esplicitamente `vision.engine: assistant` nel config cliente/repo.
+    Restituisce la configurazione Vision normalizzata **inline-only**.
+    - Percorso unico: engine = "assistant" (Threads/Runs), niente vector/attachments/fallback.
+    - Modello non configurato qui: lo decide il profilo Assistant (dashboard).
+    - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID o ASSISTANT_ID.
+    - `strict_output` resta abilitato di default.
     """
     v = (cfg or {}).get("vision") or {}
+    assistant_id = (os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID") or "").strip()
+    if not assistant_id:
+        raise ConfigError("Assistant ID non configurato: imposta OBNEXT_ASSISTANT_ID o ASSISTANT_ID.")
+
     return {
-        "engine": v.get("engine", "responses"),  # assistant | responses | legacy
-        "model": v.get("model", "gpt-4o-mini"),  # usato se responses|legacy
+        "engine": "assistant",
+        "assistant_id": assistant_id,
+        "input_mode": "inline",  # documentativo
+        "fs_mode": None,  # rimosso
+        "model": None,  # deciso dall'Assistant
         "strict_output": bool(v.get("strict_output", True)),
     }
