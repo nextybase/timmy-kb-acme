@@ -101,6 +101,7 @@ pages = {
         st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
         st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
         st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),
+        st.Page("src/ui/pages/guida_ui.py", title="Guida UI", url_path="guida"),
     ],
 }
 

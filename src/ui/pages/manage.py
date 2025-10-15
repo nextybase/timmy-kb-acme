@@ -8,6 +8,8 @@ from typing import Any, Callable, Iterator, Optional, TypeVar
 
 import streamlit as st
 
+from pipeline.config_utils import get_client_config, update_config_with_drive_ids
+from pipeline.context import ClientContext
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.utils import set_slug
@@ -102,6 +104,16 @@ def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
         return fn(*args)
 
 
+def _readmes_status(slug: str) -> int:
+    """0 se non generati, 1 se generati (fallback sicuro a 0)."""
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        cfg = get_client_config(ctx) or {}
+        return 1 if int(cfg.get("drive_readmes_done", 0) or 0) else 0
+    except Exception:
+        return 0
+
+
 # ---------------- UI ----------------
 
 slug = render_chrome_then_require(allow_without_slug=True)
@@ -150,124 +162,127 @@ if _render_drive_diff is not None:
 else:
     st.info("Vista Diff non disponibile.")
 
-# --- Genera README in raw/ ---
+# --- Genera README / Rileva PDF / Scarica da Drive → locale in 3 colonne ---
 st.markdown("")
-if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", width="stretch"):
-    emit_fn = _emit_readmes_for_raw
-    if emit_fn is None:
-        st.error(
-            "Funzione non disponibile. Abilita gli extra Drive: "
-            "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
-        )
-    else:
-        try:
-            with status_guard(
-                "Genero README nelle sottocartelle di raw/…",
-                expanded=True,
-                error_label="Errore durante la generazione dei README",
-            ) as status:
-                try:
-                    result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True, require_env=True)
-                except TypeError:
-                    result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True)
-                count = len(result or {})
-                if status is not None and hasattr(status, "update"):
-                    status.update(label=f"README creati/aggiornati: {count}", state="complete")
 
-            # Invalida cache e refresh
-            try:
-                if _invalidate_drive_index is not None:
-                    _invalidate_drive_index(slug)
-                st.toast("Cache Drive aggiornata.")
-                st.rerun()
-            except Exception:
-                pass
-        except Exception as e:  # pragma: no cover
-            st.error(f"Impossibile generare i README: {e}")
+status = _readmes_status(slug)
+emit_btn_type = "primary" if status == 0 else "secondary"
 
-# --- Probe RAW PDFs ---
-st.markdown("")
-if st.button("Rileva PDF in raw/", key="btn_probe_raw", width="stretch"):
-    ready, raw_path = has_raw_pdfs(slug)
-    if ready:
-        st.success(f"PDF rilevati in `{raw_path}`.")
-    else:
-        st.warning(f"Nessun PDF trovato in `{raw_path}`.")
+try:
+    c1, c2, c3 = st.columns([1, 1, 1])
+except TypeError:
+    c1, c2, c3 = st.columns(3)
 
-# --- Scarica da Drive -> locale (modal con conflitti) ---
-st.markdown("")
-if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", width="stretch"):
-
-    def _modal() -> None:
-        st.write(
-            "Questa operazione scarica i file dalle cartelle di Google Drive nelle cartelle locali corrispondenti."
-        )
-        st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
-
-        # Pre-analisi conflitti tramite servizio estratto
-        conflicts: list[str] = []
-        labels: list[str] = []
-        try:
-            plan_fn = _plan_raw_download
-            if plan_fn is None:
-                raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-            conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
-        except Exception as e:
-            st.error(f"Impossibile preparare il piano di download: {e}")
-            return
-
-        if conflicts:
-            with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
-                st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
+with c1:
+    if st.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
+        emit_fn = _emit_readmes_for_raw
+        if emit_fn is None:
+            st.error(
+                "Funzione non disponibile. Abilita gli extra Drive: "
+                "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+            )
         else:
-            st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
-
-        with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
-            st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
-
-        c1, c2 = st.columns(2)
-        if c1.button("Annulla", key="dl_cancel", width="stretch"):
-            return
-        if c2.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
             try:
                 with status_guard(
-                    "Scarico file da Drive…",
+                    "Genero README nelle sottocartelle di raw/…",
                     expanded=True,
-                    error_label="Errore durante il download",
-                ) as status:
-                    download_fn = _download_with_progress or _download_simple
-                    if download_fn is None:
-                        raise RuntimeError("Funzione di download non disponibile.")
+                    error_label="Errore durante la generazione dei README",
+                ) as status_widget:
                     try:
-                        paths = _call_best_effort(
-                            download_fn,
-                            slug=slug,
-                            require_env=True,
-                            overwrite=bool(conflicts),
-                        )
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True, require_env=True)
                     except TypeError:
-                        paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
-                    count = len(paths or [])
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete")
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True)
+                    count = len(result or {})
+                    if status_widget is not None and hasattr(status_widget, "update"):
+                        status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
 
                 try:
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
-                    st.toast("Allineamento Drive→locale completato.")
+                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                    update_config_with_drive_ids(ctx, updates={"drive_readmes_done": 1})
+                    st.toast("README generati. Flag `drive_readmes_done=1` salvato nel config.")
                     st.rerun()
                 except Exception:
                     pass
-            except Exception as e:
-                st.error(f"Errore durante il download: {e}")
+            except Exception as e:  # pragma: no cover
+                st.error(f"Impossibile generare i README: {e}")
 
-    dialog_builder = getattr(st, "dialog", None)
-    if callable(dialog_builder):
-        open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
-        modal_runner = open_modal(_modal)
-        if callable(modal_runner):
-            modal_runner()
+with c2:
+    if st.button("Rileva PDF in raw/", key="btn_probe_raw", type="secondary", width="stretch"):
+        ready, raw_path = has_raw_pdfs(slug)
+        st.success(f"PDF rilevati in `{raw_path}`.") if ready else st.warning(f"Nessun PDF trovato in `{raw_path}`.")
+
+with c3:
+    if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
+
+        def _modal() -> None:
+            st.write(
+                "Questa operazione scarica i file dalle cartelle di Google Drive nelle cartelle locali corrispondenti."
+            )
+            st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
+
+            conflicts, labels = [], []
+            try:
+                plan_fn = _plan_raw_download
+                if plan_fn is None:
+                    raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
+                conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
+            except Exception as e:
+                st.error(f"Impossibile preparare il piano di download: {e}")
+                return
+
+            if conflicts:
+                with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
+                    st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
+            else:
+                st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
+
+            with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
+                st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
+
+            cA, cB = st.columns(2)
+            if cA.button("Annulla", key="dl_cancel", width="stretch"):
+                return
+            if cB.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
+                try:
+                    with status_guard(
+                        "Scarico file da Drive…",
+                        expanded=True,
+                        error_label="Errore durante il download",
+                    ) as status_widget:
+                        download_fn = _download_with_progress or _download_simple
+                        if download_fn is None:
+                            raise RuntimeError("Funzione di download non disponibile.")
+                        try:
+                            paths = _call_best_effort(
+                                download_fn,
+                                slug=slug,
+                                require_env=True,
+                                overwrite=bool(conflicts),
+                            )
+                        except TypeError:
+                            paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
+                        count = len(paths or [])
+                        if status_widget is not None and hasattr(status_widget, "update"):
+                            status_widget.update(
+                                label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete"
+                            )
+
+                    try:
+                        if _invalidate_drive_index is not None:
+                            _invalidate_drive_index(slug)
+                        st.toast("Allineamento Drive→locale completato.")
+                        st.rerun()
+                    except Exception:
+                        pass
+                except Exception as e:
+                    st.error(f"Errore durante il download: {e}")
+
+        dialog_builder = getattr(st, "dialog", None)
+        if callable(dialog_builder):
+            open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
+            runner = open_modal(_modal)
+            (runner if callable(runner) else _modal)()
         else:
             _modal()
-    else:
-        _modal()

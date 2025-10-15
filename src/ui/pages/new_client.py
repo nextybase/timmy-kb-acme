@@ -124,6 +124,32 @@ def _ui_logger() -> logging.Logger:
     return log
 
 
+def _open_error_modal(title: str, body: str, *, caption: str | None = None) -> None:
+    """
+    Mostra un modal di errore con bottone 'Annulla'.
+    - Usa st.dialog se disponibile (Streamlit >= 1.50), altrimenti degrada a messaggio inline.
+    - Alla pressione di 'Annulla' il modal si chiude (ritorno semplice).
+    """
+
+    def _modal() -> None:
+        st.error(body)
+        if caption:
+            st.caption(caption)
+        if st.button("Annulla", type="secondary", width="stretch"):
+            return
+
+    dialog_builder = getattr(st, "dialog", None)
+    if callable(dialog_builder):
+        open_modal = dialog_builder(title, width="large")
+        modal_runner = open_modal(_modal)
+        if callable(modal_runner):
+            modal_runner()
+        else:
+            _modal()
+    else:
+        _modal()
+
+
 def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) -> None:
     """
     Porta i file generati/salvati in REPO_ROOT/{config,semantic}
@@ -259,32 +285,24 @@ if current_phase == UI_PHASE_INIT:
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                 except ConfigError as exc:
-                    # Sezioni mancanti → messaggio semplice + SOLO "Annulla"
                     msg = str(exc)
                     lower = msg.lower()
                     if status is not None and hasattr(status, "update"):
                         status.update(label=f"Errore durante Vision: {msg}", state="error")
-
                     if "sezioni mancanti" in lower or "visionstatement incompleto" in lower:
                         missing = msg.split("-", 1)[-1].strip() if "-" in msg else ""
-                        st.error(f"Vision interrotta: mancano sezioni obbligatorie → {missing}")
-                        st.caption("Rivedi il PDF e assicurati che tutte le sezioni richieste siano presenti.")
-                        if st.button("Annulla", type="secondary"):
-                            st.stop()
-                        st.stop()
+                        _open_error_modal(
+                            "Errore durante Vision",
+                            f"Vision interrotta: mancano sezioni obbligatorie → {missing}",
+                            caption="Rivedi il PDF e assicurati che tutte le sezioni richieste siano presenti.",
+                        )
                     else:
-                        # Altri errori: messaggio compatto, senza diagnostica estesa né retry
-                        st.error(f"Errore Vision: {msg}")
-                        if st.button("Annulla", type="secondary"):
-                            st.stop()
-                        st.stop()
+                        _open_error_modal("Errore durante Vision", f"Errore Vision: {msg}")
+                    st.stop()
                 except Exception as exc:
-                    # Errori non previsti: comunicazione essenziale + solo Annulla
                     if status is not None and hasattr(status, "update"):
                         status.update(label=f"Errore durante Vision: {exc}", state="error")
-                    st.error(f"Errore durante Vision: {exc}")
-                    if st.button("Annulla", type="secondary"):
-                        st.stop()
+                    _open_error_modal("Errore durante Vision", f"Errore durante Vision: {exc}")
                     st.stop()
 
             if _exists_semantic_files(s):
@@ -318,7 +336,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
-    if st.button("Apri workspace", key="btn_open_ws", width="stretch"):
+    if st.button("Apri workspace", key="btn_open_ws", type="primary", width="stretch"):
         display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
@@ -370,23 +388,17 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
 ):
     eff = st.session_state.get(slug_state_key) or effective_slug
     eff_q = esc_url_component(eff)
-    if hasattr(st, "page_link"):
-        try:
-            st.page_link(
-                "src/ui/pages/manage.py",
-                label="Vai a Gestisci cliente",
-                icon="➡️",
-                args={"slug": eff},
-            )
-        except Exception:
-            st.link_button("Vai a Gestisci cliente", f"/manage?slug={eff_q}", width="stretch")
-    else:
-        st.html(
-            f"""
-            <a href="/manage?slug={eff_q}" target="_self"
-            style="display:inline-block;padding:0.5rem 1rem;border-radius:0.5rem;
-                    background:#0f62fe;color:#fff;text-decoration:none;">
-            Vai a Gestisci cliente
-            </a>
-            """
-        )
+    st.html(
+        f"""
+        <div style="width:100%;">
+          <a href="/manage?slug={eff_q}" target="_self"
+             style="
+               display:block;text-align:center;
+               padding:0.6rem 1rem;border-radius:0.5rem;
+               background:#0f62fe;color:#fff;text-decoration:none;
+               font-weight:600;">
+            ➡️&nbsp;Vai a Gestisci cliente
+          </a>
+        </div>
+        """
+    )

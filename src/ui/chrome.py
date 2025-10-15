@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import re
+import shlex
+import subprocess
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional, cast
@@ -10,7 +14,6 @@ import streamlit as st
 
 from pipeline.yaml_utils import yaml_read
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
-from ui.services.drive import invalidate_drive_index
 from ui.theme.css import inject_theme_css
 from ui.utils import clear_active_slug, get_slug, require_active_slug
 from ui.utils.branding import render_brand_header, render_sidebar_brand
@@ -22,12 +25,47 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ---------- helpers ----------
 def _on_dummy_kb() -> None:
-    """Mostra istruzioni per generare la Dummy KB via CLI (nessun side-effect dalla UI)."""
-    slug = get_slug() or "dummy"
-    st.info(
-        f"Esegui da terminale:\n\n`py src/tools/gen_dummy_kb.py --slug {slug}`\n\n"
-        "Questa azione può richiedere risorse/tempo: per questo si esegue solo via CLI."
-    )
+    """Esegue lo script CLI per generare la Dummy KB e mostra log/output."""
+    raw_slug = get_slug() or "dummy"
+    slug = raw_slug.strip() or "dummy"
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", slug):
+        st.error("Slug non valido: usa lettere, numeri, trattino o underscore (max 64 caratteri).")
+        return
+
+    script = (REPO_ROOT / "src" / "tools" / "gen_dummy_kb.py").resolve()
+    if not script.exists():
+        st.error(f"Script CLI non trovato: {script}")
+        return
+
+    cmd = [sys.executable, str(script), "--slug", slug]
+
+    with st.status(f"Genero dataset dummy per '{slug}'…", expanded=True) as status_widget:
+        st.code(" ".join(shlex.quote(token) for token in cmd), language="bash")
+        try:
+            result = subprocess.run(  # noqa: S603 - slug sanificato, shell disabilitata
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception as exc:
+            status_widget.update(label="Errore di esecuzione CLI", state="error")
+            st.error(f"Impossibile avviare lo script: {exc}")
+            return
+
+        if result.stdout:
+            with st.expander("Output CLI", expanded=False):
+                st.text(result.stdout)
+        if result.stderr:
+            with st.expander("Errori CLI", expanded=False):
+                st.text(result.stderr)
+
+        if result.returncode == 0:
+            status_widget.update(label="Dummy generato correttamente.", state="complete")
+            st.toast("Dataset dummy creato. Verifica clients_db/output per i dettagli.")
+        else:
+            status_widget.update(label=f"CLI terminata con codice {result.returncode}", state="error")
+            st.error("La generazione della Dummy KB non è andata a buon fine.")
 
 
 def _on_exit() -> None:
@@ -116,55 +154,37 @@ def sidebar(slug: str | None) -> None:
         render_sidebar_brand(st_module=st, repo_root=REPO_ROOT)
 
         display_name = esc_text(_client_display_name(slug))
-        _call(
-            "html",
-            f"""
-            <div style="font-size:1.05rem;font-weight:700;margin:0 0 .5rem 0;">
-              Cliente attivo: <span style="font-weight:800">{display_name}</span>
-            </div>
-            """,
-        )
+        _call("markdown", f"**Cliente attivo:** {display_name}")
         if not has_slug:
-            _call(
-                "html",
-                """
-                <a href="/manage" target="_self"
-                   style="display:block;width:100%;text-align:center;
-                          padding:.55rem .9rem;border-radius:.6rem;
-                          background:#0f62fe;color:#fff;text-decoration:none;
-                          box-shadow:0 1px 2px rgba(0,0,0,.08);">
-                   Seleziona cliente
-                </a>
-                """,
-            )
+            if hasattr(st, "page_link"):
+                _call("page_link", "src/ui/pages/manage.py", label="Seleziona cliente", icon="👈")
+            else:
+                _call("link_button", "Seleziona cliente", url="/manage", width="stretch")
 
         _call("subheader", "Azioni rapide")
 
-        _call(
-            "link_button",
-            "Guida UI",
-            url="https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md",
-            width="stretch",
-        )
-
         btn = _call(
             "button",
-            "Aggiorna Drive",
-            key="btn_drive_refresh",
-            help="Richiede un cliente selezionato",
+            "Azzera selezione cliente",
+            help="Rimuove lo slug attivo e torna alla Home",
             disabled=not has_slug,
             width="stretch",
         )
         if btn:
-            invalidate_drive_index(slug)
-            getattr(st, "toast", lambda *_a, **_k: None)("Cache Drive aggiornata.")
+            clear_active_slug()
+            try:
+                getattr(st, "rerun", lambda: None)()
+            except Exception:
+                pass
+
+        # (rimosso) Bottone "Aggiorna Drive" non più previsto dalla guida UI
 
         btn = _call(
             "button",
-            "Dummy KB",
+            "Genera Dummy",
             key="btn_dummy",
-            disabled=not has_slug,
-            help="Genera un dataset demo per il cliente corrente",
+            disabled=False,  # sempre attivo anche senza slug
+            help="Genera un workspace demo completo (CLI, output/timmy-kb-<slug>)",
             width="stretch",
         )
         if btn:
@@ -181,19 +201,17 @@ def sidebar(slug: str | None) -> None:
             _on_exit()
 
         _call("markdown", "---")
-        btn = _call(
-            "button",
-            "Azzera selezione cliente",
-            help="Rimuove lo slug attivo e torna alla Home",
-            disabled=not has_slug,
-            width="stretch",
-        )
-        if btn:
-            clear_active_slug()
-            try:
-                getattr(st, "rerun", lambda: None)()
-            except Exception:
-                pass
+        # ➜ "Guida UI" in fondo; per pagine interne usiamo page_link (stessa scheda)
+        if hasattr(st, "page_link"):
+            _call(
+                "page_link",
+                "src/ui/pages/guida_ui.py",
+                label="Guida UI",
+                icon="📖",
+                width="stretch",
+            )
+        else:
+            _call("link_button", "Guida UI", url="/guida", width="stretch")
 
 
 def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:
