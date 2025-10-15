@@ -1,18 +1,19 @@
 # =========================
 # File: src/semantic/vision_provision.py
+# SPDX-License-Identifier: GPL-3.0-or-later
 # =========================
 from __future__ import annotations
 
-import hashlib
 import inspect
 import json
 import logging
 import os
+import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -20,14 +21,10 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
-
-# Ri-uso di schema e prompt dal modulo esistente (contratto unico)
-from semantic.vision_ai import SYSTEM_PROMPT  # noqa: E402
-from semantic.vision_utils import json_to_cartelle_raw_yaml  # noqa: E402
+from semantic.vision_ai import SYSTEM_PROMPT  # contratto di prompt condiviso
+from semantic.vision_utils import json_to_cartelle_raw_yaml
 from src.ai.client_factory import make_openai_client
-
-# Lettura configurazione Vision (engine/model/strict_output) da ingest.py
-from src.ingest import get_vision_cfg  # definito localmente dal progetto
+from src.ingest import get_vision_cfg
 from src.security.masking import hash_identifier, mask_paths, sha256_path
 from src.security.retention import purge_old_artifacts
 
@@ -36,7 +33,7 @@ _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
 
 
 def _snapshot_retention_days() -> int:
-    raw = os.getenv("VISION_SNAPSHOT_RETENTION_DAYS", "").strip()
+    raw = (os.getenv("VISION_SNAPSHOT_RETENTION_DAYS") or "").strip()
     if not raw:
         return _SNAPSHOT_RETENTION_DAYS_DEFAULT
     try:
@@ -47,7 +44,7 @@ def _snapshot_retention_days() -> int:
 
 
 # Schema minimo per Structured Outputs (richiede solo 'context' e 'areas')
-MIN_JSON_SCHEMA = {
+MIN_JSON_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": ["context", "areas"],
@@ -99,7 +96,7 @@ def _approx_token_count(text: str, model_hint: Optional[str] = None) -> int:
         return max(1, len(text) // 4)
 
 
-def _split_by_headings(text: str, headings=("Organization", "Vision", "Mission")) -> List[str]:
+def _split_by_headings(text: str, headings: Tuple[str, ...] = ("Organization", "Vision", "Mission")) -> List[str]:
     """Spezza il VisionStatement in blocchi/sezioni mantenendo i titoli come ancore semantiche."""
     import re
 
@@ -129,19 +126,11 @@ def _decide_input_mode(snapshot_text: str, env_override: Optional[str] = None) -
     return "inline" if (is_small and has_sections) else "vector"
 
 
-def _sha256_of_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> str:
     """Estrae testo dal VisionStatement, fallendo rapidamente per PDF illeggibili o vuoti."""
     try:
         import fitz  # type: ignore
-    except Exception as exc:  # pragma: no cover - dipendenza mancante
+    except Exception as exc:  # pragma: no cover
         logger.warning(
             "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
         )
@@ -151,7 +140,9 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
 
     try:
         with fitz.open(pdf_path) as doc:  # type: ignore[attr-defined]
-            texts: List[str] = [page.get_text("text") for page in doc]
+            texts: List[str] = []
+            for page in doc:
+                texts.append(page.get_text("text"))
     except Exception as exc:
         logger.warning(
             "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
@@ -168,6 +159,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
         raise ConfigError(
             "VisionStatement vuoto: nessun contenuto testuale estraibile", slug=slug, file_path=str(pdf_path)
         )
+
     return snapshot
 
 
@@ -214,7 +206,9 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
       - retrieve_fn(vs_id) -> stato vector_store
       - add_fn(vs_id, file_path, file_id|None) -> associa il PDF al VS
       - add_mode in {"id","upload"} indica se add_fn riceve un file_id oppure fa upload diretto
-    Politica: preferisci percorsi "upload_and_poll" / "create_and_poll" che non richiedono upload separato.
+
+    Politica: preferisci percorsi "upload_and_poll" / "create_and_poll" (se presenti); in alternativa
+    usa namespace .files / .file_batches o beta.vector_store_files.
     """
 
     def _build_add_callable(method: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
@@ -223,28 +217,25 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
         except (TypeError, ValueError):
             return None
 
-        # caso: metodo che prende una lista di handle (upload diretto)
         if "files" in params:
 
-            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+            def _add(vs_id: str, file_path: Path, _file_id: Optional[str], _method=method) -> None:
                 with file_path.open("rb") as handle:
                     _method(vector_store_id=vs_id, files=[handle])
 
             return _add, "upload"
 
-        # caso: metodo che prende un singolo handle
         if "file" in params:
 
-            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+            def _add(vs_id: str, file_path: Path, _file_id: Optional[str], _method=method) -> None:
                 with file_path.open("rb") as handle:
                     _method(vector_store_id=vs_id, file=handle)
 
             return _add, "upload"
 
-        # casi: serve prima fare files.create e poi passare l'ID
         if "file_ids" in params:
 
-            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+            def _add(vs_id: str, _file_path: Path, file_id: Optional[str], _method=method) -> None:
                 if not file_id:
                     raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
                 _method(vector_store_id=vs_id, file_ids=[file_id])
@@ -253,7 +244,7 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
 
         if "file_id" in params:
 
-            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+            def _add(vs_id: str, _file_path: Path, file_id: Optional[str], _method=method) -> None:
                 if not file_id:
                     raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
                 _method(vector_store_id=vs_id, file_id=file_id)
@@ -262,7 +253,7 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
 
         if "ids" in params:
 
-            def _add(vs_id: str, file_path: Path, file_id: Optional[str], _method=method) -> None:
+            def _add(vs_id: str, _file_path: Path, file_id: Optional[str], _method=method) -> None:
                 if not file_id:
                     raise ConfigError("OpenAI client: file_id mancante per l'associazione al vector store.")
                 _method(vector_store_id=vs_id, ids=[file_id])
@@ -274,9 +265,8 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
     def _try_namespace(namespace: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
         if namespace is None:
             return None
-        # Ordine: metodi "poll" (comodi), poi i classici
         method_order = (
-            "upload_and_poll",
+            "upload_and_poll",  # preferito
             "create_and_poll",
             "batch",
             "create",
@@ -305,21 +295,21 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
         def _create_vs(**kwargs: Any) -> Any:
             return ns.create(**kwargs)
 
-        # 1) preferisci vector_stores.file_batches.upload_and_poll
+        # 1) file_batches.* (upload_and_poll)
         file_batches_ns = getattr(ns, "file_batches", None)
         candidate = _try_namespace(file_batches_ns)
         if candidate:
             add_fn, mode = candidate
             return _create_vs, retrieve, add_fn, mode
 
-        # 2) poi vector_stores.files.create/file_id o simili
+        # 2) files.* (create + id / upload)
         files_ns = getattr(ns, "files", None)
         candidate = _try_namespace(files_ns)
         if candidate:
             add_fn, mode = candidate
             return _create_vs, retrieve, add_fn, mode
 
-        # 3) fallback: beta.vector_store_files (globale)
+        # 3) beta.vector_store_files (globale)
         candidate = _try_namespace(vs_files_global)
         if candidate:
             add_fn, mode = candidate
@@ -329,11 +319,7 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
 
     beta_ns = getattr(client, "beta", None)
     vs_files_global = getattr(beta_ns, "vector_store_files", None)
-
-    namespaces = [
-        getattr(client, "vector_stores", None),
-        getattr(beta_ns, "vector_stores", None) if beta_ns else None,
-    ]
+    namespaces = [getattr(client, "vector_stores", None), getattr(beta_ns, "vector_stores", None) if beta_ns else None]
     for ns in namespaces:
         result = _build_ops(ns, vs_files_global)
         if result:
@@ -355,6 +341,83 @@ def _extract_id(obj: Any) -> str:
     return ""
 
 
+# -----------------------------
+# Retry helpers + Files API
+# -----------------------------
+def _with_retries(
+    label: str,
+    fn: Callable[[], Any],
+    *,
+    attempts: int = 3,
+    base_delay: float = 0.5,
+    logger: Optional[logging.Logger] = None,
+) -> Any:
+    _log = logger or logging.getLogger("semantic.vision_provision")
+    last_exc: Optional[Exception] = None
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+            delay = base_delay * (2**i) + random.uniform(0.0, 0.2)
+            _log.warning(
+                "vision.retry", extra={"op": label, "attempt": i + 1, "error": str(exc), "sleep": round(delay, 2)}
+            )
+            time.sleep(delay)
+    if last_exc is None:
+        raise RuntimeError(f"Retry loop ended unexpectedly for operation: {label}")
+    raise last_exc
+
+
+def _upload_pdf_file(client: Any, pdf_path: Path) -> str:
+    """Upload PDF su Files API, ritorna file_id (purpose=assistants se supportato)."""
+    upload_kwargs: Dict[str, Any] = {}
+    try:
+        sig = inspect.signature(client.files.create)  # type: ignore[attr-defined]
+        if "purpose" in sig.parameters:
+            upload_kwargs["purpose"] = "assistants"
+    except Exception:
+        pass
+
+    def _do() -> Any:
+        with pdf_path.open("rb") as fh:
+            return client.files.create(file=fh, **upload_kwargs)
+
+    obj = _with_retries("files.create", _do)
+    fid = _extract_id(obj)
+    if not fid:
+        raise ConfigError("Upload file fallito: ID non presente.")
+    return fid
+
+
+# -----------------------------
+# Cache locale id file/vector
+# -----------------------------
+def _fs_cache_path(base_dir: Path) -> Path:
+    sem = ensure_within_and_resolve(base_dir, base_dir / "semantic")
+    return ensure_within_and_resolve(sem, sem / ".vision_fs.json")
+
+
+def _load_fs_cache(base_dir: Path) -> Dict[str, Any]:
+    p = _fs_cache_path(base_dir)
+    if not p.exists():
+        return {}
+    try:
+        raw = read_text_safe(base_dir, p, encoding="utf-8")
+        obj = json.loads(raw)
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_fs_cache(base_dir: Path, data: Dict[str, Any]) -> None:
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    safe_write_text(_fs_cache_path(base_dir), payload)
+
+
+# -----------------------------
+# Engines: assistant / responses / legacy
+# -----------------------------
 def _call_semantic_mapping_response(
     client: Any,
     *,
@@ -365,6 +428,7 @@ def _call_semantic_mapping_response(
     snapshot_text: str,
     inline_sections: List[str],
     strict_output: bool,
+    attachment_file_id: Optional[str] = None,
 ) -> tuple[Dict[str, Any], str]:
     """
     Invoca il modello secondo l'engine richiesto:
@@ -408,104 +472,174 @@ def _call_semantic_mapping_response(
     if engine == "assistant":
         assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
         if not assistant_id:
-            # Non bloccare la pipeline: fallback automatico a Responses inline
-            logging.getLogger("semantic.vision_provision").warning(
+            # Log coerente con i test esistenti
+            logger.warning(
                 "vision_provision.assistant_id_missing_fallback",
-                extra={"fallback": "responses"},
+                extra={"fallback": "responses-inline"},
             )
-            engine = "responses"
+            # Fallback rapido a responses-inline
+            input_msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}] + _make_user_msgs()
+            payload: Dict[str, Any] = {
+                "model": model,
+                "input": input_msgs,
+                "text": {"format": json_schema_v2},
+            }
+            try:
+                ns = responses_ns or beta_responses_ns
+                if not ns or not hasattr(ns, "create"):
+                    raise ConfigError("OpenAI client non espone Responses API per fallback rapido.")
+                resp = ns.create(**payload)
+                data = getattr(resp, "output_parsed", None)
+                if data is None:
+                    raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+                return data, "responses-inline"
+            except Exception:
+                # Come ultima spiaggia: legacy inline
+                if not chat_completions or not hasattr(chat_completions, "create"):
+                    raise
+                data = _invoke_chat_completions_legacy(
+                    chat_completions=chat_completions,
+                    model=model,
+                    snapshot_text=snapshot_text,
+                    user_block=user_block,
+                    use_inline=True,
+                    inline_sections=inline_sections,
+                )
+                return data, "legacy"
 
-        else:
-            # Se vector: assicura tool file_search + vector_store_ids
-            if (not use_inline) and vs_id:
-                try:
-                    a = client.beta.assistants.retrieve(assistant_id)
-                    tools = []
-                    for t in getattr(a, "tools", None) or []:
-                        tools.append(t if isinstance(t, dict) else {"type": getattr(t, "type", None)})
-                    if not any((t or {}).get("type") == "file_search" for t in tools):
-                        tools.append({"type": "file_search"})
-                    client.beta.assistants.update(
-                        assistant_id,
-                        tools=tools,
-                        tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-                    )
-                except Exception as e:
-                    logging.getLogger("semantic.vision_provision").warning(
-                        "assistant.tool_resources.update_failed",
-                        extra={"slug": vs_id, "error": str(e)},
-                    )
+        # Assicura file_search nel profilo (non interrompere se fallisce)
+        try:
+            a = client.beta.assistants.retrieve(assistant_id)
+            tools: List[Dict[str, Any]] = []
+            for t in getattr(a, "tools", None) or []:
+                tools.append(t if isinstance(t, dict) else {"type": getattr(t, "type", None)})
+            if not any((t or {}).get("type") == "file_search" for t in tools):
+                tools.append({"type": "file_search"})
+            kwargs: Dict[str, Any] = {"tools": tools}
+            if vs_id:
+                kwargs["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
+            client.beta.assistants.update(assistant_id, **kwargs)
+        except Exception as e:
+            logger.warning(
+                "assistant.tool_resources.update_failed", extra={"assistant_id": assistant_id, "error": str(e)}
+            )
 
-            thread = client.beta.threads.create()
+        # Thread
+        thread = _with_retries("threads.create", lambda: client.beta.threads.create(), logger=logger)
+
+        # Messaggi
+        if use_inline:
             for msg in _make_user_msgs():
-                client.beta.threads.messages.create(thread_id=thread.id, role=msg["role"], content=msg["content"])
+                _with_retries(
+                    "threads.messages.create",
+                    lambda m=msg: client.beta.threads.messages.create(
+                        thread_id=thread.id, role=m["role"], content=m["content"]
+                    ),
+                    logger=logger,
+                )
+        elif attachment_file_id:
+            _with_retries(
+                "threads.messages.create(attachments)",
+                lambda: client.beta.threads.messages.create(
+                    thread_id=thread.id,
+                    role="user",
+                    content=user_block,
+                    attachments=[{"file_id": attachment_file_id, "tools": [{"type": "file_search"}]}],
+                ),
+                logger=logger,
+            )
+        else:
+            _with_retries(
+                "threads.messages.create",
+                lambda: client.beta.threads.messages.create(thread_id=thread.id, role="user", content=user_block),
+                logger=logger,
+            )
 
-            run = client.beta.threads.runs.create_and_poll(
+        # Run con Structured Outputs (json_schema)
+        run = _with_retries(
+            "runs.create_and_poll",
+            lambda: client.beta.threads.runs.create_and_poll(
                 thread_id=thread.id,
                 assistant_id=assistant_id,
-                response_format={"type": "json_schema", "json_schema": json_schema_v2},  # strict SO
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "vision_semantic_mapping_min",
+                        "schema": MIN_JSON_SCHEMA,
+                        "strict": bool(strict_output),
+                    },
+                },
                 instructions=run_instructions if run_instructions else None,
-            )
+            ),
+            logger=logger,
+        )
 
-            if getattr(run, "status", None) != "completed":
-                raise ConfigError(f"Assistant run non completato (status={getattr(run, 'status', 'n/d')}).")
+        if getattr(run, "status", None) != "completed":
+            raise ConfigError(f"Assistant run non completato (status={getattr(run, 'status', 'n/d')}).")
 
-            # Estrai testo dall'ultimo messaggio
-            msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=1)
-            text = None
-            for msg in getattr(msgs, "data", []):
-                for part in getattr(msg, "content", None) or []:
-                    t = getattr(part, "type", None)
-                    if t == "output_text":
-                        text = getattr(getattr(part, "text", None), "value", None)
-                    elif t == "text":
-                        text = getattr(getattr(part, "text", None), "value", None)
-                    if text:
-                        break
+        msgs = _with_retries(
+            "threads.messages.list",
+            lambda: client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=1),
+            logger=logger,
+        )
+
+        text = None
+        for msg in getattr(msgs, "data", []):
+            for part in getattr(msg, "content", None) or []:
+                t = getattr(part, "type", None)
+                if t == "output_text":
+                    text = getattr(getattr(part, "text", None), "value", None)
+                elif t == "text":
+                    text = getattr(getattr(part, "text", None), "value", None)
                 if text:
                     break
-            if not text:
-                raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError as e:
-                raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
-            return data, "assistant"
+            if text:
+                break
+        if not text:
+            raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
+
+        label = (
+            "assistant-inline"
+            if use_inline
+            else ("assistant-attachments" if attachment_file_id else "assistant-vector")
+        )
+        return data, label
 
     # --- ENGINE: RESPONSES (model) ---
     if engine == "responses":
-        input_msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        input_msgs += _make_user_msgs()
-
+        input_msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}] + _make_user_msgs()
         payload: Dict[str, Any] = {
             "model": model,
             "input": input_msgs,
-            "text": {"format": json_schema_v2},  # v2
+            "text": {"format": json_schema_v2},
         }
-        if run_instructions:
-            payload["instructions"] = run_instructions
-
         if (not use_inline) and vs_id:
             payload["tools"] = [{"type": "file_search"}]
             payload["tool_resources"] = {"file_search": {"vector_store_ids": [vs_id]}}
 
-        def _try_responses(ns: Any) -> Optional[tuple[Dict[str, Any], str]]:
+        def _try(ns: Any) -> Optional[tuple[Dict[str, Any], str]]:
             if not ns or not hasattr(ns, "create"):
                 return None
-            resp = ns.create(**payload)
+            resp = _with_retries("responses.create", lambda: ns.create(**payload), logger=logger)
             data = getattr(resp, "output_parsed", None)
             if data is None:
                 raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
             label = "responses-vector" if ((not use_inline) and vs_id) else "responses-inline"
             return data, label
 
-        out = _try_responses(responses_ns)
-        if out is not None:
+        out = _try(responses_ns)
+        if out:
             return out
-        out = _try_responses(beta_responses_ns)
-        if out is not None:
+        out = _try(beta_responses_ns)
+        if out:
             return out
 
+        # Fallback finale su legacy
         if chat_completions and hasattr(chat_completions, "create"):
             logger.warning(
                 "vision_provision.responses_fallback_legacy", extra={"requested": "responses", "fallback": "legacy"}
@@ -521,7 +655,8 @@ def _call_semantic_mapping_response(
             return data, "legacy"
 
         raise ConfigError(
-            "OpenAI client non espone Responses API (model). Aggiorna l’SDK o imposta VISION_ENGINE=assistant|legacy."
+            "OpenAI client non espone Responses API (model). "
+            "Aggiorna il pacchetto openai oppure imposta VISION_ENGINE=assistant|legacy."
         )
 
     # --- ENGINE: LEGACY (chat completions) ---
@@ -541,6 +676,28 @@ def _call_semantic_mapping_response(
     raise ConfigError(f"vision.engine non supportato: {engine!r}")
 
 
+def _call_semantic_mapping_response_compat(
+    client: Any,
+    *,
+    engine: str,
+    **kwargs: Any,
+) -> tuple[Dict[str, Any], str]:
+    """
+    Compatibility layer: quando i test monkeypatchano `_call_semantic_mapping_response`
+    con una funzione più “stretta”, filtra i kwargs non supportati (es. `attachment_file_id`).
+    Mantiene le nostre nuove feature senza rompere test/estensioni esistenti.
+    """
+    target = _call_semantic_mapping_response
+    try:
+        params = inspect.signature(target).parameters
+    except Exception:
+        params = {}
+    filtered = {k: v for k, v in kwargs.items() if k in params}
+    # garantiamo che i parametri obbligatori ci siano ancora (se mancanti, lasciamo
+    # che la funzione target alzi un errore coerente)
+    return target(client, engine=engine, **filtered)
+
+
 def _invoke_chat_completions_legacy(
     *,
     chat_completions: Any,
@@ -550,7 +707,7 @@ def _invoke_chat_completions_legacy(
     use_inline: bool,
     inline_sections: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Fallback su Chat Completions (senza File Search)."""
+    """Fallback su Chat Completions (senza file_search)."""
     if use_inline:
         messages: List[Dict[str, str]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -568,6 +725,7 @@ def _invoke_chat_completions_legacy(
     chat_resp = chat_completions.create(
         model=model,
         messages=messages,
+        temperature=0.2,
         response_format={
             "type": "json_schema",
             "json_schema": {
@@ -598,47 +756,31 @@ def _invoke_chat_completions_legacy(
         raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
 
 
-def _create_vector_store_with_pdf(client, pdf_path: Path, slug: Optional[str] = None) -> str:
+def _create_vector_store_with_pdf(client: Any, pdf_path: Path, slug: Optional[str] = None) -> str:
     """
-    Crea un Vector Store e carica il PDF.
-    - Compatibile con i test che chiamano: _create_vector_store_with_pdf(client, pdf_path)
-      (quindi slug è opzionale).
-    - Usa _resolve_vector_store_ops per gestire differenze tra versioni SDK.
-    - Effettua retry/backoff su create/upload/retrieve e lancia ConfigError su timeout.
+    Crea un Vector Store per il cliente e carica il PDF.
+    - Usa introspezione via _resolve_vector_store_ops (compat con test che lo monkeypatchano)
+    - Retry/backoff su create/upload/attach e retrieve
+    - Poll indicizzazione; su timeout → ConfigError
     """
     logger = logging.getLogger("semantic.vision_provision")
     create_vs, retrieve_vs, add_file, add_mode = _resolve_vector_store_ops(client)
 
     def _retry(fn: Callable[[], Any], what: str) -> Any:
-        last_exc: Optional[Exception] = None
-        for attempt in range(1, 4):
-            try:
-                return fn()
-            except Exception as exc:  # pragma: no cover
-                last_exc = exc
-                logger.warning(
-                    "vision.vector_store.retry",
-                    extra={"op": what, "attempt": attempt, "error": str(exc), "slug": slug or "<unknown>"},
-                )
-                time.sleep(0.5 * (2 ** (attempt - 1)))
-        if last_exc is None:
-            raise RuntimeError(f"Retry loop ended unexpectedly for {what}")
-        raise last_exc
+        return _with_retries(what, fn, logger=logger)
 
     # 1) Create Vector Store
-    vs_name = f"vision-kb-{slug or 'client'}"
-    vs = _retry(lambda: create_vs(name=vs_name), "create_vs")
+    vs = _retry(lambda: create_vs(name=f"vision-kb-{slug or 'unknown'}"), "vector_stores.create")
     vs_id = _extract_id(vs)
     if not vs_id:
         raise ConfigError("OpenAI client: creazione vector store senza ID.")
 
-    # 2) Upload/attach file al VS
+    # 2) Upload/attach file (upload diretto o via files.create + attach id)
     if add_mode == "id":
 
         def _do_upload() -> Any:
             with pdf_path.open("rb") as pdf_file:
                 upload_kwargs: Dict[str, Any] = {"file": pdf_file}
-                # 'purpose' se supportato dalla build
                 try:
                     sig = inspect.signature(client.files.create)
                     if "purpose" in sig.parameters:
@@ -650,31 +792,31 @@ def _create_vector_store_with_pdf(client, pdf_path: Path, slug: Optional[str] = 
         upload = _retry(_do_upload, "files.create")
         file_id = _extract_id(upload)
         if not file_id:
-            raise ConfigError("OpenAI client: upload PDF fallito (ID mancante).")
+            raise ConfigError("OpenAI client: upload del PDF fallito (ID mancante).")
         _retry(lambda: add_file(vs_id, pdf_path, file_id), f"vector_store.add_file[{add_mode}]")
-
     elif add_mode == "upload":
         _retry(lambda: add_file(vs_id, pdf_path, None), f"vector_store.add_file[{add_mode}]")
-
     else:
         raise ConfigError(f"OpenAI client: modalità add_file non supportata: {add_mode!r}.")
 
-    # 3) Poll indicizzazione fino a vedere almeno 1 file completed
-    completed_val: Optional[int] = None
-    for _ in range(60):
-        status = _retry(lambda: retrieve_vs(vs_id), "vector_store.retrieve")
+    # 3) Poll indicizzazione
+    completed_val: int = 0
+    poll_budget_sec = int(os.getenv("VISION_VECTOR_POLL_SECS", "30"))
+    deadline = time.time() + poll_budget_sec
+    while time.time() < deadline:
+        status = _retry(lambda: retrieve_vs(vs_id), "vector_stores.retrieve")
         file_counts = getattr(status, "file_counts", None)
         if isinstance(file_counts, dict):
-            completed_val = file_counts.get("completed")  # type: ignore[assignment]
+            completed_val = int(file_counts.get("completed", 0))
         else:
-            completed_val = getattr(file_counts, "completed", None)
-        if completed_val and int(completed_val) >= 1:
+            completed_val = int(getattr(file_counts, "completed", 0) or 0)
+        if completed_val >= 1:
             return vs_id
         time.sleep(0.5)
 
     logger.warning(
         "vision.vector_store.timeout",
-        extra={"vs_id": vs_id, "pdf": str(pdf_path), "completed": int(completed_val or 0)},
+        extra={"vs_id": vs_id, "pdf": str(pdf_path), "completed": int(completed_val)},
     )
     raise ConfigError("Vector store non pronto: file non indicizzato entro il timeout", file_path=str(pdf_path))
 
@@ -688,6 +830,7 @@ def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str]
         raise ConfigError("Output modello non valido: payload non è un oggetto JSON.")
     if "context" not in data or "areas" not in data:
         raise ConfigError("Output modello non valido: mancano 'context' o 'areas'.")
+
     ctx = data.get("context")
     areas = data.get("areas")
     if not isinstance(ctx, dict):
@@ -699,8 +842,8 @@ def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str]
 
 
 def provision_from_vision(
-    ctx,
-    logger,
+    ctx: Any,
+    logger: logging.Logger,
     *,
     slug: str,
     pdf_path: Path,
@@ -712,12 +855,11 @@ def provision_from_vision(
     1) snapshot testo
     2) invocazione AI (engine esplicito: assistant | responses | legacy) -> JSON schema
     3) scrittura YAML: semantic_mapping.yaml e cartelle_raw.yaml
+    Ritorna metadati utili per UI/audit.
     """
-    # 0) Base dir dal contesto (obbligatoria per path-safety)
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
-    # 1) Risoluzione sicura del PDF entro il perimetro del workspace
     try:
         safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
     except ConfigError as e:
@@ -728,10 +870,10 @@ def provision_from_vision(
     paths = _resolve_paths(str(base_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Estrazione testo (solo per contesto AI)
+    # 1) Estrazione testo
     snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
 
-    # 2) Config (engine/model/strict_output)
+    # 2) Config
     cfg = getattr(ctx, "config", None)
     vcfg = get_vision_cfg(cfg)
     engine = (vcfg.get("engine") or "responses").lower()
@@ -740,29 +882,90 @@ def provision_from_vision(
         engine = engine_env
     strict_output = bool(vcfg.get("strict_output", True))
 
-    # 3) Client + input mode
+    # 3) Client
     client = make_openai_client()
-    input_mode = _decide_input_mode(snapshot)
-    vs_id: Optional[str] = None
-    inline_sections: Optional[List[str]] = None
-    if input_mode == "vector":
-        try:
-            vs_id = _create_vector_store_with_pdf(client, safe_pdf, slug)
-        except Exception as exc:
-            logging.getLogger("semantic.vision_provision").warning(
-                "vision_provision.vector_failed_fallback_inline",
-                extra={"slug": slug, "error": str(exc)},
-            )
-            input_mode = "inline"
-            inline_sections = _split_by_headings(snapshot)
-    if input_mode == "inline":
-        inline_sections = inline_sections or _split_by_headings(snapshot)
 
-    # 4) Modello effettivo
+    # 4) Strategia input
+    input_mode = _decide_input_mode(snapshot)
+    fs_mode_env = (os.getenv("VISION_FS_MODE") or "auto").strip().lower()  # 'auto' | 'attachments' | 'vector'
+    fs_mode = fs_mode_env if fs_mode_env in {"auto", "attachments", "vector"} else "auto"
+
+    vs_id: Optional[str] = None
+    attachment_file_id: Optional[str] = None
+    inline_sections: Optional[List[str]] = None
+
+    # Cache per riuso (se stesso PDF)
+    cache = _load_fs_cache(paths.base_dir)
+    pdf_hash = sha256_path(safe_pdf)
+
+    # Se serve contesto esterno (documento), proviamo attachments → vector → inline
+    if input_mode == "vector":
+        used_mode: Optional[str] = None
+        vector_error: Optional[str] = None
+
+        def _try_attachments() -> bool:
+            nonlocal attachment_file_id, used_mode
+            try:
+                if cache.get("pdf_hash") == pdf_hash and cache.get("file_id"):
+                    attachment_file_id = cache.get("file_id")
+                else:
+                    attachment_file_id = _upload_pdf_file(client, safe_pdf)
+                    _save_fs_cache(paths.base_dir, {"pdf_hash": pdf_hash, "file_id": attachment_file_id})
+                used_mode = "attachments"
+                return True
+            except Exception as exc:
+                logging.getLogger("semantic.vision_provision").warning(
+                    "vision_provision.attach_failed", extra={"slug": slug, "error": str(exc)}
+                )
+                return False
+
+        def _try_vector() -> bool:
+            nonlocal vs_id, used_mode, vector_error
+            try:
+                if cache.get("pdf_hash") == pdf_hash and cache.get("vs_id"):
+                    vs_id = cache.get("vs_id")
+                else:
+                    vs_id = _create_vector_store_with_pdf(client, safe_pdf, slug)
+                    _save_fs_cache(paths.base_dir, {"pdf_hash": pdf_hash, "vs_id": vs_id})
+                used_mode = "vector"
+                return True
+            except Exception as exc:
+                vector_error = str(exc)
+                logging.getLogger("semantic.vision_provision").warning(
+                    "vision_provision.vector_failed", extra={"slug": slug, "error": vector_error}
+                )
+                return False
+
+        if fs_mode == "attachments":
+            if not _try_attachments():
+                inline_sections = _split_by_headings(snapshot)
+        elif fs_mode == "vector":
+            if not _try_vector():
+                inline_sections = _split_by_headings(snapshot)
+                if vector_error:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "vision_provision.vector_failed_fallback_inline", extra={"slug": slug, "error": vector_error}
+                    )
+        else:  # auto
+            if not _try_attachments():
+                if not _try_vector():
+                    inline_sections = _split_by_headings(snapshot)
+                    if vector_error:
+                        logging.getLogger("semantic.vision_provision").warning(
+                            "vision_provision.vector_failed_fallback_inline",
+                            extra={"slug": slug, "error": vector_error},
+                        )
+        if used_mode:
+            logger.info("vision_provision.fs_mode_selected", extra={"mode": used_mode, "slug": slug})
+
+    if inline_sections is None and input_mode == "inline":
+        inline_sections = _split_by_headings(snapshot)
+
+    # 5) Modello effettivo
     model_env = os.getenv("VISION_MODEL")
     effective_model = model_env or vcfg.get("model") or model or "gpt-4.1-mini"
 
-    # 5) Prompt
+    # 6) Prompt utente
     display_name = getattr(ctx, "client_name", None) or slug
     user_block = (
         "Contesto cliente:\n"
@@ -770,18 +973,19 @@ def provision_from_vision(
         f"- client_name: {display_name}\n"
         + (
             "\nVision Statement: vedi documento allegato nel contesto (tool file_search)."
-            if input_mode == "vector"
+            if (attachment_file_id or vs_id) and input_mode == "vector"
             else "\nVision Statement: usa SOLO i blocchi DOC forniti qui sotto."
         )
     )
 
-    # 6) Invocazione modello con fallback modello/engine
+    # 7) Esecuzione modello (con fallback modelli/engine)
     MODEL_FALLBACKS = {"gpt-4.1-mini": "gpt-4o-mini", "gpt-4o-mini": "gpt-4o", "gpt-4.1": "gpt-4o"}
     tried_models: List[str] = []
-    data: Dict[str, Any] | None = None
-    engine_used: str | None = None
+    data: Optional[Dict[str, Any]] = None
+    engine_used: Optional[str] = None
     current_model = effective_model
     invalid_engine_fallback_done = False
+
     while True:
         tried_models.append(current_model)
         _call_kwargs = dict(
@@ -791,13 +995,12 @@ def provision_from_vision(
             snapshot_text=snapshot,
             inline_sections=inline_sections or [],
             strict_output=strict_output,
+            attachment_file_id=attachment_file_id,
         )
         try:
-            result = _call_semantic_mapping_response(
-                client,
-                engine=engine,
-                **_call_kwargs,
-            )
+            # Compat layer: se qualcuno (test) ha monkeypatchato la funzione con
+            # una signature senza `attachment_file_id`, filtriamo quel kwarg.
+            result = _call_semantic_mapping_response_compat(client, engine=engine, **_call_kwargs)
             data, engine_used = result
             break
         except Exception as exc:
@@ -808,12 +1011,8 @@ def provision_from_vision(
                     extra={"slug": slug, "engine": engine, "fallback": "responses-inline"},
                 )
                 inline_sections = inline_sections or _split_by_headings(snapshot)
-                _call_kwargs.update({"vs_id": "", "inline_sections": inline_sections or []})
-                data, engine_used = _call_semantic_mapping_response(
-                    client,
-                    engine="responses",
-                    **_call_kwargs,
-                )
+                _call_kwargs.update({"vs_id": "", "inline_sections": inline_sections or [], "attachment_file_id": None})
+                data, engine_used = _call_semantic_mapping_response_compat(client, engine="responses", **_call_kwargs)
                 engine_used = "responses-inline"
                 break
             if "invalid model" in message.lower():
@@ -830,6 +1029,7 @@ def provision_from_vision(
                     )
                     engine = "responses"
                     vs_id = ""
+                    attachment_file_id = None
                     inline_sections = inline_sections or _split_by_headings(snapshot)
                     invalid_engine_fallback_done = True
                     if fallback_model and fallback_model not in tried_models:
@@ -838,11 +1038,7 @@ def provision_from_vision(
                 if fallback_model and fallback_model not in tried_models:
                     logging.getLogger("semantic.vision_provision").warning(
                         "vision_provision.model_invalid_fallback",
-                        extra={
-                            "slug": slug,
-                            "invalid_model": current_model,
-                            "fallback_model": fallback_model,
-                        },
+                        extra={"slug": slug, "invalid_model": current_model, "fallback_model": fallback_model},
                     )
                     current_model = fallback_model
                     continue
@@ -864,7 +1060,7 @@ def provision_from_vision(
     # HARD GATE: coerenza slug per prevenire leak inter-cliente
     _validate_json_payload(data, expected_slug=slug)
 
-    # 7) JSON -> YAML (semantic_mapping + cartelle_raw)
+    # 8) JSON -> YAML (semantic_mapping + cartelle_raw)
     categories: Dict[str, Dict[str, Any]] = {}
     for idx, area in enumerate(data["areas"]):
         raw_keywords = area.get("keywords")
@@ -885,18 +1081,13 @@ def provision_from_vision(
     if data.get("synonyms"):
         mapping_payload["synonyms"] = data["synonyms"]
 
-    mapping_yaml_str = yaml.safe_dump(
-        mapping_payload,
-        allow_unicode=True,
-        sort_keys=False,
-        width=100,
-    )
+    mapping_yaml_str = yaml.safe_dump(mapping_payload, allow_unicode=True, sort_keys=False, width=100)
     safe_write_text(paths.mapping_yaml, mapping_yaml_str)
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
 
-    # 8) Audit esteso
+    # 9) Audit
     ts = datetime.now(timezone.utc).isoformat()
     try:
         import importlib.metadata as _ilm  # py3.8+: importlib_metadata backport opzionale
@@ -917,12 +1108,14 @@ def provision_from_vision(
         "sdk_version": _sdk_version,
         "project": os.getenv("OPENAI_PROJECT") or "",
         "base_url": os.getenv("OPENAI_BASE_URL") or "",
+        "fs_attachment_file_id": attachment_file_id or "",
         "vector_store_id": vs_id or "",
+        "fs_mode_env": fs_mode_env,
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
 
-    # 9) Retention
+    # 10) Retention
     retention_days = _snapshot_retention_days()
     if retention_days > 0:
         try:
