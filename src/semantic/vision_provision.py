@@ -18,8 +18,6 @@ import yaml
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
-
-# Convenzioni del repo
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
 
@@ -87,6 +85,7 @@ MIN_JSON_SCHEMA = {
 
 
 def _approx_token_count(text: str, model_hint: Optional[str] = None) -> int:
+    """Conta i token provando tiktoken; in fallback usa ≈ 4 char/token."""
     try:
         import tiktoken  # type: ignore
 
@@ -101,6 +100,7 @@ def _approx_token_count(text: str, model_hint: Optional[str] = None) -> int:
 
 
 def _split_by_headings(text: str, headings=("Organization", "Vision", "Mission")) -> List[str]:
+    """Spezza il VisionStatement in blocchi/sezioni mantenendo i titoli come ancore semantiche."""
     import re
 
     t = re.sub(r"\n{3,}", "\n\n", text.strip())
@@ -115,6 +115,12 @@ def _split_by_headings(text: str, headings=("Organization", "Vision", "Mission")
 
 
 def _decide_input_mode(snapshot_text: str, env_override: Optional[str] = None) -> str:
+    """
+    Ritorna 'inline' | 'vector'.
+    Se env = 'inline' | 'vector' forza la scelta, altrimenti AUTO:
+    - inline se token stimati <= 15k e testo lineare (>= 1 sezione riconosciuta)
+    - vector altrimenti
+    """
     mode = (env_override or os.getenv("VISION_INPUT_MODE") or "auto").lower()
     if mode in ("inline", "vector"):
         return mode
@@ -132,9 +138,10 @@ def _sha256_of_file(path: Path) -> str:
 
 
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> str:
+    """Estrae testo dal VisionStatement, fallendo rapidamente per PDF illeggibili o vuoti."""
     try:
         import fitz  # type: ignore
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:  # pragma: no cover - dipendenza mancante
         logger.warning(
             "vision_provision.extract_failed", extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"}
         )
@@ -165,6 +172,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
 
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
+    """Scrive una riga di audit JSONL in modo atomico e sicuro."""
     payload = json.dumps(record, ensure_ascii=False) + "\n"
     safe_append_text(base_dir, base_dir / "logs" / "vision_provision.log", payload)
 
@@ -208,7 +216,6 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
       - add_mode in {"id","upload"} indica se add_fn riceve un file_id oppure fa upload diretto
     Politica: preferisci percorsi "upload_and_poll" / "create_and_poll" che non richiedono upload separato.
     """
-    import inspect
 
     def _build_add_callable(method: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
         try:
@@ -267,7 +274,7 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
     def _try_namespace(namespace: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
         if namespace is None:
             return None
-        # Ordine rivisto: prima i percorsi "upload_and_poll" / "create_and_poll", poi gli altri
+        # Ordine: metodi "poll" (comodi), poi i classici
         method_order = (
             "upload_and_poll",
             "create_and_poll",
@@ -334,63 +341,6 @@ def _resolve_vector_store_ops(client: Any) -> tuple[Any, Any, Callable[[str, Pat
 
     raise ConfigError("OpenAI client non supporta le vector stores. Aggiorna l'SDK o abilita le beta APIs.")
 
-    def _try_namespace(namespace: Any) -> Optional[tuple[Callable[[str, Path, Optional[str]], None], str]]:
-        if namespace is None:
-            return None
-        method_order = ("batch", "create_and_poll", "create", "upload_and_poll", "add", "attach", "append")
-        for name in method_order:
-            method = getattr(namespace, name, None)
-            if method is None:
-                continue
-            candidate = _build_add_callable(method)
-            if candidate:
-                return candidate
-        return None
-
-    def _build_ops(
-        ns: Any, vs_files_global: Any
-    ) -> Optional[tuple[Any, Any, Callable[[str, Path, Optional[str]], None], str]]:
-        if ns is None or not hasattr(ns, "create"):
-            return None
-        retrieve = getattr(ns, "retrieve", None)
-        if retrieve is None:
-            return None
-
-        def _create_vs(**kwargs: Any) -> Any:
-            return ns.create(**kwargs)
-
-        create_fn = _create_vs
-
-        files_ns = getattr(ns, "files", None)
-        candidate = _try_namespace(files_ns)
-        if candidate:
-            add_fn, mode = candidate
-            return create_fn, retrieve, add_fn, mode
-
-        file_batches_ns = getattr(ns, "file_batches", None)
-        candidate = _try_namespace(file_batches_ns)
-        if candidate:
-            add_fn, mode = candidate
-            return create_fn, retrieve, add_fn, mode
-
-        candidate = _try_namespace(vs_files_global)
-        if candidate:
-            add_fn, mode = candidate
-            return create_fn, retrieve, add_fn, mode
-
-        return None
-
-    beta_ns = getattr(client, "beta", None)
-    vs_files_global = getattr(beta_ns, "vector_store_files", None)
-
-    namespaces = [getattr(client, "vector_stores", None), getattr(beta_ns, "vector_stores", None) if beta_ns else None]
-    for ns in namespaces:
-        result = _build_ops(ns, vs_files_global)
-        if result:
-            return result
-
-    raise ConfigError("OpenAI client non supporta le vector stores. Aggiorna l'SDK o abilita le beta APIs.")
-
 
 def _extract_id(obj: Any) -> str:
     if obj is None:
@@ -418,7 +368,7 @@ def _call_semantic_mapping_response(
 ) -> tuple[Dict[str, Any], str]:
     """
     Invoca il modello secondo l'engine richiesto:
-      - assistant: usa assistant_id preconfigurato (Responses API con assistant_id).
+      - assistant: usa Threads/Runs dell’Assistant preconfigurato (con file_search).
       - responses: usa Responses API con 'model'. 'tools' e 'tool_resources' separati per File Search.
       - legacy: Chat Completions; nessun File Search (non supportato).
     Ritorna (payload_json, engine_usato).
@@ -426,8 +376,8 @@ def _call_semantic_mapping_response(
     logger = logging.getLogger("semantic.vision_provision")
     use_inline = bool(inline_sections)
 
-    # JSON schema strict — stile OpenAI v2 (text.format)
-    json_schema = {
+    # JSON schema strict — stile OpenAI v2 (text.format / response_format)
+    json_schema_v2 = {
         "type": "json_schema",
         "name": "vision_semantic_mapping_min",
         "schema": MIN_JSON_SCHEMA,
@@ -435,6 +385,7 @@ def _call_semantic_mapping_response(
     }
 
     def _make_user_msgs() -> List[Dict[str, str]]:
+        """Costruisce SOLO messaggi USER (niente 'system' qui)."""
         msgs: List[Dict[str, str]] = [{"role": "user", "content": user_block}]
         if use_inline:
             for i, sec in enumerate(inline_sections, start=1):
@@ -453,83 +404,73 @@ def _call_semantic_mapping_response(
     beta_responses_ns = getattr(beta_ns, "responses", None) if beta_ns else None
     chat_completions = getattr(getattr(client, "chat", None), "completions", None)
 
-    # --- ENGINE: ASSISTANT ---
+    # --- ENGINE: ASSISTANT (Threads/Runs) ---
     if engine == "assistant":
         assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
         if not assistant_id:
-            raise ConfigError("engine=assistant ma non trovo OBNEXT_ASSISTANT_ID/ASSISTANT_ID nel .env (HiTL stop).")
+            # Non bloccare la pipeline: fallback automatico a Responses inline
+            logging.getLogger("semantic.vision_provision").warning(
+                "vision_provision.assistant_id_missing_fallback",
+                extra={"fallback": "responses"},
+            )
+            engine = "responses"
 
-        # Se usiamo vector: assicura che l'Assistant abbia file_search + vector_store_ids
-        if (not use_inline) and vs_id:
-            try:
-                a = client.beta.assistants.retrieve(assistant_id)
-                # Normalizza tools a lista di dict
-                tools = []
-                for t in getattr(a, "tools", None) or []:
-                    if isinstance(t, dict):
-                        tools.append(t)
-                    else:
-                        tools.append({"type": getattr(t, "type", None)})
-                if not any((t or {}).get("type") == "file_search" for t in tools):
-                    tools.append({"type": "file_search"})
-                client.beta.assistants.update(
-                    assistant_id,
-                    tools=tools,
-                    tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-                )
-            except Exception as e:
-                logging.getLogger("semantic.vision_provision").warning(
-                    "assistant.tool_resources.update_failed",
-                    extra={"slug": vs_id, "error": str(e)},
-                )
+        else:
+            # Se vector: assicura tool file_search + vector_store_ids
+            if (not use_inline) and vs_id:
+                try:
+                    a = client.beta.assistants.retrieve(assistant_id)
+                    tools = []
+                    for t in getattr(a, "tools", None) or []:
+                        tools.append(t if isinstance(t, dict) else {"type": getattr(t, "type", None)})
+                    if not any((t or {}).get("type") == "file_search" for t in tools):
+                        tools.append({"type": "file_search"})
+                    client.beta.assistants.update(
+                        assistant_id,
+                        tools=tools,
+                        tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
+                    )
+                except Exception as e:
+                    logging.getLogger("semantic.vision_provision").warning(
+                        "assistant.tool_resources.update_failed",
+                        extra={"slug": vs_id, "error": str(e)},
+                    )
 
-        # Crea thread + messaggi utente (blocchi inline se presenti)
-        thread = client.beta.threads.create()
-        for msg in _make_user_msgs():
-            client.beta.threads.messages.create(thread_id=thread.id, role=msg["role"], content=msg["content"])
+            thread = client.beta.threads.create()
+            for msg in _make_user_msgs():
+                client.beta.threads.messages.create(thread_id=thread.id, role=msg["role"], content=msg["content"])
 
-        # Avvia il Run con Structured Outputs (json_schema) sul RUN
-        run = client.beta.threads.runs.create_and_poll(
-            thread_id=thread.id,
-            assistant_id=assistant_id,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "vision_semantic_mapping_min",
-                    "schema": MIN_JSON_SCHEMA,
-                    "strict": bool(strict_output),
-                },
-            },
-            instructions=run_instructions if run_instructions else None,
-            # niente temperature: alcuni modelli non lo supportano con structured outputs
-        )
+            run = client.beta.threads.runs.create_and_poll(
+                thread_id=thread.id,
+                assistant_id=assistant_id,
+                response_format={"type": "json_schema", "json_schema": json_schema_v2},  # strict SO
+                instructions=run_instructions if run_instructions else None,
+            )
 
-        if getattr(run, "status", None) != "completed":
-            raise ConfigError(f"Assistant run non completato (status={getattr(run, 'status', 'n/d')}).")
+            if getattr(run, "status", None) != "completed":
+                raise ConfigError(f"Assistant run non completato (status={getattr(run, 'status', 'n/d')}).")
 
-        # Leggi l’ultimo messaggio e parse JSON
-        msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=1)
-        text = None
-        for msg in getattr(msgs, "data", []):
-            for part in getattr(msg, "content", None) or []:
-                t = getattr(part, "type", None)
-                if t == "output_text":
-                    text = getattr(getattr(part, "text", None), "value", None)
-                elif t == "text":
-                    text = getattr(getattr(part, "text", None), "value", None)
+            # Estrai testo dall'ultimo messaggio
+            msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=1)
+            text = None
+            for msg in getattr(msgs, "data", []):
+                for part in getattr(msg, "content", None) or []:
+                    t = getattr(part, "type", None)
+                    if t == "output_text":
+                        text = getattr(getattr(part, "text", None), "value", None)
+                    elif t == "text":
+                        text = getattr(getattr(part, "text", None), "value", None)
+                    if text:
+                        break
                 if text:
                     break
-            if text:
-                break
-        if not text:
-            raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
-
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as e:
-            raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
-
-        return data, "assistant"
+            if not text:
+                raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError as e:
+                raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
+            return data, "assistant"
 
     # --- ENGINE: RESPONSES (model) ---
     if engine == "responses":
@@ -539,7 +480,7 @@ def _call_semantic_mapping_response(
         payload: Dict[str, Any] = {
             "model": model,
             "input": input_msgs,
-            "text": {"format": json_schema},  # v2
+            "text": {"format": json_schema_v2},  # v2
         }
         if run_instructions:
             payload["instructions"] = run_instructions
@@ -551,15 +492,12 @@ def _call_semantic_mapping_response(
         def _try_responses(ns: Any) -> Optional[tuple[Dict[str, Any], str]]:
             if not ns or not hasattr(ns, "create"):
                 return None
-            try:
-                resp = ns.create(**payload)
-                data = getattr(resp, "output_parsed", None)
-                if data is None:
-                    raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
-                label = "responses-vector" if ((not use_inline) and vs_id) else "responses-inline"
-                return data, label
-            except Exception:
-                raise
+            resp = ns.create(**payload)
+            data = getattr(resp, "output_parsed", None)
+            if data is None:
+                raise ConfigError("OpenAI responses API non ha restituito output_parsed.")
+            label = "responses-vector" if ((not use_inline) and vs_id) else "responses-inline"
+            return data, label
 
         out = _try_responses(responses_ns)
         if out is not None:
@@ -612,6 +550,7 @@ def _invoke_chat_completions_legacy(
     use_inline: bool,
     inline_sections: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    """Fallback su Chat Completions (senza File Search)."""
     if use_inline:
         messages: List[Dict[str, str]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -629,7 +568,6 @@ def _invoke_chat_completions_legacy(
     chat_resp = chat_completions.create(
         model=model,
         messages=messages,
-        temperature=0.2,
         response_format={
             "type": "json_schema",
             "json_schema": {
@@ -660,7 +598,14 @@ def _invoke_chat_completions_legacy(
         raise ConfigError(f"Chat completions: risposta non JSON: {exc}") from exc
 
 
-def _create_vector_store_with_pdf(client, pdf_path: Path, slug: str) -> str:
+def _create_vector_store_with_pdf(client, pdf_path: Path, slug: Optional[str] = None) -> str:
+    """
+    Crea un Vector Store e carica il PDF.
+    - Compatibile con i test che chiamano: _create_vector_store_with_pdf(client, pdf_path)
+      (quindi slug è opzionale).
+    - Usa _resolve_vector_store_ops per gestire differenze tra versioni SDK.
+    - Effettua retry/backoff su create/upload/retrieve e lancia ConfigError su timeout.
+    """
     logger = logging.getLogger("semantic.vision_provision")
     create_vs, retrieve_vs, add_file, add_mode = _resolve_vector_store_ops(client)
 
@@ -672,23 +617,28 @@ def _create_vector_store_with_pdf(client, pdf_path: Path, slug: str) -> str:
             except Exception as exc:  # pragma: no cover
                 last_exc = exc
                 logger.warning(
-                    "vision.vector_store.retry", extra={"op": what, "attempt": attempt, "error": str(exc), "slug": slug}
+                    "vision.vector_store.retry",
+                    extra={"op": what, "attempt": attempt, "error": str(exc), "slug": slug or "<unknown>"},
                 )
                 time.sleep(0.5 * (2 ** (attempt - 1)))
         if last_exc is None:
-            raise RuntimeError(f"Retry loop ended unexpectedly for operation: {what}")
+            raise RuntimeError(f"Retry loop ended unexpectedly for {what}")
         raise last_exc
 
-    vs = _retry(lambda: create_vs(name=f"vision-kb-{slug}"), "create_vs")
+    # 1) Create Vector Store
+    vs_name = f"vision-kb-{slug or 'client'}"
+    vs = _retry(lambda: create_vs(name=vs_name), "create_vs")
     vs_id = _extract_id(vs)
     if not vs_id:
         raise ConfigError("OpenAI client: creazione vector store senza ID.")
 
+    # 2) Upload/attach file al VS
     if add_mode == "id":
 
         def _do_upload() -> Any:
             with pdf_path.open("rb") as pdf_file:
                 upload_kwargs: Dict[str, Any] = {"file": pdf_file}
+                # 'purpose' se supportato dalla build
                 try:
                     sig = inspect.signature(client.files.create)
                     if "purpose" in sig.parameters:
@@ -700,13 +650,16 @@ def _create_vector_store_with_pdf(client, pdf_path: Path, slug: str) -> str:
         upload = _retry(_do_upload, "files.create")
         file_id = _extract_id(upload)
         if not file_id:
-            raise ConfigError("OpenAI client: upload del PDF fallito (ID mancante).")
+            raise ConfigError("OpenAI client: upload PDF fallito (ID mancante).")
         _retry(lambda: add_file(vs_id, pdf_path, file_id), f"vector_store.add_file[{add_mode}]")
+
     elif add_mode == "upload":
         _retry(lambda: add_file(vs_id, pdf_path, None), f"vector_store.add_file[{add_mode}]")
+
     else:
         raise ConfigError(f"OpenAI client: modalità add_file non supportata: {add_mode!r}.")
 
+    # 3) Poll indicizzazione fino a vedere almeno 1 file completed
     completed_val: Optional[int] = None
     for _ in range(60):
         status = _retry(lambda: retrieve_vs(vs_id), "vector_store.retrieve")
@@ -727,6 +680,10 @@ def _create_vector_store_with_pdf(client, pdf_path: Path, slug: str) -> str:
 
 
 def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str] = None) -> None:
+    """
+    Valida lo schema minimo del payload e (opzionale) la coerenza dello slug.
+    Deve fallire SEMPRE con ConfigError (mai AttributeError/KeyError).
+    """
     if not isinstance(data, dict):
         raise ConfigError("Output modello non valido: payload non è un oggetto JSON.")
     if "context" not in data or "areas" not in data:
@@ -750,9 +707,17 @@ def provision_from_vision(
     model: str = "gpt-4.1-mini",
     force: bool = False,
 ) -> Dict[str, Any]:
+    """
+    Esegue l'onboarding Vision:
+    1) snapshot testo
+    2) invocazione AI (engine esplicito: assistant | responses | legacy) -> JSON schema
+    3) scrittura YAML: semantic_mapping.yaml e cartelle_raw.yaml
+    """
+    # 0) Base dir dal contesto (obbligatoria per path-safety)
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    # 1) Risoluzione sicura del PDF entro il perimetro del workspace
     try:
         safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
     except ConfigError as e:
@@ -763,8 +728,10 @@ def provision_from_vision(
     paths = _resolve_paths(str(base_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
+    # 1) Estrazione testo (solo per contesto AI)
     snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
 
+    # 2) Config (engine/model/strict_output)
     cfg = getattr(ctx, "config", None)
     vcfg = get_vision_cfg(cfg)
     engine = (vcfg.get("engine") or "responses").lower()
@@ -773,6 +740,7 @@ def provision_from_vision(
         engine = engine_env
     strict_output = bool(vcfg.get("strict_output", True))
 
+    # 3) Client + input mode
     client = make_openai_client()
     input_mode = _decide_input_mode(snapshot)
     vs_id: Optional[str] = None
@@ -790,11 +758,12 @@ def provision_from_vision(
     if input_mode == "inline":
         inline_sections = inline_sections or _split_by_headings(snapshot)
 
+    # 4) Modello effettivo
     model_env = os.getenv("VISION_MODEL")
     effective_model = model_env or vcfg.get("model") or model or "gpt-4.1-mini"
 
+    # 5) Prompt
     display_name = getattr(ctx, "client_name", None) or slug
-
     user_block = (
         "Contesto cliente:\n"
         f"- slug: {slug}\n"
@@ -806,6 +775,7 @@ def provision_from_vision(
         )
     )
 
+    # 6) Invocazione modello con fallback modello/engine
     MODEL_FALLBACKS = {"gpt-4.1-mini": "gpt-4o-mini", "gpt-4o-mini": "gpt-4o", "gpt-4.1": "gpt-4o"}
     tried_models: List[str] = []
     data: Dict[str, Any] | None = None
@@ -823,7 +793,11 @@ def provision_from_vision(
             strict_output=strict_output,
         )
         try:
-            result = _call_semantic_mapping_response(client, engine=engine, **_call_kwargs)
+            result = _call_semantic_mapping_response(
+                client,
+                engine=engine,
+                **_call_kwargs,
+            )
             data, engine_used = result
             break
         except Exception as exc:
@@ -835,7 +809,11 @@ def provision_from_vision(
                 )
                 inline_sections = inline_sections or _split_by_headings(snapshot)
                 _call_kwargs.update({"vs_id": "", "inline_sections": inline_sections or []})
-                data, engine_used = _call_semantic_mapping_response(client, engine="responses", **_call_kwargs)
+                data, engine_used = _call_semantic_mapping_response(
+                    client,
+                    engine="responses",
+                    **_call_kwargs,
+                )
                 engine_used = "responses-inline"
                 break
             if "invalid model" in message.lower():
@@ -860,7 +838,11 @@ def provision_from_vision(
                 if fallback_model and fallback_model not in tried_models:
                     logging.getLogger("semantic.vision_provision").warning(
                         "vision_provision.model_invalid_fallback",
-                        extra={"slug": slug, "invalid_model": current_model, "fallback_model": fallback_model},
+                        extra={
+                            "slug": slug,
+                            "invalid_model": current_model,
+                            "fallback_model": fallback_model,
+                        },
                     )
                     current_model = fallback_model
                     continue
@@ -879,8 +861,10 @@ def provision_from_vision(
         )
         raise ConfigError("OpenAI non ha restituito un payload valido (data/engine mancanti).")
 
+    # HARD GATE: coerenza slug per prevenire leak inter-cliente
     _validate_json_payload(data, expected_slug=slug)
 
+    # 7) JSON -> YAML (semantic_mapping + cartelle_raw)
     categories: Dict[str, Dict[str, Any]] = {}
     for idx, area in enumerate(data["areas"]):
         raw_keywords = area.get("keywords")
@@ -901,15 +885,21 @@ def provision_from_vision(
     if data.get("synonyms"):
         mapping_payload["synonyms"] = data["synonyms"]
 
-    mapping_yaml_str = yaml.safe_dump(mapping_payload, allow_unicode=True, sort_keys=False, width=100)
+    mapping_yaml_str = yaml.safe_dump(
+        mapping_payload,
+        allow_unicode=True,
+        sort_keys=False,
+        width=100,
+    )
     safe_write_text(paths.mapping_yaml, mapping_yaml_str)
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
 
+    # 8) Audit esteso
     ts = datetime.now(timezone.utc).isoformat()
     try:
-        import importlib.metadata as _ilm
+        import importlib.metadata as _ilm  # py3.8+: importlib_metadata backport opzionale
 
         _sdk_version = _ilm.version("openai")
     except Exception:
@@ -932,13 +922,16 @@ def provision_from_vision(
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
 
+    # 9) Retention
     retention_days = _snapshot_retention_days()
     if retention_days > 0:
         try:
             purge_old_artifacts(paths.base_dir, retention_days)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # pragma: no cover - best effort
             logger.warning(
-                "vision_provision.retention.failed", extra={"slug": slug, "error": str(exc), "days": retention_days}
+                "vision_provision.retention.failed",
+                extra={"slug": slug, "error": str(exc), "days": retention_days},
             )
 
+    # Ritorna solo i path dei due YAML richiesti
     return {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
