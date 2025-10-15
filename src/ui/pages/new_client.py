@@ -2,7 +2,6 @@
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
-import inspect
 import logging
 import os
 from contextlib import contextmanager
@@ -170,6 +169,24 @@ def _upsert_client_registry(slug: str, client_name: str) -> None:
     set_state(slug, "pronto")
 
 
+def _diagnostics_box(slug: str) -> None:
+    """Mostra una diagnostica minima utile all’utente in caso di errore Vision."""
+    try:
+        import importlib.metadata as _ilm  # py>=3.8 (backport: importlib_metadata)
+
+        openai_ver = _ilm.version("openai")
+    except Exception:
+        openai_ver = "n/d"
+
+    st.caption(
+        f"Diagnostica: engine={os.getenv('VISION_ENGINE', 'responses (default)')}, "
+        f"input_mode={os.getenv('VISION_INPUT_MODE', 'auto')}, "
+        f"model={os.getenv('VISION_MODEL', 'gpt-4.1-mini (default)')}, "
+        f"openai={openai_ver}, project={os.getenv('OPENAI_PROJECT', '') or 'n/d'}, "
+        f"base_url={os.getenv('OPENAI_BASE_URL', '') or 'api.openai.com'}"
+    )
+
+
 # --------- UI ---------
 header(None)
 sidebar(None)
@@ -256,17 +273,46 @@ if current_phase == UI_PHASE_INIT:
                         slug=s,
                         pdf_path=str(_client_pdf_path(s)),
                     )
-                except TypeError:
-                    # Ambienti legacy (signature diversa) vengono gestiti
-                    # solo se la funzione non accetta i nuovi parametri kw.
-                    sig: Optional[inspect.Signature]
-                    try:
-                        sig = inspect.signature(provision_from_vision)
-                    except (ValueError, TypeError):
-                        sig = None
-                    if sig is not None and {"slug", "pdf_path"}.issubset(sig.parameters):
+                except Exception as exc:
+                    # Messaggio chiaro + diagnostica + opzione retry inline
+                    st.error(
+                        f"Errore durante Vision: {exc}\n\n"
+                        "Possibili azioni: aggiorna il pacchetto 'openai'; verifica lo stato del servizio; "
+                        "in alternativa esegui in modalità 'inline' (senza Vector Store)."
+                    )
+                    _diagnostics_box(s)
+
+                    retry_col1, retry_col2 = st.columns([1, 1])
+                    with retry_col1:
+                        do_inline = st.button("Riprova in modalità inline (consigliato)", key="btn_retry_inline")
+                    with retry_col2:
+                        do_abort = st.button("Annulla", key="btn_abort_inline")
+
+                    if do_inline:
+                        # Forza inline per questo processo e riprova immediatamente
+                        os.environ["VISION_INPUT_MODE"] = "inline"
+                        try:
+                            with status_guard(
+                                "Rieseguo Vision (modalità inline)…",
+                                expanded=True,
+                                error_label="Errore durante Vision (inline)",
+                            ) as status2:
+                                provision_from_vision(
+                                    ctx=ctx,
+                                    logger=ui_logger,
+                                    slug=s,
+                                    pdf_path=str(_client_pdf_path(s)),
+                                )
+                                if status2 is not None and hasattr(status2, "update"):
+                                    status2.update(label="Vision completata (inline).", state="complete")
+                        except Exception as exc2:
+                            st.error(f"Riprova inline fallita: {exc2}")
+                            _diagnostics_box(s)
+                            raise  # propaghiamo per il blocco esterno
+                    else:
+                        # Abort esplicito o nessuna azione: rilancia l'errore per lo status guard
                         raise
-                    provision_from_vision(s, str(_client_pdf_path(s)))
+
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Vision completata.", state="complete")
 
