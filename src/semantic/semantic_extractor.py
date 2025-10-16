@@ -1,16 +1,28 @@
 # src/semantic/semantic_extractor.py
+"""Fase 2 - Arricchimento semantico
+--------------------------------
+I 'keywords' (sinonimi/trigger di tagging) NON provengono piu da
+semantic_mapping.yaml / cartelle_raw.yaml (Fase 1).
+Si leggono da: base_dir/semantic/tags_reviewed.yaml
+
+Compatibilita test: riesponiamo `load_semantic_mapping(...)` come shim
+in modo che i test possano monkeypatcharlo. Di default legge da
+`tags_reviewed.yaml`.
+"""
+
 from __future__ import annotations
 
 import logging
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
+
+import yaml
 
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import is_safe_subpath
-from semantic.semantic_mapping import load_semantic_mapping
+from pipeline.path_utils import ensure_within_and_resolve, is_safe_subpath, read_text_safe
 
 
 class _Ctx(Protocol):
@@ -46,7 +58,7 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
 
 
 def _normalize_term(term: str) -> str:
-    """Sanitizza una keyword: NFC + rimozione zero‑width; non forza lowercase."""
+    """Sanitizza un termine: NFC + rimozione zero-width; non forza lowercase."""
     t = unicodedata.normalize("NFC", str(term).strip())
     t = re.sub(r"[\u200B\u200C\u200D\uFEFF]", "", t)
     return t
@@ -69,7 +81,10 @@ def extract_semantic_concepts(
 ) -> Dict[str, List[Dict[str, str]]]:
     logger = logger or get_structured_logger("semantic.extract", context=context)
 
-    mapping = load_semantic_mapping(context, logger=logger)
+    # Carica i keyword (fase 2) tramite compat-shim (patchabile nei test)
+    # NB: niente keyword argument 'logger' per compatibilita con i test legacy
+    mapping = load_semantic_mapping(context)
+    mapping = _sanitize_and_dedup_mapping(mapping)
     if not mapping:
         logger.warning(
             "⚠️ Mapping semantico vuoto: salto l'estrazione concetti.",
@@ -120,8 +135,6 @@ def extract_semantic_concepts(
                     except Exception:
                         # se stat fallisce, procedi comunque
                         pass
-
-                from pipeline.path_utils import read_text_safe
 
                 content = read_text_safe(context.md_dir, file, encoding="utf-8")
                 # Normalizza Unicode e rimuove caratteri invisibili che rompono i match
@@ -201,4 +214,86 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
     logger.info("✅ Arricchimento semantico completato.", extra={"slug": context.slug})
 
 
-__all__ = ["extract_semantic_concepts", "enrich_markdown_folder"]
+def load_tags_reviewed(base_dir: Path) -> Dict[str, List[str]]:
+    """
+    Carica semantic/tags_reviewed.yaml e restituisce {concept: [keywords...]} sanificati.
+    """
+    base_path = Path(base_dir)
+    sem_dir = ensure_within_and_resolve(base_path, base_path / "semantic")
+    yaml_path = ensure_within_and_resolve(sem_dir, sem_dir / "tags_reviewed.yaml")
+    if not yaml_path.is_file():
+        raise FileNotFoundError(f"tags_reviewed.yaml non trovato: {yaml_path}")
+
+    raw = read_text_safe(sem_dir, yaml_path, encoding="utf-8")
+    data = yaml.safe_load(raw) or {}
+    if not isinstance(data, dict):
+        raise ValueError("Formato tags_reviewed.yaml non valido: atteso dict.")
+
+    raw_tags = data.get("tags") or {}
+    if not isinstance(raw_tags, dict):
+        raise ValueError("Formato tags_reviewed.yaml non valido: campo 'tags' mancante o non mappa.")
+
+    normalized: Dict[str, List[str]] = {}
+    for concept, values in raw_tags.items():
+        if isinstance(values, str):
+            seq = [values]
+        elif isinstance(values, list):
+            seq = [str(v) for v in values]
+        else:
+            seq = [str(values)]
+        normalized[str(concept)] = seq
+
+    return _sanitize_and_dedup_mapping(normalized)
+
+
+def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
+    """
+    Shim compatibile con i test legacy: restituisce i keywords di Fase 2.
+    """
+    base_dir = getattr(context, "base_dir", None)
+    if base_dir is None:
+        raise PipelineError("Context privo di base_dir per estrazione semantica.", slug=getattr(context, "slug", None))
+    try:
+        return load_tags_reviewed(Path(base_dir))
+    except FileNotFoundError as exc:
+        raise PipelineError(
+            "tags_reviewed.yaml non trovato (esegui la revisione semantica Fase 2).",
+            slug=getattr(context, "slug", None),
+            file_path=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise PipelineError(
+            f"tags_reviewed.yaml non valido: {exc}",
+            slug=getattr(context, "slug", None),
+        ) from exc
+
+
+_ZERO_WIDTH = {"\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"}
+
+
+def _sanitize_kw(value: str) -> str:
+    cleaned = "".join(ch for ch in value if ch not in _ZERO_WIDTH)
+    cleaned = unicodedata.normalize("NFC", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+def _sanitize_and_dedup_mapping(mapping: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    out: Dict[str, List[str]] = {}
+    for concept, values in (mapping or {}).items():
+        seen: set[str] = set()
+        items: List[str] = []
+        for raw_value in values or []:
+            candidate = _sanitize_kw(str(raw_value))
+            if not candidate:
+                continue
+            key = candidate.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(candidate)
+        out[str(concept)] = items
+    return out
+
+
+__all__ = ["extract_semantic_concepts", "enrich_markdown_folder", "load_tags_reviewed", "load_semantic_mapping"]

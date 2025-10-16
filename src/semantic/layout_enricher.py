@@ -87,8 +87,8 @@ def suggest_layout(base_yaml: Dict[str, Any], vision_text: str, constraints: Dic
     """
     c = Constraints.from_dict(constraints)
 
-    # 1) Estrai temi chiave dal vision_text (approccio deterministico, rule-based)
-    tokens = _extract_keywords(vision_text)
+    # 1) Estrai termini chiave dal vision_text (approccio deterministico, rule-based)
+    tokens = _extract_terms(vision_text)
     # 2) Mappa i token verso categorie canoniche note (semantic_mapping)
     topics = _map_tokens_to_topics(tokens, c.semantic_mapping)
     # 3) Filtra/normalizza i top-level rispetto ai prefissi ammessi
@@ -170,9 +170,9 @@ def to_kebab(s: str) -> str:
     return s
 
 
-def _extract_keywords(text: str, min_len: int = 4, top_k: int = 24) -> List[str]:
+def _extract_terms(text: str, min_len: int = 4, top_k: int = 24) -> List[str]:
     """
-    Estrae keyword semplici dal testo:
+    Estrae termini semplici dal testo:
     - tokenizzazione banale
     - filtra parole corte/stop-words basilari
     - ritorna i top_k più frequenti (kebab-case)

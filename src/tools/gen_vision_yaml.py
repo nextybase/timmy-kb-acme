@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from importlib import import_module
 from pathlib import Path
 
 # Bootstrap identico alla UI: aggiungi SRC al sys.path
@@ -12,32 +11,42 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-# Import dinamici per rispettare E402 mantenendo il bootstrap di sys.path
-ClientContext = import_module("pipeline.context").ClientContext
-ensure_dotenv_loaded = import_module("pipeline.env_utils").ensure_dotenv_loaded
-get_structured_logger = import_module("pipeline.logging_utils").get_structured_logger
-vision_ai = import_module("semantic.vision_ai")
+from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
+from semantic.vision_provision import HaltError, provision_from_vision
 
 
 def main() -> int:
     """Genera gli artefatti Vision Statement richiedendo il modello AI."""
-    ap = argparse.ArgumentParser("gen_vision_yaml")
-    ap.add_argument("--slug", required=True, help="ID cliente (kebab-case)")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser("gen_vision_yaml")
+    parser.add_argument("--slug", required=True, help="Slug cliente (kebab-case)")
+    parser.add_argument("--pdf", required=True, help="Percorso al VisionStatement.pdf")
+    parser.add_argument("--base", default="output", help="Root output (default: output)")
+    args = parser.parse_args()
 
     log = get_structured_logger("tools.gen_vision_yaml")
+    base_dir = Path(args.base) / f"timmy-kb-{args.slug}"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    ctx = ClientContext(slug=args.slug, client_name=args.slug, base_dir=base_dir)
+
+    pdf_path = Path(args.pdf).resolve()
+    if not pdf_path.is_file():
+        log.error("PDF non trovato", extra={"slug": args.slug, "file_path": str(pdf_path)})
+        return 1
 
     try:
-        ensure_dotenv_loaded()
-        ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
-        out = vision_ai.generate(ctx, log, slug=args.slug)
-        log.info("vision_yaml_generated", extra={"slug": args.slug, "output": str(out)})
-        sys.stdout.write(f"{out}\n")
+        result = provision_from_vision(ctx, logger=log, slug=args.slug, pdf_path=pdf_path)
+        log.info("vision_yaml_generated", extra={"slug": args.slug, **result})
         return 0
-    except vision_ai.ConfigError as err:
+    except HaltError as err:
+        log.error("vision_yaml_halt", extra={"slug": args.slug, "error": str(err)})
+        sys.stderr.write(f"HaltError: {err}\n")
+        return 2
+    except ConfigError as err:
         log.error("vision_yaml_config_error", extra={"slug": args.slug, "error": str(err)})
         sys.stderr.write(f"ConfigError: {err}\n")
-        return 2
+        return 1
     except Exception as exc:
         log.exception("vision_yaml_failed", extra={"slug": args.slug, "error": str(exc)})
         return 1

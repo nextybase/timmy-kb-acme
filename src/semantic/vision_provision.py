@@ -38,7 +38,8 @@ class HaltError(RuntimeError):
 # Config/Costanti
 # =========================
 
-# Nomi CANONICI che vogliamo garantire in pipeline/KB/assistant
+# CHIAVI CANONICHE utilizzate nel parsing, nel prompt e nella validazione.
+# I test Fase 1 richiedono che le chiavi finali includano "Prodotto/Azienda" e "Mercato".
 REQUIRED_SECTIONS_CANONICAL: Tuple[str, ...] = (
     "Vision",
     "Mission",
@@ -49,42 +50,42 @@ REQUIRED_SECTIONS_CANONICAL: Tuple[str, ...] = (
 )
 
 # Varianti d'intestazione accettate nel PDF che mappiamo ai canonici
-# (case-insensitive; gestione spazi intorno allo slash)
-_ACCEPTED_HEADER_PATTERNS = [
-    r"Vision",
-    r"Mission",
-    r"Goal",
-    r"Framework etico",
-    r"Prodotto\s*/\s*Azienda",
-    r"Descrizione prodotto/azienda",
-    r"Mercato",
-    r"Descrizione mercato",
-]
-_ACCEPTED_HEADER_RE = re.compile(rf"(?im)^(({'|'.join(_ACCEPTED_HEADER_PATTERNS)}))\s*:?\s*$")
+# (case-insensitive; gestione spazi intorno allo slash; ":" finale opzionale).
+_HEADER_VARIANTS: Dict[str, List[str]] = {
+    "Vision": ["Vision"],
+    "Mission": ["Mission"],
+    "Goal": ["Goal"],
+    "Framework etico": ["Framework etico"],
+    "Prodotto/Azienda": [
+        "Prodotto/Azienda",
+        "Prodotto / Azienda",
+        "Descrizione prodotto/azienda",
+        "Descrizione prodotto / azienda",
+    ],
+    "Mercato": [
+        "Mercato",
+        "Descrizione mercato",
+    ],
+}
 
+# Etichette “friendly” per messaggi d’errore (i test vogliono le versioni estese)
+_DISPLAY_LABEL: Dict[str, str] = {
+    "Vision": "Vision",
+    "Mission": "Mission",
+    "Goal": "Goal",
+    "Framework etico": "Framework etico",
+    "Prodotto/Azienda": "Descrizione prodotto/azienda",
+    "Mercato": "Descrizione mercato",
+}
 
-def _canonicalize_header(h: str) -> str:
-    """Normalizza un'intestazione catturata verso i canonici."""
-    t = h.strip()
-    tl = t.casefold()
-    tl = re.sub(r"\s*/\s*", "/", tl)
-    if tl.startswith("descrizione "):
-        tl = tl[len("descrizione ") :]
-
-    if tl == "vision":
-        return "Vision"
-    if tl == "mission":
-        return "Mission"
-    if tl == "goal":
-        return "Goal"
-    if tl == "framework etico":
-        return "Framework etico"
-    if tl in ("prodotto/azienda", "prodotto / azienda"):
-        return "Prodotto/Azienda"
-    if tl == "mercato":
-        return "Mercato"
-    return t
-
+# Precompilazione: mappa variante (casefold) -> canonico, e regex header
+_VARIANT_TO_CANON: Dict[str, str] = {}
+_all_variants: List[str] = []
+for _canon, _vars in _HEADER_VARIANTS.items():
+    for _v in _vars:
+        _VARIANT_TO_CANON[_v.casefold()] = _canon
+        _all_variants.append(re.escape(_v))
+_HEADER_RE = re.compile(rf"(?im)^(?P<h>({'|'.join(_all_variants)}))\s*:?\s*$")
 
 # Giorni di retention per snapshot/log (solo pulizia best-effort)
 _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
@@ -185,6 +186,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
     """Scrive una riga di audit JSONL in modo atomico e sicuro."""
+    (base_dir / "logs").mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, ensure_ascii=False) + "\n"
     safe_append_text(base_dir, base_dir / "logs" / "vision_provision.log", payload)
 
@@ -209,31 +211,40 @@ def _parse_required_sections(raw_text: str) -> Dict[str, str]:
     """
     Estrae in modo deterministico le sezioni obbligatorie, tagliando il testo
     da ciascuna intestazione alla successiva. Le intestazioni sono cercate
-    a inizio riga, case-insensitive, con due varianti:
+    a inizio riga (case-insensitive), con due varianti di sintassi:
       - <titolo>
       - <titolo>:
-    Ritorna {Titolo Canonico -> contenuto (trim)}.
-    Se una o più sezioni mancano, solleva ConfigError con elenco dei titoli mancanti.
+    Ritorna {Chiave Canonica -> contenuto (trim)} con chiavi in REQUIRED_SECTIONS_CANONICAL.
+    Aggiunge anche le alias “Descrizione prodotto/azienda” e “Descrizione mercato”
+    per compatibilità con test legacy.
+    Se una o più sezioni mancano, solleva ConfigError con elenco “friendly”.
     """
     text = re.sub(r"\n{3,}", "\n\n", raw_text.strip())
 
-    matches = list(_ACCEPTED_HEADER_RE.finditer(text))
+    matches = list(_HEADER_RE.finditer(text))
     found: Dict[str, str] = {}
 
     for idx, m in enumerate(matches):
-        title_raw = m.group(1).strip()
-        title = _canonicalize_header(title_raw)
+        title_raw = (m.group("h") or "").strip().rstrip(":")
+        # normalizza spazi intorno agli slash per robustezza
+        title_norm = re.sub(r"\s*/\s*", "/", title_raw)
+        canon = _VARIANT_TO_CANON.get(title_norm.casefold())
+        if not canon:
+            continue
         start = m.end()
         end = matches[idx + 1].start() if (idx + 1) < len(matches) else len(text)
         body = text[start:end].strip()
-        found[title] = body
+        found[canon] = body
 
-    missing = [t for t in REQUIRED_SECTIONS_CANONICAL if t not in found or not found[t].strip()]
-    if missing:
-        raise ConfigError(
-            "VisionStatement incompleto: sezioni mancanti - " + ", ".join(missing),
-            file_path=None,
-        )
+    # Validazione su chiavi CANONICHE
+    missing_canon = [t for t in REQUIRED_SECTIONS_CANONICAL if t not in found or not found[t].strip()]
+    if missing_canon:
+        human = ", ".join(_DISPLAY_LABEL.get(m, m) for m in missing_canon)
+        raise ConfigError("VisionStatement incompleto: sezioni mancanti - " + human, file_path=None)
+
+    # Alias legacy richiesti da alcuni test (stesso contenuto dei canonici)
+    found.setdefault("Descrizione prodotto/azienda", found.get("Prodotto/Azienda", ""))
+    found.setdefault("Descrizione mercato", found.get("Mercato", ""))
 
     return found
 

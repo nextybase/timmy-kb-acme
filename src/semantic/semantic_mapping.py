@@ -1,5 +1,7 @@
 # src/semantic/semantic_mapping.py
-"""Modulo per la gestione del file di mapping semantico nella pipeline Timmy-KB.
+"""Fase 2 — Arricchimento semantico (consuma tags_reviewed).
+
+Modulo per la gestione del file di mapping semantico nella pipeline Timmy-KB.
 
 Refactor v1.0.5 (Blocco B):
 - Path-safety STRONG: validazione con `ensure_within(...)` sia per il mapping cliente
@@ -19,6 +21,7 @@ Formato normalizzato: dict[str, list[str]]
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
@@ -28,6 +31,9 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
 
 __all__ = ["load_semantic_mapping"]
+
+TAG_PATTERN = re.compile(r"[a-z0-9\-]{3,}")
+KEYWORD_PATTERN = TAG_PATTERN  # legacy alias (da rimuovere dopo migrazione completa)
 
 
 class _Ctx(Protocol):
@@ -79,6 +85,15 @@ def _normalize_semantic_mapping(raw: Any) -> Dict[str, List[str]]:
     return norm
 
 
+def _has_phase1_keywords(raw: Any) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    for payload in raw.values():
+        if isinstance(payload, dict) and "keywords" in payload:
+            return True
+    return False
+
+
 def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
     """Carica e normalizza il mapping semantico per il cliente corrente.
 
@@ -97,6 +112,13 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
             candidate = cfg_dir_p / SEMANTIC_MAPPING_FILE
             ensure_within(cfg_dir_p, candidate)
             raw_ws = _yaml_read_ws(cfg_dir_p, candidate) or {}
+            if _has_phase1_keywords(raw_ws):
+                raise ConfigError(
+                    "Uso scorretto: 'keywords' non appartiene a semantic_mapping.yaml (Fase 1). "
+                    "Usa semantic/tags_reviewed.yaml (Fase 2).",
+                    file_path=str(candidate),
+                    slug=context.slug,
+                )
             mapping_ws = _normalize_semantic_mapping(raw_ws)
             if mapping_ws:
                 logger.info(
@@ -127,6 +149,13 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
         from pipeline.yaml_utils import yaml_read
 
         raw = yaml_read(mapping_path.parent, mapping_path) or {}
+        if _has_phase1_keywords(raw):
+            raise ConfigError(
+                "Uso scorretto: 'keywords' non appartiene a semantic_mapping.yaml (Fase 1). "
+                "Usa semantic/tags_reviewed.yaml (Fase 2).",
+                file_path=str(mapping_path),
+                slug=context.slug,
+            )
         mapping = _normalize_semantic_mapping(raw)
         logger.info(
             "📑 Mapping semantico caricato",
@@ -154,6 +183,13 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
         from pipeline.yaml_utils import yaml_read
 
         raw = yaml_read(repo_mapping_dir, fallback_path) or {}
+        if _has_phase1_keywords(raw):
+            raise ConfigError(
+                "Uso scorretto: 'keywords' non appartiene a semantic_mapping.yaml (Fase 1). "
+                "Usa semantic/tags_reviewed.yaml (Fase 2).",
+                file_path=str(fallback_path),
+                slug=context.slug,
+            )
         mapping = _normalize_semantic_mapping(raw)
         logger.info(
             "📑 Mapping semantico di fallback caricato",

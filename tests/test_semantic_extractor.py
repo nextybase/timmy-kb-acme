@@ -22,11 +22,6 @@ class DummyCtx:
     repo_root_dir: Optional[Path] = None
 
 
-def write_mapping(config_dir: Path, payload: str) -> None:
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "semantic_mapping.yaml").write_text(payload, encoding="utf-8")
-
-
 def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
@@ -69,25 +64,28 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    cfg = base / "config"
     md.mkdir(parents=True)
     # Create markdown files
     (md / "one.md").write_text("Foo and BAR appear here", encoding="utf-8")
     (md / "two.md").write_text("baz and qux", encoding="utf-8")
     (md / "three.md").write_text("FOO only", encoding="utf-8")
 
-    # Mapping: two concepts with keywords (order matters for first-hit policy)
-    write_mapping(
-        cfg,
-        """
-        conceptA:
-          keywords: ["foo", "Bar", "Foo"]  # duplicate 'Foo' should be deduped case-insensitively
-        conceptB:
-          keywords: ["qux"]
-        """,
+    # Tags reviewed (Fase 2): due concetti con keywords (ordine rilevante per first-hit)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_dir / "tags_reviewed.yaml").write_text(
+        "\n".join(
+            [
+                'version: "1.0-beta"',
+                "tags:",
+                '  conceptA: ["foo", "Bar", "Foo"]  # duplicate Foo -> dedupe case-insensitive',
+                '  conceptB: ["qux"]',
+            ]
+        ),
+        encoding="utf-8",
     )
 
-    ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
 
     # For conceptA: first-hit policy per file ->
@@ -103,7 +101,6 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    cfg = base / "config"
     md.mkdir(parents=True)
 
     # Small file (should be scanned)
@@ -112,14 +109,19 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     big = md / "big.md"
     big.write_text("alpha\n" * 10_000, encoding="utf-8")
 
-    write_mapping(
-        cfg,
-        """
-        concept:
-          keywords: ["alpha"]
-        """,
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_dir / "tags_reviewed.yaml").write_text(
+        "\n".join(
+            [
+                'version: "1.0-beta"',
+                "tags:",
+                '  concept: ["alpha"]',
+            ]
+        ),
+        encoding="utf-8",
     )
-    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
 
     # Set threshold lower than big file size but higher than small
     out = extract_semantic_concepts(cast(Any, ctx), max_scan_bytes=1024)

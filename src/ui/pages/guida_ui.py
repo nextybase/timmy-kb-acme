@@ -27,7 +27,7 @@ def _read_markdown(rel_path: str) -> str:
     Ritorna un messaggio di warning in caso di errore.
     """
     try:
-        return read_text_safe(_repo_root(), Path(rel_path))
+        return cast(str, read_text_safe(_repo_root(), Path(rel_path)))
     except Exception as e:
         return f"> ⚠️ Impossibile leggere `{rel_path}`: {e}"
 

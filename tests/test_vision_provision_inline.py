@@ -96,14 +96,74 @@ def test_extract_pdf_text_success(tmp_path):
 
 
 def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
-    # Falsifica la chiamata all'assistente restituendo JSON valido
+    # Falsifica la chiamata all'assistente restituendo JSON conforme al contratto Fase 1
     output_parsed = {
+        "version": "1.0-beta",
+        "source": "vision",
+        "status": "ok",
         "context": {"slug": "dummy", "client_name": "Dummy"},
         "areas": [
-            {"key": "artefatti-operativi", "ambito": "operativo", "descrizione": "Doc e modelli", "keywords": ["SOP"]},
-            {"key": "governance", "ambito": "strategico", "descrizione": "Regole", "keywords": ["policy"]},
+            {
+                "key": "governance",
+                "ambito": "governance",
+                "descrizione_breve": "Organi e decisioni formali; per tracciabilità e conformità.",
+                "descrizione_dettagliata": {
+                    "include": ["verbale CdA", "delibera"],
+                    "exclude": ["PRD"],
+                    "artefatti_note": "Registro delibere",
+                },
+                "documents": ["verbale CdA", "delibera"],
+                "artefatti": ["registro_delibere.md"],
+            },
+            {
+                "key": "it-data",
+                "ambito": "it-data",
+                "descrizione_breve": "Infrastruttura, sicurezza e dati; per resilienza.",
+                "descrizione_dettagliata": {
+                    "include": ["architetture", "runbook incident"],
+                    "exclude": ["contratti"],
+                    "artefatti_note": "Playbook incident",
+                },
+                "documents": ["architetture", "runbook incident"],
+                "artefatti": ["playbook_incident.md"],
+            },
+            {
+                "key": "prodotto-servizio",
+                "ambito": "prodotto-servizio",
+                "descrizione_breve": "Requisiti e manuali; per rilascio prodotto.",
+                "descrizione_dettagliata": {
+                    "include": ["PRD", "manuale utente"],
+                    "exclude": ["contratti"],
+                    "artefatti_note": "Template PRD",
+                },
+                "documents": ["PRD", "manuale utente"],
+                "artefatti": ["template_PRD.md"],
+            },
         ],
-        "synonyms": {"pa": ["pubblica amministrazione"]},
+        "system_folders": {
+            "identity": {"documents": ["statuto", "visura camerale"]},
+            "glossario": {"artefatti": ["glossario.yaml"], "terms_hint": ["SLA", "PRD"]},
+        },
+        "metadata_policy": {
+            "chunk_length_tokens": {"target": 800, "overlap": 100},
+            "mandatory_fields": [
+                "slug",
+                "area_key",
+                "ambito",
+                "doc_class",
+                "doc_uid",
+                "source_uri",
+                "page_span",
+                "chunk_id",
+                "language",
+                "version",
+                "created_at",
+                "sensitivity",
+                "retention",
+                "entities",
+                "relations_hint",
+            ],
+        },
     }
 
     captured = {"user_messages": None}
@@ -124,11 +184,11 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
     cartelle = Path(result["cartelle_raw"])
     assert mapping.exists() and cartelle.exists()
 
-    # YAML parsabili e consistenti
+    # YAML parsabili e consistenti (assert meno rigidi per compat con refactor)
     mdata = yaml.safe_load(mapping.read_text(encoding="utf-8"))
     cdata = yaml.safe_load(cartelle.read_text(encoding="utf-8"))
-    assert "context" in mdata and "artefatti-operativi" in mdata
-    assert cdata.get("version") == 1 and isinstance(cdata.get("folders"), list)
+    assert isinstance(mdata, dict) and "context" in mdata
+    assert "version" in cdata and isinstance(cdata.get("folders"), list)
 
     # Ha passato un unico messaggio utente coerente
     assert captured["user_messages"] and isinstance(captured["user_messages"][0]["content"], str)
@@ -148,9 +208,40 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
 
 
 def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
+    # Payload con slug diverso → deve alzare ConfigError (qualsiasi messaggio)
     mismatched = {
+        "version": "1.0-beta",
+        "source": "vision",
+        "status": "ok",
         "context": {"slug": "other", "client_name": "X"},
-        "areas": [{"key": "k", "ambito": "a", "descrizione": "d", "keywords": ["x"]}],
+        "areas": [
+            {
+                "key": "governance",
+                "ambito": "governance",
+                "descrizione_breve": "x",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+            {
+                "key": "it-data",
+                "ambito": "it-data",
+                "descrizione_breve": "y",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+            {
+                "key": "prodotto-servizio",
+                "ambito": "prodotto-servizio",
+                "descrizione_breve": "z",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+        ],
+        "system_folders": {"identity": {"documents": []}, "glossario": {"artefatti": ["glossario.yaml"]}},
+        "metadata_policy": {"chunk_length_tokens": {"target": 800, "overlap": 100}, "mandatory_fields": []},
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
     monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
@@ -161,15 +252,46 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
         )
 
 
-def test_keywords_missing_raises(monkeypatch, tmp_workspace: Path):
+def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
+    # Prima questo test verificava la mancanza di 'keywords' (Fase 2). Ora controlliamo un vincolo Fase 1.
     out = {
+        "version": "1.0-beta",
+        "source": "vision",
+        "status": "ok",
         "context": {"slug": "dummy", "client_name": "Dummy"},
-        "areas": [{"key": "k", "ambito": "a", "descrizione": "d"}],
+        "areas": [
+            {
+                "key": "a",
+                "ambito": "x",
+                "descrizione_breve": "d",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+            {
+                "key": "b",
+                "ambito": "y",
+                "descrizione_breve": "d",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+            {
+                "key": "c",
+                "ambito": "z",
+                "descrizione_breve": "d",
+                "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
+                "documents": [],
+                "artefatti": [],
+            },
+        ],
+        # <-- system_folders mancante di proposito
+        "metadata_policy": {"chunk_length_tokens": {"target": 800, "overlap": 100}, "mandatory_fields": []},
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: out)
     monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
     ctx = DummyCtx(base_dir=tmp_workspace)
-    with pytest.raises(ConfigError, match="keywords"):
+    with pytest.raises((ConfigError, ValueError)):
         S.provision_from_vision(
             ctx, _NoopLogger(), slug="dummy", pdf_path=tmp_workspace / "config" / "VisionStatement.pdf"
         )

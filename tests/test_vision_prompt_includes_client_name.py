@@ -36,6 +36,7 @@ def tmp_ws(tmp_path: Path) -> Path:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     pdf = base / "config" / "VisionStatement.pdf"
+    # PDF con le 6 sezioni obbligatorie (intestazioni a inizio riga)
     _write_pdf(
         pdf,
         "Vision\nA\nMission\nB\nGoal\nC\nFramework etico\nD\nDescrizione prodotto/azienda\nE\nDescrizione mercato\nF\n",
@@ -48,19 +49,86 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     ctx = DummyCtx(base_dir=tmp_ws, client_name="ACME S.p.A.")
     seen = {"user_messages": None}
 
+    # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)
     def _fake_call(client, *, assistant_id, user_messages, **kwargs):
         seen["user_messages"] = user_messages
         return {
+            "version": "1.0-beta",
+            "source": "vision",
+            "status": "ok",
             "context": {"slug": slug, "client_name": ctx.client_name},
-            "areas": [{"key": "core", "ambito": "A", "descrizione": "D", "keywords": ["x"]}],
+            "areas": [
+                {
+                    "key": "governance",
+                    "ambito": "governance",
+                    "descrizione_breve": "Organi e decisioni formali; per tracciabilità e conformità.",
+                    "descrizione_dettagliata": {
+                        "include": ["verbale CdA", "delibera"],
+                        "exclude": ["PRD"],
+                        "artefatti_note": "Registro delibere",
+                    },
+                    "documents": ["verbale CdA", "delibera"],
+                    "artefatti": ["registro_delibere.md"],
+                },
+                {
+                    "key": "it-data",
+                    "ambito": "it-data",
+                    "descrizione_breve": "Infrastruttura, sicurezza e dati; per resilienza.",
+                    "descrizione_dettagliata": {
+                        "include": ["architetture", "runbook incident"],
+                        "exclude": ["contratti"],
+                        "artefatti_note": "Playbook incident",
+                    },
+                    "documents": ["architetture", "runbook incident"],
+                    "artefatti": ["playbook_incident.md"],
+                },
+                {
+                    "key": "prodotto-servizio",
+                    "ambito": "prodotto-servizio",
+                    "descrizione_breve": "Requisiti e manuali; per rilascio prodotto.",
+                    "descrizione_dettagliata": {
+                        "include": ["PRD", "manuale utente"],
+                        "exclude": ["contratti"],
+                        "artefatti_note": "Template PRD",
+                    },
+                    "documents": ["PRD", "manuale utente"],
+                    "artefatti": ["template_PRD.md"],
+                },
+            ],
+            "system_folders": {
+                "identity": {"documents": ["statuto", "visura camerale"]},
+                "glossario": {"artefatti": ["glossario.yaml"], "terms_hint": ["SLA", "PRD"]},
+            },
+            "metadata_policy": {
+                "chunk_length_tokens": {"target": 800, "overlap": 100},
+                "mandatory_fields": [
+                    "slug",
+                    "area_key",
+                    "ambito",
+                    "doc_class",
+                    "doc_uid",
+                    "source_uri",
+                    "page_span",
+                    "chunk_id",
+                    "language",
+                    "version",
+                    "created_at",
+                    "sensitivity",
+                    "retention",
+                    "entities",
+                    "relations_hint",
+                ],
+            },
         }
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+    # Non patchiamo _extract_pdf_text perché il fixture ha generato un PDF valido con le 6 sezioni
     monkeypatch.setattr(S, "_call_assistant_json", _fake_call)
 
     S.provision_from_vision(
         ctx, S.logging.getLogger("noop"), slug=slug, pdf_path=tmp_ws / "config" / "VisionStatement.pdf"
     )
 
-    msg = seen["user_messages"][0]["content"]
-    assert "client_name: ACME S.p.A." in msg
+    # Verifica che il client_name sia stato incluso nel prompt inviato all'assistente
+    msgs = seen["user_messages"] or []
+    assert any("client_name: ACME S.p.A." in (m.get("content") or "") for m in msgs)

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Allineato al refactor Vision (Fase 1):
+- converte il payload VisionOutput (documents/artefatti/…)
+- NON usa né produce 'keywords'
+- i termini per il tagging restano in semantic/tags_reviewed.yaml (Fase 2)
+"""
+
 from typing import Any, Dict, List
 
 import yaml
