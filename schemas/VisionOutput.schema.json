@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://next.local/schema/VisionOutput.schema.json",
+  "title": "NeXT Vision → Semantic Mapping v1.0-beta",
+  "type": "object",
+  "required": [
+    "version",
+    "source",
+    "status",
+    "context"
+  ],
+  "properties": {
+    "version": {
+      "const": "1.0-beta"
+    },
+    "source": {
+      "const": "vision"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "halt"
+      ]
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "slug",
+        "client_name"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "client_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "areas": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "ambito",
+          "descrizione_breve",
+          "descrizione_dettagliata",
+          "documents",
+          "artefatti"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "ambito": {
+            "enum": [
+              "governance",
+              "strategico",
+              "operativo",
+              "compliance",
+              "legale",
+              "commerciale",
+              "amministrazione-finanza",
+              "hr",
+              "it-data",
+              "marketing-comunicazione",
+              "prodotto-servizio"
+            ]
+          },
+          "descrizione_breve": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "descrizione_dettagliata": {
+            "type": "object",
+            "required": [
+              "include",
+              "exclude"
+            ],
+            "properties": {
+              "include": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 0
+              },
+              "artefatti_note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 3
+          },
+          "artefatti": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "correlazioni": {
+            "type": "object",
+            "properties": {
+              "entities": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "relations": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "chunking_hints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "system_folders": {
+      "type": "object",
+      "required": [
+        "identity",
+        "glossario"
+      ],
+      "properties": {
+        "identity": {
+          "type": "object",
+          "required": [
+            "documents"
+          ],
+          "properties": {
+            "documents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "glossario": {
+          "type": "object",
+          "required": [
+            "artefatti"
+          ],
+          "properties": {
+            "artefatti": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "terms_hint": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "missing": {
+      "type": "object",
+      "properties": {
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "message_ui": {
+      "type": "string"
+    },
+    "metadata_policy": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "areas",
+          "system_folders"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "halt"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "missing",
+          "message_ui"
+        ],
+        "not": {
+          "required": [
+            "areas"
+          ]
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

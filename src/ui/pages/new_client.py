@@ -6,7 +6,7 @@ import logging
 import os
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, cast
+from typing import Any, Callable, Dict, Iterator, Optional, cast
 
 import streamlit as st
 
@@ -16,17 +16,10 @@ from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_
 from ui.utils import set_slug
 from ui.utils.html import esc_url_component
 
-# Vision (provisioning completo: mapping + cartelle_raw)
-ProvisionCallable = Callable[..., Any]
-
-if TYPE_CHECKING:
-    from src.semantic.vision_provision import provision_from_vision as provision_from_vision
-else:
-    try:
-        from src.semantic.vision_provision import provision_from_vision as _provision_from_vision
-    except Exception:  # pragma: no cover
-        from semantic.vision_provision import provision_from_vision as _provision_from_vision  # pragma: no cover
-    provision_from_vision = cast(ProvisionCallable, _provision_from_vision)
+try:
+    from src.semantic.vision_provision import HaltError
+except Exception:  # pragma: no cover
+    from semantic.vision_provision import HaltError  # pragma: no cover
 
 from pipeline.config_utils import merge_client_config_from_template
 from pipeline.context import ClientContext
@@ -34,6 +27,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read
 from ui.clients_store import ClientEntry, set_state, upsert_client
+from ui.services.vision_provision import run_vision
 
 BuildDriveCallable = Callable[..., Dict[str, str]]
 try:
@@ -276,14 +270,30 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante Vision",
             ) as status:
                 try:
-                    provision_from_vision(
-                        ctx=ctx,
-                        logger=ui_logger,
+                    run_vision(
+                        ctx,
                         slug=s,
-                        pdf_path=str(_client_pdf_path(s)),
+                        pdf_path=_client_pdf_path(s),
+                        logger=ui_logger,
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
+                except HaltError as exc:
+                    if status is not None and hasattr(status, "update"):
+                        status.update(label=f"Vision in stato HALT: {exc}", state="error")
+                    missing = ""
+                    if hasattr(exc, "missing"):
+                        details = getattr(exc, "missing")
+                        sections = details.get("sections") if isinstance(details, dict) else None
+                        if sections:
+                            missing = ", ".join(str(item) for item in sections)
+                    caption = f"Sezioni mancanti: {missing}" if missing else "Completa il Vision Statement e riprova."
+                    _open_error_modal(
+                        "Vision HALT",
+                        f"Vision interrotta: {exc}",
+                        caption=caption,
+                    )
+                    st.stop()
                 except ConfigError as exc:
                     msg = str(exc)
                     lower = msg.lower()

@@ -48,4 +48,5 @@ retriever:
 vision:
   engine: assistant        # default
   model: gpt-4o-mini-2024-07-18  # usato solo se engine=responses|legacy
+  assistant_id_env: OBNEXT_ASSISTANT_ID
   strict_output: true

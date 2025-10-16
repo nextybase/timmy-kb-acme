@@ -7,72 +7,84 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import yaml
-
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
-from semantic.vision_utils import json_to_cartelle_raw_yaml
+from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 from src.ai.client_factory import make_openai_client
 from src.security.masking import hash_identifier, mask_paths, sha256_path
 from src.security.retention import purge_old_artifacts
 
 # =========================
+# Eccezioni specifiche
+# =========================
+
+
+class HaltError(RuntimeError):
+    def __init__(self, message_ui: str, missing: Dict[str, Any]) -> None:
+        super().__init__(message_ui)
+        self.missing = missing
+
+
+# =========================
 # Config/Costanti
 # =========================
 
-# JSON schema minimo atteso dall’Assistant
-MIN_JSON_SCHEMA: Dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["context", "areas"],
-    "properties": {
-        "context": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["slug", "client_name"],
-            "properties": {
-                "slug": {"type": "string"},
-                "client_name": {"type": "string"},
-            },
-        },
-        "areas": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["key", "ambito", "descrizione", "keywords"],
-                "properties": {
-                    "key": {"type": "string"},
-                    "ambito": {"type": "string"},
-                    "descrizione": {"type": "string"},
-                    "keywords": {"type": "array", "items": {"type": "string"}},
-                },
-            },
-        },
-        "synonyms": {
-            "type": "object",
-            "additionalProperties": {"type": "array", "items": {"type": "string"}},
-        },
-    },
-}
-
-# Sezioni obbligatorie nel PDF (intestazioni, insensitive, opzionale “:” a fine riga)
-REQUIRED_SECTIONS: Tuple[str, ...] = (
+# Nomi CANONICI che vogliamo garantire in pipeline/KB/assistant
+REQUIRED_SECTIONS_CANONICAL: Tuple[str, ...] = (
     "Vision",
     "Mission",
     "Goal",
     "Framework etico",
-    "Descrizione prodotto/azienda",
-    "Descrizione mercato",
+    "Prodotto/Azienda",
+    "Mercato",
 )
+
+# Varianti d'intestazione accettate nel PDF che mappiamo ai canonici
+# (case-insensitive; gestione spazi intorno allo slash)
+_ACCEPTED_HEADER_PATTERNS = [
+    r"Vision",
+    r"Mission",
+    r"Goal",
+    r"Framework etico",
+    r"Prodotto\s*/\s*Azienda",
+    r"Descrizione prodotto/azienda",
+    r"Mercato",
+    r"Descrizione mercato",
+]
+_ACCEPTED_HEADER_RE = re.compile(rf"(?im)^(({'|'.join(_ACCEPTED_HEADER_PATTERNS)}))\s*:?\s*$")
+
+
+def _canonicalize_header(h: str) -> str:
+    """Normalizza un'intestazione catturata verso i canonici."""
+    t = h.strip()
+    tl = t.casefold()
+    tl = re.sub(r"\s*/\s*", "/", tl)
+    if tl.startswith("descrizione "):
+        tl = tl[len("descrizione ") :]
+
+    if tl == "vision":
+        return "Vision"
+    if tl == "mission":
+        return "Mission"
+    if tl == "goal":
+        return "Goal"
+    if tl == "framework etico":
+        return "Framework etico"
+    if tl in ("prodotto/azienda", "prodotto / azienda"):
+        return "Prodotto/Azienda"
+    if tl == "mercato":
+        return "Mercato"
+    return t
+
 
 # Giorni di retention per snapshot/log (solo pulizia best-effort)
 _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
@@ -94,6 +106,35 @@ def _snapshot_retention_days() -> int:
 # =========================
 
 
+@lru_cache(maxsize=1)
+def _vision_schema_path() -> Path:
+    """
+    Restituisce il path assoluto allo schema VisionOutput, validando che resti nel repo.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_path = (repo_root / "schemas" / "VisionOutput.schema.json").resolve()
+    try:
+        schema_path.relative_to(repo_root)
+    except ValueError as exc:
+        raise ConfigError("Vision schema fuori dal workspace consentito.") from exc
+    if not schema_path.is_file():
+        raise ConfigError(f"Vision schema non trovato in {schema_path}")
+    return schema_path
+
+
+@lru_cache(maxsize=1)
+def _load_vision_schema() -> Dict[str, Any]:
+    """
+    Carica lo schema VisionOutput dal filesystem (lazy, cache globale).
+    """
+    schema_path = _vision_schema_path()
+    try:
+        raw = read_text_safe(schema_path.parents[0], schema_path, encoding="utf-8")
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
+
+
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> str:
     """
     Estrae il testo dal PDF. Fallisce rapidamente se il file è corrotto o vuoto.
@@ -103,10 +144,10 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "vision_provision.extract_failed",
-            extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
+            extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "dependency-missing"},
         )
         raise ConfigError(
-            "VisionStatement illeggibile: file corrotto o non parsabile",
+            "VisionStatement illeggibile: libreria PDF non disponibile",
             slug=slug,
             file_path=str(pdf_path),
         ) from exc
@@ -174,35 +215,20 @@ def _parse_required_sections(raw_text: str) -> Dict[str, str]:
     Ritorna {Titolo Canonico -> contenuto (trim)}.
     Se una o più sezioni mancano, solleva ConfigError con elenco dei titoli mancanti.
     """
-    import re
-
-    # Normalizza righe extra
     text = re.sub(r"\n{3,}", "\n\n", raw_text.strip())
 
-    # Costruisci regex di cattura per tutte le intestazioni
-    # ^(Vision|Mission|Goal|Framework etico|Descrizione prodotto/azienda|Descrizione mercato)\s*:?\s*$
-    headings_escaped = "|".join(map(re.escape, REQUIRED_SECTIONS))
-    header_re = re.compile(rf"(?im)^(?P<h>({headings_escaped}))\s*:?\s*$")
-
-    # Trova tutte le intestazioni con i loro indici
-    matches = list(header_re.finditer(text))
+    matches = list(_ACCEPTED_HEADER_RE.finditer(text))
     found: Dict[str, str] = {}
 
     for idx, m in enumerate(matches):
-        title = m.group("h").strip()
+        title_raw = m.group(1).strip()
+        title = _canonicalize_header(title_raw)
         start = m.end()
         end = matches[idx + 1].start() if (idx + 1) < len(matches) else len(text)
         body = text[start:end].strip()
-        # Canonical: usa la forma in REQUIRED_SECTIONS per coerenza chiave
-        # (match può avere casing diverso; normalizziamo mappando per lowercase)
-        # Trova il canonico per titolo case-folded
-        canon = next(
-            (req for req in REQUIRED_SECTIONS if req.casefold() == title.casefold()),
-            title,
-        )
-        found[canon] = body
+        found[title] = body
 
-    missing = [t for t in REQUIRED_SECTIONS if t not in found or not found[t].strip()]
+    missing = [t for t in REQUIRED_SECTIONS_CANONICAL if t not in found or not found[t].strip()]
     if missing:
         raise ConfigError(
             "VisionStatement incompleto: sezioni mancanti - " + ", ".join(missing),
@@ -228,36 +254,35 @@ def _call_assistant_json(
     logger = logging.getLogger("semantic.vision_provision")
     logger.debug("vision_provision: creating assistant thread", extra={"assistant_id": assistant_id})
 
-    # Thread
     thread = client.beta.threads.create()
 
-    # Messaggi utente (solo USER message; il system è nel profilo Assistant)
     for msg in user_messages:
         client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg["content"])
 
-    # Run con response_format = json_schema (strict opzionale)
     run = client.beta.threads.runs.create_and_poll(
         thread_id=thread.id,
         assistant_id=assistant_id,
         response_format={
             "type": "json_schema",
             "json_schema": {
-                "name": "vision_semantic_mapping_min",
-                "schema": MIN_JSON_SCHEMA,
+                "name": "VisionOutput",
+                "schema": _load_vision_schema(),
                 "strict": bool(strict_output),
             },
         },
         instructions=run_instructions or None,
     )
 
-    if getattr(run, "status", None) != "completed":
-        raise ConfigError(f"Assistant run non completato (status={getattr(run, 'status', 'n/d')}).")
+    status = getattr(run, "status", None)
+    if status != "completed":
+        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}).")
 
-    # Recupera l’ultimo messaggio e interpreta il testo come JSON
-    msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=1)
+    msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=10)
 
     text = None
-    for msg in getattr(msgs, "data", []):
+    for msg in getattr(msgs, "data", []) or []:
+        if getattr(msg, "role", "") != "assistant":
+            continue
         for part in getattr(msg, "content", None) or []:
             t = getattr(part, "type", None)
             if t == "output_text":
@@ -298,6 +323,41 @@ def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str]
         raise ConfigError("Output modello non valido: 'areas' deve essere una lista non vuota.")
 
 
+# -------------------------
+# Micro-linter non bloccante
+# -------------------------
+def _lint_vision_payload(data: Dict[str, Any]) -> List[str]:
+    """
+    Regole soft (no HALT):
+      - descrizione_breve <= 400 chars (rev HALT, 01 KB)
+      - almeno 3 tipi documentali in documents[] (qualità)
+    Ritorna lista di warning testuali.
+    """
+    warnings: List[str] = []
+    areas = data.get("areas") or []
+    if not isinstance(areas, list):
+        return warnings
+
+    for idx, area in enumerate(areas):
+        if not isinstance(area, dict):
+            continue
+        key = area.get("key") or f"area_{idx}"
+        # 1) descrizione_breve
+        desc = (area.get("descrizione_breve") or "").strip()
+        if len(desc) > 400:
+            warnings.append(f"descrizione_breve troppo lunga in '{key}' ({len(desc)} > 400)")
+
+        # 2) documents count
+        docs = area.get("documents") or []
+        if isinstance(docs, str):
+            docs = [docs]
+        docs = [str(x).strip() for x in docs if str(x).strip()]
+        if len(docs) < 3:
+            warnings.append(f"pochi tipi documentali in '{key}' (min 3 consigliati)")
+
+    return warnings
+
+
 # =========================
 # API principale
 # =========================
@@ -313,20 +373,6 @@ def provision_from_vision(
 ) -> Dict[str, Any]:
     """
     Onboarding Vision (flusso **semplificato e bloccante**).
-
-    Percorso unico:
-      1) Estrai testo dal PDF (PyMuPDF).
-      2) Parsifica le 6 sezioni obbligatorie (titoli a inizio riga, case-insensitive).
-         Se una manca → ConfigError (bloccante).
-      3) Invia **esclusivamente** i blocchi testuali all’Assistant preconfigurato
-         (Threads/Runs) con `response_format = json_schema`.
-      4) Valida JSON e scrivi:
-           - semantic/semantic_mapping.yaml
-           - semantic/cartelle_raw.yaml
-      5) Log e pulizia retention (best-effort).
-
-    Niente vector store, niente attachments, niente Responses/ChatCompletions, niente fallback.
-    Se l’Assistant non è configurato a dovere, l’errore è immediato e bloccante.
     """
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
@@ -349,14 +395,19 @@ def provision_from_vision(
 
     # 3) Client OpenAI + Assistant ID (bloccante se assente)
     client = make_openai_client()
-    assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+    vision_cfg = {}
+    try:
+        vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
+    except Exception:
+        vision_cfg = {}
+    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip()
+    assistant_id = os.getenv(env_name) or os.getenv("ASSISTANT_ID")
     if not assistant_id:
-        raise ConfigError("Assistant ID non configurato: imposta OBNEXT_ASSISTANT_ID o ASSISTANT_ID.")
+        raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
 
     display_name = getattr(ctx, "client_name", None) or slug
 
     # Costruzione messaggio utente: SOLO blocchi testuali (niente file_search)
-    # Forniamo un header chiaro e poi ogni sezione in blocchi marcati.
     user_block_lines = [
         "Contesto cliente:",
         f"- slug: {slug}",
@@ -364,7 +415,7 @@ def provision_from_vision(
         "",
         "Vision Statement (usa SOLO i blocchi sottostanti):",
     ]
-    for title in REQUIRED_SECTIONS:
+    for title in REQUIRED_SECTIONS_CANONICAL:
         user_block_lines.append(f"[{title}]")
         user_block_lines.append(sections[title])
         user_block_lines.append(f"[/{title}]")
@@ -386,40 +437,36 @@ def provision_from_vision(
         run_instructions=run_instructions,
     )
 
-    # 5) Validazione hard + generazione YAML
+    if data.get("status") == "halt":
+        raise HaltError(data.get("message_ui", "Vision insufficiente"), data.get("missing", {}))
+
+    # 5) Validazioni hard + linter soft
     _validate_json_payload(data, expected_slug=slug)
 
-    # semantic_mapping.yaml
-    categories: Dict[str, Dict[str, Any]] = {}
-    for idx, area in enumerate(data["areas"]):
-        raw_keywords = area.get("keywords")
-        if raw_keywords is None:
-            raise ConfigError(f"Vision payload area #{idx} priva di 'keywords'.", slug=slug)
-        if isinstance(raw_keywords, str):
-            raw_keywords = [raw_keywords]
-        elif not isinstance(raw_keywords, list):
-            raise ConfigError(f"Vision payload area #{idx} ha 'keywords' non valido (atteso list/str).", slug=slug)
-        keywords = [str(item).strip() for item in raw_keywords if str(item).strip()]
-        categories[area["key"]] = {
-            "ambito": area["ambito"],
-            "descrizione": area["descrizione"],
-            "keywords": keywords,
-        }
+    areas = data.get("areas")
+    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
+        raise ConfigError("Aree fuori range (3..9)")
 
-    mapping_payload: Dict[str, Any] = {"context": data["context"], **categories}
-    if data.get("synonyms"):
-        mapping_payload["synonyms"] = data["synonyms"]
+    system_folders = data.get("system_folders")
+    if not isinstance(system_folders, dict) or "identity" not in system_folders or "glossario" not in system_folders:
+        raise ConfigError("System folders mancanti (identity, glossario)")
 
-    mapping_yaml_str = yaml.safe_dump(mapping_payload, allow_unicode=True, sort_keys=False, width=100)
+    # Linter (non bloccante): warning su QA
+    lint_warnings = _lint_vision_payload(data)
+    for w in lint_warnings:
+        logger.warning("vision_provision.lint", extra={"slug": slug, "warning": w})
+
+    # 6) Scrittura YAML
+    mapping_yaml_str = vision_to_semantic_mapping_yaml(data, slug=slug)
     safe_write_text(paths.mapping_yaml, mapping_yaml_str)
 
     cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
     safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
 
-    # 6) Audit (best-effort) — nessun riferimento a vector/attachments
+    # 7) Audit (best-effort)
     ts = datetime.now(timezone.utc).isoformat()
     try:
-        import importlib.metadata as _ilm  # py3.8+: backport opzionale
+        import importlib.metadata as _ilm
 
         _sdk_version = _ilm.version("openai")
     except Exception:
@@ -436,12 +483,13 @@ def provision_from_vision(
         "sdk_version": _sdk_version,
         "project": os.getenv("OPENAI_PROJECT") or "",
         "base_url": os.getenv("OPENAI_BASE_URL") or "",
-        "sections": list(REQUIRED_SECTIONS),
+        "sections": list(REQUIRED_SECTIONS_CANONICAL),
+        "lint_warnings": lint_warnings,
     }
     _write_audit_line(paths.base_dir, record)
     logger.info("vision_provision: completato", extra=record)
 
-    # 7) Retention (best-effort)
+    # 8) Retention (best-effort)
     retention_days = _snapshot_retention_days()
     if retention_days > 0:
         try:

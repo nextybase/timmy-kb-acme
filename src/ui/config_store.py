@@ -37,6 +37,17 @@ def get_config_path() -> Path:
     return CONFIG_FILE
 
 
+def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
+    """Restituisce vision.model dal config UI (fallback sul default)."""
+    cfg = _load_config()
+    vision = cfg.get("vision")
+    if isinstance(vision, dict):
+        model = vision.get("model")
+        if isinstance(model, str) and model.strip():
+            return model.strip()
+    return default
+
+
 def _load_config() -> dict[str, Any]:
     """Carica config.yaml; se assente o malformato, ritorna {}."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)

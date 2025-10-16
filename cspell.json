@@ -60,7 +60,8 @@
     "multipagina",
     "matplotlib",
     "graphviz",
-    "auditare"
+    "auditare",
+    "hardcodare"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

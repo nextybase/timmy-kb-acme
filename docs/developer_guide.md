@@ -40,6 +40,123 @@ Per prevenire divergenze future, ogni *facade* o *wrapper* che delega a moduli `
    ```
 5. **Aggiungere un test di pass-through comportamentale** per garantire che tutti i parametri (inclusi quelli opzionali) vengano trasmessi correttamente.
 
+# Sezione: LLM — Modello per chiamate *dirette* (SSoT in `config/config.yaml`)
+
+Questa sezione spiega **come leggere il modello LLM da un’unica fonte di verità** quando fai **chiamate dirette** (es. `responses`/`chat.completions`) senza passare da l’Assistant preconfigurato.
+
+> **Quando serve**: solo per feature UI/servizi che invocano l’LLM direttamente. Il flusso **Vision → Assistant** continua a usare l’`assistant_id` e **non** legge `vision.model`.
+
+---
+
+## 1) Configurazione: `config/config.yaml`
+
+Configurazione base:
+
+```yaml
+vision:
+  model: gpt-4o-mini-2024-07-18   # unico riferimento (SSoT)
+  strict_output: true              # se rilevante per la tua chiamata
+  assistant_id_env: OBNEXT_ASSISTANT_ID  # usato SOLO dal flusso con Assistant
+```
+
+- `vision.model` è il **modello** per le chiamate LLM dirette.
+- `assistant_id_env` è ignorato nelle chiamate dirette (serve solo all’Assistant).
+
+---
+
+## 2) Helper UI: leggere il modello da config&#x20;
+
+**File:** `src/ui/config_store.py`
+
+```python
+from pathlib import Path
+import yaml
+
+# ... resto del file ...
+
+def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
+    """Legge vision.model da config/config.yaml (SSoT UI)."""
+    cfg_path = get_config_path()
+    data = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
+    vision = (data.get("vision") or {})
+    return str(vision.get("model") or default)
+```
+
+> Per ambienti multi‑tenant/override, puoi far puntare `get_config_path()` a file diversi via env.
+
+---
+
+## 3) Uso nei service UI che chiamano l’LLM
+
+**Esempio:** `src/ui/services/<feature>_llm.py`
+
+```python
+from src.ui.config_store import get_vision_model
+from src.ai.client_factory import make_openai_client
+
+MODEL = get_vision_model()  # ← NIENTE hardcode
+
+client = make_openai_client()
+
+# Esempio A: Responses API (structured text output)
+resp = client.responses.create(
+    model=MODEL,
+    input=[
+        {"role": "system", "content": "Sei un assistente.."},
+        {"role": "user",   "content": "<prompt dell’utente>"},
+    ],
+)
+text = resp.output_text
+
+# Esempio B: Chat Completions (se usi l’API chat)
+# chat = client.chat.completions.create(
+#     model=MODEL,
+#     messages=[
+#         {"role": "system", "content": "Sei un assistente.."},
+#         {"role": "user",   "content": "<prompt dell’utente>"},
+#     ],
+# )
+# text = chat.choices[0].message.get("content", "")
+```
+
+**Linee guida**:
+
+- Non hardcodare il modello nei servizi; usa sempre `MODEL = get_vision_model()`.
+- Se cambi modello (p.es. in stage/prod), basta aggiornare `config/config.yaml`.
+- Mantieni `strict_output`/validazioni nel servizio se il contratto di output lo richiede (JSON, ecc.).
+
+---
+
+## 4) Differenze con il flusso *Assistant*
+
+- **Assistant (Vision)**: legge l’`assistant_id` da env (nome della variabile preso da `vision.assistant_id_env`), e il modello è configurato **dentro** l’Assistant. `vision.model` **non** è usato.
+- **Chiamate dirette**: ignorano `assistant_id_env` e usano **sempre** `vision.model`.
+
+Schema decisionale rapido:
+
+- Se stai usando `client.beta.threads.runs.create_and_poll(... assistant_id=...)` → **Assistant** (usa `assistant_id_env`).
+- Se stai usando `client.responses.create(... model=...)` o `client.chat.completions.create(... model=...)` → **diretto** (usa `get_vision_model()`).
+
+---
+
+
+## 5) Anti‑pattern da evitare
+
+- Hardcodare `MODEL = "gpt‑..."` nei file di servizio.
+- Leggere il modello da env sparse (es. `LLM_MODEL`) bypassando `config.yaml`.
+- Ri‑risolvere il path di `config.yaml` in ogni funzione: usa `get_config_path()` dal `config_store`.
+
+---
+
+## 6) FAQ
+
+- **Posso usare modelli diversi per feature diverse?**\
+  Sì, ma tieni la regola: ogni feature legge il suo modello dal `config.yaml`. Se servono due modelli, aggiungi un sotto‑blocco (es. `vision.preview.model`, `vision.qa.model`) e due getter dedicati.
+
+- **Cosa succede se ************`vision.model`************ manca?**\
+  Il getter ritorna il default (`gpt-4o-mini-2024-07-18`). Imposta sempre un valore esplicito in produzione.
+
+
 ### Prossimi Step
 - Introdurre un test automatico di “Signature Parity” per tutti i wrapper UI.
 - Aggiornare la sezione *CI Quality Checks* per includere un controllo di coerenza SSoT.

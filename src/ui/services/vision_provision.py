@@ -15,8 +15,10 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Import “late-binding” per evitare cicli nel grafo Streamlit
 try:
+    from src.semantic.vision_provision import HaltError
     from src.semantic.vision_provision import provision_from_vision as _provision_from_vision
 except Exception:  # pragma: no cover
+    from semantic.vision_provision import HaltError
     from semantic.vision_provision import provision_from_vision as _provision_from_vision  # fallback
 
 
@@ -144,14 +146,18 @@ def provision_from_vision(
         )
 
     # Esecuzione reale (delegata al layer semantic)
-    result = _provision_from_vision(
-        ctx=ctx,
-        logger=logger,
-        slug=slug,
-        pdf_path=safe_pdf,
-        model=model or "gpt-4.1-mini",
-        force=force,
-    )
+    try:
+        result = _provision_from_vision(
+            ctx=ctx,
+            logger=logger,
+            slug=slug,
+            pdf_path=safe_pdf,
+            model=model or "gpt-4.1-mini",
+            force=force,
+        )
+    except HaltError:
+        # Propaga direttamente verso la UI per consentire un messaggio dedicato.
+        raise
 
     # Aggiorna sentinel JSON (con log utile ai test)
     _save_hash(base_dir, digest=digest, model=model or "gpt-4.1-mini")
@@ -164,3 +170,26 @@ def provision_from_vision(
         "mapping": cast(str, result.get("mapping", "")),
         "cartelle_raw": cast(str, result.get("cartelle_raw", "")),
     }
+
+
+def run_vision(
+    ctx: Any,
+    *,
+    slug: str,
+    pdf_path: Path,
+    force: bool = False,
+    model: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+) -> Dict[str, Any]:
+    """
+    Wrapper semplificato per la UI: esegue Vision con logger di default.
+    """
+    eff_logger = logger or logging.getLogger("ui.vision.service")
+    return provision_from_vision(
+        ctx=ctx,
+        logger=eff_logger,
+        slug=slug,
+        pdf_path=pdf_path,
+        force=force,
+        model=model,
+    )
