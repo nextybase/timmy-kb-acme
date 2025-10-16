@@ -381,6 +381,7 @@ def provision_from_vision(
     slug: str,
     pdf_path: Path,
     force: bool = False,  # mantenuto per compat con layer UI, qui non fa gating
+    model: Optional[str] = None,  # argomento accettato per compat, non usato con Assistant
 ) -> Dict[str, Any]:
     """
     Onboarding Vision (flusso **semplificato e bloccante**).

@@ -219,42 +219,5 @@
       "type": "object"
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "ok"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "areas",
-          "system_folders"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "halt"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "missing",
-          "message_ui"
-        ],
-        "not": {
-          "required": [
-            "areas"
-          ]
-        }
-      }
-    }
-  ],
   "additionalProperties": false
 }
