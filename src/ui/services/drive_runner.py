@@ -57,8 +57,6 @@ def _require_drive_utils_ui() -> None:
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
         missing.append("create_drive_folder")
-    if not callable(create_drive_structure_from_yaml):
-        missing.append("create_drive_structure_from_yaml")
     if not callable(upload_config_to_drive_folder):
         missing.append("upload_config_to_drive_folder")
     if missing:

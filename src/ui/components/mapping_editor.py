@@ -19,6 +19,8 @@ MAPPING_RESERVED = {
     "settings",
     "about",
     "note",
+    "system_folders",
+    "metadata_policy",
 }
 
 # -------- Caricamento mapping di default (da config/) --------

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -14,22 +15,29 @@ for candidate in (REPO_ROOT, SRC_ROOT):
         sys.path.insert(0, str(candidate))
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
-from src.tools.gen_dummy_kb import main as gen_dummy_main
+from src.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
 
 DUMMY_SLUG = "dummy"
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return v not in {"0", "false", "False", ""}
 
 
 @pytest.fixture(scope="session")
 def dummy_workspace(tmp_path_factory):
     """
-    Crea un workspace dummy COMPLETO in una dir temporanea di sessione,
-    con:
-      - config/config.yaml
-      - config/VisionStatement.pdf
-      - semantic/semantic_mapping.yaml (stub)
-      - semantic/cartelle_raw.yaml (stub)
-      - book/{alpha,beta,README,SUMMARY}.md
-    Ritorna un dict con percorsi utili.
+    Crea un workspace dummy in una dir temporanea di sessione con:
+      - config/config.yaml (+ VisionStatement.pdf)
+      - raw/ (sempre)
+      - book/ (con README.md e SUMMARY.md di default)
+      - semantic/* (SOLO se DUMMY_WS_WITH_SEMANTIC=1; default: ON per retro-compatibilità test)
+
+    Ritorna un dict con percorsi utili (anche le chiavi 'semantic_mapping' e 'cartelle_raw'
+    sono sempre presenti nel dict; i file possono non esistere se DUMMY_WS_WITH_SEMANTIC=0).
     """
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_path = base_parent / "clients_db.yaml"
@@ -56,10 +64,15 @@ def dummy_workspace(tmp_path_factory):
 
     cfg = base / "config" / "config.yaml"
     pdf = base / "config" / "VisionStatement.pdf"
-    sem_map = base / "semantic" / "semantic_mapping.yaml"
-    sem_cart = base / "semantic" / "cartelle_raw.yaml"
+
+    raw_dir = base / "raw"
     book = base / "book"
 
+    sem_dir = base / "semantic"
+    sem_map = sem_dir / "semantic_mapping.yaml"
+    sem_cart = sem_dir / "cartelle_raw.yaml"
+
+    # --- Locale minimo sempre presente ---
     cfg.parent.mkdir(parents=True, exist_ok=True)
     if not cfg.exists():
         source_cfg = REPO_ROOT / "config" / "config.yaml"
@@ -85,33 +98,44 @@ def dummy_workspace(tmp_path_factory):
             except Exception:
                 pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
 
-    sem_map.parent.mkdir(parents=True, exist_ok=True)
-    if not sem_map.exists():
-        sem_map.write_text(
-            "context:\n" f"  slug: {DUMMY_SLUG}\n" f"  client_name: Dummy {DUMMY_SLUG}\n",
-            encoding="utf-8",
-        )
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
-    sem_cart.parent.mkdir(parents=True, exist_ok=True)
-    if not sem_cart.exists():
-        sem_cart.write_text(
-            "version: 1\n" "folders: []\n" "context:\n" f"  slug: {DUMMY_SLUG}\n",
-            encoding="utf-8",
-        )
-
+    # Book con file minimi (molti test li usano)
     book.mkdir(parents=True, exist_ok=True)
-    defaults = {"SUMMARY.md": "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", "README.md": "# Dummy KB\n"}
+    defaults = {
+        "SUMMARY.md": "* [Alpha](alpha.md)\n* [Beta](beta.md)\n",
+        "README.md": "# Dummy KB\n",
+    }
     for name, content in defaults.items():
         target = book / name
         if not target.exists():
             target.write_text(content, encoding="utf-8")
 
+    # --- Stub semantic opzionali (ON di default per retro-compat test) ---
+    with_semantic = _bool_env("DUMMY_WS_WITH_SEMANTIC", True)
+    if with_semantic:
+        sem_dir.mkdir(parents=True, exist_ok=True)
+        if not sem_map.exists():
+            sem_map.write_text(
+                "context:\n" f"  slug: {DUMMY_SLUG}\n" f"  client_name: Dummy {DUMMY_SLUG}\n",
+                encoding="utf-8",
+            )
+        if not sem_cart.exists():
+            sem_cart.write_text(
+                "version: 1\n" "folders: []\n" "context:\n" f"  slug: {DUMMY_SLUG}\n",
+                encoding="utf-8",
+            )
+
+    # Assert minimi sempre veri nel modello pre-Vision
     assert cfg.exists(), "config/config.yaml mancante"
     assert pdf.exists(), "config/VisionStatement.pdf mancante"
-    assert sem_map.exists(), "semantic/semantic_mapping.yaml mancante"
-    assert sem_cart.exists(), "semantic/cartelle_raw.yaml mancante"
+    assert raw_dir.exists(), "raw/ mancante"
     assert (book / "SUMMARY.md").exists()
     assert (book / "README.md").exists()
+    # Gli assert sui semantic restano condizionati dal flag
+    if with_semantic:
+        assert sem_map.exists(), "semantic/semantic_mapping.yaml mancante"
+        assert sem_cart.exists(), "semantic/cartelle_raw.yaml mancante"
 
     return {
         "base": base,
@@ -120,8 +144,10 @@ def dummy_workspace(tmp_path_factory):
         "semantic_mapping": sem_map,
         "cartelle_raw": sem_cart,
         "book_dir": book,
+        "raw_dir": raw_dir,
         "slug": DUMMY_SLUG,
         "client_name": f"Dummy {DUMMY_SLUG}",
+        "with_semantic": with_semantic,
     }
 
 
@@ -154,9 +180,9 @@ def dummy_logger():
 def _stable_env(monkeypatch, dummy_workspace):
     """
     Ambiente coerente per tutti i test:
-    - evita che test tocchino output/ reale del repo
+    - evita che i test tocchino output/ reale del repo
     - lascia vuote le var assistant per forzare branch GPT quando serve
-    (i test che vogliono l'assistente le settino esplicitamente)
+      (i test che vogliono l'assistente le settino esplicitamente)
     """
     # Harden encoding
     monkeypatch.setenv("PYTHONUTF8", "1")

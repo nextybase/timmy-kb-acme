@@ -3,20 +3,17 @@
   "$id": "https://next.local/schema/VisionOutput.schema.json",
   "title": "NeXT Vision → Semantic Mapping v1.0-beta",
   "type": "object",
-  "required": [
-    "version",
-    "source",
-    "status",
-    "context"
-  ],
   "properties": {
     "version": {
+      "type": "string",
       "const": "1.0-beta"
     },
     "source": {
+      "type": "string",
       "const": "vision"
     },
     "status": {
+      "type": "string",
       "enum": [
         "ok",
         "halt"
@@ -24,20 +21,18 @@
     },
     "context": {
       "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "client_name": {
+          "type": "string"
+        }
+      },
       "required": [
         "slug",
         "client_name"
       ],
-      "properties": {
-        "slug": {
-          "type": "string",
-          "pattern": "^[a-z0-9-]+$"
-        },
-        "client_name": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
       "additionalProperties": false
     },
     "areas": {
@@ -46,20 +41,12 @@
       "maxItems": 9,
       "items": {
         "type": "object",
-        "required": [
-          "key",
-          "ambito",
-          "descrizione_breve",
-          "descrizione_dettagliata",
-          "documents",
-          "artefatti"
-        ],
         "properties": {
           "key": {
-            "type": "string",
-            "pattern": "^[a-z0-9-]+$"
+            "type": "string"
           },
           "ambito": {
+            "type": "string",
             "enum": [
               "governance",
               "strategico",
@@ -75,42 +62,39 @@
             ]
           },
           "descrizione_breve": {
-            "type": "string",
-            "maxLength": 160
+            "type": "string"
           },
           "descrizione_dettagliata": {
             "type": "object",
-            "required": [
-              "include",
-              "exclude"
-            ],
             "properties": {
               "include": {
                 "type": "array",
                 "items": {
                   "type": "string"
-                },
-                "minItems": 1
+                }
               },
               "exclude": {
                 "type": "array",
                 "items": {
                   "type": "string"
-                },
-                "minItems": 0
+                }
               },
               "artefatti_note": {
                 "type": "string"
               }
             },
+            "required": [
+              "include",
+              "exclude",
+              "artefatti_note"
+            ],
             "additionalProperties": false
           },
           "documents": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "minItems": 3
+            }
           },
           "artefatti": {
             "type": "array",
@@ -124,13 +108,54 @@
               "entities": {
                 "type": "array",
                 "items": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "syn": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "syn"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "relations": {
                 "type": "array",
                 "items": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "subj": {
+                      "type": "string"
+                    },
+                    "pred": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "string"
+                    },
+                    "card": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "subj",
+                    "pred",
+                    "obj",
+                    "card"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "chunking_hints": {
@@ -140,47 +165,52 @@
                 }
               }
             },
-            "additionalProperties": true
+            "required": [
+              "entities",
+              "relations",
+              "chunking_hints"
+            ],
+            "additionalProperties": false
           }
         },
+        "required": [
+          "key",
+          "ambito",
+          "descrizione_breve",
+          "descrizione_dettagliata",
+          "documents",
+          "artefatti",
+          "correlazioni"
+        ],
         "additionalProperties": false
       }
     },
     "system_folders": {
       "type": "object",
-      "required": [
-        "identity",
-        "glossario"
-      ],
       "properties": {
         "identity": {
           "type": "object",
-          "required": [
-            "documents"
-          ],
           "properties": {
             "documents": {
               "type": "array",
               "items": {
                 "type": "string"
-              },
-              "minItems": 1
+              }
             }
           },
+          "required": [
+            "documents"
+          ],
           "additionalProperties": false
         },
         "glossario": {
           "type": "object",
-          "required": [
-            "artefatti"
-          ],
           "properties": {
             "artefatti": {
               "type": "array",
               "items": {
                 "type": "string"
-              },
-              "minItems": 1
+              }
             },
             "terms_hint": {
               "type": "array",
@@ -189,9 +219,17 @@
               }
             }
           },
+          "required": [
+            "artefatti",
+            "terms_hint"
+          ],
           "additionalProperties": false
         }
       },
+      "required": [
+        "identity",
+        "glossario"
+      ],
       "additionalProperties": false
     },
     "missing": {
@@ -206,18 +244,75 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "section": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "section",
+              "reason"
+            ],
+            "additionalProperties": false
           }
         }
       },
-      "additionalProperties": true
+      "required": [
+        "sections",
+        "details"
+      ],
+      "additionalProperties": false
     },
     "message_ui": {
       "type": "string"
     },
     "metadata_policy": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "chunk_length_tokens": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "integer"
+            },
+            "overlap": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "target",
+            "overlap"
+          ],
+          "additionalProperties": false
+        },
+        "mandatory_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "chunk_length_tokens",
+        "mandatory_fields"
+      ],
+      "additionalProperties": false
     }
   },
+  "required": [
+    "version",
+    "source",
+    "status",
+    "context",
+    "areas",
+    "system_folders",
+    "missing",
+    "message_ui",
+    "metadata_policy"
+  ],
   "additionalProperties": false
 }

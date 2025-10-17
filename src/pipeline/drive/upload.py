@@ -514,10 +514,25 @@ def delete_drive_file(service: Any, file_id: str) -> None:
 # ------------------------------- Esportazioni --------------------------------
 
 
+def create_drive_minimal_structure(service: Any, client_folder_id: str, *, redact_logs: bool = False) -> Dict[str, str]:
+    """
+    Crea SOLO l'ossatura minima su Drive:
+      - raw/
+      - contrattualistica/
+    sotto la cartella cliente. Non legge YAML.
+    Ritorna: {"raw": <id>, "contrattualistica": <id>}
+    """
+    raw_id = create_drive_folder(service, "raw", client_folder_id, redact_logs=redact_logs)
+    contr_id = create_drive_folder(service, "contrattualistica", client_folder_id, redact_logs=redact_logs)
+    logger.info("drive.upload.minimal.created", extra={"client_root": _maybe_redact(client_folder_id, redact_logs)})
+    return {"raw": raw_id, "contrattualistica": contr_id}
+
+
 __all__ = [
     "create_drive_folder",
     "create_drive_structure_from_yaml",
     "upload_config_to_drive_folder",
     "delete_drive_file",
     "create_local_base_structure",
+    "create_drive_minimal_structure",
 ]

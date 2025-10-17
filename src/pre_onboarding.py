@@ -18,6 +18,10 @@ Note architetturali:
 - Non stampare segreti nei log (mascheratura parziale per ID e percorsi).
 """
 
+# Fase pre-Vision (MINIMAL): nessun uso di YAML.
+# 1) LOCALE: crea raw/, book/, config/ e scrive config/config.yaml
+# 2) DRIVE: crea cartella cliente + raw/ + contrattualistica/ e carica config.yaml
+
 from __future__ import annotations
 
 import argparse
@@ -46,16 +50,14 @@ from pipeline.logging_utils import (
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
 
 create_drive_folder = None
-create_drive_structure_from_yaml = None
-create_local_base_structure = None
+create_drive_minimal_structure = None
 get_drive_service = None
 upload_config_to_drive_folder = None
 try:
     import pipeline.drive_utils as _du
 
     create_drive_folder = _du.create_drive_folder
-    create_drive_structure_from_yaml = _du.create_drive_structure_from_yaml
-    create_local_base_structure = _du.create_local_base_structure
+    create_drive_minimal_structure = getattr(_du, "create_drive_minimal_structure", None)
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
 except Exception:
@@ -78,8 +80,8 @@ def _require_drive_utils() -> None:
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
         missing.append("create_drive_folder")
-    if not callable(create_drive_structure_from_yaml):
-        missing.append("create_drive_structure_from_yaml")
+    if not callable(create_drive_minimal_structure):
+        missing.append("create_drive_minimal_structure")
     if not callable(upload_config_to_drive_folder):
         missing.append("upload_config_to_drive_folder")
     if missing:
@@ -276,16 +278,15 @@ def _prepare_context_and_logger(
 
 
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
-    """Crea struttura locale, scrive config e copia i template semantici.
-
-    Restituisce il path allo YAML di struttura.
-    """
+    """Crea raw/, book/, config/ e scrive config.yaml minimale. Restituisce il path di config."""
     if context.base_dir is None or context.config_path is None:
         raise PipelineError(
             "Contesto incompleto: base_dir/config_path mancanti",
             slug=context.slug,
         )
     ensure_within(context.base_dir, context.config_path)
+
+    cfg_path = context.config_path
 
     cfg: Dict[str, Any] = {}
     try:
@@ -305,26 +306,6 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     repo_root = Path(__file__).resolve().parents[1]
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
 
-    semantic_yaml: Optional[Path] = None
-    base_dir = context.base_dir
-    if base_dir is not None:
-        try:
-            semantic_candidate = (base_dir / "semantic" / "cartelle_raw.yaml").resolve()
-            ensure_within(base_dir, semantic_candidate)
-            if semantic_candidate.is_file():
-                semantic_yaml = semantic_candidate
-        except Exception:
-            semantic_yaml = None
-
-    yaml_structure_file = semantic_yaml if semantic_yaml is not None else _resolve_yaml_structure_file()
-    logger.info(
-        "pre_onboarding.yaml.resolved",
-        extra={
-            "yaml_path": str(yaml_structure_file),
-            "yaml_path_tail": tail_path(yaml_structure_file),
-        },
-    )
-
     if context.base_dir is None or context.raw_dir is None or context.md_dir is None:
         raise PipelineError(
             "Contesto incompleto: base_dir/raw_dir/md_dir mancanti",
@@ -332,15 +313,14 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         )
     ensure_within(context.base_dir, context.raw_dir)
     ensure_within(context.base_dir, context.md_dir)
+    ensure_within(context.base_dir, cfg_path.parent)
+
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
-        # In modalitÃ  offline (senza googleapiclient) usiamo un fallback locale minimo
-        if callable(create_local_base_structure):
-            create_local_base_structure(context, yaml_structure_file)
-        else:
-            # Fallback: crea solo struttura base locale
-            context.base_dir.mkdir(parents=True, exist_ok=True)
-            context.raw_dir.mkdir(parents=True, exist_ok=True)
-            context.md_dir.mkdir(parents=True, exist_ok=True)
+        context.base_dir.mkdir(parents=True, exist_ok=True)
+        context.raw_dir.mkdir(parents=True, exist_ok=True)
+        context.md_dir.mkdir(parents=True, exist_ok=True)
+        cfg_dir = cfg_path.parent
+        cfg_dir.mkdir(parents=True, exist_ok=True)
         # telemetria: numero directory top-level nella base cliente
         try:
             base = context.base_dir
@@ -349,7 +329,16 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
         except Exception:
             m.set_artifacts(None)
 
-    return yaml_structure_file
+    logger.info(
+        "cli.pre_onboarding.local_skeleton.created",
+        extra={
+            "raw": str(context.raw_dir),
+            "book": str(context.md_dir),
+            "config": str(cfg_path.parent),
+        },
+    )
+
+    return cfg_path
 
 
 # ---- Entry point minimale per la UI (landing solo slug) ----------------------
@@ -369,7 +358,7 @@ def ensure_local_workspace_for_ui(
         (scrittura atomica) e aggiorna `config.yaml` con:
           * `vision_statement_pdf: 'config/VisionStatement.pdf'`
           * `client_name: <client_name>` (se fornito)
-      - Ritorna il path allo YAML struttura usato per la creazione locale.
+      - Ritorna il path al config.yaml locale.
 
     Note:
       - Nessuna interazione con Google Drive/GitHub.
@@ -384,7 +373,7 @@ def ensure_local_workspace_for_ui(
     )
 
     # Crea struttura locale e config di base (idempotente)
-    yaml_structure_file = _create_local_structure(context, logger, client_name=(resolved_name or slug))
+    config_path = _create_local_structure(context, logger, client_name=(resolved_name or slug))
 
     # Salva VisionStatement.pdf se fornito
     if vision_statement_pdf:
@@ -408,21 +397,21 @@ def ensure_local_workspace_for_ui(
             "event": "new_client_workspace_created",
             "slug": context.slug,
             "base": str(context.base_dir) if context.base_dir else None,
-            "yaml": str(yaml_structure_file),
+            "config": str(config_path),
         }
     )
-    return yaml_structure_file
+    return config_path
 
 
 def _drive_phase(
     context: ClientContext,
     logger: logging.Logger,
     *,
-    yaml_structure_file: Path,
+    config_path: Path,
     client_name: str,
     require_env: bool,
 ) -> None:
-    """Crea struttura remota su Drive, carica config e aggiorna config locale con ID remoti."""
+    """Crea struttura remota minima su Drive, carica config e aggiorna il config locale."""
     _sync_env(context, require_env=require_env)
     logger.info(
         "pre_onboarding.drive.preflight",
@@ -447,10 +436,6 @@ def _drive_phase(
     )
 
     with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
-        # Le funzioni Drive sono opzionali a import-time; dopo _require_drive_utils()
-        # castiamo a callables per soddisfare il type checker.
-        from typing import Callable, cast
-
         cdf = cast(Callable[..., str], create_drive_folder)
         client_folder_id = cdf(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
         m.set_artifacts(1)
@@ -459,19 +444,17 @@ def _drive_phase(
         extra={"client_folder_id": mask_partial(client_folder_id)},
     )
 
-    with phase_scope(logger, stage="drive_create_structure", customer=context.slug) as m:
-        from typing import Callable, cast
-
-        cds = cast(Callable[..., dict[str, str]], create_drive_structure_from_yaml)
-        created_map = cds(service, yaml_structure_file, client_folder_id, redact_logs=redact)
+    with phase_scope(logger, stage="drive_create_structure_minimal", customer=context.slug) as m:
+        cdm = cast(Callable[..., Dict[str, str]], create_drive_minimal_structure)
+        created_map = cdm(service, client_folder_id, redact_logs=redact)
         try:
             m.set_artifacts(len(created_map or {}))
         except Exception:
             m.set_artifacts(None)
     logger.info(
-        "Struttura Drive creata",
+        "Struttura Drive minima creata",
         extra={
-            "yaml_tail": tail_path(yaml_structure_file),
+            "config_tail": tail_path(config_path),
             "created_map_masked": mask_id_map(created_map),
         },
     )
@@ -479,16 +462,19 @@ def _drive_phase(
     drive_raw_folder_id = created_map.get("raw")
     if not drive_raw_folder_id:
         raise ConfigError(
-            f"Cartella RAW non trovata su Drive per slug '{context.slug}'. "
-            f"Verifica lo YAML di struttura: {yaml_structure_file}",
+            f"Cartella RAW non trovata su Drive per slug '{context.slug}'.",
             drive_id=client_folder_id,
             slug=context.slug,
-            file_path=str(yaml_structure_file),
+        )
+    drive_contrattualistica_folder_id = created_map.get("contrattualistica")
+    if not drive_contrattualistica_folder_id:
+        raise ConfigError(
+            f"Cartella contrattualistica non trovata su Drive per slug '{context.slug}'.",
+            drive_id=client_folder_id,
+            slug=context.slug,
         )
 
     with phase_scope(logger, stage="drive_upload_config", customer=context.slug) as m:
-        from typing import Callable, cast
-
         ucf = cast(Callable[..., str], upload_config_to_drive_folder)
         uploaded_cfg_id = ucf(service, context, parent_id=client_folder_id, redact_logs=redact)
         m.set_artifacts(1)
@@ -500,6 +486,7 @@ def _drive_phase(
     updates = {
         "drive_folder_id": client_folder_id,
         "drive_raw_folder_id": drive_raw_folder_id,
+        "drive_contrattualistica_folder_id": drive_contrattualistica_folder_id,
         "drive_config_folder_id": client_folder_id,
         "client_name": client_name,
     }
@@ -532,11 +519,19 @@ def pre_onboarding_main(
         client_name=client_name,
     )
 
-    yaml_structure_file = _create_local_structure(context, logger, client_name=client_name)
+    config_path = _create_local_structure(context, logger, client_name=client_name)
 
     if dry_run:
         logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
-        logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "mode": "dry-run", "artifacts": 1})
+        logger.info(
+            "cli.pre_onboarding.completed",
+            extra={
+                "slug": context.slug,
+                "mode": "dry-run",
+                "artifacts": 1,
+                "config": str(config_path),
+            },
+        )
         return
 
     # Verifica disponibilitÃ  funzioni Drive prima della fase remota
@@ -544,7 +539,7 @@ def pre_onboarding_main(
     _drive_phase(
         context,
         logger,
-        yaml_structure_file=yaml_structure_file,
+        config_path=config_path,
         client_name=client_name,
         require_env=require_env,
     )
