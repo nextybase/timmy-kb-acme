@@ -2,29 +2,13 @@
 # src/ui/pages/preview.py
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import Any, Iterator
-
 import streamlit as st
 
 from adapters.preview import start_preview, stop_preview
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
 from ui.chrome import render_chrome_then_require
-
-
-@contextmanager
-def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
-    clean_label = label.rstrip(" .…")
-    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-    with st.status(label, **kwargs) as status:
-        try:
-            yield status
-        except Exception as exc:
-            if status is not None and hasattr(status, "update"):
-                status.update(label=f"{error_prefix}: {exc}", state="error")
-            raise
-
+from ui.utils.status import status_guard
 
 st.subheader("Preview Docker (HonKit)")
 

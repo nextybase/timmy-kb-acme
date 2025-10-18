@@ -2,9 +2,8 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterator, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 import streamlit as st
 
@@ -13,6 +12,7 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.clients_store import set_state as set_client_state
 from ui.utils import set_slug
+from ui.utils.status import status_guard
 from ui.utils.workspace import has_raw_pdfs
 
 
@@ -39,20 +39,6 @@ _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
 _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")  # noqa: F401
-
-
-# ---------------- Status helper ----------------
-@contextmanager
-def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
-    clean_label = label.rstrip(" .…")
-    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-    with st.status(label, **kwargs) as status:
-        try:
-            yield status
-        except Exception as exc:
-            if status is not None and hasattr(status, "update"):
-                status.update(label=f"{error_prefix}: {exc}", state="error")
-            raise
 
 
 # ---------------- Helpers ----------------

@@ -4,23 +4,25 @@ from __future__ import annotations
 
 import logging
 import os
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 import streamlit as st
 
 from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
+from ui.errors import to_user_message
 from ui.utils import set_slug
 from ui.utils.html import esc_url_component
+from ui.utils.status import status_guard
 
 try:
-    from src.semantic.vision_provision import HaltError
+    pass
 except Exception:  # pragma: no cover
-    from semantic.vision_provision import HaltError  # pragma: no cover
+    pass  # pragma: no cover
 
+from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from ui.clients_store import ClientEntry, set_state, upsert_client
@@ -50,22 +52,6 @@ else:
 
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
 LOGGER = logging.getLogger("ui.new_client")
-
-
-# --------- status helper ---------
-
-
-@contextmanager
-def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
-    clean_label = label.rstrip(" .…")
-    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-    with st.status(label, **kwargs) as status:
-        try:
-            yield status
-        except Exception as exc:
-            if status is not None and hasattr(status, "update"):
-                status.update(label=f"{error_prefix}: {exc}", state="error")
-            raise
 
 
 # --------- helper ---------
@@ -141,7 +127,10 @@ def _open_error_modal(title: str, body: str, *, caption: str | None = None) -> N
 
 
 def _log_diagnostics(slug: str, level: str, message: str, *, extra: Dict[str, Any]) -> None:
-    """Scrive un evento nel log Diagnostica e chiude l'handler per evitare lock (Win compat)."""
+    """
+    Scrive un evento nel log Diagnostica (WARNING-only by convention) e chiude l'handler
+    per evitare lock su Windows. Usiamo sempre livelli >= warning quando invochiamo questa funzione.
+    """
     base = _client_base(slug)
     (base / "logs").mkdir(parents=True, exist_ok=True)
     logger = get_structured_logger("ui.diagnostics", log_file=(base / "logs" / "ui.log"))
@@ -226,10 +215,16 @@ effective_slug = (current_slug or candidate_slug) or ""
 if current_phase == UI_PHASE_INIT:
     if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
-        if not s:
-            st.warning("Inserisci uno slug valido.")
+
+        # 1) Validazione slug (SSoT)
+        try:
+            validate_slug(s)
+        except ConfigError as e:
+            st.error(f"Slug non valido: {e}")
+            LOGGER.warning("ui.new_client.invalid_slug", extra={"slug": s, "error": str(e)})
             st.stop()
 
+        # 2) PDF obbligatorio e non vuoto
         if pdf is None:
             st.error("Carica il Vision Statement (PDF) prima di procedere.")
             st.stop()
@@ -237,8 +232,15 @@ if current_phase == UI_PHASE_INIT:
         if not pdf_bytes:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
+        # Avviso soft su PDF molto grande (diagnostica)
+        try:
+            if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
+                _log_diagnostics(s, "warning", "ui.new_client.large_pdf", extra={"slug": s, "bytes": len(pdf_bytes)})
+        except Exception:
+            pass
 
         try:
+            # 3) Bootstrap locale unificato (PR-A): crea struttura + salva PDF + merge template
             with status_guard(
                 "Preparo il workspace locale...",
                 expanded=True,
@@ -249,11 +251,11 @@ if current_phase == UI_PHASE_INIT:
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
 
-            # Provisioning minimo su Drive (se configurato)
+            # 4) Provisioning minimo su Drive (se configurato)
             if ensure_drive_minimal is None and not UI_ALLOW_LOCAL_ONLY:
                 _open_error_modal(
                     "Google Drive non configurato",
-                    "Funzionalita Drive non disponibili. Installa gli extra `pip install .[drive]` "
+                    "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
                     "e imposta `DRIVE_ID` / `SERVICE_ACCOUNT_FILE`.",
                 )
                 st.stop()
@@ -267,10 +269,9 @@ if current_phase == UI_PHASE_INIT:
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Struttura minima creata e config caricato.", state="complete")
 
+            # 5) Vision
             ui_logger = _ui_logger()
             ctx = _UIContext(base_dir=_client_base(s))
-
-            # Loader visivo durante Vision
             with status_guard(
                 "Eseguo Vision…",
                 expanded=True,
@@ -285,75 +286,36 @@ if current_phase == UI_PHASE_INIT:
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
-                except HaltError as exc:
-                    _log_diagnostics(
-                        s, "warning", "ui.vision.halt", extra={"slug": s, "err": str(exc).splitlines()[:1]}
-                    )
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label=f"Vision in stato HALT: {exc}", state="error")
-                    missing = ""
-                    if hasattr(exc, "missing"):
-                        details = getattr(exc, "missing")
-                        sections = details.get("sections") if isinstance(details, dict) else None
-                        if sections:
-                            missing = ", ".join(str(item) for item in sections)
-                    caption = f"Sezioni mancanti: {missing}" if missing else "Completa il Vision Statement e riprova."
-                    _open_error_modal(
-                        "Vision HALT",
-                        f"Vision interrotta: {exc}",
-                        caption=caption,
-                    )
-                    st.stop()
-                except ConfigError as exc:
-                    _log_diagnostics(
-                        s,
-                        "warning",
-                        "ui.vision.config_error",
-                        extra={"slug": s, "err": str(exc).splitlines()[:1]},
-                    )
-                    msg = str(exc)
-                    lower = msg.lower()
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label=f"Errore durante Vision: {msg}", state="error")
-                    if "sezioni mancanti" in lower or "visionstatement incompleto" in lower:
-                        missing = msg.split("-", 1)[-1].strip() if "-" in msg else ""
-                        _open_error_modal(
-                            "Errore durante Vision",
-                            f"Vision interrotta: mancano sezioni obbligatorie → {missing}",
-                            caption="Rivedi il PDF e assicurati che tutte le sezioni richieste siano presenti.",
-                        )
-                    else:
-                        _open_error_modal("Errore durante Vision", f"Errore Vision: {msg}")
-                    st.stop()
                 except Exception as exc:
+                    # Mapping unico degli errori (PR-C)
+                    title, body, caption = to_user_message(exc)
                     _log_diagnostics(
                         s,
                         "warning",
-                        "ui.vision.unhandled",
-                        extra={"slug": s, "err": str(exc).splitlines()[:1]},
+                        "ui.vision.error",
+                        extra={"slug": s, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
                     )
                     if status is not None and hasattr(status, "update"):
-                        status.update(label=f"Errore durante Vision: {exc}", state="error")
-                    _open_error_modal("Errore durante Vision", f"Errore durante Vision: {exc}")
+                        status.update(label=body, state="error")
+                    _open_error_modal(title, body, caption=caption)
                     st.stop()
 
+            # 6) Controllo file semantici e avanzamento fase
             if _exists_semantic_files(s):
-                # SSoT: dopo Vision il cliente è "nuovo"
                 entry = ClientEntry(slug=s, nome=(name or "").strip() or s, stato="nuovo")
                 upsert_client(entry)
                 set_state(s, "nuovo")
 
-                # Aggiorna immediatamente contesto UI (fa sparire "Inizializza" e mostra "Apri")
+                # Aggiorna contesto UI: mostra Step 2
                 set_slug(s)
                 st.session_state[slug_state_key] = s
                 st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
                 st.session_state["client_name"] = name or ""
                 st.success("Workspace inizializzato e YAML generati.")
-                st.rerun()  # <-- forza il rerender per far comparire "Apri workspace"
             else:
                 st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
         except Exception as e:  # pragma: no cover
-            # Non mostriamo diagnostica legacy né retry: messaggio compatto
+            # Messaggio compatto, diagnosi via pannello dedicato
             st.error(f"Impossibile creare il workspace: {e}")
 
 # ------------------------------------------------------------------
@@ -384,7 +346,6 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                 st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
                 st.session_state["client_name"] = display_name
                 st.success("Drive non configurato, continuo in locale.")
-                st.rerun()
             else:
                 st.warning(
                     "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
@@ -413,7 +374,6 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                 _upsert_client_registry(eff, display_name)
                 st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
                 st.success("Struttura Drive creata correttamente.")
-                st.rerun()  # <-- forza il rerender per mostrare il link finale
             except Exception as e:
                 st.error(f"Errore durante la creazione struttura Drive: {e}")
 
