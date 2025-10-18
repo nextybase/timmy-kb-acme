@@ -8,10 +8,10 @@ from typing import Any, Callable, Iterator, Optional, TypeVar
 
 import streamlit as st
 
-from pipeline.config_utils import get_client_config, update_config_with_drive_ids
-from pipeline.context import ClientContext
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
+from ui.clients_store import get_state as get_client_state
+from ui.clients_store import set_state as set_client_state
 from ui.utils import set_slug
 from ui.utils.workspace import has_raw_pdfs
 
@@ -104,16 +104,6 @@ def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
         return fn(*args)
 
 
-def _readmes_status(slug: str) -> int:
-    """0 se non generati, 1 se generati (fallback sicuro a 0)."""
-    try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-        cfg = get_client_config(ctx) or {}
-        return 1 if int(cfg.get("drive_readmes_done", 0) or 0) else 0
-    except Exception:
-        return 0
-
-
 # ---------------- UI ----------------
 
 slug = render_chrome_then_require(allow_without_slug=True)
@@ -165,8 +155,8 @@ else:
 # --- Genera README / Rileva PDF / Scarica da Drive → locale in 3 colonne ---
 st.markdown("")
 
-status = _readmes_status(slug)
-emit_btn_type = "primary" if status == 0 else "secondary"
+client_state = (get_client_state(slug) or "").strip().lower()
+emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
 try:
     c1, c2, c3 = st.columns([1, 1, 1])
@@ -199,9 +189,8 @@ with c1:
                 try:
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
-                    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-                    update_config_with_drive_ids(ctx, updates={"drive_readmes_done": 1})
-                    st.toast("README generati. Flag `drive_readmes_done=1` salvato nel config.")
+                    set_client_state(slug, "pronto")
+                    st.toast("README generati. Stato cliente aggiornato a 'pronto'.")
                     st.rerun()
                 except Exception:
                     pass

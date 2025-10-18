@@ -13,6 +13,8 @@ from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.context import ClientContext
 
 create_drive_folder: Callable[..., Any] | None
+create_drive_minimal_structure: Callable[..., Any] | None
+create_drive_raw_children_from_yaml: Callable[..., Any] | None
 create_drive_structure_from_yaml: Callable[..., Any] | None
 download_drive_pdfs_to_local: Callable[..., Any] | None
 get_drive_service: Callable[[ClientContext], Any] | None
@@ -23,6 +25,8 @@ try:
     import pipeline.drive_utils as _du
 
     create_drive_folder = _du.create_drive_folder
+    create_drive_minimal_structure = _du.create_drive_minimal_structure
+    create_drive_raw_children_from_yaml = _du.create_drive_raw_children_from_yaml
     create_drive_structure_from_yaml = _du.create_drive_structure_from_yaml
     download_drive_pdfs_to_local = _du.download_drive_pdfs_to_local
     get_drive_service = _du.get_drive_service
@@ -30,6 +34,8 @@ try:
     create_local_base_structure = _du.create_local_base_structure
 except Exception:  # pragma: no cover
     create_drive_folder = None
+    create_drive_minimal_structure = None
+    create_drive_raw_children_from_yaml = None
     create_drive_structure_from_yaml = None
     download_drive_pdfs_to_local = None
     get_drive_service = None
@@ -62,11 +68,15 @@ def _require_drive_utils_ui() -> None:
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
         missing.append("create_drive_folder")
+    if not callable(create_drive_minimal_structure):
+        missing.append("create_drive_minimal_structure")
+    if not callable(create_drive_raw_children_from_yaml):
+        missing.append("create_drive_raw_children_from_yaml")
     if not callable(upload_config_to_drive_folder):
         missing.append("upload_config_to_drive_folder")
     if missing:
         raise RuntimeError(
-            "Funzionalità Google Drive non disponibili nella UI: "
+            "Funzionalita Google Drive non disponibili nella UI: "
             f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
         )
 
@@ -74,7 +84,7 @@ def _require_drive_utils_ui() -> None:
 # ===== Creazione struttura Drive/Locale da cartelle_raw.yaml ==================
 
 
-def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
+def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     slug: str,
     client_name: Optional[str],
     *,
@@ -85,9 +95,10 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
     """
     Apre il workspace (fase 2) usando **semantic/cartelle_raw.yaml**:
 
-      1) Crea/recupera cartella cliente su Drive e carica config.yaml
-      2) Crea/aggiorna la struttura **locale** di base (raw/, book/, config/) + sottocartelle raw/
-      3) Crea/aggiorna la struttura **Drive** delle sottocartelle sotto raw/
+      1) Crea/recupera cartella cliente su Drive.
+      2) Crea la struttura minima (raw + contrattualistica) e aggiorna il config locale con gli ID.
+      3) Carica su Drive il config.yaml aggiornato.
+      4) Crea le sottocartelle RAW da YAML e riallinea la struttura locale.
 
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
@@ -95,10 +106,11 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
     if (
         get_drive_service is None
         or create_drive_folder is None
-        or create_drive_structure_from_yaml is None
+        or create_drive_minimal_structure is None
+        or create_drive_raw_children_from_yaml is None
         or upload_config_to_drive_folder is None
     ):
-        raise RuntimeError("Funzionalità Google Drive non disponibili. Installa gli extra `pip install .[drive]`.")
+        raise RuntimeError("Funzionalita Google Drive non disponibili. Installa gli extra `pip install .[drive]`.")
 
     # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
@@ -110,7 +122,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
 
     # Cartella cliente (sotto DRIVE_ID)
-    total_steps = 3
+    total_steps = 4
     step = 0
     client_folder_id = create_drive_folder(
         svc,
@@ -122,38 +134,16 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
     if progress:
         progress(step, total_steps, "Cartella cliente creata")
 
-    # Upload config.yaml nella cartella cliente
-    upload_config_to_drive_folder(
+    # Struttura minima + aggiornamento config locale con gli ID Drive
+    minimal_map = create_drive_minimal_structure(
         svc,
-        ctx,
         client_folder_id,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
-    step += 1
-    if progress:
-        progress(step, total_steps, "config.yaml caricato")
-
-    # Usa direttamente semantic/cartelle_raw.yaml (richiesto dalla fase Vision)
-    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
-    yaml_path = sem_dir / "cartelle_raw.yaml"
-    if not yaml_path.exists():
-        raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
-
-    # Struttura Drive da YAML (raw/ + categorie; contrattualistica è idempotente)
-    created_map = create_drive_structure_from_yaml(
-        svc,
-        yaml_path,
-        client_folder_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-    step += 1
-    if progress:
-        progress(step, total_steps, "Struttura RAW creata")
-
-    raw_id = created_map.get("raw")
-    contr_id = created_map.get("contrattualistica") or created_map.get("CONTRATTUALISTICA")
+    raw_id = minimal_map.get("raw") or minimal_map.get("RAW")
+    contr_id = minimal_map.get("contrattualistica") or minimal_map.get("CONTRATTUALISTICA")
     if not raw_id:
-        raise RuntimeError("ID cartella 'raw' non reperito dalla creazione struttura.")
+        raise RuntimeError("ID cartella 'raw' non reperito dalla struttura minima.")
 
     update_config_with_drive_ids(
         ctx,
@@ -164,6 +154,37 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
         },
         logger=log,
     )
+    step += 1
+    if progress:
+        progress(step, total_steps, "Struttura minima aggiornata")
+
+    # Carica config.yaml (aggiornato) nella cartella cliente
+    upload_config_to_drive_folder(
+        svc,
+        ctx,
+        client_folder_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+    step += 1
+    if progress:
+        progress(step, total_steps, "config.yaml aggiornato e caricato")
+
+    # Usa direttamente semantic/cartelle_raw.yaml (richiesto dalla fase Vision)
+    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
+    yaml_path = sem_dir / "cartelle_raw.yaml"
+    if not yaml_path.exists():
+        raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
+
+    # Sottocartelle RAW da YAML + struttura locale coerente
+    create_drive_raw_children_from_yaml(
+        svc,
+        yaml_path,
+        raw_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+    step += 1
+    if progress:
+        progress(step, total_steps, "Struttura RAW completata")
 
     if callable(create_local_base_structure):
         try:
@@ -173,12 +194,14 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
     else:
         log.debug("local.structure.skip", extra={"reason": "create_local_base_structure non disponibile"})
 
-    out: Dict[str, str] = {"client_folder_id": client_folder_id, "raw_id": raw_id}
-    if contr_id:
-        out["contrattualistica_id"] = contr_id
+    result: Dict[str, str] = {
+        "client_folder_id": client_folder_id,
+        "raw_id": raw_id,
+        "contrattualistica_id": contr_id or "",
+    }
 
-    log.info("drive.structure.created", extra={"ids": dict(mask_id_map(out))})
-    return out
+    log.info("drive.structure.created", extra={"ids": dict(mask_id_map(result))})
+    return result
 
 
 # ===== Helpers Drive ===========================================================
