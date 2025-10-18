@@ -10,7 +10,6 @@ import streamlit as st
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
-from ui.clients_store import set_state as set_client_state
 from ui.utils import set_slug
 from ui.utils.status import status_guard
 from ui.utils.workspace import has_raw_pdfs
@@ -160,14 +159,15 @@ with c1:
         else:
             try:
                 with status_guard(
-                    "Genero README nelle sottocartelle di raw/…",
+                    "Genero i README nelle sottocartelle di raw/ su Drive…",
                     expanded=True,
                     error_label="Errore durante la generazione dei README",
                 ) as status_widget:
                     try:
-                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True, require_env=True)
+                        # NIENTE creazione struttura, NIENTE split: solo emissione PDF da semantic_mapping.yaml
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False, require_env=True)
                     except TypeError:
-                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=True)
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False)
                     count = len(result or {})
                     if status_widget is not None and hasattr(status_widget, "update"):
                         status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
@@ -175,8 +175,7 @@ with c1:
                 try:
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
-                    set_client_state(slug, "pronto")
-                    st.toast("README generati. Stato cliente aggiornato a 'pronto'.")
+                    st.toast("README generati su Drive.")
                     st.rerun()
                 except Exception:
                     pass

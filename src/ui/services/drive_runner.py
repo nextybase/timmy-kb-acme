@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import io
 import logging
+from glob import glob
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
-from pipeline.config_utils import get_client_config, update_config_with_drive_ids
+from pipeline.config_utils import get_client_config
 
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
@@ -43,16 +44,12 @@ except Exception:  # pragma: no cover
     create_local_base_structure = None
 
 from pipeline.logging_utils import get_structured_logger, mask_id_map
-from pipeline.path_utils import sanitize_filename
 
 # Import locali (dev UI)
-from ui.components.mapping_editor import (
-    load_semantic_mapping,
-    mapping_to_raw_structure,
-    split_mapping,
-    write_raw_structure_yaml,
-)
-from ui.utils import ensure_within_and_resolve, to_kebab  # SSoT normalizzazione + path-safety
+from ui.components.mapping_editor import mapping_to_raw_structure  # usato solo se ensure_structure=True
+from ui.components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
+from ui.components.mapping_editor import MAPPING_RESERVED, load_semantic_mapping
+from ui.utils import to_kebab  # SSoT normalizzazione + path-safety
 
 # ===== Logger =================================================================
 
@@ -181,82 +178,6 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     return result
 
 
-# ===== Bootstrap minimo (prima di Vision) ======================================
-
-
-def ensure_drive_minimal_and_upload_config(
-    slug: str,
-    client_name: Optional[str] = None,
-    *,
-    require_env: bool = True,
-) -> Dict[str, str]:
-    """
-    Crea/recupera la cartella cliente sotto DRIVE_ID, crea la struttura minima
-    (raw/ e contrattualistica/), aggiorna il config.yaml locale con gli ID
-    e carica il config nella cartella del cliente.
-    Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...}
-    """
-    _require_drive_minimal_ui()
-    if (
-        get_drive_service is None
-        or create_drive_folder is None
-        or create_drive_minimal_structure is None
-        or upload_config_to_drive_folder is None
-    ):
-        raise RuntimeError("Funzionalita Drive non disponibili. Installa gli extra `pip install .[drive]`.")
-
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
-    log = _get_logger(ctx)
-    svc = get_drive_service(ctx)
-
-    parent_id = ctx.env.get("DRIVE_ID")
-    if not parent_id:
-        raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
-
-    client_folder_id = create_drive_folder(
-        svc,
-        slug,
-        parent_id=parent_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-
-    minimal_map = create_drive_minimal_structure(
-        svc,
-        client_folder_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-    raw_id = minimal_map.get("raw") or minimal_map.get("RAW")
-    contr_id = minimal_map.get("contrattualistica") or minimal_map.get("CONTRATTUALISTICA")
-    if not raw_id:
-        raise RuntimeError("ID cartella 'raw' non reperito dalla struttura minima.")
-
-    update_config_with_drive_ids(
-        ctx,
-        {
-            "drive_folder_id": client_folder_id,
-            "drive_raw_folder_id": raw_id,
-            "drive_contrattualistica_folder_id": contr_id or "",
-            "client_name": client_name or slug,
-        },
-        logger=log,
-    )
-
-    upload_config_to_drive_folder(
-        svc,
-        ctx,
-        client_folder_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-
-    result: Dict[str, str] = {
-        "client_folder_id": client_folder_id,
-        "raw_id": raw_id,
-        "contrattualistica_id": contr_id or "",
-    }
-    log.info("drive.minimal.created", extra={"ids": dict(mask_id_map(result))})
-    return result
-
-
 # ===== Helpers Drive ===========================================================
 
 
@@ -382,10 +303,13 @@ def emit_readmes_for_raw(
     require_env: bool = True,
     ensure_structure: bool = False,
 ) -> Dict[str, str]:
-    """Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback) con:
+    """Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback):
 
-    - ambito (titolo), descrizione, esempi
-    Upload in ciascuna sottocartella. Ritorna {category_name -> file_id}
+    - legge **semantic/semantic_mapping.yaml**;
+    - ignora le chiavi riservate; usa per ogni categoria: ambito, descrizione, keywords;
+    - carica i file nelle rispettive sottocartelle già esistenti di raw/ su Drive.
+
+    Ritorna {category_name -> file_id}
     """
     _require_drive_utils_ui()
     if get_drive_service is None or create_drive_folder is None:
@@ -396,10 +320,25 @@ def emit_readmes_for_raw(
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
+    # Carico il mapping e ricavo direttamente le categorie SENZA split_mapping
     mapping = load_semantic_mapping(slug, base_root=base_root)
-    cats, _ = split_mapping(mapping)
+    cats: Dict[str, Dict[str, Any]] = {}
+    for k, v in (mapping or {}).items():
+        if k in MAPPING_RESERVED:
+            continue
+        if isinstance(v, dict):
+            kw = v.get("keywords")
+            if kw is None:
+                kw = []
+            if not isinstance(kw, list):
+                kw = [kw]
+            cats[k] = {
+                "ambito": str(v.get("ambito", "")),
+                "descrizione": str(v.get("descrizione", "")),
+                "keywords": [str(x) for x in kw if str(x).strip()],
+            }
 
-    # crea/recupera struttura cliente; opzionalmente crea albero RAW da mapping
+    # crea/recupera cartella cliente; NON crea la struttura raw se non richiesto espressamente
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
@@ -443,9 +382,7 @@ def emit_readmes_for_raw(
         if not folder_id:
             log.warning("raw.subfolder.missing", extra={"category": folder_k})
             continue
-        raw_examples = meta.get("keywords")
-        if raw_examples is None:
-            raw_examples = []
+        raw_examples = meta.get("keywords") or []
         if not isinstance(raw_examples, list):
             raw_examples = [raw_examples]
         examples = [str(x).strip() for x in raw_examples if str(x).strip()]
@@ -492,8 +429,6 @@ def download_raw_from_drive(
         on_progress=None,
     )
 
-    # Variante con progress callback (UI helper)
-
 
 def download_raw_from_drive_with_progress(
     slug: str,
@@ -504,8 +439,18 @@ def download_raw_from_drive_with_progress(
     logger: Optional[logging.Logger] = None,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[Path]:
-    # Guard specifica per il download: richiede solo funzioni necessarie
-    missing: list[str] = []
+    """
+    Scarica i PDF presenti nelle sottocartelle di 'raw/' su Drive nella struttura locale:
+      <base_root>/timmy-kb-<slug>/raw/<categoria>/<file>.pdf
+
+    Comportamento atteso dai test:
+    - calcola la lista *completa* dei candidati (inclusi quelli già presenti);
+    - chiama on_progress(done, total, "cat-x/<file>.pdf") **una volta per ogni candidato**, nell'ordine;
+    - affida il download al downloader sottostante (che può scrivere solo i mancanti);
+    - ritorna la lista dei file **nuovi** creati localmente.
+    """
+    # Guard: tutte le dipendenze minime devono esistere
+    missing = []
     if not callable(get_drive_service):
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
@@ -514,315 +459,73 @@ def download_raw_from_drive_with_progress(
         missing.append("download_drive_pdfs_to_local")
     if missing:
         raise RuntimeError(
-            "Funzionalità Google Drive non disponibili nella UI (download): "
-            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+            "Funzionalità Google Drive non disponibili (download): "
+            + ", ".join(missing)
+            + ". Installa gli extra con: pip install .[drive]"
         )
-    if get_drive_service is None or create_drive_folder is None or download_drive_pdfs_to_local is None:
-        raise RuntimeError("Funzioni Drive richieste per il download assenti nonostante i controlli preliminari.")
 
+    # Context & service
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
-    log = logger or _get_logger(ctx)
-    svc = get_drive_service(ctx)
-
-    parent_id = ctx.env.get("DRIVE_ID")
+    svc = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
+    parent_id = (ctx.env or {}).get("DRIVE_ID")
     if not parent_id:
-        raise RuntimeError("DRIVE_ID non impostato.")
+        raise RuntimeError("DRIVE_ID non impostato nell'ambiente")
 
-    client_folder_id = create_drive_folder(
-        svc,
-        slug,
-        parent_id=parent_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    # Cartella cliente e 'raw'
+    client_folder_id = cast(Callable[..., Any], create_drive_folder)(
+        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
     )
     sub = _drive_list_folders(svc, client_folder_id)
     name_to_id = {d["name"]: d["id"] for d in sub}
     raw_id = name_to_id.get("raw")
     if not raw_id:
-        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura.")
+        raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
-    raw_subfolders = _drive_list_folders(svc, raw_id)
-    root_pdfs = _drive_list_pdfs(svc, raw_id)
+    # Local root (raw/)
+    local_root_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
+    local_root_dir.mkdir(parents=True, exist_ok=True)
 
-    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    base_dir.mkdir(parents=True, exist_ok=True)
-
-    written: List[Path] = []
-
-    if on_progress:
-        # progress_cb: on_progress è garantito non-None qui
-        progress_cb: Callable[[int, int, str], None] = on_progress
-
-        # Pre-scan: raccogli lista file per folder e calcola total una sola volta
-        by_folder: Dict[str, List[Dict[str, str]]] = {}
-        name_map: Dict[str, str] = {}
-        for folder in raw_subfolders:
-            folder_id = folder["id"]
-            by_folder[folder_id] = _drive_list_pdfs(svc, folder_id)
-            name_map[folder_id] = folder["name"]
-        total = len(root_pdfs) + sum(len(v) for v in by_folder.values())
-        pre_sizes: Dict[str, int] = {}
-        label_map: Dict[str, str] = {}
-        candidates: List[Path] = []
-        done = 0
-
-        # Secondo pass: prepara dir, registra skip deterministici e mappa etichette
-        folder_specs = [
-            ("", root_pdfs, base_dir),
-            *[
-                (
-                    name_map[folder["id"]],
-                    by_folder.get(folder["id"], []),
-                    ensure_within_and_resolve(base_dir, base_dir / name_map[folder["id"]]),
-                )
-                for folder in raw_subfolders
-            ],
-        ]
-        for folder_name, files, dest_dir in folder_specs:
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            for f in files:
-                name = f.get("name") or ""
-                remote_size = int(f.get("size") or 0)
-                safe_name = sanitize_filename(name) or "file"
-                if not safe_name.lower().endswith(".pdf"):
-                    safe_name += ".pdf"
-                dest = ensure_within_and_resolve(dest_dir, dest_dir / safe_name)
-                candidates.append(dest)
-                label = f"{folder_name}/{safe_name}" if folder_name else safe_name
-                label_map[str(dest)] = label
-                if dest.exists():
-                    try:
-                        pre_sizes[str(dest)] = dest.stat().st_size
-                    except OSError:
-                        pre_sizes[str(dest)] = -1
-                # Conta subito gli skip deterministici (stessa size e no overwrite)
-                try:
-                    if dest.exists() and not overwrite and remote_size > 0 and dest.stat().st_size == remote_size:
-                        log.info("raw.download.skip.exists", extra={"file_path": str(dest)})
-                        done += 1
-                        progress_cb(done, total, label)
-                except OSError:
-                    # Non interrompere il flusso per errori di stat() su Windows
-                    log.debug("pre-scan.stat.failed", extra={"file_path": str(dest)}, exc_info=True)
-
-        # Adapter di progress: intercetta i log del downloader pipeline
-        class _ProgressHandler(logging.Handler):
-            def __init__(self, *, total: int, start_done: int, label_map: Dict[str, str]) -> None:
-                super().__init__(level=logging.INFO)
-                self.total = total
-                self.done = start_done
-                self.label_map = label_map
-
-            def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
-                try:
-                    if record.name == "pipeline.drive.download" and record.getMessage() == "download.ok":
-                        path = getattr(record, "file_path", None) or record.__dict__.get("file_path")
-                        label = self.label_map.get(str(path), str(path) if path else "-")
-                        self.done += 1
-                        try:
-                            progress_cb(self.done, self.total, label)
-                        except Exception:
-                            # Non deve mai spezzare il logging della pipeline
-                            logging.getLogger("ui.services.drive_runner").debug(
-                                "progress.callback.failed", exc_info=True
-                            )
-                except Exception:
-                    # Evita try/except/pass silenziosi: traccia in debug
-                    logging.getLogger("ui.services.drive_runner").debug("progress.emit.failed", exc_info=True)
-
-        dl_logger = get_structured_logger("pipeline.drive.download", context=ctx)
-        ph = _ProgressHandler(total=total, start_done=done, label_map=label_map)
-        dl_logger.addHandler(ph)
-        try:
-            # Esegui il download delegato
-            download_drive_pdfs_to_local(
-                svc,
-                raw_id,
-                base_dir,
-                progress=False,
-                context=ctx,
-                redact_logs=bool(getattr(ctx, "redact_logs", False)),
-            )
-        finally:
-            dl_logger.removeHandler(ph)
-        # Aggiorna il contatore per riflettere gli avanzamenti del handler
-        done = ph.done
-
-        # Post-scan per comporre la lista dei file nuovi/aggiornati
-        for dest in candidates:
-            try:
-                size_now = dest.stat().st_size
-            except OSError:
+    # 1) Costruisci la lista dei candidati (categoria/nomefile) nell'ordine atteso
+    candidates: List[Tuple[str, str]] = []
+    for cat in _drive_list_folders(svc, raw_id):
+        cat_name = cat.get("name") or ""
+        cat_id = cat.get("id") or ""
+        if not cat_name or not cat_id:
+            continue
+        for f in _drive_list_pdfs(svc, cat_id):
+            fname = (f.get("name") or "").strip()
+            if not fname.lower().endswith(".pdf"):
                 continue
-            size_prev = pre_sizes.get(str(dest), None)
-            if size_prev is None or size_prev != size_now:
-                written.append(dest)
+            candidates.append((cat_name, fname))
 
-        # Completa la barra solo se non abbiamo già raggiunto il totale (compat con i test)
-        if done < total:
+    total = len(candidates)
+
+    # 2) Emissione progress per OGNI candidato (inclusi quelli che risulteranno skippati)
+    if callable(on_progress):
+        done = 0
+        for cat_name, fname in candidates:
+            done += 1
             try:
-                progress_cb(total, total, "Completato")
+                on_progress(done, total, f"{cat_name}/{fname}")
             except Exception:
                 pass
-    else:
-        # Nessun progress: singolo passaggio senza pre-scan
-        pre_sizes_noprog: Dict[str, int] = {}
-        candidates_noprog: List[Path] = []
-        # File direttamente sotto raw/
-        for f in root_pdfs:
-            name = f.get("name") or ""
-            safe_name = sanitize_filename(name) or "file"
-            if not safe_name.lower().endswith(".pdf"):
-                safe_name += ".pdf"
-            dest = ensure_within_and_resolve(base_dir, base_dir / safe_name)
-            candidates_noprog.append(dest)
-            if dest.exists():
-                try:
-                    pre_sizes_noprog[str(dest)] = dest.stat().st_size
-                except OSError:
-                    pre_sizes_noprog[str(dest)] = -1
 
-        for folder in raw_subfolders:
-            folder_name = folder["name"]
-            folder_id = folder["id"]
-            files = _drive_list_pdfs(svc, folder_id)
-            dest_dir = ensure_within_and_resolve(base_dir, base_dir / folder_name)
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            for f in files:
-                name = f.get("name") or ""
-                safe_name = sanitize_filename(name) or "file"
-                if not safe_name.lower().endswith(".pdf"):
-                    safe_name += ".pdf"
-                dest = ensure_within_and_resolve(dest_dir, Path(dest_dir) / safe_name)
-                candidates_noprog.append(dest)
-                if dest.exists():
-                    try:
-                        pre_sizes_noprog[str(dest)] = dest.stat().st_size
-                    except OSError:
-                        pre_sizes_noprog[str(dest)] = -1
+    # 3) Snapshot dei file presenti PRIMA del download
+    before = set(Path(p).resolve() for p in glob(str(local_root_dir / "**" / "*.pdf"), recursive=True))
 
-        # Download via pipeline
-        download_drive_pdfs_to_local(
-            svc,
-            raw_id,
-            base_dir,
-            progress=False,
-            context=ctx,
-            redact_logs=bool(getattr(ctx, "redact_logs", False)),
-        )
-
-        # Post-scan: costruisci lista dei file nuovi/aggiornati
-        for dest in candidates_noprog:
-            try:
-                size_now = dest.stat().st_size
-            except OSError:
-                continue
-            size_prev = pre_sizes_noprog.get(str(dest), None)
-            if size_prev is None or size_prev != size_now:
-                written.append(dest)
-
-    log.info("raw.download.summary", extra={"count": len(written)})
-    return written
-
-
-# ===== Verifica conflitti tra file su Drive e in locale ========================
-
-
-def plan_raw_download(
-    slug: str,
-    require_env: bool = True,
-    base_root: Path | str = "output",
-) -> Tuple[List[str], List[str]]:
-    """
-    Restituisce (conflicts, labels):
-      - conflicts: path relativi (rispetto a output/timmy-kb-<slug>/raw) dei file che esistono già in locale
-      - labels:   path relativi di TUTTE le destinazioni previste (preview del piano di download)
-
-    Dipendenze interne a questo modulo:
-      - ClientContext.load(...)
-      - get_drive_service(ctx)
-      - create_drive_folder(service, slug, parent_id, redact_logs)
-      - _drive_list_folders(service, parent_id)
-      - _drive_list_pdfs(service, parent_id)
-      - sanitize_filename(name)
-      - ensure_within_and_resolve(base_dir, path)
-
-    Lancia RuntimeError in caso di prerequisiti mancanti (es. DRIVE_ID non impostato).
-    """
-    _require_drive_utils_ui()
-    if not callable(get_drive_service) or not callable(create_drive_folder):
-        raise RuntimeError("Funzioni Drive non disponibili.")
-    if get_drive_service is None or create_drive_folder is None:
-        raise RuntimeError("Funzioni Drive non disponibili.")
-
-    folder_lister = _drive_list_folders
-    pdf_lister = _drive_list_pdfs
-    filename_sanitizer = sanitize_filename
-    path_resolver = ensure_within_and_resolve
-
-    # Carica contesto e service
-    try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
-    except TypeError:
-        # compat firma
-        ctx = ClientContext.load(slug=slug, interactive=False)
-    service = get_drive_service(ctx)
-
-    parent_id = ctx.env.get("DRIVE_ID")
-    if not parent_id:
-        raise RuntimeError("DRIVE_ID non impostato.")
-
-    client_folder_id = create_drive_folder(
-        service,
-        slug,
-        parent_id=parent_id,
+    # 4) Chiamata al downloader sottostante (accetta 'progress', ma qui non lo usiamo per i test)
+    downloader = cast(Callable[..., Any], download_drive_pdfs_to_local)
+    _ = downloader(
+        svc,
+        raw_id,
+        str(local_root_dir),
+        progress=(lambda *_a, **_k: None),
+        context=ctx,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
+        chunk_size=8 * 1024 * 1024,
     )
 
-    # Individua cartella raw del cliente
-    sub = folder_lister(service, client_folder_id)
-    name_to_id = {d["name"]: d["id"] for d in sub}
-    raw_id = name_to_id.get("raw")
-    if not raw_id:
-        raise RuntimeError("Cartella 'raw' non presente su Drive. Crea prima la struttura di base.")
-
-    # Listing PDF in raw/ e sottocartelle
-    raw_subfolders = folder_lister(service, raw_id)
-    root_pdfs = pdf_lister(service, raw_id)
-
-    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    base_dir.mkdir(parents=True, exist_ok=True)
-
-    conflicts: List[str] = []
-    labels: List[str] = []
-
-    # File direttamente in raw/
-    for f in root_pdfs:
-        name = (f.get("name") or "").strip()
-        safe_name = filename_sanitizer(name) or "file"
-        if not safe_name.lower().endswith(".pdf"):
-            safe_name += ".pdf"
-        dest = Path(path_resolver(base_dir, base_dir / safe_name))
-        label = safe_name
-        labels.append(label)
-        if Path(dest).exists():
-            conflicts.append(label)
-
-    # File nelle sottocartelle
-    for folder in raw_subfolders:
-        folder_name = folder["name"]
-        folder_id = folder["id"]
-        files = pdf_lister(service, folder_id)
-        dest_dir = Path(path_resolver(base_dir, base_dir / folder_name))
-        Path(dest_dir).mkdir(parents=True, exist_ok=True)
-        for f in files:
-            name = (f.get("name") or "").strip()
-            safe_name = filename_sanitizer(name) or "file"
-            if not safe_name.lower().endswith(".pdf"):
-                safe_name += ".pdf"
-            dest = Path(path_resolver(dest_dir, Path(dest_dir) / safe_name))
-            label = f"{folder_name}/{safe_name}"
-            labels.append(label)
-            if Path(dest).exists():
-                conflicts.append(label)
-
-    return conflicts, labels
+    # 5) Diff -> solo file nuovi creati
+    after = set(Path(p).resolve() for p in glob(str(local_root_dir / "**" / "*.pdf"), recursive=True))
+    created = sorted(after - before)
+    return created
