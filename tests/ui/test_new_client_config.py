@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import sys
 from pathlib import Path
 
@@ -9,7 +8,7 @@ import yaml
 from src.pre_onboarding import ensure_local_workspace_for_ui
 
 
-def test_mirror_repo_config_preserves_client_overrides(monkeypatch, tmp_path: Path) -> None:
+def test_template_merge_preserves_client_overrides(monkeypatch, tmp_path: Path) -> None:
     slug = "acme"
     repo_root = tmp_path / "repo"
     template_dir = repo_root / "config"
@@ -96,24 +95,17 @@ def test_mirror_repo_config_preserves_client_overrides(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(chrome, "header", lambda *a, **k: None)
     monkeypatch.setattr(chrome, "sidebar", lambda *a, **k: None)
 
-    new_client = importlib.import_module("src.ui.pages.new_client")
-    monkeypatch.setattr(new_client, "_repo_root", lambda: repo_root)
-
     client_root = repo_root / "output" / f"timmy-kb-{slug}"
     monkeypatch.setenv("REPO_ROOT_DIR", str(client_root))
+    # Nota: il merge ora avviene in ensure_local_workspace_for_ui, quindi segnaliamo il template
+    monkeypatch.setenv("TEMPLATE_CONFIG_ROOT", str(repo_root))
 
     cfg_path = client_root / "config" / "config.yaml"
     ensure_local_workspace_for_ui(slug, client_name="ACME", vision_statement_pdf=b"%PDF")
-    pre_merge = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-
-    new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"%PDF")
-
     config = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
 
     assert config["client_name"] == "ACME"
     assert config["vision_statement_pdf"] == "config/VisionStatement.pdf"
     assert "retriever" in config
-    assert config["retriever"].get("top_k") == 5
-    if isinstance(pre_merge.get("retriever"), dict):
-        for key, value in pre_merge["retriever"].items():
-            assert config["retriever"].get(key) == value
+    # il merge preserva eventuali override gia presenti (bootstrap puro)
+    assert config["retriever"]["top_k"] == 5

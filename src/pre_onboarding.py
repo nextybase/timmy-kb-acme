@@ -33,7 +33,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from pipeline.config_utils import get_client_config, update_config_with_drive_ids, write_client_config_file
+from pipeline.config_utils import (
+    get_client_config,
+    merge_client_config_from_template,
+    update_config_with_drive_ids,
+    write_client_config_file,
+)
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
@@ -391,6 +396,29 @@ def ensure_local_workspace_for_ui(
         if resolved_name:
             updates["client_name"] = resolved_name
         update_config_with_drive_ids(context, updates, logger=logger)
+
+    # --- NOVITÀ: merge dal template di repository ---
+    try:
+        # Permette override nei test/ambienti: TEMPLATE_CONFIG_ROOT=/path/alla/repo
+        template_root = get_env_var("TEMPLATE_CONFIG_ROOT", required=False)
+        if template_root:
+            template_cfg = Path(template_root).expanduser().resolve() / "config" / "config.yaml"
+        else:
+            repo_root = Path(__file__).resolve().parents[1]
+            template_cfg = repo_root / "config" / "config.yaml"
+
+        if template_cfg.exists():
+            merge_client_config_from_template(context, template_cfg)
+            logger.info(
+                "cli.pre_onboarding.config_merged_from_template",
+                extra={"slug": context.slug, "file_path": str(template_cfg)},
+            )
+    except Exception as e:
+        # Non blocca il flusso UI: finiamo comunque con un warning visibile in Diagnostica
+        logger.warning(
+            "cli.pre_onboarding.config_merge_failed",
+            extra={"slug": context.slug, "err": str(e).splitlines()[:1]},
+        )
 
     logger.info(
         {

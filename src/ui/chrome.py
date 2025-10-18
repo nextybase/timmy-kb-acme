@@ -102,7 +102,7 @@ def sidebar(slug: str | None) -> None:
 
     def _client_display_name(active_slug: Optional[str]) -> str:
         if not active_slug:
-            return "—"
+            return ""
         try:
             db_path = _clients_db_path()
             if db_path.exists():
@@ -147,6 +147,8 @@ def sidebar(slug: str | None) -> None:
                         safe_kwargs.pop("width", None)
                         return fn(*args, **safe_kwargs)
                     raise
+                except Exception:
+                    return None
             return None
 
         has_slug = bool(slug)
@@ -156,9 +158,10 @@ def sidebar(slug: str | None) -> None:
         display_name = esc_text(_client_display_name(slug))
         _call("markdown", f"**Cliente attivo:** {display_name}")
         if not has_slug:
+            rendered = None
             if hasattr(st, "page_link"):
-                _call("page_link", "src/ui/pages/manage.py", label="Seleziona cliente", icon="👈")
-            else:
+                rendered = _call("page_link", "src/ui/pages/manage.py", label="Seleziona cliente")
+            if rendered is None:
                 _call("link_button", "Seleziona cliente", url="/manage", width="stretch")
 
         _call("subheader", "Azioni rapide")
@@ -201,16 +204,14 @@ def sidebar(slug: str | None) -> None:
             _on_exit()
 
         _call("markdown", "---")
-        # ➜ "Guida UI" in fondo; per pagine interne usiamo page_link (stessa scheda)
+        rendered = None
         if hasattr(st, "page_link"):
-            _call(
+            rendered = _call(
                 "page_link",
                 "src/ui/pages/guida_ui.py",
                 label="Guida UI",
-                icon="📖",
-                width="stretch",
             )
-        else:
+        if rendered is None:
             _call("link_button", "Guida UI", url="/guida", width="stretch")
 
 

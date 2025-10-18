@@ -21,11 +21,8 @@ try:
 except Exception:  # pragma: no cover
     from semantic.vision_provision import HaltError  # pragma: no cover
 
-from pipeline.config_utils import merge_client_config_from_template
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_bytes
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read
+from pipeline.logging_utils import get_structured_logger
 from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.services.vision_provision import run_vision
 
@@ -89,18 +86,6 @@ def _semantic_dir_client(slug: str) -> Path:
     return _client_base(slug) / "semantic"
 
 
-def _config_dir_repo() -> Path:
-    return _repo_root() / "config"
-
-
-def _semantic_dir_repo() -> Path:
-    return _repo_root() / "semantic"
-
-
-def _repo_pdf_path() -> Path:
-    return _config_dir_repo() / "VisionStatement.pdf"
-
-
 def _client_pdf_path(slug: str) -> Path:
     return _config_dir_client(slug) / "VisionStatement.pdf"
 
@@ -155,38 +140,28 @@ def _open_error_modal(title: str, body: str, *, caption: str | None = None) -> N
         _modal()
 
 
-def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) -> None:
-    """
-    Porta i file generati/salvati in REPO_ROOT/{config,semantic}
-    dentro REPO_ROOT/output/timmy-kb-<slug>/{config,semantic}.
-    - Copia config.yaml dalla root nel config del cliente in modo **atomico** e path-safe.
-    - Scrive VisionStatement.pdf nel config del cliente:
-      * usa pdf_bytes se presenti (upload corrente)
-      * altrimenti copia quello della root se esiste (sempre path-safe e atomico).
-    """
-    repo_cfg = _config_dir_repo()
-    cli_cfg = _config_dir_client(slug)
-    cli_sem = _semantic_dir_client(slug)
+def _log_diagnostics(slug: str, level: str, message: str, *, extra: Dict[str, Any]) -> None:
+    """Scrive un evento nel log Diagnostica e chiude l'handler per evitare lock (Win compat)."""
+    base = _client_base(slug)
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    logger = get_structured_logger("ui.diagnostics", log_file=(base / "logs" / "ui.log"))
+    log_method = getattr(logger, level, None)
+    if callable(log_method):
+        log_method(message, extra=extra)
+    else:  # fallback a warning se il livello non esiste
+        logger.warning(message, extra=extra)
 
-    cli_cfg.mkdir(parents=True, exist_ok=True)
-    cli_sem.mkdir(parents=True, exist_ok=True)
-
-    # 1) config.yaml (path-safe + atomic write)
-    src_cfg_yaml = ensure_within_and_resolve(repo_cfg, repo_cfg / "config.yaml")
-    if Path(src_cfg_yaml).exists():
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-        merge_client_config_from_template(ctx, Path(src_cfg_yaml))
-
-    # 2) VisionStatement.pdf (path-safe + atomic write)
-    dst_pdf = ensure_within_and_resolve(cli_cfg, _client_pdf_path(slug))
-    if pdf_bytes is not None:
-        safe_write_bytes(Path(dst_pdf), pdf_bytes, atomic=True)
-    else:
-        src_pdf = ensure_within_and_resolve(repo_cfg, _repo_pdf_path())
-        if Path(src_pdf).exists():
-            # Lettura sicura tramite open_for_read (niente read_bytes diretto)
-            with open_for_read(repo_cfg, Path(src_pdf), mode="rb") as fh:
-                safe_write_bytes(Path(dst_pdf), fh.read(), atomic=True)
+    for handler in list(logger.handlers):
+        if isinstance(handler, logging.FileHandler):
+            try:
+                handler.flush()
+            except Exception:
+                pass
+            try:
+                handler.close()
+            except Exception:
+                pass
+            logger.removeHandler(handler)
 
 
 # Registry unificato (SSoT) via ui.clients_store
@@ -270,7 +245,6 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante la preparazione del workspace",
             ) as status:
                 ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
-                _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
                 _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
@@ -312,6 +286,9 @@ if current_phase == UI_PHASE_INIT:
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                 except HaltError as exc:
+                    _log_diagnostics(
+                        s, "warning", "ui.vision.halt", extra={"slug": s, "err": str(exc).splitlines()[:1]}
+                    )
                     if status is not None and hasattr(status, "update"):
                         status.update(label=f"Vision in stato HALT: {exc}", state="error")
                     missing = ""
@@ -328,6 +305,12 @@ if current_phase == UI_PHASE_INIT:
                     )
                     st.stop()
                 except ConfigError as exc:
+                    _log_diagnostics(
+                        s,
+                        "warning",
+                        "ui.vision.config_error",
+                        extra={"slug": s, "err": str(exc).splitlines()[:1]},
+                    )
                     msg = str(exc)
                     lower = msg.lower()
                     if status is not None and hasattr(status, "update"):
@@ -343,6 +326,12 @@ if current_phase == UI_PHASE_INIT:
                         _open_error_modal("Errore durante Vision", f"Errore Vision: {msg}")
                     st.stop()
                 except Exception as exc:
+                    _log_diagnostics(
+                        s,
+                        "warning",
+                        "ui.vision.unhandled",
+                        extra={"slug": s, "err": str(exc).splitlines()[:1]},
+                    )
                     if status is not None and hasattr(status, "update"):
                         status.update(label=f"Errore durante Vision: {exc}", state="error")
                     _open_error_modal("Errore durante Vision", f"Errore durante Vision: {exc}")
@@ -385,6 +374,12 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         if build_drive_from_mapping is None:
             if UI_ALLOW_LOCAL_ONLY:
                 LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+                _log_diagnostics(
+                    eff,
+                    "warning",
+                    "ui.drive.not_configured_local_only",
+                    extra={"slug": eff},
+                )
                 _upsert_client_registry(eff, display_name)
                 st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
                 st.session_state["client_name"] = display_name
