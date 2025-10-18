@@ -9,9 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from pipeline.config_utils import get_client_config
-
-# Import pipeline (obbligatori in v1.8.0)
-from pipeline.context import ClientContext
+from pipeline.context import ClientContext  # Import pipeline (obbligatori in v1.8.0)
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
@@ -48,7 +46,7 @@ from pipeline.logging_utils import get_structured_logger, mask_id_map
 # Import locali (dev UI)
 from ui.components.mapping_editor import mapping_to_raw_structure  # usato solo se ensure_structure=True
 from ui.components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
-from ui.components.mapping_editor import MAPPING_RESERVED, load_semantic_mapping
+from ui.components.mapping_editor import load_semantic_mapping
 from ui.utils import to_kebab  # SSoT normalizzazione + path-safety
 
 # ===== Logger =================================================================
@@ -122,9 +120,9 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> Dict[str, str]:
     """
-    **Versione semplificata** (post pre-Vision):
+    **Vision-first**:
       - legge `drive_raw_folder_id` (e gli altri ID) dal `config.yaml` del cliente;
-      - legge `semantic/cartelle_raw.yaml`;
+      - legge `semantic/cartelle_raw.yaml` (derivato dal mapping Vision);
       - crea su Drive le sottocartelle di `raw/` secondo lo YAML;
       - allinea la struttura locale corrispondente.
 
@@ -229,6 +227,57 @@ def _drive_list_pdfs(service: Any, parent_id: str) -> List[Dict[str, str]]:
     return results
 
 
+def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> Optional[str]:
+    """Ritorna l'ID del file con 'name' dentro parent_id (se esiste)."""
+    q_name = name.replace("'", "\\'")
+    resp = (
+        service.files()
+        .list(
+            q=f"'{parent_id}' in parents and name = '{q_name}' and trashed = false",
+            spaces="drive",
+            fields="files(id, name)",
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    files = resp.get("files") or []
+    return files[0]["id"] if files else None
+
+
+def _drive_upload_or_update_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
+    """Crea o aggiorna un file (bytes) in una cartella Drive in modo idempotente."""
+    from googleapiclient.http import MediaIoBaseUpload
+
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
+    existing_id = _drive_find_child_by_name(service, parent_id, name)
+    if existing_id:
+        file = (
+            service.files()
+            .update(
+                fileId=existing_id,
+                media_body=media,
+                supportsAllDrives=True,
+                fields="id",
+            )
+            .execute()
+        )
+        return str(file.get("id"))
+    else:
+        body = {"name": name, "parents": [parent_id], "mimeType": mime}
+        file = (
+            service.files()
+            .create(
+                body=body,
+                media_body=media,
+                fields="id",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        return str(file.get("id"))
+
+
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
     """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
     try:
@@ -267,30 +316,73 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tup
         buf.close()
         return data, "application/pdf"
     except Exception:
-        # fallback TXT
         lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
         lines += [f"- {ex}" for ex in (examples or [])]
         data = ("\n".join(lines)).encode("utf-8")
         return data, "text/plain"
 
 
-def _drive_upload_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
-    """Carica un file (bytes) in una cartella Drive."""
-    from googleapiclient.http import MediaIoBaseUpload
+# ===== Estrattori Mapping (Vision only) =======================================
 
-    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
-    body = {"name": name, "parents": [parent_id], "mimeType": mime}
-    file = (
-        service.files()
-        .create(
-            body=body,
-            media_body=media,
-            fields="id",
-            supportsAllDrives=True,
+
+def _listify(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(x).strip() for x in value if str(x).strip()]
+    return [str(value).strip()] if str(value).strip() else []
+
+
+def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    Vision-only:
+      - areas: [...]  (obbligatorio)
+      - system_folders: { identity, glossario, ... } (opzionale)
+    Ritorna: {cat_key -> {"ambito": str, "descrizione": str, "keywords": [str, ...]}}
+    """
+    cats: Dict[str, Dict[str, Any]] = {}
+
+    # 1) Vision (areas: [...]) - OBBLIGATORIO
+    areas = mapping.get("areas")
+    if not isinstance(areas, list) or not areas:
+        raise RuntimeError(
+            "semantic_mapping.yaml non conforme al formato Vision: manca 'areas'. " "Rigenera il mapping con Vision."
         )
-        .execute()
-    )
-    return str(file.get("id"))
+
+    for a in areas:
+        if not isinstance(a, dict):
+            continue
+        key_raw = a.get("key") or a.get("ambito") or a.get("title") or ""
+        key = to_kebab(str(key_raw))
+        if not key:
+            continue
+        descr = str(a.get("descrizione_breve") or a.get("descrizione") or "")
+        ambito = str(a.get("ambito") or key)
+
+        # esempi/keywords: documents -> artefatti -> chunking_hints -> descrizione_dettagliata.include
+        docs = _listify(a.get("documents"))
+        artefatti = _listify(a.get("artefatti"))
+        hints = _listify(a.get("chunking_hints"))
+        dd = a.get("descrizione_dettagliata") or {}
+        include = _listify(dd.get("include"))
+
+        keywords = [x for x in (docs + artefatti + hints + include) if x]
+        cats[key] = {"ambito": ambito, "descrizione": descr, "keywords": keywords}
+
+    # 2) System folders (identity, glossario, ...) se presenti
+    sys = mapping.get("system_folders")
+    if isinstance(sys, dict):
+        for sys_key, sys_val in sys.items():
+            if not isinstance(sys_val, dict):
+                continue
+            key = to_kebab(str(sys_key))
+            docs = _listify(sys_val.get("documents"))
+            artifacts = _listify(sys_val.get("artefatti"))
+            terms = _listify(sys_val.get("terms_hint"))
+            keywords = [x for x in (docs + artifacts + terms) if x]
+            cats.setdefault(key, {"ambito": key, "descrizione": "", "keywords": keywords})
+
+    return cats
 
 
 # ===== README per ogni categoria raw (PDF o TXT fallback) =====================
@@ -303,11 +395,11 @@ def emit_readmes_for_raw(
     require_env: bool = True,
     ensure_structure: bool = False,
 ) -> Dict[str, str]:
-    """Per ogni categoria (sottocartella di raw) genera un README.pdf (o .txt fallback):
+    """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf (o .txt fallback):
 
-    - legge **semantic/semantic_mapping.yaml**;
-    - ignora le chiavi riservate; usa per ogni categoria: ambito, descrizione, keywords;
-    - carica i file nelle rispettive sottocartelle già esistenti di raw/ su Drive.
+    - legge **semantic/semantic_mapping.yaml** in formato Vision;
+    - costruisce il set categorie da `areas` (+ `system_folders` se presenti);
+    - carica/aggiorna i file nelle rispettive sottocartelle già esistenti di raw/ su Drive.
 
     Ritorna {category_name -> file_id}
     """
@@ -315,30 +407,16 @@ def emit_readmes_for_raw(
     if get_drive_service is None or create_drive_folder is None:
         raise RuntimeError("Funzioni Drive non disponibili.")
 
-    # Carica .env per SERVICE_ACCOUNT_FILE/DRIVE_ID se disponibile
+    # Context & service
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
-    # Carico il mapping e ricavo direttamente le categorie SENZA split_mapping
+    # Mapping Vision -> categorie
     mapping = load_semantic_mapping(slug, base_root=base_root)
-    cats: Dict[str, Dict[str, Any]] = {}
-    for k, v in (mapping or {}).items():
-        if k in MAPPING_RESERVED:
-            continue
-        if isinstance(v, dict):
-            kw = v.get("keywords")
-            if kw is None:
-                kw = []
-            if not isinstance(kw, list):
-                kw = [kw]
-            cats[k] = {
-                "ambito": str(v.get("ambito", "")),
-                "descrizione": str(v.get("descrizione", "")),
-                "keywords": [str(x) for x in kw if str(x).strip()],
-            }
+    cats = _extract_categories_from_mapping(mapping or {})
 
-    # crea/recupera cartella cliente; NON crea la struttura raw se non richiesto espressamente
+    # Cartella cliente; NON crea la struttura raw se non richiesto esplicitamente
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
@@ -363,7 +441,6 @@ def emit_readmes_for_raw(
         )
         raw_id = created_map.get("raw")
     else:
-        # Non ricreare la struttura: cerca la cartella 'raw' esistente
         sub = _drive_list_folders(svc, client_folder_id)
         name_to_id = {d["name"]: d["id"] for d in sub}
         raw_id = name_to_id.get("raw")
@@ -377,7 +454,7 @@ def emit_readmes_for_raw(
 
     uploaded: Dict[str, str] = {}
     for cat_name, meta in cats.items():
-        folder_k = to_kebab(cat_name)  # riuso SSoT (niente duplicazioni)
+        folder_k = to_kebab(cat_name)
         folder_id = name_to_id.get(folder_k)
         if not folder_id:
             log.warning("raw.subfolder.missing", extra={"category": folder_k})
@@ -391,7 +468,7 @@ def emit_readmes_for_raw(
             descr=meta.get("descrizione") or "",
             examples=examples,
         )
-        file_id = _drive_upload_bytes(
+        file_id = _drive_upload_or_update_bytes(
             svc,
             folder_id,
             "README.pdf" if mime == "application/pdf" else "README.txt",
