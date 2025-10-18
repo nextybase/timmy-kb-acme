@@ -1,180 +1,199 @@
-# Guida Onboarding UI (v2.1.0)
+# Guida UI di Timmy‑KB&#x20;
 
-Questa guida descrive l’interfaccia Streamlit dell’onboarding **Timmy‑KB** così come implementata attualmente (Beta 0), allineata al codice nel repository.
-
-- **Router nativo**: `st.navigation` + `st.Page` (nessuna cartella `pages/` legacy, nessun router a tab).
-- **Deep‑linking**: `st.query_params` (es. `?slug=acme&tab=semantics`).
-- **Versione Streamlit**: **>= 1.50** (solo API stabili: nessun `experimental_*`, nessun `use_container_width`).
-- **UI**: pulsanti con `width="stretch"`; HTML solo tramite `st.html(...)`.
-- **Tema**: gestione **nativa di Streamlit**. Nessun toggle custom; il CSS brand viene iniettato automaticamente.
-
-> Avvio rapido:
->
-> ```bash
-> streamlit run onboarding_ui.py
-> ```
+Questa guida “compatta ma completa” ti accompagna nell’uso dell’interfaccia di Timmy‑KB per creare e mantenere una knowledge base a partire da PDF, usando il **mapping Vision‑only** (\`semantic\_mapping.yaml\` con \`areas\` e \`system\_folders\`). È pensata per PM e utenti non tecnici.
 
 ---
 
-## Navigazione & struttura
+## 1) Cos’è e quando usarla
 
-La navigazione è **in alto** (top) ed è suddivisa in gruppi:
+Usa la UI per:
 
-- **Onboarding**
-  - **Home** (`src/ui/pages/home.py`)
-  - **Nuovo cliente** (`src/ui/pages/new_client.py`)
-  - **Gestisci cliente** (`src/ui/pages/manage.py`)
-  - **Semantica** (`src/ui/pages/semantics.py`)
-- **Tools**
-  - **Settings** (`src/ui/pages/settings.py`)
-  - **Docker Preview** (`src/ui/pages/preview.py`)
-  - **Cleanup** (`src/ui/pages/cleanup.py`)
-  - *(interno, per diagnostica/test)* **Diagnostics** (`src/ui/pages/diagnostics.py`)
+- **Onboarding** di un nuovo cliente/progetto (creazione struttura locale/Drive + mapping).
+- **Raccolta e sincronizzazione** PDF (Drive ⇄ locale) nelle cartelle giuste.
+- **Pipeline semantica** (PDF → Markdown → arricchimento tag → README/SUMMARY).
+- **Verifica & pubblicazione** (anteprima Docker/HonKit facoltativa).
 
-> L’entrypoint `onboarding_ui.py` configura la pagina, idrata i **query params** e registra le pagine nel router.
-
-### Query params supportati
-
-- `slug`: seleziona il cliente attivo (es. `?slug=acme`).
-- `tab`: percorso pagina (es. `?tab=semantics`). Viene impostato a `home` se mancante.
+> La UI è ideale per il setup iniziale e gli aggiornamenti incrementali (nuovi PDF, nuove aree).
 
 ---
 
-## Header & Sidebar
+## 2) Prerequisiti essenziali
 
-- L’**header** mostra il titolo e, se presente, lo **slug** corrente. Il CSS brand viene applicato automaticamente.
-- La **sidebar** espone **Azioni rapide**:
-  - **Guida UI**: link alla documentazione del progetto.
-  - **Dummy KB**: pulsante informativo per dataset di prova (flag UI; l’esecuzione della generazione è esterna/da CLI).
-  - **Esci**: arresta l’app in modo controllato.
+- **Software**: Python ≥ 3.11, Streamlit. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
+- **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; variabili d’ambiente:
+  - \`SERVICE\_ACCOUNT\_FILE\` → path al JSON delle credenziali.
+  - \`DRIVE\_ID\` → ID del Drive o cartella radice.
+  - Installa gli extra Drive: \`pip install .[drive]\`.
 
-> Nota: il pannello **Retriever** *non* è più in sidebar. È stato spostato nella pagina **Settings**.
+**Avvio UI**:
 
----
-
-## Pagine
-
-### Home
-
-Pagina informativa con link rapidi. Il bottone/link **Nuovo cliente** porta alla pagina omonima (router nativo).
-
-### Nuovo cliente
-
-Wizard in due step:
-
-1. **Inizializza Workspace**
-   - Inserisci **slug** (obbligatorio) e (opzionale) **nome** cliente.
-   - Carica **VisionStatement.pdf**.
-   - La UI crea la struttura locale, salva `config.yaml` e il PDF ed **esegue Vision** generando i due YAML richiesti (`semantic_mapping.yaml`, `cartelle_raw.yaml`).
-2. **Apri workspace**
-   - Crea la struttura su **Drive** (se configurata), finalizza le cartelle locali e aggiorna il **registro clienti (SSoT)** con stato `pronto`.
-   - Non riesegue Vision.
-
-> Il wizard aggiorna anche il **registro clienti (SSoT)** con lo stato **italiano** `pronto`.
-
-### Gestisci cliente
-
-Comportamento condizionato allo **slug** attivo:
-
-- **Se lo slug non è impostato**: mostra il box *Gestione cliente* con input *Slug cliente* e i pulsanti **Apri workspace** e **Cancella cliente** (quest’ultimo richiede conferma esplicita e invoca la pulizia locale/DB/Drive quando disponibile).
-- **Se lo slug è impostato**: mostra due colonne operative:
-  1. **Albero Drive** – gerarchia da `DRIVE_ID/<slug>/` (focus su `raw/`). Se gli extra Drive non sono presenti, appare un messaggio con le istruzioni.
-  2. **Diff Drive vs Locale** – confronta `raw/` remoto con `output/timmy-kb-<slug>/raw/` e supporta lo scaricamento dei file da Drive (quando abilitato).
-
-> Sono state rimosse le vecchie intestazioni “Drive: Albero…” e “Diff: Drive vs Locale” per un look più pulito.
-
-### Semantica
-
-Flusso a pulsanti:
-
-- **Converti PDF in Markdown** → `semantic.api.convert_markdown(...)` (solo PDF **sicuri** in `raw/`).
-- **Arricchisci frontmatter** → `semantic.api.enrich_frontmatter(...)` usando il **vocabolario consolidato**.
-- **Genera README/SUMMARY** → genera `README.md` e `SUMMARY.md` in modo idempotente.
-- **Anteprima Docker (HonKit)** → delega alla pagina *Docker Preview*.
-
-**Gating**: la pagina è utilizzabile solo se lo **stato cliente** è uno tra `pronto`, `arricchito`, `finito` **e** `raw/` contiene PDF.
-Lo stato è letto dal registro SSoT (`clients_db/clients.yaml`).
-
-### Settings (Tools)
-
-- **Retriever**:
-  - *Candidate limit*, *Budget latenza (ms)*, *Auto per budget*. I valori sono persistenti e impattano la ricerca.
-- **Semantica (YAML)**: editor dedicati per:
-  - `semantic/semantic_mapping.yaml`
-  - `semantic/cartelle_raw.yaml`
-
-> Gli editor YAML sono stati spostati qui da *Gestisci cliente* per mantenere pulita la pagina operativa.
-
-### Docker Preview (Tools)
-
-Pagina dedicata all’anteprima HonKit via Docker. Se Docker non è disponibile, la pagina lo segnala e salta l’azione.
-
-### Cleanup (Tools)
-
-Azioni di pulizia locale per workspace e artefatti temporanei. La cancellazione per‑cliente è esposta anche da *Gestisci cliente* (pulsante **Cancella cliente** con conferma).
-
-### Diagnostics (interno)
-
-Pagina ausiliaria per i test/smoke. Mostra:
-
-- `base_dir` del cliente corrente, conteggi `raw/`, `book/`, `semantic/`.
-- **Tail** (≈4 KB) dell’ultimo file in `logs/` con **download ZIP** di tutti i log.
+```bash
+streamlit run onboarding_ui.py
+```
 
 ---
 
-## Regole di qualità (Definition of Done – UI Beta 0)
+## 3) Struttura del workspace
 
-- Solo `st.navigation` + `st.Page` (nessun mix con la cartella `pages/` legacy o router a tab).
-- Stato/URL: `st.query_params` per `slug` e `tab`; deep‑linking funzionante e idempotente.
-- Zero `experimental_*` e zero `use_container_width`.
-- Caching solo con `@st.cache_data` / `@st.cache_resource`.
-- HTML sanificato con `st.html(...)`.
-- Nessun riferimento a `src/ui/app.py` o `src/ui/tabs/*`.
-
----
-
-## Struttura workspace cliente
+Quando crei un cliente (slug \`\`), trovi in locale:
 
 ```
 output/
-  timmy-kb-<slug>/
-    raw/
-    book/
-    semantic/
-      semantic_mapping.yaml
-      cartelle_raw.yaml
-      tags_reviewed.yaml
-      tags_raw.csv
-      tags.db
-    config/
-      config.yaml
-      VisionStatement.pdf
-    logs/
+└─ timmy-kb-<slug>/
+   ├─ raw/                # PDF originali (per categoria)
+   ├─ contrattualistica/  # Documenti legali
+   ├─ book/               # Markdown generati + indici
+   ├─ semantic/           # semantic_mapping.yaml, cartelle_raw.yaml, tags*
+   ├─ config/             # config.yaml, VisionStatement.pdf
+   └─ logs/
 ```
 
-> `tags.db` è la **SSoT a runtime**; gli YAML restano per authoring/validazione.
+Se Drive è configurato, la stessa struttura viene replicata sotto **\<DRIVE\_ID>/**.
 
 ---
 
-## Stato cliente (terminologia)
+## 4) Onboarding → **Nuovo cliente** (2 step)
 
-Le stringhe di **stato cliente** persistite nel registro sono **in italiano** e usate per il gating della *Semantica*:
+### Step 1 — *Inizializza Workspace*
 
-- `pronto` → workspace inizializzato correttamente
-- `arricchito` → frontmatter arricchito
-- `finito` → pipeline semantica completata
+Compila:
 
-> Le **fasi UI del wizard** (es. `init`, `ready_to_open`, `provisioned`) sono interne alla pagina *Nuovo cliente* e non vengono persistite nel registro.
+- **Slug** (obbligatorio, kebab-case, es. \`acme\`).
+- **Nome cliente** (facoltativo).
+- **VisionStatement.pdf** (obbligatorio): la Vision/mission/contesto del cliente.
+
+Cosa produce:
+
+- \`semantic/semantic\_mapping.yaml\` (**Vision‑only**: usa \`areas\` + \`system\_folders\
+  ").trim()
+
+) con:
+
+- **areas**: chiave → { ambito, descrizione, (keywords opzionali) }
+- **system\_folders**: sezioni fisse (es. identity/vision/mission/glossario…)
+- \`semantic/cartelle\_raw\.yaml\`: albero cartelle per **raw/** + **contrattualistica/**
+- \`config/config.yaml\`: dati cliente e (più avanti) gli ID Drive.
+
+> Se il PDF è povero/atipico, rivedi in seguito il mapping via **Settings → Semantica (YAML)**.
+
+### Step 2 — *Apri workspace*
+
+Provisioning struttura su **Drive**:
+
+- Crea \`/raw\` e \`/contrattualistica\`.
+- Crea le **sottocartelle di raw/** dalle **areas** del mapping.
+- Carica \`config.yaml\` su Drive e salva localmente gli **ID** (cartella cliente/raw/contrattualistica).
+
+> Lo step 2 **non** rigenera il mapping: serve solo a creare/allineare le cartelle.
 
 ---
 
-## FAQ
+## 5) Gestione contenuti → **Gestisci cliente**
 
-- **Come avvio l’interfaccia?** `streamlit run onboarding_ui.py`.
-- **Perché non vedo la pagina “Semantica”?** O lo stato non è tra `pronto|arricchito|finito`, oppure non ci sono PDF in `raw/`. Scaricali da Drive o copia file locali (no symlink).
-- **Posso lavorare senza Drive?** Sì: popola `raw/` manualmente e lavora in locale.
-- **Retro‑compatibilità con router/“tab” legacy?** No: il router legacy e i relativi helper sono stati rimossi in Beta 0.
+**Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.
+
+**Genera README in raw (Drive)** Crea/aggiorna in **ogni sottocartella di ****\`\`**** su Drive** un file guida:
+
+- **Contenuto**: titolo = *ambito* dell’area; corpo = *descrizione*; se disponibili, elenco “Esempi” ricavato da `documents`, `artefatti`, `chunking_hints` e `descrizione_dettagliata.include` del mapping Vision‑only.
+- **Formato**: `README.pdf` se è presente ReportLab; altrimenti fallback `README.txt`.
+- **Coerenza nomi**: le categorie sono mappate in *kebab‑case* (es. `Governance Etica AI` → `governance-etica-ai`) e devono **corrispondere ai nomi delle cartelle** sotto `raw/`.
+- **Idempotente**: se il file esiste viene **aggiornato** (non duplicato); puoi rilanciare dopo ogni modifica al mapping.
+- **Prerequisiti**: Drive configurato (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) e struttura `<slug>/raw` già creata (Step 2 “Apri workspace”).
+- **Cartelle mancanti**: se una categoria del mapping non ha la relativa cartella su Drive, viene **segnalata e saltata** (non crea la cartella).
+
+**Diff Drive ↔ Locale** Confronta i PDF presenti in `<DRIVE_ID>/<slug>/raw/<categoria>/` con quelli in `output/timmy-kb-<slug>/raw/<categoria>/`:
+
+- **Scansione**: lato Drive considera solo `application/pdf`; lato locale considera `*.pdf`.
+- **Selezione e download**: scegli i file da copiare e clicca **Scarica PDF da Drive → locale**. I file vengono salvati **nella stessa categoria**. I file **già presenti** non vengono sovrascritti; per aggiornarli rimuovi/rinomina la copia locale prima di rilanciare.
+- **Avanzamento**: barra/progresso su **tutti i candidati** (anche quelli già presenti); al termine mostra i **nuovi file creati**.
+- **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale.
+- **Rileva PDF in raw/**: riesegue la **sola scansione locale** per aggiornare lo stato (utile se hai copiato manualmente dei file).
+- **Cancella cliente**: rimuove l’intero workspace locale e prova a eliminare le cartelle su Drive. Operazione **irreversibile** con conferma.
 
 ---
 
-Documento mantenuto in ASCII per evitare problemi di encoding; cSpell‑friendly.
+## 6) Pipeline semantica → **Semantica**
+
+Esegui nell’ordine (ripetibile per nuovi PDF):
+
+1. **Converti PDF → Markdown**
+   - **Cosa fa:** scansiona `raw/<categoria>/**/*.pdf`, esclude file non‑PDF/illeggibili, e crea i corrispondenti `.md` in `book/<categoria>/` (rapporto 1:1).
+   - **Frontmatter aggiunto:** `title`, `source_category`, `source_file`, `created_at`, `tags_raw` (estratti automatici).
+   - **Idempotenza:** genera/aggiorna solo i file nuovi o modificati; non tocca gli altri.
+   - **Note/Errore tipico:** PDF protetti o corrotti vengono segnalati nei log e saltati; gli altri proseguono.
+2. **Arricchisci frontmatter**
+   - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** usando `semantic_mapping.yaml` (areas + system\_folders), sinonimi e regole di normalizzazione.
+   - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
+   - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
+3. **Genera README/SUMMARY**
+   - **SUMMARY.md:** ricostruisce l’indice navigabile di `book/` in base a cartelle e file presenti.
+   - **README.md:** crea/aggiorna il README radice e, ove previsto, i README di categoria usando **ambito**/**descrizione** dal mapping.
+   - **Idempotenza:** sicuro da rilanciare; modifica solo ciò che è cambiato.
+4. **Anteprima Docker (HonKit)** *(facoltativa)*
+   - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
+   - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
+
+---
+
+## 7) Configurazione avanzata → **Settings**
+
+**Semantica (YAML)**
+
+- **semantic\_mapping.yaml**: rinomina aree (kebab‑case), aggiorna **ambito/descrizione/keywords**.\
+  Dopo modifiche, rigenera README (Drive) e, se serve, rifai **Arricchisci**.
+- **cartelle\_raw\.yaml**: riflette la struttura di **raw/** + **contrattualistica/**.\
+  In scenari standard non toccarlo a mano; se cambi le aree, mantieni coerenza.
+
+**Retriever** (opzionale)
+
+- Parametri di ricerca interna (candidate limit, budget latenza, auto‑budget).\
+  Lasciali di default salvo esigenze specifiche.
+
+---
+
+## 8) Diagnostics & Log
+
+- Vedi percorsi, conteggi file, ultimi log.
+- Scarica zip dei log per supporto.
+- Utile se compaiono errori di Drive/AI o conversione.
+
+---
+
+## 9) FAQ / Problemi comuni
+
+- **DRIVE\_ID o SERVICE\_ACCOUNT\_FILE mancanti** → configura variabili e installa \`.[drive]\`.
+- **“Cartella raw non trovata/creata”** → esegui **Apri workspace** (Step 2).
+- **Nessun PDF rilevato** → carica su Drive e **Scarica**, oppure copia in locale e **Rileva PDF**.
+- **README non in PDF** → manca ReportLab → viene caricato **README.txt** (comunque ok).
+- **Tag strani o mancanti** → rivedi mapping (aree/keywords/sinonimi), poi **Arricchisci**.
+
+---
+
+## 10) Best practice
+
+- Scegli **slug** chiari e stabili (es. \`evagrin\`).
+- Carica i PDF **per categoria** (coerenza → tagging migliore).
+- Dopo modifiche al mapping: **Genera README (Drive)** e (se impatta i tag) **Arricchisci**.
+- Itera spesso con piccoli lotti di PDF: più rapido e sicuro.
+
+---
+
+## 11) Checklist rapida (per sessione)
+
+1. Avvia UI → seleziona cliente.
+2. (Se onboarding): Step 1 **Inizializza** → Step 2 **Apri workspace**.
+3. **Genera README in raw (Drive)** (opzionale ma consigliato).
+4. Carica PDF su Drive → **Scarica** in locale (o **Rileva** se copiati a mano).
+5. **Converti** → **Arricchisci** → **Genera README/SUMMARY**.
+6. (Facoltativo) **Anteprima Docker** → pubblica.
+
+---
+
+### Glossario minimo
+
+- **Vision‑only mapping**: mapping semantico generato dal PDF di Vision (\`areas\`, \`system\_folders\`).
+- **raw/**: cartelle con i PDF sorgenti per categoria.
+- **book/**: output Markdown e indici.
+- **contrattualistica/**: sezione separata per documenti legali.
+
+*Fine.*

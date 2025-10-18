@@ -61,7 +61,8 @@
     "matplotlib",
     "graphviz",
     "auditare",
-    "hardcodare"
+    "hardcodare",
+    "evagrin"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",
