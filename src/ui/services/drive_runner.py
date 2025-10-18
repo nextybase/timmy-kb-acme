@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from pipeline.config_utils import update_config_with_drive_ids
+
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
 
@@ -15,6 +17,7 @@ create_drive_structure_from_yaml: Callable[..., Any] | None
 download_drive_pdfs_to_local: Callable[..., Any] | None
 get_drive_service: Callable[[ClientContext], Any] | None
 upload_config_to_drive_folder: Callable[..., Any] | None
+create_local_base_structure: Callable[..., Any] | None
 
 try:
     import pipeline.drive_utils as _du
@@ -24,12 +27,14 @@ try:
     download_drive_pdfs_to_local = _du.download_drive_pdfs_to_local
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
+    create_local_base_structure = _du.create_local_base_structure
 except Exception:  # pragma: no cover
     create_drive_folder = None
     create_drive_structure_from_yaml = None
     download_drive_pdfs_to_local = None
     get_drive_service = None
     upload_config_to_drive_folder = None
+    create_local_base_structure = None
 
 from pipeline.logging_utils import get_structured_logger, mask_id_map
 from pipeline.path_utils import sanitize_filename
@@ -66,10 +71,10 @@ def _require_drive_utils_ui() -> None:
         )
 
 
-# ===== Creazione struttura Drive da mapping ===================================
+# ===== Creazione struttura Drive/Locale da cartelle_raw.yaml ==================
 
 
-def build_drive_from_mapping(
+def build_drive_from_mapping(  # nome storico mantenuto per compatibilità UI
     slug: str,
     client_name: Optional[str],
     *,
@@ -78,10 +83,12 @@ def build_drive_from_mapping(
     progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> Dict[str, str]:
     """
-    Crea su Drive:
-      - cartella cliente con nome = slug
-      - upload config.yaml
-      - crea 'raw/' (dalle categorie del mapping) + 'contrattualistica/'
+    Apre il workspace (fase 2) usando **semantic/cartelle_raw.yaml**:
+
+      1) Crea/recupera cartella cliente su Drive e carica config.yaml
+      2) Crea/aggiorna la struttura **locale** di base (raw/, book/, config/) + sottocartelle raw/
+      3) Crea/aggiorna la struttura **Drive** delle sottocartelle sotto raw/
+
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
     """
     _require_drive_utils_ui()
@@ -115,7 +122,7 @@ def build_drive_from_mapping(
     if progress:
         progress(step, total_steps, "Cartella cliente creata")
 
-    # Upload config.yaml nella cartella cliente (il 4° parametro è keyword-only)
+    # Upload config.yaml nella cartella cliente
     upload_config_to_drive_folder(
         svc,
         ctx,
@@ -126,25 +133,45 @@ def build_drive_from_mapping(
     if progress:
         progress(step, total_steps, "config.yaml caricato")
 
-    # Struttura derivata dal mapping (locale -> YAML sintetico -> creazione su Drive)
-    mapping = load_semantic_mapping(slug, base_root=base_root)
-    structure = mapping_to_raw_structure(mapping)
-    tmp_yaml = write_raw_structure_yaml(slug, structure, base_root=base_root)
+    # Usa direttamente semantic/cartelle_raw.yaml (richiesto dalla fase Vision)
+    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
+    yaml_path = sem_dir / "cartelle_raw.yaml"
+    if not yaml_path.exists():
+        raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
 
+    # Struttura Drive da YAML (raw/ + categorie; contrattualistica è idempotente)
     created_map = create_drive_structure_from_yaml(
         svc,
-        tmp_yaml,
+        yaml_path,
         client_folder_id,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
     step += 1
     if progress:
-        progress(step, total_steps, "Struttura RAW/ creata")
+        progress(step, total_steps, "Struttura RAW creata")
 
     raw_id = created_map.get("raw")
     contr_id = created_map.get("contrattualistica") or created_map.get("CONTRATTUALISTICA")
     if not raw_id:
         raise RuntimeError("ID cartella 'raw' non reperito dalla creazione struttura.")
+
+    update_config_with_drive_ids(
+        ctx,
+        {
+            "drive_folder_id": client_folder_id,
+            "drive_raw_folder_id": raw_id,
+            "drive_contrattualistica_folder_id": contr_id or "",
+        },
+        logger=log,
+    )
+
+    if callable(create_local_base_structure):
+        try:
+            create_local_base_structure(context=ctx, yaml_structure_file=yaml_path)
+        except Exception as exc:
+            log.warning("local.structure.create_failed", extra={"error": str(exc)[:200]})
+    else:
+        log.debug("local.structure.skip", extra={"reason": "create_local_base_structure non disponibile"})
 
     out: Dict[str, str] = {"client_folder_id": client_folder_id, "raw_id": raw_id}
     if contr_id:
