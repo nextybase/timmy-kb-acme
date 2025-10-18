@@ -84,14 +84,11 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
     try:
         _retry(_call, op_name="files.delete")
     except Exception as e:  # noqa: BLE001
+        status = getattr(getattr(e, "resp", None), "status", None)
         try:
-            from googleapiclient.errors import HttpError  # type: ignore
-
-            if isinstance(e, HttpError):
-                status = getattr(e, "resp", None) and getattr(e.resp, "status", None)
-                if int(status) == 404:
-                    return
-        except Exception:
+            if status is not None and int(status) == 404:
+                return
+        except (TypeError, ValueError):
             pass
         raise
 
@@ -230,7 +227,7 @@ def upload_config_to_drive_folder(
         _delete_file_hard(service, existing_id)
 
     try:
-        from googleapiclient.http import MediaFileUpload  # type: ignore
+        from googleapiclient.http import MediaFileUpload
     except Exception as e:  # noqa: BLE001
         raise DriveUploadError(
             "Dipendenza mancante per upload su Drive: google-api-python-client. Installa con `pip install .[drive]`."
@@ -341,6 +338,63 @@ def create_drive_raw_children_from_yaml(
     return result
 
 
+def create_drive_minimal_structure(
+    service: Any,
+    client_folder_id: str,
+    *,
+    redact_logs: bool = False,
+) -> Dict[str, str]:
+    """Crea la struttura minima (cartelle top-level) sotto la cartella cliente."""
+    if not client_folder_id:
+        raise DriveUploadError("ID cartella cliente mancante per struttura minima.")
+
+    structure: Dict[str, str] = {}
+    for name in ("raw", "contrattualistica"):
+        structure[name] = create_drive_folder(service, name, client_folder_id, redact_logs=redact_logs)
+
+    logger.info(
+        "drive.upload.structure.minimal",
+        extra={
+            "client_folder": _maybe_redact(client_folder_id, redact_logs),
+            "folders": list(structure.keys()),
+        },
+    )
+    return structure
+
+
+def create_drive_structure_from_yaml(
+    service: Any,
+    yaml_path: Union[str, PathLike[str]],
+    client_folder_id: str,
+    *,
+    redact_logs: bool = False,
+) -> Dict[str, str]:
+    """Crea la struttura Drive completa (raw + sottocartelle) usando un file YAML."""
+    structure = create_drive_minimal_structure(service, client_folder_id, redact_logs=redact_logs)
+    raw_id = structure.get("raw")
+    if not raw_id:
+        raise DriveUploadError("Creazione cartella RAW fallita: ID non reperito.")
+
+    raw_children = create_drive_raw_children_from_yaml(
+        service,
+        yaml_path,
+        raw_id,
+        redact_logs=redact_logs,
+    )
+
+    combined: Dict[str, str] = {**structure}
+    combined.update(raw_children)
+
+    logger.info(
+        "drive.upload.structure.yaml",
+        extra={
+            "client_folder": _maybe_redact(client_folder_id, redact_logs),
+            "raw_children": list(raw_children.keys())[:10],
+        },
+    )
+    return combined
+
+
 # ---------------------------------------------------------------------------
 # Locale: API di creazione cartelle (fase 2, children-only)
 # ---------------------------------------------------------------------------
@@ -367,3 +421,69 @@ def create_local_raw_children_from_yaml(
 
     logger.info("local.raw_children.created", extra={"count": len(written), "base": str(base_dir)})
     return written
+
+
+def create_local_base_structure(
+    *,
+    context: Any,
+    yaml_structure_file: Union[str, PathLike[str]],
+    base_root: Union[str, Path] = "output",
+) -> Dict[str, Path]:
+    """Crea la struttura locale (raw/, book/, config/, semantic/) e le sottocartelle raw/."""
+    slug = getattr(context, "slug", None)
+    if not isinstance(slug, str) or not slug:
+        raise DriveUploadError("Contesto privo di slug: impossibile creare struttura locale.")
+
+    base_dir_hint = getattr(context, "base_dir", None)
+    base_dir = Path(str(base_dir_hint)) if base_dir_hint else Path(base_root) / f"timmy-kb-{slug}"
+    base_dir = base_dir.resolve()
+
+    raw_dir = base_dir / "raw"
+    book_dir = base_dir / "book"
+    config_dir = base_dir / "config"
+    semantic_dir = base_dir / "semantic"
+
+    _ensure_dir(base_dir)
+    for path in (raw_dir, book_dir, config_dir, semantic_dir):
+        _ensure_dir(path)
+
+    mapping = _read_yaml_structure(yaml_structure_file)
+    raw_names = _extract_structural_raw_names(mapping)
+    for name in raw_names:
+        _ensure_dir(raw_dir / name)
+
+    logger.info(
+        "local.base_structure.created",
+        extra={
+            "base": str(base_dir),
+            "raw_children": raw_names[:10],
+        },
+    )
+    return {
+        "base_dir": base_dir,
+        "raw_dir": raw_dir,
+        "book_dir": book_dir,
+        "config_dir": config_dir,
+        "semantic_dir": semantic_dir,
+    }
+
+
+def delete_drive_file(
+    service: Any,
+    file_id: str,
+    *,
+    redact_logs: bool = False,
+) -> None:
+    """Elimina un file/cartella su Drive (idempotente su 404)."""
+    if not file_id:
+        raise DriveUploadError("File ID mancante per eliminazione.")
+
+    try:
+        _delete_file_hard(service, file_id)
+    except Exception as exc:  # noqa: BLE001
+        raise DriveUploadError(f"Eliminazione file Drive fallita: {file_id}") from exc
+
+    logger.info(
+        "drive.upload.file.deleted",
+        extra={"file_id": _maybe_redact(file_id, redact_logs)},
+    )
