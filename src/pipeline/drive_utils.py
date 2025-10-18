@@ -64,6 +64,7 @@ from .drive.download import download_drive_pdfs_to_local
 from .drive.upload import (
     create_drive_folder,
     create_drive_minimal_structure,
+    create_drive_raw_children_from_yaml,
     create_drive_structure_from_yaml,
     create_local_base_structure,
     delete_drive_file,
@@ -85,6 +86,7 @@ __all__: list[str] = [
     # upload / strutture
     "create_drive_folder",
     "create_drive_minimal_structure",
+    "create_drive_raw_children_from_yaml",
     "create_drive_structure_from_yaml",
     "upload_config_to_drive_folder",
     "delete_drive_file",

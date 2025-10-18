@@ -32,12 +32,24 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
 
     # Scansione sicura: niente rglob (per evitare follow dei symlink e traversal),
-    # uso os.walk con filtro su symlink e ensure_within_and_resolve per ogni file.
+    # uso os.walk con filtro su symlink e ensure_within_and_resolve per ogni file/dir.
     for root, dirs, files in os.walk(raw_dir, followlinks=False):
         base = Path(root)
 
         # Evita di scendere in symlink a directory
         dirs[:] = [d for d in dirs if not (base / d).is_symlink()]
+        # Indicizza anche le directory intermedie per allineare il diff con l'indice Drive
+        for dirname in dirs:
+            candidate_dir = base / dirname
+            try:
+                safe_dir = ensure_within_and_resolve(raw_dir, candidate_dir)
+            except Exception:
+                continue
+            rel_dir = safe_dir.relative_to(raw_dir).as_posix()
+            if not rel_dir:
+                continue
+            key = f"raw/{rel_dir}"
+            index[key] = {"type": "dir", "size": None, "mtime": _safe_mtime(safe_dir)}
 
         for name in files:
             candidate = base / name

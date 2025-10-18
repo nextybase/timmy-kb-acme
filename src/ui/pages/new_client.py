@@ -40,6 +40,17 @@ if _build_drive_from_mapping_impl is not None:
 else:
     build_drive_from_mapping = None
 
+# Bootstrap minimo Drive (prima di Vision)
+try:
+    from ui.services.drive_runner import ensure_drive_minimal_and_upload_config as _ensure_drive_minimal_impl
+except Exception:  # pragma: no cover
+    _ensure_drive_minimal_impl = None
+
+if _ensure_drive_minimal_impl is not None:
+    ensure_drive_minimal: Optional[BuildDriveCallable] = cast(BuildDriveCallable, _ensure_drive_minimal_impl)
+else:
+    ensure_drive_minimal = None
+
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
 LOGGER = logging.getLogger("ui.new_client")
 
@@ -179,15 +190,19 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: Optional[bytes]) ->
 
 
 # Registry unificato (SSoT) via ui.clients_store
-def _upsert_client_registry(slug: str, client_name: str) -> None:
+def _upsert_client_registry(slug: str, client_name: str, *, target_state: Optional[str] = "pronto") -> None:
     """
-    Allinea il registro clienti (SSoT) impostando lo stato **pronto**.
-    Qui garantiamo la presenza del cliente e lo stato valido
-    per il gating della pagina Semantica.
+    Allinea il registro, impostando lo stato desiderato (default: 'pronto').
+    Se `target_state` è None, preserva lo stato attuale (o 'nuovo' se assente).
     """
-    entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato="pronto")
+    from ui.clients_store import get_state  # import locale per evitare cicli
+
+    current = (get_state(slug) or "").strip()
+    desired = (target_state or current or "nuovo").strip() or "nuovo"
+    entry = ClientEntry(slug=slug, nome=(client_name or "").strip() or slug, stato=desired)
     upsert_client(entry)
-    set_state(slug, "pronto")
+    if desired != current:
+        set_state(slug, desired)
 
 
 # --------- UI ---------
@@ -259,6 +274,24 @@ if current_phase == UI_PHASE_INIT:
                 _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
+
+            # Provisioning minimo su Drive (se configurato)
+            if ensure_drive_minimal is None and not UI_ALLOW_LOCAL_ONLY:
+                _open_error_modal(
+                    "Google Drive non configurato",
+                    "Funzionalita Drive non disponibili. Installa gli extra `pip install .[drive]` "
+                    "e imposta `DRIVE_ID` / `SERVICE_ACCOUNT_FILE`.",
+                )
+                st.stop()
+            if ensure_drive_minimal is not None:
+                with status_guard(
+                    "Provisiono struttura minima su Drive...",
+                    expanded=True,
+                    error_label="Errore durante il provisioning Drive",
+                ) as status:
+                    ensure_drive_minimal(slug=s, client_name=(name or None))
+                    if status is not None and hasattr(status, "update"):
+                        status.update(label="Struttura minima creata e config caricato.", state="complete")
 
             ui_logger = _ui_logger()
             ctx = _UIContext(base_dir=_client_base(s))

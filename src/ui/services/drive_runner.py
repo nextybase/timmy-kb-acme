@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from pipeline.config_utils import update_config_with_drive_ids
+from pipeline.config_utils import get_client_config, update_config_with_drive_ids
 
 # Import pipeline (obbligatori in v1.8.0)
 from pipeline.context import ClientContext
@@ -81,6 +81,38 @@ def _require_drive_utils_ui() -> None:
         )
 
 
+def _require_drive_minimal_ui() -> None:
+    """Prerequisiti minimi per creare cartella cliente + struttura base e caricare il config."""
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if not callable(create_drive_minimal_structure):
+        missing.append("create_drive_minimal_structure")
+    if not callable(upload_config_to_drive_folder):
+        missing.append("upload_config_to_drive_folder")
+    if missing:
+        raise RuntimeError(
+            "Funzionalita Google Drive non disponibili (fase minima): "
+            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+        )
+
+
+def _require_drive_for_raw_only() -> None:
+    """Prerequisiti minimi per creare le sottocartelle RAW da YAML."""
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_raw_children_from_yaml):
+        missing.append("create_drive_raw_children_from_yaml")
+    if missing:
+        raise RuntimeError(
+            "Funzionalità Google Drive non disponibili (RAW da YAML): "
+            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
+        )
+
+
 # ===== Creazione struttura Drive/Locale da cartelle_raw.yaml ==================
 
 
@@ -93,48 +125,101 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> Dict[str, str]:
     """
-    Apre il workspace (fase 2) usando **semantic/cartelle_raw.yaml**:
+    **Versione semplificata** (post pre-Vision):
+      - legge `drive_raw_folder_id` (e gli altri ID) dal `config.yaml` del cliente;
+      - legge `semantic/cartelle_raw.yaml`;
+      - crea su Drive le sottocartelle di `raw/` secondo lo YAML;
+      - allinea la struttura locale corrispondente.
 
-      1) Crea/recupera cartella cliente su Drive.
-      2) Crea la struttura minima (raw + contrattualistica) e aggiorna il config locale con gli ID.
-      3) Carica su Drive il config.yaml aggiornato.
-      4) Crea le sottocartelle RAW da YAML e riallinea la struttura locale.
-
-    Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...?}
+    Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...}
     """
-    _require_drive_utils_ui()
-    if (
-        get_drive_service is None
-        or create_drive_folder is None
-        or create_drive_minimal_structure is None
-        or create_drive_raw_children_from_yaml is None
-        or upload_config_to_drive_folder is None
-    ):
-        raise RuntimeError("Funzionalita Google Drive non disponibili. Installa gli extra `pip install .[drive]`.")
-
-    # Carica .env se presente per popolare SERVICE_ACCOUNT_FILE/DRIVE_ID
+    _require_drive_for_raw_only()
+    if get_drive_service is None or create_drive_raw_children_from_yaml is None:
+        raise RuntimeError("Funzioni Drive non disponibili (RAW da YAML).")
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
-    drive_parent_id = ctx.env.get("DRIVE_ID")
-    if not drive_parent_id:
+    cfg = get_client_config(ctx) or {}
+    client_folder_id = (cfg.get("drive_folder_id") or "").strip()
+    raw_id = (cfg.get("drive_raw_folder_id") or "").strip()
+    contr_id = (cfg.get("drive_contrattualistica_folder_id") or "").strip()
+    if not raw_id:
+        raise RuntimeError(
+            "drive_raw_folder_id mancante nel config.yaml. " "Esegui prima la fase di bootstrap Drive (pre-Vision)."
+        )
+
+    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
+    yaml_path = sem_dir / "cartelle_raw.yaml"
+    if not yaml_path.exists():
+        raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
+
+    raw_children_fn = create_drive_raw_children_from_yaml
+    raw_children_fn(
+        svc,
+        yaml_path,
+        raw_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+    if progress:
+        progress(1, 1, "Struttura RAW su Drive creata/aggiornata")
+
+    if callable(create_local_base_structure):
+        try:
+            create_local_base_structure(context=ctx, yaml_structure_file=yaml_path)
+        except Exception as exc:
+            log.warning("local.structure.create_failed", extra={"error": str(exc)[:200]})
+    else:
+        log.debug("local.structure.skip", extra={"reason": "create_local_base_structure non disponibile"})
+
+    result: Dict[str, str] = {
+        "client_folder_id": client_folder_id,
+        "raw_id": raw_id,
+        "contrattualistica_id": contr_id,
+    }
+    log.info("drive.structure.created", extra={"ids": dict(mask_id_map(result))})
+    return result
+
+
+# ===== Bootstrap minimo (prima di Vision) ======================================
+
+
+def ensure_drive_minimal_and_upload_config(
+    slug: str,
+    client_name: Optional[str] = None,
+    *,
+    require_env: bool = True,
+) -> Dict[str, str]:
+    """
+    Crea/recupera la cartella cliente sotto DRIVE_ID, crea la struttura minima
+    (raw/ e contrattualistica/), aggiorna il config.yaml locale con gli ID
+    e carica il config nella cartella del cliente.
+    Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...}
+    """
+    _require_drive_minimal_ui()
+    if (
+        get_drive_service is None
+        or create_drive_folder is None
+        or create_drive_minimal_structure is None
+        or upload_config_to_drive_folder is None
+    ):
+        raise RuntimeError("Funzionalita Drive non disponibili. Installa gli extra `pip install .[drive]`.")
+
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    log = _get_logger(ctx)
+    svc = get_drive_service(ctx)
+
+    parent_id = ctx.env.get("DRIVE_ID")
+    if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente.")
 
-    # Cartella cliente (sotto DRIVE_ID)
-    total_steps = 4
-    step = 0
     client_folder_id = create_drive_folder(
         svc,
         slug,
-        parent_id=drive_parent_id,
+        parent_id=parent_id,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
-    step += 1
-    if progress:
-        progress(step, total_steps, "Cartella cliente creata")
 
-    # Struttura minima + aggiornamento config locale con gli ID Drive
     minimal_map = create_drive_minimal_structure(
         svc,
         client_folder_id,
@@ -151,56 +236,24 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
             "drive_folder_id": client_folder_id,
             "drive_raw_folder_id": raw_id,
             "drive_contrattualistica_folder_id": contr_id or "",
+            "client_name": client_name or slug,
         },
         logger=log,
     )
-    step += 1
-    if progress:
-        progress(step, total_steps, "Struttura minima aggiornata")
 
-    # Carica config.yaml (aggiornato) nella cartella cliente
     upload_config_to_drive_folder(
         svc,
         ctx,
         client_folder_id,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
-    step += 1
-    if progress:
-        progress(step, total_steps, "config.yaml aggiornato e caricato")
-
-    # Usa direttamente semantic/cartelle_raw.yaml (richiesto dalla fase Vision)
-    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
-    yaml_path = sem_dir / "cartelle_raw.yaml"
-    if not yaml_path.exists():
-        raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
-
-    # Sottocartelle RAW da YAML + struttura locale coerente
-    create_drive_raw_children_from_yaml(
-        svc,
-        yaml_path,
-        raw_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-    step += 1
-    if progress:
-        progress(step, total_steps, "Struttura RAW completata")
-
-    if callable(create_local_base_structure):
-        try:
-            create_local_base_structure(context=ctx, yaml_structure_file=yaml_path)
-        except Exception as exc:
-            log.warning("local.structure.create_failed", extra={"error": str(exc)[:200]})
-    else:
-        log.debug("local.structure.skip", extra={"reason": "create_local_base_structure non disponibile"})
 
     result: Dict[str, str] = {
         "client_folder_id": client_folder_id,
         "raw_id": raw_id,
         "contrattualistica_id": contr_id or "",
     }
-
-    log.info("drive.structure.created", extra={"ids": dict(mask_id_map(result))})
+    log.info("drive.minimal.created", extra={"ids": dict(mask_id_map(result))})
     return result
 
 
