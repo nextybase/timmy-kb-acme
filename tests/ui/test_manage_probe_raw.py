@@ -30,6 +30,7 @@ class _StreamlitStub:
         self.warning_messages: list[str] = []
         self.info_messages: list[str] = []
         self.error_messages: list[str] = []
+        self.button_calls: list[str] = []
 
     def subheader(self, *_args: Any, **_kwargs: Any) -> None:
         return None
@@ -56,6 +57,7 @@ class _StreamlitStub:
         self.error_messages.append(message)
 
     def button(self, label: str, *_args: Any, **_kwargs: Any) -> bool:
+        self.button_calls.append(label)
         return self.button_returns.get(label, False)
 
     def columns(self, spec: Tuple[int, ...] | int) -> Tuple[_ColumnStub, ...]:
@@ -90,23 +92,12 @@ def _load_manage_module(
     monkeypatch.setattr(manage, "_render_drive_diff", None, raising=False)
 
 
-def test_manage_probe_raw_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     st_stub = _StreamlitStub()
-    st_stub.button_returns["Rileva PDF in raw/"] = True
-
     raw_path = str(Path("output") / "timmy-kb-acme" / "raw")
     _load_manage_module(monkeypatch, st_stub, slug="acme", has_raw_result=(True, raw_path))
 
-    assert any("PDF rilevati" in msg for msg in st_stub.success_messages)
+    assert "Avvia arricchimento semantico" in st_stub.button_calls
+    assert any("Arricchimento semantico" in msg for msg in st_stub.info_messages)
+    assert not any("PDF rilevati" in msg for msg in st_stub.success_messages)
     assert not st_stub.warning_messages
-
-
-def test_manage_probe_raw_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    st_stub = _StreamlitStub()
-    st_stub.button_returns["Rileva PDF in raw/"] = True
-
-    raw_path = str(Path("output") / "timmy-kb-acme" / "raw")
-    _load_manage_module(monkeypatch, st_stub, slug="acme", has_raw_result=(False, raw_path))
-
-    assert not st_stub.success_messages
-    assert any("Nessun PDF" in msg for msg in st_stub.warning_messages)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from pipeline.path_utils import ensure_within_and_resolve, validate_slug
 
@@ -28,7 +28,7 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     if not raw_dir.exists():
         return index
 
-    # Indichiamo sempre la radice "raw" (come fa lâ€™indice Drive)
+    # Indichiamo sempre la radice "raw" (come fa l’indice Drive)
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
 
     # Scansione sicura: niente rglob (per evitare follow dei symlink e traversal),
@@ -100,19 +100,116 @@ def _format_mtime(ts: Optional[float]) -> str:
         return "-"
 
 
-def _rows_from(keys: Iterable[str], meta_map: Dict[str, Dict[str, Any]]) -> List[Dict[str, str]]:
-    rows: List[Dict[str, str]] = []
+# ------------------- LINK E FILTRI -----------------------------------------------
+
+
+def _drive_web_url(meta: Dict[str, Any]) -> Optional[str]:
+    """Restituisce un URL web per aprire file/cartella su Google Drive, se identificabile."""
+    if not isinstance(meta, dict):
+        return None
+    url = meta.get("webViewLink") or meta.get("webViewUrl")
+    if isinstance(url, str) and url.startswith("http"):
+        return url
+    _id = meta.get("id")
+    if not _id:
+        return None
+    typ = (meta.get("type") or "").lower()
+    if typ in {"dir", "folder"}:
+        return f"https://drive.google.com/drive/folders/{_id}"
+    return f"https://drive.google.com/file/d/{_id}/view"
+
+
+def _mk_md_table(rows: List[Dict[str, str]], headers: List[str]) -> str:
+    """Crea una tabella Markdown semplice; i valori possono includere link."""
+    if not rows:
+        return "_(vuoto)_"
+    line_h = "| " + " | ".join(headers) + " |"
+    line_s = "| " + " | ".join(["---"] * len(headers)) + " |"
+    buf = [line_h, line_s]
+    for r in rows:
+        buf.append("| " + " | ".join(r.get(h, "") or "" for h in headers) + " |")
+    return "\n".join(buf)
+
+
+def _is_readme_pdf(path: str) -> bool:
+    """True se il basename è README.pdf (case-insensitive)."""
+    try:
+        return os.path.basename(path).lower() == "readme.pdf"
+    except Exception:
+        return False
+
+
+# ------------------- RAGGRUPPAMENTO PER CARTELLA ---------------------------------
+
+
+def _split_category_and_rel(key: str) -> Tuple[str, str]:
+    """
+    Restituisce (categoria, relativo) partendo da chiavi "raw/...".
+    - "raw/foo/bar.pdf" -> ("foo", "bar.pdf")
+    - "raw/foo"         -> ("foo", "")
+    - "raw"             -> ("(root)", "")
+    - "raw/file.pdf"    -> ("(root)", "file.pdf")
+    """
+    if key == "raw":
+        return "(root)", ""
+    rest = key[4:] if key.startswith("raw/") else key
+    if not rest:
+        return "(root)", ""
+    parts = rest.split("/", 1)
+    if len(parts) == 1:
+        return (parts[0] or "(root)"), ""
+    return parts[0], parts[1]
+
+
+def _group_keys_by_category(keys: Iterable[str]) -> Dict[str, List[Tuple[str, str]]]:
+    groups: Dict[str, List[Tuple[str, str]]] = {}
     for key in keys:
-        meta = meta_map.get(key, {})
+        # Escludi README.pdf ovunque compaia
+        if _is_readme_pdf(key):
+            continue
+        category, relative = _split_category_and_rel(key)
+        if category == "(root)" and relative == "":
+            continue
+        groups.setdefault(category, []).append((key, relative))
+    return groups
+
+
+def _rows_from_pairs(
+    pairs: List[Tuple[str, str]],
+    meta_map: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    for original, relative in pairs:
+        meta = meta_map.get(original, {})
+        display = relative if relative else "(cartella)"
         rows.append(
             {
-                "path": key,
+                "path": display,
                 "type": meta.get("type", "-"),
                 "size": _human_size(meta.get("size")),
                 "mtime": _format_mtime(meta.get("mtime")),
             }
         )
     return rows
+
+
+def _group_differences_by_category(rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        key = str(row.get("path", ""))
+        # Escludi README.pdf nelle differenze
+        if _is_readme_pdf(key):
+            continue
+        category, relative = _split_category_and_rel(key)
+        if category == "(root)" and relative == "":
+            continue
+        entry = dict(row)
+        entry["path"] = relative if relative else "(cartella)"
+        groups.setdefault(category, []).append(entry)
+    return groups
+
+
+# ------------------- RENDER -------------------------------------------------------
 
 
 def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str, Any]]]) -> None:
@@ -133,12 +230,17 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     drive_keys = set(drive_entries.keys())
     local_keys = set(local_entries.keys())
 
-    only_drive = sorted(drive_keys - local_keys)
-    only_local = sorted(local_keys - drive_keys)
+    # Differenze base
+    only_drive = sorted(k for k in (drive_keys - local_keys) if not _is_readme_pdf(k))
+    only_local = sorted(k for k in (local_keys - drive_keys) if not _is_readme_pdf(k))
 
     intersections = sorted(drive_keys & local_keys)
     differences: List[Dict[str, Any]] = []
     for key in intersections:
+        # Escludi README.pdf
+        if _is_readme_pdf(key):
+            continue
+
         drive_meta = drive_entries.get(key, {})
         local_meta = local_entries.get(key, {})
         drive_type = drive_meta.get("type")
@@ -195,20 +297,68 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     col_local.metric("Solo locale", len(only_local))
     col_diff.metric("Differenze", len(differences))
 
+    # --- Solo su Drive (con link) ------------------------------------------------
     with st.expander("Solo su Drive", expanded=False):
         if only_drive:
-            st.table(_rows_from(only_drive, drive_entries))
+            grouped_pairs = _group_keys_by_category(only_drive)
+            for category in sorted(grouped_pairs):
+                with st.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
+                    md_rows: List[Dict[str, str]] = []
+                    for key, rel in grouped_pairs[category]:
+                        meta = drive_entries.get(key, {}) or {}
+                        url = _drive_web_url(meta)
+                        name = rel if rel else "(cartella)"
+                        display = f"[{name}]({url})" if url else name
+                        md_rows.append(
+                            {
+                                "file": display,
+                                "size": _human_size(meta.get("size")),
+                                "mtime": _format_mtime(meta.get("mtime")),
+                            }
+                        )
+                    st.markdown(_mk_md_table(md_rows, headers=["file", "size", "mtime"]))
         else:
             st.caption("Nessun elemento solo su Drive.")
 
+    # --- Solo su locale (tabella semplice, senza link locali) --------------------
     with st.expander("Solo su locale", expanded=False):
         if only_local:
-            st.table(_rows_from(only_local, local_entries))
+            grouped_pairs = _group_keys_by_category(only_local)
+            for category in sorted(grouped_pairs):
+                with st.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
+                    st.table(_rows_from_pairs(grouped_pairs[category], local_entries))
         else:
             st.caption("Nessun elemento solo locale.")
 
+    # --- Differenze (con link a Drive quando possibile) --------------------------
     with st.expander("Differenze dimensione/mtime", expanded=False):
         if differences:
-            st.table(differences)
+            diff_groups = _group_differences_by_category(differences)
+            for category in sorted(diff_groups):
+                with st.expander(f"{category} ({len(diff_groups[category])})", expanded=False):
+                    diff_rows: List[Dict[str, str]] = []
+                    for row in diff_groups[category]:
+                        # Ricostruisci la chiave Drive per recuperare il meta e creare l'URL
+                        rel = row.get("path", "")
+                        key_full = f"raw/{category}" if rel == "(cartella)" else f"raw/{category}/{rel}"
+                        meta = drive_entries.get(key_full, {}) if isinstance(drive_entries, dict) else {}
+                        url = _drive_web_url(meta)
+                        file_cell = f"[{rel}]({url})" if url and rel and rel != "(cartella)" else (rel or "")
+                        diff_rows.append(
+                            {
+                                "path": file_cell or "(cartella)",
+                                "motivo": str(row.get("motivo", "")),
+                                "drive_size": str(row.get("drive_size", "")),
+                                "local_size": str(row.get("local_size", "")),
+                                "drive_mtime": str(row.get("drive_mtime", "")),
+                                "local_mtime": str(row.get("local_mtime", "")),
+                            }
+                        )
+                    st.markdown(
+                        _mk_md_table(
+                            diff_rows,
+                            headers=["path", "motivo", "drive_size", "local_size", "drive_mtime", "local_mtime"],
+                        )
+                    )
         else:
             st.caption("Nessuna differenza rilevata.")

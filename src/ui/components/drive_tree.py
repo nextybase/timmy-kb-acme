@@ -157,7 +157,8 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
             if meta["type"] == "dir" and name == "raw":
                 raw_entry = entry
                 continue
-            _render_entry_line(f"{slug}/{name.rstrip('/')}", meta, depth=0, suffix="")
+            if meta["type"] == "dir":
+                _render_entry_line(f"{slug}/{name.rstrip('/')}", meta, depth=0, suffix="")
 
         if raw_entry is None:
             _render_entry_line(f"{slug}/raw", {"type": "dir"}, depth=0, suffix="(cartella non presente)")
@@ -174,7 +175,6 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
                 sub_meta = _as_meta(sub)
                 index[sub_rel] = sub_meta
                 if sub_meta["type"] != "dir":
-                    _render_entry_line(f"{slug}/{sub_rel}", sub_meta, depth=1)
                     continue
                 # FLATTEN: nessun expander annidato per le sottocartelle di raw
                 sub_items = _list_children(service, sub["id"])
@@ -189,5 +189,13 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
                     item_rel = f"raw/{sub_name}/{item_name}"
                     item_meta = _as_meta(item)
                     index[item_rel] = item_meta
-                    _render_entry_line(f"{slug}/{item_rel}", item_meta, depth=1)
+                    if item_meta["type"] != "dir":
+                        continue
+                    grand_items = _list_children(service, item["id"])
+                    _render_entry_line(
+                        f"{slug}/{item_rel}",
+                        item_meta,
+                        depth=1,
+                        suffix=_summarise_entries(grand_items),
+                    )
     return index

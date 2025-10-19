@@ -278,6 +278,86 @@ def _drive_upload_or_update_bytes(service: Any, parent_id: str, name: str, data:
         return str(file.get("id"))
 
 
+# ===== Pre-analisi Download (dry-run per la UI) =================================
+
+
+def plan_raw_download(
+    slug: str,
+    *,
+    base_root: Path | str = "output",
+    require_env: bool = True,
+) -> Tuple[List[str], List[str]]:
+    """
+    Costruisce il piano di download dei PDF Drive -> locale (dry-run).
+
+    Returns:
+        conflicts: elenco "categoria/file.pdf" già presenti in locale
+        labels: tutte le destinazioni che il downloader processerebbe
+    """
+    missing: list[str] = []
+    if not callable(get_drive_service):
+        missing.append("get_drive_service")
+    if not callable(create_drive_folder):
+        missing.append("create_drive_folder")
+    if missing:
+        raise RuntimeError(
+            "Funzionalità Google Drive non disponibili (plan): "
+            + ", ".join(missing)
+            + ". Installa gli extra con: pip install .[drive]"
+        )
+
+    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    service = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
+    parent_id = (ctx.env or {}).get("DRIVE_ID")
+    if not parent_id:
+        raise RuntimeError("DRIVE_ID non impostato nell'ambiente")
+
+    client_folder_id = cast(Callable[..., Any], create_drive_folder)(
+        service,
+        slug,
+        parent_id=parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+    folders = _drive_list_folders(service, client_folder_id)
+    raw_id = {item["name"]: item["id"] for item in folders}.get("raw")
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
+
+    local_root = Path(base_root) / f"timmy-kb-{slug}" / "raw"
+    local_root.mkdir(parents=True, exist_ok=True)
+
+    conflicts: list[str] = []
+    labels: list[str] = []
+
+    for file_info in _drive_list_pdfs(service, raw_id):
+        name = (file_info.get("name") or "").strip()
+        if not name.lower().endswith(".pdf"):
+            continue
+        labels.append(name)
+        if (local_root / name).exists():
+            conflicts.append(name)
+
+    for folder in _drive_list_folders(service, raw_id):
+        folder_name = (folder.get("name") or "").strip()
+        folder_id = (folder.get("id") or "").strip()
+        if not folder_name or not folder_id:
+            continue
+        for file_info in _drive_list_pdfs(service, folder_id):
+            name = (file_info.get("name") or "").strip()
+            if not name.lower().endswith(".pdf"):
+                continue
+            label = f"{folder_name}/{name}"
+            labels.append(label)
+            if (local_root / folder_name / name).exists():
+                conflicts.append(label)
+
+    def _dedupe_sorted(entries: list[str]) -> list[str]:
+        ordered = dict.fromkeys(entries)
+        return sorted(ordered.keys())
+
+    return _dedupe_sorted(conflicts), _dedupe_sorted(labels)
+
+
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
     """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
     try:

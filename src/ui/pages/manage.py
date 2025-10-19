@@ -12,7 +12,6 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.utils import set_slug
 from ui.utils.status import status_guard
-from ui.utils.workspace import has_raw_pdfs
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -183,9 +182,15 @@ with c1:
                 st.error(f"Impossibile generare i README: {e}")
 
 with c2:
-    if st.button("Rileva PDF in raw/", key="btn_probe_raw", type="secondary", width="stretch"):
-        ready, raw_path = has_raw_pdfs(slug)
-        st.success(f"PDF rilevati in `{raw_path}`.") if ready else st.warning(f"Nessun PDF trovato in `{raw_path}`.")
+    st.button(
+        "Avvia arricchimento semantico",
+        key="btn_semantic_start",
+        type="secondary",
+        width="stretch",
+        disabled=True,
+        help="Segnaposto: questa azione verrà delegata alla pagina Semantica non appena pronta.",
+    )
+    st.info("Arricchimento semantico in arrivo: usa la pagina **Semantica** per i workflow dedicati.")
 
 with c3:
     if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
