@@ -84,14 +84,14 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `DRIVE_ID`: ID cartella root dello spazio Drive (RAW parent)
 - `GITHUB_TOKEN`: richiesto per il push GitHub
 - `GIT_DEFAULT_BRANCH`: branch di default `main`
-- `OPENAI_API_KEY_CODEX`: credenziale per la UI Timmy KB Coder e i servizi RAG basati su Codex.
-  - Fallback Coder: se `OPENAI_API_KEY` non è impostata, la UI Coder usa `OPENAI_API_KEY_CODEX` come chiave embeddings
-    e registra `embeddings.api_key.source=codex_fallback` nei log.
-  - Se entrambe sono presenti, viene usata `OPENAI_API_KEY` (nessun fallback/log).
-- `OPENAI_API_KEY_FOLDER`: credenziale separata per i job di ingest folder e gli script batch basati su OpenAI
+- `OPENAI_API_KEY`: chiave OpenAI usata sia per Vision sia per embeddings/RAG nella UI Coder. Se assente, la UI Coder disattiva il RAG.
+- `OPENAI_API_KEY_FOLDER`: opzionale per scenari multi-key (se presente ha priorità dove previsto dagli script CLI)
 - `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION`: `auto` (default), `on`, `off`
 - `ENV`, `CI`: Modalità operative
+
+### Preflight UI
+La UI esegue un controllo **preflight** (chiavi `.env`, Docker e porta preview) e blocca i pulsanti finché i prerequisiti non sono soddisfatti. Vedi sezione *Preview* e messaggi in pagina.
 
 ---
 

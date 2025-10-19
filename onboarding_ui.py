@@ -10,7 +10,13 @@ Onboarding UI entrypoint (beta 0).
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
+
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover
+    load_dotenv = None
 
 # --------------------------------------------------------------------------------------
 # Path bootstrap: aggiunge <repo>/src a sys.path il prima possibile
@@ -38,10 +44,17 @@ def _bootstrap_sys_path() -> None:
 
 _bootstrap_sys_path()
 
+if load_dotenv:
+    try:
+        load_dotenv(override=False)
+    except Exception:
+        pass
+
 # --------------------------------------------------------------------------------------
 # Streamlit setup
 # --------------------------------------------------------------------------------------
 import streamlit as st  # noqa: E402
+from ui.preflight import run_preflight  # noqa: E402
 
 st.set_page_config(
     page_title="Onboarding NeXT - Clienti",
@@ -83,6 +96,49 @@ def _hydrate_query_defaults() -> None:
 
 
 _hydrate_query_defaults()
+
+# --------------------------------------------------------------------------------------
+# Preflight con feedback progressivo e memoization in sessione
+# --------------------------------------------------------------------------------------
+if not st.session_state.get("preflight_ok", False):
+    box = st.container()
+    with box:
+        with st.expander("Prerequisiti", expanded=True):
+            progress = st.progress(5, text="Avvio controllo prerequisiti...")
+            time.sleep(0.05)
+            progress.progress(35, text="Verifica ambiente...")
+            try:
+                results, port_busy = run_preflight()
+            except Exception as exc:
+                st.error(f"Errore nel preflight: {exc}")
+                st.session_state["preflight_ok"] = False
+                st.stop()
+
+            essential_checks = {"PyMuPDF", "ReportLab", "Google API Client", "OPENAI_API_KEY"}
+            essentials_ok = True
+            progress.progress(60, text="Analisi risultati...")
+            for name, ok, hint in results:
+                if name == "Docker" and not ok:
+                    st.warning(f"[Opzionale] {name} - {hint}")
+                    continue
+                if ok:
+                    st.success(f"[OK] {name}")
+                else:
+                    st.error(f"[KO] {name} - {hint}")
+                if name in essential_checks:
+                    essentials_ok &= ok
+
+            if port_busy:
+                st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
+
+            progress.progress(100, text="Controllo completato")
+            st.session_state["preflight_ok"] = essentials_ok
+
+    if st.session_state["preflight_ok"]:
+        box.empty()
+        st.rerun()
+    else:
+        st.stop()
 
 # --------------------------------------------------------------------------------------
 # Definizione pagine
