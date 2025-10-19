@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -158,11 +160,33 @@ def sidebar(slug: str | None) -> None:
         display_name = esc_text(_client_display_name(slug))
         _call("markdown", f"**Cliente attivo:** {display_name}")
         if not has_slug:
-            rendered = None
-            if hasattr(st, "page_link"):
-                rendered = _call("page_link", "src/ui/pages/manage.py", label="Seleziona cliente")
-            if rendered is None:
-                _call("link_button", "Seleziona cliente", url="/manage", width="stretch")
+            # Reimposta slug e instrada verso Gestisci cliente (idempotente)
+            btn_sel = _call(
+                "button",
+                "Seleziona cliente",
+                key="btn_select_client",
+                help="Vai alla pagina Gestisci cliente senza slug attivo.",
+                width="stretch",
+            )
+            if btn_sel:
+                try:
+                    clear_active_slug(persist=True, update_query=True)
+                except Exception:
+                    pass
+                try:
+                    getattr(st, "switch_page", lambda *_args, **_kwargs: None)("src/ui/pages/manage.py")
+                except Exception:
+                    try:
+                        qp = getattr(st, "query_params", {})
+                        try:
+                            if isinstance(qp, dict):
+                                qp.pop("slug", None)
+                                qp["tab"] = "manage"
+                        except Exception:
+                            pass
+                        getattr(st, "rerun", lambda: None)()
+                    except Exception:
+                        pass
 
         _call("subheader", "Azioni rapide")
 
@@ -193,26 +217,59 @@ def sidebar(slug: str | None) -> None:
         if btn:
             _on_dummy_kb()
 
-        btn = _call(
+        # Uscita: shutdown reale del processo Streamlit
+        btn_exit = _call(
             "button",
             "Esci",
             key="btn_exit",
             type="primary",
             width="stretch",
         )
-        if btn:
-            _on_exit()
+        if btn_exit:
+            # Pulisci eventuale stato cliente, poi spegni il server
+            try:
+                clear_active_slug(persist=True, update_query=True)
+            except Exception:
+                pass
+            try:
+                st.info("Chiusura in corso…")
+            except Exception:
+                pass
+            try:
+                _shutdown(None)
+            except Exception:
+                try:
+                    os.kill(os.getpid(), signal.SIGTERM)
+                except Exception:
+                    os._exit(0)
+            try:
+                st.stop()
+            except Exception:
+                pass
 
-        _call("markdown", "---")
-        rendered = None
-        if hasattr(st, "page_link"):
-            rendered = _call(
-                "page_link",
-                "src/ui/pages/guida_ui.py",
-                label="Guida UI",
-            )
-        if rendered is None:
-            _call("link_button", "Guida UI", url="/guida", width="stretch")
+        _call("divider")
+        btn_help = _call(
+            "button",
+            "Guida UI",
+            key="btn_help_ui",
+            type="secondary",
+            width="stretch",
+            help="Apri la guida dell'interfaccia nella stessa scheda.",
+        )
+        if btn_help:
+            try:
+                getattr(st, "switch_page", lambda *_args, **_kwargs: None)("src/ui/pages/guida_ui.py")
+            except Exception:
+                try:
+                    qp = getattr(st, "query_params", {})
+                    if isinstance(qp, dict):
+                        qp["tab"] = "guida"
+                except Exception:
+                    pass
+                try:
+                    getattr(st, "rerun", lambda: None)()
+                except Exception:
+                    pass
 
 
 def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:

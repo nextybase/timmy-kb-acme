@@ -98,6 +98,25 @@ def _hydrate_query_defaults() -> None:
 _hydrate_query_defaults()
 
 # --------------------------------------------------------------------------------------
+# Modalità EXIT: short-circuit prima del preflight
+# --------------------------------------------------------------------------------------
+def _truthy(v) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, list):
+        v = v[0] if v else ""
+    try:
+        return str(v).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+    except Exception:
+        return False
+
+
+if _truthy(getattr(st, "query_params", {}).get("exit")):
+    st.title("Sessione terminata")
+    st.info("Puoi chiudere questa scheda. Lo slug attivo è stato azzerato.")
+    st.stop()
+
+# --------------------------------------------------------------------------------------
 # Preflight con feedback progressivo e memoization in sessione
 # --------------------------------------------------------------------------------------
 if not st.session_state.get("preflight_ok", False):
