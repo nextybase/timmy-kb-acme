@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
 import streamlit as st
+import yaml
 
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import read_text_safe
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
@@ -37,6 +40,60 @@ _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
 _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")  # noqa: F401
+
+# Arricchimento semantico (estrazione tag → stub + YAML)
+_run_tags_update = _safe_get("ui.services.tags_adapter:run_tags_update")
+
+
+# -----------------------------------------------------------
+# Modal editor per semantic/tags_reviewed.yaml
+# -----------------------------------------------------------
+def _open_tags_editor_modal(slug: str) -> None:
+    base_dir = _repo_root() / "output" / f"timmy-kb-{slug}"
+    yaml_path = base_dir / "semantic" / "tags_reviewed.yaml"
+    yaml_parent = yaml_path.parent
+    try:
+        initial_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+    except Exception:
+        initial_text = "version: 2\nkeep_only_listed: true\ntags: []\n"
+
+    dialog_factory = getattr(st, "dialog", None)
+
+    def _editor_body() -> None:
+        caption_fn = getattr(st, "caption", None)
+        if callable(caption_fn):
+            caption_fn("Modifica e salva il file `semantic/tags_reviewed.yaml`.")
+        content = st.text_area(
+            "Contenuto YAML",
+            value=initial_text,
+            height=420,
+            key="tags_yaml_editor",
+            label_visibility="collapsed",
+        )
+        col_a, col_b = st.columns(2)
+        if col_a.button("Salva", type="primary"):
+            try:
+                yaml.safe_load(content)
+            except Exception as exc:
+                st.error(f"YAML non valido: {exc}")
+                return
+            try:
+                yaml_parent.mkdir(parents=True, exist_ok=True)
+                safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
+                st.toast("`tags_reviewed.yaml` salvato.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Errore nel salvataggio: {exc}")
+        if col_b.button("Chiudi"):
+            st.rerun()
+
+    if dialog_factory:
+        _dialog_fn = dialog_factory("Modifica tags_reviewed.yaml")(_editor_body)
+        _dialog_fn()
+    else:
+        with st.container(border=True):
+            st.subheader("Modifica tags_reviewed.yaml")
+            _editor_body()
 
 
 # ---------------- Helpers ----------------
@@ -182,15 +239,44 @@ with c1:
                 st.error(f"Impossibile generare i README: {e}")
 
 with c2:
-    st.button(
+    base_dir = _repo_root() / "output" / f"timmy-kb-{slug}"
+    raw_dir = base_dir / "raw"
+    semantic_dir = base_dir / "semantic"
+    try:
+        has_pdfs = raw_dir.exists() and any(p.suffix.lower() == ".pdf" for p in raw_dir.rglob("*.pdf"))
+    except Exception:
+        has_pdfs = False
+
+    disabled_semantic = (not has_pdfs) or (_run_tags_update is None)
+    button_type = "primary" if has_pdfs else "secondary"
+
+    open_semantic = st.button(
         "Avvia arricchimento semantico",
         key="btn_semantic_start",
-        type="secondary",
+        type=button_type,
         width="stretch",
-        disabled=True,
-        help="Segnaposto: questa azione verrà delegata alla pagina Semantica non appena pronta.",
+        disabled=disabled_semantic,
+        help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub/YAML tags_reviewed.",
     )
-    st.info("Arricchimento semantico in arrivo: usa la pagina **Semantica** per i workflow dedicati.")
+    if open_semantic:
+        if _run_tags_update is None:
+            st.error("Servizio di estrazione tag non disponibile.")
+        else:
+            try:
+                _run_tags_update(slug)
+                _open_tags_editor_modal(slug)
+            except Exception as exc:  # pragma: no cover
+                st.error(f"Estrazione tag non riuscita: {exc}")
+    st.info("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
+    if (_run_tags_update is not None) and (not has_pdfs):
+        st.info("Nessun PDF rilevato in raw/: carica i documenti prima di procedere con l'arricchimento.")
+
+    _caption = getattr(st, "caption", None)
+    if callable(_caption):
+        _caption("")
+    if (semantic_dir / "tags_reviewed.yaml").exists():
+        if st.button("Modifica `tags_reviewed.yaml`", key="btn_edit_tags_yaml", type="secondary"):
+            _open_tags_editor_modal(slug)
 
 with c3:
     if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
