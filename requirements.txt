@@ -16,7 +16,7 @@
 PyMuPDF==1.26.5
 # pypdf e il successore mantenuto di PyPDF2 (che non riceve piu update)
 pypdf==6.1.1
-pydantic==2.7.1
+pydantic==2.12.3
 pydantic-settings==2.0.0
 python-dotenv==1.0.1
 python-slugify==8.0.4
