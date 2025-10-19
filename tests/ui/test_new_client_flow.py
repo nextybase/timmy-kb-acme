@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import importlib
+import logging
 import shutil
 import sys
 import types
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
@@ -25,7 +28,7 @@ class _StreamlitStub:
     def text_input(self, _label: str, *, value: str = "", **_kwargs: Any) -> str:
         return value
 
-    def file_uploader(self, *_args: Any, **_kwargs: Any) -> None:
+    def file_uploader(self, *_args: Any, **_kwargs: Any) -> Any:
         return None
 
     def button(self, label: str, *_args: Any, **_kwargs: Any) -> bool:
@@ -40,12 +43,14 @@ class _StreamlitStub:
     def error(self, message: str, *_args: Any, **_kwargs: Any) -> None:
         self.error_messages.append(message)
 
-    def status(self, *_args: Any, **_kwargs: Any):
-        class _Status:
-            def update(self, *_s_args: Any, **_s_kwargs: Any) -> None:
-                return None
+    def spinner(self, *_args: Any, **_kwargs: Any):
+        return _status_stub()
 
-        return _Status()
+    def container(self, *_args: Any, **_kwargs: Any):
+        return _status_stub()
+
+    def status(self, *_args: Any, **_kwargs: Any):
+        return _status_stub()
 
     def progress(self, *_args: Any, **_kwargs: Any):
         class _Progress:
@@ -65,77 +70,93 @@ class _StreamlitStub:
         self.html_calls.append(markup)
 
     def stop(self) -> None:
-        return None
+        raise RuntimeError("st.stop non dovrebbe essere invocato in fallback locale")
 
     def rerun(self) -> None:
         self.rerun_called += 1
 
 
-@pytest.fixture
-def _prepare_workspace():
+@contextmanager
+def _status_stub() -> Iterator[Any]:
+    class _Ctx:
+        def update(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+    yield _Ctx()
+
+
+def _make_pdf_stub(payload: bytes) -> Any:
+    class _Pdf:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+
+        def getvalue(self) -> bytes:
+            return self._data
+
+    return _Pdf(payload)
+
+
+def test_init_workspace_skips_drive_when_helper_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     slug = "acme"
-    project_root = Path(__file__).resolve().parents[2]
-    client_root = project_root / "output" / f"timmy-kb-{slug}"
+    monkeypatch.chdir(tmp_path)
+    client_root = tmp_path / "output" / f"timmy-kb-{slug}"
     if client_root.exists():
         shutil.rmtree(client_root)
-    (client_root / "semantic").mkdir(parents=True, exist_ok=True)
-    (client_root / "semantic" / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
-    (client_root / "semantic" / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
 
-    try:
-        yield slug, client_root
-    finally:
-        if client_root.exists():
-            shutil.rmtree(client_root)
+    stub = _StreamlitStub()
+    stub.button_returns = {"Inizializza Workspace": True}
+    stub.session_state = {"new_client.phase": "init", "new_client.slug": "", "client_name": ""}
+    stub.text_input = lambda label, **kwargs: "acme" if "Slug" in label else kwargs.get("value", "")
+    stub.file_uploader = lambda *_args, **_kwargs: _make_pdf_stub(b"%PDF-1.4")
 
-
-def _setup_common_mocks(monkeypatch: pytest.MonkeyPatch, stub: _StreamlitStub) -> None:
+    monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
     monkeypatch.setitem(sys.modules, "streamlit", stub)
-
-    import ui.chrome as chrome
-
-    monkeypatch.setattr(chrome, "header", lambda *_a, **_k: None)
-    monkeypatch.setattr(chrome, "sidebar", lambda *_a, **_k: None)
-
-    import ui.clients_store as clients_store
-
-    state_log: list[tuple[str, str]] = []
-
-    def _fake_set_state(slug: str, state: str) -> None:
-        state_log.append((slug, state))
-
-    monkeypatch.setattr(clients_store, "set_state", _fake_set_state, raising=True)
-    upsert_log: list[Any] = []
-    monkeypatch.setattr(clients_store, "upsert_client", lambda entry: upsert_log.append(entry), raising=True)
-
-    stub._state_log = state_log  # type: ignore[attr-defined]
-    stub._upsert_log = upsert_log  # type: ignore[attr-defined]
 
     fake_drive_module = types.ModuleType("ui.services.drive_runner")
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
 
+    import src.pre_onboarding as pre_onboarding
 
-def test_mirror_repo_config_preserves_client_fields(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = _StreamlitStub()
-    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    def _fake_bootstrap(slug: str, *, client_name: str | None, vision_statement_pdf: bytes | None) -> None:
+        base = client_root
+        (base / "config").mkdir(parents=True, exist_ok=True)
+        (base / "config" / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
+        (base / "semantic").mkdir(parents=True, exist_ok=True)
+        if vision_statement_pdf:
+            (base / "config" / "VisionStatement.pdf").write_bytes(vision_statement_pdf)
 
-    import src.ui.pages.new_client as new_client
+    monkeypatch.setattr(pre_onboarding, "ensure_local_workspace_for_ui", _fake_bootstrap, raising=True)
 
-    slug = "acme"
-    template_root = tmp_path
-    (template_root / "config").mkdir(parents=True, exist_ok=True)
-    (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
-    client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
-    client_cfg_dir.mkdir(parents=True, exist_ok=True)
-    (client_cfg_dir / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
+    import ui.services.vision_provision as vision_mod
 
-    monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
+    def _fake_run_vision(ctx: Any, *, slug: str, pdf_path: Path, logger: Any | None = None, **_: Any) -> None:
+        semantic_dir = Path(ctx.base_dir) / "semantic"
+        semantic_dir.mkdir(parents=True, exist_ok=True)
+        (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
+        (semantic_dir / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
 
-    original = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
+    monkeypatch.setattr(vision_mod, "run_vision", _fake_run_vision, raising=True)
 
-    new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"pdf")
+    sys.modules.pop("ui.utils.status", None)
+    import ui.utils.status as status_mod
 
-    updated = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
-    assert "client_name: ACME" in updated
-    assert updated.count("client_name") == original.count("client_name")
-    assert "foo: bar" in updated
+    monkeypatch.setattr(status_mod, "status_guard", lambda *a, **k: _status_stub(), raising=True)
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        sys.modules.pop("src.ui.pages.new_client", None)
+        import src.ui.pages.new_client as new_client
+
+        importlib.reload(new_client)
+
+    try:
+        assert stub.success_messages
+        assert not stub.error_messages
+        assert stub.session_state.get("new_client.phase") == "ready_to_open"
+        assert stub.session_state.get("new_client.slug") == slug
+        assert any("ui.drive.provisioning_skipped" in record.getMessage() for record in caplog.records)
+    finally:
+        if client_root.exists():
+            shutil.rmtree(client_root)

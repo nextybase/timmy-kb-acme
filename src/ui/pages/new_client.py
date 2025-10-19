@@ -296,7 +296,22 @@ if current_phase == UI_PHASE_INIT:
                     status.update(label="Workspace locale pronto.", state="complete")
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
-            if _ensure_drive_minimal is not None:
+            if _ensure_drive_minimal is None:
+                if UI_ALLOW_LOCAL_ONLY:
+                    LOGGER.info(
+                        "ui.drive.provisioning_skipped",
+                        extra={"slug": s, "reason": "helper_unavailable", "local_only": True},
+                    )
+                    _log_diagnostics(
+                        s,
+                        "warning",
+                        "ui.drive.not_configured_local_only",
+                        extra={"slug": s, "phase": "init"},
+                    )
+                else:
+                    st.error("Provisioning Drive non disponibile. Installa gli extra `pip install .[drive]` e riprova.")
+                    st.stop()
+            else:
                 with status_guard(
                     "Provisioning su Google Drive...",
                     expanded=True,
