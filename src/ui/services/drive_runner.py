@@ -108,6 +108,46 @@ def _require_drive_for_raw_only() -> None:
         )
 
 
+# =====================================================================
+# Bootstrap minimo su Drive (+ upload config e aggiornamento config.yaml)
+# =====================================================================
+def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str] = None) -> Path:
+    """
+    Crea la struttura minima su Drive (cartella cliente + raw/ + contrattualistica/),
+    carica il config su Drive e aggiorna `config.yaml` locale con gli ID Drive.
+    Ritorna il path del config locale aggiornato.
+    Richiede .env valido (SERVICE_ACCOUNT_FILE, DRIVE_ID, ecc.).
+    """
+    from pre_onboarding import (  # import locale per evitare costi a import-time
+        _create_local_structure,
+        _drive_phase,
+        _prepare_context_and_logger,
+        _require_drive_utils,
+    )
+
+    ctx, logger, resolved_name = _prepare_context_and_logger(
+        slug,
+        interactive=False,
+        require_env=True,  # necessari per accedere a Drive
+        run_id=None,
+        client_name=client_name,
+    )
+    cfg_path = cast(Path, _create_local_structure(ctx, logger, client_name=(resolved_name or slug)))
+
+    # Verifica che le primitive Drive siano disponibili e configurate
+    _require_drive_utils()
+
+    # Esegue la fase Drive (creazione cartelle, upload config, aggiornamento ID locali)
+    _drive_phase(
+        ctx,
+        logger,
+        config_path=cfg_path,
+        client_name=(resolved_name or slug),
+        require_env=True,
+    )
+    return cfg_path
+
+
 # ===== Creazione struttura Drive/Locale da cartelle_raw.yaml ==================
 
 

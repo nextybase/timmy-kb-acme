@@ -91,7 +91,10 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `ENV`, `CI`: Modalità operative
 
 ### Preflight UI
-La UI esegue un controllo **preflight** (chiavi `.env`, Docker e porta preview) e blocca i pulsanti finché i prerequisiti non sono soddisfatti. Vedi sezione *Preview* e messaggi in pagina.
+La UI esegue un controllo **preflight** con feedback progressivo su chiavi `.env` e librerie.
+**Docker è opzionale**: se assente viene segnalato ma non blocca l’uso; il controllo della
+porta di preview è eseguito **solo** quando Docker è disponibile. In caso di esito positivo,
+il box *Prerequisiti* viene nascosto automaticamente.
 
 ---
 
@@ -176,6 +179,8 @@ streamlit run onboarding_ui.py
 ```
 Requisiti: Streamlit >= 1.50 (solo `st.rerun`, nessun fallback `experimental_*`) e pulsanti/sottomissioni con `width="stretch"` per mantenere l'accessibilita'.
 Guida completa: `docs/guida_ui.md`.
+> **Nota:** il pulsante **Esci** chiude la sessione e azzera lo slug attivo
+> (equivalente ad aprire la pagina con `?exit=1`).
 
 ---
 

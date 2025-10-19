@@ -73,6 +73,37 @@ def _save_config(cfg: dict[str, Any]) -> None:
     safe_write_text(CONFIG_FILE, payload, encoding="utf-8", atomic=True)
 
 
+# ------------------- UI flags (config globale repo) -------------------
+def get_skip_preflight() -> bool:
+    """
+    Flag persistente per saltare il preflight (config/config.yaml -> ui.skip_preflight).
+    """
+    cfg: dict[str, Any] = _load_config()
+    ui_section: Any = cfg.get("ui")
+    if isinstance(ui_section, dict):
+        try:
+            return bool(ui_section.get("skip_preflight", False))
+        except Exception:
+            return False
+    try:
+        return bool(cfg.get("skip_preflight", False))
+    except Exception:
+        return False
+
+
+def set_skip_preflight(flag: bool) -> None:
+    """
+    Aggiorna ui.skip_preflight persistendo la configurazione in modo atomico.
+    """
+    cfg: dict[str, Any] = _load_config()
+    ui_section: Any = cfg.get("ui")
+    if not isinstance(ui_section, dict):
+        ui_section = {}
+    ui_section["skip_preflight"] = bool(flag)
+    cfg["ui"] = ui_section
+    _save_config(cfg)
+
+
 def get_retriever_settings() -> tuple[int, int, bool]:
     """(limit, budget_ms, auto). Clampa e fornisce default sicuri."""
     cfg: dict[str, Any] = _load_config()

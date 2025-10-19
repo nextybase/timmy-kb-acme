@@ -22,7 +22,7 @@ try:
 except Exception:  # pragma: no cover
     pass  # pragma: no cover
 
-from pipeline.context import validate_slug
+from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from ui.clients_store import ClientEntry, set_state, upsert_client
@@ -39,16 +39,11 @@ if _build_drive_from_mapping_impl is not None:
 else:
     build_drive_from_mapping = None
 
-# Bootstrap minimo Drive (prima di Vision)
 try:
-    from ui.services.drive_runner import ensure_drive_minimal_and_upload_config as _ensure_drive_minimal_impl
+    from ui.services.drive_runner import ensure_drive_minimal_and_upload_config as _ensure_drive_minimal
 except Exception:  # pragma: no cover
-    _ensure_drive_minimal_impl = None
-
-if _ensure_drive_minimal_impl is not None:
-    ensure_drive_minimal: Optional[BuildDriveCallable] = cast(BuildDriveCallable, _ensure_drive_minimal_impl)
-else:
-    ensure_drive_minimal = None
+    _ensure_drive_minimal = None
+from pipeline.config_utils import get_client_config
 
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
 LOGGER = logging.getLogger("ui.new_client")
@@ -74,6 +69,18 @@ def _semantic_dir_client(slug: str) -> Path:
 
 def _client_pdf_path(slug: str) -> Path:
     return _config_dir_client(slug) / "VisionStatement.pdf"
+
+
+def _has_drive_ids(slug: str) -> bool:
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False)
+    except Exception:
+        return False
+    try:
+        cfg = get_client_config(ctx) or {}
+    except Exception:
+        return False
+    return bool(cfg.get("drive_raw_folder_id")) and bool(cfg.get("drive_folder_id"))
 
 
 def _exists_semantic_files(slug: str) -> bool:
@@ -251,23 +258,29 @@ if current_phase == UI_PHASE_INIT:
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
 
-            # 4) Provisioning minimo su Drive (se configurato)
-            if ensure_drive_minimal is None and not UI_ALLOW_LOCAL_ONLY:
-                _open_error_modal(
-                    "Google Drive non configurato",
-                    "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
-                    "e imposta `DRIVE_ID` / `SERVICE_ACCOUNT_FILE`.",
-                )
+            # 4) Provisioning minimo su Drive (obbligatorio se l'helper � disponibile)
+            if _ensure_drive_minimal is None:
+                st.error("Provisioning Drive non disponibile. " "Installa gli extra `pip install .[drive]` e riprova.")
                 st.stop()
-            if ensure_drive_minimal is not None:
-                with status_guard(
-                    "Provisiono struttura minima su Drive...",
-                    expanded=True,
-                    error_label="Errore durante il provisioning Drive",
-                ) as status:
-                    ensure_drive_minimal(slug=s, client_name=(name or None))
+            with status_guard(
+                "Provisioning su Google Drive...",
+                expanded=True,
+                error_label="Errore durante il provisioning Drive",
+            ) as status:
+                try:
+                    _ensure_drive_minimal(slug=s, client_name=(name or None))
                     if status is not None and hasattr(status, "update"):
-                        status.update(label="Struttura minima creata e config caricato.", state="complete")
+                        status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
+                except Exception as exc:
+                    if status is not None and hasattr(status, "update"):
+                        status.update(label="Errore durante il provisioning Drive.", state="error")
+                    st.error(
+                        "Errore durante il provisioning Drive: "
+                        f"{exc}\n\n"
+                        "Verifica le variabili .env (es. SERVICE_ACCOUNT_FILE, DRIVE_ID) "
+                        "e i permessi dell'account di servizio."
+                    )
+                    st.stop()
 
             # 5) Vision
             ui_logger = _ui_logger()
@@ -330,7 +343,20 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
-    if st.button("Apri workspace", key="btn_open_ws", type="primary", width="stretch"):
+    has_drive_ids = _has_drive_ids(eff)
+    if not has_drive_ids and not UI_ALLOW_LOCAL_ONLY:
+        st.warning(
+            "Config privo degli ID Drive (drive_folder_id/drive_raw_folder_id). "
+            "Ripeti 'Inizializza Workspace' dopo aver configurato le variabili .env e i permessi Drive."
+        )
+
+    if st.button(
+        "Apri workspace",
+        key="btn_open_ws",
+        type="primary",
+        width="stretch",
+        disabled=(not has_drive_ids and not UI_ALLOW_LOCAL_ONLY),
+    ):
         display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
@@ -353,6 +379,10 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                 )
         else:
             try:
+                if not _has_drive_ids(eff) and not UI_ALLOW_LOCAL_ONLY:
+                    st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
+                    st.stop()
+
                 with status_guard(
                     "Provisiono la struttura Drive...",
                     expanded=True,

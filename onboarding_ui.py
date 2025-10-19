@@ -55,6 +55,7 @@ if load_dotenv:
 # --------------------------------------------------------------------------------------
 import streamlit as st  # noqa: E402
 from ui.preflight import run_preflight  # noqa: E402
+from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
 
 st.set_page_config(
     page_title="Onboarding NeXT - Clienti",
@@ -117,47 +118,64 @@ if _truthy(getattr(st, "query_params", {}).get("exit")):
     st.stop()
 
 # --------------------------------------------------------------------------------------
-# Preflight con feedback progressivo e memoization in sessione
+# Preflight con feedback + flag persistente "Salta il controllo"
+# - Se ui.skip_preflight = True, si bypassa del tutto la sezione.
+# - Altrimenti, si mostra l'esito e serve il pulsante "Prosegui".
 # --------------------------------------------------------------------------------------
 if not st.session_state.get("preflight_ok", False):
-    box = st.container()
-    with box:
-        with st.expander("Prerequisiti", expanded=True):
-            progress = st.progress(5, text="Avvio controllo prerequisiti...")
-            time.sleep(0.05)
-            progress.progress(35, text="Verifica ambiente...")
-            try:
-                results, port_busy = run_preflight()
-            except Exception as exc:
-                st.error(f"Errore nel preflight: {exc}")
-                st.session_state["preflight_ok"] = False
-                st.stop()
-
-            essential_checks = {"PyMuPDF", "ReportLab", "Google API Client", "OPENAI_API_KEY"}
-            essentials_ok = True
-            progress.progress(60, text="Analisi risultati...")
-            for name, ok, hint in results:
-                if name == "Docker" and not ok:
-                    st.warning(f"[Opzionale] {name} - {hint}")
-                    continue
-                if ok:
-                    st.success(f"[OK] {name}")
-                else:
-                    st.error(f"[KO] {name} - {hint}")
-                if name in essential_checks:
-                    essentials_ok &= ok
-
-            if port_busy:
-                st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
-
-            progress.progress(100, text="Controllo completato")
-            st.session_state["preflight_ok"] = essentials_ok
-
-    if st.session_state["preflight_ok"]:
-        box.empty()
-        st.rerun()
+    if get_skip_preflight():
+        st.session_state["preflight_ok"] = True
     else:
-        st.stop()
+        box = st.container()
+        with box:
+            with st.expander("Prerequisiti", expanded=True):
+                current_skip = get_skip_preflight()
+                new_skip = st.checkbox(
+                    "Salta il controllo",
+                    value=current_skip,
+                    help="Preferenza persistente (config/config.yaml → ui.skip_preflight).",
+                )
+                if new_skip != current_skip:
+                    try:
+                        set_skip_preflight(new_skip)
+                        st.toast("Preferenza aggiornata.")
+                    except Exception as exc:
+                        st.warning(f"Impossibile salvare la preferenza: {exc}")
+
+                progress = st.progress(5, text="Avvio controllo prerequisiti...")
+                time.sleep(0.05)
+                progress.progress(35, text="Verifica ambiente...")
+                try:
+                    results, port_busy = run_preflight()
+                except Exception as exc:
+                    st.error(f"Errore nel preflight: {exc}")
+                    st.session_state["preflight_ok"] = False
+                    st.stop()
+
+                essential_checks = {"PyMuPDF", "ReportLab", "Google API Client", "OPENAI_API_KEY"}
+                essentials_ok = True
+                progress.progress(60, text="Analisi risultati...")
+                for name, ok, hint in results:
+                    if name == "Docker" and not ok:
+                        st.warning(f"[Opzionale] {name} - {hint}")
+                        continue
+                    if ok:
+                        st.success(f"[OK] {name}")
+                    else:
+                        st.error(f"[KO] {name} - {hint}")
+                    if name in essential_checks:
+                        essentials_ok &= ok
+
+                if port_busy:
+                    st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
+
+                progress.progress(100, text="Controllo completato")
+                proceed = st.button("Prosegui", type="primary", disabled=not essentials_ok)
+                if proceed and essentials_ok:
+                    st.session_state["preflight_ok"] = True
+                    st.rerun()
+                else:
+                    st.stop()
 
 # --------------------------------------------------------------------------------------
 # Definizione pagine

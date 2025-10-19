@@ -1,52 +1,25 @@
-# =============================================
-#  config/config.yaml – Configurazione pipeline Timmy NeXT
-#  Versionato su repo, editabile da interfaccia
-# =============================================
-
-# === GitHub settings (NON token) ===
-github_org: nextybase              # Organizzazione/user GitHub
-repo_visibility: private           # 'private' o 'public' (default: private)
-
-# === Pipeline structure / templates ===
-cartelle_raw_yaml: config/default_semantic_mapping.yaml    # YAML struttura cartelle base per ingest
-local_temp_config_path: config/config.yaml  # Path file config temporaneo, se usato da UI/CLI
-raw_dir_template: output/timmy-kb-{slug}/raw   # Template per cartella input documenti del cliente
-output_dir_template: output/timmy-kb-{slug}    # Template per cartella output principale del cliente
-
-# === Docker / GitBook settings (NON token) ===
-gitbook_image: honkit/honkit          # Docker image per preview Honkit/GitBook
-gitbook_workspace: next-2             # Workspace GitBook da usare (ID o slug, NON token)
-
-# === Logging settings ===
-log_file_path: logs/onboarding.log    # Percorso file di log
-log_max_bytes: 1048576                # Max size per rotazione log (byte)
-log_backup_count: 3                   # Numero max file di backup per log rotazione
-debug: false                          # true/false per abilitare log verbose (default: false)
-
-# === Versioning UI session ===
-# Incrementale a cura della UI/pipeline:
-# - N_VER: intero che parte da 0; viene incrementato una sola volta alla prima modifica
-#          (yaml/db/etc.) in una sessione UI.
-# - DATA_VER: stringa ISO data (YYYY-MM-DD); aggiornata alla chiusura UI se ci sono state modifiche.
+github_org: nextybase
+repo_visibility: private
+cartelle_raw_yaml: config/default_semantic_mapping.yaml
+local_temp_config_path: config/config.yaml
+raw_dir_template: output/timmy-kb-{slug}/raw
+output_dir_template: output/timmy-kb-{slug}
+gitbook_image: honkit/honkit
+gitbook_workspace: next-2
+log_file_path: logs/onboarding.log
+log_max_bytes: 1048576
+log_backup_count: 3
+debug: false
 N_VER: 0
 DATA_VER: null
-
-# === Policy aggiuntive / estensioni future ===
-# (Aggiungi qui ulteriori parametri pipeline editabili)
-
-# === Retriever (calibrazione) ===
-# Impostazioni efficaci per la ricerca top-k. Il valore viene applicato solo
-# se il chiamante non ha personalizzato QueryParams.candidate_limit.
 retriever:
-  candidate_limit: 4000         # baseline consigliato (nessun override di default)
-  auto_by_budget: false         # se true e latency_budget_ms > 0 usa la mappa euristica
-  latency_budget_ms: 0          # budget (opz.) per auto_by_budget
-
-# === Assistente GPT ===
-# Impostazioni per la funzione Vision che costruisce
-# i file semantic_mapping.yaml. e cartelle_raw,yaml.
+  candidate_limit: 4000
+  auto_by_budget: false
+  latency_budget_ms: 0
 vision:
-  engine: assistant        # default
-  model: gpt-4o-mini-2024-07-18  # usato solo se engine=responses|legacy
+  engine: assistant
+  model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
   strict_output: true
+ui:
+  skip_preflight: true
