@@ -13,15 +13,16 @@
 # =============================================================================
 
 # === Librerie principali per la pipeline NeXT Timmy-KB ===
-PyMuPDF==1.24.14
-PyPDF2==3.0.1
+PyMuPDF==1.26.5
+# pypdf e il successore mantenuto di PyPDF2 (che non riceve piu update)
+pypdf==6.1.1
 pydantic==2.7.1
 pydantic-settings==2.0.0
 python-dotenv==1.0.1
 python-slugify==8.0.4
 PyYAML==6.0.1
 requests==2.32.2
-google-api-python-client==2.127.0
+google-api-python-client==2.171.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 spacy==3.7.4
@@ -30,7 +31,7 @@ fpdf==1.7.2
 PyGithub==2.3.0
 
 # === Componenti rendering/reportistica ===
-reportlab==4.1.0
+reportlab==4.4.4
 
 # === Utility e compatibilità ===
 typing-extensions==4.12.2
@@ -40,11 +41,12 @@ annotated-types==0.7.0
 streamlit==1.50.0
 
 # === RAG / embeddings ===
-openai==1.109.1
-httpx==0.27.2
-# httpx <0.28 per compatibilità con OpenAI Python (supporto proxies)
+openai==2.3.0
+# httpx >=0.28: allinea le API usate nel codice (Timeout.pool, ecc.)
+httpx==0.28.1
 tiktoken==0.7.0
-numpy==1.26.4
+# NumPy 2.x testata con torch 2.8 e scikit-learn 1.7.x
+numpy==2.3.0
 
 # Scarica il modello italiano piccolo per spaCy:
 # py -m spacy download it_core_news_md
@@ -56,6 +58,7 @@ requests-oauthlib==2.0.0
 
 # === NLP keywords extraction ===
 sentence-transformers==2.7.0
-scikit-learn==1.5.1
+# 1.7.2: bugfix + supporto Python 3.14 (richiede scipy>=1.8; pip la risolve da solo)
+scikit-learn==1.7.2
 yake==0.4.8
 torch==2.8.0

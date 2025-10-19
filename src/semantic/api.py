@@ -32,6 +32,9 @@ from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_t
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
+from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
+from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
+from storage.tags_store import get_conn as _get_tags_conn
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
@@ -425,6 +428,60 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         cfg = _load_semantic_config(base_dir)
         candidates = _extract_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
+
+        # Arricchimento con top-terms NLP (se disponibili in tags.db)
+        try:
+            tags_db_path = Path(_derive_tags_db_path(semantic_dir / "tags_reviewed.yaml"))
+            folder_terms: Dict[str, List[str]] = {}
+            if tags_db_path.exists():
+                _ensure_tags_schema_v2(str(tags_db_path))
+                with _get_tags_conn(str(tags_db_path)) as conn:
+                    rows = conn.execute(
+                        """
+                        SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
+                        FROM folder_terms ft
+                        JOIN folders f ON f.id = ft.folder_id
+                        JOIN terms   t ON t.id = ft.term_id
+                        GROUP BY f.path, t.canonical
+                        ORDER BY f.path, weight DESC
+                        """
+                    ).fetchall()
+                for row in rows:
+                    folder_path = str(row["folder_path"] or "")
+                    canonical = str(row["term"] or "").strip()
+                    if not canonical:
+                        continue
+                    rel_folder = folder_path[4:] if folder_path.startswith("raw/") else folder_path
+                    rel_folder = rel_folder.strip("/")
+                    folder_terms.setdefault(rel_folder, []).append(canonical)
+
+            if folder_terms:
+                for rel_path, meta in candidates.items():
+                    rel_folder = Path(rel_path).parent.as_posix()
+                    rel_folder = "" if rel_folder == "." else rel_folder
+                    nlp_tags = folder_terms.get(rel_folder)
+                    if not nlp_tags:
+                        continue
+                    existing = list(meta.get("tags") or [])
+                    seen_lower = {str(tag).strip().lower() for tag in existing if str(tag).strip()}
+                    enriched: list[str] = list(existing)
+                    for term in nlp_tags:
+                        term_norm = str(term).strip()
+                        if not term_norm:
+                            continue
+                        key = term_norm.lower()
+                        if key in seen_lower:
+                            continue
+                        enriched.append(term_norm)
+                        seen_lower.add(key)
+                        if len(enriched) >= 16:
+                            break
+                    if enriched:
+                        meta["tags"] = enriched
+        except Exception:
+            # Se l'arricchimento fallisce, continuiamo con i soli candidati euristici.
+            pass
+
         _render_tags_csv(candidates, csv_path, base_dir=base_dir)
         count = len(candidates)
         logger.info(

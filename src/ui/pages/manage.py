@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, cast
 
 import streamlit as st
 import yaml
@@ -242,41 +242,52 @@ with c2:
     base_dir = _repo_root() / "output" / f"timmy-kb-{slug}"
     raw_dir = base_dir / "raw"
     semantic_dir = base_dir / "semantic"
-    try:
-        has_pdfs = raw_dir.exists() and any(p.suffix.lower() == ".pdf" for p in raw_dir.rglob("*.pdf"))
-    except Exception:
-        has_pdfs = False
 
-    disabled_semantic = (not has_pdfs) or (_run_tags_update is None)
-    button_type = "primary" if has_pdfs else "secondary"
+    def _scan_raw_pdfs(directory: Path) -> tuple[bool, int]:
+        try:
+            if not directory.exists():
+                return False, 0
+            pdfs = [p for p in directory.rglob("*.pdf") if p.is_file()]
+            return bool(pdfs), len(pdfs)
+        except Exception:
+            return False, 0
+
+    has_pdfs, pdf_count = _scan_raw_pdfs(raw_dir)
+    run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
+    service_ok = run_tags_fn is not None
 
     open_semantic = st.button(
         "Avvia arricchimento semantico",
         key="btn_semantic_start",
-        type=button_type,
+        type="primary",
         width="stretch",
-        disabled=disabled_semantic,
         help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub/YAML tags_reviewed.",
     )
     if open_semantic:
-        if _run_tags_update is None:
-            st.error("Servizio di estrazione tag non disponibile.")
+        if run_tags_fn is None:
+            st.error(
+                "Servizio di estrazione tag non disponibile.",
+                "Verifica le dipendenze e il modulo `ui.services.tags_adapter`.",
+            )
+            st.stop()
+        elif not has_pdfs:
+            st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
+            st.stop()
         else:
             try:
-                _run_tags_update(slug)
+                run_tags_fn(slug)
                 _open_tags_editor_modal(slug)
             except Exception as exc:  # pragma: no cover
                 st.error(f"Estrazione tag non riuscita: {exc}")
-    st.info("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
-    if (_run_tags_update is not None) and (not has_pdfs):
-        st.info("Nessun PDF rilevato in raw/: carica i documenti prima di procedere con l'arricchimento.")
-
-    _caption = getattr(st, "caption", None)
-    if callable(_caption):
-        _caption("")
-    if (semantic_dir / "tags_reviewed.yaml").exists():
-        if st.button("Modifica `tags_reviewed.yaml`", key="btn_edit_tags_yaml", type="secondary"):
-            _open_tags_editor_modal(slug)
+    info_fn = getattr(st, "info", None)
+    if callable(info_fn):
+        info_fn("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
+    info_msg = f"PDF in raw/: **{pdf_count}** • Servizio estrazione: **{'OK' if service_ok else 'mancante'}**"
+    caption_fn = getattr(st, "caption", None)
+    if callable(caption_fn):
+        caption_fn(info_msg)
+    elif callable(info_fn):
+        info_fn(info_msg)
 
 with c3:
     if st.button("Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):

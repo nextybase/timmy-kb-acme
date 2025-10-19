@@ -25,16 +25,27 @@ from __future__ import annotations
 
 import csv
 import logging
+import sqlite3
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
+from storage import tags_store
 from storage.tags_store import derive_db_path_from_yaml_path
 from storage.tags_store import save_tags_reviewed as save_tags_reviewed_db
 
-__all__ = ["write_tagging_readme", "write_tags_review_stub_from_csv"]
+__all__ = [
+    "write_tagging_readme",
+    "write_tags_review_stub_from_csv",
+    "write_tags_review_from_terms_db",
+    "write_tags_reviewed_from_nlp_db",
+]
 
 
 def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
@@ -139,3 +150,141 @@ def write_tags_review_stub_from_csv(
         extra={"file_path": str(db_path), "suggested": len(suggested)},
     )
     return Path(db_path)
+
+
+def write_tags_review_from_terms_db(db_path: str | Path, keep_only_listed: bool = True) -> dict[str, Any]:
+    """
+    Genera (e salva) `tags_reviewed` a partire dal DB NLP (`terms` + `term_aliases`).
+
+    Args:
+        db_path: percorso del DB SQLite con le tabelle NLP.
+        keep_only_listed: valore da impostare nel payload finale.
+
+    Returns:
+        Il dizionario serializzato (version 2) persistito via `save_tags_reviewed`.
+    """
+    resolved_db_path = Path(db_path).resolve()
+
+    tags_payload: list[dict[str, Any]] = []
+    with tags_store.get_conn(str(resolved_db_path)) as conn:
+        cur = conn.execute("SELECT id, canonical FROM terms ORDER BY canonical COLLATE NOCASE ASC")
+        for term_id, canonical in cur.fetchall():
+            synonym_rows = tags_store.list_term_aliases(conn, int(term_id))
+            synonyms = [str(alias).strip() for alias in synonym_rows if str(alias).strip()]
+            tag_name = str(canonical).strip()
+            if not tag_name:
+                continue
+            tags_payload.append(
+                {
+                    "name": tag_name,
+                    "action": "keep",
+                    "synonyms": synonyms,
+                    "note": "",
+                }
+            )
+
+    reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+    data: dict[str, Any] = {
+        "version": "2",
+        "reviewed_at": reviewed_at,
+        "keep_only_listed": bool(keep_only_listed),
+        "tags": tags_payload,
+    }
+
+    tags_store.save_tags_reviewed(str(resolved_db_path), data)
+    return data
+
+
+def write_tags_reviewed_from_nlp_db(
+    semantic_dir: Path,
+    db_path: Path,
+    logger: Any,
+    *,
+    limit: int = 200,
+    min_weight: float = 0.0,
+    keep_only_listed: bool = True,
+    version: str = "2",
+) -> Path:
+    """
+    Esporta `tags_reviewed.yaml` dai risultati NLP salvati in SQLite (terms / aliases / folder_terms).
+
+    Args:
+        semantic_dir: directory `semantic/` del cliente.
+        db_path: percorso del DB NLP (tipicamente `semantic/tags.db`).
+        logger: logger su cui emettere le informazioni (best-effort).
+        limit: numero massimo di tag da includere (ordinati per peso globale).
+        min_weight: soglia minima sul peso aggregato per includere un termine.
+        keep_only_listed: flag da salvare nel payload finale.
+        version: versione del formato `tags_reviewed`.
+
+    Returns:
+        Percorso del file YAML scritto.
+    """
+    semantic_dir = Path(semantic_dir).resolve()
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    out_path = semantic_dir / "tags_reviewed.yaml"
+
+    tags_payload: list[dict[str, Any]] = []
+
+    try:
+        with sqlite3.connect(str(db_path)) as con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            rows = cur.execute(
+                """
+                SELECT t.id AS term_id, t.canonical AS canonical, IFNULL(SUM(ft.weight), 0) AS total_weight
+                FROM terms t
+                LEFT JOIN folder_terms ft
+                    ON ft.term_id = t.id
+                    AND (ft.status IS NULL OR ft.status = 'keep')
+                GROUP BY t.id
+                HAVING total_weight >= ?
+                ORDER BY total_weight DESC, t.canonical COLLATE NOCASE
+                LIMIT ?
+                """,
+                (float(min_weight), int(limit)),
+            ).fetchall()
+
+            for row in rows:
+                term_id = int(row["term_id"])
+                canonical = str(row["canonical"]).strip()
+                if not canonical:
+                    continue
+                syn_rows = cur.execute(
+                    """
+                    SELECT alias FROM term_aliases
+                    WHERE term_id = ?
+                    ORDER BY alias COLLATE NOCASE
+                    """,
+                    (term_id,),
+                ).fetchall()
+                synonyms = [str(s["alias"]).strip() for s in syn_rows if str(s["alias"]).strip()]
+                tags_payload.append(
+                    {
+                        "name": canonical,
+                        "action": "keep",
+                        "synonyms": synonyms,
+                        "note": "",
+                    }
+                )
+    except Exception as exc:
+        raise ConfigError(f"Impossibile esportare i tag dal DB NLP: {exc}", file_path=str(db_path)) from exc
+
+    payload: dict[str, Any] = {
+        "version": version,
+        "reviewed_at": None,
+        "keep_only_listed": bool(keep_only_listed),
+        "tags": tags_payload,
+    }
+
+    ensure_within(semantic_dir, out_path)
+    yaml_text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+    safe_write_text(out_path, yaml_text, encoding="utf-8", atomic=True)
+    try:
+        logger.info(
+            "tags_reviewed.yaml exported from NLP",
+            extra={"file_path": str(out_path), "tags": len(tags_payload)},
+        )
+    except Exception:
+        pass
+    return out_path
