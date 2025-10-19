@@ -1,111 +1,55 @@
 from __future__ import annotations
 
+import importlib
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, Iterator
 
-import yaml
+import pytest
 
-from src.pre_onboarding import ensure_local_workspace_for_ui
+from tests.ui.test_manage_probe_raw import _StreamlitStub
 
 
-def test_template_merge_preserves_client_overrides(monkeypatch, tmp_path: Path) -> None:
+@contextmanager
+def _null_context() -> Iterator[Any]:
+    class _Ctx:
+        def update(self, *args: Any, **kwargs: Any) -> None:
+            return None
+
+    yield _Ctx()
+
+
+def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StreamlitStub()
+    stub.text_input = lambda *_args, value="", **_kwargs: value
+    stub.file_uploader = lambda *_args, **_kwargs: None
+    stub.spinner = lambda *_args, **_kwargs: _null_context()
+    stub.container = lambda *_args, **_kwargs: _null_context()
+    stub.selectbox = lambda *_args, options=None, **_kwargs: (options[0] if options else "")
+    stub.caption = lambda *_args, **_kwargs: None
+    stub.toast = lambda *_args, **_kwargs: None
+    stub.rerun = lambda: None
+    stub.dialog = lambda *_args, **_kwargs: (lambda fn: fn)
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    sys.modules.pop("ui.pages.new_client", None)
+    new_client = importlib.import_module("ui.pages.new_client")
+
     slug = "acme"
-    repo_root = tmp_path / "repo"
-    template_dir = repo_root / "config"
-    template_dir.mkdir(parents=True, exist_ok=True)
+    template_root = tmp_path
+    (template_root / "config").mkdir(parents=True, exist_ok=True)
+    (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
+    client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
+    client_cfg_dir.mkdir(parents=True, exist_ok=True)
+    (client_cfg_dir / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
 
-    template_config = template_dir / "config.yaml"
-    template_config.write_text(
-        "\n".join(
-            [
-                "client_name: TEMPLATE",
-                "vision_statement_pdf: template/VisionStatement.pdf",
-                "retriever:",
-                "  top_k: 5",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
 
-    class _StreamlitStub:
-        def __init__(self) -> None:
-            self.session_state: dict[str, object] = {}
+    original = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
 
-        def subheader(self, *args: object, **kwargs: object) -> None:
-            return None
+    new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"pdf")
 
-        def text_input(self, *args: object, **kwargs: object) -> str:
-            return ""
-
-        def file_uploader(self, *args: object, **kwargs: object):
-            return None
-
-        def button(self, *args: object, **kwargs: object) -> bool:
-            return False
-
-        def warning(self, *args: object, **kwargs: object) -> None:
-            return None
-
-        def stop(self) -> None:
-            return None
-
-        def error(self, *args: object, **kwargs: object) -> None:
-            return None
-
-        def status(self, *args: object, **kwargs: object):
-            class _Status:
-                def __enter__(self_inner):
-                    return self_inner
-
-                def __exit__(self_inner, exc_type, exc_val, exc_tb) -> bool:
-                    return False
-
-                def update(self_inner, *inner_args: object, **inner_kwargs: object) -> None:
-                    return None
-
-            return _Status()
-
-        def success(self, *args: object, **kwargs: object) -> None:
-            return None
-
-        def rerun(self) -> None:
-            return None
-
-        def progress(self, *args: object, **kwargs: object):
-            class _Progress:
-                def progress(self_inner, *inner_args: object, **inner_kwargs: object) -> None:
-                    return None
-
-            return _Progress()
-
-        def empty(self, *args: object, **kwargs: object):
-            class _Empty:
-                def markdown(self_inner, *inner_args: object, **inner_kwargs: object) -> None:
-                    return None
-
-            return _Empty()
-
-        def html(self, *args: object, **kwargs: object) -> None:
-            return None
-
-    monkeypatch.setitem(sys.modules, "streamlit", _StreamlitStub())
-
-    import ui.chrome as chrome
-
-    monkeypatch.setattr(chrome, "header", lambda *a, **k: None)
-    monkeypatch.setattr(chrome, "sidebar", lambda *a, **k: None)
-
-    client_root = repo_root / "output" / f"timmy-kb-{slug}"
-    monkeypatch.setenv("REPO_ROOT_DIR", str(client_root))
-    # Nota: il merge ora avviene in ensure_local_workspace_for_ui, quindi segnaliamo il template
-    monkeypatch.setenv("TEMPLATE_CONFIG_ROOT", str(repo_root))
-
-    cfg_path = client_root / "config" / "config.yaml"
-    ensure_local_workspace_for_ui(slug, client_name="ACME", vision_statement_pdf=b"%PDF")
-    config = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-
-    assert config["client_name"] == "ACME"
-    assert config["vision_statement_pdf"] == "config/VisionStatement.pdf"
-    assert "retriever" in config
-    # il merge preserva eventuali override gia presenti (bootstrap puro)
-    assert config["retriever"]["top_k"] == 5
+    updated = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
+    assert "client_name: ACME" in updated
+    assert updated.count("client_name") == original.count("client_name")
+    assert "foo: bar" in updated

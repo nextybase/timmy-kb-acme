@@ -378,9 +378,9 @@ def search(
         LOGGER.warning(
             "retriever.query.invalid",
             extra={
-                "reason": "empty_query",
                 "project_slug": params.project_slug,
                 "scope": params.scope,
+                "reason": "empty_query",
             },
         )
         return []
@@ -401,9 +401,9 @@ def search(
         LOGGER.warning(
             "retriever.query.invalid",
             extra={
-                "reason": "empty_embedding",
                 "project_slug": params.project_slug,
                 "scope": params.scope,
+                "reason": "empty_embedding",
             },
         )
         return []

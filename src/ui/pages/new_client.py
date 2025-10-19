@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, cast
 
 import streamlit as st
+import yaml
 
 from src.pre_onboarding import ensure_local_workspace_for_ui
 from ui.chrome import header, sidebar
@@ -24,7 +25,9 @@ except Exception:  # pragma: no cover
 
 from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import read_text_safe
 from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.services.vision_provision import run_vision
 
@@ -86,6 +89,39 @@ def _has_drive_ids(slug: str) -> bool:
 def _exists_semantic_files(slug: str) -> bool:
     sd = _semantic_dir_client(slug)
     return (sd / "semantic_mapping.yaml").exists() and (sd / "cartelle_raw.yaml").exists()
+
+
+def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None) -> None:
+    """Merge del template `config/config.yaml` del repo con la config locale del cliente."""
+    if pdf_bytes is not None:
+        # Compatibilità: l'eventuale PDF è già stato gestito in `ensure_local_workspace_for_ui`.
+        pass
+    template_cfg = _repo_root() / "config" / "config.yaml"
+    if not template_cfg.exists():
+        return
+
+    client_cfg_dir = _config_dir_client(slug)
+    dst_cfg = client_cfg_dir / "config.yaml"
+    if not dst_cfg.exists():
+        return
+
+    try:
+        repo_payload = read_text_safe(template_cfg.parent, template_cfg, encoding="utf-8")
+        base_cfg = yaml.safe_load(repo_payload) or {}
+
+        client_payload = read_text_safe(client_cfg_dir, dst_cfg, encoding="utf-8")
+        current_cfg = yaml.safe_load(client_payload) or {}
+
+        merged_cfg = {**base_cfg, **current_cfg}
+        safe_write_text(
+            dst_cfg,
+            yaml.safe_dump(merged_cfg, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+            atomic=True,
+        )
+    except Exception:
+        # Best-effort: eventuali errori non devono bloccare il flusso UI.
+        pass
 
 
 class _UIContext:
@@ -255,6 +291,7 @@ if current_phase == UI_PHASE_INIT:
             ) as status:
                 ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
                 _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
+                _mirror_repo_config_into_client(s)
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
 
