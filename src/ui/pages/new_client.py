@@ -291,33 +291,31 @@ if current_phase == UI_PHASE_INIT:
             ) as status:
                 ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
                 _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
-                _mirror_repo_config_into_client(s)
+                _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
 
-            # 4) Provisioning minimo su Drive (obbligatorio se l'helper � disponibile)
-            if _ensure_drive_minimal is None:
-                st.error("Provisioning Drive non disponibile. " "Installa gli extra `pip install .[drive]` e riprova.")
-                st.stop()
-            with status_guard(
-                "Provisioning su Google Drive...",
-                expanded=True,
-                error_label="Errore durante il provisioning Drive",
-            ) as status:
-                try:
-                    _ensure_drive_minimal(slug=s, client_name=(name or None))
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
-                except Exception as exc:
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label="Errore durante il provisioning Drive.", state="error")
-                    st.error(
-                        "Errore durante il provisioning Drive: "
-                        f"{exc}\n\n"
-                        "Verifica le variabili .env (es. SERVICE_ACCOUNT_FILE, DRIVE_ID) "
-                        "e i permessi dell'account di servizio."
-                    )
-                    st.stop()
+            # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
+            if _ensure_drive_minimal is not None:
+                with status_guard(
+                    "Provisioning su Google Drive...",
+                    expanded=True,
+                    error_label="Errore durante il provisioning Drive",
+                ) as status:
+                    try:
+                        _ensure_drive_minimal(slug=s, client_name=(name or None))
+                        if status is not None and hasattr(status, "update"):
+                            status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
+                    except Exception as exc:
+                        if status is not None and hasattr(status, "update"):
+                            status.update(label="Errore durante il provisioning Drive.", state="error")
+                        st.error(
+                            "Errore durante il provisioning Drive: "
+                            f"{exc}\n\n"
+                            "Verifica le variabili .env (es. SERVICE_ACCOUNT_FILE, DRIVE_ID) "
+                            "e i permessi dell'account di servizio."
+                        )
+                        st.stop()
 
             # 5) Vision
             ui_logger = _ui_logger()

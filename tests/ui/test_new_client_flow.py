@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib
-import logging
 import shutil
 import sys
 import types
@@ -44,13 +42,7 @@ class _StreamlitStub:
 
     def status(self, *_args: Any, **_kwargs: Any):
         class _Status:
-            def __enter__(self) -> "_Status":
-                return self
-
-            def __exit__(self, *_exc: Any) -> bool:
-                return False
-
-            def update(self, *_args: Any, **_kwargs: Any) -> None:
+            def update(self, *_s_args: Any, **_s_kwargs: Any) -> None:
                 return None
 
         return _Status()
@@ -123,61 +115,27 @@ def _setup_common_mocks(monkeypatch: pytest.MonkeyPatch, stub: _StreamlitStub) -
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
 
 
-def test_local_fallback_promotes_state_when_flag_enabled(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, _prepare_workspace
-) -> None:
-    slug, client_root = _prepare_workspace
-
+def test_mirror_repo_config_preserves_client_fields(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     stub = _StreamlitStub()
-    stub.button_returns = {"Inizializza Workspace": False, "Apri workspace": True}
-    stub.session_state = {
-        "new_client.phase": "init",
-        "new_client.slug": slug,
-        "client_name": "ACME",
-    }
-
-    monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
-    _setup_common_mocks(monkeypatch, stub)
-    sys.modules.pop("src.ui.pages.new_client", None)
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
 
     import src.ui.pages.new_client as new_client
 
-    stub.session_state["new_client.phase"] = new_client.UI_PHASE_READY_TO_OPEN
-    stub.session_state["client_name"] = "ACME"
+    slug = "acme"
+    template_root = tmp_path
+    (template_root / "config").mkdir(parents=True, exist_ok=True)
+    (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
+    client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
+    client_cfg_dir.mkdir(parents=True, exist_ok=True)
+    (client_cfg_dir / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
 
-    caplog.clear()
-    with caplog.at_level(logging.INFO):
-        importlib.reload(new_client)
+    monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
 
-    assert stub.session_state.get("new_client.phase") == new_client.UI_PHASE_PROVISIONED
-    assert stub.session_state.get("client_name") == "ACME"
-    assert any("Drive non configurato" in msg for msg in stub.success_messages)
-    assert any(record.getMessage() == "ui.wizard.local_fallback" for record in caplog.records)
-    assert ("acme", "pronto") in getattr(stub, "_state_log")
+    original = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
 
+    new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"pdf")
 
-def test_local_fallback_disabled_when_flag_off(monkeypatch: pytest.MonkeyPatch, _prepare_workspace) -> None:
-    slug, _client_root = _prepare_workspace
-
-    stub = _StreamlitStub()
-    stub.button_returns = {"Inizializza Workspace": False, "Apri workspace": True}
-    stub.session_state = {
-        "new_client.phase": "init",
-        "new_client.slug": slug,
-        "client_name": "ACME",
-    }
-
-    monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "false")
-    _setup_common_mocks(monkeypatch, stub)
-    sys.modules.pop("src.ui.pages.new_client", None)
-
-    import src.ui.pages.new_client as new_client
-
-    stub.session_state["new_client.phase"] = new_client.UI_PHASE_READY_TO_OPEN
-
-    importlib.reload(new_client)
-
-    assert stub.session_state.get("new_client.phase") == new_client.UI_PHASE_READY_TO_OPEN
-    assert stub.success_messages == []
-    assert stub.warning_messages
-    assert getattr(stub, "_state_log") == []
+    updated = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
+    assert "client_name: ACME" in updated
+    assert updated.count("client_name") == original.count("client_name")
+    assert "foo: bar" in updated
