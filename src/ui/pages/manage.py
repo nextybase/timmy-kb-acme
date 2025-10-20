@@ -2,13 +2,14 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
 import streamlit as st
 import yaml
 
+from pipeline.context import validate_slug
+from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
@@ -16,7 +17,7 @@ from ui.clients_store import get_state as get_client_state
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
-from ui.utils.workspace import resolve_raw_dir
+from ui.utils.workspace import count_pdfs_safe, workspace_root
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -58,9 +59,9 @@ def _clients_db_path() -> Path:
 
 
 def _workspace_root(slug: str) -> Path:
-    """Restituisce la radice workspace sicura per lo slug (validato)."""
-    raw_dir = Path(resolve_raw_dir(slug))  # valida slug + path safety, tipizzato per mypy
-    return raw_dir.parent
+    """Compat: delega all'helper condiviso per il workspace."""
+    # mypy: assicurati che il ritorno sia Path concreto
+    return Path(workspace_root(slug))
 
 
 def _load_clients() -> list[dict[str, Any]]:
@@ -185,6 +186,12 @@ if not slug:
     if st.button("Usa questo cliente", type="primary", width="stretch"):
         chosen = dict(options).get(selected_label)
         if chosen:
+            # Validazione esplicita (oltre alla sanificazione pervasiva)
+            try:
+                validate_slug(chosen)
+            except ConfigError as exc:
+                st.error(f"Slug non valido: {exc}")
+                st.stop()
             set_slug(chosen)
         st.rerun()
 
@@ -251,23 +258,12 @@ with c2:
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
-    def _scan_raw_pdfs(directory: Path) -> tuple[bool, int]:
-        try:
-            if not directory.exists():
-                return False, 0
-            count = 0
-            for root, _dirs, files in os.walk(directory, followlinks=False):
-                for name in files:
-                    if not name.lower().endswith(".pdf"):
-                        continue
-                    candidate = Path(root) / name
-                    ensure_within_and_resolve(directory, candidate)
-                    count += 1
-            return (count > 0), count
-        except Exception:
-            return False, 0
+    try:
+        pdf_count = count_pdfs_safe(raw_dir)
+        has_pdfs = pdf_count > 0
+    except Exception:
+        has_pdfs, pdf_count = False, 0
 
-    has_pdfs, pdf_count = _scan_raw_pdfs(raw_dir)
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     service_ok = run_tags_fn is not None
 

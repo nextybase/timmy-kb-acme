@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from ui.pages.manage import _scan_raw_pdfs
+from ui.utils.workspace import count_pdfs_safe
 
 
 def test_scan_ignores_symlink(tmp_path: Path):
@@ -14,8 +14,8 @@ def test_scan_ignores_symlink(tmp_path: Path):
     (outside / "x.pdf").write_bytes(b"%PDF-1.4")
     try:
         (raw / "link").symlink_to(outside, target_is_directory=True)
-    except (OSError, NotImplementedError) as e:
-        pytest.skip(f"Symlink creation not permitted on this system: {e}")
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink non permessi su questo sistema")
 
-    has, count = _scan_raw_pdfs(raw)
-    assert has is False and count == 0
+    # Il walker sicuro non deve contare PDF fuori perimetro via symlink
+    assert count_pdfs_safe(raw) == 0

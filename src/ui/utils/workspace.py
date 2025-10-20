@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional, Tuple, cast
+from typing import Any, Iterator, Optional, Tuple, cast
 
 from pipeline.path_utils import ensure_within_and_resolve, validate_slug
 
@@ -21,6 +21,7 @@ _log = logging.getLogger("ui.workspace")
 
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:
+    """Prova a caricare il base_dir dal ClientContext (se disponibile)."""
     try:
         from pipeline.context import ClientContext
     except Exception:
@@ -38,7 +39,7 @@ def _load_context_base_dir(slug: str) -> Optional[Path]:
 
 
 def _fallback_base_dir(slug: str) -> Path:
-    # Usa output/timmy-kb-<slug> ma con guardie path-safe
+    """Fallback: output/timmy-kb-<slug>, con guardie path-safe."""
     root = Path("output")
     # slug è già normalizzato/validato da resolve_raw_dir; qui non ripetiamo la normalizzazione
     return cast(Path, ensure_within_and_resolve(root, root / f"timmy-kb-{slug}"))
@@ -51,12 +52,48 @@ def resolve_raw_dir(slug: str) -> Path:
     - guardie di path-safety (ensure_within_and_resolve)
     """
     slug_value = (slug or "").strip().lower()
-    # Conforma lo slug alle policy di progetto (solleva InvalidSlug se non valido)
+    # Conforma lo slug alle policy di progetto (solleva InvalidSlug/ConfigError se non valido)
     validate_slug(slug_value)
 
     base_dir = _load_context_base_dir(slug_value) or _fallback_base_dir(slug_value)
     # Impedisci traversal/symlink: raw deve stare sotto la base del workspace
     return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
+
+
+def workspace_root(slug: str) -> Path:
+    """
+    Restituisce la radice del workspace per lo slug validato.
+    Invariante: sempre dentro al perimetro sicuro del cliente.
+    """
+    raw_dir = resolve_raw_dir(slug)
+    return raw_dir.parent
+
+
+def iter_pdfs_safe(root: Path) -> Iterator[Path]:
+    """
+    Itera i PDF sotto `root` senza seguire symlink.
+    Applica ensure_within_and_resolve a ogni candidato.
+    """
+    if not root.exists():
+        return
+    for rw, _dirs, files in os.walk(root, followlinks=False):
+        base = Path(rw)
+        for name in files:
+            if not name.lower().endswith(".pdf"):
+                continue
+            candidate = base / name
+            try:
+                # Verifica perimetro per ogni file
+                ensure_within_and_resolve(root, candidate)
+            except Exception:
+                # fuori perimetro o path sospetto: ignora
+                continue
+            yield candidate
+
+
+def count_pdfs_safe(root: Path) -> int:
+    """Conta i PDF in modo sicuro usando iter_pdfs_safe."""
+    return sum(1 for _ in iter_pdfs_safe(root))
 
 
 def _dir_mtime(p: Path) -> float:
@@ -101,23 +138,11 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
                 has_pdf_cached = bool(cached.get("has_pdf", False))
                 return has_pdf_cached, raw_dir
 
-    # Scansione robusta: evita rglob (può seguire symlink) e valida ogni path
-    has_pdf = False
+    # Scansione robusta utilizzando l'helper condiviso
     try:
-        for root, _dirs, files in os.walk(raw_dir, followlinks=False):
-            for name in files:
-                if not name.lower().endswith(".pdf"):
-                    continue
-                candidate = Path(root) / name
-                try:
-                    ensure_within_and_resolve(raw_dir, candidate)
-                except Exception:
-                    # fuori perimetro o path sospetto: ignora
-                    continue
-                has_pdf = True
-                break
-            if has_pdf:
-                break
+        # basta verificare l'esistenza del primo elemento
+        first = next(iter_pdfs_safe(raw_dir), None)
+        has_pdf = first is not None
     except Exception as e:
         # Non scrivere cache negative su errore: segnala e rientra
         try:
