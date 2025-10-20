@@ -48,6 +48,9 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
     def _no_op(*_a: Any, **_k: Any) -> None:
         return None
 
+    def _button(*_a: Any, **_k: Any) -> bool:
+        return False
+
     def selectbox(*_a: Any, **_k: Any) -> str:
         return "stub"
 
@@ -61,6 +64,7 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
     module.info = _no_op  # type: ignore[attr-defined]
     module.html = _no_op  # type: ignore[attr-defined]
     module.stop = _no_op  # type: ignore[attr-defined]
+    module.button = _button  # type: ignore[attr-defined]
     module.write = _no_op  # type: ignore[attr-defined]
     module.markdown = _no_op  # type: ignore[attr-defined]
     module.success = _no_op  # type: ignore[attr-defined]
@@ -125,11 +129,18 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
 def patch_streamlit_before_import(monkeypatch: pytest.MonkeyPatch) -> None:
     # Inseriamo lo stub PRIMA di importare manage.py
     import sys
+    import types
 
     module, submodules = _build_streamlit_stub(save_button_pressed=True)
-    sys.modules["streamlit"] = module
+    monkeypatch.setitem(sys.modules, "streamlit", module)
     for name, mod in submodules.items():
-        sys.modules[name] = mod
+        monkeypatch.setitem(sys.modules, name, mod)
+    fake_chrome = types.ModuleType("ui.chrome")
+    fake_chrome.render_chrome_then_require = lambda **_kwargs: "acme"  # type: ignore[attr-defined]
+    fake_clients_store = types.ModuleType("ui.clients_store")
+    fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
+    monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
 
 
 def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
