@@ -23,6 +23,9 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
 
     st = cast(Any, _StreamlitStub())
 
+from pipeline.context import validate_slug
+from pipeline.exceptions import ConfigError, InvalidSlug
+
 # Manteniamo compat con l'attuale gestione querystring
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -50,13 +53,25 @@ def _normalize_slug(value: Any) -> Optional[str]:
     return slug or None
 
 
+def _sanitize_slug(value: Any) -> Optional[str]:
+    slug = _normalize_slug(value)
+    if not slug:
+        return None
+    try:
+        validate_slug(slug)  # può alzare ConfigError (wrappa InvalidSlug)
+    except (InvalidSlug, ConfigError):
+        LOGGER.warning("ui.slug.invalid", extra={"slug": slug})
+        return None
+    return slug
+
+
 def _load_persisted() -> Optional[str]:
     try:
         raw: Any = json.loads(read_text_safe(_PERSIST_PATH.parent, _PERSIST_PATH))
         if not isinstance(raw, dict):
             return None
         value = raw.get("active_slug")
-        return _normalize_slug(value)
+        return _sanitize_slug(value)  # sanifica anche il persistito
     except Exception:
         return None
 
@@ -82,13 +97,14 @@ def get_active_slug() -> Optional[str]:
     3) clients_db/ui_state.json
     Se trovato, riallinea sempre gli altri layer.
     """
-    s = _normalize_slug(_qp_get())
+    # lettura da query/sessione…
+    s = _sanitize_slug(_qp_get())
     if s:
         st.session_state["__active_slug"] = s
         _save_persisted(s)
         return s
 
-    s = _normalize_slug(st.session_state.get("__active_slug"))
+    s = _sanitize_slug(st.session_state.get("__active_slug"))
     if s:
         _qp_set(s)  # riallinea la query
         return s
@@ -103,7 +119,8 @@ def get_active_slug() -> Optional[str]:
 
 
 def set_active_slug(slug: Optional[str], *, persist: bool = True, update_query: bool = True) -> None:
-    s = _normalize_slug(slug)
+    # set attivo…
+    s = _sanitize_slug(slug)
     st.session_state["__active_slug"] = s
     if persist:
         _save_persisted(s)

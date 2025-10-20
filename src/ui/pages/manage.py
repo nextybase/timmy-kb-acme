@@ -2,19 +2,21 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
 import streamlit as st
 import yaml
 
-from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.utils import set_slug
+from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
+from ui.utils.workspace import resolve_raw_dir
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -45,12 +47,67 @@ _run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")  # noqa
 _run_tags_update = _safe_get("ui.services.tags_adapter:run_tags_update")
 
 
+# ---------------- Helpers ----------------
+def _repo_root() -> Path:
+    # manage.py -> pages -> ui -> src -> REPO_ROOT
+    return Path(__file__).resolve().parents[3]
+
+
+def _clients_db_path() -> Path:
+    return _repo_root() / "clients_db" / "clients.yaml"
+
+
+def _workspace_root(slug: str) -> Path:
+    """Restituisce la radice workspace sicura per lo slug (validato)."""
+    raw_dir = Path(resolve_raw_dir(slug))  # valida slug + path safety, tipizzato per mypy
+    return raw_dir.parent
+
+
+def _load_clients() -> list[dict[str, Any]]:
+    """Carica l'elenco clienti dal DB (lista di dict normalizzata)."""
+    try:
+        path = _clients_db_path()
+        if not path.exists():
+            return []
+        data = yaml_read(path.parent, path)
+        if isinstance(data, list):
+            return [dict(item) for item in data if isinstance(item, dict)]
+        if isinstance(data, dict):
+            normalized: list[dict[str, Any]] = []
+            for slug_key, payload in data.items():
+                record = dict(payload) if isinstance(payload, dict) else {}
+                record.setdefault("slug", slug_key)
+                normalized.append(record)
+            return normalized
+    except Exception:
+        pass
+    return []
+
+
+T = TypeVar("T")
+
+
+def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
+    """Chiama fn con kwargs, degradando a posizionali in caso di firma diversa."""
+    try:
+        return fn(**kwargs)
+    except TypeError:
+        args: list[Any] = []
+        if "slug" in kwargs:
+            args.append(kwargs["slug"])
+        if "overwrite" in kwargs:
+            args.append(kwargs["overwrite"])
+        if "require_env" in kwargs:
+            args.append(kwargs["require_env"])
+        return fn(*args)
+
+
 # -----------------------------------------------------------
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str) -> None:
-    base_dir = _repo_root() / "output" / f"timmy-kb-{slug}"
-    yaml_path = base_dir / "semantic" / "tags_reviewed.yaml"
+    base_dir = _workspace_root(slug)
+    yaml_path = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
     yaml_parent = yaml_path.parent
     try:
         initial_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
@@ -94,55 +151,6 @@ def _open_tags_editor_modal(slug: str) -> None:
         with st.container(border=True):
             st.subheader("Modifica tags_reviewed.yaml")
             _editor_body()
-
-
-# ---------------- Helpers ----------------
-def _repo_root() -> Path:
-    # manage.py -> pages -> ui -> src -> REPO_ROOT
-    return Path(__file__).resolve().parents[3]
-
-
-def _clients_db_path() -> Path:
-    return _repo_root() / "clients_db" / "clients.yaml"
-
-
-def _load_clients() -> list[dict[str, Any]]:
-    """Carica l'elenco clienti dal DB (lista di dict normalizzata)."""
-    try:
-        path = _clients_db_path()
-        if not path.exists():
-            return []
-        data = yaml_read(path.parent, path)
-        if isinstance(data, list):
-            return [dict(item) for item in data if isinstance(item, dict)]
-        if isinstance(data, dict):
-            normalized: list[dict[str, Any]] = []
-            for slug_key, payload in data.items():
-                record = dict(payload) if isinstance(payload, dict) else {}
-                record.setdefault("slug", slug_key)
-                normalized.append(record)
-            return normalized
-    except Exception:
-        pass
-    return []
-
-
-T = TypeVar("T")
-
-
-def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
-    """Chiama fn con kwargs, degradando a posizionali in caso di firma diversa."""
-    try:
-        return fn(**kwargs)
-    except TypeError:
-        args: list[Any] = []
-        if "slug" in kwargs:
-            args.append(kwargs["slug"])
-        if "overwrite" in kwargs:
-            args.append(kwargs["overwrite"])
-        if "require_env" in kwargs:
-            args.append(kwargs["require_env"])
-        return fn(*args)
 
 
 # ---------------- UI ----------------
@@ -239,16 +247,23 @@ with c1:
                 st.error(f"Impossibile generare i README: {e}")
 
 with c2:
-    base_dir = _repo_root() / "output" / f"timmy-kb-{slug}"
-    raw_dir = base_dir / "raw"
-    semantic_dir = base_dir / "semantic"
+    base_dir = _workspace_root(slug)
+    raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
+    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
     def _scan_raw_pdfs(directory: Path) -> tuple[bool, int]:
         try:
             if not directory.exists():
                 return False, 0
-            pdfs = [p for p in directory.rglob("*.pdf") if p.is_file()]
-            return bool(pdfs), len(pdfs)
+            count = 0
+            for root, _dirs, files in os.walk(directory, followlinks=False):
+                for name in files:
+                    if not name.lower().endswith(".pdf"):
+                        continue
+                    candidate = Path(root) / name
+                    ensure_within_and_resolve(directory, candidate)
+                    count += 1
+            return (count > 0), count
         except Exception:
             return False, 0
 

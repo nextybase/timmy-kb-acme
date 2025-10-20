@@ -89,9 +89,7 @@ def scan_global_rules() -> list[str]:
         for regex, message in compiled.items():
             for match in regex.finditer(text):
                 line_no = text.count("\n", 0, match.start()) + 1
-                findings.append(
-                    f"[GLOBAL] {file_path}:{line_no}: {message}: '{match.group(0)}'"
-                )
+                findings.append(f"[GLOBAL] {file_path}:{line_no}: {message}: '{match.group(0)}'")
     return findings
 
 
@@ -112,9 +110,7 @@ def scan_onboarding_file() -> list[str]:
         match = re.search(forbidden_pattern, content)
         if match:
             line_no = content.count("\n", 0, match.start()) + 1
-            findings.append(
-                f"[ONBOARDING] onboarding_ui.py:{line_no}: {message}"
-            )
+            findings.append(f"[ONBOARDING] onboarding_ui.py:{line_no}: {message}")
 
     return findings
 

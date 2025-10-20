@@ -55,9 +55,7 @@ def main(argv: List[str] | None = None) -> int:
     failures: List[str] = []
 
     # 1) isort (write-mode)
-    mod, rc = run_module_if_available(
-        "isort", ["--profile=black", "--line-length=120", *LINT_PATHS]
-    )
+    mod, rc = run_module_if_available("isort", ["--profile=black", "--line-length=120", *LINT_PATHS])
     if rc not in (0, None):
         failures.append(mod)
 
@@ -79,8 +77,7 @@ def main(argv: List[str] | None = None) -> int:
         if rc not in (0, None):
             failures.append(mod)
     else:
-        print("[qa-safe] mypy: nessun target esistente tra "
-              f"{mypy_candidates} → skip", flush=True)
+        print("[qa-safe] mypy: nessun target esistente tra " f"{mypy_candidates} → skip", flush=True)
 
     # 5) pytest (smoke UI/retriever)
     smoke_targets = ["tests/ui", "tests/retriever", "tests/smoke"]

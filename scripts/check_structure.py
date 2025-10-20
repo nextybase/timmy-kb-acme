@@ -2,21 +2,25 @@
 import sys, os, argparse, unicodedata, yaml
 from pathlib import Path
 
+
 def kebabify(s: str) -> str:
-    s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
-    s = s.strip().lower().replace('_','-').replace(' ','-')
-    while '--' in s: s = s.replace('--','-')
-    return ''.join(ch for ch in s if ch.isalnum() or ch in '-')
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    s = s.strip().lower().replace("_", "-").replace(" ", "-")
+    while "--" in s:
+        s = s.replace("--", "-")
+    return "".join(ch for ch in s if ch.isalnum() or ch in "-")
+
 
 def load_yaml(p: Path):
     if not p.exists():
         return {}
-    with p.open('r', encoding='utf-8') as f:
+    with p.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
 
 def categories_from_cartelle(d: dict) -> set:
     # formati attesi: {"raw": {"contratti": {}, "privacy": {}}, "contrattualistica": {}}
-    raw = d.get('raw') or d.get('RAW') or {}
+    raw = d.get("raw") or d.get("RAW") or {}
     if isinstance(raw, dict):
         return {kebabify(k) for k in raw.keys()}
     # fallback legacy: lista di stringhe
@@ -24,20 +28,22 @@ def categories_from_cartelle(d: dict) -> set:
         return {kebabify(x) for x in raw}
     return set()
 
+
 def categories_from_mapping(d: dict) -> set:
     # mapping UI → categorie: prendiamo i "nomi concetto" top-level come base
     # e li normalizziamo in kebab-case. Ignoriamo chiavi note non strutturali.
-    ignore = {'meta', 'tags', 'keywords', 'examples', 'title', 'description'}
+    ignore = {"meta", "tags", "keywords", "examples", "title", "description"}
     cats = set()
     for k, v in (d or {}).items():
         if k in ignore:
             continue
         # se il mapping ha un nodo "concetti: {...}" usiamo i figli
-        if k.lower() in ('concetti','concepts') and isinstance(v, dict):
+        if k.lower() in ("concetti", "concepts") and isinstance(v, dict):
             cats |= {kebabify(x) for x in v.keys()}
         elif isinstance(v, dict):
             cats.add(kebabify(k))
     return cats
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -79,7 +85,7 @@ def main():
 
     # categorie attese
     cats_from_cartelle = categories_from_cartelle(cartelle)
-    cats_from_mapping  = categories_from_mapping(mapping) if mapping else set()
+    cats_from_mapping = categories_from_mapping(mapping) if mapping else set()
 
     # cosa c'è davvero in locale
     local_raw = base / "raw"
@@ -99,7 +105,7 @@ def main():
     print("\n=== CONFRONTO CON LOCALE ===")
     print("Presenti in locale (raw/):", sorted(local_dirs))
     missing = expected - local_dirs
-    extra   = local_dirs - expected
+    extra = local_dirs - expected
     if not expected:
         print("ATTENZIONE: nessuna categoria attesa rilevata. Controlla i YAML.")
         sys.exit(2)
@@ -117,7 +123,7 @@ def main():
     # diff tra cartelle_raw e mapping (se entrambi presenti)
     if cats_from_cartelle and cats_from_mapping:
         only_cartelle = cats_from_cartelle - cats_from_mapping
-        only_mapping  = cats_from_mapping  - cats_from_cartelle
+        only_mapping = cats_from_mapping - cats_from_cartelle
         print("\n=== DIFF cartelle_raw vs mapping ===")
         if only_cartelle:
             print("Solo in cartelle_raw:", sorted(only_cartelle))
@@ -130,6 +136,7 @@ def main():
     if missing or (cats_from_cartelle and cats_from_mapping and (only_cartelle or only_mapping)):
         sys.exit(1)
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

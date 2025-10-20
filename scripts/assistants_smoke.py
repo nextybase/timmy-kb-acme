@@ -4,11 +4,13 @@ from __future__ import annotations
 import os, sys, json
 from pathlib import Path
 
+
 def main() -> int:
     try:
         # carica .env se presente
         try:
             from dotenv import load_dotenv, find_dotenv  # type: ignore
+
             path = find_dotenv(usecwd=True) or str(Path(__file__).resolve().parents[1] / ".env")
             if path:
                 load_dotenv(path, override=False)
@@ -29,7 +31,7 @@ def main() -> int:
     # 1) thread
     th = client.beta.threads.create()
     # 2) messaggio user minimale
-    prompt = "Restituisci SOLO JSON: {\"ok\": true, \"note\": \"smoke\"}"
+    prompt = 'Restituisci SOLO JSON: {"ok": true, "note": "smoke"}'
     client.beta.threads.messages.create(thread_id=th.id, role="user", content=prompt)
     # 3) run con response_format=json_schema minimale
     run = client.beta.threads.runs.create_and_poll(
@@ -37,7 +39,11 @@ def main() -> int:
         assistant_id=asst,
         response_format={
             "type": "json_schema",
-            "json_schema": {"name": "smoke", "schema": {"type":"object","properties":{"ok":{"type":"boolean"}}, "required":["ok"]}, "strict": True},
+            "json_schema": {
+                "name": "smoke",
+                "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]},
+                "strict": True,
+            },
         },
         instructions="Ignora File Search e tool. Usa SOLO il messaggio utente.",
     )
@@ -47,7 +53,7 @@ def main() -> int:
     for m in getattr(msgs, "data", []):
         for c in getattr(m, "content", []):
             t = getattr(c, "type", None)
-            if t in ("text","output_text"):
+            if t in ("text", "output_text"):
                 out = getattr(getattr(c, "text", None), "value", None)
                 if out:
                     break
@@ -61,6 +67,7 @@ def main() -> int:
     json.loads(out)
     print("Assistants smoke: OK")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

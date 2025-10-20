@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+from pipeline.exceptions import PipelineError
 from pipeline.path_utils import open_for_read  # path-safe reader anchored to a root
 
 SCHEMA = """
@@ -57,7 +58,7 @@ def upsert_metric(conn: sqlite3.Connection, name: str, unit: Optional[str]) -> i
     name = (name or "").strip()
     unit_val = (unit or "").strip() or None
     if not name:
-        raise ValueError("Metric name is empty")
+        raise PipelineError("Metric name is empty")
     conn.execute(
         "INSERT INTO metrics(name, unit) VALUES(?, ?) "
         "ON CONFLICT(name) DO UPDATE SET unit=COALESCE(excluded.unit, unit)",
@@ -77,7 +78,7 @@ def upsert_observation(
 ) -> None:
     period = (period or "").strip()
     if not period:
-        raise ValueError("Period is empty")
+        raise PipelineError("Period is empty")
     conn.execute(
         (
             "INSERT INTO observations(metric_id, period, value, currency, note) "

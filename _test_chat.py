@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 from openai import OpenAI
+
 client = OpenAI()
 models = [
     "gpt-4o-mini-2024-07-18",

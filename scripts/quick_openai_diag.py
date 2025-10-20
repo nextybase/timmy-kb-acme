@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 
+
 def _load_env() -> str:
     try:
         from dotenv import load_dotenv, find_dotenv  # type: ignore
@@ -23,6 +24,7 @@ def _load_env() -> str:
             loaded = load_dotenv(env, override=False)
     return path or "<non trovato>"
 
+
 def _normalize_base_url(url: str | None) -> str:
     if not url:
         return ""
@@ -33,6 +35,7 @@ def _normalize_base_url(url: str | None) -> str:
         u = u.rstrip("/") + "/v1"
     return u
 
+
 def main() -> int:
     print("=== OpenAI Diagnostics (v3) ===")
     env_path = _load_env()
@@ -40,6 +43,7 @@ def main() -> int:
 
     try:
         import importlib.metadata as ilm  # py>=3.8
+
         ver = ilm.version("openai")
     except Exception:
         ver = "<openai non installato>"
@@ -60,13 +64,15 @@ def main() -> int:
     print(f"OPENAI_BASE_URL(effettiva): {normalized}")
 
     if not api_key:
-        print("\nERRORE: client non inizializzato: "
-              "manca OPENAI_API_KEY (aggiungila in .env o esportala in ambiente).")
+        print(
+            "\nERRORE: client non inizializzato: " "manca OPENAI_API_KEY (aggiungila in .env o esportala in ambiente)."
+        )
         return 2
 
     # Prova di rete minimale (Responses) senza side-effect di scrittura
     try:
         from openai import OpenAI  # type: ignore
+
         client = OpenAI(base_url=normalized, api_key=api_key, project=project or None)
         # chiamata “no-op” (elenca modelli). Se la rete è rotta, esplode qui.
         _ = client.models.list()
@@ -75,6 +81,7 @@ def main() -> int:
     except Exception as e:
         print(f"ERRORE: ping fallito → {e}")
         return 3
+
 
 if __name__ == "__main__":
     sys.exit(main())

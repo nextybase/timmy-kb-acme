@@ -58,9 +58,7 @@ def main() -> int:
     sys.stderr.write("[streamlit-guard] pattern Streamlit deprecati trovati:\n")
     for description, output in findings:
         sys.stderr.write(f"\n=== {description} ===\n{output}\n")
-    sys.stderr.write(
-        "\nRimuovi le occorrenze sopra per rispettare le linee guida Streamlit 1.50.\n"
-    )
+    sys.stderr.write("\nRimuovi le occorrenze sopra per rispettare le linee guida Streamlit 1.50.\n")
     return 1
 
 

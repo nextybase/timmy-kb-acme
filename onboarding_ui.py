@@ -18,6 +18,7 @@ try:
 except Exception:  # pragma: no cover
     load_dotenv = None
 
+
 # --------------------------------------------------------------------------------------
 # Path bootstrap: aggiunge <repo>/src a sys.path il prima possibile
 # --------------------------------------------------------------------------------------
@@ -32,6 +33,7 @@ def _bootstrap_sys_path() -> None:
     try:
         # helper opzionale del repo; se non presente, fallback locale
         from scripts.smoke_e2e import _add_paths as _repo_add_paths  # type: ignore
+
         try:
             _repo_add_paths()
             return
@@ -54,8 +56,9 @@ if load_dotenv:
 # Streamlit setup
 # --------------------------------------------------------------------------------------
 import streamlit as st  # noqa: E402
-from ui.preflight import run_preflight  # noqa: E402
+
 from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
+from ui.preflight import run_preflight  # noqa: E402
 
 st.set_page_config(
     page_title="Onboarding NeXT - Clienti",
@@ -97,6 +100,7 @@ def _hydrate_query_defaults() -> None:
 
 
 _hydrate_query_defaults()
+
 
 # --------------------------------------------------------------------------------------
 # Modalità EXIT: short-circuit prima del preflight
