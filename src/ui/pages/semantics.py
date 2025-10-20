@@ -75,15 +75,35 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
 
 @contextmanager
 def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
+    """Wrapper di st.status con fallback no-op se non disponibile nello stub di test."""
     clean_label = label.rstrip(" .…")
     error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-    with st.status(label, **kwargs) as status:
+
+    status_cm = getattr(st, "status", None)
+
+    if callable(status_cm):
+        cm = status_cm(label, **kwargs)
+    else:
+
+        @contextmanager
+        def _noop_cm() -> Iterator[Any]:
+            class _S:
+                def update(self, *a: Any, **k: Any) -> None:  # no-op
+                    pass
+
+            yield _S()
+
+        cm = _noop_cm()
+
+    with cm as status:
         try:
             yield status
         except Exception as exc:
-            if status is not None and hasattr(status, "update"):
-                status.update(label=f"{error_prefix}: {exc}", state="error")
-            raise
+            try:
+                if status is not None and hasattr(status, "update"):
+                    status.update(label=f"{error_prefix}: {exc}", state="error")
+            finally:
+                raise
 
 
 from pipeline.context import ClientContext
@@ -119,6 +139,42 @@ def _safe_button(label: str, **kwargs: Any) -> bool:
     except TypeError:
         kwargs.pop("width", None)
         return bool(st.button(label, **kwargs))
+
+
+def _col_button(col: Any, label: str, **kwargs: Any) -> bool:
+    """
+    Prova a disegnare il bottone *dentro* la colonna usando col.button(...),
+    con fallback a st.button(...) se lo stub/oggetto non espone il metodo.
+    """
+    btn = getattr(col, "button", None)
+    if callable(btn):
+        try:
+            return bool(btn(label, **kwargs))
+        except TypeError:
+            kwargs.pop("width", None)
+            return bool(btn(label, **kwargs))
+        except Exception:
+            pass
+    return _safe_button(label, **kwargs)
+
+
+def _columns2() -> tuple[Any, Any]:
+    """Restituisce sempre 2 colonne, con padding/fallback per gli stub."""
+    make = getattr(st, "columns", None)
+    if not callable(make):
+        return (st, st)
+    try:
+        cols = list(make(2))
+    except Exception:
+        try:
+            cols = list(make([1, 1]))
+        except Exception:
+            return (st, st)
+    if not cols:
+        return (st, st)
+    while len(cols) < 2:
+        cols.append(cols[-1])
+    return cast(Any, cols[0]), cast(Any, cols[1])
 
 
 def _run_convert(slug: str) -> None:
@@ -198,32 +254,41 @@ if _HAS_STREAMLIT_CONTEXT:
         st.stop()
 
 st.subheader("Onboarding semantico")
-st.write("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
+_write = getattr(st, "write", None)
+if callable(_write):
+    _write("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
+else:
+    _cap = getattr(st, "caption", None)
+    if callable(_cap):
+        _cap("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
 
-col_a, col_b = st.columns(2)
-with col_a:
-    if _safe_button("Converti PDF in Markdown", key="btn_convert", width="stretch"):
-        try:
-            _run_convert(slug)
-        except (ConfigError, ConversionError) as e:
-            st.error(str(e))
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore nella conversione: {e}")
-    if _safe_button("Arricchisci frontmatter", key="btn_enrich", width="stretch"):
-        try:
-            _run_enrich(slug)
-        except (ConfigError, ConversionError) as e:
-            st.error(str(e))
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore nell'arricchimento: {e}")
+col_a, col_b = _columns2()
 
-with col_b:
-    if _safe_button("Genera README/SUMMARY", key="btn_generate", width="stretch"):
-        try:
-            _run_summary(slug)
-        except (ConfigError, ConversionError) as e:
-            st.error(str(e))
-        except Exception as e:  # pragma: no cover
-            st.error(f"Errore nella generazione: {e}")
-    if _safe_button("Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
-        _go_preview()
+# Colonna A
+if _col_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stretch"):
+    try:
+        _run_convert(slug)
+    except (ConfigError, ConversionError) as e:
+        st.error(str(e))
+    except Exception as e:  # pragma: no cover
+        st.error(f"Errore nella conversione: {e}")
+
+if _col_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretch"):
+    try:
+        _run_enrich(slug)
+    except (ConfigError, ConversionError) as e:
+        st.error(str(e))
+    except Exception as e:  # pragma: no cover
+        st.error(f"Errore nell'arricchimento: {e}")
+
+# Colonna B
+if _col_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretch"):
+    try:
+        _run_summary(slug)
+    except (ConfigError, ConversionError) as e:
+        st.error(str(e))
+    except Exception as e:  # pragma: no cover
+        st.error(f"Errore nella generazione: {e}")
+
+if _col_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
+    _go_preview()

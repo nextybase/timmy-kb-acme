@@ -16,6 +16,8 @@ import streamlit as st
 from google.auth.transport import requests as greq
 from google.oauth2 import id_token
 
+from pipeline.exceptions import ConfigError
+
 # ✨ Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
 
@@ -102,12 +104,13 @@ def _verify_id_token(idt: str) -> Dict[str, Any]:
     info = cast(Dict[str, Any], id_token.verify_oauth2_token(idt, greq.Request(), GOOGLE_CLIENT_ID))
     iss = str(info.get("iss"))
     if iss not in ISS_ALLOWED:
-        raise ValueError(f"Issuer non valido: {iss}")
+        raise ConfigError(f"Issuer non valido: {iss}")
     hd = (info.get("hd") or "").lower()
     email = (info.get("email") or "").lower()
     domain = email.split("@")[-1] if "@" in email else ""
     if (hd != ALLOWED_DOMAIN) and (domain != ALLOWED_DOMAIN):
-        raise ValueError("Dominio dell'account non autorizzato")
+        # Dominio non autorizzato: errore di permessi lato UI
+        raise PermissionError("Dominio dell'account non autorizzato")
     return info
 
 

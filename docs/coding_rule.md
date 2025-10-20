@@ -1,4 +1,4 @@
-# Timmy-KB - Coding Rules (v2.1.0)
+# Timmy-KB - Coding Rules (v2.2.0)
 <!-- cSpell:ignore Novita -->
 
 Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
@@ -9,47 +9,84 @@ Linee guida per contribuire al codice in modo coerente, sicuro e manutenibile.
 ---
 
 ## Principi
-- SSoT (Single Source of Truth): riusa utility già presenti; evita duplicazioni.
-- Idempotenza: ogni step deve poter essere rieseguito senza effetti collaterali.
-- Path-safety: nessuna write/copy/rm senza passare da utility di sicurezza.
-- Fail-fast & messaggi chiari: errori espliciti e log azionabili.
-- Compatibilità cross-platform: Windows/Linux (path, encoding, newline).
-- Contratti condivisi: per funzioni che richiedono solo `base_dir/raw_dir/md_dir/slug`, usa `semantic.types.ClientContextProtocol` invece di protocolli locali duplicati.
-- No side-effects a import-time: nessun I/O o lettura di env vars a livello di modulo.
-- Adozione dipendenze: prima di aggiungere una libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e alternative già adottate.
-
+- **SSoT (Single Source of Truth)**: riusa utility già presenti; evita duplicazioni.
+- **Idempotenza**: ogni step deve poter essere rieseguito senza effetti collaterali.
+- **Path-safety**: nessuna read/write/copy/rm senza passare da utility di sicurezza.
+- **Slug hygiene**: validazione centralizzata; nessuna persistenza UI senza `validate_slug`.
+- **Fail-fast & messaggi chiari**: errori espliciti e log azionabili.
+- **Compatibilità cross-platform**: Windows/Linux (path, encoding, newline).
+- **Contratti condivisi**: per funzioni che richiedono solo `base_dir/raw_dir/md_dir/slug`, usa `semantic.types.ClientContextProtocol` invece di protocolli locali duplicati.
+- **No side-effects a import-time**: nessun I/O o lettura di env vars a livello di modulo.
+- **Adozione dipendenze**: prima di aggiungere una libreria, valuta sicurezza, licenza, maturità, impatto su CI/CD e alternative già adottate.
 
 ---
 
 ## Interfaccia Streamlit
-- La versione 1.50.0 di Streamlit comporta significative differenze nel coding.
+- Target: **Streamlit 1.50.0**.
 
 | Area/Componente            | Deprecato                                                 | Usa invece                                      | Note sintetiche |
 |---------------------------|-----------------------------------------------------------|-------------------------------------------------|-----------------|
-| Query string              | `st.experimental_get_query_params` / `st.experimental_set_query_params` | `st.query_params`                               | API dict-like: `clear()`, `from_dict()`, `get_all()`, `to_dict()`. |
-| Rerun                     | `st.experimental_rerun`                                   | `st.rerun`                                      | Rerun esplicito, niente `experimental`. |
-| Caching (generale)        | `st.cache`                                                | `@st.cache_data` / `@st.cache_resource`         | **Data** funzioni pure con `ttl`/`max_entries`; **Resource** per client e connessioni. |
-| Caching (memo)            | `st.experimental_memo`                                    | `@st.cache_data`                                | Unifica sui dati. |
-| Caching (singleton)       | `st.experimental_singleton`                               | `@st.cache_resource`                            | Unifica sulle risorse. |
-| Data editor               | `st.experimental_data_editor`                             | `st.data_editor`                                | Stato: da `edited_cells` → `edited_rows`. |
-| Navigazione               | Directory `pages/`                                        | `st.navigation` + `st.Page`                     | Router unico; `pages/` ignorata se usi `st.navigation`. |
-| User/Auth                 | `st.experimental_user`                                    | `st.user` (+ `st.login()` / `st.logout()`)      | Info utente read-only; OIDC via `login/logout`. |
-| Immagini                  | `use_column_width` / `use_container_width`                | `width="content" | "stretch" | <int>`          | `True`→`"stretch"`, `False`→`"content"`. |
-| Tabelle (`st.dataframe`)  | `use_container_width`                                     | `width="stretch" | "content" | <int>`, `height="auto" | <int>` | Preferisci `"stretch"`. |
-| Editor (`st.data_editor`) | `use_container_width`                                     | `width="stretch" | "content" | <int>`, `height="auto" | <int>` | Allinea anche lo stato. |
-| Matplotlib (`st.pyplot`)  | `use_container_width`, figura globale implicita           | `fig=` esplicito + `width="…"`, `height="…"`    | Passa **sempre** `fig`; globale deprecata. |
-| Graphviz                  | `use_container_width`                                     | `width="stretch" | "content" | <int>`          | Migrazione 1:1. |
-| Bottoni/Link/Download     | `use_container_width`                                     | `width="stretch" | "content" | <int>`          | Uniforma su `width`. |
+| Query string              | `st.experimental_get_query_params` / `st.experimental_set_query_params` | `st.query_params`                               | API dict-like: `clear()`, `from_dict()`, `get_all()`, `to_dict()` |
+| Rerun                     | `st.experimental_rerun`                                   | `st.rerun`                                      | Rerun esplicito, niente `experimental` |
+| Caching (generale)        | `st.cache`                                                | `@st.cache_data` / `@st.cache_resource`         | **Data** = funzioni pure; **Resource** = client/connessioni |
+| Data editor               | `st.experimental_data_editor`                             | `st.data_editor`                                | Stato: da `edited_cells` → `edited_rows` |
+| Navigazione               | Directory `pages/`                                        | `st.navigation` + `st.Page`                     | Router unico; `pages/` ignorata se usi `st.navigation` |
+| Immagini/Tabelle/Buttons  | `use_container_width`                                     | `width="content|stretch|<int>"`                | Preferisci `width="stretch"` |
+| Matplotlib (`st.pyplot`)  | Figura globale implicita                                  | `fig=` esplicito + `width/height`               | Passa **sempre** `fig` |
 
 Vedi dettagli completi in [streamlit_ui.md](streamlit_ui.md).
 
+---
+
+## **UI Path-Safety & Slug Hygiene** (nuova sezione)
+**Obbligatorio**: qualunque funzionalità UI che legga/scriva nel workspace cliente deve:
+
+1. **Sanificare lo slug** (query/session/persistenza):
+```py
+from ui.utils.query_params import get_slug, set_slug
+# get_slug() legge e valida; ritorna None se invalido
+slug = get_slug()
+```
+Oppure, se arriva da input utente:
+```py
+from pipeline.context import validate_slug
+slug = value.strip().lower()
+validate_slug(slug)  # alza ConfigError su slug non valido
+```
+
+2. **Derivare i path dal workspace sicuro**:
+```py
+from ui.utils.workspace import resolve_raw_dir
+from pipeline.path_utils import ensure_within_and_resolve
+
+raw_dir = resolve_raw_dir(slug)                  # valida slug + path safety
+base_dir = raw_dir.parent                        # workspace root
+yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
+```
+> Vietato costruire `output/timmy-kb-<slug>` a mano.
+
+3. **Scansionare i file in modo sicuro** (no `Path.rglob` su input non affidabili):
+```py
+from ui.utils.workspace import iter_pdfs_safe, count_pdfs_safe
+
+for pdf in iter_pdfs_safe(raw_dir):
+    ...
+count = count_pdfs_safe(raw_dir)
+```
+Gli helper eseguono `os.walk(..., followlinks=False)` e validano ogni path con `ensure_within_and_resolve`.
+
+4. **Persistenza UI**: usare writer sicuri e atomici:
+```py
+from ui.utils.core import safe_write_text
+safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
+```
 
 ---
 
 ## Struttura & naming
-- Slug e nomi cartelle: normalizza con `to_kebab()` dove previsto.
+- Slug e nomi cartelle: normalizza con `to_kebab()` dove previsto; valida con `validate_slug`.
 - RAW/BOOK/SEMANTIC: non cambiare convenzioni senza aggiornare orchestratori e documentazione.
-- File generati: mantieni posizionamento in `output/timmy-kb-<slug>/...`.
+- File generati: mantieni posizionamento in `output/timmy-kb-<slug>/...` **derivando i path via helper** (vedi sezione sopra).
 
 ---
 
@@ -58,115 +95,105 @@ Vedi dettagli completi in [streamlit_ui.md](streamlit_ui.md).
 - Evita `Any` e i wild import; mantieni import espliciti e ordinati.
 - Funzioni corte, una responsabilità; preferisci pure functions dove possibile.
 - No side-effects in import (es. no I/O top-level).
-- Estrai helper privati (SRP) se una funzione supera ~40-50 righe o mescola traversal/rendering/I/O.
+- Estrai helper privati (SRP) se una funzione supera ~40–50 righe o mescola traversal/rendering/I/O.
 - Aggiorna le docstring delle funzioni core (stile Google o Sphinx).
 
 ---
 
 ## Qualità prima dei test (lint & format obbligatori)
-
 Il codice deve essere conforme **prima del commit** a: `black` (format), `isort` (ordinamento import) e `ruff` (lint).
+
 Standard: **line-length 120**, profilo `black` per `isort`, nessun segreto nei log.
 
-Ogni contributor deve avere `pre-commit` attivo: i commit che non passano lint/format **non entrano** nel repo.
-Regola pratica: *scrivi come se il linter stesse leggendo con te*. Se serve, formatta a mano, poi salva: l'editor applica `black` in automatico.
-
-**Definition of Done (minimo) per ogni PR:**
+**Definition of Done (minimo) per ogni PR):**
 - file formattati (`black`) e import ordinati (`isort`);
 - `ruff` pulito (nessun F/E/W rilevante);
-- messaggi di log privi di segreti;
+- **path-safety rispettata** (uso di `ensure_within_and_resolve` & writer sicuri);
+- **slug hygiene** (lettura con `get_slug()` o validazione esplicita);
 - test esistenti non rotti.
 
 ### Linting & Formatting
 - Ruff è il linter SSoT: tutte le regole lint vivono in Ruff; se manca qualcosa, estendi `pyproject.toml`.
 - Black e isort: obbligatori per formattazione/ordinamento import.
 
+---
 
 ## Typing & Pylance
 - Per dependency opzionali usa narrowing esplicito:
-  - `if fn is None: raise RuntimeError("...")` prima di chiamare funzioni opzionali.
+  - `if fn is None: raise RuntimeError("…")` prima di chiamare funzioni opzionali.
   - Wrapper come `_require_callable(fn, name)` nei layer adapter/runner.
 - Evita accessi a metodi su `None` (es. `.strip`): usa normalizzatori tipo `_norm_str`.
 - Streamlit: preferisci API stabili (`st.rerun`) con fallback a `experimental_*` solo se assente.
-- Type check rapidi:
-  - Mypy: `make type`
-  - Pyright: `make type-pyright` (richiede `pyright` o `npx`)
-- Linting automatico in CI: ogni PR/build passa Black, Ruff e isort; Ruff è l'unica fonte autorevole per le regole lint.
+- Type check rapidi: `mypy` e/o `pyright` in CI.
 
 ---
 
 ## Logging & redazione
-- Usa il logger strutturato dove disponibile; fallback a `logging.basicConfig` negli script.
-- Pattern obbligatorio: `logger.info("event_name", extra={...})` (nessun payload anonimo); popola sempre `extra` con slug/scope/id utili.
+- Logger strutturato: `logger.info("event_name", extra={...})` (nessun payload anonimo); popola sempre `extra` con slug/scope/id utili.
 - Redazione automatica attiva quando richiesto (`LOG_REDACTION`): non loggare segreti o payload completi.
-- Niente segreti nei log: maschera sempre token, chiavi API e payload sensibili (es. `OPENAI_API_KEY_CODEX`, `OPENAI_API_KEY_FOLDER`).
-- Includi event e metadati essenziali (slug, conteggi, esiti) per ogni operazione rilevante.
-- Non loggare secrets, password, token o variabili d'ambiente (mai l'intero `os.environ`). Usa `dotenv` o `vault` per i secrets.
+- Non loggare `os.environ` o credenziali; maschera token/API key.
+- Logga eventi chiave in UI (es. `ui.manage.tags.save`).
 
 ---
 
 ## Sicurezza I/O
-- Path-safety: usa `ensure_within_and_resolve` (o SSoT equivalenti) per prevenire traversal; evita concatenazioni manuali.
-- Scritture atomiche: `safe_write_text/bytes` per generare/aggiornare file (niente write parziali).
-- Append sicuro: usa `safe_append_text` per audit/log multi-run; garantisce path-safety, lock file e fsync opzionale.
-- Sanitizzazione nomi file: usa utility dedicate prima di creare file da input esterni.
-- DRY validazioni: centralizza controlli ricorrenti (listing sicuro dei Markdown, ecc.).
+- **Path-safety**: usa `ensure_within_and_resolve` (o SSoT equivalenti) per prevenire traversal; evita concatenazioni manuali.
+- **Scritture atomiche**: `safe_write_text/bytes` per generare/aggiornare file (niente write parziali).
+- **Append sicuro**: `safe_append_text` per audit/log multi-run; garantisce path-safety, lock file e fsync opzionale.
+- **Sanitizzazione nomi file**: usa utility dedicate prima di creare file da input esterni.
+- **Listing sicuri**: preferisci `iter_pdfs_safe`/`count_pdfs_safe` a `Path.rglob` quando l’input proviene da l’utente.
 
 ---
 
 ## Orchestratori & UI
-- Orchestratori (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) + facade `semantic.api` per la semantica:
+- Orchestratori (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) + façade `semantic.api` per la semantica:
   - Niente input bloccanti nei moduli di servizio; tutta la UX rimane negli orchestratori.
   - Gestisci `--non-interactive` per batch/CI.
-- UI (`onboarding_ui.py`):
-  - Gating a due input (slug, nome cliente), poi mostra le schede.
-  - Drive: crea struttura → genera README → download su raw.
-  - Semantica: conversione → arricchimento → README/SUMMARY → preview (opz.).
-  - Usa `_safe_streamlit_rerun()` per gestire il rerun in modo coerente con stubs/tipi.
+- UI (onboarding/semantica/manage):
+  - Gating su prerequisiti (slug valido, `raw/` presente via `has_raw_pdfs`/`count_pdfs_safe`).
+  - **Wrapper UI = firma backend** (test di parità firma consigliati).
+  - Niente write manuali: usa writer sicuri e path derivati dal workspace.
 
 ---
 
 ## Error handling & exit codes
-- Solleva eccezioni tipizzate (es. `ConfigError`, `PreviewError`), non `Exception` generiche.
-- Mappa le eccezioni a exit codes coerenti negli script CLI.
-- In UI mostra errori con messaggi chiari e non verbosi; logga il dettaglio tecnico.
+- Solleva **eccezioni tipizzate** (`ConfigError`, `PipelineError`, `PreviewError`, …), non `Exception` generiche.
+- Evita `ValueError` ai confini: mappa verso eccezioni di dominio in façade/wrapper.
+- In UI mostra errori con messaggi chiari e non verbosi; dettaglio tecnico nei log.
 
 ---
 
 ## Drive & Git
-- Drive: tutte le operazioni passano da `pipeline/drive_utils.py` o runner dedicati; evita API low-level dirette.
+- Drive: tutte le operazioni passano da runner/adapter dedicati; evita API low-level dirette.
 - Download RAW: usa la funzione di alto livello esposta nel runner UI.
 - Git: push solo di `.md` in `book/`; ignora `.md.fp` e file binari.
 
-### Novita v1.9.6 (Retriever & logging)
-- Wrapper `retrieve_candidates` pubblico nel retriever per calibrazioni sicure.
-- Logging strutturato obbligatorio (`event + extra`) nei tool CLI.
-- Nuova utility `safe_append_text` per append atomici con path-safety e lock cross-platform.
-- Tool Vision audit migrato a `safe_append_text` (niente open append).
 ---
 
 ## Test
 - Genera dataset dummy con `py src/tools/gen_dummy_kb.py --slug dummy`.
-- Piramide dei test: unit → middle/contract → smoke E2E (dummy). Niente dipendenze di rete nei test.
-- Mocka Drive/Git nei test; verifica invarianti su `book/` e presenza di README/SUMMARY.
+- Piramide: unit → middle/contract → smoke E2E (dummy). Niente rete nei test.
+- Mocka Drive/Git; verifica invarianti su `book/` e presenza di README/SUMMARY.
+- **Nuovi casi minimi obbligatori**:
+  - slug invalidi in query/session/persistenza (devono essere scartati);
+  - traversal via symlink in `raw/` (gli helper non devono contare file esterni);
+  - parità firma wrapper UI ↔ backend.
 
 ---
 
 ## Versioning & release
 - SemVer + `CHANGELOG.md` (Keep a Changelog).
 - Aggiorna README e i documenti in `docs/` quando cambi UX/flow.
-- Tag/branch coerenti con la policy di versione (vedi `versioning_policy.md`).
+- Tag/branch coerenti con la policy di versione.
 
 ---
 
 ## Contributi
 - PR piccole, atomic commit, messaggi chiari (imperativo al presente).
-- Copri con test i cambi di comportamento; mantieni l'asticella della qualità.
+- Copri con test i cambi di comportamento; mantieni l’asticella della qualità.
 
 ---
 
 ## Path-Safety Lettura (Aggiornamento)
 - Letture Markdown/CSV/YAML nei moduli `pipeline/*` e `semantic/*`: usa sempre `pipeline.path_utils.ensure_within_and_resolve(base, p)` per ottenere un path risolto e sicuro prima di leggere.
-- È vietato usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.
-
----
+- È **vietato** usare direttamente `open()` o `Path.read_text()` per file provenienti dalla sandbox utente senza passare dal wrapper.

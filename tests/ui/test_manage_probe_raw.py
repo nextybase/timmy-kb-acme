@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import types
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -73,6 +74,49 @@ class _StreamlitStub:
         raise RuntimeError("stop should not be called in tests")
 
 
+def register_streamlit_runtime(monkeypatch: pytest.MonkeyPatch, st_stub: _StreamlitStub) -> None:
+    """Registra moduli runtime di Streamlit necessari per i test UI."""
+
+    def _cache_decorator(func=None, **_kwargs):
+        def _wrap(inner):
+            return inner
+
+        if callable(func):
+            return func
+        return _wrap
+
+    runtime_module = types.ModuleType("streamlit.runtime")
+    caching_module = types.ModuleType("streamlit.runtime.caching")
+    caching_module.cache_data = _cache_decorator  # type: ignore[attr-defined]
+    caching_module.cache_resource = _cache_decorator  # type: ignore[attr-defined]
+    caching_module.memoize = _cache_decorator  # type: ignore[attr-defined]
+
+    scriptrunner_module = types.ModuleType("streamlit.runtime.scriptrunner")
+
+    def _get_script_run_ctx(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    scriptrunner_module.get_script_run_ctx = _get_script_run_ctx  # type: ignore[attr-defined]
+    scriptrunner_module.script_run_context = types.SimpleNamespace(get_script_run_ctx=_get_script_run_ctx)  # type: ignore[attr-defined]
+
+    script_runner_module = types.ModuleType("streamlit.runtime.scriptrunner.script_runner")
+
+    class _RerunException(Exception):
+        pass
+
+    script_runner_module.RerunException = _RerunException  # type: ignore[attr-defined]
+
+    scriptrunner_module.script_runner = script_runner_module  # type: ignore[attr-defined]
+    runtime_module.caching = caching_module  # type: ignore[attr-defined]
+    runtime_module.scriptrunner = scriptrunner_module  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "streamlit.runtime", runtime_module)
+    monkeypatch.setitem(sys.modules, "streamlit.runtime.caching", caching_module)
+    monkeypatch.setitem(sys.modules, "streamlit.runtime.scriptrunner", scriptrunner_module)
+    monkeypatch.setitem(sys.modules, "streamlit.runtime.scriptrunner.script_runner", script_runner_module)
+    setattr(st_stub, "runtime", runtime_module)
+
+
 def _load_manage_module(
     monkeypatch: pytest.MonkeyPatch,
     st_stub: _StreamlitStub,
@@ -80,6 +124,7 @@ def _load_manage_module(
     has_raw_result: Tuple[bool, str | None],
 ) -> None:
     monkeypatch.setitem(sys.modules, "streamlit", st_stub)
+    register_streamlit_runtime(monkeypatch, st_stub)
     import ui.chrome
     import ui.utils.workspace
 

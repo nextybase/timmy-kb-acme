@@ -62,7 +62,9 @@
     "graphviz",
     "auditare",
     "hardcodare",
-    "evagrin"
+    "evagrin",
+    "façade",
+    "facade"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

@@ -2,6 +2,7 @@
 
 import pytest
 
+from pipeline.exceptions import ConversionError
 from src.semantic.layout_enricher import (
     Constraints,
     merge_non_distruttivo,
@@ -126,12 +127,12 @@ def test_merge_non_distruttivo_preserves_existing(base_yaml, constraints_dict):
 
 
 def test_validate_yaml_schema_rejects_bad_depth():
-    with pytest.raises(ValueError):
+    with pytest.raises(ConversionError):
         validate_yaml_schema({"a": {"b": {"c": {"d": {}}}}}, max_depth=3)  # profondità 4 > 3
 
 
 def test_validate_yaml_schema_rejects_non_kebab_keys():
-    with pytest.raises(ValueError):
+    with pytest.raises(ConversionError):
         validate_yaml_schema({"NotKebab": {}}, max_depth=3)
 
 

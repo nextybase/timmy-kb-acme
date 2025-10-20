@@ -8,7 +8,7 @@ from typing import Any, Iterator
 
 import pytest
 
-from tests.ui.test_manage_probe_raw import _StreamlitStub
+from tests.ui.test_manage_probe_raw import _StreamlitStub, register_streamlit_runtime
 
 
 @contextmanager
@@ -32,6 +32,7 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     stub.rerun = lambda: None
     stub.dialog = lambda *_args, **_kwargs: (lambda fn: fn)
     monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
     sys.modules.pop("ui.pages.new_client", None)
     new_client = importlib.import_module("ui.pages.new_client")
 

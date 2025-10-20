@@ -11,6 +11,8 @@ from typing import Any, Iterator
 
 import pytest
 
+from tests.ui.test_manage_probe_raw import register_streamlit_runtime
+
 
 class _StreamlitStub:
     def __init__(self) -> None:
@@ -113,6 +115,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
 
     monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
     monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
 
     fake_drive_module = types.ModuleType("ui.services.drive_runner")
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)

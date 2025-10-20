@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Protocol
 
 import yaml
 
-from pipeline.exceptions import InputDirectoryMissing, PipelineError
+from pipeline.exceptions import ConfigError, InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, is_safe_subpath, read_text_safe
 
@@ -227,11 +227,11 @@ def load_tags_reviewed(base_dir: Path) -> Dict[str, List[str]]:
     raw = read_text_safe(sem_dir, yaml_path, encoding="utf-8")
     data = yaml.safe_load(raw) or {}
     if not isinstance(data, dict):
-        raise ValueError("Formato tags_reviewed.yaml non valido: atteso dict.")
+        raise ConfigError("Formato tags_reviewed.yaml non valido: atteso dict.")
 
     raw_tags = data.get("tags") or {}
     if not isinstance(raw_tags, dict):
-        raise ValueError("Formato tags_reviewed.yaml non valido: campo 'tags' mancante o non mappa.")
+        raise ConfigError("Formato tags_reviewed.yaml non valido: campo 'tags' mancante o non mappa.")
 
     normalized: Dict[str, List[str]] = {}
     for concept, values in raw_tags.items():

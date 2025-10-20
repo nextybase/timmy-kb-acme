@@ -152,21 +152,7 @@ def _retry(
     max_total_sleep_s: float = 20.0,
     op_name: str = "drive-op",
 ) -> Any:
-    """Esegue `op()` con backoff esponenziale + jitter, rispettando un budget massimo.
-
-    Comportamento:
-    - Ritenta eccezioni transienti (HttpError 5xx/429 e errori di rete comuni).
-    - Jitter “full”: attesa uniforme in [0, base * 2**(tentativo-1)].
-    - Se i tentativi si esauriscono o l’errore non è retryable → rilancia l’eccezione.
-    - Se il sonno cumulato supera `max_total_sleep_s` → interrompe con `_RetryBudgetExceeded`.
-
-    Parametri:
-    - is_retryable: classificatore alternativo; se None usa `_is_retryable_error`.
-    - max_attempts: numero massimo di tentativi (incluso il primo).
-    - base_delay_s: base del backoff esponenziale.
-    - max_total_sleep_s: tetto massimo al sonno cumulato (budget).
-    - op_name: nome logico dell’operazione per i log.
-    """
+    """Esegue `op()` con backoff esponenziale + jitter, rispettando un budget massimo."""
     attempts = 0
     total_sleep = 0.0
     while True:
@@ -188,13 +174,12 @@ def _retry(
                 )
                 raise
 
-            # Aggiornamento metriche (se attive)
+            # Aggiorna metriche (se attive)
             m = _METRICS_CTX.get()
             if m is not None:
                 m.retries_total += 1
                 m.retries_by_error[type(e).__name__] += 1
                 m.last_error = str(e)[:300]
-                # Proviamo a leggere lo status HTTP se c'è
                 try:
                     resp = getattr(e, "resp", None)
                     if resp is None:
@@ -206,7 +191,6 @@ def _retry(
                 except Exception:
                     m.last_status = getattr(e, "status", None)
 
-            # Calcolo del backoff con jitter completo e rispetto del budget
             backoff = base_delay_s * (2 ** (attempts - 1))
             sleep_s = random.uniform(0, backoff)
             if total_sleep + sleep_s > max_total_sleep_s:
@@ -235,7 +219,6 @@ def _retry(
             time.sleep(sleep_s)
             total_sleep += sleep_s
 
-            # Aggiorna accumulo metriche (se attive)
             m = _METRICS_CTX.get()
             if m is not None:
                 m.backoff_total_ms += int(round(sleep_s * 1000))
@@ -245,27 +228,14 @@ def _retry(
 
 
 def _resolve_service_account_file(context: Any) -> str:
-    """Risolve il percorso assoluto del file JSON del service account.
-
-    Ordine di ricerca:
-      1) `context.service_account_file`
-      2) `context.SERVICE_ACCOUNT_FILE`
-      3) `context.env['SERVICE_ACCOUNT_FILE']`
-      4) env `SERVICE_ACCOUNT_FILE` via `get_env_var`
-
-    Solleva:
-      ConfigError se non trovato o non leggibile.
-    """
+    """Risolve il percorso assoluto del file JSON del service account."""
     candidates: List[Optional[str]] = []
-    # Attributi sul contesto (via proprietà o campi)
     for attr in ("service_account_file", "SERVICE_ACCOUNT_FILE"):
         if hasattr(context, attr):
             candidates.append(getattr(context, attr))
-    # Mappa env nel contesto (se esiste)
     if hasattr(context, "env") and isinstance(context.env, dict):
         sa: Optional[str] = cast(Optional[str], context.env.get("SERVICE_ACCOUNT_FILE"))
         candidates.append(sa)
-    # Variabile d'ambiente letta tramite resolver centralizzato
     candidates.append(get_env_var("SERVICE_ACCOUNT_FILE", default=None, required=False))
 
     for cand in candidates:
@@ -282,19 +252,7 @@ def _resolve_service_account_file(context: Any) -> str:
 
 
 def get_drive_service(context: Any) -> Any:
-    """Costruisce e restituisce un client Google Drive v3 usando un service account.
-
-    Args:
-        context: oggetto tipo ClientContext. Deve fornire info sul file di credenziali.
-
-    Returns:
-        googleapiclient.discovery.Resource per Drive v3.
-
-    Raises:
-        ConfigError: se il file credenziali manca o non è leggibile,
-                     o se la creazione del client fallisce.
-    """
-    # Logger contestualizzato: eredita slug/run_id e filtri di redazione
+    """Costruisce e restituisce un client Google Drive v3 usando un service account."""
     local_logger = get_structured_logger("pipeline.drive.client", context=context)
 
     sa_path = _resolve_service_account_file(context)
@@ -311,7 +269,6 @@ def get_drive_service(context: Any) -> Any:
     except Exception as e:  # noqa: BLE001
         raise ConfigError(f"Creazione client Google Drive fallita: {e}") from e
 
-    # NB: non logghiamo il path completo delle credenziali (solo basename)
     local_logger.debug(
         "drive.client.built",
         extra={"sa_file": Path(sa_path).name, "scopes": "drive", "impersonation": False},
@@ -320,6 +277,22 @@ def get_drive_service(context: Any) -> Any:
 
 
 # ------------------------------- Primitive di lettura ------------------------------
+
+
+def _ensure_parent(parent_id: Optional[str]) -> str:
+    """Normalizza e valida l'ID della cartella padre (config-boundary)."""
+    parent_id = (parent_id or "").strip()
+    if not parent_id:
+        raise ConfigError("Google Drive: parent_id mancante o vuoto.", parent_id=parent_id)
+    return parent_id
+
+
+def _ensure_file_id(file_id: Optional[str]) -> str:
+    """Normalizza e valida l'ID del file (config-boundary)."""
+    file_id = (file_id or "").strip()
+    if not file_id:
+        raise ConfigError("Google Drive: file_id mancante o vuoto.", file_id=file_id)
+    return file_id
 
 
 def list_drive_files(
@@ -332,46 +305,41 @@ def list_drive_files(
 ) -> Generator[Dict[str, Any], None, None]:
     """Elenca file/cartelle sotto una cartella Drive (gestisce Shared Drives, paging, retry).
 
-    Args:
-        service: client Drive v3.
-        parent_id: ID della cartella da elencare.
-        query: filtro addizionale da AND-are con "parents in <parent_id>".
-        fields: campi richiesti (minimi per performance).
-        page_size: dimensione pagina (max raccomandato 1000).
-
-    Yields:
-        dict con almeno id, name, mimeType (ed md5Checksum/size quando disponibili).
+    Raises:
+        ConfigError: se `parent_id` è vuoto o non valido.
     """
-    if not parent_id:
-        raise ValueError("parent_id è obbligatorio")
-
-    base_q = f"'{parent_id}' in parents and trashed = false"
+    # ✅ Esegui la validazione SUBITO (prima di restituire il generatore)
+    parent_id_norm = _ensure_parent(parent_id)
+    base_q = f"'{parent_id_norm}' in parents and trashed = false"
     q = f"({base_q}) and ({query})" if query else base_q
 
-    page_token: Optional[str] = None
-    op_name = "files.list"
+    def _iter() -> Generator[Dict[str, Any], None, None]:
+        page_token: Optional[str] = None
+        op_name = "files.list"
+        while True:
 
-    while True:
+            def _call() -> Any:
+                req = service.files().list(
+                    q=q,
+                    fields=fields,
+                    spaces="drive",
+                    pageSize=page_size,
+                    pageToken=page_token,
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                )
+                return req.execute()
 
-        def _call() -> Any:
-            req = service.files().list(
-                q=q,
-                fields=fields,
-                spaces="drive",
-                pageSize=page_size,
-                pageToken=page_token,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-            )
-            return req.execute()
+            resp = _retry(_call, op_name=op_name)
+            for f in resp.get("files", []):
+                yield f
 
-        resp = _retry(_call, op_name=op_name)
-        for f in resp.get("files", []):
-            yield f
+            page_token_local = resp.get("nextPageToken")
+            if not page_token_local:
+                break
+            page_token = page_token_local
 
-        page_token = resp.get("nextPageToken")
-        if not page_token:
-            break
+    return _iter()
 
 
 def get_file_metadata(
@@ -382,19 +350,10 @@ def get_file_metadata(
 ) -> Dict[str, Any]:
     """Recupera metadati minimi per un file su Drive.
 
-    Args:
-        service: client Drive v3.
-        file_id: ID del file.
-        fields: campi richiesti.
-
-    Returns:
-        dict con i campi specificati.
-
     Raises:
-        ValueError: se `file_id` è vuoto.
+        ConfigError: se `file_id` è vuoto o non valido.
     """
-    if not file_id:
-        raise ValueError("file_id è obbligatorio")
+    file_id = _ensure_file_id(file_id)
 
     def _call() -> Any:
         return service.files().get(fileId=file_id, fields=fields, supportsAllDrives=True).execute()

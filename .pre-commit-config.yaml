@@ -179,6 +179,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
+      # 🔒 Nuovo: vieta ValueError ai boundary runtime (cross-platform)
+      - id: forbid-legacy-valueerror
+        name: Forbid ValueError in runtime layers
+        language: pygrep
+        entry: 'raise\s*ValueError\('
+        files: ^src/(ui|pipeline|semantic)/.*\.py$
+        stages: [pre-commit, pre-push]
+
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.18.1
     hooks:

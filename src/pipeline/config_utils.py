@@ -114,10 +114,10 @@ class Settings(_BaseSettings):
         for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"):
             if not getattr(self, key, None):
                 logger.error(f"Parametro critico '{key}' mancante!")
-                raise ValueError(f"Parametro critico '{key}' mancante!")
+                raise ConfigError(f"Parametro critico '{key}' mancante!", key=key)
         if not self.slug:
             logger.error("Parametro 'slug' mancante! Usare ClientContext.load(slug).")
-            raise ValueError("Parametro 'slug' mancante!")
+            raise ConfigError("Parametro 'slug' mancante!", param="slug")
 
 
 # ----------------------------------------------------------

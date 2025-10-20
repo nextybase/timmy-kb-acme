@@ -7,6 +7,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple, cast
 
+from pipeline.exceptions import ConfigError, ConversionError
+
 # ============================
 # Types & Constraints Handling
 # ============================
@@ -35,12 +37,12 @@ class Constraints:
             ap_raw = d.get("allowed_prefixes", [])
             sm_raw = d.get("semantic_mapping", {})
         except (KeyError, TypeError, ValueError) as e:
-            raise ValueError("Constraints invalidi o incompleti") from e
+            raise ConfigError("Constraints invalidi o incompleti") from e
 
         if not isinstance(ap_raw, Iterable):
-            raise ValueError("allowed_prefixes deve essere una lista/iterabile")
+            raise ConfigError("allowed_prefixes deve essere una lista/iterabile")
         if not isinstance(sm_raw, dict):
-            raise ValueError("semantic_mapping deve essere un dict")
+            raise ConfigError("semantic_mapping deve essere un dict")
 
         # normalizza i prefissi in kebab-case
         ap = tuple(sorted({to_kebab(str(x)) for x in ap_raw}))
@@ -52,9 +54,9 @@ class Constraints:
             sm[canon] = vs
 
         if md < 1:
-            raise ValueError("max_depth deve essere >= 1")
+            raise ConfigError("max_depth deve essere >= 1")
         if mn < 1:
-            raise ValueError("max_nodes deve essere >= 1")
+            raise ConfigError("max_nodes deve essere >= 1")
 
         return Constraints(
             max_depth=md,
@@ -141,7 +143,7 @@ def validate_yaml_schema(tree: Dict[str, Any], max_depth: int) -> None:
     - la profondità non superi max_depth
     """
     if not isinstance(tree, dict):
-        raise ValueError("La struttura deve essere un dict")
+        raise ConversionError("La struttura deve essere un dict")
     _validate_node(tree, depth=1, max_depth=max_depth)
 
 
@@ -345,14 +347,14 @@ def _build_branch(
 
 def _validate_node(node: Dict[str, Any], *, depth: int, max_depth: int) -> None:
     if depth > max_depth:
-        raise ValueError(f"Profondità massima superata: {depth} > {max_depth}")
+        raise ConversionError(f"Profondità massima superata: {depth} > {max_depth}")
     for k, v in node.items():
         if not isinstance(k, str) or not k:
-            raise ValueError("Chiave non valida (stringa vuota o non stringa)")
+            raise ConversionError("Chiave non valida (stringa vuota o non stringa)")
         if to_kebab(k) != k:
-            raise ValueError(f"Chiave non normalizzata (kebab-case richiesto): {k!r}")
+            raise ConversionError(f"Chiave non normalizzata (kebab-case richiesto): {k!r}")
         if not isinstance(v, dict):
-            raise ValueError(f"Valore non valido per chiave {k!r}: atteso dict")
+            raise ConversionError(f"Valore non valido per chiave {k!r}: atteso dict")
         _validate_node(v, depth=depth + 1, max_depth=max_depth)
 
 
