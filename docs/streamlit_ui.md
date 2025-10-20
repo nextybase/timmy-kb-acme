@@ -1,134 +1,313 @@
-# Streamlit (UI) - Regole 2025 - Add-on a `coding_rule.md` (v2.1.0)
+# Streamlit UI — linee guida (dettagliate)
 
-**Baseline**: target `Streamlit==1.50.*` (compat ≥ 1.45). Evitare API `experimental`/`beta` in produzione.
-
----
-
-## Deprecazioni → Migrazioni obbligatorie
-
-| Obsoleto                                                               | Sostituisci con                             | Regola d’uso                                                                                                                   |
-| ---------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `st.experimental_get_query_params`, `st.experimental_set_query_params` | `st.query_params`                           | API dict-like: lettura/scrittura atomica; disponibili `clear()`, `from_dict()`, `get_all()`, `to_dict()`.                      |
-| `st.experimental_rerun`                                                | `st.rerun`                                  | Rerun esplicito; rimuovere prefisso experimental.                                                                              |
-| `st.cache`                                                             | `@st.cache_data` **o** `@st.cache_resource` | **Data**: funzioni pure, return pickleable, imposta `ttl`/`max_entries`. **Resource**: client/connessioni/modelli thread-safe. |
-| `st.experimental_memo`                                                 | `@st.cache_data`                            | Stesse regole di caching dati.                                                                                                 |
-| `st.experimental_singleton`                                            | `@st.cache_resource`                        | Stesse regole di caching risorse.                                                                                              |
-| `st.experimental_data_editor`                                          | `st.data_editor`                            | Adegua la gestione stato: da `edited_cells` a `edited_rows` (formato diverso).                                                 |
-| Navigazione via directory `pages/`                                     | `st.navigation` + `st.Page`                 | Entry-point come router; `pages/` viene **ignorata** se usi `st.navigation`. `position="sidebar"\|"top"`.                      |
-| `st.experimental_user`                                                 | `st.user`                                   | Oggetto read-only con info utente; per OIDC usa `st.login()`/`st.logout()` e configura `[auth]` in `secrets.toml`.             |
-
-> **Nota**: rimuovere ogni utilizzo residuo di `st.experimental_*`.
+*Allineato alle regole di progetto (vedi *[***coding\_rule.md***](./coding_rule.md)*)*.
 
 ---
 
-## Larghezze & altezze — Migrazioni grafiche (2025)
+## Perché queste regole (in breve)
 
-| Componente           | Deprecato                                       | Usa invece                                                  | Mappatura rapida                           |
-| -------------------- | ----------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------ |
-| `st.image`           | `use_column_width` / `use_container_width`      | `width="content"\|"stretch"\|<int>`                         | `True`→`"stretch"`, `False`→`"content"`.   |
-| `st.dataframe`       | `use_container_width`                           | `width="stretch"\|"content"\|<int>`, `height="auto"\|<int>` | Preferisci `width="stretch"`.              |
-| `st.data_editor`     | `use_container_width`                           | `width="stretch"\|"content"\|<int>`, `height="auto"\|<int>` | Uniformare anche lo stato (`edited_rows`). |
-| `st.pyplot`          | `use_container_width`, figura globale implicita | `width="stretch"\|"content"\|<int>` **e** `fig=` esplicito  | Passa sempre `fig`; globale **deprecata**. |
-| `st.graphviz_chart`  | `use_container_width`                           | `width="stretch"\|"content"\|<int>`                         | 1:1.                                       |
-| `st.download_button` | `use_container_width`                           | `width="stretch"\|"content"\|<int>`                         | 1:1.                                       |
-| `st.button`          | `use_container_width`                           | `width="stretch"\|"content"\|<int>`                         | 1:1.                                       |
-| `st.link_button`     | `use_container_width`                           | `width="stretch"\|"content"\|<int>`                         | 1:1.                                       |
-
-**Regole pratiche**
-
-- Default consigliato: `width="stretch"` per componenti principali; usa `"content"` quando serve dimensione naturale.
-- Evita `use_(container|column)_width` in nuove PR; migra i warning esistenti.
+- **Sicurezza**: impedire path traversal/symlink malevoli e scritture non atomiche.
+- **Osservabilità**: avere log strutturati e stabili, senza PII, per investigazioni/metriche.
+- **Testabilità**: far girare i test senza il runtime Streamlit reale (stub), anche su Windows.
+- **Coerenza**: un’unica fonte di verità per stati, query string, e gating funzionali.
 
 ---
 
-## HTML sicuro (UI)
+## Indice
 
-- Usa `` per HTML/CSS *senza JS*. È sanificato; accetta stringhe o path locali (un file `.css` viene iniettato come `<style>`).
-- Evita `st.markdown(..., unsafe_allow_html=True)` in produzione: sostituiscilo con `st.html(...)` per ancore/badge/snippet stilistici.
-- Per HTML+JS, usa componenti (`streamlit.components.v1.html`) e trattali come dipendenze da auditare.
+- [Query string & slug](#query-string--slug)
+  - [Perché ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
+  - [API consigliata: ](#api-consigliata-uiutilsquery_params)[`ui.utils.query_params`](#api-consigliata-uiutilsquery_params)
+  - [Esempi e anti‑pattern](#esempi-e-anti-pattern)
+- [Path‑safety (lettura/scrittura)](#path-safety-letturascrittura)
+  - [Flusso consigliato](#flusso-consigliato)
+  - [Esempi pratici](#esempi-pratici)
+- [Scan PDF sicuro](#scan-pdf-sicuro)
+- [Eventi di log strutturati](#eventi-di-log-strutturati)
+  - [Naming & payload](#naming--payload)
+  - [Esempi: pagina Manage](#esempi-pagina-manage)
+  - [Test con ](#test-con-caplog)[`caplog`](#test-con-caplog)
+- [Gating e SSoT di stato](#gating-e-ssot-di-stato)
+- [Compatibilità con gli stub di Streamlit nei test](#compatibilita-con-gli-stub-di-streamlit-nei-test)
+- [Checklist “UI page”](#checklist-ui-page)
+- [FAQ](#faq)
+- [Anti‑pattern da evitare](#anti-pattern-da-evitare)
 
-**Pattern**
+---
+
+## Query string & slug
+
+Usiamo `` (API Streamlit moderna) come SSoT lato UI e i wrapper in `` per leggere/scrivere lo slug. Quando serve garantire la presenza dello slug e rendere coerente l’UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
+
+### Perché `st.query_params`
+
+- Evita parsing manuale degli URL.
+- Funziona come dizionario reattivo: gli update triggerano un **rerun** della pagina.
+- È coperto dai nostri stub di test.
+
+### API consigliata: `ui.utils.query_params`
 
 ```python
-# Ancore / micro-markup
-st.html("<a id='top'></a>")
+import streamlit as st
+from ui.utils.query_params import get_slug, set_slug
 
-# Badge semplice (HTML+CSS inline)
-st.html("""
-<span style="padding:.2rem .5rem;border-radius:999px;background:#E8F5E9;color:#2E7D32;font:600 12px/1.2 system-ui;">OK</span>
-""")
+# Leggi lo slug (può tornare None)
+slug = get_slug()
 
-# CSS locale
+# Scrivi/aggiorna lo slug (triggera un rerun ordinato)
+set_slug("acme-srl")
+```
+
+Oppure, quando la pagina **richiede** lo slug:
+
+```python
+from ui.chrome import render_chrome_then_require
+
+# Se allow_without_slug=False (default), la pagina blocca e guida l’utente
+slug = render_chrome_then_require(allow_without_slug=True)
+```
+
+### Esempi e anti‑pattern
+
+**OK**
+
+```python
+slug = get_slug() or "acme-srl"
+st.query_params["tab"] = "manage"  # se serve cambiare tab
+```
+
+**EVITARE**
+
+```python
+# ❌ Non leggere/scrivere direttamente dalla stringa dell’URL
+# ❌ Non conservare lo slug in variabili globali non sincronizzate con query params
+```
+
+---
+
+## Path‑safety (lettura/scrittura)
+
+### Flusso consigliato
+
+1. Deriva la radice workspace dal solo `slug` con `` e ricava il parent.
+2. Usa `` prima di leggere/scrivere.
+3. Leggi con `` e scrivi con `` (**atomico**).
+
+> Non assumere mai path costruiti con concatenazioni manuali: passa **sempre** dagli helper.
+
+### Esempi pratici
+
+**Caricare/modificare** `semantic/tags_reviewed.yaml`:
+
+```python
 from pathlib import Path
-st.html(Path("assets/app.css"))
+import yaml
+from ui.utils.workspace import resolve_raw_dir
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.utils.core import safe_write_text
+
+def _workspace_root(slug: str) -> Path:
+    raw_dir = Path(resolve_raw_dir(slug))  # valida slug + path safety
+    return raw_dir.parent
+
+def load_tags_yaml(slug: str) -> str:
+    base = _workspace_root(slug)
+    yaml_path = ensure_within_and_resolve(base, base / "semantic" / "tags_reviewed.yaml")
+    try:
+        return read_text_safe(yaml_path.parent, yaml_path, encoding="utf-8")
+    except Exception:
+        return "version: 2\nkeep_only_listed: true\ntags: []\n"  # default sicuro
+
+def save_tags_yaml(slug: str, text: str) -> None:
+    yaml.safe_load(text)  # validazione prima di scrivere
+    base = _workspace_root(slug)
+    yaml_path = ensure_within_and_resolve(base, base / "semantic" / "tags_reviewed.yaml")
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_write_text(yaml_path, text, encoding="utf-8", atomic=True)
 ```
 
-**Sicurezza**
-
-1. Non interpolare input utente crudi in HTML. 2) Evita asset remoti non necessari. 3) Per JS reale, usa componenti in iframe.
+**Perché atomico?** Minimizza corruzioni/condizioni di gara: si scrive su un file temporaneo e poi si fa un rename.
 
 ---
 
-## Pattern prescritti
+## Scan PDF sicuro
 
-### Query params
-
-```python
-q = st.query_params.to_dict()
-st.query_params["slug"] = slug
-st.query_params.from_dict({"tab": "settings", "filters": ["a", "b"]})
-st.query_params.clear()
-```
-
-### Navigazione multipagina
+Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa le primitive **safe** che rispettano lo scope del workspace ed escludono symlink non ammessi.
 
 ```python
-pages = {
-    "Onboarding": [
-        st.Page("ui/pre_onboarding.py", title="Pre-Onboarding"),
-        st.Page("ui/onboarding.py", title="Onboarding"),
-    ],
-    "Tools": [
-        st.Page("ui/cleanup.py", title="Cleanup"),
-        st.Page("ui/preview.py", title="Docker Preview"),
-    ],
-}
-pg = st.navigation(pages, position="top")
-pg.run()
+from ui.utils.workspace import iter_pdfs_safe, count_pdfs_safe
+
+n = count_pdfs_safe(slug)
+for pdf_path in iter_pdfs_safe(slug):
+    ...  # pdf_path è già validato
 ```
 
-### Caching
+Motivazioni:
 
-```python
-@st.cache_data(ttl=600, max_entries=64)
-def load_client_docs(slug: str) -> list[str]:
-    return fetch_docs(slug)
-
-@st.cache_resource(ttl=3600)
-def git_client():
-    return make_git_client()
-
-# Evitare widget nei cached salvo necessità
-@st.cache_data(experimental_allow_widgets=True)
-def filtered(limit: int):
-    lim = st.slider("Limite", 10, 1000, limit)
-    return query(lim)
-```
-
-### Stato & layout
-
-- Ogni widget ha `key` esplicito; stato condiviso via `st.session_state`.
-- Layout nidificati max **2 livelli** per leggibilità (anche mobile).
-- Tema runtime: `st.get_option("theme.base")`; lascia a Streamlit la gestione del toggle.
-  Il CSS brand viene iniettato senza interferire con il tema.
+- Path traversal e symlink fuori dal workspace sono bloccati a monte.
+- Comportamento coerente cross‑platform (test OK anche su Windows dove i symlink possono non essere disponibili).
 
 ---
 
-## Definition of Done (UI)
+## Eventi di log strutturati
 
-- Nessun simbolo `experimental`/`beta` nel codice.
-- **Zero** `use_column_width` / `use_container_width` nei sorgenti; usare `width=`/`height=`.
-- Navigazione unificata con `st.navigation` (no mix con `pages/`).
-- Solo `@st.cache_data` / `@st.cache_resource` per caching; verifiche memoria su filtri.
-- Query string solo via `st.query_params`.
-- Se presente auth OIDC: `st.login()`/`st.logout()` e `st.user`.
+### Naming & payload
+
+- Schema: `ui.<pagina>.<sottoarea>.<azione>` (es.: `ui.manage.tags.save`).
+- **Niente PII** o contenuto file; payload **minimale** (`slug`, path relativo/basename, messaggio errore redatto).
+- Usa `logging.getLogger("ui.<pagina>")` (o il logger strutturato dove previsto) e lascia ai filtri globali la redazione.
+
+### Esempi: pagina Manage
+
+```python
+import logging
+LOGGER = logging.getLogger("ui.manage")
+
+# Apertura editor
+LOGGER.info("ui.manage.tags.open", extra={"slug": slug})
+
+# Validazione YAML
+try:
+    yaml.safe_load(content)
+    LOGGER.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
+except Exception as exc:
+    LOGGER.warning("ui.manage.tags.yaml.invalid", extra={"slug": slug, "error": str(exc)})
+    ...
+
+# Salvataggio (ok/errore)
+LOGGER.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
+LOGGER.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
+```
+
+### Test con `caplog`
+
+```python
+def test_emette_eventi_tags(caplog, monkeypatch):
+    import ui.pages.manage as manage
+
+    caplog.set_level("INFO")
+    slug = "acme"
+
+    # Monkeypatch writer per evitare I/O reale
+    monkeypatch.setattr(manage, "safe_write_text", lambda *a, **k: None)
+
+    # Simula azioni utente (p.es. click su Salva + contenuto valido)
+    ...
+
+    # Assert sugli eventi
+    assert any("ui.manage.tags.open" in r.message for r in caplog.records)
+    assert any("ui.manage.tags.save" in r.message for r in caplog.records)
+```
+
+---
+
+## Gating e SSoT di stato
+
+Per le pagine semantiche, il gating usa la SSoT `SEMANTIC_READY_STATES` e la presenza di PDF in `raw/`:
+
+```python
+from ui.constants import SEMANTIC_READY_STATES as ALLOWED_STATES
+from ui.clients_store import get_state
+from ui.utils.workspace import has_raw_pdfs
+
+state = (get_state(slug) or "").strip().lower()
+ready, raw_dir = has_raw_pdfs(slug)
+if state not in ALLOWED_STATES or not ready:
+    st.info("La semantica sarà disponibile quando lo stato raggiunge 'pronto' e `raw/` contiene PDF.")
+    st.caption(f"Stato: {state or 'n/d'} — RAW: {raw_dir or 'n/d'}")
+    st.stop()
+```
+
+**Razionale**: evitiamo che la pagina mostri azioni non eseguibili; i test verificano la dipendenza dalla costante SSoT (no whitelist locale).
+
+---
+
+## Compatibilità con gli stub di Streamlit nei test
+
+I test girano con uno **stub** di Streamlit (assenza del runtime reale). Per evitare rotture:
+
+- Avvolgi le chiamate facoltative con `getattr(st, "api", None)` e verifica che siano **callable**.
+- Fallback per layout:
+
+```python
+_markdown = getattr(st, "markdown", None)
+if callable(_markdown):
+    _markdown("")
+
+# Columns resilienti
+make_cols = getattr(st, "columns", None)
+if callable(make_cols):
+    try:
+        c1, c2, c3 = make_cols([1, 1, 1])
+    except Exception:
+        cols = list(make_cols(3)) if callable(make_cols) else []
+        while len(cols) < 3:
+            cols.append(cols[-1] if cols else st)
+        c1, c2, c3 = cols[:3]
+else:
+    c1 = c2 = c3 = st
+
+# NO with c1: ... se lo stub non supporta il context manager
+# Preferisci: c1.button(...), c2.button(...)
+```
+
+- Evita pattern che forzano `with col:` sugli stub: alcuni colonnati mock non implementano il context manager.
+
+---
+
+## Checklist “UI page”
+
+Prima di aprire una PR:
+
+**Stato & routing**
+
+-
+
+**File I/O**
+
+-
+
+**Osservabilità**
+
+-
+
+**UX & stub‑compat**
+
+-
+
+**Docs & link**
+
+-
+
+---
+
+## FAQ
+
+**D: Posso usare **``** per scrivere file?**\
+R: No. Usa **sempre** `safe_write_text(..., atomic=True)` per garantire atomicità e logging coerente.
+
+**D: Perché non posso usare **``**?**\
+R: Non è path‑safe e può seguire symlink non desiderati. Usa `iter_pdfs_safe`/`count_pdfs_safe`.
+
+**D: Dove metto i log?**\
+R: Logger di pagina (es. `logging.getLogger('ui.manage')`) con eventi `ui.manage.*`. I filtri globali si occupano di redazione.
+
+**D: Come gestisco la validazione YAML?**\
+R: Valida **prima** di scrivere (`yaml.safe_load`) e, in caso di errore, emetti `ui.<pagina>.<area>.yaml.invalid` senza persist.
+
+---
+
+## Anti‑pattern da evitare
+
+- ❌ `Path(...).rglob('*.pdf')`, `os.walk(...)` sul workspace → **usa** `iter_pdfs_safe` / `count_pdfs_safe`.
+- ❌ Scritture non atomiche (`open(..., 'w')`) → **usa** `safe_write_text(...)`.
+- ❌ Path costruiti a mano senza guardrail → **usa** `ensure_within_and_resolve(...)`.
+- ❌ Dati sensibili nei log (contenuti, token, path assoluti di sistema).
+- ❌ Dipendenze dirette da API Streamlit non stubbate senza `getattr(...)`/fallback.
+
+---
+
+### Note finali
+
+- Questo documento è SSoT per la UI Streamlit e si affianca a [coding\_rule.md](./coding_rule.md).
+- Gli esempi sono tratti da implementazioni reali nelle pagine **Manage** e **Semantics** e risultano eseguibili nel progetto.
