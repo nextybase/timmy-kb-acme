@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext  # Import pipeline (obbligatori in v1.8.0)
+from pipeline.path_utils import ensure_within_and_resolve
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
@@ -184,8 +185,8 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
             "drive_raw_folder_id mancante nel config.yaml. " "Esegui prima la fase di bootstrap Drive (pre-Vision)."
         )
 
-    sem_dir = Path(base_root) / f"timmy-kb-{slug}" / "semantic"
-    yaml_path = sem_dir / "cartelle_raw.yaml"
+    root_dir = ensure_within_and_resolve(Path(base_root), Path(base_root) / f"timmy-kb-{slug}")
+    yaml_path = ensure_within_and_resolve(root_dir, Path(root_dir) / "semantic" / "cartelle_raw.yaml")
     if not yaml_path.exists():
         raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
 

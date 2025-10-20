@@ -29,7 +29,7 @@ st.subheader("Impostazioni")
 
 # ---------------- Retriever ----------------
 st.markdown("### Retriever")
-curr_limit, curr_budget_ms, curr_auto = get_retriever_settings()
+curr_limit, curr_budget_ms, curr_auto = get_retriever_settings(slug)
 
 new_limit = st.number_input(
     "Candidate limit",
@@ -56,7 +56,7 @@ if (int(new_limit), int(new_budget_ms), bool(new_auto)) != (
     int(curr_budget_ms),
     bool(curr_auto),
 ):
-    set_retriever_settings(int(new_limit), int(new_budget_ms), bool(new_auto))
+    set_retriever_settings(int(new_limit), int(new_budget_ms), bool(new_auto), slug=slug)
     try:
         st.toast("Impostazioni retriever salvate")
     except Exception:

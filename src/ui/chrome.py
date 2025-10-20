@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shlex
 import signal
 import subprocess
@@ -14,6 +13,7 @@ from typing import Any, Iterator, Optional, cast
 
 import streamlit as st
 
+from pipeline.context import validate_slug
 from pipeline.yaml_utils import yaml_read
 from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
 from ui.theme.css import inject_theme_css
@@ -28,10 +28,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # ---------- helpers ----------
 def _on_dummy_kb() -> None:
     """Esegue lo script CLI per generare la Dummy KB e mostra log/output."""
-    raw_slug = get_slug() or "dummy"
-    slug = raw_slug.strip() or "dummy"
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", slug):
-        st.error("Slug non valido: usa lettere, numeri, trattino o underscore (max 64 caratteri).")
+    slug = (get_slug() or "dummy").strip().lower() or "dummy"
+    try:
+        validate_slug(slug)
+    except Exception as exc:
+        st.error(f"Slug non valido: {exc}")
         return
 
     script = (REPO_ROOT / "src" / "tools" / "gen_dummy_kb.py").resolve()

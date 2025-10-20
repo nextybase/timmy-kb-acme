@@ -37,7 +37,7 @@
 
 ## Query string & slug
 
-Usiamo `` (API Streamlit moderna) come SSoT lato UI e i wrapper in `` per leggere/scrivere lo slug. Quando serve garantire la presenza dello slug e rendere coerente l’UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
+Usiamo `st.query_params` (API Streamlit moderna) come SSoT lato UI e i wrapper in `ui.utils.query_params` per leggere/scrivere lo slug. Quando serve garantire la presenza dello slug e rendere coerente l'UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
 
 ### Perché `st.query_params`
 
@@ -63,8 +63,8 @@ Oppure, quando la pagina **richiede** lo slug:
 ```python
 from ui.chrome import render_chrome_then_require
 
-# Se allow_without_slug=False (default), la pagina blocca e guida l’utente
-slug = render_chrome_then_require(allow_without_slug=True)
+# Se allow_without_slug=False (default), la pagina blocca e guida l'utente
+slug = render_chrome_then_require()
 ```
 
 ### Esempi e anti‑pattern
@@ -89,9 +89,9 @@ st.query_params["tab"] = "manage"  # se serve cambiare tab
 
 ### Flusso consigliato
 
-1. Deriva la radice workspace dal solo `slug` con `` e ricava il parent.
-2. Usa `` prima di leggere/scrivere.
-3. Leggi con `` e scrivi con `` (**atomico**).
+1. Deriva la radice workspace dal solo `slug` con `ui.utils.workspace.resolve_raw_dir` e ricava il parent.
+2. Usa `pipeline.path_utils.ensure_within_and_resolve` prima di leggere/scrivere.
+3. Leggi con `pipeline.path_utils.read_text_safe` e scrivi con `ui.utils.core.safe_write_text` (**atomico**).
 
 > Non assumere mai path costruiti con concatenazioni manuali: passa **sempre** dagli helper.
 
@@ -135,10 +135,11 @@ def save_tags_yaml(slug: str, text: str) -> None:
 Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa le primitive **safe** che rispettano lo scope del workspace ed escludono symlink non ammessi.
 
 ```python
-from ui.utils.workspace import iter_pdfs_safe, count_pdfs_safe
+from ui.utils.workspace import workspace_root, iter_pdfs_safe, count_pdfs_safe
 
-n = count_pdfs_safe(slug)
-for pdf_path in iter_pdfs_safe(slug):
+root = workspace_root(slug)
+n = count_pdfs_safe(root)
+for pdf_path in iter_pdfs_safe(root):
     ...  # pdf_path è già validato
 ```
 
@@ -283,10 +284,10 @@ Prima di aprire una PR:
 
 ## FAQ
 
-**D: Posso usare **``** per scrivere file?**\
+**D: Posso usare **`Path.write_text`** per scrivere file?**\
 R: No. Usa **sempre** `safe_write_text(..., atomic=True)` per garantire atomicità e logging coerente.
 
-**D: Perché non posso usare **``**?**\
+**D: Perché non posso usare **`Path.rglob`**?**\
 R: Non è path‑safe e può seguire symlink non desiderati. Usa `iter_pdfs_safe`/`count_pdfs_safe`.
 
 **D: Dove metto i log?**\

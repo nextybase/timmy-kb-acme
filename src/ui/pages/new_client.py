@@ -264,6 +264,7 @@ if current_phase == UI_PHASE_INIT:
             validate_slug(s)
         except ConfigError as e:
             st.error(f"Slug non valido: {e}")
+            st.caption("Formato atteso: minuscole, numeri e '-' (configurabile in config.yaml).")
             LOGGER.warning("ui.new_client.invalid_slug", extra={"slug": s, "error": str(e)})
             st.stop()
 

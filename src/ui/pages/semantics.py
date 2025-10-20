@@ -113,6 +113,7 @@ from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_r
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.constants import SEMANTIC_READY_STATES
+from ui.errors import to_user_message
 
 try:
     from ui.utils.workspace import has_raw_pdfs
@@ -269,26 +270,41 @@ if _col_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stre
     try:
         _run_convert(slug)
     except (ConfigError, ConversionError) as e:
-        st.error(str(e))
+        title, body, caption = to_user_message(e)
+        st.error(title)
+        if caption:
+            st.caption(caption)
+        else:
+            st.caption(body)
     except Exception as e:  # pragma: no cover
-        st.error(f"Errore nella conversione: {e}")
+        title, body, caption = to_user_message(e)
+        st.error(title)
+        st.caption(caption or body)
 
 if _col_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretch"):
     try:
         _run_enrich(slug)
     except (ConfigError, ConversionError) as e:
-        st.error(str(e))
+        title, body, caption = to_user_message(e)
+        st.error(title)
+        st.caption(caption or body)
     except Exception as e:  # pragma: no cover
-        st.error(f"Errore nell'arricchimento: {e}")
+        t, b, c = to_user_message(e)
+        st.error(t)
+        st.caption(c or b)
 
 # Colonna B
 if _col_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretch"):
     try:
         _run_summary(slug)
     except (ConfigError, ConversionError) as e:
-        st.error(str(e))
+        t, b, c = to_user_message(e)
+        st.error(t)
+        st.caption(c or b)
     except Exception as e:  # pragma: no cover
-        st.error(f"Errore nella generazione: {e}")
+        t, b, c = to_user_message(e)
+        st.error(t)
+        st.caption(c or b)
 
 if _col_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
     _go_preview()

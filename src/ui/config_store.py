@@ -2,11 +2,14 @@
 # src/ui/config_store.py
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, cast
 
 import yaml
 
+from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
@@ -27,6 +30,45 @@ CONFIG_FILE: Path = _resolve_path(CONFIG_DIR, CONFIG_DIR / "config.yaml")
 MIN_CANDIDATE_LIMIT: int = 500
 MAX_CANDIDATE_LIMIT: int = 20_000
 DEFAULT_CANDIDATE_LIMIT: int = 4_000
+DEFAULT_LATENCY_BUDGET_MS: int = 0
+
+_logger = logging.getLogger("ui.config_store")
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
+    """
+    Carica il config specifico del cliente, garantendo path-safety.
+
+    Raises:
+        ConfigError: se il contesto non è disponibile o il file è illeggibile.
+    """
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+    except Exception as exc:
+        raise ConfigError(f"Impossibile caricare il contesto per {slug}: {exc}", slug=slug) from exc
+
+    if ctx.config_path is None:
+        raise ConfigError("Config path non disponibile", slug=slug)
+
+    cfg_path = ensure_within_and_resolve(ctx.config_path.parent, ctx.config_path)
+
+    try:
+        text = read_text_safe(cfg_path.parent, cfg_path, encoding="utf-8")
+        data = yaml.safe_load(text) or {}
+    except Exception as exc:
+        raise ConfigError(f"Config cliente non leggibile: {exc}", slug=slug, file_path=str(cfg_path)) from exc
+
+    if not isinstance(data, dict):
+        data = {}
+
+    return Path(cfg_path), cast(dict[str, Any], data)
 
 
 def get_config_dir() -> Path:
@@ -104,19 +146,32 @@ def set_skip_preflight(flag: bool) -> None:
     _save_config(cfg)
 
 
-def get_retriever_settings() -> tuple[int, int, bool]:
+def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
     """(limit, budget_ms, auto). Clampa e fornisce default sicuri."""
     cfg: dict[str, Any] = _load_config()
 
-    raw_section: Any = cfg.get("retriever")
+    source_cfg: dict[str, Any] = cfg
+
+    if slug:
+        try:
+            _, client_cfg = _load_client_config(slug)
+            if client_cfg:
+                source_cfg = client_cfg
+        except ConfigError as exc:
+            _logger.debug("get_retriever_settings.client_fallback", exc_info=exc)
+
+    raw_section: Any = source_cfg.get("retriever")
     if isinstance(raw_section, dict):
         section: dict[str, Any] = cast(dict[str, Any], raw_section)
     else:
         section = {}
 
-    limit: int = int(section.get("candidate_limit", DEFAULT_CANDIDATE_LIMIT))
-    budget_ms: int = int(section.get("budget_ms", 300))
-    auto: bool = bool(section.get("auto", False))
+    limit = _coerce_int(section.get("candidate_limit"), DEFAULT_CANDIDATE_LIMIT)
+    budget_ms = _coerce_int(
+        section.get("latency_budget_ms", section.get("budget_ms")),
+        DEFAULT_LATENCY_BUDGET_MS,
+    )
+    auto = bool(section.get("auto_by_budget", section.get("auto", False)))
 
     # Clamp
     if limit < MIN_CANDIDATE_LIMIT:
@@ -131,23 +186,47 @@ def get_retriever_settings() -> tuple[int, int, bool]:
     return limit, budget_ms, auto
 
 
-def set_retriever_settings(candidate_limit: int, budget_ms: int, auto: bool) -> None:
+def set_retriever_settings(
+    candidate_limit: int,
+    budget_ms: int,
+    auto: bool,
+    *,
+    slug: str | None = None,
+) -> None:
     """Persistenza atomica delle impostazioni retriever."""
     # Clamp in ingresso
     limit = max(MIN_CANDIDATE_LIMIT, min(MAX_CANDIDATE_LIMIT, int(candidate_limit)))
     budget = max(0, min(2000, int(budget_ms)))
 
     cfg: dict[str, Any] = _load_config()
+    target_cfg = cfg
+    target_path: Path | None = None
 
-    raw_section: Any = cfg.get("retriever")
+    if slug:
+        try:
+            target_path, target_cfg = _load_client_config(slug)
+        except ConfigError as exc:
+            _logger.warning(
+                "set_retriever_settings.client_fallback",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            target_cfg = cfg
+
+    raw_section: Any = target_cfg.get("retriever")
     if isinstance(raw_section, dict):
         section: dict[str, Any] = cast(dict[str, Any], raw_section)
     else:
         section = {}
 
     section["candidate_limit"] = int(limit)
-    section["budget_ms"] = int(budget)
-    section["auto"] = bool(auto)
-    cfg["retriever"] = section
+    section["latency_budget_ms"] = int(budget)
+    section["budget_ms"] = int(budget)  # fallback legacy
+    section["auto_by_budget"] = bool(auto)
+    section["auto"] = bool(auto)  # fallback legacy
+    target_cfg["retriever"] = section
 
-    _save_config(cfg)
+    if target_path is not None:
+        payload: str = yaml.safe_dump(target_cfg, allow_unicode=True, sort_keys=False)
+        safe_write_text(target_path, payload, encoding="utf-8", atomic=True)
+    else:
+        _save_config(cfg)
