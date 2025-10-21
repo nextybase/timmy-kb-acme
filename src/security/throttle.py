@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING, Optional
 from pipeline.exceptions import RetrieverError
 
 if TYPE_CHECKING:
-    from src.retriever import QueryParams
+    try:
+        from src.retriever import QueryParams  # type: ignore
+    except ImportError:
+        try:
+            from timmykb.retriever import QueryParams  # type: ignore
+        except ImportError:  # pragma: no cover
+            from ..retriever import QueryParams
 
 LOGGER = logging.getLogger("security.throttle")
 

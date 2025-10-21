@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import validate_slug
-from ui.utils.core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
+
+from ..utils.core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
     "context",
@@ -33,7 +34,9 @@ def load_default_mapping() -> Dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"Mapping default non trovato: {path}")
     data = yaml_load(path)
-    return cast(Dict[str, Any], data)
+    if not isinstance(data, dict):
+        raise TypeError("default_semantic_mapping.yaml deve contenere un oggetto YAML")
+    return data
 
 
 # -------- Split/Build/Validate (editor) --------
@@ -157,7 +160,9 @@ def load_semantic_mapping(slug: str, *, base_root: Path | str = "output") -> Dic
     mapping_path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
     if mapping_path.is_file():
         data = yaml_load(mapping_path)
-        return cast(Dict[str, Any], data)
+        if not isinstance(data, dict):
+            raise TypeError("semantic_mapping.yaml deve contenere un oggetto YAML")
+        return data
 
     raise FileNotFoundError(f"Mapping non trovato: {mapping_path}.")
 

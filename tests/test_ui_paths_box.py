@@ -5,7 +5,7 @@ from typing import Any
 
 
 def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Path):
-    import src.ui.landing_slug as landing
+    import timmykb.ui.landing_slug as landing
 
     # Prepara workspace
     base = tmp_path / "output" / "timmy-kb-acme"

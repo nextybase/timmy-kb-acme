@@ -15,11 +15,12 @@ import streamlit as st
 
 from pipeline.context import validate_slug
 from pipeline.yaml_utils import yaml_read
-from ui.landing_slug import _request_shutdown as _shutdown  # deterministico
-from ui.theme.css import inject_theme_css
-from ui.utils import clear_active_slug, get_slug, require_active_slug
-from ui.utils.branding import render_brand_header, render_sidebar_brand
-from ui.utils.html import esc_text
+
+from .landing_slug import _request_shutdown as _shutdown  # deterministico
+from .theme.css import inject_theme_css
+from .utils import clear_active_slug, get_slug, require_active_slug
+from .utils.branding import render_brand_header, render_sidebar_brand
+from .utils.html import esc_text
 
 # Root repo per branding (favicon/logo)
 REPO_ROOT = Path(__file__).resolve().parents[2]

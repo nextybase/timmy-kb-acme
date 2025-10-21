@@ -3,7 +3,7 @@
 import pytest
 
 from pipeline.exceptions import ConversionError
-from src.semantic.layout_enricher import (
+from timmykb.semantic.layout_enricher import (
     Constraints,
     merge_non_distruttivo,
     suggest_layout,

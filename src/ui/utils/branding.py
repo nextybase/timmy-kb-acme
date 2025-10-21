@@ -10,7 +10,7 @@ except Exception:  # pragma: no cover
     st = None
 
 # Usa l’helper centralizzato che sceglie il logo in base al tema
-from src.ui.utils.core import resolve_theme_logo_path
+from .core import resolve_theme_logo_path
 
 
 def get_favicon_path(repo_root: Path) -> Path:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.security.masking import hash_identifier, mask_paths, sha256_path
+from timmykb.security.masking import hash_identifier, mask_paths, sha256_path
 
 
 def test_hash_identifier_deterministic() -> None:

@@ -29,17 +29,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 
-from src.pipeline.context import ClientContext
-from src.pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
-from src.pipeline.exceptions import ConfigError
-from src.pipeline.logging_utils import get_structured_logger
-from src.pipeline.path_utils import ensure_within, ensure_within_and_resolve
-
 # SSoT percorsi registry clienti dalla UI
-from ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
-from ui.clients_store import DB_FILE as CLIENTS_DB_FILE
-from ui.clients_store import load_clients as _load_clients
-from ui.clients_store import save_clients as _save_clients
+from timmykb.ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
+from timmykb.ui.clients_store import DB_FILE as CLIENTS_DB_FILE
+from timmykb.ui.clients_store import load_clients as _load_clients
+from timmykb.ui.clients_store import save_clients as _save_clients
+
+from ..pipeline.context import ClientContext
+from ..pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
+from ..pipeline.exceptions import ConfigError
+from ..pipeline.logging_utils import get_structured_logger
+from ..pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
 MIME_FOLDER_CACHED = MIME_FOLDER
 

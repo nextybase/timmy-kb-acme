@@ -1,4 +1,4 @@
-from src.tag_onboarding import _validate_tags_reviewed
+from timmykb.tag_onboarding import _validate_tags_reviewed
 
 
 def make_base_tag(**overrides):

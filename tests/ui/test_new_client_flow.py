@@ -120,7 +120,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
     fake_drive_module = types.ModuleType("ui.services.drive_runner")
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
 
-    import src.pre_onboarding as pre_onboarding
+    import timmykb.pre_onboarding as pre_onboarding
 
     def _fake_bootstrap(slug: str, *, client_name: str | None, vision_statement_pdf: bytes | None) -> None:
         base = client_root
@@ -150,7 +150,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
     caplog.clear()
     with caplog.at_level(logging.INFO):
         sys.modules.pop("src.ui.pages.new_client", None)
-        import src.ui.pages.new_client as new_client
+        import timmykb.ui.pages.new_client as new_client
 
         importlib.reload(new_client)
 

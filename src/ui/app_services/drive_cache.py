@@ -3,28 +3,33 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, Callable, Dict, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
     st = None
 
+RenderTreeCallable = Callable[[str], Dict[str, Dict[str, Any]]]
+
 try:
-    from ui.components.drive_tree import render_drive_tree
+    from ..components.drive_tree import render_drive_tree as _render_drive_tree
 except Exception:  # pragma: no cover
-    render_drive_tree = None
+    render_drive_tree: Optional[RenderTreeCallable] = None
+else:
+    render_drive_tree = cast(RenderTreeCallable, _render_drive_tree)
 
 
 def _drive_tree_uncached(slug: str) -> Dict[str, Dict[str, Any]]:
     if render_drive_tree is None:
         return {}
-    return cast(Dict[str, Dict[str, Any]], render_drive_tree(slug))
+    return render_drive_tree(slug)
 
 
+# st.cache_data returns a wrapper preserving the callable signature but mypy sees `Any`.
 if st is not None and hasattr(st, "cache_data"):
-    _drive_tree_cached: Callable[[str], Dict[str, Dict[str, Any]]] = cast(
-        Callable[[str], Dict[str, Dict[str, Any]]],
+    _drive_tree_cached: RenderTreeCallable = cast(
+        RenderTreeCallable,
         st.cache_data(ttl=timedelta(seconds=90))(_drive_tree_uncached),
     )
 else:

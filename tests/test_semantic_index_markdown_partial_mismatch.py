@@ -2,7 +2,7 @@
 import logging
 from types import SimpleNamespace
 
-from src.semantic.api import index_markdown_to_db
+from timmykb.semantic.api import index_markdown_to_db
 
 
 class FakeEmbClient:

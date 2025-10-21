@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.semantic.api import build_tags_csv
+from timmykb.semantic.api import build_tags_csv
 
 
 def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:

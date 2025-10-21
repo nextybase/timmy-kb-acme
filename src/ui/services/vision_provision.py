@@ -13,13 +13,17 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
-# Import “late-binding” per evitare cicli nel grafo Streamlit
+# Import isolate-binding per evitare cicli nel grafo Streamlit
 try:
     from src.semantic.vision_provision import HaltError
     from src.semantic.vision_provision import provision_from_vision as _provision_from_vision
-except Exception:  # pragma: no cover
-    from semantic.vision_provision import HaltError
-    from semantic.vision_provision import provision_from_vision as _provision_from_vision  # fallback
+except ImportError:
+    try:
+        from timmykb.semantic.vision_provision import HaltError
+        from timmykb.semantic.vision_provision import provision_from_vision as _provision_from_vision
+    except ImportError:  # pragma: no cover
+        from ...semantic.vision_provision import HaltError
+        from ...semantic.vision_provision import provision_from_vision as _provision_from_vision
 
 
 @dataclass(frozen=True)

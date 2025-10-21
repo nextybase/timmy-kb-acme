@@ -17,7 +17,14 @@ import argparse
 import json
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Dict
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 # Optional: carica .env
 try:  # pragma: no cover - optional dependency
@@ -27,7 +34,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:
     pass
 
-from src.ingest import ingest_folder
+from timmykb.ingest import ingest_folder
 
 
 def main() -> None:

@@ -91,8 +91,8 @@ def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
 **Esempio:** `src/ui/services/<feature>_llm.py`
 
 ```python
-from src.ui.config_store import get_vision_model
-from src.ai.client_factory import make_openai_client
+from timmykb.ui.config_store import get_vision_model
+from timmykb.ai.client_factory import make_openai_client
 
 MODEL = get_vision_model()  # ← NIENTE hardcode
 

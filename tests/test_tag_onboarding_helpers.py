@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import src.tag_onboarding as to
-from src.tag_onboarding import _copy_from_local, _download_from_drive, _should_proceed  # type: ignore
+import timmykb.tag_onboarding as to
+from timmykb.tag_onboarding import _copy_from_local, _download_from_drive, _should_proceed  # type: ignore
 
 
 class _NoopLogger:

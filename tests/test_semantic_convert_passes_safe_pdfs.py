@@ -2,7 +2,7 @@
 import logging
 from types import SimpleNamespace
 
-import src.semantic.api as api
+import timmykb.semantic.api as api
 
 
 def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch, caplog):

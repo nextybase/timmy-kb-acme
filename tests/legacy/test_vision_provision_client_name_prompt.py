@@ -4,7 +4,7 @@ import pytest
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF/PyMuPDF wheels")
 
-import src.semantic.vision_provision as vp
+import timmykb.semantic.vision_provision as vp
 
 
 def test_provision_uses_client_name_in_prompt(dummy_workspace, dummy_ctx, dummy_logger, monkeypatch):

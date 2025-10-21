@@ -116,7 +116,7 @@ def _prepare_admin_module(monkeypatch: pytest.MonkeyPatch) -> Tuple[Any, _Stream
     monkeypatch.setenv("ALLOWED_GOOGLE_DOMAIN", "unisom.it")
 
     sys.modules.pop("src.ui.pages.admin", None)
-    from src.ui.pages import admin
+    from timmykb.ui.pages import admin
 
     monkeypatch.setattr(admin, "st", stub, raising=False)
     return admin, stub

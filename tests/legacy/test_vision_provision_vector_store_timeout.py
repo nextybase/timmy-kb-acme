@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.semantic.vision_provision as vp
+import timmykb.semantic.vision_provision as vp
 from pipeline.exceptions import ConfigError
 
 

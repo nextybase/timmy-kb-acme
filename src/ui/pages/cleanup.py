@@ -28,18 +28,24 @@ def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
 # Orchestratore di cancellazione (locale + DB + Drive)
 # run_cleanup(slug: str, assume_yes: bool = False) -> int
 # Prova entrambe le forme del modulo, a seconda del run-path.
-_run_cleanup = _safe_get("tools.clean_client_workspace:run_cleanup") or _safe_get(
-    "src.tools.clean_client_workspace:run_cleanup"
+_run_cleanup = (
+    _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")
+    or _safe_get("tools.clean_client_workspace:run_cleanup")
+    or _safe_get("src.tools.clean_client_workspace:run_cleanup")
 )
-_perform_cleanup = _safe_get("tools.clean_client_workspace:perform_cleanup") or _safe_get(
-    "src.tools.clean_client_workspace:perform_cleanup"
+_perform_cleanup = (
+    _safe_get("timmykb.tools.clean_client_workspace:perform_cleanup")
+    or _safe_get("tools.clean_client_workspace:perform_cleanup")
+    or _safe_get("src.tools.clean_client_workspace:perform_cleanup")
 )
 
 
 def _load_run_cleanup() -> Optional[Callable[..., Any]]:
     """Tenta di ricaricare `run_cleanup` dai namespace supportati."""
-    return _safe_get("tools.clean_client_workspace:run_cleanup") or _safe_get(
-        "src.tools.clean_client_workspace:run_cleanup"
+    return (
+        _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")
+        or _safe_get("tools.clean_client_workspace:run_cleanup")
+        or _safe_get("src.tools.clean_client_workspace:run_cleanup")
     )
 
 
@@ -80,6 +86,8 @@ slug = render_chrome_then_require(allow_without_slug=True)
 if not slug:
     st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
     st.stop()
+
+slug = cast(str, slug)
 
 st.subheader("Cleanup")
 st.write("Strumenti di pulizia del workspace e **cancellazione definitiva** del cliente.")

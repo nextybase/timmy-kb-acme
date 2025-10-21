@@ -4,8 +4,7 @@ from __future__ import annotations
 from textwrap import dedent
 from typing import Any
 
-from ui.utils.core import get_theme_base  # resta valido
-
+from ..utils.core import get_theme_base  # resta valido
 from . import tokens as T
 
 

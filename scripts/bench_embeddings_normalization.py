@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, Iterable, Sequence, Tuple
 
 import numpy as np
 
-import src.retriever as retr
+import timmykb.retriever as retr
 
 
 def _timeit(fn: Callable[[], object], rounds: int = 5) -> float:

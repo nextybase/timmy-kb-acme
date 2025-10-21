@@ -6,8 +6,8 @@ from typing import Any
 import pytest
 
 from pipeline.exceptions import RetrieverError
-from src.retriever import QueryParams, search
-from src.security.throttle import reset_token_buckets, throttle_token_bucket
+from timmykb.retriever import QueryParams, search
+from timmykb.security.throttle import reset_token_buckets, throttle_token_bucket
 
 
 class _DummyEmbeddingsClient:

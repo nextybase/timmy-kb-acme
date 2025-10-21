@@ -8,7 +8,7 @@ import yaml
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 
-import src.semantic.vision_provision as S
+import timmykb.semantic.vision_provision as S
 from pipeline.exceptions import ConfigError
 
 # ---- Helpers ---------------------------------------------------------------

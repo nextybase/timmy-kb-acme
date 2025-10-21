@@ -70,9 +70,17 @@ def _ensure_dependencies() -> types.SimpleNamespace:
     from pipeline.logging_utils import tail_path as _tail
     from pipeline.path_utils import ensure_within as _ew
     from pipeline.path_utils import ensure_within_and_resolve as _ewr
-    from pipeline.path_utils import open_for_read as _ofrt
+
+    try:
+        from pipeline.path_utils import open_for_read as _ofrt
+    except (ImportError, AttributeError):  # pragma: no cover - opzionale
+        _ofrt = None
     from pipeline.path_utils import open_for_read_bytes_selfguard as _ofr
-    from pipeline.path_utils import read_text_safe as _rts
+
+    try:
+        from pipeline.path_utils import read_text_safe as _rts
+    except (ImportError, AttributeError):  # pragma: no cover - opzionale
+        _rts = None
     from semantic.auto_tagger import extract_semantic_candidates as _esc
     from semantic.auto_tagger import render_tags_csv as _rtc
     from semantic.config import load_semantic_config as _lsc
@@ -84,6 +92,20 @@ def _ensure_dependencies() -> types.SimpleNamespace:
         from finance.api import import_csv as _fic  # opzionale
     except Exception:
         _fic = None
+
+    if _ofrt is None:
+
+        def _missing_open_for_read(*_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError("open_for_read dependency non disponibile.")
+
+        _ofrt = _missing_open_for_read
+
+    if _rts is None:
+
+        def _missing_read_text(*_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError("read_text_safe dependency non disponibile.")
+
+        _rts = _missing_read_text
 
     _DEPS = types.SimpleNamespace(
         safe_write_bytes=_swb,

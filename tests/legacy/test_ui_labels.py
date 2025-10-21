@@ -54,8 +54,8 @@ def test_no_legacy_labels_or_switchers_anymore():
         "Rigenera YAML",  # vecchia azione di ready
         "render_sidebar_tab_switches",  # switcher tab legacy
         "src/ui/tabs",  # percorso legacy
-        "from src.ui.tabs",  # import legacy
-        "import src.ui.tabs",  # import legacy
+        "from timmykb.ui.tabs",  # import legacy
+        "import timmykb.ui.tabs",  # import legacy
     ]
     for needle in forbidden:
         assert needle not in hay, f"Residuo legacy trovato nel codice app: {needle!r}"

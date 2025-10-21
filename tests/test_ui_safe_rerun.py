@@ -1,7 +1,7 @@
 # tests/test_ui_safe_rerun.py
 from __future__ import annotations
 
-import src.ui.landing_slug as landing
+import timmykb.ui.landing_slug as landing
 
 
 def test_safe_rerun_noop_when_missing(monkeypatch) -> None:

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.pipeline.content_utils as cu
+import timmykb.pipeline.content_utils as cu
 from pipeline.exceptions import PipelineError
 
 

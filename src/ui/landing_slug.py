@@ -15,10 +15,11 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
-from pre_onboarding import ensure_local_workspace_for_ui
 from semantic.validation import validate_context_slug
-from ui.services import vision_provision as vision_services
-from ui.utils.branding import render_brand_header
+from timmykb.pre_onboarding import ensure_local_workspace_for_ui
+
+from .services import vision_provision as vision_services
+from .utils.branding import render_brand_header
 
 st: Any | None
 try:  # preferisce runtime soft-fail per import opzionali

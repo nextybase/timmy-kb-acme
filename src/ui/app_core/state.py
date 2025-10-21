@@ -10,10 +10,10 @@ Compatibilità e costanti per lo stato/fasi lato UI.
 """
 
 
-from ui.constants import SEMANTIC_READY_STATES  # SSoT per gating "Semantica"
-from ui.constants import UI_PHASE_INIT  # "iniziale"
-from ui.constants import UI_PHASE_PROVISIONED  # "predisposto"
-from ui.constants import UI_PHASE_READY_TO_OPEN  # "pronto_apertura"
+from ..constants import SEMANTIC_READY_STATES  # SSoT per gating "Semantica"
+from ..constants import UI_PHASE_INIT  # "iniziale"
+from ..constants import UI_PHASE_PROVISIONED  # "predisposto"
+from ..constants import UI_PHASE_READY_TO_OPEN  # "pronto_apertura"
 
 # Fasi UI in italiano (SSoT)
 UI_PAGE_PHASES = {UI_PHASE_INIT, UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED}

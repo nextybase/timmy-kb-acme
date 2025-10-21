@@ -25,8 +25,14 @@ from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 
-# IMPORT ASSOLUTO: trattiamo src/ come package
-from src.kb_db import insert_chunks
+# IMPORT alias: supporta sia import locale che pacchetto installato
+try:
+    from src.kb_db import insert_chunks  # type: ignore
+except ImportError:
+    try:
+        from timmykb.kb_db import insert_chunks  # type: ignore
+    except ImportError:  # pragma: no cover
+        from .kb_db import insert_chunks
 
 LOGGER = logging.getLogger("timmy_kb.ingest")
 

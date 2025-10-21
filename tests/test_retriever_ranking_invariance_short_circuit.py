@@ -1,7 +1,7 @@
 # tests/test_retriever_ranking_invariance_short_circuit.py
 import logging
 
-import src.retriever as retr
+import timmykb.retriever as retr
 
 
 class _EmbClient:

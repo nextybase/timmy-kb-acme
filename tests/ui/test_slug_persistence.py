@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.ui.utils.slug as slug_utils
+import timmykb.ui.utils.slug as slug_utils
 
 
 @pytest.fixture(autouse=True)

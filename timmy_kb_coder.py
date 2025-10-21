@@ -9,7 +9,7 @@ Quick demo script:
 2) Run the app:
    python -m streamlit run timmy_kb_coder.py
 3) Example ingest (from a Python REPL or a separate script):
-   >>> from src.ingest import ingest_folder
+   >>> from timmykb.ingest import ingest_folder
    >>> summary = ingest_folder(
    ...     project_slug="evagrin", scope="Timmy",
    ...     folder_glob="docs/**/*.md", version="v1",
@@ -23,8 +23,14 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, cast
+
+REPO_ROOT = Path(__file__).resolve().parent
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from pipeline.config_utils import get_client_config
 
@@ -32,13 +38,13 @@ from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded
 from semantic.types import EmbeddingsClient
-from src.ingest import OpenAIEmbeddings
-from src.kb_db import get_db_path, init_db
-from src.prompt_builder import build_prompt
-from src.retriever import QueryParams, search_with_config  # <-- usa la facade
-from src.security.authorization import authorizer_session
-from src.security.throttle import throttle_token_bucket
-from src.vscode_bridge import read_response, write_request
+from timmykb.ingest import OpenAIEmbeddings
+from timmykb.kb_db import get_db_path, init_db
+from timmykb.prompt_builder import build_prompt
+from timmykb.retriever import QueryParams, search_with_config  # <-- usa la facade
+from timmykb.security.authorization import authorizer_session
+from timmykb.security.throttle import throttle_token_bucket
+from timmykb.vscode_bridge import read_response, write_request
 
 st: Any | None
 try:

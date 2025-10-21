@@ -1,7 +1,7 @@
 # tests/test_ui_exit_buttons.py
 from __future__ import annotations
 
-import src.ui.landing_slug as landing
+import timmykb.ui.landing_slug as landing
 
 
 def test_request_shutdown_kill_path(monkeypatch) -> None:

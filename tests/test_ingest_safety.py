@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-import src.ingest as ingest
+import timmykb.ingest as ingest
 
 
 class FakeEmb:

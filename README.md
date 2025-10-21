@@ -201,7 +201,7 @@ retriever:
 
 Uso a codice (API): passa dalle utilità del retriever per applicare i valori da config con la precedenza giusta:
 ```python
-from src.retriever import QueryParams, with_config_or_budget, search
+from timmykb.retriever import QueryParams, with_config_or_budget, search
 from pipeline.config_utils import get_client_config
 
 params = QueryParams(db_path=..., project_slug=..., scope=..., query="...", k=8)

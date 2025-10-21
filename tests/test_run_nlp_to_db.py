@@ -5,10 +5,10 @@ import pytest
 
 from pipeline.exceptions import PathTraversalError
 from semantic.types import ClientContextProtocol
-from src.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
 from storage.tags_store import upsert_document, upsert_folder
+from timmykb.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 
 
 def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):

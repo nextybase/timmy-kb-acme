@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
-from src.retriever import QueryParams, choose_limit_for_budget, with_config_candidate_limit, with_config_or_budget
+from timmykb.retriever import QueryParams, choose_limit_for_budget, with_config_candidate_limit, with_config_or_budget
 
 
 def test_with_config_candidate_limit_precedence() -> None:

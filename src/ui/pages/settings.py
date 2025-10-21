@@ -2,7 +2,7 @@
 # src/ui/pages/settings.py
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 import streamlit as st
 
@@ -23,7 +23,7 @@ except Exception:
     edit_semantic_mapping = None
     edit_cartelle_raw = None
 
-slug = render_chrome_then_require()
+slug = cast(str, render_chrome_then_require())
 
 st.subheader("Impostazioni")
 

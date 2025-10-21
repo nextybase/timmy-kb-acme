@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from src.retriever import QueryParams, search
+from timmykb.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:

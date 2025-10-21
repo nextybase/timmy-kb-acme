@@ -29,8 +29,9 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 # Manteniamo compat con l'attuale gestione querystring
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from ui.utils.query_params import get_slug as _qp_get
-from ui.utils.query_params import set_slug as _qp_set
+
+from .query_params import get_slug as _qp_get
+from .query_params import set_slug as _qp_set
 
 _PERSIST_PATH = Path(__file__).resolve().parents[2] / "clients_db" / "ui_state.json"
 LOGGER = logging.getLogger("ui.slug")

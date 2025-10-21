@@ -10,7 +10,7 @@ from typing import Iterable
 
 import pytest
 
-from src.retriever import (
+from timmykb.retriever import (
     QueryParams,
     cosine,
     preview_effective_candidate_limit,

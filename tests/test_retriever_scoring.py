@@ -5,8 +5,8 @@ from typing import Sequence
 
 import numpy as np
 
-import src.retriever as r
-from src.retriever import QueryParams, search
+import timmykb.retriever as r
+from timmykb.retriever import QueryParams, search
 
 
 class EmbedOne:

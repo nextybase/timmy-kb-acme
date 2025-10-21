@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Set
 
-import src.semantic.vocab_loader as vl
+import timmykb.semantic.vocab_loader as vl
 
 
 class _NoopLogger:

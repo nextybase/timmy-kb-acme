@@ -45,10 +45,10 @@ except Exception:  # pragma: no cover
 from pipeline.logging_utils import get_structured_logger, mask_id_map
 
 # Import locali (dev UI)
-from ui.components.mapping_editor import mapping_to_raw_structure  # usato solo se ensure_structure=True
-from ui.components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
-from ui.components.mapping_editor import load_semantic_mapping
-from ui.utils import to_kebab  # SSoT normalizzazione + path-safety
+from ..components.mapping_editor import mapping_to_raw_structure  # usato solo se ensure_structure=True
+from ..components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
+from ..components.mapping_editor import load_semantic_mapping
+from ..utils import to_kebab  # SSoT normalizzazione + path-safety
 
 # ===== Logger =================================================================
 
@@ -119,7 +119,7 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     Ritorna il path del config locale aggiornato.
     Richiede .env valido (SERVICE_ACCOUNT_FILE, DRIVE_ID, ecc.).
     """
-    from pre_onboarding import (  # import locale per evitare costi a import-time
+    from timmykb.pre_onboarding import (  # import locale per evitare costi a import-time
         _create_local_structure,
         _drive_phase,
         _prepare_context_and_logger,

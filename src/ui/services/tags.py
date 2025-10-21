@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from ui.components.yaml_editors import edit_cartelle_raw as _edit_cartelle_raw
-from ui.components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
-from ui.components.yaml_editors import edit_tags_reviewed as _edit_tags_reviewed
+from ..components.yaml_editors import edit_cartelle_raw as _edit_cartelle_raw
+from ..components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
+from ..components.yaml_editors import edit_tags_reviewed as _edit_tags_reviewed
 
 try:
     import streamlit as st

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import src.semantic.vision_provision as S
+import timmykb.semantic.vision_provision as S
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 

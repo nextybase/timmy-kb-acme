@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.exceptions import PathTraversalError
-from src.tag_onboarding import validate_tags_reviewed
+from timmykb.tag_onboarding import validate_tags_reviewed
 
 
 def test_validate_tags_reviewed_rejects_semantic_outside_base(tmp_path, monkeypatch):

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
-from ui.app_services.drive_cache import _clear_drive_tree_cache, get_drive_tree_cache
-from ui.components.diff_view import render_drive_local_diff as _render_diff_component
+from ..app_services.drive_cache import _clear_drive_tree_cache, get_drive_tree_cache
+from ..components.diff_view import render_drive_local_diff as _render_diff_component
 
 
 def invalidate_drive_index(slug: str | None = None) -> None:

@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 # scripts/assistants_smoke.py
 from __future__ import annotations
-import os, sys, json
+import json
+import os
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 
 def main() -> int:
@@ -17,7 +24,7 @@ def main() -> int:
         except Exception:
             pass
 
-        from src.ai.client_factory import make_openai_client  # usa lo stesso factory della UI
+        from timmykb.ai.client_factory import make_openai_client  # usa lo stesso factory della UI
     except Exception as e:
         print(f"ERRORE import: {e}")
         return 2

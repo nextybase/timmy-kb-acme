@@ -2,6 +2,7 @@
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from pathlib import Path
@@ -10,7 +11,14 @@ from typing import Any, Callable, Dict, Optional, cast
 import streamlit as st
 import yaml
 
-from src.pre_onboarding import ensure_local_workspace_for_ui
+try:
+    from timmykb.pre_onboarding import ensure_local_workspace_for_ui
+except ImportError:
+    try:
+        from src.pre_onboarding import ensure_local_workspace_for_ui
+    except ImportError:  # pragma: no cover
+        from pre_onboarding import ensure_local_workspace_for_ui
+
 from ui.chrome import header, sidebar
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
@@ -29,22 +37,59 @@ from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import read_text_safe
 from ui.clients_store import ClientEntry, set_state, upsert_client
-from ui.services.vision_provision import run_vision
+
+_vision_module = None
+for _vision_mod_name in (
+    "ui.services.vision_provision",
+    "timmykb.ui.services.vision_provision",
+    "src.ui.services.vision_provision",
+):
+    try:
+        _vision_module = importlib.import_module(_vision_mod_name)
+        break
+    except ImportError:
+        continue
+
+if _vision_module is None:
+    raise ImportError("Impossibile importare ui.services.vision_provision")
+
+run_vision = getattr(_vision_module, "run_vision")
 
 BuildDriveCallable = Callable[..., Dict[str, str]]
-try:
-    from ui.services.drive_runner import build_drive_from_mapping as _build_drive_from_mapping_impl
-except Exception:  # pragma: no cover
-    _build_drive_from_mapping_impl = None
+EnsureDriveCallable = Callable[..., Path]
+_build_drive_from_mapping_impl: Optional[BuildDriveCallable] = None
+_ensure_drive_minimal_impl: Optional[EnsureDriveCallable] = None
 
-if _build_drive_from_mapping_impl is not None:
-    build_drive_from_mapping: Optional[BuildDriveCallable] = cast(BuildDriveCallable, _build_drive_from_mapping_impl)
+for _mod in ("ui.services.drive_runner", "timmykb.ui.services.drive_runner", "src.ui.services.drive_runner"):
+    try:
+        _drive_runner = importlib.import_module(_mod)
+    except ImportError:
+        continue
+    _build_candidate = getattr(_drive_runner, "build_drive_from_mapping", None)
+    _ensure_candidate = getattr(_drive_runner, "ensure_drive_minimal_and_upload_config", None)
+    if _mod == "ui.services.drive_runner":
+        if callable(_build_candidate):
+            _build_drive_from_mapping_impl = cast(BuildDriveCallable, _build_candidate)
+        if callable(_ensure_candidate):
+            _ensure_drive_minimal_impl = cast(EnsureDriveCallable, _ensure_candidate)
+        break
+    if _build_drive_from_mapping_impl is None and callable(_build_candidate):
+        _build_drive_from_mapping_impl = cast(BuildDriveCallable, _build_candidate)
+    if _ensure_drive_minimal_impl is None and callable(_ensure_candidate):
+        _ensure_drive_minimal_impl = cast(EnsureDriveCallable, _ensure_candidate)
+    if _build_drive_from_mapping_impl is not None and _ensure_drive_minimal_impl is not None:
+        break
+
+build_drive_from_mapping: Optional[BuildDriveCallable]
+if _build_drive_from_mapping_impl:
+    build_drive_from_mapping = _build_drive_from_mapping_impl
 else:
     build_drive_from_mapping = None
 
-try:
-    from ui.services.drive_runner import ensure_drive_minimal_and_upload_config as _ensure_drive_minimal
-except Exception:  # pragma: no cover
+_ensure_drive_minimal: Optional[EnsureDriveCallable]
+if _ensure_drive_minimal_impl:
+    _ensure_drive_minimal = _ensure_drive_minimal_impl
+else:
     _ensure_drive_minimal = None
 from pipeline.config_utils import get_client_config
 

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.semantic.api import ConfigError, convert_markdown
+from timmykb.semantic.api import ConfigError, convert_markdown
 
 
 def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):

@@ -7,7 +7,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     il ramo source=="drive" deve sollevare ConfigError con istruzioni chiare,
     non TypeError da chiamata su None.
     """
-    import src.tag_onboarding as tag
+    import timmykb.tag_onboarding as tag
 
     # Isola la root del workspace cliente
     client_root = tmp_path / "timmy-kb-smk"

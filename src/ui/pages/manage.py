@@ -44,7 +44,7 @@ _download_with_progress = _safe_get("ui.services.drive_runner:download_raw_from_
 _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
-_run_cleanup = _safe_get("src.tools.clean_client_workspace:run_cleanup")  # noqa: F401
+_run_cleanup = _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
 
 # Arricchimento semantico (estrazione tag → stub + YAML)
 _run_tags_update = _safe_get("ui.services.tags_adapter:run_tags_update")
@@ -232,6 +232,8 @@ if not slug:
 
     st.stop()
 
+slug = cast(str, slug)
+
 # Da qui in poi: slug presente → viste operative
 
 # Unica vista per Drive (Diff)
@@ -363,7 +365,29 @@ if _btn(c3, "Scarica PDF da Drive → locale", key="btn_drive_download", type="s
                 raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
             conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
         except Exception as e:
-            st.error(f"Impossibile preparare il piano di download: {e}")
+            message = f"Impossibile preparare il piano di download: {e}"
+            HttpErrorType: type[BaseException] | None
+            try:
+                from googleapiclient.errors import HttpError as _HttpError
+            except Exception:
+                HttpErrorType = None
+            else:
+                HttpErrorType = _HttpError
+
+            if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
+                status = getattr(getattr(e, "resp", None), "status", None)
+            else:
+                status = None
+
+            if status == 500:
+                st.error(
+                    f"{message}\n"
+                    "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
+                    "Riprovare tra qualche minuto e, se il problema persiste, scaricare i PDF manualmente da Drive "
+                    "e copiarli nella cartella `raw/`."
+                )
+            else:
+                st.error(message)
             return
 
         if conflicts:

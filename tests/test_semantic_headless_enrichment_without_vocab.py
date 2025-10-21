@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-import src.semantic.api as sapi
-import src.semantic_headless as sh
+import timmykb.semantic.api as sapi
+import timmykb.semantic_headless as sh
 
 
 def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):

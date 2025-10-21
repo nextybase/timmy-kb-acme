@@ -5,8 +5,8 @@ from typing import Sequence
 
 import pytest
 
-import src.retriever as r
-from src.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
+import timmykb.retriever as r
+from timmykb.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 
 class DummyEmbeddings:

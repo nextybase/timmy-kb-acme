@@ -16,8 +16,8 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays as np_arrays
 
-from src.pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
-from src.retriever import cosine
+from timmykb.pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
+from timmykb.retriever import cosine
 
 
 def _gen_like(seq: Sequence[float]) -> Any:

@@ -2,7 +2,7 @@ import pytest
 
 
 def test_require_drive_utils_raises_when_missing(monkeypatch):
-    import src.pre_onboarding as pre
+    import timmykb.pre_onboarding as pre
 
     # Simula funzioni drive mancanti
     monkeypatch.setattr(pre, "get_drive_service", None, raising=False)
@@ -17,7 +17,7 @@ def test_require_drive_utils_raises_when_missing(monkeypatch):
 
 
 def test_require_drive_utils_passes_when_callable(monkeypatch):
-    import src.pre_onboarding as pre
+    import timmykb.pre_onboarding as pre
 
     # Fornisce stub callabili
     monkeypatch.setattr(pre, "get_drive_service", lambda ctx: object(), raising=False)
@@ -30,7 +30,7 @@ def test_require_drive_utils_passes_when_callable(monkeypatch):
 
 
 def test_ui_drive_runner_guard(monkeypatch):
-    import src.ui.services.drive_runner as dr
+    import timmykb.ui.services.drive_runner as dr
 
     # Simula funzioni mancanti
     monkeypatch.setattr(dr, "get_drive_service", None, raising=False)
@@ -44,7 +44,7 @@ def test_ui_drive_runner_guard(monkeypatch):
 
 
 def test_tag_onboarding_guard(monkeypatch):
-    import src.tag_onboarding as tag
+    import timmykb.tag_onboarding as tag
 
     monkeypatch.setattr(tag, "get_drive_service", None, raising=False)
     monkeypatch.setattr(tag, "download_drive_pdfs_to_local", None, raising=False)

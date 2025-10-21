@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 from typing import Any, Optional
 
-from src.pipeline.context import ClientContext
-from src.pipeline.drive_utils import get_drive_service
+from ..pipeline.context import ClientContext
+from ..pipeline.drive_utils import get_drive_service
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 

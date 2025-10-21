@@ -15,7 +15,7 @@ for candidate in (REPO_ROOT, SRC_ROOT):
         sys.path.insert(0, str(candidate))
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
-from src.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
+from timmykb.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
 
 DUMMY_SLUG = "dummy"
 

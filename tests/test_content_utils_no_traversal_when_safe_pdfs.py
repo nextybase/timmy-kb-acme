@@ -2,7 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import src.pipeline.content_utils as cu
+import timmykb.pipeline.content_utils as cu
 
 
 def _ctx(base: Path, raw: Path, book: Path):

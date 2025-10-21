@@ -19,9 +19,30 @@ from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
-from src.ai.client_factory import make_openai_client
-from src.security.masking import hash_identifier, mask_paths, sha256_path
-from src.security.retention import purge_old_artifacts
+
+try:
+    from src.ai.client_factory import make_openai_client  # type: ignore
+except ImportError:
+    try:
+        from timmykb.ai.client_factory import make_openai_client  # type: ignore
+    except ImportError:  # pragma: no cover - fallback when package context
+        from ..ai.client_factory import make_openai_client
+
+try:
+    from src.security.masking import hash_identifier, mask_paths, sha256_path  # type: ignore
+except ImportError:
+    try:
+        from timmykb.security.masking import hash_identifier, mask_paths, sha256_path  # type: ignore
+    except ImportError:  # pragma: no cover
+        from ..security.masking import hash_identifier, mask_paths, sha256_path
+
+try:
+    from src.security.retention import purge_old_artifacts  # type: ignore
+except ImportError:
+    try:
+        from timmykb.security.retention import purge_old_artifacts  # type: ignore
+    except ImportError:  # pragma: no cover
+        from ..security.retention import purge_old_artifacts
 
 # =========================
 # Eccezioni specifiche
@@ -259,34 +280,71 @@ def _call_assistant_json(
 ) -> Dict[str, Any]:
     """
     Invoca l'Assistant preconfigurato usando Threads/Runs con Structured Outputs (JSON Schema).
-    - Non allega file, non usa File Search, non usa vector store.
+    - Usa File Search se abilitato (VISION_USE_KB=1, default) forzando tool_choice=file_search.
     - Restituisce il payload JSON già parsato.
     """
     logger = logging.getLogger("semantic.vision_provision")
     logger.debug("vision_provision: creating assistant thread", extra={"assistant_id": assistant_id})
+
+    # Recupero modello assistant per capire se supporta response_format=json_schema
+    try:
+        asst = client.beta.assistants.retrieve(assistant_id)
+        asst_model = getattr(asst, "model", "") or ""
+    except Exception as exc:  # pragma: no cover - diagnostico best effort
+        logger.warning(
+            "vision_provision.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)}
+        )
+        asst_model = ""
+
+    use_structured = bool(strict_output) and ("gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model)
 
     thread = client.beta.threads.create()
 
     for msg in user_messages:
         client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg["content"])
 
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant_id,
-        response_format={
+    _use_kb = (os.getenv("VISION_USE_KB", "1") or "1").strip().lower() not in {"0", "false", "no", "off"}
+    tool_choice = {"type": "file_search"} if _use_kb else "auto"
+
+    response_format = (
+        {
             "type": "json_schema",
             "json_schema": {
                 "name": "VisionOutput",
                 "schema": _load_vision_schema(),
-                "strict": bool(strict_output),
+                "strict": True,
             },
-        },
+        }
+        if use_structured
+        else {"type": "json_object"}
+    )
+
+    run = client.beta.threads.runs.create_and_poll(
+        thread_id=thread.id,
+        assistant_id=assistant_id,
+        response_format=response_format,
         instructions=run_instructions or None,
+        tool_choice=tool_choice,
     )
 
     status = getattr(run, "status", None)
     if status != "completed":
-        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}).")
+        extra = {
+            "assistant_id": assistant_id,
+            "run_id": getattr(run, "id", None),
+            "status": status,
+            "last_error": getattr(run, "last_error", None),
+            "incomplete_details": getattr(run, "incomplete_details", None),
+        }
+        logger.error("vision_provision.run_failed", extra=extra)
+        last_error = extra["last_error"] or {}
+        reason = (
+            getattr(last_error, "message", None)
+            or getattr(last_error, "code", None)
+            or str(last_error)
+            or "sconosciuto"
+        )
+        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}; reason={reason}).")
 
     msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=10)
 
@@ -306,11 +364,20 @@ def _call_assistant_json(
             break
 
     if not text:
+        logger.error("vision_provision.no_output_text", extra={"assistant_id": assistant_id})
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
 
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
+        logger.error(
+            "vision_provision.invalid_json",
+            extra={
+                "assistant_id": assistant_id,
+                "error": str(e),
+                "sample": (text[:500] if isinstance(text, str) else None),
+            },
+        )
         raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
 
 
@@ -433,12 +500,20 @@ def provision_from_vision(
         user_block_lines.append(f"[/{title}]")
     user_block = "\n".join(user_block_lines)
 
-    # Istruzioni run per disabilitare qualsiasi ricerca esterna lato Assistant
-    run_instructions = (
-        "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
-        "usa esclusivamente i blocchi forniti dall'utente. "
-        "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
-    )
+    # Run instructions: KB attiva di default, disattivabile con VISION_USE_KB=0/false/no/off
+    _use_kb = (os.getenv("VISION_USE_KB", "1") or "1").strip().lower() not in {"0", "false", "no", "off"}
+    if _use_kb:
+        run_instructions = (
+            "Durante QUESTA run puoi usare **File Search** (KB allegata all'assistente) "
+            "per verifiche e contesto. I blocchi del Vision Statement restano la fonte primaria. "
+            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+        )
+    else:
+        run_instructions = (
+            "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
+            "usa esclusivamente i blocchi forniti dall'utente. "
+            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+        )
 
     # 4) Invocazione Assistant con Structured Outputs
     data = _call_assistant_json(

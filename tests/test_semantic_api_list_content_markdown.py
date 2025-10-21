@@ -2,7 +2,7 @@
 # tests/test_semantic_api_list_content_markdown.py
 from pathlib import Path
 
-from src.semantic.api import list_content_markdown
+from timmykb.semantic.api import list_content_markdown
 
 
 def test_list_content_markdown_excludes_readme_summary(tmp_path: Path) -> None:

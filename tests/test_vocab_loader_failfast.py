@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import src.semantic.vocab_loader as vl
+import timmykb.semantic.vocab_loader as vl
 from pipeline.exceptions import ConfigError
 
 

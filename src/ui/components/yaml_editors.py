@@ -21,8 +21,9 @@ except Exception:  # pragma: no cover
     st = None
 
 from pipeline.file_utils import safe_write_text
-from ui.const import DEFAULT_ENCODING
-from ui.utils.streamlit_fragments import run_fragment
+
+from ..const import DEFAULT_ENCODING
+from ..utils.streamlit_fragments import run_fragment
 
 LOGGER = logging.getLogger("ui.components.yaml_editors")
 

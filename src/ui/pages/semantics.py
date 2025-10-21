@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import uuid
 from contextlib import contextmanager
-from typing import Any, Iterator, Literal, cast
+from pathlib import Path
+from typing import Any, Iterator, Literal, Optional, Tuple, cast
 
 try:
     import streamlit as st
@@ -119,7 +120,7 @@ try:
     from ui.utils.workspace import has_raw_pdfs
 except Exception:  # pragma: no cover
 
-    def has_raw_pdfs(_slug: str | None) -> tuple[bool, str | None]:
+    def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
         return False, None
 
 
@@ -237,7 +238,7 @@ def _go_preview() -> None:
 
 # ---------------- UI ----------------
 
-slug = render_chrome_then_require()
+slug = cast(str, render_chrome_then_require())
 
 try:
     from streamlit.runtime.scriptrunner import get_script_run_ctx

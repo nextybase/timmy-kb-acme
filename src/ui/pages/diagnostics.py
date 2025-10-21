@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import streamlit as st
 
@@ -87,7 +87,7 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
 
 def main() -> None:
     """Pagina Diagnostica: header, sidebar, counts e log tail."""
-    slug = render_chrome_then_require()
+    slug = cast(str, render_chrome_then_require())
 
     st.subheader("Diagnostica")
 

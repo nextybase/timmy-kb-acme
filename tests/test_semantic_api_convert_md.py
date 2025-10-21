@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConversionError
-from src.semantic.api import _call_convert_md, _CtxShim
+from timmykb.semantic.api import _call_convert_md, _CtxShim
 
 
 def _ctx(
