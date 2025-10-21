@@ -8,7 +8,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     import timmykb.ui.landing_slug as landing
 
     # Prepara workspace
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 
@@ -26,11 +26,11 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
         def __init__(self):
             self.session_state = {
                 "vision_workflow": {
-                    "slug": "acme",
+                    "slug": "dummy",
                     "verified": True,
                     "needs_creation": True,
                     "pdf_bytes": b"%PDF",
-                    "client_name": "ACME",
+                    "client_name": "Dummy",
                 }
             }
             self.buttons: list[str] = []
@@ -50,7 +50,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
             return [_Ctx(), _Ctx(), _Ctx()]
 
         def text_input(self, *a, **k):
-            return "acme"
+            return "dummy"
 
         def button(self, label: str, *a, **k):
             self.buttons.append(label)

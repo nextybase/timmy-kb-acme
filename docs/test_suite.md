@@ -137,11 +137,29 @@ pytest -ra -m "slow"   # include smoke/end-to-end lenti
 
 ---
 
+## Script di supporto (`scripts/`)
+
+Oltre ai test Pytest, il repository include numerosi script CLI nella cartella `scripts/` che fungono da estensioni e smoke manuali della suite. Questi strumenti sono utili per:
+
+- **Smoke end-to-end rapidi:** `scripts/smoke_e2e.py` e `scripts/e2e_smoke_test.py` orchestrano i flussi principali (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) con workspace temporanei. Usano sempre gli entrypoint `timmykb.*`, garantendo coerenza con l’installabile e fornendo feedback immediato prima di lanciare i test `slow`.
+- **Verifiche UI/finanza:** `scripts/smoke_streamlit_finance.py` replica le azioni della tab Streamlit Finanza (upload CSV → `finance.db`) sfruttando le stesse guardie di path (`ensure_within_and_resolve`) e i writer atomici (`safe_write_bytes`), così da validare la UI anche fuori dal browser.
+- **Benchmark e regressioni performance:** `scripts/bench_embeddings_normalization.py` misura l’impatto delle modifiche sulle normalizzazioni di retriever e semantic API. Produce report JSON idempotenti via `safe_write_text`, comodi da confrontare con baseline salvate in CI.
+- **Manutenzione del codice:** `scripts/auto_wrap_e501.py` aiuta a ridurre gli errori E501 avvolgendo stringhe/commenti lunghi in modo sicuro (scrittura atomica con backup). Analoghi script in `scripts/dev/` e `scripts/ci/` applicano lo stesso approccio per controlli lint strutturali.
+- **Migrazioni dati operative:** `scripts/migrate_yaml_to_db.py` converte i vecchi `tags_reviewed.yaml` nel nuovo formato SQLite (`semantic/tags.db`) riutilizzando la utility centrale `timmykb.pipeline.yaml_utils`.
+
+Quando si introduce un nuovo script CLI:
+- assicurarsi che riutilizzi gli helper di path-safety e i writer atomici della pipeline (`timmykb.pipeline.*`);
+- documentare eventuali variabili d’ambiente richieste;
+- valutare la necessità di un test dedicato (Pytest o smoke manuale) linkando questa sezione per mantenere la visione aggiornata.
+
+---
+
 ## Linee guida per nuovi test
 
 ### Test generici
 - Usa le fixture `dummy_workspace`, `dummy_ctx` e `dummy_logger` per isolare i percorsi cliente.
   Non creare strutture manuali in `output/` o nel repo: per file temporanei sfrutta `dummy_workspace["base"] / "tmp"`.
+- Mantieni coerente lo slug: per i workspace di test utilizza sempre `dummy` (nessun nuovo slug custom).
 - Gli assert devono riferirsi ai percorsi restituiti dalle fixture (es. `dummy_workspace["config"].exists()`),
   evitando stringhe di path hard-coded o separatori specifici del sistema.
 - Non impostare variabili d'ambiente legate all'assistente (`OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID`) nei test generici;

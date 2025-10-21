@@ -20,11 +20,11 @@ def test_filter_safe_pdfs_logs_symlink_event(tmp_path: Path, caplog, monkeypatch
     monkeypatch.setattr(Path, "is_symlink", _fake_is_symlink)
 
     caplog.set_level(logging.WARNING)
-    out = _filter_safe_pdfs(tmp_path, raw, [pdf], slug="acme")
+    out = _filter_safe_pdfs(tmp_path, raw, [pdf], slug="dummy")
     assert out == []
     recs = [r for r in caplog.records if r.msg == "pipeline.content.skip_symlink"]
     assert recs, "evento skip_symlink mancante"
-    assert getattr(recs[0], "slug", None) == "acme"
+    assert getattr(recs[0], "slug", None) == "dummy"
     assert str(pdf) in getattr(recs[0], "file_path", "")
 
 
@@ -35,12 +35,12 @@ def test_filter_safe_pdfs_logs_unsafe_event_with_slug(tmp_path: Path, caplog):
     outside.write_bytes(b"%PDF-1.4\n")
 
     caplog.set_level(logging.WARNING)
-    out = _filter_safe_pdfs(tmp_path, raw, [outside], slug="acme")
+    out = _filter_safe_pdfs(tmp_path, raw, [outside], slug="dummy")
     assert out == []
     recs = [r for r in caplog.records if r.msg == "pipeline.content.skip_unsafe"]
     assert recs, "evento skip_unsafe mancante"
     rec = recs[0]
-    assert getattr(rec, "slug", None) == "acme"
+    assert getattr(rec, "slug", None) == "dummy"
     assert str(outside) in getattr(rec, "file_path", "")
     assert hasattr(rec, "error")
 
@@ -76,7 +76,7 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
         _fake_ensure_within_and_resolve,
     )
 
-    ctx = type("C", (), {"base_dir": base, "raw_dir": raw, "md_dir": book, "slug": "acme"})()
+    ctx = type("C", (), {"base_dir": base, "raw_dir": raw, "md_dir": book, "slug": "dummy"})()
     caplog.set_level(logging.WARNING)
     convert_files_to_structured_markdown(ctx)
 
@@ -87,5 +87,5 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     for key, p in (("pipeline.content.skip_symlink", root_pdf), ("pipeline.content.skip_unsafe", cat_pdf)):
         recs = [r for r in caplog.records if r.msg == key]
         assert recs, f"evento {key} mancante"
-        assert getattr(recs[0], "slug", None) == "acme"
+        assert getattr(recs[0], "slug", None) == "dummy"
         assert str(p) in getattr(recs[0], "file_path", "")

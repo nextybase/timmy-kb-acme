@@ -17,6 +17,7 @@ from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from semantic.validation import validate_context_slug
 from timmykb.pre_onboarding import ensure_local_workspace_for_ui
+from ui.utils.workspace import workspace_root
 
 from .services import vision_provision as vision_services
 from .utils.branding import render_brand_header
@@ -143,8 +144,7 @@ def _reset_to_landing() -> None:
 
 
 def _workspace_dir_for(slug: str) -> Path:
-    repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "output" / f"timmy-kb-{slug}"
+    return cast(Path, workspace_root(slug))
 
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:

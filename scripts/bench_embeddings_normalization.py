@@ -27,6 +27,8 @@ from typing import Any, Callable, Dict, Iterable, Sequence, Tuple
 import numpy as np
 
 import timmykb.retriever as retr
+from timmykb.pipeline.file_utils import safe_write_text
+from timmykb.pipeline.path_utils import ensure_within_and_resolve
 
 
 def _timeit(fn: Callable[[], object], rounds: int = 5) -> float:
@@ -91,7 +93,8 @@ def _prepare_md(book: "Path", n_files: int) -> None:
         except Exception:
             pass
     for i in range(n_files):
-        Path(book / f"F{i:04d}.md").write_text(f"# File {i}\ncontenuto {i}", encoding="utf-8")
+        target = ensure_within_and_resolve(book, book / f"F{i:04d}.md")
+        safe_write_text(target, f"# File {i}\ncontenuto {i}", encoding="utf-8", atomic=True)
 
 
 def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, int]]]:
@@ -240,8 +243,8 @@ def main() -> int:
                     }
             except Exception:
                 pass
-            with open(args.json_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
+            json_path = Path(args.json_path)
+            safe_write_text(json_path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
 
         print("OK")
         return 0
@@ -252,8 +255,13 @@ def main() -> int:
                 out_dir = os.path.dirname(args.json_path)
                 if out_dir:
                     os.makedirs(out_dir, exist_ok=True)
-                with open(args.json_path, "w", encoding="utf-8") as f:
-                    json.dump({"status": "error", "error": str(e)}, f, ensure_ascii=False, indent=2)
+                json_path = Path(args.json_path)
+                safe_write_text(
+                    json_path,
+                    json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                    atomic=True,
+                )
         except Exception:
             pass
         print("⚠︎ regression")

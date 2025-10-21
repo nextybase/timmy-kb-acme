@@ -199,6 +199,7 @@ pages = {
         st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
         st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),
         st.Page("src/ui/pages/guida_ui.py", title="Guida UI", url_path="guida"),
+        st.Page("src/ui/pages/tools_check.py", title="Healthcheck", url_path="check"),
     ],
 }
 

@@ -18,7 +18,7 @@ def _ctx(base: Path, book: Path):
 
 
 def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
 
@@ -32,7 +32,7 @@ def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog
     ret = api.index_markdown_to_db(
         ctx,
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=_DummyEmb(),
         db_path=tmp_path / "db.sqlite",

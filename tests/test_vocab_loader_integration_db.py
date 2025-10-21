@@ -17,7 +17,7 @@ class _NoopLogger:
 
 
 def test_loads_canonicals_from_db_when_loader_available(tmp_path: Path, monkeypatch):
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
 

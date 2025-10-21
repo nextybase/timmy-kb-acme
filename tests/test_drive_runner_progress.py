@@ -9,7 +9,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
 
     # Fake ClientContext
     class Ctx:
-        slug = "foo"
+        slug = "dummy"
         redact_logs = False
         env = {"DRIVE_ID": "PARENT"}
 
@@ -76,7 +76,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
 
     # Pre-create doc1.pdf to simulate skip
     base_root = tmp_path / "out"
-    base_dir = base_root / "timmy-kb-foo" / "raw" / "cat-a"
+    base_dir = base_root / "timmy-kb-dummy" / "raw" / "cat-a"
     base_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / "doc1.pdf").write_bytes(b"x" * 10)
 
@@ -87,7 +87,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
         progress_events.append((done, total, label))
 
     written = dr.download_raw_from_drive_with_progress(
-        slug="foo",
+        slug="dummy",
         base_root=base_root,
         require_env=True,
         overwrite=False,
@@ -103,8 +103,8 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
     ]
     # And written contains only updated/new (doc2, doc3)
     written_set = {p.as_posix() for p in written}
-    assert (base_root / "timmy-kb-foo" / "raw" / "cat-a" / "doc2.pdf").as_posix() in written_set
-    assert (base_root / "timmy-kb-foo" / "raw" / "cat-b" / "doc3.pdf").as_posix() in written_set
+    assert (base_root / "timmy-kb-dummy" / "raw" / "cat-a" / "doc2.pdf").as_posix() in written_set
+    assert (base_root / "timmy-kb-dummy" / "raw" / "cat-b" / "doc3.pdf").as_posix() in written_set
     assert all(p.suffix.lower() == ".pdf" for p in written)
 
 
@@ -112,7 +112,7 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
     import ui.services.drive_runner as dr
 
     class Ctx:
-        slug = "foo"
+        slug = "dummy"
         redact_logs = False
         env = {"DRIVE_ID": "PARENT"}
 
@@ -140,6 +140,6 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dr, "download_drive_pdfs_to_local", _fake_downloader)
 
-    written = dr.download_raw_from_drive_with_progress("foo", base_root=tmp_path, require_env=False)
+    written = dr.download_raw_from_drive_with_progress("dummy", base_root=tmp_path, require_env=False)
 
     assert any(path.name == "root.pdf" for path in written)

@@ -30,12 +30,12 @@ def _ctx(base_dir: Path) -> C:
         base_dir=base_dir,
         raw_dir=base_dir / "raw",
         md_dir=base_dir / "book",
-        slug="x",
+        slug="dummy",
     )
 
 
 def test_index_markdown_to_db_inserts_rows(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\ncontenuto uno", encoding="utf-8")
@@ -45,7 +45,7 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),  # bypass nominal type di ClientContext
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=_DummyEmbeddings(),
         db_path=dbp,
@@ -53,12 +53,12 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
     assert inserted >= 2
 
     # Recupera alcuni candidati e verifica che arrivino dal DB
-    cands = list(fetch_candidates("x", "book", limit=10, db_path=dbp))
+    cands = list(fetch_candidates("dummy", "book", limit=10, db_path=dbp))
     assert len(cands) >= 2
 
 
 def test_index_markdown_to_db_numpy_array(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -72,18 +72,18 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=NpEmb(),
         db_path=dbp,
     )
     assert inserted == 2
-    cands = list(fetch_candidates("x", "book", limit=10, db_path=dbp))
+    cands = list(fetch_candidates("dummy", "book", limit=10, db_path=dbp))
     assert len(cands) >= 2
 
 
 def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -101,7 +101,7 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     ok = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=GenEmb(),
         db_path=tmp_path / "db_gen.sqlite",
@@ -116,7 +116,7 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     ret = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=EmptyVecEmb(),
         db_path=tmp_path / "db_empty.sqlite",
@@ -138,7 +138,7 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
 
     import numpy as np
 
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -152,7 +152,7 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=ListNpEmb(),
         db_path=dbp,
@@ -166,7 +166,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
 
     import numpy as np
 
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -181,7 +181,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
     ret = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=ShortEmb(),
         db_path=tmp_path / "db_short.sqlite",
@@ -203,7 +203,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
 
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -225,7 +225,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
         index_markdown_to_db(
             cast(Any, _ctx(base)),
             logger,
-            slug="x",
+            slug="dummy",
             scope="book",
             embeddings_client=OkEmb(),
             db_path=tmp_path / "db_fail.sqlite",
@@ -238,7 +238,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
 
 
 def test_index_excludes_readme_and_summary(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     # Contenuto reale
@@ -256,7 +256,7 @@ def test_index_excludes_readme_and_summary(tmp_path):
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=E(),
         db_path=dbp,
@@ -265,7 +265,7 @@ def test_index_excludes_readme_and_summary(tmp_path):
 
 
 def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
@@ -281,7 +281,7 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
-        slug="x",
+        slug="dummy",
         scope="book",
         embeddings_client=PartEmptyEmb(),
         db_path=dbp,

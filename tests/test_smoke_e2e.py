@@ -26,7 +26,7 @@ def _make_pdf(path: Path, *, text: str, pages: int = 1, heavy: bool = False) -> 
 @pytest.mark.slow
 def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Workspace isolato nell'area temporanea
-    slug = "bad"
+    slug = "dummy"
     workspace = tmp_path / f"timmy-kb-{slug}"
     raw = workspace / "raw"
     book = workspace / "book"

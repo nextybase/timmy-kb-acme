@@ -6,7 +6,7 @@ import timmykb.pipeline.content_utils as cu
 
 
 def _ctx(base: Path, raw: Path, book: Path):
-    return SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book, slug="x")
+    return SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
 
 
 def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):

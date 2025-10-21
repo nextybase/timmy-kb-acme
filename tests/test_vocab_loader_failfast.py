@@ -18,7 +18,7 @@ class _NoopLogger:
 
 
 def test_returns_empty_when_db_missing(tmp_path: Path):
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
 
@@ -27,7 +27,7 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
 
 
 def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any):
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
     db = sem / "tags.db"
@@ -49,7 +49,7 @@ def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any)
 
 
 def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: Any):
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 
     # ensure_within_and_resolve che fallisce per simulare path traversal/symlink malevolo

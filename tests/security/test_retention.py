@@ -8,7 +8,7 @@ from timmykb.security.retention import purge_old_artifacts
 
 
 def test_purge_old_artifacts_removes_old_snapshot(tmp_path: Path) -> None:
-    base_dir = tmp_path / "output" / "timmy-kb-demo"
+    base_dir = tmp_path / "output" / "timmy-kb-dummy"
     target_dir = base_dir / "semantic"
     target_dir.mkdir(parents=True, exist_ok=True)
 

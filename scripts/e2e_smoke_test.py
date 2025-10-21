@@ -2,6 +2,7 @@
 import argparse
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -131,7 +132,7 @@ def main():
         need_gen = (not raw_dir.exists()) or (not any(raw_dir.rglob("*.pdf")))
         if need_gen:
             print("[INFO] RAW vuota: genero sandbox dummy…")
-            run(["python", "src/tools/gen_dummy_kb.py", "--slug", args.slug], check=True)
+            run([sys.executable, "-m", "timmykb.tools.gen_dummy_kb", "--slug", args.slug], check=True)
 
     # 1) preflight
     check_optional_deps(args.lang)
@@ -139,9 +140,9 @@ def main():
     # 1) scan RAW → DB
     run(
         [
-            "python",
+            sys.executable,
             "-m",
-            "tag_onboarding",
+            "timmykb.tag_onboarding",
             "--slug",
             args.slug,
             "--scan-raw",
@@ -156,9 +157,9 @@ def main():
     # 2) NLP → DB
     run(
         [
-            "python",
+            sys.executable,
             "-m",
-            "tag_onboarding",
+            "timmykb.tag_onboarding",
             "--slug",
             args.slug,
             "--nlp",

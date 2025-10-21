@@ -132,7 +132,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     sys.argv = [
         "retriever_calibrate.py",
         "--slug",
-        "x",
+        "dummy",
         "--scope",
         "faq",
         "--queries",
@@ -161,7 +161,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     first_params = created_params[0]
     assert first_params == {
         "db_path": None,
-        "project_slug": "x",
+        "project_slug": "dummy",
         "scope": "faq",
         "query": "hello",
         "k": 2,

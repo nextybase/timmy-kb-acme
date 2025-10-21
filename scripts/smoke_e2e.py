@@ -7,6 +7,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from timmykb.pipeline.file_utils import safe_write_text
+from timmykb.pipeline.path_utils import ensure_within_and_resolve
+
 
 def _add_paths() -> None:
     """Rende importabili sia `src.*` sia i moduli sotto `src/` (es. `pipeline.*`)."""
@@ -42,13 +45,13 @@ def main() -> int:
     import importlib
     from typing import Any, Dict
 
-    pre_onboarding = importlib.import_module("pre_onboarding")
-    onboarding_full = importlib.import_module("src.onboarding_full")
+    pre_onboarding = importlib.import_module("timmykb.pre_onboarding")
+    onboarding_full = importlib.import_module("timmykb.onboarding_full")
     finance_api = importlib.import_module("finance.api")
-    pipeline_context = importlib.import_module("pipeline.context")
+    pipeline_context = importlib.import_module("timmykb.pipeline.context")
 
     parser = argparse.ArgumentParser(description="Smoke E2E: REPO_ROOT_DIR + orchestratore + finanza")
-    parser.add_argument("--slug", default="smoke", help="Slug cliente per il test (default: smoke)")
+    parser.add_argument("--slug", default="dummy", help="Slug cliente per il test (default: dummy)")
     parser.add_argument(
         "--repo-root",
         default="",
@@ -90,7 +93,9 @@ def main() -> int:
     # 3) Import CSV finanza → semantic/finance.db
     print("[3/4] Import CSV finanza in semantic/finance.db…")
     csv_path = sem_dir / "smoke.csv"
-    csv_path.write_text("metric,period,value\nrevenue,2023,1234\n", encoding="utf-8")
+    safe_csv_path = ensure_within_and_resolve(base_dir, csv_path)
+    safe_write_text(safe_csv_path, "metric,period,value\nrevenue,2023,1234\n", encoding="utf-8", atomic=True)
+    csv_path = safe_csv_path
 
     res: Dict[str, Any] = finance_api.import_csv(base_dir, csv_path)
     rows = int(res.get("rows", 0) or 0)

@@ -31,7 +31,7 @@ def _make_context(tmp_path: Path, slug: str):
 
 
 def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    slug = "contract-artifacts"
+    slug = "dummy"
     base_dir = tmp_path / f"timmy-kb-{slug}"
     monkeypatch.setenv("REPO_ROOT_DIR", str(base_dir))
 

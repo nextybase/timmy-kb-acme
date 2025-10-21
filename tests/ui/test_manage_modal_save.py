@@ -147,7 +147,7 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     # Import tardivo dopo aver registrato lo stub streamlit
 
     # Stub: workspace_root → directory di test
-    base_dir = tmp_path / "output" / "timmy-kb-acme"
+    base_dir = tmp_path / "output" / "timmy-kb-dummy"
     (base_dir / "semantic").mkdir(parents=True)
 
     import ui.pages.manage as manage  # type: ignore

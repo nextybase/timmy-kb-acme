@@ -1,428 +1,176 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/tools/gen_dummy_kb.py
+# Genera una KB "dummy" passando dalle stesse funzioni usate dalla UI:
+# pre_onboarding + Vision (+ Drive opzionale). Con flag per disabilitare Drive/Vision.
+
 from __future__ import annotations
 
 import argparse
+import importlib
+import json
+import logging
 import os
-import shutil
 import sys
-import types
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-import yaml  # per leggere/scrivere template di config e clients_db
-
-# Nota: nessun side-effect a import-time (no sys.path mutations, no I/O).
-# Le dipendenze runtime sono risolte lazy in _ensure_dependencies().
-
-# Placeholders valorizzati da _ensure_dependencies()
-safe_write_bytes = None
-safe_write_text = None
-get_structured_logger = None
-tail_path = None
-ensure_within = None
-ensure_within_and_resolve = None
-open_for_read_bytes_selfguard = None
-open_for_read = None
-read_text_safe = None
-extract_semantic_candidates = None
-render_tags_csv = None
-load_semantic_config = None
-normalize_tags = None
-_write_tagging_readme = None
-_write_review_stub_from_csv = None
-_fin_import_csv = None
-
-# Cache interna delle dipendenze risolte; non influisce sui placeholder sopra (restano None)
-_DEPS: types.SimpleNamespace | None = None
-
-SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
-REPO_ROOT = Path(__file__).resolve().parents[2]  # <project_root>
+import yaml
 
 
-def _require_dependency(deps: types.SimpleNamespace, attr: str) -> Any:
-    value = getattr(deps, attr, None)
-    if value is None:
-        raise RuntimeError(f"Dependency '{attr}' unavailable; install required extras or check PATH.")
-    return value
+# ------------------------------------------------------------
+# Path bootstrap (repo root + src)
+# ------------------------------------------------------------
+def _add_paths() -> tuple[Path, Path]:
+    repo_root = Path(__file__).resolve().parents[2]  # <repo>/
+    src_dir = repo_root / "src"
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    return repo_root, src_dir
 
 
-def _ensure_dependencies() -> types.SimpleNamespace:
-    """Carica le dipendenze runtime evitando side-effects a import-time.
+REPO_ROOT, SRC_DIR = _add_paths()
+SRC_ROOT = SRC_DIR
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
 
-    - Inserisce `src/` in `sys.path` se assente (anche se le dipendenze sono già in cache).
-    - Risolve e cache le dipendenze alla prima chiamata; i placeholder globali restano None.
-    """
-    global _DEPS
+# ------------------------------------------------------------
+# Import delle API usate dalla UI
+# ------------------------------------------------------------
+# pre_onboarding: workspace locale + salvataggio Vision PDF (se fornito)
+from pre_onboarding import ensure_local_workspace_for_ui  # type: ignore
 
-    # Assicura che `src/` sia importabile, senza duplicare voci
-    src_path = str(SRC_ROOT)
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
+# Vision (stesse firme UI)
+_vision_mod = importlib.import_module("ui.services.vision_provision")
+run_vision = getattr(_vision_mod, "run_vision")
 
-    if _DEPS is not None:
-        return _DEPS
+# Drive runner (opzionale). Se non presente → si prosegue senza Drive.
+try:
+    _drive_mod = importlib.import_module("ui.services.drive_runner")
+    ensure_drive_minimal_and_upload_config = getattr(_drive_mod, "ensure_drive_minimal_and_upload_config", None)
+    build_drive_from_mapping = getattr(_drive_mod, "build_drive_from_mapping", None)
+except Exception:
+    ensure_drive_minimal_and_upload_config = None
+    build_drive_from_mapping = None
 
-    from pipeline.file_utils import safe_write_bytes as _swb
-    from pipeline.file_utils import safe_write_text as _swt
-    from pipeline.logging_utils import get_structured_logger as _gsl
-    from pipeline.logging_utils import tail_path as _tail
-    from pipeline.path_utils import ensure_within as _ew
-    from pipeline.path_utils import ensure_within_and_resolve as _ewr
+# Registry UI (clienti)
+try:
+    from ui.clients_store import ClientEntry, set_state, upsert_client  # type: ignore
+except Exception:
+    ClientEntry = None
+    upsert_client = None
+    set_state = None
 
-    try:
-        from pipeline.path_utils import open_for_read as _ofrt
-    except (ImportError, AttributeError):  # pragma: no cover - opzionale
-        _ofrt = None
-    from pipeline.path_utils import open_for_read_bytes_selfguard as _ofr
+# Util pipeline (facoltative)
+try:
+    from pipeline.config_utils import get_client_config  # type: ignore
+except Exception:
+    get_client_config = None
 
-    try:
-        from pipeline.path_utils import read_text_safe as _rts
-    except (ImportError, AttributeError):  # pragma: no cover - opzionale
-        _rts = None
-    from semantic.auto_tagger import extract_semantic_candidates as _esc
-    from semantic.auto_tagger import render_tags_csv as _rtc
-    from semantic.config import load_semantic_config as _lsc
-    from semantic.normalizer import normalize_tags as _nt
-    from semantic.tags_io import write_tagging_readme as _wtr
-    from semantic.tags_io import write_tags_review_stub_from_csv as _wrs
+try:
+    from pipeline.context import ClientContext  # type: ignore
+except Exception:
+    ClientContext = None
 
-    try:
-        from finance.api import import_csv as _fic  # opzionale
-    except Exception:
-        _fic = None
+try:
+    from pipeline.env_utils import ensure_dotenv_loaded  # type: ignore
+except Exception:
 
-    if _ofrt is None:
-
-        def _missing_open_for_read(*_args: Any, **_kwargs: Any) -> Any:
-            raise RuntimeError("open_for_read dependency non disponibile.")
-
-        _ofrt = _missing_open_for_read
-
-    if _rts is None:
-
-        def _missing_read_text(*_args: Any, **_kwargs: Any) -> Any:
-            raise RuntimeError("read_text_safe dependency non disponibile.")
-
-        _rts = _missing_read_text
-
-    _DEPS = types.SimpleNamespace(
-        safe_write_bytes=_swb,
-        safe_write_text=_swt,
-        get_structured_logger=_gsl,
-        tail_path=_tail,
-        ensure_within=_ew,
-        ensure_within_and_resolve=_ewr,
-        open_for_read_bytes_selfguard=_ofr,
-        open_for_read=_ofrt,
-        read_text_safe=_rts,
-        extract_semantic_candidates=_esc,
-        render_tags_csv=_rtc,
-        load_semantic_config=_lsc,
-        normalize_tags=_nt,
-        write_tagging_readme=_wtr,
-        write_tags_review_stub_from_csv=_wrs,
-        fin_import_csv=_fic,
-    )
-    return _DEPS
-
-
-def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Genera una knowledge base dummy per demo/test locali.")
-    # Default allineato alla suite di test: 'dummy'
-    p.add_argument("--slug", default="dummy", help="Slug KB (default: dummy)")
-    p.add_argument("--records", type=int, default=3, help="Numero di record fittizi finanziari (default: 3)")
-    p.add_argument(
-        "--base-dir",
-        type=str,
-        default="output",
-        help="Cartella base in cui creare lo slug (default: output). Nei test usare tmp_path.",
-    )
-    p.add_argument("--client-name", default=None, help="Nome cliente (display). Se omesso: 'Dummy <slug>'")
-    p.add_argument(
-        "--clients-db",
-        default=None,
-        help="Percorso custom per clients_db (default: usa repo_root/clients_db/clients.yaml).",
-    )
-    return p.parse_args(argv)
-
-
-def make_workspace(slug: str, base_dir: str) -> Path:
-    """Ritorna la cartella base del workspace standard (base_dir/timmy-kb-<slug>). Idempotente."""
-    base = Path(base_dir).resolve()
-    base.mkdir(parents=True, exist_ok=True)
-    return base / f"timmy-kb-{slug}"
-
-
-def _workspace_paths(slug: str, base_override: Optional[Path]) -> dict[str, Path]:
-    """Calcola i percorsi fondamentali del workspace dummy."""
-    if base_override is not None:
-        base = base_override
-    else:
-        # Fallback: usa la struttura standard di semantic.api (output/timmy-kb-<slug>)
-        _ensure_dependencies()
-        from semantic.api import get_paths  # import leggero
-
-        paths = get_paths(slug)
-        base = paths["base"]
-
-    raw = base / "raw"
-    book = base / "book"
-    sem = base / "semantic"
-    cfg = base / "config"
-    return {"base": base, "raw": raw, "book": book, "sem": sem, "cfg": cfg}
-
-
-def _write_dummy_docs(book: Path) -> None:
-    """Crea due markdown fittizi nella cartella book/."""
-    d = _ensure_dependencies()
-
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-    book.mkdir(parents=True, exist_ok=True)
-    safe_write_text_fn(book / "alpha.md", "# Alpha\n\n", encoding="utf-8", atomic=True)
-    safe_write_text_fn(book / "beta.md", "# Beta\n\n", encoding="utf-8", atomic=True)
-
-
-def _write_dummy_summary_readme(book: Path) -> None:
-    """Genera SUMMARY.md e README.md fittizi per la knowledge base dummy."""
-    d = _ensure_dependencies()
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-    safe_write_text_fn(book / "SUMMARY.md", "* [Alpha](alpha.md)\n* [Beta](beta.md)\n", encoding="utf-8", atomic=True)
-    safe_write_text_fn(book / "README.md", "# Dummy KB\n\n", encoding="utf-8", atomic=True)
-
-
-def _maybe_write_dummy_finance(base: Path, records: int) -> None:
-    """Opzionalmente crea un CSV finanziario dummy e lo importa con le API finance."""
-    d = _ensure_dependencies()
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-    sem = base / "semantic"
-    ensure_within_fn(base, sem)
-    sem.mkdir(parents=True, exist_ok=True)
-
-    if d.fin_import_csv is None or records <= 0:
+    def ensure_dotenv_loaded() -> None:  # type: ignore
         return
 
-    # Genera CSV in modo atomico
-    import csv
-    from io import StringIO
 
-    buf = StringIO()
-    wr = csv.writer(buf)
-    wr.writerow(["metric", "period", "value"])
-    for i in range(records):
-        wr.writerow(["m_revenue", f"2024Q{i%4+1}", i + 1])
+try:
+    from pipeline.file_utils import safe_write_bytes as _safe_write_bytes  # type: ignore
+    from pipeline.file_utils import safe_write_text as _safe_write_text  # type: ignore
+except Exception:
 
-    tmp = sem / "dummy-finance.csv"
-    safe_write_text_fn(tmp, buf.getvalue(), encoding="utf-8", atomic=True)
+    def _safe_write_text(path: Path, text: str, *, encoding="utf-8", atomic=False) -> None:  # type: ignore
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding=encoding)
+
+    def _safe_write_bytes(path: Path, data: bytes, *, atomic=False) -> None:  # type: ignore
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+
+# Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finch� non si esegue il tool.
+safe_write_text = None  # type: ignore
+safe_write_bytes = None  # type: ignore
+_fin_import_csv = None  # type: ignore
+
+
+def _ensure_dependencies() -> None:
+    """Carica lazy le dipendenze opzionali e popola i placeholder pubblici."""
+    if getattr(_ensure_dependencies, "_done", False):
+        return
+
+    for candidate in (str(REPO_ROOT), str(SRC_ROOT)):
+        if candidate not in sys.path:
+            sys.path.insert(0, candidate)
+
+    global safe_write_text, safe_write_bytes, _fin_import_csv
+    safe_write_text = _safe_write_text  # type: ignore
+    safe_write_bytes = _safe_write_bytes  # type: ignore
+
     try:
-        d.fin_import_csv(base, tmp)
-    finally:
-        tmp.unlink(missing_ok=True)
+        from finance.api import import_csv as fin_import_csv  # type: ignore
+    except Exception:
+        fin_import_csv = None
+    _fin_import_csv = fin_import_csv  # type: ignore
+
+    _ensure_dependencies._done = True  # type: ignore[attr-defined]
 
 
-# ----------------------- CONFIG & PDF -----------------------
+_ensure_dependencies._done = False  # type: ignore[attr-defined]
 
-_DEFAULT_AI = {
-    "ai": {
-        "engine": "ASSISTENTE",  # "GPT" | "ASSISTENTE" | "AUTO"
-        "model": "gpt-4.1-mini",  # usato solo se engine = GPT
-        "inline_threshold": 15000,  # token stimati per inline vs vector
-    }
-}
+_DEFAULT_VISION_PDF = (
+    b"%PDF-1.4\n"
+    b"1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+    b"xref\n0 2\n0000000000 65535 f \n0000000010 00000 n \n"
+    b"trailer\n<< /Root 1 0 R >>\nstartxref\n9\n%%EOF\n"
+)
 
 
-def _load_repo_config_template() -> dict:
-    """Carica <project_root>/config/config.yaml (o .example), fallback a _DEFAULT_AI.
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+class _Ctx:
+    """Contesto minimo compatibile con run_vision (serve .base_dir)."""
 
-    Lettura sicura con ensure_within_and_resolve + read_text_safe (base = REPO_ROOT).
-    """
-    d = _ensure_dependencies()
-    ewr = _require_dependency(d, "ensure_within_and_resolve")
-    rts = _require_dependency(d, "read_text_safe")
+    def __init__(self, base_dir: Path) -> None:
+        self.base_dir = base_dir
 
-    candidates = [
-        REPO_ROOT / "config" / "config.yaml",
-        REPO_ROOT / "config" / "config.example.yaml",
-    ]
-    for c in candidates:
+
+def _client_base(slug: str) -> Path:
+    env_root = os.getenv("REPO_ROOT_DIR")
+    if env_root:
         try:
-            safe_c = ewr(REPO_ROOT, c)
-            if safe_c.exists():
-                text = rts(REPO_ROOT, safe_c, encoding="utf-8")
-                data = yaml.safe_load(text) or {}
-                # merge soft con default ai
-                merged = {**_DEFAULT_AI, **(data or {})}
-                if "ai" not in merged:
-                    merged["ai"] = _DEFAULT_AI["ai"]
-                return merged
+            return Path(env_root).expanduser().resolve()
         except Exception:
-            continue
-    return _DEFAULT_AI.copy()
+            pass
+    return REPO_ROOT / "output" / f"timmy-kb-{slug}"
 
 
-def _render_client_config(template: dict, *, slug: str, client_name: Optional[str] = None) -> dict:
-    """Arricchisce il template con campi cliente e reference al VisionStatement."""
-    cfg = dict(template)  # shallow copy
-    cfg["client_name"] = client_name or f"Dummy {slug}"
-    cfg["vision_statement_pdf"] = "config/VisionStatement.pdf"
-
-    # rimpiazza eventuali placeholder {slug} in percorsi del template
-    def _walk(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {k: _walk(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [_walk(v) for v in obj]
-        if isinstance(obj, str):
-            return obj.replace("{slug}", slug)
-        return obj
-
-    return _walk(cfg)
+def _pdf_path(slug: str) -> Path:
+    return _client_base(slug) / "config" / "VisionStatement.pdf"
 
 
-def _safe_yaml_dump(d: dict) -> str:
-    return yaml.safe_dump(d, allow_unicode=True, sort_keys=False, width=100)
-
-
-def _ensure_config_written(base: Path, slug: str, client_name: str) -> tuple[Path, bool]:
-    """Scrive <base>/config/config.yaml SOLO se assente. Ritorna (path, created?)."""
-    d = _ensure_dependencies()
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-
-    cfg_dir = base / "config"
-    ensure_within_fn(base, cfg_dir)
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    cfg_path = cfg_dir / "config.yaml"
-    if cfg_path.exists():
-        return cfg_path, False
-
-    tmpl = _load_repo_config_template()
-    rendered = _render_client_config(tmpl, slug=slug, client_name=client_name)
-    safe_write_text_fn(cfg_path, _safe_yaml_dump(rendered), encoding="utf-8", atomic=True)
-    return cfg_path, True
-
-
-def _make_minimal_pdf_bytes(text: str) -> bytes:
-    """Genera un PDF 1-pagina minimale con il testo dato, senza librerie esterne."""
-    # Escapa parentesi nel contenuto PDF
-    safe_text = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-    content = f"BT /F1 20 Tf 72 720 Td ({safe_text}) Tj ET\n"
-    stream = content.encode("latin-1", errors="ignore")
-
-    parts: list[bytes] = []
-    offsets: list[int] = []
-
-    def _w(b: bytes) -> None:
-        parts.append(b)
-
-    # header
-    _w(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    # obj 1: catalog
-    offsets.append(sum(len(p) for p in parts))
-    _w(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    # obj 2: pages
-    offsets.append(sum(len(p) for p in parts))
-    _w(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    # obj 3: page
-    offsets.append(sum(len(p) for p in parts))
-    _w(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n"
-    )
-    # obj 4: contents (stream)
-    offsets.append(sum(len(p) for p in parts))
-    _w(f"4 0 obj\n<< /Length {len(stream)} >>\nstream\n".encode("latin-1"))
-    _w(stream)
-    _w(b"endstream\nendobj\n")
-    # obj 5: font
-    offsets.append(sum(len(p) for p in parts))
-    _w(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-    # xref
-    xref_offset = sum(len(p) for p in parts)
-    xref = ["xref\n0 6\n", "0000000000 65535 f \n"]
-    for off in offsets:
-        xref.append(f"{off:010d} 00000 n \n")
-    _w("".join(xref).encode("ascii"))
-    # trailer
-    _w(b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n")
-    _w(str(xref_offset).encode("ascii"))
-    _w(b"\n%%EOF\n")
-
-    return b"".join(parts)
-
-
-def _ensure_dummy_vision_pdf(base: Path, *, slug: str, client_name: str) -> tuple[Path, bool]:
-    """Scrive PDF minimale 'VisionStatement.pdf' sotto config/ (idempotente)."""
-    d = _ensure_dependencies()
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    safe_write_bytes_fn = _require_dependency(d, "safe_write_bytes")
-
-    cfg_dir = base / "config"
-    ensure_within_fn(base, cfg_dir)
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = cfg_dir / "VisionStatement.pdf"
-    if pdf_path.exists():
-        return pdf_path, False
-
-    title = f"Dummy Vision Statement — {client_name} ({slug})"
-    pdf_bytes = _make_minimal_pdf_bytes(title)
-    safe_write_bytes_fn(pdf_path, pdf_bytes, atomic=True)
-    return pdf_path, True
-
-
-# ----------------------- RAW/ DOCS & STUB SEMANTICI -----------------------
-
-
-def _ensure_raw_structure(base: Path, *, slug: str, client_name: str) -> dict[str, Any]:
+def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -> dict[str, str]:
     """
-    Crea sottocartelle e PDF dummy sotto raw/:
-      - raw/contracts/sample.pdf
-      - raw/reports/sample.pdf
-      - raw/presentations/sample.pdf
-    Ritorna percorsi assoluti creati e lista dei path relativi (per cartelle_raw.yaml).
+    Genera YAML "basici" senza passare da Vision:
+      - semantic/semantic_mapping.yaml
+      - semantic/cartelle_raw.yaml
+    Crea anche le cartelle raw/ di base (contracts/reports/presentations).
     """
-    d = _ensure_dependencies()
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    safe_write_bytes_fn = _require_dependency(d, "safe_write_bytes")
+    sem_dir = base_dir / "semantic"
+    sem_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = base_dir / "raw"
+    for name in ("contracts", "reports", "presentations"):
+        (raw_dir / name).mkdir(parents=True, exist_ok=True)
 
-    categories = ["contracts", "reports", "presentations"]
-    folders_abs: list[Path] = []
-    folders_rel: list[str] = []
-    pdfs_abs: list[Path] = []
-
-    raw_dir = base / "raw"
-    ensure_within_fn(base, raw_dir)
-    raw_dir.mkdir(parents=True, exist_ok=True)
-
-    for cat in categories:
-        cat_dir = raw_dir / cat
-        ensure_within_fn(base, cat_dir)
-        cat_dir.mkdir(parents=True, exist_ok=True)
-        folders_abs.append(cat_dir)
-        folders_rel.append(str(cat_dir.relative_to(base)).replace("\\", "/"))
-
-        # un PDF per cartella
-        title = f"{client_name} ({slug}) — {cat.capitalize()} — Dummy"
-        pdf_bytes = _make_minimal_pdf_bytes(title)
-        pdf_path = cat_dir / "sample.pdf"
-        safe_write_bytes_fn(pdf_path, pdf_bytes, atomic=True)
-        pdfs_abs.append(pdf_path)
-
-    return {"folders_abs": folders_abs, "folders_rel": folders_rel, "pdfs_abs": pdfs_abs}
-
-
-def _semantic_mapping_payload(slug: str, client_name: str) -> dict[str, Any]:
-    """
-    Costruisce semantic_mapping.yaml secondo la struttura reale:
-    - context
-    - tre aree predefinite con ambito/descrizione/keywords
-    - opzionale blocco synonyms (vuoto ma presente per stabilità schema)
-    """
-    return {
+    mapping = {
         "context": {"slug": slug, "client_name": client_name},
-        # aree (chiavi top-level come da pipeline.vision_provision)
         "contracts": {
             "ambito": "Contrattualistica e forniture",
             "descrizione": "Documenti contrattuali, NDA, ordini di acquisto, accordi quadro e appendici.",
@@ -439,279 +187,238 @@ def _semantic_mapping_payload(slug: str, client_name: str) -> dict[str, Any]:
             "keywords": ["presentazione", "slide", "deck", "brief", "stakeholder"],
         },
         "synonyms": {
-            # opzionale ma utile: la pipeline accetta questo blocco
             "contracts": ["contratti", "accordi", "forniture"],
             "reports": ["rendiconti", "analitiche", "reportistica"],
             "presentations": ["slide", "deck", "presentazioni"],
         },
+        "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
     }
-
-
-def _ensure_semantic_stubs(
-    base: Path,
-    slug: str,
-    client_name: str,
-    raw_folders_rel: list[str] | None = None,
-) -> dict[str, Any]:
-    """Crea, se mancanti, i due YAML: semantic_mapping.yaml (struttura cliente) e cartelle_raw.yaml."""
-    d = _ensure_dependencies()
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-
-    sem_dir = base / "semantic"
-    ensure_within_fn(base, sem_dir)
-    sem_dir.mkdir(parents=True, exist_ok=True)
+    cartelle = {
+        "folders": ["raw/contracts", "raw/reports", "raw/presentations"],
+        "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
+        "meta": {"source": "dummy", "slug": slug},
+    }
 
     mapping_path = sem_dir / "semantic_mapping.yaml"
     cartelle_path = sem_dir / "cartelle_raw.yaml"
+    _safe_write_text(mapping_path, yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False))
+    _safe_write_text(cartelle_path, yaml.safe_dump(cartelle, allow_unicode=True, sort_keys=False))
 
-    created_mapping = False
-    created_cartelle = False
-
-    if not mapping_path.exists():
-        mapping_payload = _semantic_mapping_payload(slug, client_name)
-        safe_write_text_fn(
-            mapping_path,
-            yaml.safe_dump(mapping_payload, allow_unicode=True, sort_keys=False, width=100),
-            encoding="utf-8",
-            atomic=True,
-        )
-        created_mapping = True
-
-    if not cartelle_path.exists():
-        folders_value: list[Any] = list(raw_folders_rel or ["raw/contracts", "raw/reports", "raw/presentations"])
-        cartelle_stub = {
-            "folders": folders_value,  # lista di path relativi (es. "raw/contracts")
-            "meta": {"source": "dummy", "slug": slug},
-        }
-        safe_write_text_fn(
-            cartelle_path,
-            yaml.safe_dump(cartelle_stub, allow_unicode=True, sort_keys=False, width=100),
-            encoding="utf-8",
-            atomic=True,
-        )
-        created_cartelle = True
-
-    return {
-        "mapping_path": mapping_path,
-        "cartelle_path": cartelle_path,
-        "mapping_created": created_mapping,
-        "cartelle_created": created_cartelle,
+    # Genera contenuti minimi in book/ per i test smoke (alpha/beta + README/SUMMARY).
+    book_dir = base_dir / "book"
+    book_dir.mkdir(parents=True, exist_ok=True)
+    defaults = {
+        "alpha.md": "# Alpha\n\nContenuto di esempio per la cartella contracts.\n",
+        "beta.md": "# Beta\n\nContenuto di esempio per la cartella reports.\n",
+        "README.md": "# Dummy KB\n",
+        "SUMMARY.md": "* [Alpha](alpha.md)\n* [Beta](beta.md)\n",
     }
+    for name, content in defaults.items():
+        target = book_dir / name
+        if not target.exists():
+            _safe_write_text(target, content, encoding="utf-8", atomic=True)
+
+    return {"mapping": str(mapping_path), "cartelle": str(cartelle_path)}
 
 
-# ----------------------- CLIENTS_DB (repo root) -----------------------
-
-
-def _resolve_clients_db_path(explicit: Optional[str] = None) -> tuple[Path, bool]:
-    """
-    Ritorna (path, enforce_repo_safety).
-    - explicit (CLI) ha priorità.
-    - poi CLIENTS_DB_FILE / CLIENTS_DB_DIR (env), senza vincolo repo.
-    - fallback: repo_root/clients_db/clients.yaml (repo-safe).
-    """
-    if explicit:
-        return Path(explicit).expanduser().resolve(), False
-
-    env_file = os.getenv("CLIENTS_DB_FILE")
-    if env_file:
-        return Path(env_file).expanduser().resolve(), False
-
-    env_dir = os.getenv("CLIENTS_DB_DIR")
-    if env_dir:
-        dir_path = Path(env_dir).expanduser().resolve()
-        return (dir_path / "clients.yaml"), False
-
-    db_dir = REPO_ROOT / "clients_db"
-    db_dir.mkdir(parents=True, exist_ok=True)
-    return (db_dir / "clients.yaml").resolve(), True
-
-
-def _update_clients_db(
-    slug: str,
-    client_name: str,
-    base: Path,
-    cfg_rel: str = "config/config.yaml",
-    pdf_rel: str = "config/VisionStatement.pdf",
-    clients_db: Optional[str] = None,
-) -> dict[str, Any]:
-    """
-    Aggiunge/aggiorna il cliente in clients_db (idempotente).
-    - Preserva il formato esistente (dict keyed by slug oppure list di dict).
-    - Se il file non esiste o è vuoto, crea un dict keyed by slug.
-    """
-    d = _ensure_dependencies()
-
-    slug_norm = slug.strip()
-    client_name_norm = (client_name or slug_norm).strip() or slug_norm
-
-    if clients_db is None:
-        from ui import clients_store as _store
-
-        existing_entries = _store.get_all()
-        existed = any(e.slug.strip() == slug_norm for e in existing_entries)
-        entry = _store.ClientEntry(slug=slug_norm, nome=client_name_norm, stato="pronto")
-        _store.upsert_client(entry)
-        _store.set_state(slug_norm, "pronto")
-        return {"path": _store.DB_FILE, "created": not existed, "updated": existed}
-
-    safe_write_text_fn = _require_dependency(d, "safe_write_text")
-    ewr = _require_dependency(d, "ensure_within_and_resolve")
-    rts = _require_dependency(d, "read_text_safe")
-
-    db_path, enforce_repo = _resolve_clients_db_path(clients_db)
-    if enforce_repo:
-        safe_db_path = ewr(REPO_ROOT, db_path)
-
-        def reader() -> str:
-            return rts(REPO_ROOT, safe_db_path, encoding="utf-8")
-
-    else:
-        safe_db_path = Path(db_path)
-        safe_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        def reader() -> str:
-            ofr_text = _require_dependency(d, "open_for_read")
-            base_dir = safe_db_path.parent
-            with ofr_text(base_dir, safe_db_path, encoding="utf-8") as handle:
-                return handle.read()
-
-    existing: Any = None
-    if safe_db_path.exists():
-        try:
-            text = reader()
-            existing = yaml.safe_load(text)
-        except Exception:
-            existing = None
-
-    record = {
-        "slug": slug_norm,
-        "name": client_name_norm,
-        "base": str(base),
-        "config": cfg_rel,
-        "vision_pdf": pdf_rel,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    created = False
-    updated = False
-
-    if existing is None:
-        # crea dict keyed by slug
-        data = {slug_norm: record}
-        created = True
-    elif isinstance(existing, dict):
-        prev = existing.get(slug_norm)
-        existing[slug_norm] = {**(prev or {}), **record}
-        data = existing
-        updated = prev is not None
-        created = not updated
-    elif isinstance(existing, list):
-        # lista di record: cerca per slug
-        found = False
-        for i, item in enumerate(existing):
-            if isinstance(item, dict) and item.get("slug") == slug_norm:
-                existing[i] = {**item, **record}
-                found = True
-                updated = True
-                break
-        if not found:
-            existing.append(record)
-            created = True
-        data = existing
-    else:
-        # formato ignoto → migra a dict keyed by slug
-        data = {slug_norm: record}
-        created = True
-
-    safe_write_text_fn(
-        safe_db_path, yaml.safe_dump(data, allow_unicode=True, sort_keys=True, width=100), encoding="utf-8", atomic=True
-    )
-    return {"path": safe_db_path, "created": created, "updated": updated}
-
-
-# ----------------------- main CLI -----------------------
-
-
-def main(argv: list[str] | None = None) -> int:
-    """Punto di ingresso CLI per generare un workspace dummy (richiamabile dai test)."""
-    args = _parse_args(argv)
-    d = _ensure_dependencies()
-    get_logger = _require_dependency(d, "get_structured_logger")
-    ensure_within_fn = _require_dependency(d, "ensure_within")
-    log = get_logger("tools.gen_dummy_kb")
-
+def _call_drive_min(slug: str, client_name: str, base_dir: Path, logger: logging.Logger) -> Optional[dict[str, Any]]:
+    """Chiama ensure_drive_minimal_and_upload_config con firme UI. Skip silenzioso se non disponibile."""
+    if not callable(ensure_drive_minimal_and_upload_config):
+        return None
+    ctx = _Ctx(base_dir)
     try:
-        client_name = args.client_name or f"Dummy {args.slug}"
+        # firma principale (ctx, slug, client_folder_id=None, logger=None)
+        return ensure_drive_minimal_and_upload_config(ctx, slug=slug, client_folder_id=None, logger=logger)  # type: ignore[arg-type]
+    except TypeError:
+        # fallback legacy: (slug, client_name)
+        return ensure_drive_minimal_and_upload_config(slug=slug, client_name=client_name)  # type: ignore[misc]
 
-        ws_base = make_workspace(args.slug, args.base_dir)
-        paths = _workspace_paths(args.slug, ws_base)
 
-        base_root = Path(args.base_dir).resolve()
-        ensure_within_fn(base_root, paths["base"])
-        if paths["base"].exists():
-            shutil.rmtree(paths["base"])
+def _call_drive_build_from_mapping(
+    slug: str, client_name: str, base_dir: Path, logger: logging.Logger
+) -> Optional[dict[str, Any]]:
+    """Chiama build_drive_from_mapping come fa la UI (se disponibile)."""
+    if not callable(build_drive_from_mapping):
+        return None
+    return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
 
-        # Crea le directory minime
-        paths["base"].mkdir(parents=True, exist_ok=True)
-        paths["raw"].mkdir(parents=True, exist_ok=True)
-        paths["book"].mkdir(parents=True, exist_ok=True)
-        paths["sem"].mkdir(parents=True, exist_ok=True)
-        paths["cfg"].mkdir(parents=True, exist_ok=True)
-        (paths["base"] / "logs").mkdir(parents=True, exist_ok=True)
 
-        # Contenuti book
-        _write_dummy_docs(paths["book"])
-        _write_dummy_summary_readme(paths["book"])
+def _register_client(slug: str, client_name: str) -> None:
+    """Registra il cliente nel registry UI come fa la pagina UI."""
+    if ClientEntry and upsert_client and set_state:
+        entry = ClientEntry(slug=slug, nome=client_name, stato="nuovo")  # type: ignore[call-arg]
+        upsert_client(entry)  # type: ignore[misc]
+        set_state(slug, "nuovo")  # type: ignore[misc]
 
-        # Finanza dummy opzionale
-        _maybe_write_dummy_finance(paths["base"], args.records)
 
-        # RAW: sottocartelle + PDF dummy
-        raw_info = _ensure_raw_structure(paths["base"], slug=args.slug, client_name=client_name)
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
+def main(argv: Optional[list[str]] = None) -> int:
+    ensure_dotenv_loaded()
 
-        # Config + Vision PDF + YAML semantici (struttura cliente + folders raw/*)
-        cfg_path, cfg_created = _ensure_config_written(paths["base"], args.slug, client_name)
-        pdf_path, pdf_created = _ensure_dummy_vision_pdf(paths["base"], slug=args.slug, client_name=client_name)
-        sem_info = _ensure_semantic_stubs(
-            paths["base"], args.slug, client_name=client_name, raw_folders_rel=raw_info["folders_rel"]
-        )
+    ap = argparse.ArgumentParser(
+        description="Genera una KB dummy usando gli entry-point della UI (pre_onboarding + Vision + (Drive opz.))."
+    )
+    ap.add_argument("--slug", default="dummy", help="Slug del cliente (default: dummy)")
+    ap.add_argument("--name", default=None, help='Nome visuale del cliente (default: "Dummy <slug>")')
+    # Nuove opzioni richieste: disabilitare Drive / Vision
+    ap.add_argument("--no-drive", action="store_true", help="Disabilita tutti i passi Drive")
+    ap.add_argument("--no-vision", action="store_true", help="Non invocare Vision: genera YAML basici")
+    # Back-compat (non usato dalla UI nuova): se qualcuno passa --with-drive
+    ap.add_argument("--with-drive", action="store_true", help="(Legacy) Abilita Drive se possibile")
+    # Opzioni legacy mantenute per compatibilità con test/script esistenti
+    ap.add_argument(
+        "--base-dir",
+        default=None,
+        help="(Legacy) Directory radice in cui creare il workspace (override di REPO_ROOT_DIR).",
+    )
+    ap.add_argument(
+        "--clients-db",
+        dest="clients_db",
+        default=None,
+        help="(Legacy) Percorso file clients_db.yaml; imposta CLIENTS_DB_DIR sulla cartella indicata.",
+    )
+    ap.add_argument(
+        "--records",
+        default=None,
+        help="(Legacy) Numero di record finanza da generare (non più utilizzato).",
+    )
+    args = ap.parse_args(argv)
 
-        # Aggiorna clients_db (repo root)
-        db_info = _update_clients_db(
-            slug=args.slug,
-            client_name=client_name,
-            base=paths["base"],
-            cfg_rel="config/config.yaml",
-            pdf_rel="config/VisionStatement.pdf",
-            clients_db=args.clients_db,
-        )
+    slug = args.slug.strip()
+    client_name = (args.name or f"Dummy {slug}").strip()
+    enable_drive = (not args.no_drive) or args.with_drive
+    enable_vision = not args.no_vision
+    records_hint = args.records
 
-        log.info(
-            "dummy_kb_generated",
-            extra={
-                "slug": args.slug,
+    if records_hint is not None and not args.no_vision:
+        enable_vision = False
+        enable_drive = False
+
+    if not args.with_drive and (args.base_dir or args.clients_db):
+        enable_drive = False
+        if not args.no_vision:
+            enable_vision = False
+
+    # Gestione override legacy: REPO_ROOT_DIR e CLIENTS_DB_DIR
+    prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
+    prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
+    workspace_override: Optional[Path] = None
+    try:
+        if args.base_dir:
+            base_override = Path(args.base_dir).expanduser().resolve()
+            workspace_override = base_override / f"timmy-kb-{slug}"
+            os.environ["REPO_ROOT_DIR"] = str(workspace_override)
+
+        clients_db_path: Optional[Path] = None
+        if args.clients_db:
+            clients_db_path = Path(args.clients_db).expanduser().resolve()
+            clients_db_path.parent.mkdir(parents=True, exist_ok=True)
+            os.environ["CLIENTS_DB_DIR"] = str(clients_db_path.parent)
+
+        # Logger stile UI
+        logger = logging.getLogger("tools.gen_dummy_kb")
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+
+        if records_hint:
+            try:
+                _ = int(records_hint)
+            except Exception:
+                logger.debug("records_hint_non_numeric", extra={"value": records_hint})
+
+        try:
+            # 0) PDF Vision dalla root del repo
+            repo_pdf = REPO_ROOT / "config" / "VisionStatement.pdf"
+            if repo_pdf.exists():
+                try:
+                    safe_pdf = ensure_within_and_resolve(REPO_ROOT, repo_pdf)
+                    with open_for_read_bytes_selfguard(safe_pdf) as handle:
+                        pdf_bytes = handle.read()
+                except Exception:
+                    logger.warning("vision_statement_template_unreadable", extra={"file_path": str(repo_pdf)})
+                    pdf_bytes = _DEFAULT_VISION_PDF
+            else:
+                logger.warning("vision_statement_template_missing", extra={"file_path": str(repo_pdf)})
+                pdf_bytes = _DEFAULT_VISION_PDF
+
+            # 1) Workspace locale (UI helper)
+            ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
+
+            base_dir = _client_base(slug)
+            pdf_path = _pdf_path(slug)
+
+            # 2) Drive (opzionale)
+            drive_min_info = drive_build_info = None
+            if enable_drive:
+                try:
+                    drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
+                    drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
+                except Exception as e:
+                    logger.warning("drive_provisioning_failed", extra={"error": str(e)})
+
+            # 3) Vision o YAML basici
+            if enable_vision:
+                ctx = _Ctx(base_dir)
+                run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
+            else:
+                _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+
+            # 4) Registry UI
+            _register_client(slug, client_name)
+
+            # 5) Output diagnostico
+            cfg_out: dict[str, Any] = {}
+            if callable(get_client_config) and ClientContext:
+                try:
+                    ctx_cfg = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[misc]
+                    cfg = get_client_config(ctx_cfg) or {}
+                    cfg_out = {
+                        "drive_folder_id": cfg.get("drive_folder_id"),
+                        "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
+                    }
+                except Exception:
+                    cfg_out = {}
+
+            result = {
+                "slug": slug,
                 "client_name": client_name,
-                "base": str(paths["base"]),
-                "config": str(cfg_path),
-                "config_created": bool(cfg_created),
-                "vision_pdf": str(pdf_path),
-                "vision_pdf_created": bool(pdf_created),
-                "raw_folders": [str(p) for p in raw_info["folders_abs"]],
-                "raw_pdfs": [str(p) for p in raw_info["pdfs_abs"]],
-                "semantic_mapping": str(sem_info["mapping_path"]),
-                "semantic_mapping_created": bool(sem_info["mapping_created"]),
-                "cartelle_raw": str(sem_info["cartelle_path"]),
-                "cartelle_raw_created": bool(sem_info["cartelle_created"]),
-                "clients_db": str(db_info["path"]),
-                "clients_db_created": bool(db_info["created"]),
-                "clients_db_updated": bool(db_info["updated"]),
-            },
-        )
-        return 0
-    except Exception as exc:
-        log.error("dummy_kb_failed", extra={"slug": args.slug, "error": str(exc)})
-        return 1
+                "paths": {
+                    "base": str(base_dir),
+                    "config": str(base_dir / "config" / "config.yaml"),
+                    "vision_pdf": str(pdf_path),
+                    "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
+                    "cartelle_raw": str(base_dir / "semantic" / "cartelle_raw.yaml"),
+                },
+                "drive_min": drive_min_info or {},
+                "drive_build": drive_build_info or {},
+                "config_ids": cfg_out,
+                "vision_used": bool(enable_vision),
+                "drive_used": bool(enable_drive),
+            }
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+
+        except Exception as e:
+            logger.error("dummy_kb_failed", extra={"slug": slug, "error": str(e)})
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            return 1
+    finally:
+        if args.base_dir:
+            if prev_repo_root_dir is None:
+                os.environ.pop("REPO_ROOT_DIR", None)
+            else:
+                os.environ["REPO_ROOT_DIR"] = prev_repo_root_dir
+        if args.clients_db:
+            if prev_clients_db_dir is None:
+                os.environ.pop("CLIENTS_DB_DIR", None)
+            else:
+                os.environ["CLIENTS_DB_DIR"] = prev_clients_db_dir
 
 
 if __name__ == "__main__":

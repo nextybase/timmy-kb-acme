@@ -10,7 +10,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     import timmykb.tag_onboarding as tag
 
     # Isola la root del workspace cliente
-    client_root = tmp_path / "timmy-kb-smk"
+    client_root = tmp_path / "timmy-kb-dummy"
     (client_root / "config").mkdir(parents=True, exist_ok=True)
     # Config minimale con drive_raw_folder_id richiesto dal ramo drive
     (client_root / "config" / "config.yaml").write_text("drive_raw_folder_id: RAW_FOLDER_ID\n", encoding="utf-8")
@@ -26,7 +26,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
 
     with pytest.raises(tag.ConfigError) as exc:
         tag.tag_onboarding_main(
-            slug="smk",
+            slug="dummy",
             source="drive",
             non_interactive=True,
             proceed_after_csv=False,

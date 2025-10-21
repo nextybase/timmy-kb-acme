@@ -5,7 +5,7 @@ import timmykb.semantic_headless as sh
 
 
 def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     raw = base / "raw"
     for d in (book, raw):
@@ -31,7 +31,7 @@ def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(sapi, "_validate_md", lambda shim: None)
 
     # Esegue headless
-    out = sh.build_markdown_headless(ctx, sapi.logging.getLogger("test.headless"), slug="x")
+    out = sh.build_markdown_headless(ctx, sapi.logging.getLogger("test.headless"), slug="dummy")
     assert md in [book / p.name for p in out["converted"]]  # type: ignore[index]
 
     # Il frontmatter deve avere un titolo derivato dal nome file

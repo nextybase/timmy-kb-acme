@@ -33,7 +33,7 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
     }
     repo_config_path = _setup_repo_config(tmp_path, repo_cfg)
 
-    client_config_path = tmp_path / "output" / "timmy-kb-demo" / "config" / "config.yaml"
+    client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True)
     client_cfg = {
         "retriever": {
@@ -52,7 +52,7 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
         classmethod(lambda cls, **_: _StubContext(client_config_path)),
     )
 
-    limit, budget, auto = config_store.get_retriever_settings(slug="timmy-kb-demo")
+    limit, budget, auto = config_store.get_retriever_settings(slug="timmy-kb-dummy")
 
     assert limit == config_store.MIN_CANDIDATE_LIMIT
     assert budget == 2000
@@ -71,7 +71,7 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
     repo_config_path = _setup_repo_config(tmp_path, repo_cfg)
     repo_original = repo_config_path.read_text(encoding="utf-8")
 
-    client_config_path = tmp_path / "output" / "timmy-kb-demo" / "config" / "config.yaml"
+    client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True)
     client_cfg = {
         "retriever": {
@@ -91,7 +91,7 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
         classmethod(lambda cls, **_: _StubContext(client_config_path)),
     )
 
-    config_store.set_retriever_settings(1234, 1800, True, slug="timmy-kb-demo")
+    config_store.set_retriever_settings(1234, 1800, True, slug="timmy-kb-dummy")
 
     updated_client = yaml.safe_load(client_config_path.read_text(encoding="utf-8"))
     assert updated_client["retriever"] == {
@@ -127,7 +127,7 @@ def test_get_retriever_settings_fallback_on_configerror(
 
     caplog.set_level("DEBUG", logger="ui.config_store")
 
-    limit, budget, auto = config_store.get_retriever_settings(slug="timmy-kb-demo")
+    limit, budget, auto = config_store.get_retriever_settings(slug="timmy-kb-dummy")
 
     assert limit == config_store.MIN_CANDIDATE_LIMIT
     assert budget == 0

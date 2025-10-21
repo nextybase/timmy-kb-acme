@@ -49,6 +49,7 @@ from ..components.mapping_editor import mapping_to_raw_structure  # usato solo s
 from ..components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
 from ..components.mapping_editor import load_semantic_mapping
 from ..utils import to_kebab  # SSoT normalizzazione + path-safety
+from ..utils.workspace import workspace_root
 
 # ===== Logger =================================================================
 
@@ -185,7 +186,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
             "drive_raw_folder_id mancante nel config.yaml. " "Esegui prima la fase di bootstrap Drive (pre-Vision)."
         )
 
-    root_dir = ensure_within_and_resolve(Path(base_root), Path(base_root) / f"timmy-kb-{slug}")
+    root_dir = _resolve_workspace(base_root, slug)
     yaml_path = ensure_within_and_resolve(root_dir, Path(root_dir) / "semantic" / "cartelle_raw.yaml")
     if not yaml_path.exists():
         raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
@@ -364,8 +365,9 @@ def plan_raw_download(
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
-    local_root = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    local_root.mkdir(parents=True, exist_ok=True)
+    workspace_dir = _resolve_workspace(base_root, slug)
+    local_root = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
+    Path(local_root).mkdir(parents=True, exist_ok=True)
 
     conflicts: list[str] = []
     labels: list[str] = []
@@ -680,8 +682,9 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
     # Local root (raw/)
-    local_root_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    local_root_dir.mkdir(parents=True, exist_ok=True)
+    workspace_dir = _resolve_workspace(base_root, slug)
+    local_root_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
+    Path(local_root_dir).mkdir(parents=True, exist_ok=True)
 
     # 1) Costruisci la lista dei candidati (categoria/nomefile) nell'ordine atteso
     candidates: List[Tuple[str, str]] = []
@@ -727,3 +730,19 @@ def download_raw_from_drive_with_progress(
     after = set(Path(p).resolve() for p in glob(str(local_root_dir / "**" / "*.pdf"), recursive=True))
     created = sorted(after - before)
     return created
+
+
+def _resolve_workspace(base_root: Path | str, slug: str) -> Path:
+    """
+    Determina la radice locale del workspace rispettando eventuali override di base_root.
+    - Se base_root corrisponde al valore di default ('output'), sfrutta workspace_root per
+      ereditare eventuali configurazioni dal ClientContext.
+    - In caso di override (es. test/tempdir) applica la guardia di path-safety locale.
+    """
+    default_root = Path("output")
+    candidate_root = Path(base_root)
+    workspace_from_context: Path = workspace_root(slug)
+    if candidate_root == default_root:
+        return workspace_from_context
+    safe_override: Path = ensure_within_and_resolve(candidate_root, candidate_root / f"timmy-kb-{slug}")
+    return safe_override

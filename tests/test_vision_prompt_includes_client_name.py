@@ -32,7 +32,7 @@ def _write_pdf(path: Path, txt: str):
 
 @pytest.fixture
 def tmp_ws(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     pdf = base / "config" / "VisionStatement.pdf"
@@ -45,8 +45,8 @@ def tmp_ws(tmp_path: Path) -> Path:
 
 
 def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
-    slug = "acme"
-    ctx = DummyCtx(base_dir=tmp_ws, client_name="ACME S.p.A.")
+    slug = "dummy"
+    ctx = DummyCtx(base_dir=tmp_ws, client_name="Dummy S.p.A.")
     seen = {"user_messages": None}
 
     # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)
@@ -131,4 +131,4 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
 
     # Verifica che il client_name sia stato incluso nel prompt inviato all'assistente
     msgs = seen["user_messages"] or []
-    assert any("client_name: ACME S.p.A." in (m.get("content") or "") for m in msgs)
+    assert any("client_name: Dummy S.p.A." in (m.get("content") or "") for m in msgs)

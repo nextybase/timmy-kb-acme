@@ -25,12 +25,12 @@ def _logger(name: str = "test.obs") -> logging.Logger:
 
 def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     # Setup workspace minimo con 2 file MD
-    base = tmp_path / "output" / "timmy-kb-obs"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="obs")
+    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
     logger = _logger("test.obs.index")
 
     # Stub embeddings e inserimento DB
@@ -46,7 +46,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(sapi, "_insert_chunks", lambda **kwargs: 1)
 
     caplog.set_level(logging.INFO)
-    _ = sapi.index_markdown_to_db(ctx, logger, slug="obs", scope="book", embeddings_client=Emb(), db_path=None)
+    _ = sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=None)
 
     # Verifica record strutturati
     started = next(
@@ -64,7 +64,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
 
 def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     # Patch pipeline per generare rapidamente 2 MD
-    base = tmp_path / "kb" / "obs"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     raw = base / "raw"
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
@@ -88,11 +88,11 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     # Evita enrich_frontmatter post build
     monkeypatch.setattr(sapi, "_load_reviewed_vocab", lambda base_dir, logger: {}, raising=True)
 
-    ctx = _Ctx(base_dir=base, raw_dir=raw, md_dir=book, slug="obs")
+    ctx = _Ctx(base_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
     logger = _logger("test.obs.build")
 
     caplog.set_level(logging.INFO)
-    _ = sapi.build_markdown_book(ctx, logger, slug="obs")
+    _ = sapi.build_markdown_book(ctx, logger, slug="dummy")
 
     started = next(
         r for r in caplog.records if r.msg == "phase_started" and getattr(r, "phase", None) == "build_markdown_book"
@@ -107,11 +107,11 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
 
 
 def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-obs"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="obs")
+    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
     logger = _logger("test.obs.index.fail")
 
     class Emb:
@@ -132,7 +132,7 @@ def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplo
     import pytest
 
     with pytest.raises(RuntimeError):
-        sapi.index_markdown_to_db(ctx, logger, slug="obs", scope="book", embeddings_client=Emb(), db_path=None)
+        sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=None)
 
     failed = next(
         r for r in caplog.records if r.msg == "phase_failed" and getattr(r, "phase", None) == "index_markdown_to_db"

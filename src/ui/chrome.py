@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ---------- helpers ----------
 def _on_dummy_kb() -> None:
-    """Esegue lo script CLI per generare la Dummy KB e mostra log/output."""
+    """Apre un modal con opzioni; su 'Prosegui' esegue la CLI e mostra log/output nel modal."""
     slug = (get_slug() or "dummy").strip().lower() or "dummy"
     try:
         validate_slug(slug)
@@ -41,35 +41,67 @@ def _on_dummy_kb() -> None:
         st.error(f"Script CLI non trovato: {script}")
         return
 
-    cmd = [sys.executable, str(script), "--slug", slug]
+    def _run_and_render(cmd: list[str]) -> None:
+        st.caption("Esecuzione comando:")
+        st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
+        with st.status(f"Genero dataset dummy per '{slug}'…", expanded=True) as status_widget:
+            try:
+                result = subprocess.run(  # noqa: S603 - slug sanificato, shell disabilitata
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except Exception as exc:
+                status_widget.update(label="Errore di esecuzione CLI", state="error")
+                st.error(f"Impossibile avviare lo script: {exc}")
+                return
 
-    with st.status(f"Genero dataset dummy per '{slug}'…", expanded=True) as status_widget:
-        st.code(" ".join(shlex.quote(token) for token in cmd), language="bash")
-        try:
-            result = subprocess.run(  # noqa: S603 - slug sanificato, shell disabilitata
-                cmd,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except Exception as exc:
-            status_widget.update(label="Errore di esecuzione CLI", state="error")
-            st.error(f"Impossibile avviare lo script: {exc}")
-            return
+            if result.stdout:
+                with st.expander("Output CLI", expanded=False):
+                    st.text(result.stdout)
+            if result.stderr:
+                with st.expander("Errori CLI", expanded=False):
+                    st.text(result.stderr)
 
-        if result.stdout:
-            with st.expander("Output CLI", expanded=False):
-                st.text(result.stdout)
-        if result.stderr:
-            with st.expander("Errori CLI", expanded=False):
-                st.text(result.stderr)
+            if result.returncode == 0:
+                status_widget.update(label="Dummy generato correttamente.", state="complete")
+                st.toast("Dataset dummy creato. Verifica clients_db/output per i dettagli.")
+                st.success("Operazione completata.")
+            else:
+                status_widget.update(label=f"CLI terminata con codice {result.returncode}", state="error")
+                st.error("La generazione della Dummy KB non è andata a buon fine.")
 
-        if result.returncode == 0:
-            status_widget.update(label="Dummy generato correttamente.", state="complete")
-            st.toast("Dataset dummy creato. Verifica clients_db/output per i dettagli.")
-        else:
-            status_widget.update(label=f"CLI terminata con codice {result.returncode}", state="error")
-            st.error("La generazione della Dummy KB non è andata a buon fine.")
+        st.divider()
+        st.button("Chiudi", type="secondary")
+
+    def _render_modal_body() -> None:
+        st.subheader("Opzioni generazione")
+        no_drive = st.checkbox("Disabilita Drive", value=False, help="Salta provisioning/upload su Google Drive")
+        no_vision = st.checkbox(
+            "Disabilita Vision (genera YAML basici)",
+            value=False,
+            help="Crea semantic_mapping.yaml e cartelle_raw.yaml senza chiamare Vision",
+        )
+        proceed = st.button("Prosegui", type="primary")
+        st.divider()
+        if proceed:
+            cmd = [sys.executable, str(script), "--slug", slug]
+            if no_drive:
+                cmd.append("--no-drive")
+            if no_vision:
+                cmd.append("--no-vision")
+            _run_and_render(cmd)
+
+    dialog_builder = getattr(st, "dialog", None)
+    if callable(dialog_builder):
+        open_modal = dialog_builder("Generazione Dummy KB", width="large")
+        runner = open_modal(_render_modal_body)
+        if callable(runner):
+            runner()
+    else:
+        # Fallback per Streamlit vecchio: render inline
+        _render_modal_body()
 
 
 def _on_exit() -> None:

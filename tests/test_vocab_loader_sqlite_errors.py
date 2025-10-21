@@ -16,7 +16,7 @@ class _NoopLogger:
 
 
 def _mk_semantic_db_placeholder(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-acme"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
     db = sem / "tags.db"

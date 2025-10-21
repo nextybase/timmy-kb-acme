@@ -35,8 +35,9 @@ from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.clients_store import ClientEntry, set_state, upsert_client
+from ui.utils.workspace import workspace_root
 
 _vision_module = None
 for _vision_mod_name in (
@@ -104,19 +105,37 @@ def _repo_root() -> Path:
 
 
 def _client_base(slug: str) -> Path:
-    return _repo_root() / "output" / f"timmy-kb-{slug}"
+    """
+    Determina la radice del workspace cliente.
+    - Preferisce `workspace_root` (che valida lo slug e ingloba il ClientContext).
+    - Fallback: usa la root del repository (override-friendly per i test) mantenendo le guardie.
+    """
+    fallback_base = _repo_root() / "output" / f"timmy-kb-{slug}"
+    base_parent = fallback_base.parent
+
+    candidate: Path
+    try:
+        candidate = cast(Path, workspace_root(slug))
+        # Accettiamo il candidate solo se resta nel perimetro del fallback (copre override repo root).
+        candidate = cast(Path, ensure_within_and_resolve(base_parent, candidate))
+    except Exception:
+        candidate = cast(Path, ensure_within_and_resolve(base_parent, fallback_base))
+    return candidate
 
 
 def _config_dir_client(slug: str) -> Path:
-    return _client_base(slug) / "config"
+    base = _client_base(slug)
+    return cast(Path, ensure_within_and_resolve(base, base / "config"))
 
 
 def _semantic_dir_client(slug: str) -> Path:
-    return _client_base(slug) / "semantic"
+    base = _client_base(slug)
+    return cast(Path, ensure_within_and_resolve(base, base / "semantic"))
 
 
 def _client_pdf_path(slug: str) -> Path:
-    return _config_dir_client(slug) / "VisionStatement.pdf"
+    cfg_dir = _config_dir_client(slug)
+    return cast(Path, ensure_within_and_resolve(cfg_dir, cfg_dir / "VisionStatement.pdf"))
 
 
 def _has_drive_ids(slug: str) -> bool:
@@ -170,10 +189,10 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None
 
 
 class _UIContext:
-    """Contesto minimo per Vision: solo .base_dir (per-cliente)."""
+    """Contesto minimo per Vision con base_dir già validato."""
 
-    def __init__(self, base_dir: Path) -> None:
-        self.base_dir = base_dir
+    def __init__(self, slug: str) -> None:
+        self.base_dir = _client_base(slug)
 
 
 def _ui_logger() -> logging.Logger:
@@ -380,7 +399,7 @@ if current_phase == UI_PHASE_INIT:
 
             # 5) Vision
             ui_logger = _ui_logger()
-            ctx = _UIContext(base_dir=_client_base(s))
+            ctx = _UIContext(slug=s)
             with status_guard(
                 "Eseguo Vision…",
                 expanded=True,

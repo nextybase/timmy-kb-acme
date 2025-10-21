@@ -11,7 +11,7 @@ PY = sys.executable
 
 
 def test_tag_onboarding_cli_missing_env_returns_configerror_code(tmp_path: Path) -> None:
-    slug = "env-miss"
+    slug = "dummy"
     client_dir = tmp_path / f"timmy-kb-{slug}"
     client_dir.mkdir(parents=True, exist_ok=True)
 

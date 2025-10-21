@@ -15,13 +15,12 @@ from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2, load_tags_reviewed
 from tag_onboarding import run_nlp_to_db
+from ui.utils.workspace import workspace_root
 
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
     st = None
-
-OUTPUT_ROOT = Path(__file__).resolve().parents[3] / "output"
 
 
 def _require_streamlit() -> None:
@@ -32,9 +31,10 @@ def _require_streamlit() -> None:
 def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
     base_dir = getattr(ctx, "base_dir", None)
     if base_dir is None:
-        base_dir = OUTPUT_ROOT / f"timmy-kb-{slug}"
-    base_dir = Path(base_dir).resolve()
-    base_dir = ensure_within_and_resolve(base_dir.parent, base_dir)
+        base_dir = workspace_root(slug)
+    else:
+        candidate = Path(base_dir)
+        base_dir = ensure_within_and_resolve(candidate.parent, candidate)
 
     raw_dir = getattr(ctx, "raw_dir", None) or (base_dir / "raw")
     raw_dir = ensure_within_and_resolve(base_dir, Path(raw_dir))

@@ -18,14 +18,14 @@ def _ctx(base_dir: Path):
     c.base_dir = base_dir
     c.raw_dir = base_dir / "raw"
     c.md_dir = base_dir / "book"
-    c.slug = "x"
+    c.slug = "dummy"
     return c
 
 
 def test_build_tags_csv_from_raw(tmp_path):
     from semantic.api import build_tags_csv
 
-    base = tmp_path / "output" / "timmy-kb-x"
+    base = tmp_path / "output" / "timmy-kb-dummy"
     raw = base / "raw"
     sem = base / "semantic"
     (raw / "HR" / "Policies").mkdir(parents=True, exist_ok=True)
@@ -33,7 +33,7 @@ def test_build_tags_csv_from_raw(tmp_path):
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
     # cast(Any, …): bypass del nominal type (ClientContext) mantenendo invariata la logica
-    csv_path = build_tags_csv(cast(Any, _ctx(base)), logging.getLogger("test"), slug="x")
+    csv_path = build_tags_csv(cast(Any, _ctx(base)), logging.getLogger("test"), slug="dummy")
     assert csv_path.exists()
     assert csv_path.parent == sem
 

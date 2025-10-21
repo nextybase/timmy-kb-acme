@@ -10,7 +10,7 @@ from semantic import api as sapi
 
 
 class _Ctx:
-    def __init__(self, base: Path, slug: str = "x"):
+    def __init__(self, base: Path, slug: str = "dummy"):
         self.base_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"
@@ -25,9 +25,9 @@ class _NoopLogger:
 
 
 def test_convert_markdown_unsafe_pdfs_with_legacy_md_fail_fast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    # Struttura base: output/timmy-kb-x/{raw,book}
-    base = tmp_path / "output" / "timmy-kb-x"
-    ctx = _Ctx(base, slug="x")
+    # Struttura base: output/timmy-kb-dummy/{raw,book}
+    base = tmp_path / "output" / "timmy-kb-dummy"
+    ctx = _Ctx(base, slug="dummy")
     logger = _NoopLogger()
 
     # Crea legacy in book/ e un PDF finto in raw/

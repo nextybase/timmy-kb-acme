@@ -16,7 +16,7 @@ class _DummyCtx(SimpleNamespace):
     slug: str
 
 
-def _make_ctx(tmp_path: Path, slug: str = "acme") -> _DummyCtx:
+def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     base = tmp_path / "output" / f"timmy-kb-{slug}"
     book = base / "book"
     base.mkdir(parents=True, exist_ok=True)
@@ -24,19 +24,19 @@ def _make_ctx(tmp_path: Path, slug: str = "acme") -> _DummyCtx:
     return _DummyCtx(base_dir=base, md_dir=book, slug=slug)
 
 
-def _set_argv(slug: str = "acme") -> None:
+def _set_argv(slug: str = "dummy") -> None:
     sys.argv = ["semantic_onboarding.py", "--slug", slug, "--non-interactive"]
 
 
 def test_cli_returns_configerror_exit_code(tmp_path: Path, monkeypatch: Any) -> None:
-    _set_argv("x")
+    _set_argv("dummy")
     mod = importlib.import_module("src.semantic_onboarding")
 
     # Evita I/O reale
     monkeypatch.setattr(
         mod,
         "ClientContext",
-        SimpleNamespace(load=lambda **_: _make_ctx(tmp_path, "x")),
+        SimpleNamespace(load=lambda **_: _make_ctx(tmp_path, "dummy")),
         raising=True,
     )
 
@@ -51,13 +51,13 @@ def test_cli_returns_configerror_exit_code(tmp_path: Path, monkeypatch: Any) -> 
 
 
 def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -> None:
-    _set_argv("y")
+    _set_argv("dummy")
     mod = importlib.import_module("src.semantic_onboarding")
 
     monkeypatch.setattr(
         mod,
         "ClientContext",
-        SimpleNamespace(load=lambda **_: _make_ctx(tmp_path, "y")),
+        SimpleNamespace(load=lambda **_: _make_ctx(tmp_path, "dummy")),
         raising=True,
     )
 
@@ -87,10 +87,10 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
 
 def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: Any) -> None:
     """Verifica che il riepilogo strutturato riporti solo markdown di contenuto."""
-    _set_argv("z")
+    _set_argv("dummy")
     mod = importlib.import_module("src.semantic_onboarding")
 
-    ctx = _make_ctx(tmp_path, "z")
+    ctx = _make_ctx(tmp_path, "dummy")
     monkeypatch.setattr(
         mod,
         "ClientContext",

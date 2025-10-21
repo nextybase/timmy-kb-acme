@@ -66,7 +66,7 @@ def _run(cmd, *, env, cwd):
 
 @pytest.mark.slow
 def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
-    slug = "cli-smoke"
+    slug = "dummy"
     client_dir = tmp_path / f"timmy-kb-{slug}"
     raw_dir = client_dir / "raw"
     semantic_dir = client_dir / "semantic"

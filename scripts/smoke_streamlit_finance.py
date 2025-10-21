@@ -6,6 +6,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from timmykb.pipeline.context import ClientContext
+from timmykb.pipeline.file_utils import safe_write_bytes
+from timmykb.pipeline.path_utils import ensure_within_and_resolve
+
 
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     """
@@ -15,8 +19,6 @@ def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     """
     # 1) Prova ClientContext
     try:
-        from pipeline.context import ClientContext  # import lazy
-
         ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
         base_dir = getattr(ctx, "base_dir", None)
         if isinstance(base_dir, Path):
@@ -51,12 +53,6 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     # Import lazy (evita side-effects a import-time del modulo)
     from finance.api import import_csv as fin_import_csv
     from finance.api import summarize_metrics as fin_summarize
-
-    # Opzionale: scrittura atomica se disponibile
-    try:
-        from pipeline.file_utils import safe_write_bytes
-    except Exception:
-        safe_write_bytes = None  # fallback
 
     st.subheader("Finanza (CSV → finance.db)")
     st.caption("Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`).")
@@ -93,10 +89,9 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
                 tmp_csv = sem_dir / tmp_name
 
                 data: bytes = file.read()
-                if safe_write_bytes is not None:
-                    safe_write_bytes(tmp_csv, data, atomic=True)
-                else:
-                    tmp_csv.write_bytes(data)
+                safe_tmp_csv = ensure_within_and_resolve(base_dir, tmp_csv)
+                safe_write_bytes(safe_tmp_csv, data, atomic=True)
+                tmp_csv = safe_tmp_csv
 
                 res: Dict[str, object] = fin_import_csv(base_dir, tmp_csv)
                 st.success(

@@ -14,10 +14,10 @@ def test_validate_markdown_dir_traversal_includes_slug(tmp_path: Path):
     outside = tmp_path / "outside_book"
     outside.mkdir(parents=True, exist_ok=True)
 
-    ctx = SimpleNamespace(base_dir=base, md_dir=outside, slug="acme")
+    ctx = SimpleNamespace(base_dir=base, md_dir=outside, slug="dummy")
 
     with pytest.raises(PipelineError) as exc:
         cu.validate_markdown_dir(ctx, md_dir=outside)
 
     # Il messaggio deve contenere lo slug per diagnostica
-    assert "slug=acme" in str(exc.value)
+    assert "slug=dummy" in str(exc.value)

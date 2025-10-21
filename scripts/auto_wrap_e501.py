@@ -25,6 +25,8 @@ import subprocess
 from pathlib import Path
 from textwrap import fill
 
+from timmykb.pipeline.file_utils import safe_write_text
+
 # pattern: detect long comment lines
 COMMENT_RE = re.compile(r"^(\s*)#( ?)(.*\S.*)$")
 # detect lines like help="...very long..."
@@ -200,7 +202,7 @@ def process_file(path: Path, width: int, dry: bool) -> bool:
         bak = path.with_suffix(path.suffix + ".bak")
         if not bak.exists():
             shutil.copy2(path, bak)
-        path.write_text(new_text, encoding="utf-8")
+        safe_write_text(path, new_text, encoding="utf-8", atomic=True)
     return changed
 
 

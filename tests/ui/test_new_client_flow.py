@@ -101,7 +101,7 @@ def _make_pdf_stub(payload: bytes) -> Any:
 def test_init_workspace_skips_drive_when_helper_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    slug = "acme"
+    slug = "dummy"
     monkeypatch.chdir(tmp_path)
     client_root = tmp_path / "output" / f"timmy-kb-{slug}"
     if client_root.exists():
@@ -110,7 +110,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
     stub = _StreamlitStub()
     stub.button_returns = {"Inizializza Workspace": True}
     stub.session_state = {"new_client.phase": "init", "new_client.slug": "", "client_name": ""}
-    stub.text_input = lambda label, **kwargs: "acme" if "Slug" in label else kwargs.get("value", "")
+    stub.text_input = lambda label, **kwargs: "dummy" if "Slug" in label else kwargs.get("value", "")
     stub.file_uploader = lambda *_args, **_kwargs: _make_pdf_stub(b"%PDF-1.4")
 
     monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
@@ -125,7 +125,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
     def _fake_bootstrap(slug: str, *, client_name: str | None, vision_statement_pdf: bytes | None) -> None:
         base = client_root
         (base / "config").mkdir(parents=True, exist_ok=True)
-        (base / "config" / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
+        (base / "config" / "config.yaml").write_text("client_name: Dummy\n", encoding="utf-8")
         (base / "semantic").mkdir(parents=True, exist_ok=True)
         if vision_statement_pdf:
             (base / "config" / "VisionStatement.pdf").write_bytes(vision_statement_pdf)
