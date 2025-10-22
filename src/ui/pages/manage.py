@@ -240,7 +240,7 @@ if not slug:
             continue
         name = (client.get("nome") or slug_value).strip()
         state = (client.get("stato") or "n/d").strip()
-        label = f"{name} ({slug_value}) â€” {state}"
+        label = f"{name} ({slug_value}) - {state}"
         options.append((label, slug_value))
 
     if not options:
@@ -350,7 +350,7 @@ if slug:
             except Exception as e:  # pragma: no cover
                 st.error(f"Impossibile generare i README: {e}")
 
-    # Colonna 2 â€” Arricchimento semantico (estrazione tag)
+    # Colonna 2  -  Arricchimento semantico (estrazione tag)
     base_dir = _workspace_root(slug)
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))

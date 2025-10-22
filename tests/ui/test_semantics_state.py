@@ -55,12 +55,70 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # vocabolario e arricchimento simulati
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"ok": True})
-    monkeypatch.setattr(sem, "enrich_frontmatter", lambda ctx, logger, vocab, slug: ["file1.md", "file2.md"])
+    monkeypatch.setattr(
+        sem,
+        "enrich_frontmatter",
+        lambda ctx, logger, vocab, slug, **kwargs: ["file1.md", "file2.md"],
+    )
 
     sem._run_enrich("acme-srl")
 
     assert state_calls, "set_state non è stato chiamato"
     assert state_calls[-1] == ("acme-srl", "arricchito")
+
+
+def test_run_enrich_warns_and_allows_empty_vocab(monkeypatch, tmp_path):
+    """Quando `tags.db` manca la UI avverte ma consente l'arricchimento base."""
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+
+    warning_messages: list[str] = []
+    monkeypatch.setattr(sem.st, "warning", lambda msg, **_: warning_messages.append(msg), raising=False)
+    monkeypatch.setattr(
+        sem.st,
+        "error",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("st.error non atteso")),
+        raising=False,
+    )
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+
+    class _Logger:
+        def __init__(self) -> None:
+            self.warning_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+        def warning(self, *args: object, **kwargs: object) -> None:
+            self.warning_calls.append((args, kwargs))
+
+        def info(self, *args: object, **kwargs: object) -> None:
+            pass
+
+    logger = _Logger()
+
+    def _mk_ctx_and_logger(slug: str):
+        return SimpleNamespace(base_dir=tmp_path), logger
+
+    monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
+    monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
+    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
+
+    captured: dict[str, object] = {}
+
+    def _fake_enrich(ctx, log, vocab, *, slug, allow_empty_vocab=False):
+        captured["allow_empty_vocab"] = allow_empty_vocab
+        captured["vocab"] = vocab
+        return ["file1.md"]
+
+    monkeypatch.setattr(sem, "enrich_frontmatter", _fake_enrich)
+
+    sem._run_enrich("acme-srl")
+
+    assert warning_messages, "st.warning deve informare l'utente dell'assenza del vocabolario"
+    assert captured.get("allow_empty_vocab") is True
+    assert captured.get("vocab") == {}
+    assert state_calls and state_calls[-1] == ("acme-srl", "arricchito")
 
 
 def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
