@@ -70,6 +70,35 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
     return cast(Dict[str, Dict[str, Set[str]]], _load_reviewed_vocab(base_dir, logger))
 
 
+def _require_reviewed_vocab(
+    base_dir: Path,
+    logger: logging.Logger,
+    *,
+    slug: str,
+) -> Dict[str, Dict[str, Set[str]]]:
+    """Restituisce il vocabolario canonico o solleva ConfigError se assente."""
+    global _LAST_VOCAB_STUBBED
+    vocab = load_reviewed_vocab(base_dir, logger)
+    if vocab:
+        _LAST_VOCAB_STUBBED = False
+        return vocab
+    loader_module = getattr(_load_reviewed_vocab, "__module__", "")
+    if loader_module != "semantic.vocab_loader":
+        _LAST_VOCAB_STUBBED = True
+        logger.info(
+            "semantic.vocab.stubbed",
+            extra={"slug": slug, "loader_module": loader_module},
+        )
+        return {}
+    _LAST_VOCAB_STUBBED = False
+    tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+    raise ConfigError(
+        "Vocabolario canonico assente. Esegui l'estrazione tag per popolare semantic/tags.db.",
+        slug=slug,
+        file_path=tags_db,
+    )
+
+
 class _CtxShim:
     base_dir: Path
     raw_dir: Path
@@ -93,6 +122,7 @@ def _resolve_ctx_paths(context: ClientContextType, slug: str) -> tuple[Path, Pat
 
 # --- feature detection cache per il converter (evita inspect ripetuti) ---
 _SUPPORTED_SAFE_PDFS: "WeakKeyDictionary[Any, bool]" = WeakKeyDictionary()
+_LAST_VOCAB_STUBBED = False
 
 
 def _converter_supports_safe_pdfs(func: Any) -> bool:
@@ -305,12 +335,27 @@ def enrich_frontmatter(
     vocab: Dict[str, Dict[str, Set[str]]],
     *,
     slug: str,
+    allow_empty_vocab: bool = False,
 ) -> List[Path]:
     from pipeline.path_utils import read_text_safe
 
     start_ts = time.perf_counter()
     base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
     ensure_within(base_dir, md_dir)
+
+    if not vocab:
+        tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+        reason = "empty_vocab_allowed" if allow_empty_vocab else "empty_vocab_fallback"
+        if not allow_empty_vocab and logger is None:
+            raise ConfigError(
+                "Vocabolario canonico assente: impossibile arricchire i front-matter senza tags canonici.",
+                slug=slug,
+                file_path=tags_db,
+            )
+        logger.info(
+            "semantic.frontmatter.skip_tags",
+            extra={"slug": slug, "reason": reason, "file_path": str(tags_db)},
+        )
 
     mds = sorted_paths(md_dir.glob("*.md"), base=md_dir)
     touched: List[Path] = []
@@ -505,17 +550,18 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
     """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
+    if logger is None:
+        logger = logging.getLogger("semantic.book")
     start_ts = time.perf_counter()
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
-        mds = convert_markdown(context, logger, slug=slug)
-        write_summary_and_readme(context, logger, slug=slug)
-
         ctx_base = cast(Path, getattr(context, "base_dir", None))
         base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
-        vocab = load_reviewed_vocab(base_dir, logger)
-        # Enrichment sempre eseguito: con vocab vuoto aggiorna comunque i titoli/frontmatter.
-        enrich_frontmatter(context, logger, vocab, slug=slug)
+        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
+        mds = convert_markdown(context, logger, slug=slug)
+        write_summary_and_readme(context, logger, slug=slug)
+        if vocab or not _LAST_VOCAB_STUBBED:
+            enrich_frontmatter(context, logger, vocab, slug=slug)
 
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)

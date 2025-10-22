@@ -42,7 +42,7 @@ def build_markdown_headless(
 
     # 3) Arricchimento frontmatter: esegui SEMPRE anche con vocab vuoto
     #    (titoli normalizzati devono essere impostati comunque)
-    enriched: List[Path] = enrich_frontmatter(ctx, log, vocab, slug=slug)
+    enriched: List[Path] = enrich_frontmatter(ctx, log, vocab, slug=slug, allow_empty_vocab=True)
 
     # 4) SUMMARY.md + README.md + validazione directory MD
     write_summary_and_readme(ctx, log, slug=slug)

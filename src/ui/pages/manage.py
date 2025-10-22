@@ -269,8 +269,8 @@ def _column_button(col: Any, label: str, **kwargs: Any) -> bool:
         raise
 
 
-# Colonna 1 — README su Drive
-if c1.button("Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
+# Colonna 1 – README su Drive
+if _column_button(c1, "Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
     emit_fn = _emit_readmes_for_raw
     if emit_fn is None:
         st.error(
@@ -314,7 +314,8 @@ pdf_count = count_pdfs_safe(raw_dir)
 run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
 service_ok = run_tags_fn is not None
 
-open_semantic = c2.button(
+open_semantic = _column_button(
+    c2,
     "Avvia arricchimento semantico",
     key="btn_semantic_start",
     type="primary",
@@ -336,36 +337,46 @@ if open_semantic:
             _open_tags_editor_modal(slug)
         except Exception as exc:  # pragma: no cover
             st.error(f"Estrazione tag non riuscita: {exc}")
-info_fn = getattr(st, "info", None)
-if callable(info_fn):
-    info_fn("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
-db_path = semantic_dir / "tags.db"
-db_status = "presente" if db_path.exists() else "assente"
-info_msg = (
-    f"PDF in raw/: **{pdf_count}** • Servizio estrazione: **{'OK' if service_ok else 'mancante'}** "
-    f"• tags.db: **{db_status}**"
-)
-caption_fn = getattr(st, "caption", None)
-if callable(caption_fn):
-    caption_fn(info_msg)
-elif callable(info_fn):
-    info_fn(info_msg)
-if not db_path.exists():
-    warn_fn = getattr(st, "warning", None)
-    if callable(warn_fn):
-        warn_fn("`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico.")
-caption_fn = getattr(st, "caption", None)
-if callable(caption_fn):
-    caption_fn(info_msg)
-elif callable(info_fn):
-    info_fn(info_msg)
-if not db_path.exists():
-    warn_fn = getattr(st, "warning", None)
-    if callable(warn_fn):
-        warn_fn("`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico.")
 
-# Colonna 3 — Scarica da Drive → locale
-if c3.button("Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
+
+def _render_status_block(
+    pdf_count: int | None = None,
+    service_ok: bool | None = None,
+    semantic_dir: Path | None = None,
+) -> None:
+    if pdf_count is None:
+        pdf_count = globals().get("pdf_count", 0)
+    if service_ok is None:
+        service_ok = bool(globals().get("service_ok"))
+    if semantic_dir is None:
+        semantic_dir = cast(Path, globals().get("semantic_dir"))
+        if semantic_dir is None:
+            raise RuntimeError("semantic_dir non disponibile per _render_status_block")
+
+    info_fn = getattr(st, "info", None)
+    if callable(info_fn):
+        info_fn("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
+    db_path = semantic_dir / "tags.db"
+    db_exists = db_path.exists()
+    info_msg = (
+        f"PDF in raw/: **{pdf_count}** - Servizio estrazione: **{'OK' if service_ok else 'mancante'}** "
+        f"- tags.db: **{'presente' if db_exists else 'assente'}**"
+    )
+    caption_fn = getattr(st, "caption", None)
+    if callable(caption_fn):
+        caption_fn(info_msg)
+    elif callable(info_fn):
+        info_fn(info_msg)
+    if not db_exists:
+        warn_fn = getattr(st, "warning", None)
+        if callable(warn_fn):
+            warn_fn("`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico.")
+
+
+_render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
+
+# Colonna 3 – Scarica da Drive → locale
+if _column_button(c3, "Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
 
     def _modal() -> None:
         st.write(

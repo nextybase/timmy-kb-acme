@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/tools_check.py
 # Tools › Check: lancia scripts/kb_healthcheck.py su 'dummy' e,
-# se ok, mostra semantic_mapping.yaml come albero (titolo/descrizione).
+# se ok (o soft-fail con rc=3), mostra semantic_mapping.yaml come albero.
+
 from __future__ import annotations
 
 import html
@@ -58,12 +59,12 @@ def _render_mapping_tree(mapping: Dict[str, Any]) -> None:
 
     tree_html = (
         "<style>"
-        "  .tree {{ border-left: 2px solid #eee; margin-left: .5rem; padding-left: .75rem; }}"
-        "  .tree-item {{ margin-bottom: .6rem; }}"
-        "  .tree-title {{ font-weight: 600; }}"
-        "  .tree-desc {{ color: #555; margin-top: .15rem; }}"
-        '  .tree-key {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",'
-        '                       "Courier New", monospace; font-size: 0.8rem; color: #777; }}'
+        "  .tree { border-left: 2px solid #eee; margin-left: .5rem; padding-left: .75rem; }"
+        "  .tree-item { margin-bottom: .6rem; }"
+        "  .tree-title { font-weight: 600; }"
+        "  .tree-desc { color: #555; margin-top: .15rem; }"
+        '  .tree-key { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",'
+        '                       "Courier New", monospace; font-size: 0.8rem; color: #777; }'
         "</style>"
         '<div class="tree">'
         f'{"".join(items_html)}'
@@ -79,6 +80,7 @@ def _run_healthcheck(force: bool = False) -> subprocess.CompletedProcess[str]:
 
     st.caption("Esecuzione comando:")
     st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
+    # check=False: vogliamo gestire esplicitamente i returncode (anche 3 = soft-fail)
     return subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
 
 
@@ -87,9 +89,7 @@ def _parse_stdout(stdout: str) -> Dict[str, Any]:
 
 
 def _gate_hit(stderr: str) -> bool:
-    """
-    Rileva l'errore del gate Vision ('già eseguito per questo PDF').
-    """
+    """Rileva l'errore del gate Vision ('già eseguito per questo PDF')."""
     return bool(re.search(r"Vision.*gi[aà]\s+eseguito", stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
 
 
@@ -141,12 +141,15 @@ def main() -> None:
             with st.expander("Errori CLI (retry)", expanded=False):
                 st.text(res.stderr or "(stderr vuoto)")
 
-        if res.returncode != 0:
+        # Gestione returncode:
+        # - 0: ok
+        # - 3: soft-fail (assistant non ha usato file_search o citazioni assenti) -> continuiamo comunque
+        if res.returncode != 0 and res.returncode != 3:
             status.update(label=f"Errore durante l'esecuzione (codice {res.returncode}).", state="error")
             st.error(f"kb_healthcheck è uscita con codice {res.returncode}")
             return
 
-        # parse JSON
+        # parse JSON (anche se rc=3)
         try:
             payload = _parse_stdout(res.stdout)
         except Exception as e:
@@ -154,11 +157,34 @@ def main() -> None:
             st.error(f"Impossibile decodificare l'output: {e}")
             return
 
-        status.update(label="Completato.", state="complete")
+        if res.returncode == 3:
+            status.update(
+                label="Completato con avviso (file_search non usato o citazioni assenti).",
+                state="complete",
+            )
+            st.warning(
+                "L’assistente non ha usato il file_search o non ha prodotto citazioni. "
+                "Controlla la configurazione della KB o riprova con contenuti diversi."
+            )
+        else:
+            status.update(label="Completato.", state="complete")
 
-    st.success("Healthcheck completato con successo.")
+    st.success("Healthcheck completato.")
     st.write(f"file_search usato: **{bool(payload.get('used_file_search'))}**")
     st.write(f"thread_id: `{payload.get('thread_id')}` - run_id: `{payload.get('run_id')}`")
+    if payload.get("pdf_path") or payload.get("base_dir"):
+        st.caption(f"pdf_path: `{payload.get('pdf_path')}` · base_dir: `{payload.get('base_dir')}`")
+
+    # Mostra estratto risposta Assistente e citazioni (se presenti)
+    if payload.get("assistant_text_excerpt"):
+        st.markdown("**Risposta Assistente (estratto):**")
+        st.write(payload["assistant_text_excerpt"])
+    if payload.get("citations"):
+        with st.expander("Citazioni rilevate", expanded=False):
+            for c in payload["citations"]:
+                fn = c.get("filename") or c.get("file_id")
+                qt = c.get("quote") or ""
+                st.markdown(f"- `{fn}` — “{qt}”")
 
     # semantic_mapping: preferisci il contenuto nel payload (se presente), altrimenti leggi dal path
     mapping_text: Optional[str] = payload.get("semantic_mapping_content")
