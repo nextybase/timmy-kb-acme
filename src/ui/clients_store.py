@@ -10,6 +10,7 @@ from typing import Any, Optional, cast
 
 import yaml
 
+from pipeline.context import validate_slug
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
@@ -85,6 +86,7 @@ def upsert_client(entry: ClientEntry) -> None:
     out: list[ClientEntry] = []
 
     slug_norm = entry.slug.strip()
+    validate_slug(slug_norm)
     out.append(ClientEntry(slug=slug_norm, nome=entry.nome, stato=entry.stato))
     seen.add(slug_norm)
 
@@ -103,6 +105,7 @@ def set_state(slug: str, new_state: str) -> bool:
     slug_norm = slug.strip()
     if not slug_norm:
         return False
+    validate_slug(slug_norm)
     entries = load_clients()
     changed = False
     found = False

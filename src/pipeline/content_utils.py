@@ -43,12 +43,7 @@ def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) ->
     try:
         return cast(Path, ensure_within_and_resolve(base_dir, candidate))
     except PathTraversalError as exc:
-        if slug:
-            message = str(exc)
-            if f"slug={slug}" not in message:
-                message = f"{message} [slug={slug}]"
-            raise PathTraversalError(message) from exc
-        raise
+        raise PathTraversalError(str(exc), slug=slug, file_path=str(candidate)) from exc
 
 
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:

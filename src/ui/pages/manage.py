@@ -46,7 +46,7 @@ _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 # Tool di pulizia workspace (locale + DB + Drive)
 _run_cleanup = _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
 
-# Arricchimento semantico (estrazione tag → stub + YAML)
+# Arricchimento semantico (estrazione tag ? stub + YAML)
 _run_tags_update = _safe_get("ui.services.tags_adapter:run_tags_update")
 
 
@@ -198,6 +198,28 @@ def _btn(container: Any, *args: Any, **kwargs: Any) -> bool:
     return bool(fallback(*args, **kwargs)) if callable(fallback) else False
 
 
+def _column_button(container: Any, label: str, **kwargs: Any) -> bool:
+    fn = getattr(container, "button", None)
+    if callable(fn):
+        try:
+            return bool(fn(label, **kwargs))
+        except TypeError as exc:
+            if "width" in str(exc):
+                kwargs.pop("width", None)
+                return bool(fn(label, **kwargs))
+            raise
+    fallback = getattr(st, "button", None)
+    if callable(fallback):
+        try:
+            return bool(fallback(label, **kwargs))
+        except TypeError as exc:
+            if "width" in str(exc):
+                kwargs.pop("width", None)
+                return bool(fallback(label, **kwargs))
+            raise
+    return False
+
+
 # ---------------- UI ----------------
 
 slug = render_chrome_then_require(allow_without_slug=True)
@@ -208,7 +230,7 @@ if not slug:
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
-        st.html('<a href="/new?tab=new" target="_self">➕ Crea nuovo cliente</a>')
+        st.html('<a href="/new?tab=new" target="_self">? Crea nuovo cliente</a>')
         st.stop()
 
     options: list[tuple[str, str]] = []
@@ -218,7 +240,7 @@ if not slug:
             continue
         name = (client.get("nome") or slug_value).strip()
         state = (client.get("stato") or "n/d").strip()
-        label = f"{name} ({slug_value}) — {state}"
+        label = f"{name} ({slug_value}) â€” {state}"
         options.append((label, slug_value))
 
     if not options:
@@ -227,7 +249,7 @@ if not slug:
 
     labels = [label for label, _ in options]
     selected_label = st.selectbox("Cliente", labels, index=0, key="manage_select_slug")
-    if st.button("Usa questo cliente", type="primary", width="stretch"):
+    if _column_button(st, "Usa questo cliente", type="primary", width="stretch"):
         chosen = dict(options).get(selected_label)
         if chosen:
             set_slug(chosen)
@@ -236,107 +258,6 @@ if not slug:
     st.stop()
 
 slug = cast(str, slug)
-
-# Da qui in poi: slug presente → viste operative
-
-# Unica vista per Drive (Diff)
-if _render_drive_diff is not None:
-    try:
-        _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
-    except Exception as e:  # pragma: no cover
-        st.error(f"Errore nella vista Diff: {e}")
-else:
-    st.info("Vista Diff non disponibile.")
-
-# --- Genera README / Rileva PDF / Scarica da Drive → locale in 3 colonne ---
-_markdown = getattr(st, "markdown", None)
-if callable(_markdown):
-    _markdown("")
-
-c1, c2, c3 = _columns3()
-
-client_state = (get_client_state(slug) or "").strip().lower()
-emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
-
-
-def _column_button(col: Any, label: str, **kwargs: Any) -> bool:
-    try:
-        return bool(col.button(label, **kwargs))
-    except TypeError as exc:
-        if "width" in str(exc):
-            kwargs.pop("width", None)
-            return bool(col.button(label, **kwargs))
-        raise
-
-
-# Colonna 1 – README su Drive
-if _column_button(c1, "Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
-    emit_fn = _emit_readmes_for_raw
-    if emit_fn is None:
-        st.error(
-            "Funzione non disponibile. Abilita gli extra Drive: "
-            "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
-        )
-    else:
-        try:
-            with status_guard(
-                "Genero i README nelle sottocartelle di raw/ su Drive…",
-                expanded=True,
-                error_label="Errore durante la generazione dei README",
-            ) as status_widget:
-                try:
-                    # NIENTE creazione struttura, NIENTE split: solo emissione PDF da semantic_mapping.yaml
-                    result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False, require_env=True)
-                except TypeError:
-                    result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False)
-                count = len(result or {})
-                if status_widget is not None and hasattr(status_widget, "update"):
-                    status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
-
-            try:
-                if _invalidate_drive_index is not None:
-                    _invalidate_drive_index(slug)
-                st.toast("README generati su Drive.")
-                st.rerun()
-            except Exception:
-                pass
-        except Exception as e:  # pragma: no cover
-            st.error(f"Impossibile generare i README: {e}")
-
-# Colonna 2 — Arricchimento semantico (estrazione tag)
-base_dir = _workspace_root(slug)
-raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
-semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
-
-
-has_pdfs = any(iter_pdfs_safe(raw_dir))
-pdf_count = count_pdfs_safe(raw_dir)
-run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-service_ok = run_tags_fn is not None
-
-open_semantic = _column_button(
-    c2,
-    "Avvia arricchimento semantico",
-    key="btn_semantic_start",
-    type="primary",
-    width="stretch",
-    help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub/YAML tags_reviewed.",
-)
-if open_semantic:
-    if run_tags_fn is None:
-        st.error(
-            "Servizio di estrazione tag non disponibile.",
-        )
-        st.stop()
-    elif not has_pdfs:
-        st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
-        st.stop()
-    else:
-        try:
-            run_tags_fn(slug)
-            _open_tags_editor_modal(slug)
-        except Exception as exc:  # pragma: no cover
-            st.error(f"Estrazione tag non riuscita: {exc}")
 
 
 def _render_status_block(
@@ -373,100 +294,190 @@ def _render_status_block(
             warn_fn("`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico.")
 
 
-_render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
+if slug:
+    # Da qui in poi: slug presente ? viste operative
 
-# Colonna 3 – Scarica da Drive → locale
-if _column_button(c3, "Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
-
-    def _modal() -> None:
-        st.write(
-            "Questa operazione scarica i file dalle cartelle di Google Drive nelle cartelle locali corrispondenti."
-        )
-        st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
-
-        conflicts, labels = [], []
+    # Unica vista per Drive (Diff)
+    if _render_drive_diff is not None:
         try:
-            plan_fn = _plan_raw_download
-            if plan_fn is None:
-                raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-            conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
-        except Exception as e:
-            message = f"Impossibile preparare il piano di download: {e}"
-            HttpErrorType: type[BaseException] | None
-            try:
-                from googleapiclient.errors import HttpError as _HttpError
-            except Exception:
-                HttpErrorType = None
-            else:
-                HttpErrorType = _HttpError
+            _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
+        except Exception as e:  # pragma: no cover
+            st.error(f"Errore nella vista Diff: {e}")
+    else:
+        st.info("Vista Diff non disponibile.")
 
-            if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
-                status = getattr(getattr(e, "resp", None), "status", None)
-            else:
-                status = None
+    # --- Genera README / Rileva PDF / Scarica da Drive ? locale in 3 colonne ---
+    _markdown = getattr(st, "markdown", None)
+    if callable(_markdown):
+        _markdown("")
 
-            if status == 500:
-                st.error(
-                    f"{message}\n"
-                    "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
-                    "Riprovare tra qualche minuto e, se il problema persiste, scaricare i PDF manualmente da Drive "
-                    "e copiarli nella cartella `raw/`."
-                )
-            else:
-                st.error(message)
-            return
+    c1, c2, c3 = _columns3()
 
-        if conflicts:
-            with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
-                st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
+    client_state = (get_client_state(slug) or "").strip().lower()
+    emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
+
+    # Colonna 1 â€“ README su Drive
+    if _column_button(c1, "Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
+        emit_fn = _emit_readmes_for_raw
+        if emit_fn is None:
+            st.error(
+                "Funzione non disponibile. Abilita gli extra Drive: "
+                "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+            )
         else:
-            st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
-
-        with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
-            st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
-
-        cA, cB = st.columns(2)
-        if cA.button("Annulla", key="dl_cancel", width="stretch"):
-            return
-        if cB.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
             try:
                 with status_guard(
-                    "Scarico file da Drive…",
+                    "Genero i README nelle sottocartelle di raw/ su Driveâ€¦",
                     expanded=True,
-                    error_label="Errore durante il download",
+                    error_label="Errore durante la generazione dei README",
                 ) as status_widget:
-                    download_fn = _download_with_progress or _download_simple
-                    if download_fn is None:
-                        raise RuntimeError("Funzione di download non disponibile.")
                     try:
-                        paths = _call_best_effort(
-                            download_fn,
-                            slug=slug,
-                            require_env=True,
-                            overwrite=bool(conflicts),
-                        )
+                        # NIENTE creazione struttura, NIENTE split: solo emissione PDF da semantic_mapping.yaml
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False, require_env=True)
                     except TypeError:
-                        paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
-                    count = len(paths or [])
+                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False)
+                    count = len(result or {})
                     if status_widget is not None and hasattr(status_widget, "update"):
-                        status_widget.update(
-                            label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete"
-                        )
+                        status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
 
                 try:
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
-                    st.toast("Allineamento Drive→locale completato.")
+                    st.toast("README generati su Drive.")
                     st.rerun()
                 except Exception:
                     pass
-            except Exception as e:
-                st.error(f"Errore durante il download: {e}")
+            except Exception as e:  # pragma: no cover
+                st.error(f"Impossibile generare i README: {e}")
 
-    dialog_builder = getattr(st, "dialog", None)
-    if callable(dialog_builder):
-        open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
-        runner = open_modal(_modal)
-        (runner if callable(runner) else _modal)()
-    else:
-        _modal()
+    # Colonna 2 â€” Arricchimento semantico (estrazione tag)
+    base_dir = _workspace_root(slug)
+    raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
+    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+
+    has_pdfs = any(iter_pdfs_safe(raw_dir))
+    pdf_count = count_pdfs_safe(raw_dir)
+    run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
+    service_ok = run_tags_fn is not None
+
+    open_semantic = _column_button(
+        c2,
+        "Avvia arricchimento semantico",
+        key="btn_semantic_start",
+        type="primary",
+        width="stretch",
+        help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub/YAML tags_reviewed.",
+    )
+    if open_semantic:
+        if run_tags_fn is None:
+            st.error(
+                "Servizio di estrazione tag non disponibile.",
+            )
+            st.stop()
+        elif not has_pdfs:
+            st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
+            st.stop()
+        else:
+            try:
+                run_tags_fn(slug)
+                _open_tags_editor_modal(slug)
+            except Exception as exc:  # pragma: no cover
+                st.error(f"Estrazione tag non riuscita: {exc}")
+
+    _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
+
+    # Colonna 3 â€“ Scarica da Drive ? locale
+    if _column_button(c3, "Scarica PDF da Drive ? locale", key="btn_drive_download", type="secondary", width="stretch"):
+
+        def _modal() -> None:
+            st.write(
+                "Questa operazione scarica i file dalle cartelle di Google Drive nelle cartelle locali corrispondenti."
+            )
+            st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
+
+            conflicts, labels = [], []
+            try:
+                plan_fn = _plan_raw_download
+                if plan_fn is None:
+                    raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
+                conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
+            except Exception as e:
+                message = f"Impossibile preparare il piano di download: {e}"
+                HttpErrorType: type[BaseException] | None
+                try:
+                    from googleapiclient.errors import HttpError as _HttpError
+                except Exception:
+                    HttpErrorType = None
+                else:
+                    HttpErrorType = _HttpError
+
+                if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
+                    status = getattr(getattr(e, "resp", None), "status", None)
+                else:
+                    status = None
+
+                if status == 500:
+                    st.error(
+                        f"{message}\n"
+                        "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
+                        "Riprovare tra qualche minuto e, se il problema persiste, scaricare i PDF manualmente da Drive "
+                        "e copiarli nella cartella `raw/`."
+                    )
+                else:
+                    st.error(message)
+                return
+
+            if conflicts:
+                with st.expander(f"File giÃ  presenti in locale ({len(conflicts)})", expanded=True):
+                    st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
+            else:
+                st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
+
+            with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
+                st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
+
+            cA, cB = st.columns(2)
+            if cA.button("Annulla", key="dl_cancel", width="stretch"):
+                return
+            if cB.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
+                try:
+                    with status_guard(
+                        "Scarico file da Driveâ€¦",
+                        expanded=True,
+                        error_label="Errore durante il download",
+                    ) as status_widget:
+                        download_fn = _download_with_progress or _download_simple
+                        if download_fn is None:
+                            raise RuntimeError("Funzione di download non disponibile.")
+                        try:
+                            paths = _call_best_effort(
+                                download_fn,
+                                slug=slug,
+                                require_env=True,
+                                overwrite=bool(conflicts),
+                            )
+                        except TypeError:
+                            paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
+                        count = len(paths or [])
+                        if status_widget is not None and hasattr(status_widget, "update"):
+                            status_widget.update(
+                                label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete"
+                            )
+
+                    try:
+                        if _invalidate_drive_index is not None:
+                            _invalidate_drive_index(slug)
+                        st.toast("Allineamento Drive?locale completato.")
+                        st.rerun()
+                    except Exception:
+                        pass
+                except Exception as e:
+                    st.error(f"Errore durante il download: {e}")
+
+        dialog_builder = getattr(st, "dialog", None)
+        if callable(dialog_builder):
+            open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
+            runner = open_modal(_modal)
+            (runner if callable(runner) else _modal)()
+        else:
+            _modal()

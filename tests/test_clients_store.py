@@ -2,6 +2,8 @@ import importlib
 
 import pytest
 
+from pipeline.exceptions import ConfigError
+
 
 def _reset_store(tmp_path):
     module = importlib.import_module("ui.clients_store")
@@ -49,3 +51,20 @@ def test_set_state_updates_existing_only(store):
     store.set_state("missing", "arricchito")
     entries_after = store.load_clients()
     assert [e.slug for e in entries_after] == ["gamma"]
+
+
+def test_upsert_rejects_invalid_slug(store):
+    store.ensure_db()
+    with pytest.raises(ConfigError):
+        store.upsert_client(store.ClientEntry(slug="Not Valid", nome="Foo", stato="nuovo"))
+    with pytest.raises(ConfigError):
+        store.upsert_client(store.ClientEntry(slug="UPPER", nome="Bar", stato="nuovo"))
+
+
+def test_set_state_rejects_invalid_slug(store):
+    store.ensure_db()
+    store.upsert_client(store.ClientEntry(slug="delta", nome="Delta", stato="nuovo"))
+    with pytest.raises(ConfigError):
+        store.set_state("UPPER", "arricchito")
+    entries = store.load_clients()
+    assert [e.slug for e in entries] == ["delta"]

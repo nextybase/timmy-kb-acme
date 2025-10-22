@@ -205,9 +205,21 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None
             encoding="utf-8",
             atomic=True,
         )
-    except Exception:
-        # Best-effort: eventuali errori non devono bloccare il flusso UI.
-        pass
+    except Exception as exc:
+        # Best-effort: segnala l'errore ma non blocca il flusso UI.
+        LOGGER.warning(
+            "ui.new_client.config_merge_failed",
+            extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
+        )
+        try:
+            _log_diagnostics(
+                slug,
+                "warning",
+                "ui.new_client.config_merge_failed",
+                extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
+            )
+        except Exception:
+            pass
 
 
 class _UIContext:
