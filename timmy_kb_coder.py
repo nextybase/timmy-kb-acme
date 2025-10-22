@@ -103,9 +103,15 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
     api_key_codex = os.getenv("OPENAI_API_KEY_CODEX")
     ui = st
     if not api_key and not api_key_codex:
-        LOGGER.info("coder.rag.disabled", extra={"event": "coder.rag.disabled", "reason": "missing_openai_keys"})
+        LOGGER.info(
+            "coder.rag.disabled",
+            extra={"event": "coder.rag.disabled", "reason": "missing_openai_keys"},
+        )
         if ui is not None:
-            ui.warning("OPENAI_API_KEY_CODEX non trovato nell'ambiente (.env consigliato). RAG disattivato.")
+            ui.warning(
+                "Chiavi OPENAI_API_KEY / OPENAI_API_KEY_CODEX non trovate nell'ambiente (.env consigliato). "
+                "Ricerca RAG disattivata in modo automatico."
+            )
         return None
     try:
         if api_key:

@@ -1,6 +1,6 @@
 github_org: nextybase
 repo_visibility: private
-cartelle_raw_yaml: config/default_semantic_mapping.yaml
+cartelle_raw_yaml: config/cartelle_raw.yaml
 local_temp_config_path: config/config.yaml
 raw_dir_template: output/timmy-kb-{slug}/raw
 output_dir_template: output/timmy-kb-{slug}

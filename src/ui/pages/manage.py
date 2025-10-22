@@ -2,6 +2,7 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
@@ -81,8 +82,11 @@ def _load_clients() -> list[dict[str, Any]]:
                 record.setdefault("slug", slug_key)
                 normalized.append(record)
             return normalized
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.warning(
+            "ui.manage.clients.load_error",
+            extra={"error": str(exc), "path": str(_clients_db_path())},
+        )
     return []
 
 
@@ -94,14 +98,14 @@ def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
     try:
         return fn(**kwargs)
     except TypeError:
-        args: list[Any] = []
-        if "slug" in kwargs:
-            args.append(kwargs["slug"])
-        if "overwrite" in kwargs:
-            args.append(kwargs["overwrite"])
-        if "require_env" in kwargs:
-            args.append(kwargs["require_env"])
-        return fn(*args)
+        try:
+            sig = inspect.signature(fn)
+            bound = sig.bind_partial(**kwargs)
+            return fn(*bound.args, **bound.kwargs)
+        except Exception:
+            keys = ("slug", "overwrite", "require_env")
+            args = [kwargs[k] for k in keys if k in kwargs]
+            return fn(*args)
 
 
 # -----------------------------------------------------------
