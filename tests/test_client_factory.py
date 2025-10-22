@@ -2,38 +2,58 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any
+from typing import Any, Dict
+
+import pytest
 
 from ai import client_factory
+from pipeline.exceptions import ConfigError
 
 
-def test_make_openai_client_fallback_on_proxy(monkeypatch):
+def test_make_openai_client_requires_modern_sdk(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY_FOLDER", raising=False)
+    monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    sentinel_http_client = object()
-    call_args: list[tuple[Any, Any]] = []
-
-    class DummyOpenAI:
-        def __init__(self, *, api_key: str, http_client: Any = None, default_headers: Any = None) -> None:
-            call_args.append((http_client, default_headers))
-            if http_client is None:
-                raise TypeError("Client.__init__() got an unexpected keyword argument 'proxies'")
-            self.api_key = api_key
-            self.http_client = http_client
-            self.default_headers = default_headers
+    class LegacyOpenAI:
+        def __init__(self, **_kwargs: Any) -> None:
+            raise TypeError("Client.__init__() got an unexpected keyword argument 'proxies'")
 
     dummy_module = types.ModuleType("openai")
-    dummy_module.OpenAI = DummyOpenAI  # type: ignore[attr-defined]
+    dummy_module.OpenAI = LegacyOpenAI  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "openai", dummy_module)
-    monkeypatch.setattr(client_factory, "_build_http_client", lambda: sentinel_http_client)
 
-    client = client_factory.make_openai_client()
+    with pytest.raises(ConfigError) as excinfo:
+        client_factory.make_openai_client()
 
-    assert client.api_key == "test-key"
-    assert client.http_client is sentinel_http_client
-    assert getattr(client, "default_headers") == {"OpenAI-Beta": "assistants=v2"}
-    assert call_args == [
-        (None, {"OpenAI-Beta": "assistants=v2"}),
-        (sentinel_http_client, {"OpenAI-Beta": "assistants=v2"}),
-    ]
+    assert "openai" in str(excinfo.value).lower()
+    assert "aggiorna" in str(excinfo.value).lower()
+
+
+def test_make_openai_client_success(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY_FOLDER", raising=False)
+    monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_BASE_URL", "api.nexty.ai")
+    monkeypatch.setenv("OPENAI_TIMEOUT", "30")
+    monkeypatch.setenv("OPENAI_MAX_RETRIES", "5")
+    monkeypatch.setenv("OPENAI_PROJECT", "alpha")
+
+    captured_kwargs: Dict[str, Any] = {}
+
+    class ModernOpenAI:
+        def __init__(self, **kwargs: Any) -> None:
+            captured_kwargs.update(kwargs)
+
+    dummy_module = types.ModuleType("openai")
+    dummy_module.OpenAI = ModernOpenAI  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "openai", dummy_module)
+
+    client_factory.make_openai_client()
+
+    assert captured_kwargs["api_key"] == "secret"
+    assert captured_kwargs["default_headers"] == {"OpenAI-Beta": "assistants=v2"}
+    assert captured_kwargs["base_url"] == "https://api.nexty.ai/v1"
+    assert captured_kwargs["project"] == "alpha"
+    assert captured_kwargs["timeout"] == 30.0
+    assert captured_kwargs["max_retries"] == 5

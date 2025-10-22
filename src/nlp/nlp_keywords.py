@@ -6,7 +6,7 @@ import re
 import unicodedata
 from collections import Counter, defaultdict
 from functools import lru_cache
-from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Tuple, TypedDict, cast
+from typing import Any, DefaultDict, Dict, Iterable, List, Tuple, TypedDict
 
 
 class ClusterGroup(TypedDict):
@@ -35,221 +35,155 @@ def _as_str(val: Any) -> str:
 
 
 def extract_text_from_pdf(path: str) -> str:
-    """Legge TUTTO il testo dal PDF.
-
-    Strategia:
-      - prova con pypdf, se non disponibile fa fallback su PyMuPDF (fitz).
-    Se entrambe mancano, alza RuntimeError con istruzioni d'installazione.
-    """
-    PdfReader: Any | None = None
+    """Legge tutto il testo dal PDF usando pypdf; segnala esplicitamente eventuali problemi."""
     try:
-        import importlib
+        from pypdf import PdfReader  # type: ignore
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("Il pacchetto 'pypdf' è richiesto per leggere i PDF.") from exc
 
-        pypdf_module = importlib.import_module("pypdf")
-        maybe_reader = getattr(pypdf_module, "PdfReader", None)
-        if callable(maybe_reader):
-            PdfReader = maybe_reader
-    except Exception:
-        PdfReader = None
+    try:
+        reader = PdfReader(path)
+    except Exception as exc:
+        raise RuntimeError(f"Impossibile aprire il PDF {path} con pypdf: verifica il file.") from exc
 
-    if PdfReader is not None:
+    collected: list[str] = []
+    for index, page in enumerate(getattr(reader, "pages", []) or []):
         try:
-            reader = cast(Any, PdfReader)(path)
-            collected: list[str] = []
-            for page in getattr(reader, "pages", []) or []:
-                try:
-                    text = page.extract_text() or ""
-                except Exception:
-                    text = ""
-                if text:
-                    collected.append(text)
-            return "\n".join(collected)
-        except Exception as e:  # pragma: no cover
-            raise RuntimeError("Errore lettura PDF con pypdf; assicurarsi che il file sia valido o usa PyMuPDF") from e
+            text = page.extract_text() or ""
+        except Exception as exc:
+            raise RuntimeError(f"Estrazione testo fallita nella pagina {index} del PDF {path}.") from exc
+        if text:
+            collected.append(text)
 
-    try:
-        import fitz  # PyMuPDF
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare pypdf oppure PyMuPDF (fitz)") from e
-
-    try:
-        doc = fitz.open(path)
-        collected = []
-        try:
-            for page in doc:
-                try:
-                    getter = getattr(page, "get_text", None)
-                    if callable(getter):
-                        try:
-                            text = _as_str(getter("text"))
-                        except TypeError:
-                            try:
-                                text = _as_str(getter())
-                            except Exception:
-                                text = ""
-                    else:
-                        getter_old = getattr(page, "getText", None)
-                        if callable(getter_old):
-                            try:
-                                text = _as_str(getter_old("text"))
-                            except TypeError:
-                                try:
-                                    text = _as_str(getter_old())
-                                except Exception:
-                                    text = ""
-                        else:
-                            text = ""
-                except Exception:
-                    text = ""
-                if text:
-                    collected.append(text)
-        finally:
-            try:
-                doc.close()
-            except Exception:
-                pass
-        return "\n".join(collected)
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Errore lettura PDF; assicurarsi che il file sia valido e che PyMuPDF funzioni") from e
+    if not collected:
+        raise RuntimeError(f"Nessun testo estratto dal PDF {path}.")
+    return "\n".join(collected)
 
 
 @lru_cache(maxsize=4)
 def _load_spacy(lang: str = "it") -> Any:
-    """
-    Carica spaCy con fallback:
-      - it: prima 'it_core_news_md', poi 'it_core_news_sm'
-      - en: prima 'en_core_web_md', poi 'en_core_web_sm'
-    """
+    """Carica spaCy richiedendo i modelli principali (md)."""
     try:
         import spacy
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare spaCy: pip install spacy e il modello (es. it_core_news_sm)") from e
+        raise RuntimeError("Installare spaCy: pip install spacy e il relativo modello.") from e
 
-    if lang.startswith("it"):
-        models = ["it_core_news_md", "it_core_news_sm"]
-    else:
-        models = ["en_core_web_md", "en_core_web_sm"]
-
-    last_err: Optional[Exception] = None
-    for model in models:
-        try:
-            return spacy.load(model)
-        except Exception as e:
-            last_err = e
-            continue
-    raise RuntimeError(
-        f"Modello spaCy mancante: installa uno tra {', '.join(models)} " f"(es. python -m spacy download {models[-1]})"
-    ) from last_err
+    model = "it_core_news_md" if lang.startswith("it") else "en_core_web_md"
+    try:
+        return spacy.load(model)
+    except Exception as e:
+        raise RuntimeError(
+            f"Impossibile caricare il modello spaCy '{model}'. Esegui 'python -m spacy download {model}'."
+        ) from e
 
 
-def normalize_phrase(s: str) -> str:
-    """Normalizza frasi per matching robusto:
-    - lower
-    - NFKD + rimozione diacritici
-    - sostituzione '-' con spazio
-    - collapse whitespace
-    - strip
+@lru_cache(maxsize=2)
+def _require_sent_transformer(model_name: str = "all-MiniLM-L6-v2") -> Any:
     """
-    s = (s or "").lower().replace("-", " ")
-    # Unicode normalize + strip diacritici
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def spacy_candidates(text: str, lang: str = "it", max_ngram: int = 4) -> List[str]:
-    """Estrae noun-chunks e proper-nouns (1-4 token) con spaCy.
-
-    Normalizza (lower, strip punteggiatura), filtra stopword e token troppo corti. Ritorna lista di
-    candidate (non dedup).
-    """
-    if not text:
-        return []
-    nlp = _load_spacy(lang)
-    doc = nlp(text)
-    out: List[str] = []
-    # noun chunks
-    for nc in getattr(doc, "noun_chunks", []) or []:
-        toks = [t for t in nc if not (t.is_punct or t.is_space)]
-        if 1 <= len(toks) <= max_ngram:
-            s = nc.text.strip()
-            if len(s) >= 3:
-                out.append(s)
-    # proper nouns (and simple n-grams up to max_ngram)
-    tokens = [t for t in doc if not (t.is_punct or t.is_space)]
-    for i in range(len(tokens)):
-        # single proper noun or noun
-        if tokens[i].pos_ in {"PROPN", "NOUN"} and not tokens[i].is_stop:
-            s = tokens[i].text.strip()
-            if len(s) >= 3:
-                out.append(s)
-        # small n-grams
-        for n in range(2, max_ngram + 1):
-            j = i + n
-            if j <= len(tokens):
-                span = tokens[i:j]
-                if any(t.is_stop for t in span):
-                    continue
-                s = " ".join(t.text for t in span).strip()
-                if len(s) >= 3:
-                    out.append(s)
-    return out
-
-
-def yake_scores(text: str, top_k: int = 30, lang: str = "it") -> List[Tuple[str, float]]:
-    """Usa YAKE per estrarre (phrase, score) [score più basso = migliore].
-
-    Converti in punteggio normalizzato 0..1 dove 1 è migliore (es. score_yake = 1 / (1 + raw)).
+    Carica SentenceTransformer, riducendo le importazioni ripetute.
     """
     try:
-        import yake
+        from sentence_transformers import SentenceTransformer  # type: ignore
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare yake") from e
-
-    kw_extractor = yake.KeywordExtractor(lan=lang[:2], n=1, top=top_k)
-    raw = kw_extractor.extract_keywords(text or "")
-    out: List[Tuple[str, float]] = []
-    for phrase, score in raw:
-        s = 1.0 / (1.0 + float(score))
-        out.append((phrase, s))
-    return out
-
-
-@lru_cache(maxsize=8)
-def _load_st_model(model_name: str) -> Any:
-    from sentence_transformers import SentenceTransformer
-
+        raise RuntimeError("Installare sentence-transformers: pip install sentence-transformers") from e
     return SentenceTransformer(model_name)
 
 
-def keybert_scores(
-    text: str,
-    candidates: Iterable[str],
-    model_name: str = "all-MiniLM-L6-v2",
-    top_k: int = 30,
-) -> List[Tuple[str, float]]:
-    """Usa SentenceTransformer per embed del documento e dei candidati; score = cos(doc, cand).
-
-    Ritorna lista (phrase, score in 0..1).
+def normalize_phrase(phrase: str) -> str:
     """
-    try:
-        _ = __import__("sentence_transformers")
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare sentence-transformers") from e
-    try:
-        from sklearn.metrics.pairwise import cosine_similarity
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Installare scikit-learn") from e
+    Normalize a string (lowercase, strip accents, collapse whitespaces, remove punctuation).
 
-    model = _load_st_model(model_name)
-    cands = list({c for c in candidates if c and len(c) >= 3})
-    if not cands:
-        return []
-    emb_doc = model.encode([text or ""], normalize_embeddings=True)
-    emb_c = model.encode(cands, normalize_embeddings=True)
-    sims = cosine_similarity(emb_c, emb_doc)[:, 0]
-    pairs: List[Tuple[str, float]] = list(zip(cands, sims.tolist(), strict=False))
+    Guard rail: conserva i caratteri alfanumerici e poche separazioni (/, -, _).
+    """
+    if not phrase:
+        return ""
+    # Normalizza unicode per rimuovere accenti
+    nfkd = unicodedata.normalize("NFKD", phrase)
+    no_accents = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    # Minuscolo + normalizzazione spazi
+    lowered = no_accents.lower()
+    cleaned = re.sub(r"[^a-z0-9\\/_\\-\\s]", " ", lowered)
+    collapsed = re.sub(r"\\s+", " ", cleaned).strip()
+    return collapsed
+
+
+def clean_candidates(text: str) -> List[str]:
+    """
+    Genera candidati basati su spaCy (lemma/entità) e heuristica regex leggera.
+
+    Rimuove stopword e termini troppo brevi.
+    """
+    nlp = _load_spacy("it")
+    doc = nlp(text)
+    stopwords = nlp.Defaults.stop_words
+
+    candidates: set[str] = set()
+
+    # 1) Named entities
+    for ent in getattr(doc, "ents", []) or []:
+        normalized = normalize_phrase(ent.text)
+        if len(normalized) >= 3:
+            candidates.add(normalized)
+
+    # 2) Lemmi di sostantivi e aggettivi
+    for token in doc:
+        if token.pos_ in {"NOUN", "PROPN", "ADJ"}:
+            lemma = normalize_phrase(token.lemma_)
+            if lemma and lemma not in stopwords and len(lemma) >= 3:
+                candidates.add(lemma)
+
+    # 3) Heuristica regex per pattern come "progetto X", "linee guida", ecc.
+    regex_candidates = re.findall(r"[a-zA-Z0-9][a-zA-Z0-9 /_-]{2,}", text)
+    for cand in regex_candidates:
+        normalized = normalize_phrase(cand)
+        if len(normalized) >= 3 and normalized not in stopwords:
+            candidates.add(normalized)
+
+    return sorted(candidates)
+
+
+def spacy_candidates(text: str) -> List[str]:
+    """Alias legacy per compatibilità con test/stub precedenti."""
+    return clean_candidates(text)
+
+
+def yake_scores(text: str, top_k: int = 20) -> List[Tuple[str, float]]:
+    """
+    Calcola score YAKE! (return sorted list).
+    """
+    yake_mod = _require(
+        "yake",
+        "Installare YAKE: pip install yake",
+    )
+    kw_extractor = yake_mod.KeywordExtractor(lan="it", n=3, top=top_k, features=None)
+    scores: List[Tuple[str, float]] = []
+    for kw, score in kw_extractor.extract_keywords(text):
+        normalized = normalize_phrase(kw)
+        if normalized:
+            scores.append((normalized, float(score)))
+    return scores
+
+
+def keybert_scores(text: str, top_k: int = 20) -> List[Tuple[str, float]]:
+    """
+    Calcola score KeyBERT (cosine similarity embeddings).
+    """
+    keybert_mod = _require(
+        "keybert",
+        "Installare keybert: pip install keybert",
+    )
+    kw_model = keybert_mod.KeyBERT()
+    candidates = kw_model.extract_keywords(
+        text,
+        keyphrase_ngram_range=(1, 3),
+        stop_words="italian",
+        top_n=top_k,
+    )
+    pairs = []
+    for kw, score in candidates:
+        normalized = normalize_phrase(kw)
+        if normalized:
+            pairs.append((normalized, float(score)))
     pairs.sort(key=lambda x: x[1], reverse=True)
     return pairs[:top_k]
 
@@ -342,7 +276,7 @@ def cluster_synonyms(
     # Normalizza prima del clustering
     phrases: List[str] = [normalize_phrase(p) for p, _ in phrases_scores]
     scores: Dict[str, float] = {normalize_phrase(p): float(s) for p, s in phrases_scores}
-    model = _load_st_model(model_name)
+    model = _require_sent_transformer(model_name)
     emb = model.encode(phrases, normalize_embeddings=True)
     sim = cosine_similarity(emb, emb)
 

@@ -6,7 +6,7 @@ import importlib
 import logging
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, cast
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import streamlit as st
 import yaml
@@ -97,6 +97,27 @@ from pipeline.config_utils import get_client_config
 
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
 LOGGER = logging.getLogger("ui.new_client")
+
+
+# --------- env helpers ---------
+def _sanitize_openai_env() -> List[str]:
+    """Rimuove variabili legacy OpenAI e avvisa l'utente/telemetria."""
+    removed: List[str] = []
+    legacy_keys = ("OPENAI_FORCE_HTTPX",)
+    for key in legacy_keys:
+        if os.environ.pop(key, None) is not None:
+            removed.append(key)
+
+    if removed:
+        LOGGER.warning("ui.new_client.openai_legacy_env", extra={"removed": removed})
+        warn = getattr(st, "warning", None)
+        if callable(warn):
+            warn(
+                "Variabili legacy OpenAI ignorate automaticamente: "
+                + ", ".join(removed)
+                + ". Aggiorna il tuo .env per rimuoverle.",
+            )
+    return removed
 
 
 # --------- helper ---------
@@ -407,6 +428,7 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante Vision",
             ) as status:
                 try:
+                    _sanitize_openai_env()
                     run_vision(
                         ctx,
                         slug=s,

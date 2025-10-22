@@ -11,6 +11,16 @@ fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyM
 import timmykb.semantic.vision_provision as S
 from pipeline.exceptions import ConfigError
 
+
+@pytest.fixture(autouse=True)
+def _ensure_openai_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uniforma l'ambiente OpenAI per i test Vision inline."""
+    monkeypatch.delenv("OPENAI_API_KEY_FOLDER", raising=False)
+    monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-key")
+    monkeypatch.setattr(S, "make_openai_client", lambda: object())
+
+
 # ---- Helpers ---------------------------------------------------------------
 
 

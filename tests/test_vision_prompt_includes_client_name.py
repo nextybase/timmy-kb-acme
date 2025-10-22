@@ -122,7 +122,10 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
         }
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    # Non patchiamo _extract_pdf_text perché il fixture ha generato un PDF valido con le 6 sezioni
+    monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-key")
+    monkeypatch.setattr(S, "make_openai_client", lambda: object())
+    # Non patchiamo _extract_pdf_text: il fixture ha generato un PDF valido con le 6 sezioni
     monkeypatch.setattr(S, "_call_assistant_json", _fake_call)
 
     S.provision_from_vision(

@@ -18,7 +18,6 @@ import logging
 import os
 from glob import glob
 from pathlib import Path
-from types import ModuleType
 from typing import Any, List, Optional, Sequence, cast
 
 from pipeline.exceptions import ConfigError
@@ -37,29 +36,18 @@ except ImportError:
 LOGGER = logging.getLogger("timmy_kb.ingest")
 
 
-def _read_text_file(base_dir: Path, p: Path) -> Optional[str]:
+def _read_text_file(base_dir: Path, p: Path) -> str:
     try:
         # Prova prima con UTF-8
         return cast(str, read_text_safe(base_dir, p, encoding="utf-8"))
-    except UnicodeDecodeError:
-        # Fallback su codifiche comuni (senza continue in except)
-        for enc in ("utf-16", "latin-1"):
-            try:
-                return cast(str, read_text_safe(base_dir, p, encoding=enc))
-            except (UnicodeDecodeError, OSError):
-                LOGGER.debug(
-                    "ingest.read.fallback_failed",
-                    extra={
-                        "event": "ingest.read.fallback_failed",
-                        "file": str(p),
-                        "encoding": enc,
-                    },
-                )
-        LOGGER.warning(
-            "ingest.read.failed_text",
-            extra={"event": "ingest.read.failed_text", "file": str(p)},
+    except UnicodeDecodeError as exc:
+        LOGGER.error(
+            "ingest.read.unsupported_encoding",
+            extra={"event": "ingest.read.unsupported_encoding", "file": str(p)},
         )
-        return None
+        raise ConfigError(
+            f"Il file {p} non è codificato in UTF-8. Converti il file in UTF-8 prima di procedere."
+        ) from exc
 
 
 def _is_binary(base_dir: Path, path: Path) -> bool:
@@ -77,30 +65,19 @@ def _is_binary(base_dir: Path, path: Path) -> bool:
         return True
 
 
-def _try_import_tiktoken() -> ModuleType | None:
-    try:
-        import tiktoken
-
-        return cast(ModuleType, tiktoken)
-    except Exception:
-        return None
-
-
 def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -> List[str]:
     """Divide il testo in chunk basati su token quando possibile, altrimenti per caratteri."""
-    tk = _try_import_tiktoken()
-    if tk is None:
-        # Fallback: lunghezza in caratteri ~ 4 caratteri per token (euristica)
-        size = target_tokens * 4
-        ov = overlap_tokens * 4
-        chunks: List[str] = []
-        i = 0
-        while i < len(text):
-            chunks.append(text[i : i + size])
-            i += max(1, size - ov)
-        return chunks
+    try:
+        import tiktoken
+    except Exception as exc:
+        raise ConfigError(
+            "Il pacchetto 'tiktoken' è richiesto per eseguire l'ingestione. Installa le dipendenze complete."
+        ) from exc
 
-    enc = tk.get_encoding("cl100k_base")
+    try:
+        enc = tiktoken.get_encoding("cl100k_base")
+    except Exception as exc:
+        raise ConfigError("Impossibile inizializzare l'encoding 'cl100k_base' di tiktoken.") from exc
     tokens = enc.encode(text)
     chunks = []
     step = max(1, target_tokens - overlap_tokens)
@@ -168,8 +145,6 @@ def ingest_path(
         )
         return 0
     text = _read_text_file(base, p)
-    if text is None:
-        return 0
     chunks: List[str] = _chunk_text(text)
     client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
     vectors_seq = client.embed_texts(chunks)

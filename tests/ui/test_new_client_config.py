@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,7 +9,8 @@ from typing import Any, Iterator
 
 import pytest
 
-from tests.ui.test_manage_probe_raw import _StreamlitStub, register_streamlit_runtime
+from tests.ui.streamlit_stub import StreamlitStub
+from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
 
 @contextmanager
@@ -21,16 +23,10 @@ def _null_context() -> Iterator[Any]:
 
 
 def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = _StreamlitStub()
-    stub.text_input = lambda *_args, value="", **_kwargs: value
-    stub.file_uploader = lambda *_args, **_kwargs: None
-    stub.spinner = lambda *_args, **_kwargs: _null_context()
+    stub = StreamlitStub()
     stub.container = lambda *_args, **_kwargs: _null_context()
-    stub.selectbox = lambda *_args, options=None, **_kwargs: (options[0] if options else "")
-    stub.caption = lambda *_args, **_kwargs: None
-    stub.toast = lambda *_args, **_kwargs: None
-    stub.rerun = lambda: None
-    stub.dialog = lambda *_args, **_kwargs: (lambda fn: fn)
+    stub.spinner = lambda *_args, **_kwargs: _null_context()
+    stub.register_button_sequence("Genera workspace locale", [False])
     monkeypatch.setitem(sys.modules, "streamlit", stub)
     register_streamlit_runtime(monkeypatch, stub)
     sys.modules.pop("ui.pages.new_client", None)
@@ -54,3 +50,17 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     assert "client_name: ACME" in updated
     assert updated.count("client_name") == original.count("client_name")
     assert "foo: bar" in updated
+
+
+def test_sanitize_openai_env_removes_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ui.pages.new_client as new_client
+
+    stub = StreamlitStub()
+    monkeypatch.setattr(new_client, "st", stub, raising=False)
+    monkeypatch.setenv("OPENAI_FORCE_HTTPX", "1")
+
+    removed = new_client._sanitize_openai_env()
+
+    assert "OPENAI_FORCE_HTTPX" in removed
+    assert os.getenv("OPENAI_FORCE_HTTPX") is None
+    assert any("OPENAI_FORCE_HTTPX" in msg for msg in stub.warning_messages)

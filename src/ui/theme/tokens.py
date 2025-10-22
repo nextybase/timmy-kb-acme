@@ -33,11 +33,6 @@ _DARK = dict(
 
 
 def resolve_tokens(base: str | None) -> SimpleNamespace:
-    base = (base or "light").strip().lower()
-    return SimpleNamespace(**(_DARK if base == "dark" else _LIGHT))
-
-
-# Per retro-compatibilità (code che importasse costanti)
-# NB: non usate queste costanti in nuovo codice: usate resolve_tokens().
-for k, v in _LIGHT.items():
-    globals()[k] = v
+    """Restituisce palette light/dark come SimpleNamespace."""
+    base_normalized = (base or "light").strip().lower()
+    return SimpleNamespace(**(_DARK if base_normalized == "dark" else _LIGHT))

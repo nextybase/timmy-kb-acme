@@ -108,48 +108,17 @@ def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
     return ctx, logger
 
 
-def _safe_button(label: str, **kwargs: Any) -> bool:
-    try:
-        return bool(st.button(label, **kwargs))
-    except TypeError:
-        kwargs.pop("width", None)
-        return bool(st.button(label, **kwargs))
-
-
-def _col_button(col: Any, label: str, **kwargs: Any) -> bool:
-    """
-    Prova a disegnare il bottone *dentro* la colonna usando col.button(...),
-    con fallback a st.button(...) se lo stub/oggetto non espone il metodo.
-    """
+def _column_button(col: Any, label: str, **kwargs: Any) -> bool:
     btn = getattr(col, "button", None)
-    if callable(btn):
-        try:
-            return bool(btn(label, **kwargs))
-        except TypeError:
+    if not callable(btn):
+        raise AttributeError("Column object does not expose button()")
+    try:
+        return bool(btn(label, **kwargs))
+    except TypeError as exc:
+        if "width" in str(exc):
             kwargs.pop("width", None)
             return bool(btn(label, **kwargs))
-        except Exception:
-            pass
-    return _safe_button(label, **kwargs)
-
-
-def _columns2() -> tuple[Any, Any]:
-    """Restituisce sempre 2 colonne, con padding/fallback per gli stub."""
-    make = getattr(st, "columns", None)
-    if not callable(make):
-        return (st, st)
-    try:
-        cols = list(make(2))
-    except Exception:
-        try:
-            cols = list(make([1, 1]))
-        except Exception:
-            return (st, st)
-    if not cols:
-        return (st, st)
-    while len(cols) < 2:
-        cols.append(cols[-1])
-    return cast(Any, cols[0]), cast(Any, cols[1])
+        raise
 
 
 def _run_convert(slug: str) -> None:
@@ -168,6 +137,13 @@ def _run_enrich(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base_dir, logger)
+    if not vocab:
+        st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
+        st.caption(
+            "Vai su **Gestisci cliente** e avvia l'estrazione/validazione tag per popolare `tags.db`, "
+            "poi riprova l'arricchimento."
+        )
+        return
     with status_guard(
         "Arricchisco il frontmatter...",
         expanded=True,
@@ -240,10 +216,10 @@ else:
     if callable(_cap):
         _cap("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
 
-col_a, col_b = _columns2()
+col_a, col_b = st.columns(2)
 
 # Colonna A
-if _col_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stretch"):
+if _column_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stretch"):
     try:
         _run_convert(slug)
     except (ConfigError, ConversionError) as e:
@@ -258,7 +234,7 @@ if _col_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stre
         st.error(title)
         st.caption(caption or body)
 
-if _col_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretch"):
+if _column_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretch"):
     try:
         _run_enrich(slug)
     except (ConfigError, ConversionError) as e:
@@ -271,7 +247,7 @@ if _col_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretc
         st.caption(c or b)
 
 # Colonna B
-if _col_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretch"):
+if _column_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretch"):
     try:
         _run_summary(slug)
     except (ConfigError, ConversionError) as e:
@@ -283,5 +259,5 @@ if _col_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretc
         st.error(t)
         st.caption(c or b)
 
-if _col_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
+if _column_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
     _go_preview()

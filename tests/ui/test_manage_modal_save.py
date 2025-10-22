@@ -30,7 +30,11 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
             # Esegue direttamente il body del modal
             self._fn()
 
-    module = types.ModuleType("streamlit")
+    from tests.ui.streamlit_stub import StreamlitStub
+
+    module = StreamlitStub()
+    module.register_button_sequence("Salva", [save_button_pressed])
+    module.register_button_sequence("Chiudi", [False])
 
     def dialog(_title: str, **_kwargs: Any) -> Callable[[Callable[[], None]], _DialogRunner]:
         def _wrap(fn: Callable[[], None]) -> _DialogRunner:
@@ -54,73 +58,7 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
     def selectbox(*_a: Any, **_k: Any) -> str:
         return "stub"
 
-    module.dialog = dialog  # type: ignore[attr-defined]
-    module.text_area = text_area  # type: ignore[attr-defined]
-    module.columns = columns  # type: ignore[attr-defined]
-    module.caption = _no_op  # type: ignore[attr-defined]
-    module.toast = _no_op  # type: ignore[attr-defined]
-    module.rerun = _no_op  # type: ignore[attr-defined]
-    module.subheader = _no_op  # type: ignore[attr-defined]
-    module.info = _no_op  # type: ignore[attr-defined]
-    module.html = _no_op  # type: ignore[attr-defined]
-    module.stop = _no_op  # type: ignore[attr-defined]
-    module.button = _button  # type: ignore[attr-defined]
-    module.write = _no_op  # type: ignore[attr-defined]
-    module.markdown = _no_op  # type: ignore[attr-defined]
-    module.success = _no_op  # type: ignore[attr-defined]
-    module.warning = _no_op  # type: ignore[attr-defined]
-    module.error = _no_op  # type: ignore[attr-defined]
-    module.page_link = _no_op  # type: ignore[attr-defined]
-    module.expander = lambda *_a, **_k: types.SimpleNamespace(__enter__=lambda self: self, __exit__=_no_op)  # type: ignore[attr-defined]
-    module.container = lambda **_k: types.SimpleNamespace(__enter__=lambda self: self, __exit__=_no_op)  # type: ignore[attr-defined]
-    module.selectbox = selectbox  # type: ignore[attr-defined]
-    module.session_state = {}
-
-    # Stub runtime namespace richiesto dai moduli UI
-    runtime_module = types.ModuleType("streamlit.runtime")
-
-    caching_module = types.ModuleType("streamlit.runtime.caching")
-
-    def _cache_decorator(func: Callable[..., Any] | None = None, **_kwargs: Any):
-        def _wrap(inner: Callable[..., Any]) -> Callable[..., Any]:
-            return inner
-
-        if callable(func):
-            return func
-        return _wrap
-
-    caching_module.cache_data = _cache_decorator  # type: ignore[attr-defined]
-    caching_module.cache_resource = _cache_decorator  # type: ignore[attr-defined]
-    caching_module.memoize = _cache_decorator  # type: ignore[attr-defined]
-
-    scriptrunner_module = types.ModuleType("streamlit.runtime.scriptrunner")
-
-    def _get_script_run_ctx(*_args: Any, **_kwargs: Any) -> Any:
-        return None
-
-    scriptrunner_module.get_script_run_ctx = _get_script_run_ctx  # type: ignore[attr-defined]
-    scriptrunner_module.script_run_context = types.SimpleNamespace(get_script_run_ctx=_get_script_run_ctx)  # type: ignore[attr-defined]
-
-    script_runner_module = types.ModuleType("streamlit.runtime.scriptrunner.script_runner")
-
-    class _RerunException(Exception):
-        pass
-
-    script_runner_module.RerunException = _RerunException  # type: ignore[attr-defined]
-
-    scriptrunner_module.script_runner = script_runner_module  # type: ignore[attr-defined]
-
-    runtime_module.caching = caching_module  # type: ignore[attr-defined]
-    runtime_module.scriptrunner = scriptrunner_module  # type: ignore[attr-defined]
-
-    module.runtime = runtime_module  # type: ignore[attr-defined]
-
-    sys_modules = {
-        "streamlit.runtime": runtime_module,
-        "streamlit.runtime.caching": caching_module,
-        "streamlit.runtime.scriptrunner": scriptrunner_module,
-        "streamlit.runtime.scriptrunner.script_runner": script_runner_module,
-    }
+    sys_modules = {}
 
     return module, sys_modules
 
@@ -129,7 +67,6 @@ def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
 def patch_streamlit_before_import(monkeypatch: pytest.MonkeyPatch) -> None:
     # Inseriamo lo stub PRIMA di importare manage.py
     import sys
-    import types
 
     module, submodules = _build_streamlit_stub(save_button_pressed=True)
     monkeypatch.setitem(sys.modules, "streamlit", module)
