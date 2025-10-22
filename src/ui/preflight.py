@@ -19,7 +19,11 @@ except Exception:  # pragma: no cover
 
 CheckItem = Tuple[str, bool, str]
 
-if load_dotenv:
+
+def _maybe_load_dotenv() -> None:
+    """Carica .env solo quando serve (no side-effects a import-time)."""
+    if not load_dotenv:
+        return
     try:
         load_dotenv(override=False)
     except Exception:
@@ -68,6 +72,7 @@ def _has_openai_key() -> bool:
 
 
 def run_preflight() -> tuple[List[CheckItem], bool]:
+    _maybe_load_dotenv()
     results: List[CheckItem] = []
 
     docker_ok, hint = _docker_ok()

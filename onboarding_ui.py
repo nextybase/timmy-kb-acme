@@ -46,12 +46,6 @@ def _bootstrap_sys_path() -> None:
 
 _bootstrap_sys_path()
 
-if load_dotenv:
-    try:
-        load_dotenv(override=False)
-    except Exception:
-        pass
-
 # --------------------------------------------------------------------------------------
 # Streamlit setup
 # --------------------------------------------------------------------------------------
@@ -156,10 +150,13 @@ if not st.session_state.get("preflight_ok", False):
                     st.session_state["preflight_ok"] = False
                     st.stop()
 
-                essential_checks = {"PyMuPDF", "ReportLab", "Google API Client", "OPENAI_API_KEY"}
+                essential_checks = {"PyMuPDF", "ReportLab", "Google API Client"}  # OPENAI è opzionale
                 essentials_ok = True
                 progress.progress(60, text="Analisi risultati...")
                 for name, ok, hint in results:
+                    if name == "OPENAI_API_KEY" and not ok:
+                        st.warning(f"[Opzionale] {name} - {hint}")
+                        continue
                     if name == "Docker" and not ok:
                         st.warning(f"[Opzionale] {name} - {hint}")
                         continue
@@ -175,7 +172,7 @@ if not st.session_state.get("preflight_ok", False):
 
                 progress.progress(100, text="Controllo completato")
                 proceed = st.button("Prosegui", type="primary", disabled=not essentials_ok)
-                if proceed and essentials_ok:
+                if proceed:
                     st.session_state["preflight_ok"] = True
                     st.rerun()
                 else:

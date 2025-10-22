@@ -24,6 +24,7 @@ from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_
 from ui.errors import to_user_message
 from ui.utils import set_slug
 from ui.utils.html import esc_url_component
+from ui.utils.merge import deep_merge_dict
 from ui.utils.status import status_guard
 
 try:
@@ -176,7 +177,7 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None
         client_payload = read_text_safe(client_cfg_dir, dst_cfg, encoding="utf-8")
         current_cfg = yaml.safe_load(client_payload) or {}
 
-        merged_cfg = {**base_cfg, **current_cfg}
+        merged_cfg = deep_merge_dict(base_cfg, current_cfg)
         safe_write_text(
             dst_cfg,
             yaml.safe_dump(merged_cfg, allow_unicode=True, sort_keys=False),

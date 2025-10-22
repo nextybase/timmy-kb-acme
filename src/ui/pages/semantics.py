@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Literal, Optional, Tuple, cast
+from typing import Any, Literal, Optional, Tuple, cast
 
 try:
     import streamlit as st
@@ -51,9 +50,15 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
                 return _rerun
             if name == "spinner":
 
-                @contextmanager
-                def _spinner(*_args: Any, **_kwargs: Any) -> Iterator[None]:
-                    yield None
+                class _SpinnerStub:
+                    def __enter__(self) -> None:
+                        return None
+
+                    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
+                        return False
+
+                def _spinner(*_args: Any, **_kwargs: Any) -> _SpinnerStub:
+                    return _SpinnerStub()
 
                 return _spinner
             if name == "columns":
@@ -74,39 +79,6 @@ except Exception:  # pragma: no cover - fallback per ambienti test senza streaml
     st = cast(Any, _StreamlitStub())
 
 
-@contextmanager
-def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
-    """Wrapper di st.status con fallback no-op se non disponibile nello stub di test."""
-    clean_label = label.rstrip(" .…")
-    error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-
-    status_cm = getattr(st, "status", None)
-
-    if callable(status_cm):
-        cm = status_cm(label, **kwargs)
-    else:
-
-        @contextmanager
-        def _noop_cm() -> Iterator[Any]:
-            class _S:
-                def update(self, *a: Any, **k: Any) -> None:  # no-op
-                    pass
-
-            yield _S()
-
-        cm = _noop_cm()
-
-    with cm as status:
-        try:
-            yield status
-        except Exception as exc:
-            try:
-                if status is not None and hasattr(status, "update"):
-                    status.update(label=f"{error_prefix}: {exc}", state="error")
-            finally:
-                raise
-
-
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
@@ -115,6 +87,7 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.errors import to_user_message
+from ui.utils.status import status_guard  # usa l'helper condiviso (con fallback)
 
 try:
     from ui.utils.workspace import has_raw_pdfs

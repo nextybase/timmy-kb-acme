@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from ui.utils.merge import deep_merge_dict
+
+
+def test_deep_merge_preserves_nested() -> None:
+    base = {"vision": {"schema": 1, "fields": {"a": 1, "b": 2}}, "other": 1}
+    override = {"vision": {"fields": {"b": 99, "c": 3}}}
+
+    merged = deep_merge_dict(base, override)
+
+    assert merged["vision"]["schema"] == 1
+    assert merged["vision"]["fields"] == {"a": 1, "b": 99, "c": 3}
+    assert merged["other"] == 1

@@ -40,7 +40,12 @@ Per prevenire divergenze future, ogni *facade* o *wrapper* che delega a moduli `
    ```
 5. **Aggiungere un test di pass-through comportamentale** per garantire che tutti i parametri (inclusi quelli opzionali) vengano trasmessi correttamente.
 
-# Sezione: LLM — Modello per chiamate *dirette* (SSoT in `config/config.yaml`)
+### Caricamento `.env` nella UI
+- Evita effetti collaterali a import-time: niente `load_dotenv()` eseguito appena il modulo viene importato.
+- Incapsula il caricamento in helper idempotenti (es. `_maybe_load_dotenv()` in `ui.preflight`) e invocali solo all'interno delle funzioni runtime (`run_preflight()`, orchestratori, servizi).
+- Test di regressione: `tests/test_preflight_import_safety.py` garantisce che i moduli UI restino importabili anche in ambienti headless/minimali.
+
+# Sezione: LLM - Modello per chiamate *dirette* (SSoT in `config/config.yaml`)
 
 Questa sezione spiega **come leggere il modello LLM da un’unica fonte di verità** quando fai **chiamate dirette** (es. `responses`/`chat.completions`) senza passare da l’Assistant preconfigurato.
 

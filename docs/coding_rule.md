@@ -81,6 +81,13 @@ from ui.utils.core import safe_write_text
 safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
 ```
 
+5. **Merge di configurazioni**: quando combini template repo e configurazioni cliente, usa l'helper condiviso:
+```py
+from ui.utils.merge import deep_merge_dict
+merged = deep_merge_dict(template_cfg, client_cfg)
+```
+Garantisce merge ricorsivo senza mutare l'input e previene la perdita di chiavi annidate.
+
 ---
 
 ## Struttura & naming

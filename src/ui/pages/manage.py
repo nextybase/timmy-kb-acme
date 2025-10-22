@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
@@ -17,7 +16,7 @@ from ui.clients_store import get_state as get_client_state
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
-from ui.utils.workspace import resolve_raw_dir
+from ui.utils.workspace import count_pdfs_safe, iter_pdfs_safe, resolve_raw_dir
 
 LOGGER = logging.getLogger("ui.manage")
 
@@ -295,24 +294,8 @@ raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
 semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
 
-def _scan_raw_pdfs(directory: Path) -> tuple[bool, int]:
-    try:
-        if not directory.exists():
-            return False, 0
-        count = 0
-        for root, _dirs, files in os.walk(directory, followlinks=False):
-            for name in files:
-                if not name.lower().endswith(".pdf"):
-                    continue
-                candidate = Path(root) / name
-                ensure_within_and_resolve(directory, candidate)
-                count += 1
-        return (count > 0), count
-    except Exception:
-        return False, 0
-
-
-has_pdfs, pdf_count = _scan_raw_pdfs(raw_dir)
+has_pdfs = any(iter_pdfs_safe(raw_dir))
+pdf_count = count_pdfs_safe(raw_dir)
 run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
 service_ok = run_tags_fn is not None
 

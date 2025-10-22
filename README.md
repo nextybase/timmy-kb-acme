@@ -363,6 +363,7 @@ Requisito: variabile `GITHUB_TOKEN` presente. Errori: ConfigError se il token ma
   pytest -ra
   ```
 - Dettagli, casi singoli e markers: vedi `docs/test_suite.md`.
+- Regressioni recenti coperte da: `tests/test_preflight_import_safety.py` (no side-effect a import), `tests/test_merge_utils.py` (merge config ricorsivo) e `tests/test_status_guard_fallback.py` (fallback UI senza Streamlit completo).
 
 ### Type checking rapido
 - Mypy: `make type`
