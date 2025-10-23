@@ -63,8 +63,6 @@ def _require_drive_utils_ui() -> None:
     missing: list[str] = []
     if not callable(get_drive_service):
         missing.append("get_drive_service")
-    if not callable(create_drive_folder):
-        missing.append("create_drive_folder")
     if not callable(create_drive_minimal_structure):
         missing.append("create_drive_minimal_structure")
     if not callable(create_drive_raw_children_from_yaml):
@@ -245,6 +243,30 @@ def _drive_list_folders(service: Any, parent_id: str) -> List[Dict[str, str]]:
     return results
 
 
+def _get_existing_client_folder_id(service: Any, parent_id: str, slug: str) -> Optional[str]:
+    """
+    Recupera l'id della cartella cliente senza crearla.
+    Confronto casefold + normalizzazione kebab per tollerare varianti di naming.
+    """
+    slug_clean = slug.strip()
+    target = to_kebab(slug_clean)
+    accepted_names = {
+        target,
+        slug_clean.casefold(),
+        f"timmy-kb-{target}",
+    }
+    for folder in _drive_list_folders(service, parent_id):
+        name = (folder.get("name") or "").strip()
+        folder_id = (folder.get("id") or "").strip()
+        if not name or not folder_id:
+            continue
+        normalized = to_kebab(name)
+        name_cf = name.casefold()
+        if normalized in accepted_names or name_cf in accepted_names:
+            return folder_id
+    return None
+
+
 def _drive_list_pdfs(service: Any, parent_id: str) -> List[Dict[str, str]]:
     """Elenca tutti i PDF (con paginazione) sotto una cartella Drive."""
     results: List[Dict[str, str]] = []
@@ -354,12 +376,9 @@ def plan_raw_download(
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente")
 
-    client_folder_id = cast(Callable[..., Any], create_drive_folder)(
-        service,
-        slug,
-        parent_id=parent_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
+    client_folder_id = _get_existing_client_folder_id(service, parent_id, slug)
+    if not client_folder_id:
+        raise RuntimeError("Cartella cliente non trovata su Drive: esegui prima 'Apri workspace'.")
     folders = _drive_list_folders(service, client_folder_id)
     raw_id = {item["name"]: item["id"] for item in folders}.get("raw")
     if not raw_id:
@@ -688,6 +707,11 @@ def download_raw_from_drive_with_progress(
 
     # 1) Costruisci la lista dei candidati (categoria/nomefile) nell'ordine atteso
     candidates: List[Tuple[str, str]] = []
+    for f in _drive_list_pdfs(svc, raw_id):
+        fname = (f.get("name") or "").strip()
+        if not fname.lower().endswith(".pdf"):
+            continue
+        candidates.append(("", fname))
     for cat in _drive_list_folders(svc, raw_id):
         cat_name = cat.get("name") or ""
         cat_id = cat.get("id") or ""
@@ -707,7 +731,8 @@ def download_raw_from_drive_with_progress(
         for cat_name, fname in candidates:
             done += 1
             try:
-                on_progress(done, total, f"{cat_name}/{fname}")
+                label = f"{cat_name}/{fname}" if cat_name else fname
+                on_progress(done, total, label)
             except Exception:
                 pass
 

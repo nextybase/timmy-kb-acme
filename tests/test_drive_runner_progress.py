@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 def test_download_with_progress_adapter(monkeypatch, tmp_path):
     import logging
@@ -140,6 +142,64 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dr, "download_drive_pdfs_to_local", _fake_downloader)
 
-    written = dr.download_raw_from_drive_with_progress("dummy", base_root=tmp_path, require_env=False)
+    captured = []
+
+    def _on_progress(done, total, label):
+        captured.append((done, total, label))
+
+    written = dr.download_raw_from_drive_with_progress(
+        "dummy", base_root=tmp_path, require_env=False, on_progress=_on_progress
+    )
 
     assert any(path.name == "root.pdf" for path in written)
+    assert captured == [(1, 1, "root.pdf")]
+
+
+def test_plan_raw_download_requires_existing_folder(monkeypatch, tmp_path):
+    import ui.services.drive_runner as dr
+
+    class Ctx:
+        slug = "dummy"
+        redact_logs = False
+        env = {"DRIVE_ID": "PARENT"}
+
+    monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+
+    def _fake_list_folders(service, parent_id):
+        if parent_id == "PARENT":
+            return [{"name": "timmy-kb-dummy", "id": "CFID"}]
+        if parent_id == "CFID":
+            return [{"name": "raw", "id": "RAW"}]
+        return []
+
+    def _fake_list_pdfs(service, parent_id):
+        if parent_id == "RAW":
+            return [{"name": "root.pdf"}]
+        return []
+
+    monkeypatch.setattr(dr, "_drive_list_folders", _fake_list_folders)
+    monkeypatch.setattr(dr, "_drive_list_pdfs", _fake_list_pdfs)
+
+    conflicts, labels = dr.plan_raw_download("dummy", base_root=tmp_path, require_env=False)
+
+    assert conflicts == []
+    assert labels == ["root.pdf"]
+
+
+def test_plan_raw_download_errors_when_client_folder_missing(monkeypatch, tmp_path):
+    import ui.services.drive_runner as dr
+
+    class Ctx:
+        slug = "dummy"
+        redact_logs = False
+        env = {"DRIVE_ID": "PARENT"}
+
+    monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+    monkeypatch.setattr(dr, "_drive_list_folders", lambda service, parent_id: [])
+
+    with pytest.raises(RuntimeError) as excinfo:
+        dr.plan_raw_download("dummy", base_root=tmp_path, require_env=False)
+
+    assert "Cartella cliente non trovata" in str(excinfo.value)

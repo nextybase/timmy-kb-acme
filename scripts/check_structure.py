@@ -1,5 +1,9 @@
 # salva come: scripts/check_structure.py  (esegui dalla root del repo)
-import sys, os, argparse, unicodedata, yaml
+import argparse
+import sys
+import unicodedata
+
+import yaml
 from pathlib import Path
 
 

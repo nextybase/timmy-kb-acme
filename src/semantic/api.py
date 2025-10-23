@@ -345,17 +345,17 @@ def enrich_frontmatter(
 
     if not vocab:
         tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
-        reason = "empty_vocab_allowed" if allow_empty_vocab else "empty_vocab_fallback"
-        if not allow_empty_vocab and logger is None:
+        if not allow_empty_vocab:
             raise ConfigError(
                 "Vocabolario canonico assente: impossibile arricchire i front-matter senza tags canonici.",
                 slug=slug,
                 file_path=tags_db,
             )
-        logger.info(
-            "semantic.frontmatter.skip_tags",
-            extra={"slug": slug, "reason": reason, "file_path": str(tags_db)},
-        )
+        if logger is not None:
+            logger.info(
+                "semantic.frontmatter.skip_tags",
+                extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
+            )
 
     mds = sorted_paths(md_dir.glob("*.md"), base=md_dir)
     touched: List[Path] = []

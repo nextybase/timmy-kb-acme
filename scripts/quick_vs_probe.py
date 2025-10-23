@@ -1,4 +1,6 @@
-import time, sys
+import sys
+import time
+
 from openai import APIConnectionError, APIStatusError, OpenAI
 
 c = OpenAI()

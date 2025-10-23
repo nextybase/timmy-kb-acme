@@ -76,7 +76,7 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     except Exception:
         # Nuovo comportamento: se manca tags.db il loader solleva ConfigError -> proceed senza vocab
         vocab = {}
-    touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
+    touched = enrich_frontmatter(ctx, logger, vocab, slug=slug, allow_empty_vocab=True)
     assert isinstance(touched, list)
 
     # 3) README/SUMMARY

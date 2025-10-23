@@ -1,5 +1,7 @@
 # tests/semantic/test_ssot_enforcement.py
 
+import logging
+
 import pytest
 
 from semantic.api import ConfigError, build_markdown_book, enrich_frontmatter
@@ -22,5 +24,6 @@ def test_enrich_frontmatter_requires_vocab(tmp_path):
     class Ctx:
         base_dir = tmp_path
 
+    logger = logging.getLogger("test.enrich")
     with pytest.raises(ConfigError):
-        enrich_frontmatter(Ctx(), logger=None, vocab={}, slug="dummy")  # type: ignore[arg-type]
+        enrich_frontmatter(Ctx(), logger=logger, vocab={}, slug="dummy")  # type: ignore[arg-type]

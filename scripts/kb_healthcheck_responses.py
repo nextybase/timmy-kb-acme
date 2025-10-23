@@ -2,7 +2,10 @@
 # Verifica l'uso reale della KB (File Search) con Responses API, mostrando citations.
 # Requisiti: openai>=2.3.0, python-dotenv
 
-import os, sys, json, re
+import json
+import os
+import re
+import sys
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 from openai import OpenAI
@@ -79,7 +82,10 @@ def main():
     vs_env = read_env("KB_VECTOR_STORE_ID")
     vector_store_ids = resolve_vector_store_id(client, vs_env, assistant_id)
     if not vector_store_ids:
-        print("ERRORE: nessuna vector store trovata. Imposta KB_VECTOR_STORE_ID nello .env oppure collega una store all'Assistant.")
+        print(
+            "ERRORE: nessuna vector store trovata. Imposta KB_VECTOR_STORE_ID nello .env "
+            "oppure collega una store all'Assistant."
+        )
         sys.exit(3)
 
     # Responses API + File Search (forzato)

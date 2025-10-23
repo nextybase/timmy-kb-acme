@@ -2,9 +2,13 @@
 # Health-check 1:1 con il flusso Vision (Assistants v2), robusto e “sempre verboso”.
 # Compatibile con openai==2.3.0. Requisiti: python-dotenv.
 
-import os, sys, json, re, traceback
+import json
+import os
+import re
+import sys
+import traceback
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 from dotenv import load_dotenv, find_dotenv
 
 def _print_json(payload: Dict[str, Any], exit_code: int = None):
