@@ -45,7 +45,7 @@ Per dettagli vedi anche: `docs/developer_guide.md` (Indexer & Retriever) e la nu
 - UI: caricamento `.env` idempotente per `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`.
 - Installazione nativa via `pyproject.toml`:
   - extra `drive`: `pip install .[drive]`.
-  - dipendenze base per `pip install .` (SSoT dei pin in `requirements.txt`).
+  - dipendenze base per `pip install .` (pin generati da `pip-compile` in `requirements.txt` / `constraints.txt`).
 - CI: workflow `import-smoke` non-gating su PR; `bench.yml` opzionale.
 - Test: aggiunti `tests/test_tag_onboarding_drive_guard_main.py` e `tests/test_ui_drive_services_guards.py`.
 
@@ -89,6 +89,19 @@ Pipeline di onboarding dei clienti per Timmy KB.
 - `YAML_STRUCTURE_FILE`: override opzionale del file YAML per il pre-onboarding (default `config/cartelle_raw.yaml`)
 - `LOG_REDACTION`: `auto` (default), `on`, `off`
 - `ENV`, `CI`: Modalità operative
+
+### Gestione dipendenze (pip-tools)
+
+- Runtime: `pip install -r requirements.txt` (pin generati da `pip-compile`; se serve un file di sola constraint usa `constraints.txt`).
+- Dev/test: `pip install -r requirements-dev.txt` (include runtime + toolchain).
+- Extra NLP/RAG: `pip install -r requirements-optional.txt`.
+- Per aggiornare i pin modifica i corrispondenti `*.in` e rigenera con:
+  ```bash
+  pip-compile requirements.in
+  pip-compile requirements-dev.in
+  pip-compile requirements-optional.in
+  ```
+  `constraints.txt` è rigenerato da `pip-compile requirements.in`.
 
 ### Preflight UI
 La UI esegue un controllo **preflight** con feedback progressivo su chiavi `.env` e librerie.

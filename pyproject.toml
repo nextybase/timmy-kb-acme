@@ -7,34 +7,33 @@ name = "timmy-kb"
 version = "1.9.5"
 requires-python = ">=3.11"
 
-# Dipendenze runtime minime per installare il pacchetto via pip install .
-# Nota: i pin completi restano in requirements.txt (SSoT). Qui manteniamo
-# solo il set necessario all'esecuzione CLI/base senza UI/Drive.
+# Dipendenze runtime minime per installare il pacchetto via `pip install .`.
+# I pin completi per gli ambienti sono gestiti con pip-tools (requirements*.txt).
 dependencies = [
-    "PyMuPDF==1.24.14",
-    "PyPDF2==3.0.1",
-    "pydantic==2.7.1",
-    "pydantic-settings==2.0.0",
-    "python-dotenv==1.0.1",
-    "python-slugify==8.0.4",
-    "PyYAML==6.0.1",
-    "requests==2.32.2",
-    "numpy==1.26.4",
+    "PyMuPDF~=1.26.5",
+    "pypdf~=6.1.1",
+    "pydantic~=2.7",
+    "pydantic-settings~=2.0",
+    "python-dotenv~=1.0",
+    "python-slugify~=8.0",
+    "PyYAML~=6.0",
+    "requests~=2.32",
+    "numpy~=2.3",
     # Compat pydantic/types
-    "typing-extensions==4.12.2",
-    "annotated-types==0.7.0",
-    "typing-inspection==0.4.0",
+    "typing-extensions>=4.12,<5",
+    "annotated-types~=0.7",
+    "typing-inspection~=0.4",
 ]
 
 [project.optional-dependencies]
 # Extra opzionale per le funzionalità Google Drive (usato da: pip install .[drive])
 drive = [
-    "google-api-python-client==2.127.0",
-    "google-auth-httplib2==0.2.0",
-    "google-auth-oauthlib==1.2.0",
-    "google-auth==2.34.0",
-    "httplib2==0.22.0",
-    "requests-oauthlib==2.0.0",
+    "google-api-python-client~=2.171.0",
+    "google-auth-httplib2~=0.2.0",
+    "google-auth-oauthlib~=1.2.0",
+    "google-auth~=2.34",
+    "httplib2~=0.22.0",
+    "requests-oauthlib~=2.0.0",
 ]
 
 tests = [

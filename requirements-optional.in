@@ -1,0 +1,14 @@
+# requirements-optional.in
+# =============================================================================
+# Dipendenze opzionali (NLP avanzato, keyword extraction, ecc.).
+# Rigenera con: pip-compile requirements-optional.in
+# Install: pip install -r requirements-optional.txt
+# =============================================================================
+
+-c constraints.txt
+
+spacy==3.7.4
+yake==0.4.8
+sentence-transformers==2.7.0
+scikit-learn==1.7.2
+pypdf==6.1.1

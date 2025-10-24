@@ -41,13 +41,8 @@ jobs:
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
-          python -m pip install --disable-pip-version-check pip==24.2 wheel==0.44.0
-          pip install --disable-pip-version-check \
-            black==24.8.0 \
-            ruff==0.6.4 \
-            mypy==1.11.2 \
-            pytest==8.3.2 \
-            pytest-cov==5.0.0
+          python -m pip install --upgrade pip
+          pip install --requirement requirements-dev.txt
       - name: Install gitleaks
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz

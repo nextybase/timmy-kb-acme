@@ -14,7 +14,15 @@ env-check:
 	fi
 
 install: env-check
-	@$(PIP) install -U black isort ruff mypy pytest pytest-cov pre-commit
+	@$(PIP) install -r requirements-dev.txt
+
+deps: env-check
+	@echo "[deps] pip-compile requirements.in"
+	@pip-compile requirements.in
+	@echo "[deps] pip-compile requirements-dev.in"
+	@pip-compile requirements-dev.in
+	@echo "[deps] pip-compile requirements-optional.in"
+	@pip-compile requirements-optional.in
 
 pre-commit: env-check
 	@pre-commit install --hook-type pre-commit --hook-type pre-push

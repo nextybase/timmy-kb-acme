@@ -1,0 +1,47 @@
+# requirements.in
+# =============================================================================
+# Definizione sorgente delle dipendenze runtime per Timmy-KB.
+# Usa `pip-compile requirements.in` per rigenerare requirements.txt/constraints.
+# =============================================================================
+
+# Librerie principali
+PyMuPDF==1.26.5
+pypdf==6.1.1
+pydantic==2.7.1
+pydantic-settings==2.0.0
+python-dotenv==1.0.1
+python-slugify==8.0.4
+PyYAML==6.0.1
+requests==2.32.2
+numpy==2.3.0
+
+# Google/Drive integrazione
+google-api-python-client==2.171.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+google-auth==2.34.0
+httplib2==0.22.0
+requests-oauthlib==2.0.0
+
+# PDF/Report
+fpdf==1.7.2
+reportlab==4.4.4
+
+# GitHub e container tooling
+PyGithub==2.3.0
+docker==7.0.0
+
+# NLP/RAG
+openai==2.3.0
+httpx==0.28.1
+tiktoken==0.7.0
+sentence-transformers==2.7.0
+scikit-learn==1.7.2
+yake==0.4.8
+torch==2.8.0
+spacy==3.7.4
+
+# Utility varie
+typing-extensions==4.12.2
+annotated-types==0.7.0
+hypothesis==6.112.2
