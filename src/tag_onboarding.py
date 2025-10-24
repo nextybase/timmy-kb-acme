@@ -182,9 +182,21 @@ def scan_raw_to_db(
                 continue
             if path.is_file() and path.suffix.lower() == ".pdf":
                 folder_id = upsert_folder_chain(conn, raw_dir_path, path.parent)
-                sha256 = compute_sha256(path)
+                sha256_new = compute_sha256(path)
                 pages = get_pdf_pages(path)
-                upsert_document(conn, folder_id, path.name, sha256, pages)
+                row = conn.execute(
+                    "SELECT id, sha256 FROM documents WHERE folder_id=? AND filename=?",
+                    (folder_id, path.name),
+                ).fetchone()
+                prev_id = int(row["id"]) if row and row["id"] is not None else None
+                prev_sha = str(row["sha256"]) if row and row["sha256"] is not None else None
+                if prev_id is not None and prev_sha and prev_sha != sha256_new and has_doc_terms(conn, prev_id):
+                    clear_doc_terms(conn, prev_id)
+                    logging.getLogger("tag_onboarding").info(
+                        "doc_terms invalidated due to hash change",
+                        extra={"filename": path.name, "folder_id": folder_id},
+                    )
+                upsert_document(conn, folder_id, path.name, sha256_new, pages)
                 docs_count += 1
 
     stats: dict[str, int] = {"folders": folders_count, "documents": docs_count}

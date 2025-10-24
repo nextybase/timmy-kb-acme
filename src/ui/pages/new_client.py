@@ -2,7 +2,6 @@
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
-import importlib
 import logging
 import os
 from pathlib import Path
@@ -11,76 +10,51 @@ from typing import Any, Callable, Dict, List, Optional, cast
 import streamlit as st
 import yaml
 
-try:
-    from timmykb.pre_onboarding import ensure_local_workspace_for_ui
-except ImportError:
-    try:
-        from src.pre_onboarding import ensure_local_workspace_for_ui
-    except ImportError:  # pragma: no cover
-        from pre_onboarding import ensure_local_workspace_for_ui
+from ui.imports import getattr_if_callable, import_first
 
-from ui.chrome import header, sidebar
-from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
-from ui.errors import to_user_message
-from ui.utils import set_slug
-from ui.utils.html import esc_url_component
-from ui.utils.merge import deep_merge_dict
-from ui.utils.status import status_guard
-
-try:
-    pass
-except Exception:  # pragma: no cover
-    pass  # pragma: no cover
+ensure_local_workspace_for_ui = import_first(
+    "timmykb.pre_onboarding",
+    "src.pre_onboarding",
+    "pre_onboarding",
+).ensure_local_workspace_for_ui
 
 from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, set_state, upsert_client
+from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
+from ui.errors import to_user_message
+from ui.utils import set_slug
+from ui.utils.html import esc_url_component
+from ui.utils.merge import deep_merge_dict
+from ui.utils.status import status_guard
 from ui.utils.workspace import workspace_root
 
-_vision_module = None
-for _vision_mod_name in (
+_vision_module = import_first(
     "ui.services.vision_provision",
     "timmykb.ui.services.vision_provision",
     "src.ui.services.vision_provision",
-):
-    try:
-        _vision_module = importlib.import_module(_vision_mod_name)
-        break
-    except ImportError:
-        continue
-
-if _vision_module is None:
-    raise ImportError("Impossibile importare ui.services.vision_provision")
-
+)
 run_vision = getattr(_vision_module, "run_vision")
 
 BuildDriveCallable = Callable[..., Dict[str, str]]
 EnsureDriveCallable = Callable[..., Path]
-_build_drive_from_mapping_impl: Optional[BuildDriveCallable] = None
-_ensure_drive_minimal_impl: Optional[EnsureDriveCallable] = None
-
-for _mod in ("ui.services.drive_runner", "timmykb.ui.services.drive_runner", "src.ui.services.drive_runner"):
-    try:
-        _drive_runner = importlib.import_module(_mod)
-    except ImportError:
-        continue
-    _build_candidate = getattr(_drive_runner, "build_drive_from_mapping", None)
-    _ensure_candidate = getattr(_drive_runner, "ensure_drive_minimal_and_upload_config", None)
-    if _mod == "ui.services.drive_runner":
-        if callable(_build_candidate):
-            _build_drive_from_mapping_impl = cast(BuildDriveCallable, _build_candidate)
-        if callable(_ensure_candidate):
-            _ensure_drive_minimal_impl = cast(EnsureDriveCallable, _ensure_candidate)
-        break
-    if _build_drive_from_mapping_impl is None and callable(_build_candidate):
-        _build_drive_from_mapping_impl = cast(BuildDriveCallable, _build_candidate)
-    if _ensure_drive_minimal_impl is None and callable(_ensure_candidate):
-        _ensure_drive_minimal_impl = cast(EnsureDriveCallable, _ensure_candidate)
-    if _build_drive_from_mapping_impl is not None and _ensure_drive_minimal_impl is not None:
-        break
+_drive_runner = import_first(
+    "ui.services.drive_runner",
+    "timmykb.ui.services.drive_runner",
+    "src.ui.services.drive_runner",
+)
+_build_drive_from_mapping_impl = cast(
+    Optional[BuildDriveCallable],
+    getattr_if_callable(_drive_runner, "build_drive_from_mapping"),
+)
+_ensure_drive_minimal_impl = cast(
+    Optional[EnsureDriveCallable],
+    getattr_if_callable(_drive_runner, "ensure_drive_minimal_and_upload_config"),
+)
 
 build_drive_from_mapping: Optional[BuildDriveCallable]
 if _build_drive_from_mapping_impl:

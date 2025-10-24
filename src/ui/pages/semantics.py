@@ -5,78 +5,11 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any, Literal, Optional, Tuple, cast
+from typing import Any, Optional, Tuple, cast
 
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
+from ui.utils.stubs import get_streamlit
 
-    class _FunctionStub:
-        """No-op callable/context manager usato per simulare API Streamlit."""
-
-        def __call__(self, *args: Any, **kwargs: Any) -> "_FunctionStub":
-            return self
-
-        def __enter__(self) -> "_FunctionStub":
-            return self
-
-        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
-            return False
-
-        def __getattr__(self, name: str) -> "_FunctionStub":
-            return self
-
-        def __bool__(self) -> bool:
-            return False
-
-    class _StreamlitStub:
-        def __init__(self) -> None:
-            self.session_state: dict[str, Any] = {}
-            self.query_params: dict[str, str] = {}
-            self.sidebar = _FunctionStub()
-
-        def __getattr__(self, name: str) -> Any:
-            if name == "stop":
-
-                def _stop(*_args: Any, **_kwargs: Any) -> None:
-                    raise RuntimeError("Streamlit stop non disponibile nel fallback")
-
-                return _stop
-            if name == "rerun":
-
-                def _rerun(*_args: Any, **_kwargs: Any) -> None:
-                    raise RuntimeError("Streamlit rerun non disponibile nel fallback")
-
-                return _rerun
-            if name == "spinner":
-
-                class _SpinnerStub:
-                    def __enter__(self) -> None:
-                        return None
-
-                    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
-                        return False
-
-                def _spinner(*_args: Any, **_kwargs: Any) -> _SpinnerStub:
-                    return _SpinnerStub()
-
-                return _spinner
-            if name == "columns":
-
-                def _columns(spec: Any) -> tuple[_FunctionStub, ...]:
-                    if isinstance(spec, (list, tuple)):
-                        count = len(spec)
-                    else:
-                        try:
-                            count = int(spec)
-                        except Exception:
-                            count = 0
-                    return tuple(_FunctionStub() for _ in range(max(count, 0)))
-
-                return _columns
-            return _FunctionStub()
-
-    st = cast(Any, _StreamlitStub())
+st = get_streamlit()
 
 
 from pipeline.context import ClientContext
@@ -87,7 +20,7 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.errors import to_user_message
-from ui.utils.status import status_guard  # usa l'helper condiviso (con fallback)
+from ui.utils.status import status_guard  # helper condiviso (con fallback)
 
 try:
     from ui.utils.workspace import has_raw_pdfs

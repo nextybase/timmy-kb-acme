@@ -12,6 +12,8 @@ import yaml
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
+from semantic.tags_io import write_tags_reviewed_from_nlp_db
+from storage.tags_store import derive_db_path_from_yaml_path
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.utils import set_slug
@@ -366,7 +368,7 @@ if slug:
         key="btn_semantic_start",
         type="primary",
         width="stretch",
-        help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub/YAML tags_reviewed.",
+        help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub (in DB). Lo YAML si pubblica a parte.",
     )
     if open_semantic:
         if run_tags_fn is None:
@@ -384,6 +386,24 @@ if slug:
             except Exception as exc:  # pragma: no cover
                 st.error(f"Estrazione tag non riuscita: {exc}")
 
+    if _column_button(
+        c2,
+        "Pubblica tag revisionati (da DB)",
+        key="btn_publish_tags",
+        type="secondary",
+        width="stretch",
+        help="Esporta semantic/tags_reviewed.yaml a partire dal DB NLP (terms/aliases).",
+    ):
+        try:
+            base_dir = _workspace_root(slug)
+            semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+            yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
+            db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+            out = write_tags_reviewed_from_nlp_db(semantic_dir, db_path, LOGGER)
+            st.toast(f"`tags_reviewed.yaml` pubblicato: {out}")
+            _open_tags_editor_modal(slug)
+        except Exception as exc:  # pragma: no cover
+            st.error(f"Pubblicazione non riuscita: {exc}")
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
 
     # Colonna 3 â€“ Scarica da Drive ? locale

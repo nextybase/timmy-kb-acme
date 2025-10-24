@@ -4,18 +4,15 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
-from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.yaml_utils import clear_yaml_cache
 from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
-from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2, load_tags_reviewed
-from tag_onboarding import run_nlp_to_db
+from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2
+from tag_onboarding import run_nlp_to_db, scan_raw_to_db
 from ui.utils.workspace import workspace_root
 
 try:
@@ -66,6 +63,8 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
         with st.spinner("Analisi linguistica dei PDF (NLP)..."):
             try:
                 ensure_schema_v2(str(db_path))
+                # 1) Indicizzazione RAW -> DB con invalidazione selettiva su hash cambiato
+                scan_raw_to_db(raw_dir=raw_dir, db_path=db_path, base_dir=base_dir)
                 run_nlp_to_db(
                     slug=slug,
                     raw_dir=raw_dir,
@@ -74,7 +73,8 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
                     topn_doc=12,
                     topk_folder=24,
                     rebuild=False,
-                    only_missing=False,
+                    # NLP incrementale: processa solo i documenti senza doc_terms
+                    only_missing=True,
                 )
             except Exception as exc:
                 nlp_ok = False
@@ -90,16 +90,9 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
             write_tagging_readme(semantic_dir, svc_logger)
             write_tags_review_stub_from_csv(semantic_dir, csv_path, svc_logger)
 
-        with st.spinner("Aggiornamento YAML tags_reviewed..."):
-            data = load_tags_reviewed(db_path)
-            yaml_text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
-            safe_write_text(yaml_path, yaml_text, encoding="utf-8", atomic=True)
-            clear_yaml_cache()
-            session_key = f"ui.manage.{slug}.tags_reviewed_text"
-            if session_key in st.session_state:
-                st.session_state[session_key] = yaml_text
-
-        st.success("Estrai Tags completato: tags_reviewed aggiornato.")
+        # Niente scrittura automatica dello YAML: l'utente pubblica esplicitamente dalla UI.
+        clear_yaml_cache()
+        st.success("Estrai Tags completato: DB/stub aggiornati. Usa 'Pubblica tag revisionati' per generare lo YAML.")
         if not nlp_ok and fallback_reason:
             st.info("Pipeline NLP non disponibile: utilizzata generazione euristica (auto-tagger).")
         svc_logger.info(
