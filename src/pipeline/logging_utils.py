@@ -166,16 +166,18 @@ class _RedactFilter(logging.Filter):
 
 
 class _EventDefaultFilter(logging.Filter):
-    """Garantisce la presenza del campo 'event' valorizzandolo dal messaggio."""
+    """Garantisce che 'event' sia sempre presente; se manca usa il messaggio come codice evento."""
 
-    def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover - semplice
+    def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover
         try:
             if not hasattr(record, "event"):
-                raw = record.getMessage() if hasattr(record, "getMessage") else record.msg
-                if isinstance(raw, str):
-                    record.event = raw.strip()
+                msg = record.getMessage() if hasattr(record, "getMessage") else getattr(record, "msg", "")
+                if isinstance(msg, str):
+                    record.event = msg.strip() or "log"
+                else:
+                    record.event = "log"
         except Exception:
-            # il logging non deve fallire per un filtro di supporto
+            # mai bloccare il logging
             pass
         return True
 

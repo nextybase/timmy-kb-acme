@@ -34,7 +34,7 @@ def test_convert_no_files_logs_event_and_raises(tmp_path: Path, caplog: pytest.L
     with pytest.raises(ConfigError):
         sapi.convert_markdown(ctx, logger, slug="dummy")
 
-    # L'evento esplicito deve comparire prima del fail-fast
+    # Deve comparire l’evento esplicito prima del fail-fast
     assert any(
         (getattr(rec, "event", rec.getMessage()) == "semantic.convert.no_files") for rec in caplog.records
     ), "Evento semantic.convert.no_files non trovato nei log"

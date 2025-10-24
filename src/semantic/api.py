@@ -278,6 +278,11 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
         else:
             # RAW senza PDF: non convertire; usa eventuali MD già presenti
             content_mds = list_content_markdown(md_dir)
+            if not content_mds:
+                logger.info(
+                    "semantic.convert.no_files",
+                    extra={"slug": slug, "raw_dir": str(raw_dir), "book_dir": str(md_dir)},
+                )
 
         try:
             m.set_artifacts(len(content_mds))
@@ -342,10 +347,6 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                 },
             )
             return content_mds
-        logger.info(
-            "semantic.convert.no_files",
-            extra={"slug": slug, "raw_dir": str(raw_dir), "book_dir": str(md_dir)},
-        )
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
 
 
