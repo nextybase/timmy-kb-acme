@@ -34,3 +34,18 @@ def test_validate_markdown_dir_not_directory_has_slug_and_file_path(tmp_path: Pa
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"
     assert Path(getattr(err, "file_path", "")) == file_path
+
+
+def test_validate_markdown_dir_traversal_includes_slug_in_message(tmp_path: Path):
+    base = tmp_path / "kb"
+    base.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside_book"
+    outside.mkdir(parents=True, exist_ok=True)
+
+    ctx = _Ctx(base, slug="dummy")
+    with pytest.raises(PipelineError) as ei:
+        cu.validate_markdown_dir(ctx, md_dir=outside)
+
+    err = ei.value
+    assert getattr(err, "slug", None) == "dummy"
+    assert "slug=dummy" in str(err)

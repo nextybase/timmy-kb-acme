@@ -5,86 +5,20 @@ import logging
 import shutil
 import sys
 import types
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 
+from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
 
-class _StreamlitStub:
-    def __init__(self) -> None:
-        self.session_state: dict[str, Any] = {}
-        self.button_returns: dict[str, bool] = {}
-        self.success_messages: list[str] = []
-        self.warning_messages: list[str] = []
-        self.error_messages: list[str] = []
-        self.html_calls: list[str] = []
-        self.rerun_called = 0
-
-    def subheader(self, *_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    def text_input(self, _label: str, *, value: str = "", **_kwargs: Any) -> str:
-        return value
-
-    def file_uploader(self, *_args: Any, **_kwargs: Any) -> Any:
-        return None
-
-    def button(self, label: str, *_args: Any, **_kwargs: Any) -> bool:
-        return self.button_returns.get(label, False)
-
-    def warning(self, message: str, *_args: Any, **_kwargs: Any) -> None:
-        self.warning_messages.append(message)
-
-    def success(self, message: str, *_args: Any, **_kwargs: Any) -> None:
-        self.success_messages.append(message)
-
-    def error(self, message: str, *_args: Any, **_kwargs: Any) -> None:
-        self.error_messages.append(message)
-
-    def spinner(self, *_args: Any, **_kwargs: Any):
-        return _status_stub()
-
-    def container(self, *_args: Any, **_kwargs: Any):
-        return _status_stub()
-
-    def status(self, *_args: Any, **_kwargs: Any):
-        return _status_stub()
-
-    def progress(self, *_args: Any, **_kwargs: Any):
-        class _Progress:
-            def progress(self, *_p_args: Any, **_p_kwargs: Any) -> None:
-                return None
-
-        return _Progress()
-
-    def empty(self, *_args: Any, **_kwargs: Any):
-        class _Empty:
-            def markdown(self, *_m_args: Any, **_m_kwargs: Any) -> None:
-                return None
-
-        return _Empty()
-
-    def html(self, markup: str, *_args: Any, **_kwargs: Any) -> None:
-        self.html_calls.append(markup)
-
-    def stop(self) -> None:
-        raise RuntimeError("st.stop non dovrebbe essere invocato in fallback locale")
-
-    def rerun(self) -> None:
-        self.rerun_called += 1
-
-
-@contextmanager
-def _status_stub() -> Iterator[Any]:
-    class _Ctx:
-        def update(self, *_args: Any, **_kwargs: Any) -> None:
-            return None
-
-    yield _Ctx()
+def _make_st() -> StreamlitStub:
+    st = StreamlitStub()
+    st.register_button_sequence("Inizializza Workspace", [True])
+    st.register_button_sequence("btn_init_ws", [True])
+    return st
 
 
 def _make_pdf_stub(payload: bytes) -> Any:
@@ -107,10 +41,12 @@ def test_init_workspace_skips_drive_when_helper_missing(
     if client_root.exists():
         shutil.rmtree(client_root)
 
-    stub = _StreamlitStub()
-    stub.button_returns = {"Inizializza Workspace": True}
+    stub = _make_st()
     stub.session_state = {"new_client.phase": "init", "new_client.slug": "", "client_name": ""}
-    stub.text_input = lambda label, **kwargs: "dummy" if "Slug" in label else kwargs.get("value", "")
+    orig_text_input = stub.text_input
+    stub.text_input = lambda label, **kwargs: (
+        "dummy" if "Slug" in label else kwargs.get("value", "")
+    ) or orig_text_input(label, **kwargs)
     stub.file_uploader = lambda *_args, **_kwargs: _make_pdf_stub(b"%PDF-1.4")
 
     monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
@@ -143,9 +79,16 @@ def test_init_workspace_skips_drive_when_helper_missing(
     monkeypatch.setattr(vision_mod, "run_vision", _fake_run_vision, raising=True)
 
     sys.modules.pop("ui.utils.status", None)
+    from contextlib import contextmanager
+
     import ui.utils.status as status_mod
 
-    monkeypatch.setattr(status_mod, "status_guard", lambda *a, **k: _status_stub(), raising=True)
+    @contextmanager
+    def _guard(*_a: Any, **_k: Any):
+        with stub.status() as status:
+            yield status
+
+    monkeypatch.setattr(status_mod, "status_guard", _guard, raising=True)
 
     caplog.clear()
     with caplog.at_level(logging.INFO):

@@ -26,6 +26,9 @@ class StreamlitStub:
         self.warning_messages: list[str] = []
         self.success_messages: list[str] = []
         self.error_messages: list[str] = []
+        # Estensioni per test OAuth/UI
+        self.query_params: Dict[str, Optional[str]] = {}
+        self._stop_exc_cls: type[BaseException] = RuntimeError
 
     # ---- UI primitives ----
     def button(
@@ -95,6 +98,25 @@ class StreamlitStub:
     def file_uploader(self, *args: Any, **kwargs: Any) -> Any:
         return None
 
+    def page_link(self, *args: Any, **_kwargs: Any) -> None:
+        return None
+
+    def link_button(self, *args: Any, **_kwargs: Any) -> None:
+        return None
+
+    class _Expander:
+        def __enter__(self) -> "StreamlitStub._Expander":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def expander(self, *_args: Any, **_kwargs: Any) -> "_Expander":
+        return StreamlitStub._Expander()
+
+    def code(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
     # ---- Layout ----
     def columns(self, spec: List[int] | int) -> List["_Column"]:
         if isinstance(spec, int):
@@ -152,7 +174,7 @@ class StreamlitStub:
         self._rerun_called = True
 
     def stop(self) -> None:
-        raise RuntimeError("stop requested")
+        raise self._stop_exc_cls("stop requested")
 
 
 class _Column:

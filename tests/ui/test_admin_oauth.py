@@ -2,89 +2,34 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import pytest
+
+from tests.ui.streamlit_stub import StreamlitStub
 
 
 class StopExecution(RuntimeError):
     """Simula l'eccezione di `st.stop()` durante i test."""
 
 
-class _QueryParamsStub:
-    def __init__(self) -> None:
-        self._data: Dict[str, Optional[str]] = {}
+def _prepare_admin_module(monkeypatch: pytest.MonkeyPatch) -> Tuple[Any, StreamlitStub]:
+    stub = StreamlitStub()
+    stub._stop_exc_cls = StopExecution  # type: ignore[attr-defined]
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        return self._data.get(key, default)
+    class _QP(dict[str, Any]):
+        def set(self, **entries: Any) -> None:
+            self.clear()
+            for key, value in entries.items():
+                self[key] = value
 
-    def set(self, **entries: Optional[str]) -> None:
-        self._data = dict(entries)
+    stub.query_params = _QP()  # type: ignore[attr-defined]
+    stub.page_links = []  # type: ignore[attr-defined]
 
-    def __getitem__(self, key: str) -> Optional[str]:
-        return self._data[key]
+    def _record_page_link(self: StreamlitStub, *args: Any, **kwargs: Any) -> None:
+        self.page_links.append((args, kwargs))  # type: ignore[attr-defined]
 
-    def __setitem__(self, key: str, value: Optional[str]) -> None:
-        self._data[key] = value
-
-    def __delitem__(self, key: str) -> None:
-        self._data.pop(key, None)
-
-
-class _ExpanderStub:
-    def __enter__(self) -> "_ExpanderStub":
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> bool:
-        return False
-
-
-class _StreamlitStub:
-    def __init__(self) -> None:
-        self.session_state: Dict[str, Any] = {}
-        self.query_params = _QueryParamsStub()
-        self.success_messages: list[str] = []
-        self.error_messages: list[str] = []
-        self.warning_messages: list[str] = []
-        self.page_links: list[Tuple[Tuple[Any, ...], Dict[str, Any]]] = []
-
-    # UI API -------------------------------------------------------------
-    def subheader(self, *args: Any, **kwargs: Any) -> None:
-        return None
-
-    def html(self, *_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    def error(self, message: str) -> None:
-        self.error_messages.append(message)
-
-    def warning(self, message: str) -> None:
-        self.warning_messages.append(message)
-
-    def success(self, message: str) -> None:
-        self.success_messages.append(message)
-
-    def button(self, *args: Any, **kwargs: Any) -> bool:
-        return False
-
-    def page_link(self, *args: Any, **kwargs: Any) -> None:
-        self.page_links.append((args, kwargs))
-
-    def link_button(self, *args: Any, **kwargs: Any) -> None:
-        return None
-
-    def expander(self, *_args: Any, **_kwargs: Any) -> _ExpanderStub:
-        return _ExpanderStub()
-
-    def code(self, *_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    def stop(self) -> None:
-        raise StopExecution()
-
-
-def _prepare_admin_module(monkeypatch: pytest.MonkeyPatch) -> Tuple[Any, _StreamlitStub]:
-    stub = _StreamlitStub()
+    stub.page_link = types.MethodType(_record_page_link, stub)  # type: ignore[attr-defined]
     sys.modules.pop("streamlit", None)
     monkeypatch.setitem(sys.modules, "streamlit", stub)
 

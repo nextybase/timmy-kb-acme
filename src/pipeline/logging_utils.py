@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,9 +54,13 @@ def redact_secrets(msg: str) -> str:
         return msg
     out = msg
     # Mascherature semplici; per casi complessi si demanda ai moduli chiamanti
-    out = out.replace("x-access-token:", "x-access-token:***")
-    out = out.replace("Authorization: Basic ", "Authorization: Basic ***")
-    out = out.replace("Authorization: Bearer ", "Authorization: Bearer ***")
+    replacements = (
+        (re.compile(r"x-access-token\s*:\s*\S+", re.IGNORECASE), "x-access-token:***"),
+        (re.compile(r"Authorization\s*:\s*Basic\s+\S+", re.IGNORECASE), "Authorization: Basic ***"),
+        (re.compile(r"Authorization\s*:\s*Bearer\s+\S+", re.IGNORECASE), "Authorization: Bearer ***"),
+    )
+    for pattern, replacement in replacements:
+        out = pattern.sub(replacement, out)
     return out
 
 
@@ -210,6 +215,15 @@ def _ensure_no_duplicate_handlers(lg: logging.Logger, key: str) -> None:
         lg.removeHandler(h)
 
 
+def _set_logger_filter(lg: logging.Logger, flt: logging.Filter, key: str) -> None:
+    """Sostituisce (se presente) un filtro identificato dal key e lo rimpiazza."""
+    to_remove = [f for f in lg.filters if getattr(f, "_logging_utils_key", None) == key]
+    for f in to_remove:
+        lg.removeFilter(f)
+    flt._logging_utils_key = key  # type: ignore[attr-defined]
+    lg.addFilter(flt)
+
+
 def get_structured_logger(
     name: str,
     *,
@@ -259,6 +273,8 @@ def get_structured_logger(
     # filtri
     ctx_filter = _ContextFilter(ctx)
     redact_filter = _RedactFilter(ctx.redact_logs)
+    _set_logger_filter(lg, ctx_filter, f"{name}::ctx_filter")
+    _set_logger_filter(lg, redact_filter, f"{name}::redact_filter")
 
     # console handler (idempotente per chiave)
     key_console = f"{name}::console"

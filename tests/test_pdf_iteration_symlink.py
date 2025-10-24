@@ -8,6 +8,7 @@ from pipeline.exceptions import ConfigError, ConversionError
 from semantic import api as sapi
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
+from tests.utils.symlink import make_symlink
 
 
 class _Ctx:
@@ -32,13 +33,6 @@ class _NoopLogger:
         pass
 
 
-def _make_symlink(src: Path, dst: Path) -> None:
-    try:
-        dst.symlink_to(src)
-    except OSError as e:
-        pytest.skip(f"symlink not supported on this platform: {e}")
-
-
 def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path):
     base = tmp_path / "kb"
     raw = base / "raw"
@@ -50,7 +44,7 @@ def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path):
     target_pdf.write_bytes(b"%PDF-1.4\n%\n")
 
     link = raw / "link.pdf"
-    _make_symlink(target_pdf, link)
+    make_symlink(target_pdf, link)
 
     cfg = SemanticConfig(base_dir=str(base))
     cands = extract_semantic_candidates(raw, cfg)
@@ -72,7 +66,7 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     target_pdf = outside / "evil2.pdf"
     target_pdf.write_bytes(b"%PDF-1.4\n%\n")
     link = raw / "evil2.pdf"
-    _make_symlink(target_pdf, link)
+    make_symlink(target_pdf, link)
 
     with pytest.raises(ConfigError) as ei:
         sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)

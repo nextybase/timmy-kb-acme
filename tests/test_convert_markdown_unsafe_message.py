@@ -32,6 +32,9 @@ def test_only_unsafe_pdfs_raise_explicit_message(tmp_path: Path, monkeypatch: py
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
     ctx.md_dir.mkdir(parents=True, exist_ok=True)
 
+    # Legacy markdown già presente nel book
+    (ctx.md_dir / "legacy.md").write_text("# Legacy\n", encoding="utf-8")
+
     # Crea PDF finti
     (ctx.raw_dir / "a.pdf").write_bytes(b"%PDF-1.4\n%\n")
     (ctx.raw_dir / "b.pdf").write_bytes(b"%PDF-1.4\n%\n")
