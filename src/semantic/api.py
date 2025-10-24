@@ -294,6 +294,14 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                         "artifacts": {"content_files": len(content_mds)},
                     },
                 )
+                logger.info(
+                    "semantic.convert.summary",
+                    extra={
+                        "slug": slug,
+                        "mode": "convert",
+                        "content_files": len(content_mds),
+                    },
+                )
                 return content_mds
             raise ConversionError(
                 "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
@@ -325,7 +333,19 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                     "artifacts": {"content_files": len(content_mds)},
                 },
             )
+            logger.info(
+                "semantic.convert.summary",
+                extra={
+                    "slug": slug,
+                    "mode": "reuse",
+                    "content_files": len(content_mds),
+                },
+            )
             return content_mds
+        logger.info(
+            "semantic.convert.no_files",
+            extra={"slug": slug, "raw_dir": str(raw_dir), "book_dir": str(md_dir)},
+        )
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
 
 
@@ -627,6 +647,10 @@ def index_markdown_to_db(
             skipped_io += 1
             continue
         if not text or not text.strip():
+            logger.info(
+                "semantic.index.skip_empty_file",
+                extra={"slug": slug, "file_path": str(f)},
+            )
             skipped_no_text += 1
             continue
         contents.append(text)
@@ -674,7 +698,14 @@ def index_markdown_to_db(
                 file_path=effective,
             ) from e
 
-        vecs_raw = embeddings_client.embed_texts(contents)
+        try:
+            vecs_raw = embeddings_client.embed_texts(contents)
+        except Exception as e:
+            logger.error(
+                "semantic.index.embedding_error",
+                extra={"slug": slug, "error": str(e), "count": len(contents)},
+            )
+            raise
         vecs = normalize_embeddings(vecs_raw)
 
         # Accumulatori per un SOLO evento `semantic.index.skips` a fine fase

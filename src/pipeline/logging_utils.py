@@ -165,6 +165,21 @@ class _RedactFilter(logging.Filter):
         return True
 
 
+class _EventDefaultFilter(logging.Filter):
+    """Garantisce la presenza del campo 'event' valorizzandolo dal messaggio."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover - semplice
+        try:
+            if not hasattr(record, "event"):
+                raw = record.getMessage() if hasattr(record, "getMessage") else record.msg
+                if isinstance(raw, str):
+                    record.event = raw.strip()
+        except Exception:
+            # il logging non deve fallire per un filtro di supporto
+            pass
+        return True
+
+
 class _KVFormatter(logging.Formatter):
     """Formatter semplice e leggibile, con campi chiave-valore stabili."""
 
@@ -273,8 +288,10 @@ def get_structured_logger(
     # filtri
     ctx_filter = _ContextFilter(ctx)
     redact_filter = _RedactFilter(ctx.redact_logs)
+    event_filter = _EventDefaultFilter()
     _set_logger_filter(lg, ctx_filter, f"{name}::ctx_filter")
     _set_logger_filter(lg, redact_filter, f"{name}::redact_filter")
+    _set_logger_filter(lg, event_filter, f"{name}::event_filter")
 
     # console handler (idempotente per chiave)
     key_console = f"{name}::console"
@@ -283,6 +300,7 @@ def get_structured_logger(
     ch._logging_utils_key = key_console  # type: ignore[attr-defined]
     ch.addFilter(ctx_filter)
     ch.addFilter(redact_filter)
+    ch.addFilter(event_filter)
     lg.addHandler(ch)
 
     # file handler opzionale
@@ -293,6 +311,7 @@ def get_structured_logger(
         fh._logging_utils_key = key_file  # type: ignore[attr-defined]
         fh.addFilter(ctx_filter)
         fh.addFilter(redact_filter)
+        fh.addFilter(event_filter)
         lg.addHandler(fh)
 
     return lg
