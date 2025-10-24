@@ -20,7 +20,7 @@ google-api-python-client==2.171.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 google-auth==2.34.0
-httplib2==0.22.0
+httplib2==0.31.0
 requests-oauthlib==2.0.0
 
 # PDF/Report
