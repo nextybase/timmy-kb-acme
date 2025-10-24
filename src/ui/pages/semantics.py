@@ -137,30 +137,20 @@ def _run_enrich(slug: str) -> None:
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base_dir, logger)
-    allow_empty = not bool(vocab)
-    if allow_empty:
+    if not vocab:
         try:
             logger.warning("ui.semantics.vocab_missing", extra={"slug": slug})
         except Exception:
             pass
-        warn_fn = getattr(st, "warning", None)
-        if callable(warn_fn):
-            warn_fn(
-                "Vocabolario canonico assente: aggiorno comunque titoli e metadati base. "
-                "Popola `semantic/tags.db` da **Gestisci cliente** per applicare i tag canonici."
-            )
+        st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
+        st.caption("Vai su **Gestisci cliente** e completa l'estrazione tag, poi riprova.")
+        return
     with status_guard(
         "Arricchisco il frontmatter...",
         expanded=True,
         error_label="Errore durante l'arricchimento",
     ) as status:
-        touched = enrich_frontmatter(
-            ctx,
-            logger,
-            vocab,
-            slug=slug,
-            allow_empty_vocab=allow_empty,
-        )
+        touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
         if status is not None and hasattr(status, "update"):
             status.update(label=f"Frontmatter aggiornato ({len(touched)} file).", state="complete")
     try:

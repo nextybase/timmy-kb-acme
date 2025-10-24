@@ -53,16 +53,27 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Import tardivi per evitare costi se marker esclusi
     from pipeline.context import ClientContext
     from pipeline.logging_utils import get_structured_logger
-    from semantic.api import (
-        convert_markdown,
-        enrich_frontmatter,
-        get_paths,
-        load_reviewed_vocab,
-        write_summary_and_readme,
-    )
+    from semantic.api import convert_markdown, enrich_frontmatter, load_reviewed_vocab, write_summary_and_readme
 
     ctx = ClientContext.load(slug=slug, require_env=False)
     logger = get_structured_logger("smoke.bad", context=ctx, run_id="test-run")
+
+    from storage.tags_store import save_tags_reviewed
+
+    tags_db_path = Path(ctx.base_dir) / "semantic" / "tags.db"
+    save_tags_reviewed(
+        str(tags_db_path),
+        {
+            "tags": [
+                {
+                    "name": "energia rinnovabile",
+                    "action": "keep",
+                    "synonyms": ["energia green"],
+                }
+            ]
+        },
+    )
+    assert tags_db_path.exists()
 
     # 1) Conversione PDF -> Markdown
     mds = convert_markdown(ctx, logger, slug=slug)
@@ -70,13 +81,9 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert len(mds) >= 1
 
     # 2) Arricchimento frontmatter (vocabolario potrebbe essere vuoto -> no-op)
-    base = get_paths(slug)["base"]
-    try:
-        vocab = load_reviewed_vocab(base, logger)
-    except Exception:
-        # Nuovo comportamento: se manca tags.db il loader solleva ConfigError -> proceed senza vocab
-        vocab = {}
-    touched = enrich_frontmatter(ctx, logger, vocab, slug=slug, allow_empty_vocab=True)
+    base = Path(ctx.base_dir)
+    vocab = load_reviewed_vocab(base, logger)
+    touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
     assert isinstance(touched, list)
 
     # 3) README/SUMMARY

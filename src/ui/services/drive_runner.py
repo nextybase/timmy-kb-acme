@@ -672,8 +672,6 @@ def download_raw_from_drive_with_progress(
     missing = []
     if not callable(get_drive_service):
         missing.append("get_drive_service")
-    if not callable(create_drive_folder):
-        missing.append("create_drive_folder")
     if not callable(download_drive_pdfs_to_local):
         missing.append("download_drive_pdfs_to_local")
     if missing:
@@ -691,9 +689,9 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("DRIVE_ID non impostato nell'ambiente")
 
     # Cartella cliente e 'raw'
-    client_folder_id = cast(Callable[..., Any], create_drive_folder)(
-        svc, slug, parent_id=parent_id, redact_logs=bool(getattr(ctx, "redact_logs", False))
-    )
+    client_folder_id = _get_existing_client_folder_id(svc, parent_id, slug)
+    if not client_folder_id:
+        raise RuntimeError("Cartella cliente non trovata su Drive: esegui prima 'Apri workspace'.")
     sub = _drive_list_folders(svc, client_folder_id)
     name_to_id = {d["name"]: d["id"] for d in sub}
     raw_id = name_to_id.get("raw")

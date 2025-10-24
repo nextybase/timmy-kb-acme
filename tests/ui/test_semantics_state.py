@@ -67,20 +67,21 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
     assert state_calls[-1] == ("acme-srl", "arricchito")
 
 
-def test_run_enrich_warns_and_allows_empty_vocab(monkeypatch, tmp_path):
-    """Quando `tags.db` manca la UI avverte ma consente l'arricchimento base."""
+def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
+    """La UI blocca l'arricchimento se il vocabolario canonico è assente."""
     import ui.pages.semantics as sem
 
     _patch_streamlit_semantics(monkeypatch, sem)
 
-    warning_messages: list[str] = []
-    monkeypatch.setattr(sem.st, "warning", lambda msg, **_: warning_messages.append(msg), raising=False)
+    errors: list[str] = []
     monkeypatch.setattr(
         sem.st,
         "error",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("st.error non atteso")),
+        lambda msg, **_: errors.append(msg),
         raising=False,
     )
+    captions: list[str] = []
+    monkeypatch.setattr(sem.st, "caption", lambda msg, **_: captions.append(msg), raising=False)
 
     state_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
@@ -104,21 +105,11 @@ def test_run_enrich_warns_and_allows_empty_vocab(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
 
-    captured: dict[str, object] = {}
-
-    def _fake_enrich(ctx, log, vocab, *, slug, allow_empty_vocab=False):
-        captured["allow_empty_vocab"] = allow_empty_vocab
-        captured["vocab"] = vocab
-        return ["file1.md"]
-
-    monkeypatch.setattr(sem, "enrich_frontmatter", _fake_enrich)
-
     sem._run_enrich("acme-srl")
 
-    assert warning_messages, "st.warning deve informare l'utente dell'assenza del vocabolario"
-    assert captured.get("allow_empty_vocab") is True
-    assert captured.get("vocab") == {}
-    assert state_calls and state_calls[-1] == ("acme-srl", "arricchito")
+    assert errors and "vocabolario canonico assente" in errors[0].lower()
+    assert captions and "estrazione tag" in captions[0].lower()
+    assert state_calls == []
 
 
 def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
