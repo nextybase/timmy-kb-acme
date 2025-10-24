@@ -22,6 +22,9 @@ _log = get_structured_logger("ui.workspace")
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:
     """Prova a caricare il base_dir dal ClientContext (se disponibile)."""
+    default_candidate = Path("output") / f"timmy-kb-{slug}"
+    if not default_candidate.exists():
+        return None
     try:
         from pipeline.context import ClientContext
     except Exception:

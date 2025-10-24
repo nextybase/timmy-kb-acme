@@ -59,6 +59,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
         context,
         redact_logs,
         chunk_size=8388608,
+        overwrite=False,
     ):
         lg = logging.getLogger("pipeline.drive.download")
         lg.propagate = False

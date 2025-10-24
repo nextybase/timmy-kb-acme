@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import io
 import logging
-from glob import glob
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext  # Import pipeline (obbligatori in v1.8.0)
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
@@ -49,7 +48,7 @@ from ..components.mapping_editor import mapping_to_raw_structure  # usato solo s
 from ..components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
 from ..components.mapping_editor import load_semantic_mapping
 from ..utils import to_kebab  # SSoT normalizzazione + path-safety
-from ..utils.workspace import workspace_root
+from ..utils.workspace import iter_pdfs_safe, workspace_root
 
 # ===== Logger =================================================================
 
@@ -388,36 +387,47 @@ def plan_raw_download(
     local_root = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
     Path(local_root).mkdir(parents=True, exist_ok=True)
 
-    conflicts: list[str] = []
+    conflicts: set[str] = set()
     labels: list[str] = []
+    seen_labels: set[str] = set()
+
+    def _sanitize_pdf_name(raw_name: str) -> Optional[str]:
+        clean: str = sanitize_filename(raw_name or "")
+        if not clean:
+            return None
+        if not clean.lower().endswith(".pdf"):
+            clean = f"{clean}.pdf"
+        return clean
+
+    def _register_candidate(folder: Optional[str], name: str) -> None:
+        label = f"{folder}/{name}" if folder else name
+        if label not in seen_labels:
+            labels.append(label)
+            seen_labels.add(label)
+        target = local_root / name if not folder else local_root / folder / name
+        dest = ensure_within_and_resolve(local_root, target)
+        if dest.exists():
+            conflicts.add(label)
 
     for file_info in _drive_list_pdfs(service, raw_id):
-        name = (file_info.get("name") or "").strip()
-        if not name.lower().endswith(".pdf"):
-            continue
-        labels.append(name)
-        if (local_root / name).exists():
-            conflicts.append(name)
+        raw_name = (file_info.get("name") or "").strip()
+        clean_name = _sanitize_pdf_name(raw_name)
+        if clean_name:
+            _register_candidate(None, clean_name)
 
     for folder in _drive_list_folders(service, raw_id):
-        folder_name = (folder.get("name") or "").strip()
+        raw_folder = (folder.get("name") or "").strip()
         folder_id = (folder.get("id") or "").strip()
-        if not folder_name or not folder_id:
+        clean_folder = sanitize_filename(raw_folder)
+        if not clean_folder or not folder_id:
             continue
         for file_info in _drive_list_pdfs(service, folder_id):
-            name = (file_info.get("name") or "").strip()
-            if not name.lower().endswith(".pdf"):
-                continue
-            label = f"{folder_name}/{name}"
-            labels.append(label)
-            if (local_root / folder_name / name).exists():
-                conflicts.append(label)
+            raw_name = (file_info.get("name") or "").strip()
+            clean_name = _sanitize_pdf_name(raw_name)
+            if clean_name:
+                _register_candidate(clean_folder, clean_name)
 
-    def _dedupe_sorted(entries: list[str]) -> list[str]:
-        ordered = dict.fromkeys(entries)
-        return sorted(ordered.keys())
-
-    return _dedupe_sorted(conflicts), _dedupe_sorted(labels)
+    return sorted(conflicts), sorted(labels)
 
 
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
@@ -735,7 +745,9 @@ def download_raw_from_drive_with_progress(
                 pass
 
     # 3) Snapshot dei file presenti PRIMA del download
-    before = set(Path(p).resolve() for p in glob(str(local_root_dir / "**" / "*.pdf"), recursive=True))
+    before = {
+        ensure_within_and_resolve(local_root_dir, candidate) for candidate in iter_pdfs_safe(Path(local_root_dir))
+    }
 
     # 4) Chiamata al downloader sottostante (accetta 'progress', ma qui non lo usiamo per i test)
     downloader = cast(Callable[..., Any], download_drive_pdfs_to_local)
@@ -747,10 +759,11 @@ def download_raw_from_drive_with_progress(
         context=ctx,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
         chunk_size=8 * 1024 * 1024,
+        overwrite=overwrite,
     )
 
     # 5) Diff -> solo file nuovi creati
-    after = set(Path(p).resolve() for p in glob(str(local_root_dir / "**" / "*.pdf"), recursive=True))
+    after = {ensure_within_and_resolve(local_root_dir, candidate) for candidate in iter_pdfs_safe(Path(local_root_dir))}
     created = sorted(after - before)
     return created
 

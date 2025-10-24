@@ -52,7 +52,9 @@ def test_download_from_drive_invokes_download(tmp_path: Path, monkeypatch) -> No
 
     called = {"ok": False}
 
-    def _fake_download(service, remote_root_folder_id, local_root_dir, progress, context, redact_logs):  # noqa: ANN001
+    def _fake_download(  # noqa: ANN001
+        service, remote_root_folder_id, local_root_dir, progress, context, redact_logs, *, overwrite=False, **_
+    ):
         assert remote_root_folder_id == "fid123"
         assert Path(local_root_dir) == raw
         called["ok"] = True

@@ -172,6 +172,7 @@ def download_drive_pdfs_to_local(
     context: Any | None = None,
     redact_logs: bool = False,
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    overwrite: bool = False,
 ) -> int:
     """Scarica ricorsivamente **solo i PDF** da una cartella Drive verso `local_root_dir`.
 
@@ -183,6 +184,7 @@ def download_drive_pdfs_to_local(
         context: ClientContext opzionale per log arricchiti (slug, base_dir, redact).
         redact_logs: se True, redige ID sensibili nei log.
         chunk_size: dimensione chunk per MediaIoBaseDownload (byte).
+        overwrite: se True forza la riscrittura anche quando il file esiste con size diversa.
 
     Returns:
         Numero di PDF scaricati (nuovi/aggiornati).
@@ -246,10 +248,17 @@ def download_drive_pdfs_to_local(
         remote_size = int(item.get("size") or 0)
         if dest_path.exists() and remote_size > 0:
             try:
-                if dest_path.stat().st_size == remote_size:
+                local_size = dest_path.stat().st_size
+                if local_size == remote_size:
                     logger.debug(
                         "download.skip.same_size",
                         extra={"file_path": str(dest_path), "size": remote_size},
+                    )
+                    continue
+                if not overwrite:
+                    logger.debug(
+                        "download.skip.overwrite_disabled",
+                        extra={"file_path": str(dest_path), "local_size": local_size, "remote_size": remote_size},
                     )
                     continue
             except OSError:
