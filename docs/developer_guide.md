@@ -1,225 +1,203 @@
-## Developer Guide — Facade & Wrapper Audit (2025‑10‑07)
+# Developer Guide — v1.0 Beta
 
-### Audit dei Wrapper che Delegano a `pipeline.*`
-
-Un audit mirato è stato condotto sul repository `timmy-kb-acme` per identificare tutti i wrapper UI che delegano a funzioni della pipeline centrale. I risultati confermano che la maggior parte dei moduli UI segue correttamente il contratto SSoT (Single Source of Truth), ma alcuni richiedono un riallineamento di firma per garantire piena parità futura.
-
-#### Risultati principali
-
-**1. `src/ui/utils/core.py`**
-- Wrappers individuati: `safe_write_text`, `ensure_within_and_resolve`, `to_kebab`, `yaml_load`, `yaml_dump`.
-- Stato: ✅ coerenti con la pipeline tranne `safe_write_text`, che inizialmente non esportava il parametro `fsync`.
-- Correzione applicata: la firma è stata aggiornata a `safe_write_text(path, data, *, encoding='utf-8', atomic=True, fsync=False)` per mantenere parità con `pipeline.file_utils.safe_write_text`.
-
-**2. `src/ui/components/yaml_editors.py`**
-- Wrapper: `safe_write_text` usato per scritture atomiche.
-- Stato: ✅ coerente (parametri `encoding`, `atomic`, `fsync=False` ora supportati a cascata dal wrapper core).
-
-**3. `src/ui/services/tags_adapter.py`**
-- Wrapper: `safe_write_text` e `ensure_within_and_resolve`.
-- Stato: ✅ corretti; nessuna divergenza di firma.
-
-**4. `src/ui/clients_store.py`**
-- Wrapper: `safe_write_text` e `ensure_within_and_resolve`.
-- Stato: ✅ coerenti; usa parametri di default identici alla pipeline.
-
-### Linee Guida Aggiornate per Facade/Wrapper
-
-Per prevenire divergenze future, ogni *facade* o *wrapper* che delega a moduli `pipeline.*` deve:
-
-1. **Mantenere la stessa firma** del backend SSoT (nomi, posizione e default dei parametri).
-2. **Delegare senza alterazioni semantiche**: nessuna modifica dei default, nessun filtraggio dei parametri opzionali.
-3. **Riesporre nuove feature** introdotte nel backend entro lo stesso commit (es. nuovi flag come `fsync`, `retry`, `atomic`).
-4. **Essere coperto da test di parità firma**, ad esempio:
-   ```python
-   def test_safe_write_text_signature_matches_backend():
-       import inspect, importlib
-       ui = importlib.import_module('src.ui.utils.core')
-       be = importlib.import_module('pipeline.file_utils')
-       assert inspect.signature(ui.safe_write_text) == inspect.signature(be.safe_write_text)
-   ```
-5. **Aggiungere un test di pass-through comportamentale** per garantire che tutti i parametri (inclusi quelli opzionali) vengano trasmessi correttamente.
-
-### Caricamento `.env` nella UI
-- Evita effetti collaterali a import-time: niente `load_dotenv()` eseguito appena il modulo viene importato.
-- Incapsula il caricamento in helper idempotenti (es. `_maybe_load_dotenv()` in `ui.preflight`) e invocali solo all'interno delle funzioni runtime (`run_preflight()`, orchestratori, servizi).
-- Test di regressione: `tests/test_preflight_import_safety.py` garantisce che i moduli UI restino importabili anche in ambienti headless/minimali.
-
-# Sezione: LLM - Modello per chiamate *dirette* (SSoT in `config/config.yaml`)
-
-Questa sezione spiega **come leggere il modello LLM da un’unica fonte di verità** quando fai **chiamate dirette** (es. `responses`/`chat.completions`) senza passare da l’Assistant preconfigurato.
-
-> **Quando serve**: solo per feature UI/servizi che invocano l’LLM direttamente. Il flusso **Vision → Assistant** continua a usare l’`assistant_id` e **non** legge `vision.model`.
+Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa versione è la base iniziale della documentazione tecnica: niente riferimenti a legacy o migrazioni passate.
 
 ---
 
-## 1) Configurazione: `config/config.yaml`
+## Obiettivi
+- **SSoT (Single Source of Truth)** per configurazioni, dipendenze e utility condivise.
+- **Logging strutturato centralizzato**, redazione automatica dei segreti, handler idempotenti.
+- **Path-safety** e **scritture atomiche** per ogni I/O nel workspace cliente.
+- **UI import‑safe** (nessun side‑effect a import‑time).
+- **Parità di firma** tra wrapper/facade UI e backend `pipeline.*`/`semantic.*`.
+- **Riproducibilità ambienti** tramite pin gestiti con `pip-tools` (requirements/constraints).
 
-Configurazione base:
+---
+
+## Architettura in breve
+- **Pipeline** (`pipeline.*`): funzioni SSoT per I/O, path-safety, logging, semantica e orchestrazione.
+- **UI/Service Layer** (`src/ui/*`): presenta funzioni e schermate Streamlit, delega alla pipeline senza cambiare semantica.
+- **Semantic** (`semantic.*`): conversione PDF→Markdown, arricchimento frontmatter, generazione `SUMMARY.md`/`README.md`.
+- **Workspace cliente**: `output/timmy-kb-<slug>/` con sottocartelle `raw/`, `book/`, `semantic/`, `config/`, `logs/`.
+
+---
+
+## Configurazione (SSoT)
+Il file `config/config.yaml` è la fonte unica per i parametri condivisi. Esempio per LLM **diretti**:
 
 ```yaml
 vision:
-  model: gpt-4o-mini-2024-07-18   # unico riferimento (SSoT)
-  strict_output: true              # se rilevante per la tua chiamata
-  assistant_id_env: OBNEXT_ASSISTANT_ID  # usato SOLO dal flusso con Assistant
+  model: gpt-4o-mini-2024-07-18   # modello per le chiamate dirette
+  strict_output: true             # abilita validazioni strutturali quando necessario
+  assistant_id_env: OBNEXT_ASSISTANT_ID  # usato solo dal flusso Assistant
 ```
 
-- `vision.model` è il **modello** per le chiamate LLM dirette.
-- `assistant_id_env` è ignorato nelle chiamate dirette (serve solo all’Assistant).
+**Regole:**
+- Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `vision.model`.
+- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `vision.assistant_id_env`.
 
----
-
-## 2) Helper UI: leggere il modello da config&#x20;
-
-**File:** `src/ui/config_store.py`
+Getter consigliato lato UI:
 
 ```python
+# src/ui/config_store.py
 from pathlib import Path
 import yaml
 
-# ... resto del file ...
-
 def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
     """Legge vision.model da config/config.yaml (SSoT UI)."""
-    cfg_path = get_config_path()
+    cfg_path = get_config_path()  # definito in questo modulo
     data = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
-    vision = (data.get("vision") or {})
-    return str(vision.get("model") or default)
+    return str((data.get("vision") or {}).get("model") or default)
 ```
-
-> Per ambienti multi‑tenant/override, puoi far puntare `get_config_path()` a file diversi via env.
 
 ---
 
-## 3) Uso nei service UI che chiamano l’LLM
-
-**Esempio:** `src/ui/services/<feature>_llm.py`
+## Logging centralizzato
+Usa sempre il logger strutturato della pipeline; vietati `print`, `logging.basicConfig` e `logging.getLogger(...)` nei moduli.
 
 ```python
-from timmykb.ui.config_store import get_vision_model
+from pipeline.logging_utils import get_structured_logger
+
+log = get_structured_logger(__name__, run_id=None, context={"slug": "acme"})
+log.info("ui.preview.open", extra={"slug": "acme", "page": "preview"})
+```
+
+**Caratteristiche:**
+- Output in `output/timmy-kb-<slug>/logs/`.
+- Redazione automatica di token/segreti quando `LOG_REDACTION` è attivo.
+- Handler idempotenti (console/file), formatter key‑value, `run_id` opzionale.
+
+**Regola d’uso nei servizi/UI:** il logger viene creato per modulo e passato in call‑chain dove necessario, evitando stati globali.
+
+---
+
+## Path-safety & IO sicuro
+- Deriva i path dal workspace cliente (mai costruire manualmente stringhe tipo `output/timmy-kb-<slug>`).
+- Prima di leggere/scrivere, **risolvi** e **valida** il path con gli helper della pipeline.
+- Usa writer atomici per evitare file parziali/corruzione.
+
+```python
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.file_utils import safe_write_text
+
+yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
+safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
+```
+
+---
+
+## UI import-safe
+- Nessun `load_dotenv()` o I/O a livello di modulo.
+- Incapsula il caricamento env/config in helper idempotenti (es. `_maybe_load_dotenv()` in `ui.preflight`) e invocali **solo** nel runtime (funzioni `run_*`, servizi, orchestratori).
+- I moduli devono essere importabili anche in ambienti headless/minimali.
+
+---
+
+## Wrapper & Facade: parità di firma (SSoT)
+Qualsiasi wrapper UI che delega a `pipeline.*`/`semantic.*` **mantiene la stessa firma** (nomi, posizione, default). Nessuna modifica semantica dei default.
+
+**Linee guida:**
+1. Riesponi le nuove feature del backend **nello stesso commit** (es. nuovi flag `fsync`, `retry`, `atomic`).
+2. Copertura con **test di parità firma** e **test pass‑through** dei parametri.
+
+```python
+# Esempio test di parità firma
+import importlib, inspect
+
+def _sig(fn):  # rappresentazione semplice della firma
+    return tuple((p.kind, p.name, p.default is not inspect._empty) for p in inspect.signature(fn).parameters.values())
+
+def test_safe_write_text_signature_matches_backend():
+    ui = importlib.import_module('src.ui.utils.core')
+    be = importlib.import_module('pipeline.file_utils')
+    assert _sig(ui.safe_write_text) == _sig(be.safe_write_text)
+```
+
+---
+
+## Gestione dipendenze (pip‑tools)
+- I pin vivono nei file generati `requirements*.txt` e `constraints.txt`.
+- Modifichi **solo** i sorgenti `requirements*.in` e rigeneri con `pip-compile`.
+
+```bash
+# Runtime / Dev / Opzionali
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pip install -r requirements-optional.txt
+
+# Rigenerazione pin
+pip-compile requirements.in
+pip-compile requirements-dev.in
+pip-compile requirements-optional.in
+```
+
+**Extras opzionali** (ambienti non pin‑locked): `pip install .[drive]` oppure `pip install -e ".[drive]"` in sviluppo.
+
+---
+
+## Qualità & CI
+- Lint/format obbligatori: `ruff`, `black`, `isort` (line-length 120).
+- Type checking consigliato: `mypy`/`pyright`.
+- Hook pre-commit: format/lint prima del commit; smoke test in CI.
+
+```bash
+pre-commit install --hook-type pre-commit --hook-type pre-push
+make qa-safe     # isort/black/ruff/mypy (se presenti)
+make ci-safe     # qa-safe + pytest
+```
+
+---
+
+## Test: piramide e casi minimi
+- **Unit** → **contract/middle** → **smoke E2E** (dataset dummy; nessuna rete).
+- Casi minimi obbligatori:
+  - Slug invalidi (devono essere scartati/validati).
+  - Traversal via symlink in `raw/` (gli helper non devono attraversare).
+  - Parità di firma wrapper UI ↔ backend e pass‑through dei parametri.
+  - Invarianti su `book/` (presenza `README.md`/`SUMMARY.md` dopo onboarding).
+
+---
+
+## Pattern da evitare
+- Hardcode del modello LLM nei servizi (`MODEL = "gpt-..."`): usa `get_vision_model()`.
+- `print` o `basicConfig` per logging.
+- Letture/scritture senza path-safety o writer atomici.
+- Side-effect a import‑time (I/O, letture env, configurazioni globali).
+
+---
+
+## Esempi rapidi (UI/Servizi)
+```python
+# Lettura modello e chiamata Responses API
+from ui.config_store import get_vision_model
 from timmykb.ai.client_factory import make_openai_client
 
-MODEL = get_vision_model()  # ← NIENTE hardcode
-
+MODEL = get_vision_model()
 client = make_openai_client()
-
-# Esempio A: Responses API (structured text output)
 resp = client.responses.create(
     model=MODEL,
     input=[
-        {"role": "system", "content": "Sei un assistente.."},
-        {"role": "user",   "content": "<prompt dell’utente>"},
+        {"role": "system", "content": "Sei un assistente..."},
+        {"role": "user", "content": "<prompt>"},
     ],
 )
 text = resp.output_text
-
-# Esempio B: Chat Completions (se usi l’API chat)
-# chat = client.chat.completions.create(
-#     model=MODEL,
-#     messages=[
-#         {"role": "system", "content": "Sei un assistente.."},
-#         {"role": "user",   "content": "<prompt dell’utente>"},
-#     ],
-# )
-# text = chat.choices[0].message.get("content", "")
 ```
 
-**Linee guida**:
+```python
+# Logging evento UI + scrittura YAML sicura
+from pipeline.logging_utils import get_structured_logger
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve
 
-- Non hardcodare il modello nei servizi; usa sempre `MODEL = get_vision_model()`.
-- Se cambi modello (p.es. in stage/prod), basta aggiornare `config/config.yaml`.
-- Mantieni `strict_output`/validazioni nel servizio se il contratto di output lo richiede (JSON, ecc.).
-
----
-
-## 4) Differenze con il flusso *Assistant*
-
-- **Assistant (Vision)**: legge l’`assistant_id` da env (nome della variabile preso da `vision.assistant_id_env`), e il modello è configurato **dentro** l’Assistant. `vision.model` **non** è usato.
-- **Chiamate dirette**: ignorano `assistant_id_env` e usano **sempre** `vision.model`.
-
-Schema decisionale rapido:
-
-- Se stai usando `client.beta.threads.runs.create_and_poll(... assistant_id=...)` → **Assistant** (usa `assistant_id_env`).
-- Se stai usando `client.responses.create(... model=...)` o `client.chat.completions.create(... model=...)` → **diretto** (usa `get_vision_model()`).
+log = get_structured_logger("ui.manage.tags")
+yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
+safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True)
+log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
+```
 
 ---
 
-
-## 5) Anti‑pattern da evitare
-
-- Hardcodare `MODEL = "gpt‑..."` nei file di servizio.
-- Leggere il modello da env sparse (es. `LLM_MODEL`) bypassando `config.yaml`.
-- Ri‑risolvere il path di `config.yaml` in ogni funzione: usa `get_config_path()` dal `config_store`.
-
----
-
-## 6) FAQ
-
-- **Posso usare modelli diversi per feature diverse?**\
-  Sì, ma tieni la regola: ogni feature legge il suo modello dal `config.yaml`. Se servono due modelli, aggiungi un sotto‑blocco (es. `vision.preview.model`, `vision.qa.model`) e due getter dedicati.
-
-- **Cosa succede se ************`vision.model`************ manca?**\
-  Il getter ritorna il default (`gpt-4o-mini-2024-07-18`). Imposta sempre un valore esplicito in produzione.
-
-
-### Prossimi Step
-- Introdurre un test automatico di “Signature Parity” per tutti i wrapper UI.
-- Aggiornare la sezione *CI Quality Checks* per includere un controllo di coerenza SSoT.
-
----
-
-## Estensione Audit — Modulo `services/*`
-
-> Obiettivo: verificare i wrapper/logiche adattatrici in `src/ui/services` che delegano a `pipeline.*` o ad altre SSoT (es. `semantic.*`).
-
-### Copertura e Risultati
-
-**1) `services/tags_adapter.py`**
-- Deleghe: `ensure_within_and_resolve`, `safe_write_text` (per persistenza mapping/tag review).
-- Stato: **OK** — firma allineata grazie al ripristino di `fsync` nel wrapper UI; i default coincidono con il backend.
-
-**2) `services/workspace_utils.py` (o equivalenti)**
-- Deleghe: path‑safety (`ensure_within*`), discovery cartelle/asset.
-- Stato: **OK** — usa le guardie SSoT senza ridefinire parametri; nessun comportamento divergente trovato.
-- Nota: dove possibile preferire `validate_slug` (dalla pipeline) invece di normalizzazioni locali.
-
-**3) `clients_store.py` / `services/clients_store.py`**
-- Deleghe: `safe_write_text`, `ensure_within_and_resolve`.
-- Stato: **OK** — la persistenza ora può opt‑in su `fsync=True` in operazioni sensibili (es. salvataggi di configurazioni/indici).
-
-**4) Adapter verso `semantic.*` (es. enrichment/indexer)**
-- Deleghe: chiamate a facade `semantic.api` con parametri pass‑through.
-- Stato: **OK** — nessun rimappaggio dei default; i wrapper non nascondono flag rilevanti.
-
-> Non sono emersi altri wrapper con divergenza di firma rispetto alle SSoT. In caso di introduzione di nuove utility in pipeline (es. `safe_append_text(fs...)`, `retry_write(...)`), la UI **deve** riesporre i nuovi argomenti con gli stessi default.
-
-### Linee guida aggiuntive per `services/*`
-- **Parità di firma**: ogni funzione di `services/*` che è un semplice inoltro verso pipeline/semantic deve mantenere names/default **identici**.
-- **No side‑effects**: nessun monkeypatch o rebinding globale; preferire `partial` o parametri espliciti.
-- **Idempotenza**: le funzioni che scrivono su disco devono essere ri‑eseguibili senza effetti collaterali (scritture atomiche, cleanup, path‑safety).
-- **Errori tipizzati**: propagare `ConfigError`/`PipelineError` senza trasformarli in `ValueError` generici.
-
-### Test proposti (aggiuntivi)
-- **Signature Parity per services**
-  ```python
-  import importlib, inspect
-  from typing import Sequence
-
-  CASES: Sequence[tuple[str, str, str]] = (
-      ("src.ui.services.tags_adapter", "safe_write_text", "pipeline.file_utils.safe_write_text"),
-      ("src.ui.services.tags_adapter", "ensure_within_and_resolve", "pipeline.path_utils.ensure_within_and_resolve"),
-  )
-
-  def _sig(fn):
-      return tuple((p.kind, p.name, p.default is not inspect._empty) for p in inspect.signature(fn).parameters.values())
-
-  def test_services_signature_parity():
-      for mod_name, fn_name, be_path in CASES:
-          mod = importlib.import_module(mod_name)
-          be_mod_name, be_fn_name = be_path.rsplit(".", 1)
-          be_mod = importlib.import_module(be_mod_name)
-          assert _sig(getattr(mod, fn_name)) == _sig(getattr(be_mod, be_fn_name))
-  ```
-- **Pass‑through comportamentale** (es.: `safe_write_text(..., fsync=True)` chiama il backend con `fsync=True`).
-
-Con questa estensione, anche i wrapper/adapter in `services/*` risultano allineati alle SSoT, riducendo il rischio di drift e rendendo la UI più prevedibile ai rerun.
+## Contributi
+- PR piccole, commit atomici, messaggi chiari (imperativo al presente).
+- Ogni modifica di comportamento va coperta da test.
