@@ -96,7 +96,7 @@ else:
 from pipeline.config_utils import get_client_config
 
 UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
-LOGGER = logging.getLogger("ui.new_client")
+LOGGER = get_structured_logger("ui.new_client")
 
 
 # --------- env helpers ---------
@@ -231,13 +231,7 @@ class _UIContext:
 
 def _ui_logger() -> logging.Logger:
     """Logger minimale per Vision lato UI."""
-    log = logging.getLogger("ui.vision.new_client")
-    if not log.handlers:
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        log.addHandler(handler)
-        log.setLevel(logging.INFO)
-        log.propagate = False
+    log = cast(logging.Logger, get_structured_logger("ui.vision.new_client", propagate=False))
     return log
 
 

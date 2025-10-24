@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Any, Callable, Optional, TypeVar, cast
+
+from pipeline.logging_utils import get_structured_logger
 
 try:
     import streamlit as st
@@ -30,7 +31,7 @@ def show_error_with_details(
     expander_label: str = "Dettagli tecnici",
 ) -> None:
     """Renderizza un messaggio sintetico e registra il dettaglio sui log."""
-    log = logger or logging.getLogger(event)
+    log = logger or get_structured_logger(event)
     log_extra: dict[str, object] = {"error": str(exc), "exception_type": type(exc).__name__}
     if extra:
         log_extra.update(extra)

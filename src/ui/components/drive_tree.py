@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, Iterable, List, Optional, cast
+
+from pipeline.logging_utils import get_structured_logger
 
 try:
     import streamlit as st
@@ -17,7 +18,7 @@ except Exception:  # pragma: no cover
     get_drive_service = None
     list_drive_files = None
 
-_LOGGER = logging.getLogger("ui.components.drive_tree")
+_LOGGER = get_structured_logger("ui.components.drive_tree")
 _FIELDS_MINIMAL = "nextPageToken, files(id, name, mimeType, size, modifiedTime)"
 
 

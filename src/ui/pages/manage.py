@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import inspect
-import logging
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
 import streamlit as st
 import yaml
 
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
@@ -19,7 +19,7 @@ from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, iter_pdfs_safe, resolve_raw_dir
 
-LOGGER = logging.getLogger("ui.manage")
+LOGGER = get_structured_logger("ui.manage")
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:

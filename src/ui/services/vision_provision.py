@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Import isolate-binding per evitare cicli nel grafo Streamlit
@@ -188,7 +189,7 @@ def run_vision(
     """
     Wrapper semplificato per la UI: esegue Vision con logger di default.
     """
-    eff_logger = logger or logging.getLogger("ui.vision.service")
+    eff_logger = logger or get_structured_logger("ui.vision.service")
     return provision_from_vision(
         ctx=ctx,
         logger=eff_logger,

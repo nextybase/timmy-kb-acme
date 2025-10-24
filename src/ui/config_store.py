@@ -2,7 +2,6 @@
 # src/ui/config_store.py
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -11,6 +10,7 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Base sicura ancorata al repo
@@ -32,7 +32,7 @@ MAX_CANDIDATE_LIMIT: int = 20_000
 DEFAULT_CANDIDATE_LIMIT: int = 4_000
 DEFAULT_LATENCY_BUDGET_MS: int = 0
 
-_logger = logging.getLogger("ui.config_store")
+_logger = get_structured_logger("ui.config_store")
 
 
 def _coerce_int(value: Any, default: int) -> int:

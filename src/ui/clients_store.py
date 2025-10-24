@@ -2,7 +2,6 @@
 # src/ui/clients_store.py
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +11,7 @@ import yaml
 
 from pipeline.context import validate_slug
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Base sicura ancorata al repo
@@ -26,7 +26,7 @@ def _resolve_db_path(target: Path) -> Path:
 DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "clients_db"))))
 DB_FILE: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))))
 
-LOG = logging.getLogger("ui.clients_store")
+LOG = get_structured_logger("ui.clients_store")
 
 
 @dataclass

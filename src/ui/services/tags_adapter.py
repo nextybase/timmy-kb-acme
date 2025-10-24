@@ -9,6 +9,7 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.yaml_utils import clear_yaml_cache
 from semantic.api import build_tags_csv
@@ -50,7 +51,7 @@ def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     """Genera/aggiorna tags_reviewed in-process mostrando l'avanzamento nella UI."""
     _require_streamlit()
-    svc_logger = logger or logging.getLogger("ui.services.tags_adapter")
+    svc_logger = logger or get_structured_logger("ui.services.tags_adapter")
 
     try:
         with st.spinner("Preparazione contesto..."):

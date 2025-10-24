@@ -14,6 +14,7 @@ import yaml
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from semantic.validation import validate_context_slug
 from timmykb.pre_onboarding import ensure_local_workspace_for_ui
@@ -149,7 +150,7 @@ def _workspace_dir_for(slug: str) -> Path:
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:
     try:
-        (logger or logging.getLogger("ui.landing_slug")).info("ui.shutdown_request")
+        (logger or get_structured_logger("ui.landing_slug")).info("ui.shutdown_request")
         os.kill(os.getpid(), signal.SIGTERM)
     except Exception:
         os._exit(0)
@@ -375,7 +376,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 pdf_path = ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf")
                 result = vision_services.provision_from_vision(
                     ctx,
-                    log or logging.getLogger("ui.vision_provision"),
+                    log or get_structured_logger("ui.vision_provision"),
                     slug=slug,
                     pdf_path=pdf_path,
                 )

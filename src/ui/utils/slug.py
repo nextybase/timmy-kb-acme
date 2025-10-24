@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from typing import Any, Optional, cast
+
+from pipeline.logging_utils import get_structured_logger
 
 try:
     import streamlit as st
@@ -34,7 +35,7 @@ from .query_params import get_slug as _qp_get
 from .query_params import set_slug as _qp_set
 
 _PERSIST_PATH = Path(__file__).resolve().parents[2] / "clients_db" / "ui_state.json"
-LOGGER = logging.getLogger("ui.slug")
+LOGGER = get_structured_logger("ui.slug")
 
 
 def _has_streamlit_context() -> bool:

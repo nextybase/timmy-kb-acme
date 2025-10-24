@@ -1,12 +1,12 @@
 # src/ui/utils/workspace.py
 from __future__ import annotations
 
-import logging
 import os
 import time
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple, cast
 
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, validate_slug
 
 # Import opzionale di Streamlit senza type: ignore.
@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover
     _st = None
 
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
-_log = logging.getLogger("ui.workspace")
+_log = get_structured_logger("ui.workspace")
 
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:

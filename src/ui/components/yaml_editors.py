@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from pipeline.logging_utils import get_structured_logger
+
 """
 Editor YAML per i file semantici.
 
 """
 
-import logging
 from pathlib import Path
 from typing import cast
 
@@ -25,7 +26,7 @@ from pipeline.file_utils import safe_write_text
 from ..const import DEFAULT_ENCODING
 from ..utils.streamlit_fragments import run_fragment
 
-LOGGER = logging.getLogger("ui.components.yaml_editors")
+LOGGER = get_structured_logger("ui.components.yaml_editors")
 
 
 def _show_error(message: str, exc: Exception) -> None:
