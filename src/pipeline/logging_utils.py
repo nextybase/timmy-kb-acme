@@ -6,7 +6,7 @@ Obiettivi:
 - Logger **idempotente**, con filtri di **contesto** (slug, run_id) e **redazione**
   I filtri sono attivabili da `context.redact_logs`.
 - Niente `print`: tutti i moduli usano logging strutturato (console + opzionale file).
-- Utilità di **masking** coerenti per ID, percorsi e aggiornamenti di config.
+- Utility di **masking** coerenti per ID, percorsi e aggiornamenti di config.
 
 Formato di output (console/file):
     %(asctime)s %(levelname)s %(name)s: %(message)s |
@@ -21,12 +21,12 @@ Indice funzioni principali (ruolo):
 - `redact_secrets(msg)`:
     redige pattern comuni di segreti in testo libero.
 - `mask_partial(value, keep=3)`, `mask_id_map(d)`, `mask_updates(d)`:
-    utilità per mascherare valori da includere in `extra`.
+    utility per mascherare valori da includere in `extra`.
 - `tail_path(p, keep_segments=2)`:
     coda compatta di un path per log.
 
 Linee guida implementative:
-- **Redazione centralizzata**: se `context.redact_logs` è True, il filtro applica la redazione
+- **Redazione centralizzata**: se `context.redact_logs` e' True, il filtro applica la redazione
   ai messaggi e a campi extra sensibili (`GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, ecc.).
 - **Idempotenza**: chiamate ripetute a `get_structured_logger` non creano handler duplicati.
 """
@@ -34,6 +34,7 @@ Linee guida implementative:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,10 +60,10 @@ def redact_secrets(msg: str) -> str:
 
 
 def mask_partial(value: Optional[str], keep: int = 3) -> str:
-    """Maschera parzialmente un identificativo: 'abcdef' -> 'abc…'."""
+    """Maschera parzialmente un identificativo: 'abcdef' -> 'abc...'."""
     if not value:
         return ""
-    return value[:keep] + "…" if len(value) > keep else value
+    return value[:keep] + "..." if len(value) > keep else value
 
 
 def tail_path(p: Union[Path, str], keep_segments: int = 2) -> str:
@@ -119,7 +120,7 @@ class _ContextFilter(logging.Filter):
         self.ctx = ctx
 
     def filter(self, record: logging.LogRecord) -> bool:
-        # campi extra “globali”
+        # campi extra "globali"
         if not hasattr(record, "slug"):
             record.slug = self.ctx.slug or "-"
         if not hasattr(record, "run_id"):
@@ -216,19 +217,20 @@ def get_structured_logger(
     log_file: Optional[Path] = None,
     run_id: Optional[str] = None,
     level: int = logging.INFO,
+    propagate: Optional[bool] = None,
 ) -> logging.Logger:
     """Restituisce un logger configurato e idempotente.
 
     Parametri:
         name:     nome del logger (es. 'pre_onboarding').
         context:  oggetto con attributi opzionali `.slug`, `.redact_logs`, `.run_id`.
-        log_file: path file log; se presente, aggiunge file handler (dir già creata a monte).
+        log_file: path file log; se presente, aggiunge file handler (dir gia' creata a monte).
         run_id:   identificativo run usato se `context.run_id` assente.
         level:    livello logging (default: INFO).
 
     Comportamento:
       - `propagation=False`, handler console sempre presente,
-      - file handler opzionale se `log_file` è fornito (si assume path già validato/creato),
+      - file handler opzionale se `log_file` e' fornito (si assume path gia' validato/creato),
       - filtri: contesto + redazione (se `context.redact_logs` True),
       - formatter coerente console/file.
 
@@ -241,7 +243,13 @@ def get_structured_logger(
     """
     lg = logging.getLogger(name)
     lg.setLevel(level)
-    lg.propagate = False
+    if propagate is None:
+        env_override = os.getenv("TIMMY_LOG_PROPAGATE", "").lower()
+        if env_override:
+            propagate = env_override in {"1", "true", "yes", "on"}
+        else:
+            propagate = True
+    lg.propagate = propagate
 
     ctx = _ctx_view_from(context, run_id)
 
@@ -362,9 +370,9 @@ class metrics_scope:
             upload_config_to_drive_folder(...)
 
     Log prodotti:
-        INFO ▶️  start:<stage> | slug=<customer>
-        INFO ✅ end:<stage>   | slug=<customer>
-        ERROR ⛔ fail:<stage>: <exc> | slug=<customer>
+        INFO -> start:<stage> | slug=<customer>
+        INFO -> end:<stage>   | slug=<customer>
+        ERROR -> fail:<stage>: <exc> | slug=<customer>
     """
 
     def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
@@ -373,7 +381,7 @@ class metrics_scope:
         self.customer = customer
 
     def __enter__(self) -> "metrics_scope":
-        self.logger.info(f"▶️  start:{self.stage}", extra={"slug": self.customer})
+        self.logger.info(f"[start] {self.stage}", extra={"slug": self.customer})
         return self
 
     def __exit__(
@@ -383,9 +391,9 @@ class metrics_scope:
         tb: Optional[TracebackType],
     ) -> Literal[False]:
         if exc:
-            self.logger.error(f"⛔ fail:{self.stage}: {exc}", extra={"slug": self.customer})
+            self.logger.error(f"[fail] {self.stage}: {exc}", extra={"slug": self.customer})
         else:
-            self.logger.info(f"✅ end:{self.stage}", extra={"slug": self.customer})
+            self.logger.info(f"[end] {self.stage}", extra={"slug": self.customer})
         # non sopprimere eccezioni
         return False
 
