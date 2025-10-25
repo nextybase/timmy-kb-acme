@@ -1,6 +1,8 @@
-# Timmy-KB - Documentazione (v2.1.0)
+# Timmy-KB - Documentazione (v1.0 Beta)
 
 Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida utente, guida sviluppatore, policy operative e regole di versioning.
+
+> **Lingue**: la documentazione operativa rimane in italiano; il documento di architettura (`architecture.md`) resta in inglese per coerenza con diagrammi e naming del codice.
 
 > **Doppio approccio**: puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py` - vedi [Guida UI (Streamlit)](guida_ui.md).
@@ -20,7 +22,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilità.
-  - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
+  - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.\n  - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
 - **Changelog**
   - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
 

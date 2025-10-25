@@ -1,4 +1,4 @@
-# Timmy-KB - User Guide (v2.1.0)
+# Timmy-KB - User Guide (v1.0 Beta)
 
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
