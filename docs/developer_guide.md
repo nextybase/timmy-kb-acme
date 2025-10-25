@@ -41,12 +41,14 @@ Getter consigliato lato UI:
 ```python
 # src/ui/config_store.py
 from pathlib import Path
-import yaml
+from pipeline.yaml_utils import yaml_read
+
 
 def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
     """Legge vision.model da config/config.yaml (SSoT UI)."""
     cfg_path = get_config_path()  # definito in questo modulo
-    data = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
+    cfg_file = Path(cfg_path)
+    data = yaml_read(cfg_file.parent, cfg_file) or {}
     return str((data.get("vision") or {}).get("model") or default)
 ```
 

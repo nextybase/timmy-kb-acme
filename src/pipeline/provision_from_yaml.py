@@ -5,10 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import yaml
-
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.yaml_utils import yaml_read
 
 
 @dataclass(frozen=True)
@@ -28,8 +27,7 @@ def _load_cartelle_yaml(base_dir: Path, yaml_path: Path) -> Dict[str, Any]:
     if not resolved.exists():
         raise ConfigError(f"YAML non trovato: {resolved}")
     try:
-        raw_text = read_text_safe(base_dir, resolved)
-        data = yaml.safe_load(raw_text)
+        data = yaml_read(base_dir, resolved)
     except Exception as e:
         raise ConfigError(f"Impossibile leggere/parsing YAML: {resolved}") from e
     if not isinstance(data, dict):

@@ -11,19 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# -- Caricamento .env (robusto, con fallback manuale) -------------------------
-try:
-    from pipeline.env_utils import ensure_dotenv_loaded  # type: ignore
-except Exception:
-    try:
-        from dotenv import load_dotenv  # type: ignore
-
-        def ensure_dotenv_loaded() -> None:
-            load_dotenv(override=False)
-    except Exception:
-        def ensure_dotenv_loaded() -> None:  # type: ignore
-            return
-
 # --- ensure repo root & src are on sys.path ---------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
@@ -32,7 +19,7 @@ if SRC_DIR.exists():
     sys.path.insert(0, str(SRC_DIR))
 sys.path.insert(0, str(REPO_ROOT))
 
-
+from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 def _print_err(payload: Dict[str, Any], code: int) -> None:
     """Stampa JSON su stderr e termina con codice specifico."""
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
@@ -125,8 +112,11 @@ class TracingClient:
 # ---- guardie ambiente / .env -----------------------------------------------
 def _require_env() -> None:
     """Richiede OPENAI_API_KEY + OBNEXT_ASSISTANT_ID/ASSISTANT_ID, altrimenti esce (2)."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    assistant_id = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+    try:
+        api_key = get_env_var("OPENAI_API_KEY", required=True)
+    except KeyError:
+        api_key = None
+    assistant_id = _optional_env("OBNEXT_ASSISTANT_ID") or _optional_env("ASSISTANT_ID")
     if not api_key or not assistant_id:
         _print_err(
             {
@@ -141,16 +131,12 @@ def _require_env() -> None:
 
 
 def _ensure_kb_enabled_or_fail() -> None:
-    """
-    L'healthcheck serve a validare Assistente + File Search.
-    - Se VISION_USE_KB è assente ⇒ forziamo '1'
-    - Se è impostata a '0'/'false'/'no' ⇒ falliamo (exit 3)
-    """
-    val = os.getenv("VISION_USE_KB")
-    if not val:
+    """Garantisce che la KB sia attiva per l'healthcheck Assistant."""
+    current = _optional_env("VISION_USE_KB")
+    if current is None:
         os.environ["VISION_USE_KB"] = "1"
         return
-    if str(val).lower() in ("0", "false", "no"):
+    if not get_bool("VISION_USE_KB", default=True):
         _print_err(
             {
                 "error": "VISION_USE_KB è disabilitata ma l'healthcheck richiede la KB attiva.",
@@ -199,37 +185,11 @@ def _resolve_filenames(client: TracingClient, file_ids: List[str]) -> Dict[str, 
 
 
 def _load_env() -> None:
-    """Carica .env: prima via ensure_dotenv_loaded, poi fallback manuale su REPO_ROOT/.env."""
-    loaded = False
+    """Carica .env con l'helper centralizzato (best-effort)."""
     try:
-        result = ensure_dotenv_loaded()
-        loaded = bool(result)
+        ensure_dotenv_loaded()
     except Exception:
-        loaded = False
-    if not loaded:
-        # load_dotenv potrebbe non essere installato: fallback manuale
-        env_path = REPO_ROOT / ".env"
-        if env_path.exists():
-            try:
-                text = env_path.read_text(encoding="utf-8")
-                for raw_line in text.splitlines():
-                    line = raw_line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-                    if key and os.environ.get(key) is None:
-                        os.environ[key] = value
-            except Exception:
-                pass
-    else:
-        try:
-            from dotenv import load_dotenv  # type: ignore
-
-            load_dotenv(dotenv_path=REPO_ROOT / ".env", override=False)
-        except Exception:
-            pass
+        pass
 
 
 # ---- main -------------------------------------------------------------------

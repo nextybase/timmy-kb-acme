@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var, get_int
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -113,14 +113,17 @@ _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
 
 
 def _snapshot_retention_days() -> int:
-    raw = (os.getenv("VISION_SNAPSHOT_RETENTION_DAYS") or "").strip()
-    if not raw:
-        return _SNAPSHOT_RETENTION_DAYS_DEFAULT
-    try:
-        value = int(raw)
-    except ValueError:
-        return _SNAPSHOT_RETENTION_DAYS_DEFAULT
+    value = get_int("VISION_SNAPSHOT_RETENTION_DAYS", default=_SNAPSHOT_RETENTION_DAYS_DEFAULT)
     return max(0, value)
+
+
+def _optional_env(name: str) -> Optional[str]:
+    try:
+        return get_env_var(name)
+    except KeyError:
+        return None
+    except Exception:
+        return None
 
 
 # =========================
@@ -303,7 +306,7 @@ def _call_assistant_json(
     for msg in user_messages:
         client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg["content"])
 
-    _use_kb = (os.getenv("VISION_USE_KB", "1") or "1").strip().lower() not in {"0", "false", "no", "off"}
+    _use_kb = get_bool("VISION_USE_KB", default=True)
     tool_choice = {"type": "file_search"} if _use_kb else "auto"
 
     response_format = (
@@ -453,6 +456,8 @@ def provision_from_vision(
     """
     Onboarding Vision (flusso **semplificato e bloccante**).
     """
+    ensure_dotenv_loaded()
+
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
@@ -479,8 +484,8 @@ def provision_from_vision(
         vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
     except Exception:
         vision_cfg = {}
-    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip()
-    assistant_id = os.getenv(env_name) or os.getenv("ASSISTANT_ID")
+    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip() or "OBNEXT_ASSISTANT_ID"
+    assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
     if not assistant_id:
         raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
 
@@ -501,7 +506,7 @@ def provision_from_vision(
     user_block = "\n".join(user_block_lines)
 
     # Run instructions: KB attiva di default, disattivabile con VISION_USE_KB=0/false/no/off
-    _use_kb = (os.getenv("VISION_USE_KB", "1") or "1").strip().lower() not in {"0", "false", "no", "off"}
+    _use_kb = get_bool("VISION_USE_KB", default=True)
     if _use_kb:
         run_instructions = (
             "Durante QUESTA run puoi usare **File Search** (KB allegata all'assistente) "
@@ -568,8 +573,8 @@ def provision_from_vision(
         "strict_output": True,
         "yaml_paths": mask_paths(paths.mapping_yaml, paths.cartelle_yaml),
         "sdk_version": _sdk_version,
-        "project": os.getenv("OPENAI_PROJECT") or "",
-        "base_url": os.getenv("OPENAI_BASE_URL") or "",
+        "project": _optional_env("OPENAI_PROJECT") or "",
+        "base_url": _optional_env("OPENAI_BASE_URL") or "",
         "sections": list(REQUIRED_SECTIONS_CANONICAL),
         "lint_warnings": lint_warnings,
     }

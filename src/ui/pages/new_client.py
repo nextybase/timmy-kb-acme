@@ -19,6 +19,7 @@ ensure_local_workspace_for_ui = import_first(
 ).ensure_local_workspace_for_ui
 
 from pipeline.context import ClientContext, validate_slug
+from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -69,7 +70,7 @@ else:
     _ensure_drive_minimal = None
 from pipeline.config_utils import get_client_config
 
-UI_ALLOW_LOCAL_ONLY = os.getenv("UI_ALLOW_LOCAL_ONLY", "true").lower() in ("1", "true", "yes")
+UI_ALLOW_LOCAL_ONLY = get_bool("UI_ALLOW_LOCAL_ONLY", default=True)
 LOGGER = get_structured_logger("ui.new_client")
 
 

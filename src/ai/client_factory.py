@@ -1,24 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/ai/client_factory.py
 from __future__ import annotations
 
-import os
-from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
+from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.exceptions import ConfigError
-
-try:
-    from dotenv import find_dotenv, load_dotenv  # type: ignore
-
-    _DOTENV_LOADED = bool(load_dotenv(find_dotenv(usecwd=True), override=False))
-    if not _DOTENV_LOADED:
-        repo_root = Path(__file__).resolve().parents[2]
-        env_path = repo_root / ".env"
-        if env_path.exists():
-            _DOTENV_LOADED = bool(load_dotenv(env_path, override=False))
-except Exception:
-    # python-dotenv non installato: l'ambiente deve provvedere alle variabili
-    _DOTENV_LOADED = False
 
 
 def _normalize_base_url(raw: str) -> str:
@@ -32,10 +19,11 @@ def _normalize_base_url(raw: str) -> str:
     return base
 
 
-def _is_truthy(value: str | None) -> bool:
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+def _optional_env(name: str) -> Optional[str]:
+    try:
+        return get_env_var(name)
+    except Exception:
+        return None
 
 
 def make_openai_client():
@@ -45,16 +33,20 @@ def make_openai_client():
     Richiede che `OPENAI_API_KEY` sia impostata.
     Le variabili legacy (`OPENAI_API_KEY_FOLDER`, `OPENAI_FORCE_HTTPX`) non sono più supportate.
     """
-    legacy_key = os.getenv("OPENAI_API_KEY_FOLDER")
-    api_key = os.getenv("OPENAI_API_KEY")
+    ensure_dotenv_loaded()
+
+    legacy_key = _optional_env("OPENAI_API_KEY_FOLDER")
+    try:
+        api_key = get_env_var("OPENAI_API_KEY", required=True)
+    except KeyError as exc:
+        raise ConfigError("Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.") from exc
+
     if legacy_key and not api_key:
         raise ConfigError(
             "OPENAI_API_KEY_FOLDER non è più supportata. Sposta il valore in OPENAI_API_KEY (.env/ambiente)."
         )
-    if not api_key:
-        raise ConfigError("Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.")
 
-    if _is_truthy(os.getenv("OPENAI_FORCE_HTTPX")):
+    if get_bool("OPENAI_FORCE_HTTPX", default=False):
         raise ConfigError("OPENAI_FORCE_HTTPX non è più supportata: il client utilizza solo l'SDK ufficiale.")
 
     try:
@@ -68,10 +60,10 @@ def make_openai_client():
         "default_headers": default_headers,
     }
 
-    base_url_env = (os.getenv("OPENAI_BASE_URL") or "").strip()
-    project_env = (os.getenv("OPENAI_PROJECT") or "").strip()
-    timeout_env = (os.getenv("OPENAI_TIMEOUT") or "").strip()
-    max_retries_env = (os.getenv("OPENAI_MAX_RETRIES") or "").strip()
+    base_url_env = _optional_env("OPENAI_BASE_URL")
+    project_env = _optional_env("OPENAI_PROJECT")
+    timeout_env = _optional_env("OPENAI_TIMEOUT")
+    max_retries_env = _optional_env("OPENAI_MAX_RETRIES")
 
     if base_url_env:
         client_kwargs["base_url"] = _normalize_base_url(base_url_env)
