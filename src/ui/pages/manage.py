@@ -12,10 +12,17 @@ import yaml
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
-from semantic.tags_io import write_tags_reviewed_from_nlp_db
-from storage.tags_store import derive_db_path_from_yaml_path
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
+
+try:
+    from ui.clients_store import set_state as set_client_state
+except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di test
+
+    def set_client_state(slug: str, new_state: str) -> bool:
+        return False
+
+
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
@@ -166,6 +173,74 @@ def _open_tags_editor_modal(slug: str) -> None:
         with st.container(border=True):
             st.subheader("Modifica tags_reviewed.yaml")
             _editor_body()
+
+
+def _open_tags_raw_modal(slug: str) -> None:
+    base_dir = _workspace_root(slug)
+    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+    csv_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.csv"))
+    yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
+    try:
+        initial_text = read_text_safe(semantic_dir, csv_path, encoding="utf-8")
+    except Exception:
+        initial_text = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
+
+    LOGGER.info("ui.manage.tags_raw.open", extra={"slug": slug})
+    dialog_factory = getattr(st, "dialog", None)
+
+    def _body() -> None:
+        cap = getattr(st, "caption", None)
+        if callable(cap):
+            cap(
+                "Modifica `semantic/tags_raw.csv`. **Salva raw** aggiorna il CSV; "
+                "**Abilita** genera `tags_reviewed.yaml` e abilita la Semantica."
+            )
+
+        content = st.text_area(
+            "Contenuto CSV",
+            value=initial_text,
+            height=420,
+            key="tags_csv_editor",
+            label_visibility="collapsed",
+        )
+        col_a, col_b = st.columns(2)
+
+        if col_a.button("Salva raw", type="secondary"):
+            header = (content.splitlines() or [""])[0]
+            if "suggested_tags" not in header:
+                st.error("CSV non valido: manca la colonna 'suggested_tags'.")
+                LOGGER.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
+                return
+            semantic_dir.mkdir(parents=True, exist_ok=True)
+            safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
+            st.toast("`tags_raw.csv` salvato.")
+            LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
+
+        if col_b.button("Abilita", type="primary"):
+            try:
+                from semantic.tags_io import write_tags_review_stub_from_csv, write_tags_reviewed_from_nlp_db
+                from storage.tags_store import derive_db_path_from_yaml_path
+
+                write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
+                db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+                write_tags_reviewed_from_nlp_db(semantic_dir, db_path, LOGGER)
+                try:
+                    set_client_state(slug, "arricchito")
+                except Exception:
+                    pass
+                st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+                LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Abilitazione non riuscita: {exc}")
+                LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+
+    if dialog_factory:
+        (dialog_factory("Revisione keyword (tags_raw.csv)")(_body))()
+    else:
+        with st.container(border=True):
+            st.subheader("Revisione keyword (tags_raw.csv)")
+            _body()
 
 
 # --- piccoli helper per compat con stub di test ---
@@ -368,7 +443,10 @@ if slug:
         key="btn_semantic_start",
         type="primary",
         width="stretch",
-        help="Estrae tag dai PDF in raw/, genera tags_raw.csv e lo stub (in DB). Lo YAML si pubblica a parte.",
+        help=(
+            "Estrae keyword dai PDF in raw/, genera/aggiorna tags_raw.csv e lo stub (DB). "
+            "Poi puoi rivedere il CSV e abilitare lo YAML."
+        ),
     )
     if open_semantic:
         if run_tags_fn is None:
@@ -382,28 +460,16 @@ if slug:
         else:
             try:
                 run_tags_fn(slug)
-                _open_tags_editor_modal(slug)
+                _open_tags_raw_modal(slug)
             except Exception as exc:  # pragma: no cover
                 st.error(f"Estrazione tag non riuscita: {exc}")
 
-    if _column_button(
-        c2,
-        "Pubblica tag revisionati (da DB)",
-        key="btn_publish_tags",
-        type="secondary",
-        width="stretch",
-        help="Esporta semantic/tags_reviewed.yaml a partire dal DB NLP (terms/aliases).",
-    ):
-        try:
-            base_dir = _workspace_root(slug)
-            semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
-            yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
-            db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-            out = write_tags_reviewed_from_nlp_db(semantic_dir, db_path, LOGGER)
-            st.toast(f"`tags_reviewed.yaml` pubblicato: {out}")
-            _open_tags_editor_modal(slug)
-        except Exception as exc:  # pragma: no cover
-            st.error(f"Pubblicazione non riuscita: {exc}")
+    if (get_client_state(slug) or "").strip().lower() == "arricchito":
+        st.html(
+            '<a href="/semantics" target="_self" class="stLinkButton">'
+            "➡️ Prosegui con l’arricchimento semantico"
+            "</a>"
+        )
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
 
     # Colonna 3 â€“ Scarica da Drive ? locale

@@ -134,7 +134,7 @@ if _HAS_STREAMLIT_CONTEXT:
     state = (get_state(slug) or "").strip().lower()
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
-        st.info("La semantica sarà disponibile quando lo stato raggiunge 'pronto' e `raw/` contiene PDF.")
+        st.info("La semantica sarà disponibile quando lo stato raggiunge 'arricchito' e `raw/` contiene PDF.")
         st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
         try:
             st.stop()

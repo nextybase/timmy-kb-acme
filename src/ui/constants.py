@@ -17,7 +17,7 @@ Usare SEMANTIC_READY_STATES ovunque serva il gating della scheda "Semantica".
 CLIENT_STATE_FIELD = "stato"
 
 # Stati cliente ammessi per abilitare la scheda "Semantica"
-SEMANTIC_READY_STATES = {"pronto", "arricchito", "finito"}
+SEMANTIC_READY_STATES = {"arricchito", "finito"}
 
 # Facoltativo: elenco di stati "conosciuti" (può servire per validazioni o UI)
 KNOWN_CLIENT_STATES = {"nuovo", "pronto", "arricchito", "finito"}
