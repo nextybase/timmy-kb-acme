@@ -6,25 +6,54 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, Protocol, Type, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
-# Import isolate-binding per evitare cicli nel grafo Streamlit
-try:
-    from src.semantic.vision_provision import HaltError
-    from src.semantic.vision_provision import provision_from_vision as _provision_from_vision
-except ImportError:
-    try:
-        from timmykb.semantic.vision_provision import HaltError
-        from timmykb.semantic.vision_provision import provision_from_vision as _provision_from_vision
-    except ImportError:  # pragma: no cover
-        from ...semantic.vision_provision import HaltError
-        from ...semantic.vision_provision import provision_from_vision as _provision_from_vision
+
+class _ProvisionFromVisionFunc(Protocol):
+    def __call__(
+        self,
+        *,
+        ctx: Any,
+        logger: logging.Logger,
+        slug: str,
+        pdf_path: Path,
+        force: bool = False,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]: ...
+
+
+def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc]:
+    """Carica dinamicamente le binding da semantic.vision_provision."""
+    candidates = (
+        "src.semantic.vision_provision",
+        "timmykb.semantic.vision_provision",
+        "semantic.vision_provision",
+    )
+    for module_name in candidates:
+        try:
+            module = import_module(module_name)
+        except ImportError:
+            continue
+        halt_error = getattr(module, "HaltError", None)
+        provision = getattr(module, "provision_from_vision", None)
+        if isinstance(halt_error, type) and callable(provision):
+            return cast(Type[Exception], halt_error), cast(_ProvisionFromVisionFunc, provision)
+    from ...semantic.vision_provision import HaltError as fallback_error
+    from ...semantic.vision_provision import provision_from_vision as fallback_provision
+
+    return fallback_error, fallback_provision
+
+
+HaltError: Type[Exception]
+_provision_from_vision: _ProvisionFromVisionFunc
+HaltError, _provision_from_vision = _load_semantic_bindings()
 
 
 @dataclass(frozen=True)

@@ -20,14 +20,15 @@ Exit codes:
 """
 
 import argparse
+import logging
 import os
 import shutil
 import stat
 import sys
 import time
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
+from types import SimpleNamespace, TracebackType
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, cast
 
 # SSoT percorsi registry clienti dalla UI
 from timmykb.ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
@@ -249,7 +250,11 @@ def _delete_on_drive_if_present(
 # --------------------------------------------------------------------------------------
 
 
-def _try_remove_readonly(func, path, exc_info):  # noqa: ANN001
+def _try_remove_readonly(
+    func: Callable[[str], Any],
+    path: str,
+    exc_info: Tuple[type[BaseException], BaseException, TracebackType],
+) -> None:
     # Callback per shutil.rmtree onerror: rimuove readonly e riprova
     try:
         current_mode = os.stat(path).st_mode
@@ -267,7 +272,7 @@ def _rmtree_best_effort(
     target: Path,
     slug: str,
     *,
-    logger=LOGGER,
+    logger: logging.Logger = LOGGER,
     retries: int = 5,
     delay: float = 0.6,
 ) -> Tuple[bool, list[str]]:
@@ -317,7 +322,7 @@ def _rmtree_best_effort(
     return (not still_exists), residuals
 
 
-def _delete_local_workspace(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+def _delete_local_workspace(slug: str, logger: logging.Logger = LOGGER) -> Tuple[bool, str]:
     """
     Elimina il workspace locale `output/timmy-kb-<slug>`.
     Non fallisce se la cartella non esiste. In caso di file lock residui,
@@ -361,7 +366,7 @@ def _delete_local_workspace(slug: str, logger=LOGGER) -> Tuple[bool, str]:
 # --------------------------------------------------------------------------------------
 
 
-def _remove_from_clients_db(slug: str, logger=LOGGER) -> Tuple[bool, str]:
+def _remove_from_clients_db(slug: str, logger: logging.Logger = LOGGER) -> Tuple[bool, str]:
     """
     Rimuove lo slug dal registry clienti delegando all'SSoT `ui.clients_store`.
     """

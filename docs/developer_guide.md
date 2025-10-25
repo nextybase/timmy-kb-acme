@@ -164,7 +164,23 @@ make ci-safe     # qa-safe + pytest
 - Hardcode del modello LLM nei servizi (`MODEL = "gpt-..."`): usa `get_vision_model()`.
 - `print` o `basicConfig` per logging.
 - Letture/scritture senza path-safety o writer atomici.
-- Side-effect a import‑time (I/O, letture env, configurazioni globali).
+- Side-effect a import-time (I/O, letture env, configurazioni globali).
+
+---
+
+## Typing coverage & debt
+`mypy --config-file mypy.ini src/pipeline src/semantic src/ui` deve essere pulito in CI (`strict` per namespace). I blocchi ancora esclusi dalla copertura formale sono:
+
+- `src/adapters/**` – integrazioni esterne e client API da rifinire con TypedDict/Protocol.
+- `src/tools/**` – script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
+- `scripts/**` – tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
+
+Checklist per le PR che riducono il debito:
+1. Isolare un sotto-scope (max ~30 righe modificate) e rendere le funzioni import-safe.
+2. Introdurre `dataclass`/`TypedDict`/`Protocol` al posto di `dict[str, Any]`/`Any` nelle API condivise.
+3. Eliminare i cast ridondanti e aggiungere annotazioni alle entrypoint pubbliche.
+4. Eseguire `mypy --config-file mypy.ini src/<scope>` e aggiornare `mypy.ini` solo quando il comando è pulito.
+5. Documentare nel changelog interno la sezione migrata (link alla PR e note di compatibilità).
 
 ---
 

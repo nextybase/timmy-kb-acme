@@ -214,8 +214,8 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
             extra={"slug": context.slug, "file_path": str(mapping_path)},
         )
         # Risoluzione sicura del fallback rispetto alla root del repo
-        repo_root: Path = getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
-        repo_config_dir = repo_root / "config"
+        repo_root_fallback = getattr(context, "repo_root_dir", None) or Path(__file__).resolve().parents[2]
+        repo_config_dir = Path(repo_root_fallback) / "config"
         default_path = repo_config_dir / "default_semantic_mapping.yaml"
         try:
             ensure_within(repo_config_dir, default_path)  # STRONG guard sul fallback

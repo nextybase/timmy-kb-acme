@@ -1,13 +1,17 @@
 # src/pipeline/provision_from_yaml.py
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.yaml_utils import yaml_read
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
 
 
 @dataclass(frozen=True)
@@ -62,8 +66,8 @@ def _create_directory(docs_dir: Path, key: str) -> Tuple[bool, Path]:
 
 
 def provision_directories_from_cartelle_raw(
-    ctx,
-    logger,
+    ctx: "ClientContext",
+    logger: logging.Logger,
     *,
     slug: str,
     yaml_path: Path,

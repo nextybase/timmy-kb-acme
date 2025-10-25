@@ -43,11 +43,26 @@ def _maybe_redact(text: str, redact: bool) -> str:
     return str(res)
 
 
+def _context_settings_map(context: Any) -> Mapping[str, Any]:
+    """Estrae un mapping di configurazione dal contesto (Settings o dict legacy)."""
+    result: Mapping[str, Any] = {}
+    cfg_source = getattr(context, "settings", None)
+    if isinstance(cfg_source, Settings):
+        result = cfg_source.as_dict()
+    elif isinstance(cfg_source, Mapping):
+        result = cfg_source
+    else:
+        legacy_cfg = getattr(context, "config", {}) or {}
+        if isinstance(legacy_cfg, Mapping):
+            result = legacy_cfg
+    return result
+
+
 def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int, int]:
     """Risoluzione porte (host e container) con precedenza:
 
-    host: 1) parametro → 2) env PREVIEW_PORT → 3) context.config.preview_port → 4) default
-    container: 1) env HONKIT_PORT → 2) context.config.honkit_port → 3) default
+    host: 1) parametro -> 2) env PREVIEW_PORT -> 3) context.config.preview_port -> 4) default
+    container: 1) env HONKIT_PORT -> 2) context.config.honkit_port -> 3) default
     """
     # Host port
     host_port = explicit_host_port
@@ -58,17 +73,8 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
                 host_port = int(env_val)
             except ValueError:
                 logger.warning(f"PREVIEW_PORT non valida: {env_val!r} (ignoro)")
+    cfg = _context_settings_map(context)
     if host_port is None:
-        cfg_source = getattr(context, "settings", None)
-        cfg: Mapping[str, Any] = {}
-        if isinstance(cfg_source, Settings):
-            cfg = cfg_source.as_dict()
-        elif isinstance(cfg_source, Mapping):
-            cfg = cfg_source
-        else:
-            legacy_cfg = getattr(context, "config", {}) or {}
-            if isinstance(legacy_cfg, Mapping):
-                cfg = legacy_cfg
         cfg_val = cfg.get("preview_port")
         if cfg_val is not None:
             try:
@@ -87,16 +93,6 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
         except ValueError:
             logger.warning(f"HONKIT_PORT non valida: {env_c!r} (ignoro)")
     if container_port is None:
-        cfg_source = getattr(context, "settings", None)
-        cfg: Mapping[str, Any] = {}
-        if isinstance(cfg_source, Settings):
-            cfg = cfg_source.as_dict()
-        elif isinstance(cfg_source, Mapping):
-            cfg = cfg_source
-        else:
-            legacy_cfg = getattr(context, "config", {}) or {}
-            if isinstance(legacy_cfg, Mapping):
-                cfg = legacy_cfg
         cfg_val = cfg.get("honkit_port")
         if cfg_val is not None:
             try:

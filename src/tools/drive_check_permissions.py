@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from ..pipeline.context import ClientContext
 from ..pipeline.drive_utils import get_drive_service
@@ -11,7 +11,7 @@ from ..pipeline.drive_utils import get_drive_service
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
-def _find_client_folder(service: Any, parent_id: str, slug: str) -> Optional[dict]:
+def _find_client_folder(service: Any, parent_id: str, slug: str) -> Optional[Dict[str, Any]]:
     q = f"'{parent_id}' in parents and " f"name = '{slug}' and " f"mimeType = '{FOLDER_MIME}' and trashed = false"
     res = (
         service.files()

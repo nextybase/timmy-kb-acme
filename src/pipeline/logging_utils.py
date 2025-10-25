@@ -277,7 +277,7 @@ def get_structured_logger(
     if propagate is None:
         env_override = ""
         try:  # lazy import per evitare cicli durante bootstrap
-            from pipeline.env_utils import get_env_var as _get_env_var  # type: ignore
+            from pipeline.env_utils import get_env_var as _get_env_var
         except Exception:
             _get_env_var = None
         if _get_env_var is not None:

@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 from .env_utils import compute_redact_flag, get_bool, get_env_var
 from .exceptions import ConfigError, InvalidSlug
@@ -55,7 +55,7 @@ def validate_slug(slug: str) -> str:
         ConfigError: se lo slug non rispetta la regex configurata.
     """
     try:
-        return cast(str, _validate_slug(slug))
+        return _validate_slug(slug)
     except InvalidSlug as e:
         # Mappa l'eccezione di dominio in ConfigError per coerenza con la pipeline
         raise ConfigError(str(e), slug=slug) from e
@@ -214,7 +214,7 @@ class ClientContext:
         """Istanzia (o riusa) il logger strutturato dell'applicazione."""
         if logger is not None:
             return logger
-        return cast(logging.Logger, get_structured_logger(__name__, run_id=run_id))
+        return get_structured_logger(__name__, run_id=run_id)
 
     @staticmethod
     def _compute_repo_root_dir(slug: str, env_vars: Dict[str, Any], logger: logging.Logger) -> Path:
@@ -348,7 +348,7 @@ class ClientContext:
         """Ritorna il logger del contesto; se assente lo crea in modo lazy e coerente."""
         if self.logger:
             return self.logger
-        self.logger = cast(logging.Logger, get_structured_logger(__name__, context=self, run_id=self.run_id))
+        self.logger = get_structured_logger(__name__, context=self, run_id=self.run_id)
         return self.logger
 
     def log_error(self, msg: str) -> None:

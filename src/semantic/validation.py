@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import is_valid_slug
@@ -39,7 +39,8 @@ def validate_context_slug(data: Dict[str, Any], expected_slug: str) -> None:
     if not isinstance(ctx, dict):
         _maybe_raise("Output modello non valido: 'context' deve essere un oggetto.", payload_slug=None)
 
-    raw_slug = ctx.get("slug")
+    ctx_dict = cast(Dict[str, Any], ctx)
+    raw_slug = ctx_dict.get("slug")
     payload_slug = raw_slug.strip() if isinstance(raw_slug, str) else ""
     if not payload_slug:
         _maybe_raise("Output modello non valido: 'context.slug' mancante o non stringa.", payload_slug=None)

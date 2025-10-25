@@ -33,6 +33,15 @@ lint: env-check
 type: env-check
 	@mypy src
 
+.PHONY: type-all
+type-all: env-check
+	@mypy --config-file mypy.ini --ignore-missing-imports src
+
+.PHONY: type-ui
+type-ui: env-check
+	@mypy --config-file mypy.ini src/ui
+	@$(PY) -m pytest -m ui -ra
+
 type-pyright: env-check
 	@if command -v pyright >/dev/null 2>&1; then \
 	  pyright; \

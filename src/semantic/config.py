@@ -183,7 +183,7 @@ def _load_client_settings(base_dir: Path) -> dict[str, Any]:
     config_path = (base_dir / "config" / "config.yaml").resolve()
     try:
         settings = PipelineSettings.load(base_dir, config_path=config_path)
-        return settings.as_dict()
+        return cast(dict[str, Any], settings.as_dict())
     except ConfigError:
         return {}
     except Exception:

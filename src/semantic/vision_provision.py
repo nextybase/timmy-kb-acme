@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var, get_int
 from pipeline.exceptions import ConfigError
@@ -21,26 +21,26 @@ from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
 try:
-    from src.ai.client_factory import make_openai_client  # type: ignore
+    from ai.client_factory import make_openai_client
 except ImportError:
     try:
-        from timmykb.ai.client_factory import make_openai_client  # type: ignore
+        from timmykb.ai.client_factory import make_openai_client
     except ImportError:  # pragma: no cover - fallback when package context
         from ..ai.client_factory import make_openai_client
 
 try:
-    from src.security.masking import hash_identifier, mask_paths, sha256_path  # type: ignore
+    from security.masking import hash_identifier, mask_paths, sha256_path
 except ImportError:
     try:
-        from timmykb.security.masking import hash_identifier, mask_paths, sha256_path  # type: ignore
+        from timmykb.security.masking import hash_identifier, mask_paths, sha256_path
     except ImportError:  # pragma: no cover
         from ..security.masking import hash_identifier, mask_paths, sha256_path
 
 try:
-    from src.security.retention import purge_old_artifacts  # type: ignore
+    from security.retention import purge_old_artifacts
 except ImportError:
     try:
-        from timmykb.security.retention import purge_old_artifacts  # type: ignore
+        from timmykb.security.retention import purge_old_artifacts
     except ImportError:  # pragma: no cover
         from ..security.retention import purge_old_artifacts
 
@@ -113,17 +113,18 @@ _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
 
 
 def _snapshot_retention_days() -> int:
-    value = get_int("VISION_SNAPSHOT_RETENTION_DAYS", default=_SNAPSHOT_RETENTION_DAYS_DEFAULT)
+    value = cast(int, get_int("VISION_SNAPSHOT_RETENTION_DAYS", default=_SNAPSHOT_RETENTION_DAYS_DEFAULT))
     return max(0, value)
 
 
 def _optional_env(name: str) -> Optional[str]:
     try:
-        return get_env_var(name)
+        value = get_env_var(name)
     except KeyError:
         return None
     except Exception:
         return None
+    return cast(Optional[str], value)
 
 
 # =========================
@@ -155,7 +156,7 @@ def _load_vision_schema() -> Dict[str, Any]:
     schema_path = _vision_schema_path()
     try:
         raw = read_text_safe(schema_path.parents[0], schema_path, encoding="utf-8")
-        return json.loads(raw)
+        return cast(Dict[str, Any], json.loads(raw))
     except json.JSONDecodeError as exc:
         raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
 
@@ -165,7 +166,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
     Estrae il testo dal PDF. Fallisce rapidamente se il file è corrotto o vuoto.
     """
     try:
-        import fitz  # type: ignore
+        import fitz
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "vision_provision.extract_failed",
@@ -178,7 +179,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> s
         ) from exc
 
     try:
-        with fitz.open(pdf_path) as doc:  # type: ignore[attr-defined]
+        with fitz.open(pdf_path) as doc:
             texts: List[str] = []
             for page in doc:
                 texts.append(page.get_text("text"))
@@ -371,7 +372,7 @@ def _call_assistant_json(
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
 
     try:
-        return json.loads(text)
+        return cast(Dict[str, Any], json.loads(text))
     except json.JSONDecodeError as e:
         logger.error(
             "vision_provision.invalid_json",
@@ -479,7 +480,7 @@ def provision_from_vision(
 
     # 3) Client OpenAI + Assistant ID (bloccante se assente)
     client = make_openai_client()
-    vision_cfg = {}
+    vision_cfg: Dict[str, Any] = {}
     try:
         vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
     except Exception:
