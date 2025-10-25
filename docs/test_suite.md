@@ -157,7 +157,29 @@ pytest -k "embedding_pruned" -ra
 ```
 
 ---
+## Pre-commit — configurazione & comandi rapidi
 
+**Perché**: manteniamo qualità e sicurezza *prima* del push. Gli hook girano su due stadi:
+- `pre-commit`: formattazione, linting, controlli di base (file/UTF-8, policy UI, ingest).
+- `pre-push`: check più “pesanti” (typing selettivo, QA degradabile).
+
+**Installazione**
+```bash
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+**Hook principali (sintesi)**
+- *Format/Lint* (**commit + push**): `isort` → `black` → `ruff --fix`.
+- *Typing* (**push**): `mypy` su UI config & driver Drive.
+- *Safety I/O & API*: `forbid-unsafe-file-reads`, `no-dup-ingest-csv`.
+- *Unicode/UTF-8*: `fix-control-chars` (fix) + `forbid-control-chars` (guard).
+- *UI policy*: `forbid-streamlit-deprecated`, `ui-beta0-compliance`.
+- *Boundary error*: `forbid-legacy-valueerror` (vietato `raise ValueError(` in runtime).
+- *Security/Docs* (**commit**): `gitleaks` (segreti), `cspell` (README+docs).
+- *Doc governance* (**commit**): `agents-matrix-check` — verifica che la matrice in `docs/AGENTS_INDEX.md` sia **allineata** agli `AGENTS.md` locali; fallisce se va rigenerata. Esegue `python scripts/gen_agents_matrix.py --check`; scope file: `docs/AGENTS_INDEX.md`, `src/**/AGENTS.md`, `tests/AGENTS.md`, `.codex/AGENTS.md`, `AGENTS.md`.
+
+**Esecuzioni tipiche**
+```bash
 # tutto lo stadio commit su tutti i file
 pre-commit run --all-files
 
@@ -180,6 +202,16 @@ pre-commit run -a --show-diff-on-failure
 
 # (avanzato) saltare temporaneamente uno o più hook durante il commit
 SKIP=ruff,black git commit -m "…"
+```
+
+**Dettagli di configurazione**
+- Versione minima: `pre-commit ≥ 3.6`; Python di default: `3.11`.
+- Esclusi dal scan: `.venv/`, `node_modules/`, `output/`, `dist/`, `build/`, `docs/_build/`.
+- Scope file: Python limitato a `src|tests`; cSpell = `README.md` e `docs/*.md`.
+- Matrice AGENTS: hook locale `agents-matrix-check` (`.pre-commit-config.yaml` → `repo: local`, `id: agents-matrix-check`, `entry: python scripts/gen_agents_matrix.py --check`, `language: system`, `pass_filenames: false`, `files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$`).
+
+> Riferimenti: `.pre-commit-config.yaml` (stadi, scope, hook e argomenti), README/Developer Guide (installazione rapida), User Guide (fixer/guard Unicode).
+
 
 ---
 
