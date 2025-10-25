@@ -158,6 +158,31 @@ pytest -k "embedding_pruned" -ra
 
 ---
 
+# tutto lo stadio commit su tutti i file
+pre-commit run --all-files
+
+# simulare lo stadio push (utile in locale)
+pre-commit run --hook-stage pre-push --all-files
+
+# un singolo hook su tutti i file
+pre-commit run ruff --all-files
+pre-commit run agents-matrix-check --all-files
+
+# fixer/guard Unicode/UTF-8
+pre-commit run fix-control-chars --all-files
+pre-commit run forbid-control-chars --all-files
+
+# solo alcuni percorsi
+pre-commit run --files src/pipeline/file_utils.py tests/test_semantic_index_markdown_db.py
+
+# mostrare diff alla failure
+pre-commit run -a --show-diff-on-failure
+
+# (avanzato) saltare temporaneamente uno o più hook durante il commit
+SKIP=ruff,black git commit -m "…"
+
+---
+
 ## Note
 
 - Mantieni questa pagina allineata quando si aggiungono o cambiano i test.

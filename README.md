@@ -187,7 +187,7 @@ Per ambienti pin‑locked, usa i `requirements‑optional(.in/.txt)` rigenerati 
 
 ## QA locale
 
-Hook pre‑commit e comandi rapidi:
+Hook pre-commit e comandi rapidi:
 
 ```bash
 pre-commit install --hook-type pre-commit --hook-type pre-push
@@ -195,6 +195,8 @@ make qa-safe     # isort/black/ruff/mypy (se presenti)
 make ci-safe     # qa-safe + pytest
 pytest -ra       # dopo aver generato il dataset dummy
 ```
+
+Vedi anche: [docs/test_suite.md](docs/test_suite.md)
 
 ---
 

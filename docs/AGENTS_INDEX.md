@@ -2,19 +2,21 @@
 
 Questo indice raccoglie le regole comuni che gli agent devono seguire nel repository. Evitare duplicazioni: i singoli `AGENTS.md` nelle sottocartelle devono contenere solo gli override specifici del loro ambito e rimandare qui per tutto il resto.
 
+<!-- MATRIX:BEGIN -->
 > **Matrice di override (panoramica rapida)**
-> Gli `AGENTS.md` locali definiscono solo le deroghe/override specifiche di area; le policy comuni restano in questo indice.
+> Gli `AGENTS.md` locali definiscono solo le deroghe/override; le policy comuni restano in questo indice.
 
-| Area               | File                           | Override chiave (sintesi)                                                                 | Criteri di accettazione (key)                                  | Note                           |
-|--------------------|--------------------------------|-------------------------------------------------------------------------------------------|-----------------------------------------------------------------|--------------------------------|
-| Root               | `AGENTS.md`                    | Indice generale e rimandi a `.codex/*`; **nessun override tecnico**                      | —                                                               | Hub di navigazione             |
-| Pipeline Core      | `src/pipeline/AGENTS.md`       | **Path-safety** via `ensure_within*`; **scritture atomiche** `safe_write_*`; logging/redazione | No write fuori workspace; operazioni **idempotenti**            | Safety prima di tutto          |
-| Semantica          | `src/semantic/AGENTS.md`       | **SSoT tag su SQLite** (`semantic/tags.db`); usare solo **façade `semantic.api`**; no `_private`; no side-effects a import-time | Niente duplicazioni tag; frontmatter integro; se assente DB → proporre migrazione | Contratti stabili              |
-| UI (Streamlit)     | `src/ui/AGENTS.md`             | **Gating**: tab *Semantica* attiva solo con `raw/` presente; persistenza solo via util SSoT; messaggi brevi | Nessuna azione “Semantica” se `raw/` vuoto; feedback chiaro     | UX guidata da stato            |
-| Test               | `tests/AGENTS.md`              | Piramide test; niente rete; **contract guard** su `book/`                                 | Build verde; smoke E2E su dummy slug                            | Dati sintetici, riproducibili  |
-| Documentazione     | `docs/AGENTS.md`               | **(Da allineare)**: oggi duplica “Test”; attese regole su cSpell/frontmatter/ADR          | —                                                               | TODO: specificare override doc |
-| Codex (repo)       | `.codex/AGENTS.md`             | Checklist pre-push: path-safety, atomiche, QA chain, micro-PR                             | —                                                               | Enforcement operativo          |
-| Personale (utente) | `~/.codex/AGENTS.md` *(local)* | Preferenze individuali (stile, diff, micro-PR)                                            | —                                                               | **Non versionato**             |
+| Area | File | Override chiave (sintesi) | Criteri di accettazione (key) | Note |
+|------|------|---------------------------|-------------------------------|------|
+| Root | `AGENTS.md` | — | — |  |
+| Pipeline Core | `src/pipeline/AGENTS.md` | **Path‑safety**: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).; **Scritture atomiche**: `safe_write_text/bytes` obbligatorie. | Nessuna write fuori dal workspace cliente. |  |
+| Semantica | `src/semantic/AGENTS.md` | **SSoT tag runtime: SQLite (`semantic/tags.db`)**; YAML `tags_reviewed.yaml` è solo authoring/migrazione.; Non importare o invocare funzioni `_private`; mantenere compatibilità della façade. | Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter. |  |
+| UI (Streamlit) | `src/ui/AGENTS.md` | Gating: la tab **Semantica** si abilita **solo** quando `raw/` locale è presente.; Evita side‑effects non idempotenti; persistenza solo via util SSoT (no write manuali). | Nessuna azione “Semantica” se RAW vuoto. | UX guidata da stato |
+| Test | `tests/AGENTS.md` | Niente dipendenze di rete (Drive/Git mockati o bypass).; Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati). | Build verde locale; smoke E2E su dummy slug riproducibile. |  |
+| Documentazione | `docs/AGENTS.md` | Niente dipendenze di rete (Drive/Git mockati o bypass).; Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati). | Build verde locale; smoke E2E su dummy slug riproducibile. |  |
+| Codex (repo) | `.codex/AGENTS.md` | — | — |  |
+
+<!-- MATRIX:END -->
 
 
 ---

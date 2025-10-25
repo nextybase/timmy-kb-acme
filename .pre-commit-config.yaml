@@ -71,6 +71,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: agents-matrix-check
+        name: Check AGENTS matrix
+        entry: python scripts/gen_agents_matrix.py --check
+        language: system
+        pass_filenames: false
+        files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$
+        stages: [pre-commit]
+
       - id: mypy
         name: mypy
         entry: mypy
