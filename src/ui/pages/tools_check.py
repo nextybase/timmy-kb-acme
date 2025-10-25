@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
 import shlex
 import subprocess
@@ -18,6 +17,7 @@ from typing import Any, Dict, Optional, cast
 import streamlit as st
 import yaml
 
+from pipeline.env_utils import get_env_var
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # --- percorsi (nessuna preparazione workspace) ---
@@ -103,9 +103,10 @@ def main() -> None:
         errors.append(f"Script non trovato: {SCRIPT}")
     if not ROOT_PDF.exists():
         errors.append(f"VisionStatement.pdf assente in root: {ROOT_PDF}")
-    if not os.getenv("OPENAI_API_KEY"):
+    if not get_env_var("OPENAI_API_KEY", default=None):
         errors.append("OPENAI_API_KEY mancante.")
-    if not (os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")):
+    assistant_env = get_env_var("OBNEXT_ASSISTANT_ID", default=None)
+    if not (assistant_env or get_env_var("ASSISTANT_ID", default=None)):
         errors.append("OBNEXT_ASSISTANT_ID/ASSISTANT_ID mancante.")
 
     if errors:

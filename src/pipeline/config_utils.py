@@ -32,7 +32,7 @@ import logging
 import shutil
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Mapping, Optional, cast
 
 import yaml
 from pydantic import AliasChoices, Field
@@ -57,8 +57,34 @@ from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidat
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, read_text_safe
+from pipeline.settings import Settings as ContextSettings
 
 logger = get_structured_logger("pipeline.config_utils")
+
+
+def _extract_context_settings(context: ClientContext) -> tuple[Optional[ContextSettings], dict[str, Any], bool]:
+    """Ritorna (wrapper Settings, payload dict, available)."""
+    settings_obj = getattr(context, "settings", None)
+    if isinstance(settings_obj, ContextSettings):
+        return settings_obj, settings_obj.as_dict(), True
+    if isinstance(settings_obj, Mapping):
+        return None, dict(settings_obj), True
+    return None, {}, False
+
+
+def _refresh_context_settings(context: ClientContext) -> None:
+    """Ricarica il Settings wrapper dopo una write, se possibile."""
+    if context.repo_root_dir is None or context.config_path is None:
+        return
+    try:
+        context.settings = ContextSettings.load(
+            cast(Path, context.repo_root_dir),
+            config_path=cast(Path, context.config_path),
+            slug=context.slug,
+        )
+    except Exception:
+        # best-effort: se fallisce lasciamo il contesto invariato
+        pass
 
 
 # ----------------------------------------------------------
@@ -161,6 +187,7 @@ def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> 
         "Config cliente salvato",
         extra={"slug": context.slug, "file_path": str(config_path)},
     )
+    _refresh_context_settings(context)
     return cast(Path, config_path)
 
 
@@ -173,6 +200,9 @@ def get_client_config(context: ClientContext) -> dict[str, Any]:
         raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
     if not context.config_path.exists():
         raise ConfigError(f"Config file non trovato: {context.config_path}")
+    _, settings_payload, available = _extract_context_settings(context)
+    if available:
+        return dict(settings_payload)
     try:
         from pipeline.path_utils import ensure_within_and_resolve
         from pipeline.yaml_utils import yaml_read
@@ -203,20 +233,25 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         logger.error(f"❗ Config cliente non trovato: {context.config_path}")
         raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
-    try:
-        from pipeline.path_utils import ensure_within_and_resolve
-        from pipeline.yaml_utils import yaml_read
+    _, cfg_payload, available = _extract_context_settings(context)
+    if available:
+        cfg = cfg_payload
+    else:
+        try:
+            from pipeline.path_utils import ensure_within_and_resolve
+            from pipeline.yaml_utils import yaml_read
 
-        # Path-safety in LETTURA
-        safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
-        cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
-    except Exception as e:
-        logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
-        raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
+            # Path-safety in LETTURA
+            safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+            raw_cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
+        except Exception as e:
+            logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
+            raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
 
-    if not isinstance(cfg, dict):
-        logger.error("Config YAML non valido o vuoto.")
-        raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
+        if not isinstance(raw_cfg, dict):
+            logger.error("Config YAML non valido o vuoto.")
+            raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
+        cfg = dict(raw_cfg)
 
     # Chiavi obbligatorie minime
     required_keys = ["cartelle_raw_yaml"]
@@ -277,14 +312,18 @@ def merge_client_config_from_template(
         if log:
             log.info("config.client.backup", extra={"slug": context.slug, "path": str(backup_path)})
 
-        try:
-            from pipeline.yaml_utils import yaml_read
+        _, settings_payload, available = _extract_context_settings(context)
+        if available:
+            existing_data = dict(settings_payload)
+        else:
+            try:
+                from pipeline.yaml_utils import yaml_read
 
-            current = yaml_read(config_path.parent, config_path) or {}
-            if isinstance(current, dict):
-                existing_data = dict(current)
-        except Exception as exc:
-            raise ConfigError(f"Errore lettura config esistente {config_path}: {exc}") from exc
+                current = yaml_read(config_path.parent, config_path) or {}
+                if isinstance(current, dict):
+                    existing_data = dict(current)
+            except Exception as exc:
+                raise ConfigError(f"Errore lettura config esistente {config_path}: {exc}") from exc
 
     preserve_set = set(preserve_keys)
 
@@ -319,6 +358,8 @@ def merge_client_config_from_template(
                 "preserved": list(preserve_keys),
             },
         )
+
+    _refresh_context_settings(context)
 
     return config_path
 
@@ -355,17 +396,21 @@ def update_config_with_drive_ids(
     if logger:
         logger.info(f"💾 Backup config creato: {backup_path}")
 
-    # Carica config esistente (path-safety in LETTURA)
-    try:
-        from pipeline.yaml_utils import yaml_read
+    # Carica config esistente (preferendo il contesto)
+    _, settings_payload, available = _extract_context_settings(context)
+    if available:
+        config_data: dict[str, Any] = dict(settings_payload)
+    else:
+        try:
+            from pipeline.yaml_utils import yaml_read
 
-        config_raw = yaml_read(config_path.parent, config_path) or {}
-    except Exception as e:
-        raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
+            config_raw = yaml_read(config_path.parent, config_path) or {}
+        except Exception as e:
+            raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
 
-    if not isinstance(config_raw, dict):
-        raise ConfigError("Config YAML non valido.")
-    config_data: dict[str, Any] = dict(config_raw)
+        if not isinstance(config_raw, dict):
+            raise ConfigError("Config YAML non valido.")
+        config_data = dict(config_raw)
     config_data.update(updates or {})
 
     # Scrittura sicura (atomica) + path-safety
@@ -377,6 +422,7 @@ def update_config_with_drive_ids(
             logger.info(f"✅ Config aggiornato in {config_path}")
     except Exception as e:
         raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
+    _refresh_context_settings(context)
 
 
 __all__ = [

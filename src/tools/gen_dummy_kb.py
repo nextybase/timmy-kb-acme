@@ -73,11 +73,14 @@ except Exception:
     ClientContext = None
 
 try:
-    from pipeline.env_utils import ensure_dotenv_loaded  # type: ignore
+    from pipeline.env_utils import ensure_dotenv_loaded, get_env_var  # type: ignore
 except Exception:
 
     def ensure_dotenv_loaded() -> None:  # type: ignore
         return
+
+    def get_env_var(name: str, default: str | None = None, **_: object) -> str | None:
+        return os.environ.get(name, default)
 
 
 try:
@@ -143,7 +146,7 @@ class _Ctx:
 
 
 def _client_base(slug: str) -> Path:
-    env_root = os.getenv("REPO_ROOT_DIR")
+    env_root = get_env_var("REPO_ROOT_DIR", default=None)
     if env_root:
         try:
             return Path(env_root).expanduser().resolve()

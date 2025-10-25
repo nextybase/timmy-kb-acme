@@ -275,7 +275,18 @@ def get_structured_logger(
     lg = logging.getLogger(name)
     lg.setLevel(level)
     if propagate is None:
-        env_override = os.getenv("TIMMY_LOG_PROPAGATE", "").lower()
+        env_override = ""
+        try:  # lazy import per evitare cicli durante bootstrap
+            from pipeline.env_utils import get_env_var as _get_env_var  # type: ignore
+        except Exception:
+            _get_env_var = None
+        if _get_env_var is not None:
+            try:
+                env_override = (_get_env_var("TIMMY_LOG_PROPAGATE", default="") or "").lower()
+            except Exception:
+                env_override = ""
+        else:
+            env_override = os.getenv("TIMMY_LOG_PROPAGATE", "").lower()
         if env_override:
             propagate = env_override in {"1", "true", "yes", "on"}
         else:

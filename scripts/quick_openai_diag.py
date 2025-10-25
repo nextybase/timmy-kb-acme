@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 # scripts/quick_openai_diag.py
 from __future__ import annotations
-import os
+
 import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from pipeline.env_utils import get_env_var
 
 
 def _load_env() -> str:
@@ -49,10 +56,10 @@ def main() -> int:
         ver = "<openai non installato>"
     print(f"openai version: {ver}")
 
-    api_key = os.getenv("OPENAI_API_KEY") or ""
-    project = os.getenv("OPENAI_PROJECT") or ""
-    base_url_env = os.getenv("OPENAI_BASE_URL") or ""
-    assistant = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID") or ""
+    api_key = get_env_var("OPENAI_API_KEY", default="") or ""
+    project = get_env_var("OPENAI_PROJECT", default="") or ""
+    base_url_env = get_env_var("OPENAI_BASE_URL", default="") or ""
+    assistant = get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default="") or ""
 
     print(f"OPENAI_API_KEY: {'<settata>' if api_key else '<vuoto>'}")
     print(f"OPENAI_PROJECT: {project or '<vuoto>'}")

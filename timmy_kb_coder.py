@@ -22,7 +22,6 @@ Quick demo script:
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, cast
@@ -36,7 +35,7 @@ from pipeline.config_utils import get_client_config
 
 # Config repo (per leggere config.yaml se disponibile)
 from pipeline.context import ClientContext
-from pipeline.env_utils import ensure_dotenv_loaded
+from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from semantic.types import EmbeddingsClient
 from timmykb.ingest import OpenAIEmbeddings
 from timmykb.kb_db import get_db_path, init_db
@@ -99,8 +98,8 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
     """Return an embeddings client if RAG is enabled and credentials are present; otherwise None."""
     if not use_rag:
         return None
-    api_key = os.getenv("OPENAI_API_KEY")
-    api_key_codex = os.getenv("OPENAI_API_KEY_CODEX")
+    api_key = get_env_var("OPENAI_API_KEY", default=None)
+    api_key_codex = get_env_var("OPENAI_API_KEY_CODEX", default=None)
     ui = st
     if not api_key and not api_key_codex:
         LOGGER.info(

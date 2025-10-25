@@ -192,6 +192,8 @@ pages = {
     "Tools": [
         st.Page("src/ui/pages/admin.py", title="Admin", url_path="admin"),
         st.Page("src/ui/pages/settings.py", title="Settings", url_path="settings"),
+        st.Page("src/ui/pages/config_editor.py", title="Config Editor", url_path="config"),
+        st.Page("src/ui/pages/secrets_healthcheck.py", title="Secrets Healthcheck", url_path="secrets"),
         st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
         st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
         st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),

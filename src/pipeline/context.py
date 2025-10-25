@@ -39,6 +39,7 @@ from .file_utils import safe_write_text
 from .logging_utils import get_structured_logger
 from .path_utils import ensure_within, ensure_within_and_resolve
 from .path_utils import validate_slug as _validate_slug
+from .settings import Settings
 
 
 def validate_slug(slug: str) -> str:
@@ -89,7 +90,7 @@ class ClientContext:
     repo_root_dir: Path | None = None  # single source of truth
 
     # Configurazione e path
-    settings: Dict[str, Any] = field(default_factory=dict)
+    settings: Settings | Dict[str, Any] = field(default_factory=dict)
     config_path: Optional[Path] = None
     config_dir: Optional[Path] = None
     mapping_path: Optional[Path] = None
@@ -175,7 +176,7 @@ class ClientContext:
         config_path = cls._ensure_config(repo_root, slug, _logger)
 
         # 5) Carica config cliente (yaml)
-        settings = cls._load_yaml_config(config_path, slug, _logger)
+        settings = cls._load_yaml_config(repo_root, config_path, slug, _logger)
 
         # 6) Livello log (default INFO; retro-compat da kwargs)
         log_level = str(kwargs.get("log_level", "INFO")).upper()
@@ -185,9 +186,9 @@ class ClientContext:
 
         return cls(
             slug=slug,
-            client_name=(settings or {}).get("client_name"),
+            client_name=settings.get("client_name") if settings else None,
             repo_root_dir=repo_root,
-            settings=settings or {},
+            settings=settings,
             env=env_vars,
             config_path=config_path,
             config_dir=config_path.parent,
@@ -280,20 +281,22 @@ class ClientContext:
         return config_path
 
     @staticmethod
-    def _load_yaml_config(config_path: Path, slug: str, logger: logging.Logger) -> Dict[str, Any]:
+    def _load_yaml_config(repo_root: Path, config_path: Path, slug: str, logger: logging.Logger) -> Settings:
         """Carica e valida il file YAML di configurazione del cliente."""
         try:
-            from .yaml_utils import yaml_read
-
-            settings = yaml_read(config_path.parent, config_path) or {}
+            settings = Settings.load(repo_root, config_path=config_path, logger=logger, slug=slug)
+            try:
+                logger.info(
+                    "context.config.loaded",
+                    extra={"slug": slug, "file_path": str(config_path)},
+                )
+            except Exception:
+                pass
+            return settings
+        except ConfigError:
+            raise
         except Exception as e:  # pragma: no cover
             raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path, slug=slug) from e
-
-        logger.info(
-            "context.config.loaded",
-            extra={"slug": slug, "file_path": str(config_path)},
-        )
-        return settings
 
     @staticmethod
     def _load_env(*, require_env: bool) -> Dict[str, Any]:

@@ -2,7 +2,6 @@
 # scripts/assistants_smoke.py
 from __future__ import annotations
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -29,7 +28,9 @@ def main() -> int:
         print(f"ERRORE import: {e}")
         return 2
 
-    asst = os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID")
+    from pipeline.env_utils import get_env_var
+
+    asst = get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default=None)
     if not asst:
         print("ERRORE: manca OBNEXT_ASSISTANT_ID/ASSISTANT_ID")
         return 2

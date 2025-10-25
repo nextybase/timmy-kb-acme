@@ -25,11 +25,15 @@ def _resolve_db_path(target: Path) -> Path:
 
 DEFAULT_DB_DIR: Path = REPO_ROOT / "clients_db"
 DEFAULT_DB_FILE: Path = DEFAULT_DB_DIR / "clients.yaml"
+# Allow override in tests/consumers
+DB_DIR: Path = DEFAULT_DB_DIR
+DB_FILE: Path = DEFAULT_DB_FILE
 
 
 def _optional_env(name: str) -> Optional[str]:
     try:
-        return get_env_var(name)
+        value = cast(Optional[str], get_env_var(name, default=None))
+        return value
     except KeyError:
         return None
     except Exception:
@@ -40,14 +44,15 @@ def _db_dir() -> Path:
     value = _optional_env("CLIENTS_DB_DIR")
     if value:
         return Path(value).expanduser().resolve()
-    return _resolve_db_path(DEFAULT_DB_DIR)
+    return _resolve_db_path(DB_DIR)
 
 
 def _db_file() -> Path:
     value = _optional_env("CLIENTS_DB_FILE")
     if value:
         return Path(value).expanduser().resolve()
-    return _db_dir() / DEFAULT_DB_FILE.name
+    target = DB_FILE if DB_FILE.is_absolute() else _db_dir() / DB_FILE.name
+    return _resolve_db_path(target)
 
 
 LOG = get_structured_logger("ui.clients_store")

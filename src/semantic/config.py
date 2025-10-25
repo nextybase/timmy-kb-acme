@@ -22,6 +22,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.exceptions import ConfigError
+from pipeline.settings import Settings as PipelineSettings
+from pipeline.yaml_utils import yaml_read
+
 yaml: Any | None
 try:
     import yaml  # PyYAML è già usato nel repo
@@ -82,8 +86,6 @@ def _safe_load_yaml(p: Path) -> dict[str, Any]:
     if not p or yaml is None:
         return {}
     try:
-        from pipeline.yaml_utils import yaml_read
-
         if not p.exists():
             return {}
         data = yaml_read(p.parent, p) or {}
@@ -176,6 +178,16 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 # ----------------------------- API pubblica ---------------------------------- #
+def _load_client_settings(base_dir: Path) -> dict[str, Any]:
+    """Carica config.yaml del cliente tramite loader centralizzato."""
+    config_path = (base_dir / "config" / "config.yaml").resolve()
+    try:
+        settings = PipelineSettings.load(base_dir, config_path=config_path)
+        return settings.as_dict()
+    except ConfigError:
+        return {}
+    except Exception:
+        return {}
 
 
 def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
@@ -196,8 +208,7 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] 
     acc: dict[str, Any] = dict(_DEFAULTS)
 
     # 2) config.yaml → semantic_defaults
-    config_yaml = (base_dir / "config" / "config.yaml").resolve()
-    cfg_all = _safe_load_yaml(config_yaml)
+    cfg_all = _load_client_settings(base_dir)
     defaults_from_cfg = _normalize_tagger_section(
         (cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {}
     )

@@ -5,9 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
 import time
+from functools import lru_cache
 from importlib import import_module
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
@@ -16,6 +16,7 @@ import streamlit as st
 from google.auth.transport import requests as greq
 from google.oauth2 import id_token
 
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 
 # ✨ Coerenza con le altre pagine UI
@@ -26,16 +27,25 @@ from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
 header(None)
 sidebar(None)
 
-# ---------- Config/env ----------
-GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
-REDIRECT_URI = (os.getenv("GOOGLE_REDIRECT_URI") or "").strip()  # es.: http://localhost:8501/admin
-ALLOWED_DOMAIN = (os.getenv("ALLOWED_GOOGLE_DOMAIN") or "unisom.it").strip()
-
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - endpoint pubblico OAuth2
 ISS_ALLOWED = {"accounts.google.com", "https://accounts.google.com"}
 SESSION_TTL_SECONDS = 3600
+
+
+@lru_cache(maxsize=1)
+def _oauth_env() -> Dict[str, str]:
+    """Carica valori OAuth dai segreti/ENV in modo lazy e memorizzato."""
+    client_id = (get_env_var("GOOGLE_CLIENT_ID", default="") or "").strip()
+    client_secret = (get_env_var("GOOGLE_CLIENT_SECRET", default="") or "").strip()
+    redirect_uri = (get_env_var("GOOGLE_REDIRECT_URI", default="") or "").strip()
+    allowed_domain = (get_env_var("ALLOWED_GOOGLE_DOMAIN", default="unisom.it") or "unisom.it").strip()
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "allowed_domain": allowed_domain,
+    }
 
 
 def _current_timestamp() -> int:
@@ -66,16 +76,17 @@ def _pop_oauth_artifacts() -> Tuple[Optional[str], Optional[str], Optional[str]]
 
 
 def _build_auth_url(state: str, nonce: str) -> str:
+    cfg = _oauth_env()
     verifier = cast(str, st.session_state.get("oauth_pkce_verifier") or _generate_pkce_verifier())
     st.session_state["oauth_pkce_verifier"] = verifier
     params: dict[str, str] = {
         "response_type": "code",
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
+        "client_id": cfg["client_id"],
+        "redirect_uri": cfg["redirect_uri"],
         "scope": "openid email",
         "state": state,
         "nonce": nonce,
-        "hd": ALLOWED_DOMAIN,  # hint UX; enforcement sul claim 'hd' dell'ID token
+        "hd": cfg["allowed_domain"],  # hint UX; enforcement sul claim 'hd' dell'ID token
         "include_granted_scopes": "true",
         "prompt": "select_account",
         "access_type": "online",
@@ -86,11 +97,12 @@ def _build_auth_url(state: str, nonce: str) -> str:
 
 
 def _exchange_code_for_tokens(code: str, *, code_verifier: str) -> Dict[str, Any]:
+    cfg = _oauth_env()
     data: dict[str, str] = {
         "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
+        "client_id": cfg["client_id"],
+        "client_secret": cfg["client_secret"],
+        "redirect_uri": cfg["redirect_uri"],
         "grant_type": "authorization_code",
         "code_verifier": code_verifier,
     }
@@ -101,14 +113,16 @@ def _exchange_code_for_tokens(code: str, *, code_verifier: str) -> Dict[str, Any
 
 
 def _verify_id_token(idt: str) -> Dict[str, Any]:
-    info = cast(Dict[str, Any], id_token.verify_oauth2_token(idt, greq.Request(), GOOGLE_CLIENT_ID))
+    cfg = _oauth_env()
+    info = cast(Dict[str, Any], id_token.verify_oauth2_token(idt, greq.Request(), cfg["client_id"]))
     iss = str(info.get("iss"))
     if iss not in ISS_ALLOWED:
         raise ConfigError(f"Issuer non valido: {iss}")
     hd = (info.get("hd") or "").lower()
     email = (info.get("email") or "").lower()
     domain = email.split("@")[-1] if "@" in email else ""
-    if (hd != ALLOWED_DOMAIN) and (domain != ALLOWED_DOMAIN):
+    allowed_domain = cfg["allowed_domain"].lower()
+    if (hd != allowed_domain) and (domain != allowed_domain):
         # Dominio non autorizzato: errore di permessi lato UI
         raise PermissionError("Dominio dell'account non autorizzato")
     return info
@@ -177,11 +191,12 @@ def _mask(s: str) -> str:
 st.subheader("Login con Google (dominio autorizzato)")
 
 # Guardie config (mostra diagnosi ma NON interrompe la sidebar)
-if not GOOGLE_CLIENT_ID or not REDIRECT_URI:
+cfg = _oauth_env()
+if not cfg["client_id"] or not cfg["redirect_uri"]:
     st.error("Config mancante: imposta GOOGLE_CLIENT_ID e GOOGLE_REDIRECT_URI.")
     with st.expander("Diagnostica"):
         st.code(
-            f"client_id={_mask(GOOGLE_CLIENT_ID)}\nredirect={REDIRECT_URI}\nallowed_domain={ALLOWED_DOMAIN}",
+            f"client_id={_mask(cfg['client_id'])}\nredirect={cfg['redirect_uri']}\nallowed_domain={cfg['allowed_domain']}",
             language="bash",
         )
 else:
@@ -206,9 +221,9 @@ else:
         st.code(
             json.dumps(
                 {
-                    "GOOGLE_CLIENT_ID": _mask(GOOGLE_CLIENT_ID),
-                    "GOOGLE_REDIRECT_URI": REDIRECT_URI,
-                    "ALLOWED_GOOGLE_DOMAIN": ALLOWED_DOMAIN,
+                    "GOOGLE_CLIENT_ID": _mask(cfg["client_id"]),
+                    "GOOGLE_REDIRECT_URI": cfg["redirect_uri"],
+                    "ALLOWED_GOOGLE_DOMAIN": cfg["allowed_domain"],
                 },
                 indent=2,
             ),

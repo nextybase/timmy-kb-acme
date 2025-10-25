@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import shutil
 import socket
 import subprocess
@@ -17,15 +16,20 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
+from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
+
 CheckItem = Tuple[str, bool, str]
 
 
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
-    if not load_dotenv:
-        return
+    if load_dotenv:
+        try:
+            load_dotenv(override=False)
+        except Exception:
+            pass
     try:
-        load_dotenv(override=False)
+        ensure_dotenv_loaded()
     except Exception:
         pass
 
@@ -61,7 +65,7 @@ def _port_in_use(port: int) -> bool:
 
 
 def _has_openai_key() -> bool:
-    if os.getenv("OPENAI_API_KEY"):
+    if get_env_var("OPENAI_API_KEY", default=None):
         return True
     if st is not None:
         try:
@@ -89,5 +93,10 @@ def run_preflight() -> tuple[List[CheckItem], bool]:
     )
     results.append(("OPENAI_API_KEY", _has_openai_key(), "Imposta .env o st.secrets e riavvia"))
 
-    port_busy = _port_in_use(int(os.getenv("PORT", "4000"))) if docker_ok else False
+    port_val = get_env_var("PORT", default="4000")
+    try:
+        port_num = int(port_val or "4000")
+    except Exception:
+        port_num = 4000
+    port_busy = _port_in_use(port_num) if docker_ok else False
     return results, port_busy

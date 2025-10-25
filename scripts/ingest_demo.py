@@ -26,6 +26,8 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+from pipeline.env_utils import get_env_var
+
 # Optional: carica .env
 try:  # pragma: no cover - optional dependency
     from dotenv import load_dotenv  # type: ignore
@@ -59,7 +61,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO)
 
-    if not os.getenv("OPENAI_API_KEY_CODEX"):
+    if not get_env_var("OPENAI_API_KEY_CODEX", default=None):
         raise SystemExit("OPENAI_API_KEY_CODEX mancante. Impostalo nell'ambiente o in un file .env.")
 
     summary = ingest_folder(

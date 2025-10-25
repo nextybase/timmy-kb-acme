@@ -154,6 +154,14 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
+      - id: no-secrets-in-yaml
+        name: Forbid inline secrets in config YAML
+        entry: python scripts/dev/check_yaml_secrets.py
+        language: system
+        pass_filenames: true
+        files: ^config/.*\.ya?ml$
+        stages: [pre-commit, pre-push]
+
       # FIXER: rimuove C0/C1 e normalizza NFC (se modifica, pre-commit fallirà chiedendo di rieseguire il commit)
       - id: fix-control-chars
         name: Fix Unicode control chars (remove C0/C1 + NFC)

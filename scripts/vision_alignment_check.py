@@ -9,7 +9,15 @@ import sys
 import traceback
 from pathlib import Path
 from typing import Any, Dict
+
 from dotenv import load_dotenv, find_dotenv
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from pipeline.env_utils import get_env_var
 
 def _print_json(payload: Dict[str, Any], exit_code: int = None):
     try:
@@ -22,13 +30,13 @@ def _print_json(payload: Dict[str, Any], exit_code: int = None):
 
 def _load_env_and_sanitize():
     load_dotenv(find_dotenv(usecwd=True) or str(Path(__file__).resolve().parents[1] / ".env"), override=False)
-    raw_base = (os.getenv("OPENAI_BASE_URL") or "").strip().strip("'").strip('"')
+    raw_base = (get_env_var("OPENAI_BASE_URL", default="") or "").strip().strip("'").strip('"')
     if raw_base and not re.match(r"^https?://", raw_base, flags=re.I):
         os.environ.pop("OPENAI_BASE_URL", None)
 
 def _env(*names: str) -> str | None:
     for n in names:
-        v = os.getenv(n)
+        v = get_env_var(n, default=None)
         if v:
             return v
     return None
@@ -48,10 +56,6 @@ def main():
     use_kb = (_env("VISION_USE_KB") or "1").strip().lower() not in {"0", "false", "no", "off"}
     # 1) Import schema reale dal modulo Vision
     #    Aggiungiamo src al PYTHONPATH per rispecchiare l’app
-    ROOT = Path(__file__).resolve().parents[1]
-    SRC = ROOT / "src"
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
     try:
         from semantic.vision_provision import _load_vision_schema  # stesso loader della tua app
     except Exception as e:

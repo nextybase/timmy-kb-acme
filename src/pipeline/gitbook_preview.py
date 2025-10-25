@@ -18,17 +18,17 @@ Linee guida applicate:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple
 
 from pipeline.constants import BOOK_JSON_NAME, HONKIT_DOCKER_IMAGE, PACKAGE_JSON_NAME
-from pipeline.env_utils import get_int
+from pipeline.env_utils import get_env_var, get_int
 from pipeline.exceptions import PipelineError, PreviewError
 from pipeline.file_utils import safe_write_text  # ✅ scritture atomiche (SSoT)
 from pipeline.logging_utils import get_structured_logger, redact_secrets
 from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
 from pipeline.proc_utils import CmdError, run_cmd, wait_for_port
+from pipeline.settings import Settings
 
 # Default consolidati (evitiamo hard-code sparsi)
 _DEFAULT_HOST_PREVIEW_PORT = 4000
@@ -52,14 +52,23 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
     # Host port
     host_port = explicit_host_port
     if host_port is None:
-        env_val = os.getenv("PREVIEW_PORT")
+        env_val = get_env_var("PREVIEW_PORT", default=None)
         if env_val:
             try:
                 host_port = int(env_val)
             except ValueError:
                 logger.warning(f"PREVIEW_PORT non valida: {env_val!r} (ignoro)")
     if host_port is None:
-        cfg = getattr(context, "config", {}) or {}
+        cfg_source = getattr(context, "settings", None)
+        cfg: Mapping[str, Any] = {}
+        if isinstance(cfg_source, Settings):
+            cfg = cfg_source.as_dict()
+        elif isinstance(cfg_source, Mapping):
+            cfg = cfg_source
+        else:
+            legacy_cfg = getattr(context, "config", {}) or {}
+            if isinstance(legacy_cfg, Mapping):
+                cfg = legacy_cfg
         cfg_val = cfg.get("preview_port")
         if cfg_val is not None:
             try:
@@ -71,14 +80,23 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
 
     # Container (HonKit) port
     container_port = None
-    env_c = os.getenv("HONKIT_PORT")
+    env_c = get_env_var("HONKIT_PORT", default=None)
     if env_c:
         try:
             container_port = int(env_c)
         except ValueError:
             logger.warning(f"HONKIT_PORT non valida: {env_c!r} (ignoro)")
     if container_port is None:
-        cfg = getattr(context, "config", {}) or {}
+        cfg_source = getattr(context, "settings", None)
+        cfg: Mapping[str, Any] = {}
+        if isinstance(cfg_source, Settings):
+            cfg = cfg_source.as_dict()
+        elif isinstance(cfg_source, Mapping):
+            cfg = cfg_source
+        else:
+            legacy_cfg = getattr(context, "config", {}) or {}
+            if isinstance(legacy_cfg, Mapping):
+                cfg = legacy_cfg
         cfg_val = cfg.get("honkit_port")
         if cfg_val is not None:
             try:

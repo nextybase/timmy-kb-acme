@@ -15,11 +15,11 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 from __future__ import annotations
 
 import logging
-import os
 from glob import glob
 from pathlib import Path
 from typing import Any, List, Optional, Sequence, cast
 
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
@@ -258,7 +258,7 @@ def get_vision_cfg(cfg: dict | None) -> dict:
     - `strict_output` resta abilitato di default.
     """
     v = (cfg or {}).get("vision") or {}
-    assistant_id = (os.getenv("OBNEXT_ASSISTANT_ID") or os.getenv("ASSISTANT_ID") or "").strip()
+    assistant_id = (get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default="")).strip()
     if not assistant_id:
         raise ConfigError("Assistant ID non configurato: imposta OBNEXT_ASSISTANT_ID o ASSISTANT_ID.")
 

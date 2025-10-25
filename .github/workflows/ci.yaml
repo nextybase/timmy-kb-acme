@@ -51,6 +51,9 @@ jobs:
           gitleaks version
       - name: Secrets scan
         run: gitleaks detect --redact --no-git -v
+      - name: YAML secrets check
+        run: |
+          python scripts/dev/check_yaml_secrets.py $(git ls-files 'config/*.yml' 'config/*.yaml')
       - name: Docs UTF-8/accents normalization check
         run: |
           python scripts/fix_mojibake.py
