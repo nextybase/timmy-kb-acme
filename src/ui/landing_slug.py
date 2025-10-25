@@ -12,6 +12,7 @@ from typing import Any, ContextManager, Dict, Literal, Optional, Tuple, cast
 import yaml
 
 from pipeline.context import ClientContext
+from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -266,7 +267,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 "Verifica cliente",
                 type="primary",
             )
-        if bool(os.getenv("UI_ALLOW_EXIT", "").strip()):
+        if get_bool("UI_ALLOW_EXIT", default=False):
             st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
 
     if verify_clicked:

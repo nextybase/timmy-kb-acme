@@ -20,6 +20,15 @@ if SRC_DIR.exists():
 sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
+
+
+def _optional_env(name: str) -> Optional[str]:
+    try:
+        return get_env_var(name)
+    except KeyError:
+        return None
+    except Exception:
+        return None
 def _print_err(payload: Dict[str, Any], code: int) -> None:
     """Stampa JSON su stderr e termina con codice specifico."""
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)

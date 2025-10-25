@@ -2,7 +2,6 @@
 # src/ui/clients_store.py
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -10,6 +9,7 @@ from typing import Any, Optional, cast
 import yaml
 
 from pipeline.context import validate_slug
+from pipeline.env_utils import get_env_var
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -23,8 +23,32 @@ def _resolve_db_path(target: Path) -> Path:
     return cast(Path, ensure_within_and_resolve(REPO_ROOT, target))
 
 
-DB_DIR: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_DIR", str(REPO_ROOT / "clients_db"))))
-DB_FILE: Path = _resolve_db_path(Path(os.getenv("CLIENTS_DB_FILE", str(DB_DIR / "clients.yaml"))))
+DEFAULT_DB_DIR: Path = REPO_ROOT / "clients_db"
+DEFAULT_DB_FILE: Path = DEFAULT_DB_DIR / "clients.yaml"
+
+
+def _optional_env(name: str) -> Optional[str]:
+    try:
+        return get_env_var(name)
+    except KeyError:
+        return None
+    except Exception:
+        return None
+
+
+def _db_dir() -> Path:
+    value = _optional_env("CLIENTS_DB_DIR")
+    if value:
+        return Path(value).expanduser().resolve()
+    return _resolve_db_path(DEFAULT_DB_DIR)
+
+
+def _db_file() -> Path:
+    value = _optional_env("CLIENTS_DB_FILE")
+    if value:
+        return Path(value).expanduser().resolve()
+    return _db_dir() / DEFAULT_DB_FILE.name
+
 
 LOG = get_structured_logger("ui.clients_store")
 
@@ -40,9 +64,11 @@ class ClientEntry:
 
 
 def ensure_db() -> None:
-    DB_DIR.mkdir(parents=True, exist_ok=True)
-    if not DB_FILE.exists():
-        safe_write_text(DB_FILE, "[]\n", encoding="utf-8", atomic=True)
+    db_dir = _db_dir()
+    db_file = _db_file()
+    db_dir.mkdir(parents=True, exist_ok=True)
+    if not db_file.exists():
+        safe_write_text(db_file, "[]\n", encoding="utf-8", atomic=True)
 
 
 def _parse_entries(text: str) -> list[ClientEntry]:
@@ -66,7 +92,9 @@ def _parse_entries(text: str) -> list[ClientEntry]:
 def load_clients() -> list[ClientEntry]:
     ensure_db()
     try:
-        txt: str = read_text_safe(DB_DIR, DB_FILE, encoding="utf-8")
+        db_dir = _db_dir()
+        db_file = _db_file()
+        txt = read_text_safe(db_dir, db_file, encoding="utf-8")
     except Exception:
         return []
     return _parse_entries(txt)
@@ -76,7 +104,7 @@ def save_clients(entries: list[ClientEntry]) -> None:
     ensure_db()
     payload: list[dict[str, Any]] = [e.to_dict() for e in entries]
     text: str = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
-    safe_write_text(DB_FILE, text, encoding="utf-8", atomic=True)
+    safe_write_text(_db_file(), text, encoding="utf-8", atomic=True)
 
 
 def upsert_client(entry: ClientEntry) -> None:

@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, cast
 import streamlit as st
 import yaml
 
+from pipeline.yaml_utils import yaml_read
 from ui.imports import getattr_if_callable, import_first
 
 ensure_local_workspace_for_ui = import_first(
@@ -23,7 +24,7 @@ from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
@@ -167,11 +168,8 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None
         return
 
     try:
-        repo_payload = read_text_safe(template_cfg.parent, template_cfg, encoding="utf-8")
-        base_cfg = yaml.safe_load(repo_payload) or {}
-
-        client_payload = read_text_safe(client_cfg_dir, dst_cfg, encoding="utf-8")
-        current_cfg = yaml.safe_load(client_payload) or {}
+        base_cfg = yaml_read(template_cfg.parent, template_cfg) or {}
+        current_cfg = yaml_read(client_cfg_dir, dst_cfg) or {}
 
         merged_cfg = deep_merge_dict(base_cfg, current_cfg)
         safe_write_text(
