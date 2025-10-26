@@ -14,6 +14,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.imports import get_streamlit
 
 
 class _ProvisionFromVisionFunc(Protocol):
@@ -26,10 +27,15 @@ class _ProvisionFromVisionFunc(Protocol):
         pdf_path: Path,
         force: bool = False,
         model: Optional[str] = None,
+        prepared_prompt: Optional[str] = None,
     ) -> Dict[str, Any]: ...
 
 
-def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc]:
+class _PreparePromptFunc(Protocol):
+    def __call__(self, *, ctx: Any, slug: str, pdf_path: Path, model: str, logger: Any) -> str: ...
+
+
+def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc, _PreparePromptFunc]:
     """Carica dinamicamente le binding da semantic.vision_provision."""
     candidates = (
         "src.semantic.vision_provision",
@@ -43,17 +49,24 @@ def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc
             continue
         halt_error = getattr(module, "HaltError", None)
         provision = getattr(module, "provision_from_vision", None)
-        if isinstance(halt_error, type) and callable(provision):
-            return cast(Type[Exception], halt_error), cast(_ProvisionFromVisionFunc, provision)
+        prepare = getattr(module, "prepare_assistant_input", None)
+        if isinstance(halt_error, type) and callable(provision) and callable(prepare):
+            return (
+                cast(Type[Exception], halt_error),
+                cast(_ProvisionFromVisionFunc, provision),
+                cast(_PreparePromptFunc, prepare),
+            )
     from ...semantic.vision_provision import HaltError as fallback_error
+    from ...semantic.vision_provision import prepare_assistant_input as fallback_prepare
     from ...semantic.vision_provision import provision_from_vision as fallback_provision
 
-    return fallback_error, fallback_provision
+    return fallback_error, fallback_provision, fallback_prepare
 
 
 HaltError: Type[Exception]
 _provision_from_vision: _ProvisionFromVisionFunc
-HaltError, _provision_from_vision = _load_semantic_bindings()
+_prepare_prompt: _PreparePromptFunc
+HaltError, _provision_from_vision, _prepare_prompt = _load_semantic_bindings()
 
 
 @dataclass(frozen=True)
@@ -135,6 +148,7 @@ def provision_from_vision(
     pdf_path: str | Path,
     force: bool = False,
     model: Optional[str] = None,
+    prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Esegue Vision in modo idempotente lato UI:
@@ -188,6 +202,7 @@ def provision_from_vision(
             pdf_path=safe_pdf,
             model=model or "gpt-4.1-mini",
             force=force,
+            prepared_prompt=prepared_prompt,
         )
     except HaltError:
         # Propaga direttamente verso la UI per consentire un messaggio dedicato.
@@ -214,16 +229,43 @@ def run_vision(
     force: bool = False,
     model: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
+    preview_prompt: bool = False,
 ) -> Dict[str, Any]:
     """
     Wrapper semplificato per la UI: esegue Vision con logger di default.
+    Se `preview_prompt` è True mostra il prompt generato prima di inviare la richiesta.
     """
     eff_logger = logger or get_structured_logger("ui.vision.service")
+    pdf_path = Path(pdf_path)
+    base_dir = getattr(ctx, "base_dir", None)
+    safe_pdf: Path = pdf_path
+    if base_dir is not None:
+        safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
+
+    prepared_prompt: Optional[str] = None
+    if preview_prompt:
+        st = get_streamlit()
+        with st.container(border=True):
+            st.subheader("Anteprima prompt inviato all’Assistant")
+            st.caption("Verifica il testo generato. Premi **Prosegui** per continuare.")
+            prepared_prompt = _prepare_prompt(
+                ctx=ctx,
+                slug=slug,
+                pdf_path=safe_pdf,
+                model=model or "gpt-4.1-mini",
+                logger=eff_logger,
+            )
+            st.text_area("Prompt", value=prepared_prompt, height=420, disabled=True)
+            proceed = st.button("Prosegui", type="primary")
+            if not proceed:
+                st.stop()
+
     return provision_from_vision(
         ctx=ctx,
         logger=eff_logger,
         slug=slug,
-        pdf_path=pdf_path,
+        pdf_path=safe_pdf,
         force=force,
         model=model,
+        prepared_prompt=prepared_prompt,
     )

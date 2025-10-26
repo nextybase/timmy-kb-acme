@@ -445,6 +445,36 @@ def _lint_vision_payload(data: Dict[str, Any]) -> List[str]:
 # =========================
 
 
+def prepare_assistant_input(
+    ctx: Any,
+    slug: str,
+    pdf_path: Path,
+    model: str,
+    logger: Any,
+) -> str:
+    """
+    Costruisce il messaggio utente completo da inoltrare all'Assistant.
+    Nessun side-effect: legge il PDF, normalizza le sezioni e compone il prompt.
+    """
+    _ = model  # placeholder per eventuali personalizzazioni future
+    snapshot = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
+    sections = _parse_required_sections(snapshot)
+    display_name = getattr(ctx, "client_name", None) or slug
+
+    user_block_lines = [
+        "Contesto cliente:",
+        f"- slug: {slug}",
+        f"- client_name: {display_name}",
+        "",
+        "Vision Statement (usa SOLO i blocchi sottostanti):",
+    ]
+    for title in REQUIRED_SECTIONS_CANONICAL:
+        user_block_lines.append(f"[{title}]")
+        user_block_lines.append(sections[title])
+        user_block_lines.append(f"[/{title}]")
+    return "\n".join(user_block_lines)
+
+
 def provision_from_vision(
     ctx: Any,
     logger: logging.Logger,
@@ -453,6 +483,7 @@ def provision_from_vision(
     pdf_path: Path,
     force: bool = False,  # mantenuto per compat con layer UI, qui non fa gating
     model: Optional[str] = None,  # argomento accettato per compat, non usato con Assistant
+    prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Onboarding Vision (flusso **semplificato e bloccante**).
@@ -472,13 +503,7 @@ def provision_from_vision(
     paths = _resolve_paths(str(base_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Estrazione testo
-    snapshot = _extract_pdf_text(Path(safe_pdf), slug=slug, logger=logger)
-
-    # 2) Parsing sezioni obbligatorie
-    sections = _parse_required_sections(snapshot)
-
-    # 3) Client OpenAI + Assistant ID (bloccante se assente)
+    # 1) Client OpenAI + Assistant ID (bloccante se assente)
     client = make_openai_client()
     vision_cfg: Dict[str, Any] = {}
     try:
@@ -493,18 +518,11 @@ def provision_from_vision(
     display_name = getattr(ctx, "client_name", None) or slug
 
     # Costruzione messaggio utente: SOLO blocchi testuali (niente file_search)
-    user_block_lines = [
-        "Contesto cliente:",
-        f"- slug: {slug}",
-        f"- client_name: {display_name}",
-        "",
-        "Vision Statement (usa SOLO i blocchi sottostanti):",
-    ]
-    for title in REQUIRED_SECTIONS_CANONICAL:
-        user_block_lines.append(f"[{title}]")
-        user_block_lines.append(sections[title])
-        user_block_lines.append(f"[/{title}]")
-    user_block = "\n".join(user_block_lines)
+    prompt_text = (
+        prepared_prompt
+        if prepared_prompt is not None
+        else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
+    )
 
     # Run instructions: KB attiva di default, disattivabile con VISION_USE_KB=0/false/no/off
     _use_kb = get_bool("VISION_USE_KB", default=True)
@@ -525,7 +543,7 @@ def provision_from_vision(
     data = _call_assistant_json(
         client=client,
         assistant_id=assistant_id,
-        user_messages=[{"role": "user", "content": user_block}],
+        user_messages=[{"role": "user", "content": prompt_text}],
         strict_output=True,
         run_instructions=run_instructions,
     )

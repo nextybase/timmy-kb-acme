@@ -312,6 +312,15 @@ pdf = st.file_uploader(
     help="Obbligatorio: sarà salvato come config/VisionStatement.pdf",
 )
 
+# Anteprima prompt Vision opzionale
+preview_prompt = st.checkbox(
+    "Mostra anteprima prompt Vision",
+    value=False,
+    key="vision_preview_prompt",
+    help="Visualizza il testo generato e conferma con 'Prosegui' prima di inviare la richiesta.",
+    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
+)
+
 # Slug determinato localmente (non cambiamo fasi/stati finché non premi i pulsanti)
 candidate_slug = (slug or "").strip()
 effective_slug = (current_slug or candidate_slug) or ""
@@ -413,6 +422,7 @@ if current_phase == UI_PHASE_INIT:
                         slug=s,
                         pdf_path=_client_pdf_path(s),
                         logger=ui_logger,
+                        preview_prompt=preview_prompt,
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")

@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 from typing import Any, Optional
 
+from ui.utils.stubs import get_streamlit as _stub_streamlit
+
 
 def import_first(*module_names: str) -> Any:
     """
@@ -25,3 +27,13 @@ def getattr_if_callable(module: Any, name: str) -> Any | None:
     """getattr con filtro: restituisce l'attributo solo se callabile, altrimenti None."""
     obj = getattr(module, name, None)
     return obj if callable(obj) else None
+
+
+def get_streamlit() -> Any:
+    """Restituisce il modulo streamlit oppure uno stub import-safe."""
+    try:
+        import streamlit as st
+
+        return st
+    except Exception:
+        return _stub_streamlit()

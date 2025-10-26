@@ -24,6 +24,7 @@ ENV/
 .hypothesis/
 .mypy_cache/
 .ruff_cache/
+.pytest_clients_db/
 coverage.*
 .coverage
 *.coverage
