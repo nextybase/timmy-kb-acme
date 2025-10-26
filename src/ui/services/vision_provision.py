@@ -230,6 +230,7 @@ def run_vision(
     model: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
     preview_prompt: bool = False,
+    prepared_prompt_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Wrapper semplificato per la UI: esegue Vision con logger di default.
@@ -242,19 +243,20 @@ def run_vision(
     if base_dir is not None:
         safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
 
-    prepared_prompt: Optional[str] = None
+    prepared_prompt: Optional[str] = prepared_prompt_override
     if preview_prompt:
         st = get_streamlit()
         with st.container(border=True):
             st.subheader("Anteprima prompt inviato all’Assistant")
             st.caption("Verifica il testo generato. Premi **Prosegui** per continuare.")
-            prepared_prompt = _prepare_prompt(
-                ctx=ctx,
-                slug=slug,
-                pdf_path=safe_pdf,
-                model=model or "gpt-4.1-mini",
-                logger=eff_logger,
-            )
+            if prepared_prompt is None:
+                prepared_prompt = _prepare_prompt(
+                    ctx=ctx,
+                    slug=slug,
+                    pdf_path=safe_pdf,
+                    model=model or "gpt-4.1-mini",
+                    logger=eff_logger,
+                )
             st.text_area("Prompt", value=prepared_prompt, height=420, disabled=True)
             proceed = st.button("Prosegui", type="primary")
             if not proceed:

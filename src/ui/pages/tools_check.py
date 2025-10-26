@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/tools_check.py
-# Tools › Check: lancia scripts/kb_healthcheck.py su 'dummy' e,
+# Tools âº Check: lancia scripts/kb_healthcheck.py su 'dummy' e,
 # se ok (o soft-fail con rc=3), mostra semantic_mapping.yaml come albero.
 
 from __future__ import annotations
@@ -73,10 +73,12 @@ def _render_mapping_tree(mapping: Dict[str, Any]) -> None:
     st.html(tree_html)
 
 
-def _run_healthcheck(force: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_healthcheck(force: bool = False, include_prompt: bool = False) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, str(SCRIPT), "--slug", SLUG]
     if force:
         cmd.append("--force")
+    if include_prompt:
+        cmd.append("--include-prompt")
 
     st.caption("Esecuzione comando:")
     st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
@@ -89,13 +91,13 @@ def _parse_stdout(stdout: str) -> Dict[str, Any]:
 
 
 def _gate_hit(stderr: str) -> bool:
-    """Rileva l'errore del gate Vision ('già eseguito per questo PDF')."""
-    return bool(re.search(r"Vision.*gi[aà]\s+eseguito", stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
+    """Rileva l'errore del gate Vision ('giÃ  eseguito per questo PDF')."""
+    return bool(re.search(r"Vision.*gi[aÃ ]\s+eseguito", stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
 
 
 def main() -> None:
-    st.title("Tools › Check")
-    st.caption("Esegue l’healthcheck Vision su 'dummy' e visualizza il semantic_mapping come albero.")
+    st.title("Tools âº Check")
+    st.caption("Esegue lâhealthcheck Vision su 'dummy' e visualizza il semantic_mapping come albero.")
 
     # prerequisiti leggeri (nessuna azione sul workspace)
     errors = []
@@ -116,6 +118,13 @@ def main() -> None:
     else:
         st.success("Pre-requisiti OK.")
 
+    preview_prompt = st.checkbox(
+        "Mostra prompt Vision generato",
+        value=False,
+        help="Include il prompt completo negli output per una verifica manuale.",
+        disabled=bool(errors),
+    )
+
     run_btn = st.button(
         "Esegui Healthcheck su 'dummy'",
         type="primary",
@@ -124,9 +133,9 @@ def main() -> None:
     if not run_btn:
         return
 
-    # 1° tentativo (senza force)
-    with st.status("Eseguo healthcheck…", expanded=True) as status:
-        res = _run_healthcheck(force=False)
+    # 1Â° tentativo (senza force)
+    with st.status("Eseguo healthcheckâ¦", expanded=True) as status:
+        res = _run_healthcheck(force=False, include_prompt=preview_prompt)
 
         with st.expander("Output CLI", expanded=False):
             st.text(res.stdout or "(stdout vuoto)")
@@ -135,8 +144,8 @@ def main() -> None:
 
         # Auto-retry con --force se colpiamo il gate Vision
         if res.returncode != 0 and _gate_hit(res.stderr):
-            st.info("Vision è già stata eseguita per questo PDF. Riprovo con forzatura…")
-            res = _run_healthcheck(force=True)
+            st.info("Vision Ã¨ giÃ  stata eseguita per questo PDF. Riprovo con forzaturaâ¦")
+            res = _run_healthcheck(force=True, include_prompt=preview_prompt)
             with st.expander("Output CLI (retry)", expanded=False):
                 st.text(res.stdout or "(stdout vuoto)")
             with st.expander("Errori CLI (retry)", expanded=False):
@@ -147,7 +156,7 @@ def main() -> None:
         # - 3: soft-fail (assistant non ha usato file_search o citazioni assenti) -> continuiamo comunque
         if res.returncode != 0 and res.returncode != 3:
             status.update(label=f"Errore durante l'esecuzione (codice {res.returncode}).", state="error")
-            st.error(f"kb_healthcheck è uscita con codice {res.returncode}")
+            st.error(f"kb_healthcheck Ã¨ uscita con codice {res.returncode}")
             return
 
         # parse JSON (anche se rc=3)
@@ -164,7 +173,7 @@ def main() -> None:
                 state="complete",
             )
             st.warning(
-                "L’assistente non ha usato il file_search o non ha prodotto citazioni. "
+                "Lâassistente non ha usato il file_search o non ha prodotto citazioni. "
                 "Controlla la configurazione della KB o riprova con contenuti diversi."
             )
         else:
@@ -174,7 +183,7 @@ def main() -> None:
     st.write(f"file_search usato: **{bool(payload.get('used_file_search'))}**")
     st.write(f"thread_id: `{payload.get('thread_id')}` - run_id: `{payload.get('run_id')}`")
     if payload.get("pdf_path") or payload.get("base_dir"):
-        st.caption(f"pdf_path: `{payload.get('pdf_path')}` · base_dir: `{payload.get('base_dir')}`")
+        st.caption(f"pdf_path: `{payload.get('pdf_path')}` Â· base_dir: `{payload.get('base_dir')}`")
 
     # Mostra estratto risposta Assistente e citazioni (se presenti)
     if payload.get("assistant_text_excerpt"):
@@ -185,7 +194,14 @@ def main() -> None:
             for c in payload["citations"]:
                 fn = c.get("filename") or c.get("file_id")
                 qt = c.get("quote") or ""
-                st.markdown(f"- `{fn}` — “{qt}”")
+                st.markdown(f"- `{fn}` â â{qt}â")
+    if preview_prompt:
+        prompt_text = payload.get("prompt")
+        if prompt_text:
+            with st.expander("Prompt Vision generato", expanded=False):
+                st.text_area("Prompt", value=str(prompt_text), height=420, disabled=True)
+        else:
+            st.info("Prompt non disponibile negli output; riprova con una nuova esecuzione se necessario.")
 
     # semantic_mapping: preferisci il contenuto nel payload (se presente), altrimenti leggi dal path
     mapping_text: Optional[str] = payload.get("semantic_mapping_content")

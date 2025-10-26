@@ -213,6 +213,11 @@ def main() -> None:
     parser.add_argument("--slug", default="dummy", help="Slug cliente (default: dummy)")
     parser.add_argument("--force", action="store_true", help="Forza rigenerazione Vision")
     parser.add_argument("--model", default=None, help="Annotazione modello (per sentinel hash)")
+    parser.add_argument(
+        "--include-prompt",
+        action="store_true",
+        help="Include nel risultato JSON il prompt Vision generato",
+    )
     args = parser.parse_args()
 
     slug = args.slug.strip()
@@ -250,9 +255,35 @@ def main() -> None:
     logger = logging.getLogger("healthcheck.vision")
     logger.setLevel(logging.INFO)
 
+    prepared_prompt: Optional[str] = None
+    include_prompt = bool(args.include_prompt)
+    if include_prompt:
+        prepare_fn = getattr(vp, "prepare_assistant_input", None)
+        if callable(prepare_fn):
+            try:
+                prepared_prompt = prepare_fn(
+                    ctx=ctx,
+                    slug=slug,
+                    pdf_path=pdf_path,
+                    model=args.model or "gpt-4.1-mini",
+                    logger=logger,
+                )
+            except Exception as exc:
+                logger.warning("healthcheck.prompt_prepare_failed", extra={"error": str(exc)})
+                prepared_prompt = None
+        else:
+            include_prompt = False
+
     try:
         vision_result = run_vision(
-            ctx=ctx, slug=slug, pdf_path=pdf_path, force=args.force, model=args.model, logger=logger
+            ctx=ctx,
+            slug=slug,
+            pdf_path=pdf_path,
+            force=args.force,
+            model=args.model,
+            logger=logger,
+            preview_prompt=False,
+            prepared_prompt_override=prepared_prompt,
         )
     except Exception as e:
         _print_err({"error": f"Vision failed: {e}"}, 1)
@@ -315,6 +346,8 @@ def main() -> None:
         "cartelle_raw_yaml": vision_result.get("cartelle_raw"),
         "semantic_mapping_content": mapping_text,
     }
+    if include_prompt and prepared_prompt:
+        out["prompt"] = prepared_prompt
     print(json.dumps(out, ensure_ascii=False, indent=2))
     if not out["used_file_search"] and not citations:
         # Caso "soft-fail" specifico dell'healthcheck KB (assistente non ha usato file_search / niente citazioni)
