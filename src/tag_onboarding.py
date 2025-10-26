@@ -169,7 +169,7 @@ def scan_raw_to_db(
 
     folders_count = 0
     docs_count = 0
-    log = logging.getLogger("tag_onboarding")
+    log = get_structured_logger("tag_onboarding")
 
     with get_conn(str(db_path_path)) as conn:
         # registra root 'raw'
@@ -192,7 +192,7 @@ def scan_raw_to_db(
                 prev_sha = str(row["sha256"]) if row and row["sha256"] is not None else None
                 if prev_id is not None and prev_sha and prev_sha != sha256_new and has_doc_terms(conn, prev_id):
                     clear_doc_terms(conn, prev_id)
-                    logging.getLogger("tag_onboarding").info(
+                    log.info(
                         "doc_terms invalidated due to hash change",
                         extra={"filename": path.name, "folder_id": folder_id},
                     )
@@ -224,7 +224,7 @@ def run_nlp_to_db(
     raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
     db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
     ensure_schema_v2(str(db_path_path))
-    log = logging.getLogger("tag_onboarding")
+    log = get_structured_logger("tag_onboarding")
 
     with get_conn(str(db_path_path)) as conn:
         docs = list_documents(conn)

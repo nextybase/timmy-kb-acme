@@ -40,7 +40,7 @@ from ..pipeline.context import ClientContext
 from ..pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
 from ..pipeline.exceptions import ConfigError
 from ..pipeline.logging_utils import get_structured_logger
-from ..pipeline.path_utils import ensure_within, ensure_within_and_resolve
+from ..pipeline.path_utils import ensure_within_and_resolve
 
 MIME_FOLDER_CACHED = MIME_FOLDER
 
@@ -281,12 +281,12 @@ def _rmtree_best_effort(
     In caso di lock (Windows), tenta retry; se persiste, prova a eliminare contenuti
     uno a uno e ritorna l'elenco dei residui.
     """
-    ensure_within(base, target)
+    resolved = ensure_within_and_resolve(base, target)
     residuals: list[str] = []
 
     for attempt in range(1, retries + 1):
         try:
-            shutil.rmtree(target, onerror=_try_remove_readonly)
+            shutil.rmtree(resolved, onerror=_try_remove_readonly)
             return True, residuals
         except Exception as e:
             logger.info(
@@ -296,15 +296,15 @@ def _rmtree_best_effort(
                     "attempt": attempt,
                     "retries": retries,
                     "delay": delay,
-                    "path": str(target),
+                    "path": str(resolved),
                     "message": str(e)[:120],
                 },
             )
             time.sleep(delay)
 
     # Best-effort per pulire quasi tutto, isolando i file bloccati
-    if target.exists():
-        for p in sorted(target.rglob("*"), key=len, reverse=True):
+    if resolved.exists():
+        for p in sorted(resolved.rglob("*"), key=len, reverse=True):
             try:
                 if p.is_file() or p.is_symlink():
                     p.unlink(missing_ok=True)
@@ -314,11 +314,11 @@ def _rmtree_best_effort(
                 residuals.append(str(p))
         # Ritenta la rimozione della root se vuota
         try:
-            target.rmdir()
+            resolved.rmdir()
         except Exception:
             pass
 
-    still_exists = target.exists()
+    still_exists = resolved.exists()
     return (not still_exists), residuals
 
 

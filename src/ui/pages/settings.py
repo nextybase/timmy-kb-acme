@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Callable, Optional, cast
 
-import streamlit as st
-
 from ui.chrome import render_chrome_then_require
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
+from ui.utils.stubs import get_streamlit
 
 # ---- Tipi per gli editor YAML ----
 YamlEditor = Callable[[str], None]
@@ -25,6 +24,7 @@ except Exception:
 
 slug = cast(str, render_chrome_then_require())
 
+st = get_streamlit()
 st.subheader("Impostazioni")
 
 # ---------------- Retriever ----------------

@@ -1,4 +1,5 @@
 import importlib
+import os
 
 import pytest
 
@@ -11,6 +12,8 @@ def _reset_store(tmp_path):
     module.REPO_ROOT = tmp_path
     module.DB_DIR = tmp_path / "clients_db"
     module.DB_FILE = module.DB_DIR / "clients.yaml"
+    os.environ["CLIENTS_DB_DIR"] = str(module.DB_DIR)
+    os.environ["CLIENTS_DB_FILE"] = str(module.DB_FILE)
     return module
 
 

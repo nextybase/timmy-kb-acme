@@ -14,6 +14,15 @@ for candidate in (REPO_ROOT, SRC_ROOT):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
+# Reindirizza di default il registry clienti verso una copia interna usata solo dai test
+_DEFAULT_TEST_CLIENTS_DB_DIR = REPO_ROOT / ".pytest_clients_db"
+_DEFAULT_TEST_CLIENTS_DB_DIR.mkdir(parents=True, exist_ok=True)
+_DEFAULT_TEST_CLIENTS_DB_FILE = _DEFAULT_TEST_CLIENTS_DB_DIR / "clients.yaml"
+if "CLIENTS_DB_DIR" not in os.environ:
+    os.environ["CLIENTS_DB_DIR"] = str(_DEFAULT_TEST_CLIENTS_DB_DIR)
+if "CLIENTS_DB_FILE" not in os.environ:
+    os.environ["CLIENTS_DB_FILE"] = str(_DEFAULT_TEST_CLIENTS_DB_FILE)
+
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
 from timmykb.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
 
@@ -148,6 +157,8 @@ def dummy_workspace(tmp_path_factory):
         "slug": DUMMY_SLUG,
         "client_name": f"Dummy {DUMMY_SLUG}",
         "with_semantic": with_semantic,
+        "clients_db_file": clients_db_path,
+        "clients_db_dir": clients_db_path.parent,
     }
 
 
@@ -195,4 +206,15 @@ def _stable_env(monkeypatch, dummy_workspace):
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
     monkeypatch.chdir(dummy_workspace["base"])
+    # Reindirizza il registry clienti verso la copia temporanea
+    clients_db_dir = Path(dummy_workspace["clients_db_dir"])
+    clients_db_file = Path(dummy_workspace["clients_db_file"])
+    try:
+        import ui.clients_store as _clients_store
+
+        monkeypatch.setattr(_clients_store, "REPO_ROOT", clients_db_dir.parent)
+        monkeypatch.setattr(_clients_store, "DB_DIR", clients_db_dir)
+        monkeypatch.setattr(_clients_store, "DB_FILE", clients_db_file)
+    except Exception:
+        pass
     yield

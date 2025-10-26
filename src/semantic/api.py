@@ -24,13 +24,14 @@ from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import phase_scope
-from pipeline.path_utils import ensure_within, sorted_paths
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, sorted_paths
 from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
 from semantic.normalizer import normalize_tags as _normalize_tags
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
+from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
@@ -53,6 +54,7 @@ __all__ = [
     "index_markdown_to_db",
     "copy_local_pdfs_to_raw",
     "list_content_markdown",
+    "export_tags_yaml_from_db",
 ]
 
 
@@ -563,6 +565,39 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         except Exception:
             m.set_artifacts(None)
     return csv_path
+
+
+def export_tags_yaml_from_db(
+    semantic_dir: Path,
+    db_path: Path,
+    logger: Any,
+    *,
+    limit: int = 200,
+    min_weight: float = 0.0,
+    keep_only_listed: bool = True,
+    version: str = "2",
+) -> Path:
+    """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only)."""
+    semantic_dir_path = ensure_within_and_resolve(Path(semantic_dir).parent, Path(semantic_dir))
+    expected_db_path = ensure_within_and_resolve(
+        semantic_dir_path.parent, Path(_derive_tags_db_path(semantic_dir_path / "tags_reviewed.yaml"))
+    )
+    actual_db_path = Path(db_path).resolve()
+    if actual_db_path != expected_db_path:
+        raise ConfigError(
+            "Percorso DB non coerente con la directory semantic specificata.",
+            file_path=str(actual_db_path),
+        )
+    result = _write_tags_yaml_from_db(
+        semantic_dir_path,
+        expected_db_path,
+        logger,
+        limit=limit,
+        min_weight=min_weight,
+        keep_only_listed=keep_only_listed,
+        version=version,
+    )
+    return cast(Path, result)
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:

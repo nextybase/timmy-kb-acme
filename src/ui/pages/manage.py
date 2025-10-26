@@ -6,7 +6,6 @@ import inspect
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
-import streamlit as st
 import yaml
 
 from pipeline.logging_utils import get_structured_logger
@@ -14,6 +13,7 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
+from ui.utils.stubs import get_streamlit
 
 try:
     from ui.clients_store import set_state as set_client_state
@@ -29,6 +29,7 @@ from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, iter_pdfs_safe, resolve_raw_dir
 
 LOGGER = get_structured_logger("ui.manage")
+st = get_streamlit()
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -218,12 +219,13 @@ def _open_tags_raw_modal(slug: str) -> None:
 
         if col_b.button("Abilita", type="primary"):
             try:
-                from semantic.tags_io import write_tags_review_stub_from_csv, write_tags_reviewed_from_nlp_db
+                from semantic.api import export_tags_yaml_from_db
+                from semantic.tags_io import write_tags_review_stub_from_csv
                 from storage.tags_store import derive_db_path_from_yaml_path
 
                 write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
                 db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-                write_tags_reviewed_from_nlp_db(semantic_dir, db_path, LOGGER)
+                export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
                 try:
                     set_client_state(slug, "arricchito")
                 except Exception:
