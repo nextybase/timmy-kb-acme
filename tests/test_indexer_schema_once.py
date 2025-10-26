@@ -85,7 +85,7 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
     real_init = kdb.init_db
 
     def _slow_init(pth):
-        time.sleep(0.02)
+        time.sleep(0.01)
         return real_init(pth)
 
     monkeypatch.setattr(kdb, "init_db", _slow_init, raising=True)
