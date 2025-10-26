@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+?# SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/tools_check.py
-# Tools > Check: lancia scripts/kb_healthcheck.py su "dummy" e,
+# Tools ???? Check: lancia scripts/kb_healthcheck.py su 'dummy' e,
 # se ok (o soft-fail con rc=3), mostra semantic_mapping.yaml come albero.
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import yaml
 
 from pipeline.env_utils import get_env_var
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from ui.chrome import render_chrome_then_require
 
 # --- percorsi (nessuna preparazione workspace) ---
 REPO_ROOT = Path(__file__).resolve().parents[3]  # <repo root>
@@ -37,8 +36,8 @@ ROOT_PDF = REPO_ROOT / "config" / "VisionStatement.pdf"
 # --- UI helpers ---
 def _render_mapping_tree(mapping: Dict[str, Any]) -> None:
     """Albero elegante: solo titolo (ambito) e descrizione."""
-    skip = {"context", "synonyms", "system_folders"}
-    areas = [(k, v) for k, v in mapping.items() if k not in skip and isinstance(v, dict)]
+    SKIP = {"context", "synonyms", "system_folders"}
+    areas = [(k, v) for k, v in mapping.items() if k not in SKIP and isinstance(v, dict)]
     if not areas:
         st.info("Nessuna area rilevata nel mapping.")
         return
@@ -71,10 +70,7 @@ def _render_mapping_tree(mapping: Dict[str, Any]) -> None:
         f'{"".join(items_html)}'
         "</div>"
     )
-    st.markdown(
-        tree_html,
-        help=None,
-    )
+    st.html(tree_html)
 
 
 def _run_healthcheck(force: bool = False, include_prompt: bool = False) -> subprocess.CompletedProcess[str]:
@@ -86,7 +82,7 @@ def _run_healthcheck(force: bool = False, include_prompt: bool = False) -> subpr
 
     st.caption("Esecuzione comando:")
     st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
-    # check=False: gestiamo manualmente i returncode (anche 3 = soft-fail)
+    # check=False: vogliamo gestire esplicitamente i returncode (anche 3 = soft-fail)
     return subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
 
 
@@ -95,15 +91,13 @@ def _parse_stdout(stdout: str) -> Dict[str, Any]:
 
 
 def _gate_hit(stderr: str) -> bool:
-    """Rileva l'errore del gate Vision quando riporta 'gia' (anche con accento) eseguito."""
-    pattern = r"Vision.*gi(?:\u00E0|a)\s+eseguito"
-    return bool(re.search(pattern, stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
+    """Rileva l'errore del gate Vision ('gi???? eseguito per questo PDF')."""
+    return bool(re.search(r"Vision.*gi[a????]\s+eseguito", stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
 
 
 def main() -> None:
-    render_chrome_then_require(allow_without_slug=True)
-    st.title("Tools > Check")
-    st.caption("Esegue l'healthcheck Vision su 'dummy' e visualizza il semantic_mapping come albero.")
+    st.title("Tools ???? Check")
+    st.caption("Esegue l??healthcheck Vision su 'dummy' e visualizza il semantic_mapping come albero.")
 
     # prerequisiti leggeri (nessuna azione sul workspace)
     errors = []
@@ -119,8 +113,8 @@ def main() -> None:
 
     if errors:
         st.error("Pre-requisiti mancanti:")
-        for err in errors:
-            st.markdown(f"- {err}")
+        for e in errors:
+            st.markdown(f"- {e}")
     else:
         st.success("Pre-requisiti OK.")
 
@@ -139,8 +133,8 @@ def main() -> None:
     if not run_btn:
         return
 
-    # Primo tentativo (senza force)
-    with st.status("Eseguo healthcheck...", expanded=True) as status:
+    # 1???? tentativo (senza force)
+    with st.status("Eseguo healthcheck????", expanded=True) as status:
         res = _run_healthcheck(force=False, include_prompt=preview_prompt)
 
         with st.expander("Output CLI", expanded=False):
@@ -150,7 +144,7 @@ def main() -> None:
 
         # Auto-retry con --force se colpiamo il gate Vision
         if res.returncode != 0 and _gate_hit(res.stderr):
-            st.info("Vision gia eseguita per questo PDF. Riprovo con forzatura...")
+            st.info("Vision ???? gi???? stata eseguita per questo PDF. Riprovo con forzatura????")
             res = _run_healthcheck(force=True, include_prompt=preview_prompt)
             with st.expander("Output CLI (retry)", expanded=False):
                 st.text(res.stdout or "(stdout vuoto)")
@@ -160,17 +154,17 @@ def main() -> None:
         # Gestione returncode:
         # - 0: ok
         # - 3: soft-fail (assistant non ha usato file_search o citazioni assenti) -> continuiamo comunque
-        if res.returncode not in (0, 3):
+        if res.returncode != 0 and res.returncode != 3:
             status.update(label=f"Errore durante l'esecuzione (codice {res.returncode}).", state="error")
-            st.error(f"kb_healthcheck e uscita con codice {res.returncode}")
+            st.error(f"kb_healthcheck ???? uscita con codice {res.returncode}")
             return
 
         # parse JSON (anche se rc=3)
         try:
             payload = _parse_stdout(res.stdout)
-        except Exception as exc:
+        except Exception as e:
             status.update(label="JSON non valido dallo stdout.", state="error")
-            st.error(f"Impossibile decodificare l'output: {exc}")
+            st.error(f"Impossibile decodificare l'output: {e}")
             return
 
         if res.returncode == 3:
@@ -179,20 +173,17 @@ def main() -> None:
                 state="complete",
             )
             st.warning(
-                "L'assistente non ha usato il file_search o non ha prodotto citazioni. "
-                "Controlla la configurazione della KB o riprova con contenuti differenti."
+                "L??assistente non ha usato il file_search o non ha prodotto citazioni. "
+                "Controlla la configurazione della KB o riprova con contenuti diversi."
             )
         else:
             status.update(label="Completato.", state="complete")
-
-    if payload.get("vision_skipped"):
-        st.info("Vision gia eseguita: anteprima prompt mostrata senza rigenerare gli artefatti.")
 
     st.success("Healthcheck completato.")
     st.write(f"file_search usato: **{bool(payload.get('used_file_search'))}**")
     st.write(f"thread_id: `{payload.get('thread_id')}` - run_id: `{payload.get('run_id')}`")
     if payload.get("pdf_path") or payload.get("base_dir"):
-        st.caption(f"pdf_path: `{payload.get('pdf_path')}` - base_dir: `{payload.get('base_dir')}`")
+        st.caption(f"pdf_path: `{payload.get('pdf_path')}` ???? base_dir: `{payload.get('base_dir')}`")
 
     # Mostra estratto risposta Assistente e citazioni (se presenti)
     if payload.get("assistant_text_excerpt"):
@@ -200,10 +191,10 @@ def main() -> None:
         st.write(payload["assistant_text_excerpt"])
     if payload.get("citations"):
         with st.expander("Citazioni rilevate", expanded=False):
-            for citation in payload["citations"]:
-                filename = citation.get("filename") or citation.get("file_id")
-                quote = citation.get("quote") or ""
-                st.markdown(f'- `{filename}` -- "{quote}"')
+            for c in payload["citations"]:
+                fn = c.get("filename") or c.get("file_id")
+                qt = c.get("quote") or ""
+                st.markdown(f"- `{fn}` ?? ??{qt}??")
     if preview_prompt:
         prompt_text = payload.get("prompt")
         if prompt_text:
@@ -215,10 +206,10 @@ def main() -> None:
     # semantic_mapping: preferisci il contenuto nel payload (se presente), altrimenti leggi dal path
     mapping_text: Optional[str] = payload.get("semantic_mapping_content")
     if not mapping_text:
-        mapping_hint = payload.get("mapping_yaml")
-        if mapping_hint:
+        mp = payload.get("mapping_yaml")
+        if mp:
             try:
-                mapping_path = ensure_within_and_resolve(REPO_ROOT, Path(mapping_hint))
+                mapping_path = ensure_within_and_resolve(REPO_ROOT, Path(mp))
                 mapping_text = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
             except Exception:
                 mapping_text = None

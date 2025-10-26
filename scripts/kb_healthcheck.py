@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,8 @@ if SRC_DIR.exists():
 sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
+from pipeline.file_utils import safe_write_bytes
+from pipeline.path_utils import ensure_within_and_resolve
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -29,6 +32,29 @@ def _optional_env(name: str) -> Optional[str]:
         return None
     except Exception:
         return None
+
+
+def _is_gate_error(exc: BaseException) -> bool:
+    """Riconosce l'eccezione del gate Vision già eseguito."""
+    normalized = unicodedata.normalize("NFKD", str(exc)).casefold()
+    return "vision" in normalized and "gia" in normalized and "eseguito" in normalized
+
+
+def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
+    """Restituisce i path agli artefatti Vision già presenti (se esistono)."""
+    payload = {"mapping": "", "cartelle_raw": ""}
+    try:
+        semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+    except Exception:
+        return payload
+
+    mapping = semantic_dir / "semantic_mapping.yaml"
+    cartelle = semantic_dir / "cartelle_raw.yaml"
+    if mapping.exists():
+        payload["mapping"] = str(mapping)
+    if cartelle.exists():
+        payload["cartelle_raw"] = str(cartelle)
+    return payload
 def _print_err(payload: Dict[str, Any], code: int) -> None:
     """Stampa JSON su stderr e termina con codice specifico."""
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
@@ -43,6 +69,34 @@ def _client_base(slug: str) -> Path:
 def _repo_pdf_path() -> Path:
     """Unico percorso ammesso: REPO_ROOT/config/VisionStatement.pdf (niente fallback)."""
     return REPO_ROOT / "config" / "VisionStatement.pdf"
+
+
+def _sync_workspace_pdf(base_dir: Path, source_pdf: Path) -> Path:
+    """
+    Garantisce che il VisionStatement sia presente nel workspace (config/VisionStatement.pdf).
+
+    Ritorna il percorso sicuro all'interno del workspace, copiando il PDF repo se assente
+    o diverso (scrittura atomica).
+    """
+    base_dir = Path(base_dir)
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "config"))
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+
+    target = Path(ensure_within_and_resolve(cfg_dir, cfg_dir / "VisionStatement.pdf"))
+
+    data = source_pdf.read_bytes()
+    if target.exists():
+        try:
+            if target.read_bytes() == data:
+                return target
+        except Exception:
+            # fall-back: riscrive in caso di errore di lettura
+            pass
+
+    safe_write_bytes(target, data, atomic=True)
+    return target
 
 
 # ---- Vision UI API (primary: ui.*, fallback: src.ui.*) ----------------------
@@ -222,12 +276,13 @@ def main() -> None:
 
     slug = args.slug.strip()
     base_dir = _client_base(slug)
-    pdf_path = _repo_pdf_path()
-    if not pdf_path.exists():
+    repo_pdf = _repo_pdf_path()
+    if not repo_pdf.exists():
         _print_err(
-            {"error": "VisionStatement non trovato", "expected": str(pdf_path)},
+            {"error": "VisionStatement non trovato", "expected": str(repo_pdf)},
             1,
         )
+    workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
 
     # Monkey-patch: sostituiamo la factory OpenAI usata da Vision per inserire il client tracciante
     orig_factory = getattr(vp, "make_openai_client", None)
@@ -264,7 +319,7 @@ def main() -> None:
                 prepared_prompt = prepare_fn(
                     ctx=ctx,
                     slug=slug,
-                    pdf_path=pdf_path,
+                    pdf_path=workspace_pdf,
                     model=args.model or "gpt-4.1-mini",
                     logger=logger,
                 )
@@ -274,55 +329,71 @@ def main() -> None:
         else:
             include_prompt = False
 
+    run_skipped = False
+    traced_client: Optional[TracingClient] = None
     try:
         vision_result = run_vision(
             ctx=ctx,
             slug=slug,
-            pdf_path=pdf_path,
+            pdf_path=workspace_pdf,
             force=args.force,
             model=args.model,
             logger=logger,
             preview_prompt=False,
             prepared_prompt_override=prepared_prompt,
         )
-    except Exception as e:
-        _print_err({"error": f"Vision failed: {e}"}, 1)
+        traced_client = LAST_CLIENT.get("client")  # type: ignore[assignment]
+    except Exception as exc:
+        if include_prompt and _is_gate_error(exc):
+            run_skipped = True
+            vision_result = _existing_vision_artifacts(base_dir)
+        else:
+            _print_err({"error": f"Vision failed: {exc}"}, 1)
 
-    traced: TracingClient = LAST_CLIENT.get("client")  # type: ignore
-    if traced is None or traced.beta._last_thread_id is None or traced.beta._last_run_id is None:
-        _print_err({"error": "Tracing non riuscito: nessun thread/run ID catturato."}, 1)
+    used_file_search = False
+    citations: List[Dict[str, Any]] = []
+    excerpt = ""
+    thread_id: Optional[str] = None
+    run_id: Optional[str] = None
 
-    # Verifica steps: uso effettivo di file_search
-    try:
-        steps = traced._orig.beta.threads.runs.steps.list(
-            thread_id=traced.beta._last_thread_id, run_id=traced.beta._last_run_id
-        )
-        used_file_search = False
-        for st in getattr(steps, "data", []) or []:
-            tool = getattr(st, "type", None) or getattr(st, "step_type", None)
-            if "tool" in str(tool).lower():
-                name = getattr(getattr(st, "tool", None), "name", None)
-                if name == "file_search":
-                    used_file_search = True
-                    break
-    except Exception:
-        used_file_search = False
+    if not run_skipped:
+        traced: TracingClient = traced_client  # type: ignore[assignment]
+        if traced is None or traced.beta._last_thread_id is None or traced.beta._last_run_id is None:
+            _print_err({"error": "Tracing non riuscito: nessun thread/run ID catturato."}, 1)
 
-    # Estrai testo e citazioni
-    text, annotations = _extract_text_and_annotations(traced, traced.beta._last_thread_id)
-    file_ids = [a.get("file_id") for a in annotations if a.get("file_id")]
-    id_to_name = _resolve_filenames(traced, list(dict.fromkeys(file_ids))) if file_ids else {}
+        thread_id = traced.beta._last_thread_id
+        run_id = traced.beta._last_run_id
 
-    citations = []
-    for a in annotations:
-        fid = a.get("file_id")
-        if not fid:
-            continue
-        citations.append({"file_id": fid, "filename": id_to_name.get(fid), "quote": a.get("quote")})
+        # Verifica steps: uso effettivo di file_search
+        try:
+            steps = traced._orig.beta.threads.runs.steps.list(
+                thread_id=thread_id,
+                run_id=run_id,
+            )
+            for st in getattr(steps, "data", []) or []:
+                tool = getattr(st, "type", None) or getattr(st, "step_type", None)
+                if "tool" in str(tool).lower():
+                    name = getattr(getattr(st, "tool", None), "name", None)
+                    if name == "file_search":
+                        used_file_search = True
+                        break
+        except Exception:
+            used_file_search = False
 
-    excerpt = (text or "").strip()
-    if len(excerpt) > 400:
-        excerpt = excerpt[:400].rstrip() + "…"
+        # Estrai testo e citazioni
+        text, annotations = _extract_text_and_annotations(traced, thread_id)
+        file_ids = [a.get("file_id") for a in annotations if a.get("file_id")]
+        id_to_name = _resolve_filenames(traced, list(dict.fromkeys(file_ids))) if file_ids else {}
+
+        for a in annotations:
+            fid = a.get("file_id")
+            if not fid:
+                continue
+            citations.append({"file_id": fid, "filename": id_to_name.get(fid), "quote": a.get("quote")})
+
+        excerpt = (text or "").strip()
+        if len(excerpt) > 400:
+            excerpt = excerpt[:400].rstrip() + "..."
 
     # carica (se presente) il contenuto del semantic_mapping.yaml
     mapping_text: Optional[str] = None
@@ -334,24 +405,27 @@ def main() -> None:
         mapping_text = None
 
     out = {
-        "status": "completed",
-        "used_file_search": bool(used_file_search or bool(file_ids)),
+        "status": "skipped" if run_skipped else "completed",
+        "used_file_search": bool(used_file_search),
         "citations": citations,
         "assistant_text_excerpt": excerpt,
-        "thread_id": traced.beta._last_thread_id,
-        "run_id": traced.beta._last_run_id,
-        "pdf_path": str(pdf_path),
+        "thread_id": thread_id,
+        "run_id": run_id,
+        "pdf_path": str(workspace_pdf),
         "base_dir": str(base_dir),
         "mapping_yaml": vision_result.get("mapping"),
         "cartelle_raw_yaml": vision_result.get("cartelle_raw"),
         "semantic_mapping_content": mapping_text,
+        "vision_skipped": run_skipped,
     }
     if include_prompt and prepared_prompt:
         out["prompt"] = prepared_prompt
     print(json.dumps(out, ensure_ascii=False, indent=2))
+    if run_skipped:
+        sys.exit(0)
     if not out["used_file_search"] and not citations:
-        # Caso "soft-fail" specifico dell'healthcheck KB (assistente non ha usato file_search / niente citazioni)
         sys.exit(3)
+
 
 
 if __name__ == "__main__":
