@@ -404,7 +404,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "vision_used": bool(enable_vision),
                 "drive_used": bool(enable_drive),
             }
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
             return 0
 
         except Exception as e:
