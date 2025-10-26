@@ -15,7 +15,9 @@ def _write_file(path: Path, content: str) -> None:
 
 
 def test_semantic_config_merges_settings(tmp_path: Path) -> None:
-    base_dir = tmp_path / "output" / "timmy-kb-acme"
+    slug = "dummy"
+    base_dir = tmp_path / "output" / f"timmy-kb-{slug}"
+    base_dir.mkdir(parents=True, exist_ok=True)
     config_yaml = base_dir / "config" / "config.yaml"
     mapping_yaml = base_dir / "semantic" / "semantic_mapping.yaml"
 
@@ -39,7 +41,13 @@ semantic_tagger:
         + "\n",
     )
 
+    config_snapshot = config_yaml.read_text(encoding="utf-8")
+    mapping_snapshot = mapping_yaml.read_text(encoding="utf-8")
+
     cfg = load_semantic_config(base_dir)
     assert cfg.top_k == 9
     assert cfg.score_min == 0.55
     assert "semantic_tagger" in cfg.mapping
+    # Il loader non deve modificare i file esistenti
+    assert config_yaml.read_text(encoding="utf-8") == config_snapshot
+    assert mapping_yaml.read_text(encoding="utf-8") == mapping_snapshot
