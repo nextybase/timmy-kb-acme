@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import importlib
-import logging
 import os
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from pipeline.exceptions import RetrieverError
+from pipeline.logging_utils import get_structured_logger
 
 if TYPE_CHECKING:
     try:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
         except ImportError:  # pragma: no cover
             from ..retriever import QueryParams
 
-LOGGER = logging.getLogger("security.authorization")
+LOGGER = get_structured_logger("security.authorization", propagate=False)
 
 _ENV_SLUG_KEYS: tuple[str, ...] = (
     "TIMMY_ACTIVE_SLUG",
@@ -62,7 +62,7 @@ def _resolve_active_slug() -> str:
     slug = _slug_from_streamlit_session()
     if slug:
         return slug
-    LOGGER.error("authorization.active_slug.missing")
+    LOGGER.error("authorization.active_slug.missing", extra={"event": "authorization.active_slug.missing"})
     raise RetrieverError("Slug attivo non disponibile per l'autorizzazione della ricerca.")
 
 
@@ -73,6 +73,7 @@ def authorizer_session(params: "QueryParams") -> None:
         LOGGER.warning(
             "authorization.denied",
             extra={
+                "event": "authorization.denied",
                 "expected_slug": active_slug,
                 "received_slug": params.project_slug,
             },

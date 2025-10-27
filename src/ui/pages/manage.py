@@ -247,7 +247,7 @@ def _open_tags_raw_modal(slug: str) -> None:
 
 # --- piccoli helper per compat con stub di test ---
 def _columns3() -> tuple[Any, Any, Any]:
-    """Restituisce sempre 3 colonne, facendo padding se lo stub ne crea <3."""
+    """Restituisce sempre 3 colonne, facendo padding se lo stub ne crea <3>."""
     make = getattr(st, "columns", None)
     if not callable(make):
         return (st, st, st)
@@ -309,7 +309,11 @@ if not slug:
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
-        st.html('<a href="/new?tab=new" target="_self">? Crea nuovo cliente</a>')
+        # Sostituisce anchor HTML interno con page_link / fallback
+        if hasattr(st, "page_link"):
+            st.page_link("src/ui/pages/new_client.py", label="➕ Crea nuovo cliente")
+        else:
+            st.link_button("➕ Crea nuovo cliente", url="/new?tab=new")
         st.stop()
 
     options: list[tuple[str, str]] = []
@@ -374,7 +378,7 @@ def _render_status_block(
 
 
 if slug:
-    # Da qui in poi: slug presente ? viste operative
+    # Da qui in poi: slug presente → viste operative
 
     # Unica vista per Drive (Diff)
     if _render_drive_diff is not None:
@@ -385,7 +389,7 @@ if slug:
     else:
         st.info("Vista Diff non disponibile.")
 
-    # --- Genera README / Rileva PDF / Scarica da Drive ? locale in 3 colonne ---
+    # --- Genera README / Rileva PDF / Scarica da Drive → locale in 3 colonne ---
     _markdown = getattr(st, "markdown", None)
     if callable(_markdown):
         _markdown("")
@@ -395,7 +399,7 @@ if slug:
     client_state = (get_client_state(slug) or "").strip().lower()
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
-    # Colonna 1 â€“ README su Drive
+    # Colonna 1 – README su Drive
     if _column_button(c1, "Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
         emit_fn = _emit_readmes_for_raw
         if emit_fn is None:
@@ -406,7 +410,7 @@ if slug:
         else:
             try:
                 with status_guard(
-                    "Genero i README nelle sottocartelle di raw/ su Driveâ€¦",
+                    "Genero i README nelle sottocartelle di raw/ su Drive…",
                     expanded=True,
                     error_label="Errore durante la generazione dei README",
                 ) as status_widget:
@@ -467,15 +471,15 @@ if slug:
                 st.error(f"Estrazione tag non riuscita: {exc}")
 
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
-        st.html(
-            '<a href="/semantics" target="_self" class="stLinkButton">'
-            "➡️ Prosegui con l’arricchimento semantico"
-            "</a>"
-        )
+        # Sostituisce anchor HTML interno con API native di navigazione
+        if hasattr(st, "page_link"):
+            st.page_link("src/ui/pages/semantics.py", label="➡️ Prosegui con l’arricchimento semantico")
+        else:
+            st.link_button("➡️ Prosegui con l’arricchimento semantico", url="/semantics")
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
 
-    # Colonna 3 â€“ Scarica da Drive ? locale
-    if _column_button(c3, "Scarica PDF da Drive ? locale", key="btn_drive_download", type="secondary", width="stretch"):
+    # Colonna 3 – Scarica da Drive → locale
+    if _column_button(c3, "Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
 
         def _modal() -> None:
             st.write(
@@ -516,7 +520,7 @@ if slug:
                 return
 
             if conflicts:
-                with st.expander(f"File giÃ  presenti in locale ({len(conflicts)})", expanded=True):
+                with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
                     st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
             else:
                 st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
@@ -525,12 +529,12 @@ if slug:
                 st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
 
             cA, cB = st.columns(2)
-            if cA.button("Annulla", key="dl_cancel", width="stretch"):
+            if cA.button("Annulla", key="dl_cancel"):
                 return
-            if cB.button("Procedi e scarica", key="dl_proceed", type="primary", width="stretch"):
+            if cB.button("Procedi e scarica", key="dl_proceed", type="primary"):
                 try:
                     with status_guard(
-                        "Scarico file da Driveâ€¦",
+                        "Scarico file da Drive…",
                         expanded=True,
                         error_label="Errore durante il download",
                     ) as status_widget:
@@ -555,7 +559,7 @@ if slug:
                     try:
                         if _invalidate_drive_index is not None:
                             _invalidate_drive_index(slug)
-                        st.toast("Allineamento Drive?locale completato.")
+                        st.toast("Allineamento Drive→locale completato.")
                         st.rerun()
                     except Exception:
                         pass

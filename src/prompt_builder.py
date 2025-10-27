@@ -11,10 +11,11 @@ design comments, modular and production-ready code.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-LOGGER = logging.getLogger("timmy_kb.prompt_builder")
+from pipeline.logging_utils import get_structured_logger
+
+LOGGER = get_structured_logger("timmy_kb.prompt_builder", propagate=True)
 
 
 def _format_retrieved(retrieved: list[dict[str, Any]]) -> str:
@@ -56,5 +57,9 @@ def build_prompt(next_premise: str, coding_rules: str, task: str, retrieved: lis
     )
 
     prompt = "\n".join(lines).strip() + "\n"
-    LOGGER.info("Prompt built, length=%d chars", len(prompt))
+    LOGGER.info(
+        "Prompt built, length=%s",
+        len(prompt),
+        extra={"event": "prompt.built", "length_chars": len(prompt)},
+    )
     return prompt

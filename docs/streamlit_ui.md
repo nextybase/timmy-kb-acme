@@ -262,23 +262,27 @@ Prima di aprire una PR:
 
 **Stato & routing**
 
--
+- Usa `st.Page`/`st.navigation` e niente router legacy.
+- Se la pagina richiede slug: `render_chrome_then_require()` / `require_active_slug()`.
+- Navigazione interna con `st.page_link` / `st.switch_page` (no `<a href="/...">`).
 
 **File I/O**
 
--
+- Path-safety con `ensure_within_and_resolve`, I/O atomico con `safe_write_text`.
+- Niente `Path.rglob` sui workspace: usa `iter_pdfs_safe`/`count_pdfs_safe`.
 
 **Osservabilità**
 
--
+- Logger `ui.<pagina>` e eventi minimali senza PII (vedi esempi “Manage”).
 
 **UX & stub‑compat**
 
--
+- Feedback con `status_guard` o `st.status` (no sleep/progress finti).
+- Evita `with col:` se lo stub non lo supporta; usa helper già presenti.
 
 **Docs & link**
 
--
+- Aggiorna questa checklist e aggiungi riferimenti a esempi nella doc.
 
 ---
 

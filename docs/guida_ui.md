@@ -19,7 +19,7 @@ Usa la UI per:
 
 ## 2) Prerequisiti essenziali
 
-- **Software**: Python ≥ 3.11, Streamlit. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
+- **Software**: Python ≥ 3.11, Streamlit ≥ 1.50.0. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
 - **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; variabili d’ambiente:
   - \`SERVICE\_ACCOUNT\_FILE\` → path al JSON delle credenziali.
   - \`DRIVE\_ID\` → ID del Drive o cartella radice.

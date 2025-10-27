@@ -10,7 +10,6 @@ Onboarding UI entrypoint (beta 0).
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 
 try:
@@ -53,6 +52,8 @@ import streamlit as st  # noqa: E402
 
 from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
 from ui.preflight import run_preflight  # noqa: E402
+from ui.utils.slug import clear_active_slug  # noqa: E402
+from ui.utils.status import status_guard  # noqa: E402
 
 st.set_page_config(
     page_title="Onboarding NeXT - Clienti",
@@ -113,6 +114,11 @@ def _truthy(v) -> bool:
 if _truthy(getattr(st, "query_params", {}).get("exit")):
     st.title("Sessione terminata")
     st.info("Puoi chiudere questa scheda. Lo slug attivo è stato azzerato.")
+    try:
+        # Azzeramento coerente su query/sessione/persistenza
+        clear_active_slug(persist=True, update_query=True)
+    except Exception:
+        pass
     st.stop()
 
 # --------------------------------------------------------------------------------------
@@ -140,37 +146,35 @@ if not st.session_state.get("preflight_ok", False):
                     except Exception as exc:
                         st.warning(f"Impossibile salvare la preferenza: {exc}")
 
-                progress = st.progress(5, text="Avvio controllo prerequisiti...")
-                time.sleep(0.05)
-                progress.progress(35, text="Verifica ambiente...")
                 try:
-                    results, port_busy = run_preflight()
+                    with status_guard("Controllo prerequisiti…", expanded=True, error_label="Errore nel preflight") as s:
+                        results, port_busy = run_preflight()
+
+                        # OPENAI/Docker sono opzionali per l'onboarding
+                        essential_checks = {"PyMuPDF", "ReportLab", "Google API Client"}
+                        essentials_ok = True
+
+                        for name, ok, hint in results:
+                            if name in {"OPENAI_API_KEY", "Docker"} and not ok:
+                                st.warning(f"[Opzionale] {name} - {hint}")
+                            elif ok:
+                                st.success(f"[OK] {name}")
+                            else:
+                                st.error(f"[KO] {name} - {hint}")
+
+                            if name in essential_checks:
+                                essentials_ok &= ok
+
+                        if port_busy:
+                            st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
+
+                        if s is not None and hasattr(s, "update"):
+                            s.update(label="Controllo completato", state="complete")
                 except Exception as exc:
                     st.error(f"Errore nel preflight: {exc}")
                     st.session_state["preflight_ok"] = False
                     st.stop()
 
-                essential_checks = {"PyMuPDF", "ReportLab", "Google API Client"}  # OPENAI è opzionale
-                essentials_ok = True
-                progress.progress(60, text="Analisi risultati...")
-                for name, ok, hint in results:
-                    if name == "OPENAI_API_KEY" and not ok:
-                        st.warning(f"[Opzionale] {name} - {hint}")
-                        continue
-                    if name == "Docker" and not ok:
-                        st.warning(f"[Opzionale] {name} - {hint}")
-                        continue
-                    if ok:
-                        st.success(f"[OK] {name}")
-                    else:
-                        st.error(f"[KO] {name} - {hint}")
-                    if name in essential_checks:
-                        essentials_ok &= ok
-
-                if port_busy:
-                    st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
-
-                progress.progress(100, text="Controllo completato")
                 proceed = st.button("Prosegui", type="primary", disabled=not essentials_ok)
                 if proceed:
                     st.session_state["preflight_ok"] = True

@@ -1,3 +1,4 @@
+# src/vscode_bridge.py
 """Bridge tra UI Streamlit e watcher di VS Code.
 
 Funzioni:
@@ -11,16 +12,15 @@ se presente.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, read_text_safe
 
-LOGGER = logging.getLogger("timmy_kb.vscode_bridge")
-
+LOGGER = get_structured_logger("timmy_kb.vscode_bridge", propagate=False)
 
 BASE = Path(".timmykb")
 HISTORY = BASE / "history"
@@ -44,7 +44,10 @@ def write_request(prompt: str) -> str:
     hist_path = HISTORY / f"{ts}.prompt"
     ensure_within(HISTORY, hist_path)
     safe_write_text(hist_path, prompt, encoding="utf-8", atomic=True)
-    LOGGER.info("Prompt written: %s and %s", last_path, hist_path)
+    LOGGER.info(
+        "vscode_bridge.prompt_written",
+        extra={"event": "vscode_bridge.prompt_written", "last_path": str(last_path), "history_path": str(hist_path)},
+    )
     return str(last_path)
 
 
@@ -54,9 +57,14 @@ def read_response() -> Optional[str]:
     if p.exists():
         try:
             content = read_text_safe(BASE, p)
-            LOGGER.info("Response read from %s", p)
+            LOGGER.info(
+                "vscode_bridge.response_read", extra={"event": "vscode_bridge.response_read", "response_path": str(p)}
+            )
             return str(content) if content is not None else None
         except Exception as e:
-            LOGGER.exception("Error reading response %s: %s", p, e)
+            LOGGER.exception(
+                "vscode_bridge.response_error",
+                extra={"event": "vscode_bridge.response_error", "response_path": str(p), "error": str(e)},
+            )
             return None
     return None

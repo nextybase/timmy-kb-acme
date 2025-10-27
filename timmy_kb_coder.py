@@ -21,7 +21,6 @@ Quick demo script:
 
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 from typing import Any, Dict, cast
@@ -32,10 +31,10 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from pipeline.config_utils import get_client_config
-
-# Config repo (per leggere config.yaml se disponibile)
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
+from pipeline.logging_utils import get_structured_logger
+
 from semantic.types import EmbeddingsClient
 from timmykb.ingest import OpenAIEmbeddings
 from timmykb.kb_db import get_db_path, init_db
@@ -53,38 +52,23 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
-# Logging (passive at import-time): define constants/logger only
-LOGS_DIR = Path("logs")
-LOGGER = logging.getLogger("timmy_kb.ui")
+# Logging (SSoT, senza handler custom) + path validati
+LOGS_DIR = Path(".timmykb") / "logs"
+LOG_FILE = LOGS_DIR / "timmy_kb.log"
+LOGGER = get_structured_logger("timmy_kb.ui", propagate=True)
 
 
 def _configure_logging() -> None:
-    """Configure app logging in an idempotent way.
-
-    - Create `logs/` and `timmy_kb.log` file.
-    - Add handlers only if not already present for this logger.
-    - Do not touch the root logger.
-    """
-    # Idempotency: skip if our handlers are already attached
-    if any(getattr(h, "_kb_handler", False) for h in LOGGER.handlers):
-        return
-
+    """Inizializza il logger strutturato con file dedicato (idempotente)."""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOGS_DIR / "timmy_kb.log"
+    globals()["LOG_FILE"] = log_file
+    # get_structured_logger e' idempotente e non duplica handler; qui attiviamo il file handler
+    logger = get_structured_logger("timmy_kb.ui", log_file=log_file, propagate=True)
 
-    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    fh = logging.FileHandler(LOGS_DIR / "timmy_kb.log", encoding="utf-8")
-    fh.setFormatter(fmt)
-    fh._kb_handler = True  # type: ignore[attr-defined]
-
-    sh = logging.StreamHandler()
-    sh.setFormatter(fmt)
-    sh._kb_handler = True  # type: ignore[attr-defined]
-
-    LOGGER.setLevel(logging.INFO)
-    LOGGER.propagate = False
-    LOGGER.addHandler(fh)
-    LOGGER.addHandler(sh)
-
+    for handler in logger.handlers:
+        if getattr(handler, "_logging_utils_key", "").startswith("timmy_kb.ui::"):
+            handler._kb_handler = True
 
 def _ensure_startup() -> None:
     """Ensure required folders and DB exist."""

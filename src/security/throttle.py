@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib
-import logging
 import os
 import threading
 import time
@@ -10,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from pipeline.exceptions import RetrieverError
+from pipeline.logging_utils import get_structured_logger
 
 if TYPE_CHECKING:
     try:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
         except ImportError:  # pragma: no cover
             from ..retriever import QueryParams
 
-LOGGER = logging.getLogger("security.throttle")
+LOGGER = get_structured_logger("security.throttle", propagate=False)
 
 _ENV_IDENTITY_KEYS: tuple[str, ...] = (
     "TIMMY_USER_EMAIL",
@@ -56,9 +56,12 @@ def _resolve_identity(default: Optional[str]) -> str:
     if identity:
         return identity
     if default:
-        LOGGER.debug("throttle.identity.fallback", extra={"identity": default})
+        LOGGER.debug(
+            "throttle.identity.fallback",
+            extra={"event": "throttle.identity.fallback", "identity": default},
+        )
         return default
-    LOGGER.error("throttle.identity.missing")
+    LOGGER.error("throttle.identity.missing", extra={"event": "throttle.identity.missing"})
     raise RetrieverError("Identità utente non disponibile per la verifica rate limit.")
 
 
@@ -118,7 +121,12 @@ def throttle_token_bucket(
         if bucket.tokens < 1.0:
             LOGGER.warning(
                 "throttle.denied",
-                extra={"identity": user_identity, "max_requests": max_requests, "interval_seconds": interval_seconds},
+                extra={
+                    "event": "throttle.denied",
+                    "identity": user_identity,
+                    "max_requests": max_requests,
+                    "interval_seconds": interval_seconds,
+                },
             )
             raise RetrieverError("Troppe richieste: rate limit superato.")
 

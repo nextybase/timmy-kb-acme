@@ -543,17 +543,8 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
 ):
     eff = st.session_state.get(slug_state_key) or effective_slug
     eff_q = esc_url_component(eff)
-    st.html(
-        f"""
-        <div style="width:100%;">
-          <a href="/manage?slug={eff_q}" target="_self"
-             style="
-               display:block;text-align:center;
-               padding:0.6rem 1rem;border-radius:0.5rem;
-               background:#0f62fe;color:#fff;text-decoration:none;
-               font-weight:600;">
-            ➡️&nbsp;Vai a Gestisci cliente
-          </a>
-        </div>
-        """
-    )
+    # Navigazione nativa (preferita) con fallback
+    if hasattr(st, "page_link"):
+        st.page_link("src/ui/pages/manage.py", label="➡️ Vai a Gestisci cliente")
+    else:
+        st.link_button("➡️ Vai a Gestisci cliente", url=f"/manage?slug={eff_q}")
