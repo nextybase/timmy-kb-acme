@@ -1,240 +1,146 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/tools_check.py
-# Tools > Check: lancia scripts/kb_healthcheck.py su "dummy" e,
-# se ok (o soft-fail con rc=3), mostra semantic_mapping.yaml come albero.
+# Flusso: mostra prompt → Prosegui → esegue Vision (senza force, con retry auto se gate) → mostra output → STOP.
 
 from __future__ import annotations
 
-import html
 import json
-import re
-import shlex
-import subprocess
-import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import cast
 
 import streamlit as st
-import yaml
 
-from pipeline.env_utils import get_env_var
+from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+
+# servizi Vision
+from semantic.vision_provision import prepare_assistant_input
 from ui.chrome import render_chrome_then_require
+from ui.services.vision_provision import provision_from_vision
+from ui.utils.workspace import workspace_root
 
-# --- percorsi (nessuna preparazione workspace) ---
-REPO_ROOT = Path(__file__).resolve().parents[3]  # <repo root>
-SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-SCRIPT = REPO_ROOT / "scripts" / "kb_healthcheck.py"
-SLUG = "dummy"
-ROOT_PDF = REPO_ROOT / "config" / "VisionStatement.pdf"
+LOG = get_structured_logger("ui.tools_check")
 
 
-# --- UI helpers ---
-def _render_mapping_tree(mapping: Dict[str, Any]) -> None:
-    """Albero elegante: solo titolo (ambito) e descrizione."""
-    skip = {"context", "synonyms", "system_folders"}
-    areas = [(k, v) for k, v in mapping.items() if k not in skip and isinstance(v, dict)]
-    if not areas:
-        st.info("Nessuna area rilevata nel mapping.")
-        return
-
-    st.markdown("#### Struttura semantica (titolo & descrizione)")
-
-    items_html: list[str] = []
-    for key, bloc in areas:
-        titolo = html.escape(bloc.get("ambito") or key)
-        descr = html.escape(bloc.get("descrizione") or "")
-        safe_key = html.escape(key)
-        items_html.append(
-            f'<div class="tree-item">'
-            f'<div class="tree-title">{titolo}</div>'
-            f'<div class="tree-desc">{descr}</div>'
-            f'<div class="tree-key">({safe_key})</div>'
-            f"</div>"
-        )
-
-    tree_html = (
-        "<style>"
-        "  .tree { border-left: 2px solid #eee; margin-left: .5rem; padding-left: .75rem; }"
-        "  .tree-item { margin-bottom: .6rem; }"
-        "  .tree-title { font-weight: 600; }"
-        "  .tree-desc { color: #555; margin-top: .15rem; }"
-        '  .tree-key { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",'
-        '                       "Courier New", monospace; font-size: 0.8rem; color: #777; }'
-        "</style>"
-        '<div class="tree">'
-        f'{"".join(items_html)}'
-        "</div>"
-    )
-    st.markdown(
-        tree_html,
-        help=None,
-    )
+def _client_pdf_path(base_dir: Path) -> Path:
+    cfg = cast(Path, ensure_within_and_resolve(base_dir, base_dir / "config"))
+    return cast(Path, ensure_within_and_resolve(cfg, cfg / "VisionStatement.pdf"))
 
 
-def _run_healthcheck(force: bool = False, include_prompt: bool = False) -> subprocess.CompletedProcess[str]:
-    cmd = [sys.executable, str(SCRIPT), "--slug", SLUG]
-    if force:
-        cmd.append("--force")
-    if include_prompt:
-        cmd.append("--include-prompt")
-
-    st.caption("Esecuzione comando:")
-    st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
-    # check=False: gestiamo manualmente i returncode (anche 3 = soft-fail)
-    return subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
-
-
-def _parse_stdout(stdout: str) -> Dict[str, Any]:
-    return cast(Dict[str, Any], json.loads(stdout))
-
-
-def _gate_hit(stderr: str) -> bool:
-    """Rileva l'errore del gate Vision quando riporta 'gia' (anche con accento) eseguito."""
-    pattern = r"Vision.*gi(?:\u00E0|a)\s+eseguito"
-    return bool(re.search(pattern, stderr, flags=re.IGNORECASE) or "file=vision_hash" in stderr)
+def _is_gate_error(err: Exception) -> bool:
+    msg = str(err).lower()
+    return ("vision già eseguit" in msg) or ("vision gia eseguit" in msg) or ("file=vision_hash" in msg)
 
 
 def main() -> None:
-    render_chrome_then_require(allow_without_slug=True)
-    st.title("Tools > Check")
-    st.caption("Esegue l'healthcheck Vision su 'dummy' e visualizza il semantic_mapping come albero.")
+    # Richiede slug selezionato e disegna chrome coerente
+    slug = render_chrome_then_require()
+    base_dir = workspace_root(slug)
+    pdf_path = _client_pdf_path(base_dir)
 
-    # prerequisiti leggeri (nessuna azione sul workspace)
-    errors = []
-    if not SCRIPT.exists():
-        errors.append(f"Script non trovato: {SCRIPT}")
-    if not ROOT_PDF.exists():
-        errors.append(f"VisionStatement.pdf assente in root: {ROOT_PDF}")
-    if not get_env_var("OPENAI_API_KEY", default=None):
-        errors.append("OPENAI_API_KEY mancante.")
-    assistant_env = get_env_var("OBNEXT_ASSISTANT_ID", default=None)
-    if not (assistant_env or get_env_var("ASSISTANT_ID", default=None)):
-        errors.append("OBNEXT_ASSISTANT_ID/ASSISTANT_ID mancante.")
+    st.header("Tools > Check")
+    st.caption("Anteprima del prompt, poi esecuzione Vision e visualizzazione dell’output.")
 
-    if errors:
-        st.error("Pre-requisiti mancanti:")
-        for err in errors:
-            st.markdown(f"- {err}")
+    # 1) Costruzione prompt (no token)
+    try:
+        with st.spinner("Preparo il prompt Vision..."):
+            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+            prepared_prompt: str = prepare_assistant_input(ctx, slug=slug, pdf_path=pdf_path, model=None, logger=LOG)
+    except Exception as exc:
+        st.error(f"Impossibile generare il prompt: {exc}")
+        LOG.warning("ui.tools_check.prompt_error", extra={"slug": slug, "err": str(exc)})
+        st.stop()
+
+    # 2) Gate sul prompt
+    st.subheader("Prompt Vision generato")
+    st.text_area("Prompt", value=prepared_prompt, height=420, label_visibility="collapsed", disabled=True)
+    c1, c2 = st.columns(2)
+    if c1.button("Annulla", type="secondary"):
+        st.info("Operazione annullata.")
+        st.stop()
+    go = c2.button("Prosegui", type="primary")
+    if not go:
+        st.stop()
+
+    # 3) Esecuzione Vision: tentativo normale → retry automatico forzato solo se scatta il gate
+    forced = False
+    try:
+        with st.spinner("Contatto l’assistente..."):
+            result = provision_from_vision(
+                ctx,
+                logger=LOG,
+                slug=slug,
+                pdf_path=pdf_path,
+                prepared_prompt=prepared_prompt,
+                force=False,  # primo tentativo: non forzare
+                model=None,
+            )
+    except ConfigError as e:
+        if _is_gate_error(e):
+            forced = True
+            with st.spinner("Vision già eseguita: rigenero forzando..."):
+                result = provision_from_vision(
+                    ctx,
+                    logger=LOG,
+                    slug=slug,
+                    pdf_path=pdf_path,
+                    prepared_prompt=prepared_prompt,
+                    force=True,  # retry invisibile all’utente
+                    model=None,
+                )
+        else:
+            st.error(str(e))
+            LOG.warning("ui.tools_check.run_error", extra={"slug": slug, "type": e.__class__.__name__})
+            st.stop()
+    except Exception as e:
+        st.error(f"Errore durante l'esecuzione della Vision: {e}")
+        LOG.warning("ui.tools_check.run_error", extra={"slug": slug, "err": str(e)})
+        st.stop()
+
+    # 4) Output Assistente (+ caption sul tipo di esecuzione) → STOP
+    st.subheader("Output Assistente")
+
+    # Caption discreta sul tipo di esecuzione
+    if forced:
+        st.caption("Esecuzione: **rigenerata forzando** (gate rilevato).")
     else:
-        st.success("Pre-requisiti OK.")
+        st.caption("Esecuzione: **normale** (nessun gate rilevato).")
 
-    preview_prompt = st.checkbox(
-        "Mostra prompt Vision generato",
-        value=False,
-        help="Include il prompt completo negli output per una verifica manuale.",
-        disabled=bool(errors),
-    )
+    shown = False
 
-    run_btn = st.button(
-        "Esegui Healthcheck su 'dummy'",
-        type="primary",
-        disabled=bool(errors),
-    )
-    if not run_btn:
-        return
-
-    # Primo tentativo (senza force)
-    with st.status("Eseguo healthcheck...", expanded=True) as status:
-        res = _run_healthcheck(force=False, include_prompt=preview_prompt)
-
-        with st.expander("Output CLI", expanded=False):
-            st.text(res.stdout or "(stdout vuoto)")
-        with st.expander("Errori CLI", expanded=False):
-            st.text(res.stderr or "(stderr vuoto)")
-
-        # Auto-retry con --force se colpiamo il gate Vision
-        if res.returncode != 0 and _gate_hit(res.stderr):
-            st.info("Vision gia eseguita per questo PDF. Riprovo con forzatura...")
-            res = _run_healthcheck(force=True, include_prompt=preview_prompt)
-            with st.expander("Output CLI (retry)", expanded=False):
-                st.text(res.stdout or "(stdout vuoto)")
-            with st.expander("Errori CLI (retry)", expanded=False):
-                st.text(res.stderr or "(stderr vuoto)")
-
-        # Gestione returncode:
-        # - 0: ok
-        # - 3: soft-fail (assistant non ha usato file_search o citazioni assenti) -> continuiamo comunque
-        if res.returncode not in (0, 3):
-            status.update(label=f"Errore durante l'esecuzione (codice {res.returncode}).", state="error")
-            st.error(f"kb_healthcheck e uscita con codice {res.returncode}")
-            return
-
-        # parse JSON (anche se rc=3)
+    # a) YAML del mapping generato (se presente)
+    mapping_path = Path(result.get("mapping", "")) if isinstance(result, dict) else None
+    if mapping_path and mapping_path.exists():
         try:
-            payload = _parse_stdout(res.stdout)
-        except Exception as exc:
-            status.update(label="JSON non valido dallo stdout.", state="error")
-            st.error(f"Impossibile decodificare l'output: {exc}")
-            return
-
-        if res.returncode == 3:
-            status.update(
-                label="Completato con avviso (file_search non usato o citazioni assenti).",
-                state="complete",
-            )
-            st.warning(
-                "L'assistente non ha usato il file_search o non ha prodotto citazioni. "
-                "Controlla la configurazione della KB o riprova con contenuti differenti."
-            )
-        else:
-            status.update(label="Completato.", state="complete")
-
-    if payload.get("vision_skipped"):
-        st.info("Vision gia eseguita: anteprima prompt mostrata senza rigenerare gli artefatti.")
-
-    st.success("Healthcheck completato.")
-    st.write(f"file_search usato: **{bool(payload.get('used_file_search'))}**")
-    st.write(f"thread_id: `{payload.get('thread_id')}` - run_id: `{payload.get('run_id')}`")
-    if payload.get("pdf_path") or payload.get("base_dir"):
-        st.caption(f"pdf_path: `{payload.get('pdf_path')}` - base_dir: `{payload.get('base_dir')}`")
-
-    # Mostra estratto risposta Assistente e citazioni (se presenti)
-    if payload.get("assistant_text_excerpt"):
-        st.markdown("**Risposta Assistente (estratto):**")
-        st.write(payload["assistant_text_excerpt"])
-    if payload.get("citations"):
-        with st.expander("Citazioni rilevate", expanded=False):
-            for citation in payload["citations"]:
-                filename = citation.get("filename") or citation.get("file_id")
-                quote = citation.get("quote") or ""
-                st.markdown(f'- `{filename}` -- "{quote}"')
-    if preview_prompt:
-        prompt_text = payload.get("prompt")
-        if prompt_text:
-            with st.expander("Prompt Vision generato", expanded=False):
-                st.text_area("Prompt", value=str(prompt_text), height=420, disabled=True)
-        else:
-            st.info("Prompt non disponibile negli output; riprova con una nuova esecuzione se necessario.")
-
-    # semantic_mapping: preferisci il contenuto nel payload (se presente), altrimenti leggi dal path
-    mapping_text: Optional[str] = payload.get("semantic_mapping_content")
-    if not mapping_text:
-        mapping_hint = payload.get("mapping_yaml")
-        if mapping_hint:
-            try:
-                mapping_path = ensure_within_and_resolve(REPO_ROOT, Path(mapping_hint))
-                mapping_text = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
-            except Exception:
-                mapping_text = None
-
-    if mapping_text:
-        try:
-            mapping = yaml.safe_load(mapping_text) or {}
+            yaml_text = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
+            st.code(yaml_text, language="yaml")
+            shown = True
         except Exception:
-            st.warning("Impossibile parsare il semantic_mapping.yaml; lo mostro raw.")
-            st.code(mapping_text, language="yaml")
-        else:
-            _render_mapping_tree(mapping)
-            with st.expander("semantic_mapping.yaml (raw)", expanded=False):
-                st.code(mapping_text, language="yaml")
-    else:
-        st.warning("Nessun contenuto di semantic_mapping disponibile.")
+            pass
+
+    # b) Eventuale JSON “raw” affiancato (best effort)
+    if mapping_path:
+        maybe_json = mapping_path.with_suffix(".json")
+        if maybe_json.exists():
+            try:
+                raw = read_text_safe(maybe_json.parent, maybe_json, encoding="utf-8")
+                st.code(json.dumps(json.loads(raw), ensure_ascii=False, indent=2), language="json")
+                shown = True
+            except Exception:
+                pass
+
+    # c) (opzionale) estratto testuale se disponibile nel risultato
+    if isinstance(result, dict) and result.get("assistant_text_excerpt"):
+        st.write(result["assistant_text_excerpt"])
+        shown = True
+
+    if not shown:
+        st.info("Risultato generato. Nessun payload testuale aggiuntivo da mostrare per questa esecuzione.")
+
+    st.success("Completato. Il flusso si ferma qui.")
+    st.stop()
 
 
 if __name__ == "__main__":

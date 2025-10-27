@@ -20,9 +20,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional, cast
 
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 
-LOGGER = logging.getLogger("timmy_kb.kb_db")
+LOGGER = get_structured_logger("timmy_kb.kb_db")
+# I logger strutturati aggiungono sempre un console handler; sul percorso hot-path (indexer)
+# alziamo il livello per evitare I/O ripetuti ma lasciamo comunque propagare gli INFO.
+for _handler in list(LOGGER.handlers):
+    key = getattr(_handler, "_logging_utils_key", "")
+    if key.endswith("::console"):
+        _handler.setLevel(logging.WARNING)
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "kb.sqlite"

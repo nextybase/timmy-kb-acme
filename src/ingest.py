@@ -14,13 +14,13 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 
 from __future__ import annotations
 
-import logging
 from glob import glob
 from pathlib import Path
 from typing import Any, List, Optional, Sequence, cast
 
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 
@@ -33,7 +33,7 @@ except ImportError:
     except ImportError:  # pragma: no cover
         from .kb_db import insert_chunks
 
-LOGGER = logging.getLogger("timmy_kb.ingest")
+LOGGER = get_structured_logger("timmy_kb.ingest")
 
 
 def _read_text_file(base_dir: Path, p: Path) -> str:

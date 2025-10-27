@@ -10,9 +10,10 @@ Espone:
 """
 
 import importlib.util
-import logging
 import os
 from typing import Any, Dict, Optional
+
+from pipeline.logging_utils import get_structured_logger
 
 from .path_utils import read_text_safe
 
@@ -24,7 +25,7 @@ __all__ = [
     "compute_redact_flag",
 ]
 
-_LOGGER = logging.getLogger("pipeline.env_utils")
+_LOGGER = get_structured_logger("pipeline.env_utils")
 _ENV_LOADED = False
 
 

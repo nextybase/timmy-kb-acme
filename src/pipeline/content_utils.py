@@ -1,13 +1,13 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Iterable, TypeAlias, cast
 from urllib.parse import quote
 
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve  # SSoT path-safety forte
 from pipeline.path_utils import ensure_within
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
@@ -59,7 +59,7 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
 
     Mantiene l'ordinamento ricevuto.
     """
-    log = logging.getLogger("pipeline.content_utils")
+    log = get_structured_logger("pipeline.content_utils")
     out: list[Path] = []
     for p in pdfs:
         try:

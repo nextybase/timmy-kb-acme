@@ -20,7 +20,6 @@ Design:
 
 from __future__ import annotations
 
-import logging
 import math
 import time
 from dataclasses import MISSING, dataclass, replace
@@ -31,11 +30,12 @@ from typing import Any, Callable, Iterable, Optional, Sequence
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
+from pipeline.logging_utils import get_structured_logger
 from semantic.types import EmbeddingsClient
 
 from .kb_db import fetch_candidates
 
-LOGGER = logging.getLogger("timmy_kb.retriever")
+LOGGER = get_structured_logger("timmy_kb.retriever")
 
 
 @dataclass(frozen=True)
