@@ -149,7 +149,7 @@ def _open_tags_editor_modal(slug: str) -> None:
             label_visibility="collapsed",
         )
         col_a, col_b = st.columns(2)
-        if col_a.button("Salva", type="primary"):
+        if _column_button(col_a, "Salva", type="primary"):
             try:
                 yaml.safe_load(content)
             except Exception as exc:
@@ -166,7 +166,7 @@ def _open_tags_editor_modal(slug: str) -> None:
             except Exception as exc:
                 st.error(f"Errore nel salvataggio: {exc}")
                 LOGGER.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
-        if col_b.button("Chiudi"):
+        if _column_button(col_b, "Chiudi"):
             st.rerun()
 
     if dialog_factory:
@@ -208,7 +208,7 @@ def _open_tags_raw_modal(slug: str) -> None:
         )
         col_a, col_b = st.columns(2)
 
-        if col_a.button("Salva raw", type="secondary"):
+        if _column_button(col_a, "Salva raw", type="secondary"):
             header = (content.splitlines() or [""])[0]
             if "suggested_tags" not in header:
                 st.error("CSV non valido: manca la colonna 'suggested_tags'.")
@@ -219,7 +219,7 @@ def _open_tags_raw_modal(slug: str) -> None:
             st.toast("`tags_raw.csv` salvato.")
             LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
 
-        if col_b.button("Abilita", type="primary"):
+        if _column_button(col_b, "Abilita", type="primary"):
             try:
                 from semantic.api import export_tags_yaml_from_db
                 from semantic.tags_io import write_tags_review_stub_from_csv
@@ -481,9 +481,9 @@ if slug:
                 st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
 
             cA, cB = st.columns(2)
-            if cA.button("Annulla", key="dl_cancel"):
+            if _column_button(cA, "Annulla", key="dl_cancel"):
                 return
-            if cB.button("Procedi e scarica", key="dl_proceed", type="primary"):
+            if _column_button(cB, "Procedi e scarica", key="dl_proceed", type="primary"):
                 try:
                     with status_guard(
                         "Scarico file da Drive…",
