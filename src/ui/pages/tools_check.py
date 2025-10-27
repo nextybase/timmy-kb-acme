@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, Dict, cast
 
 import streamlit as st
 
@@ -30,8 +30,17 @@ def _client_pdf_path(base_dir: Path) -> Path:
 
 
 def _is_gate_error(err: Exception) -> bool:
-    msg = str(err).lower()
-    return ("vision già eseguit" in msg) or ("vision gia eseguit" in msg) or ("file=vision_hash" in msg)
+    """
+    Rileva il gate Vision:
+    - messaggi con 'vision' e radice 'eseguit*' (case/diacritics tolerant)
+    - presenza del marker 'file=vision_hash'
+    - oppure attributo err.file_path che punta al sentinel '.vision_hash'
+    """
+    msg = str(err).casefold()
+    file_path = getattr(err, "file_path", "") or ""
+    has_sentinel = Path(str(file_path)).name == ".vision_hash"
+    text_hit = ("vision" in msg and "eseguit" in msg) or ("file=vision_hash" in msg)
+    return has_sentinel or text_hit
 
 
 def main() -> None:
@@ -47,7 +56,8 @@ def main() -> None:
     try:
         with st.spinner("Preparo il prompt Vision..."):
             ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-            prepared_prompt: str = prepare_assistant_input(ctx, slug=slug, pdf_path=pdf_path, model=None, logger=LOG)
+            # Usa model="" per evitare warning/typing; il parametro è opzionale a livello logico
+            prepared_prompt: str = prepare_assistant_input(ctx, slug=slug, pdf_path=pdf_path, model="", logger=LOG)
     except Exception as exc:
         st.error(f"Impossibile generare il prompt: {exc}")
         LOG.warning("ui.tools_check.prompt_error", extra={"slug": slug, "err": str(exc)})
@@ -66,6 +76,7 @@ def main() -> None:
 
     # 3) Esecuzione Vision: tentativo normale → retry automatico forzato solo se scatta il gate
     forced = False
+    result: Dict[str, Any] = {}
     try:
         with st.spinner("Contatto l’assistente..."):
             result = provision_from_vision(
@@ -131,7 +142,7 @@ def main() -> None:
             except Exception:
                 pass
 
-    # c) (opzionale) estratto testuale se disponibile nel risultato
+    # c) Estratto testuale se disponibile nel risultato
     if isinstance(result, dict) and result.get("assistant_text_excerpt"):
         st.write(result["assistant_text_excerpt"])
         shown = True
