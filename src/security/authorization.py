@@ -1,4 +1,4 @@
-# src/security/authorization.py
+# path: src/security/authorization.py
 from __future__ import annotations
 
 import importlib
@@ -69,13 +69,19 @@ def _resolve_active_slug() -> str:
 def authorizer_session(params: "QueryParams") -> None:
     """Consente la ricerca solo se lo slug coincide con quello del contesto attivo."""
     active_slug = _resolve_active_slug()
-    if params.project_slug.strip() != active_slug:
+    # Hardening: confronto normalizzato
+    req_slug_norm = params.project_slug.strip().lower()
+    active_slug_norm = active_slug.strip().lower()
+    if req_slug_norm != active_slug_norm:
         LOGGER.warning(
             "authorization.denied",
             extra={
                 "event": "authorization.denied",
-                "expected_slug": active_slug,
-                "received_slug": params.project_slug,
+                "expected_slug": active_slug_norm,
+                "received_slug": req_slug_norm,
             },
         )
         raise RetrieverError("Accesso alla ricerca negato per slug non autorizzato.")
+
+
+__all__ = ["authorizer_session"]

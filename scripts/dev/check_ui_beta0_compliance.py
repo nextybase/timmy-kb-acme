@@ -26,8 +26,8 @@ GLOBAL_RULES = {
     r"@st\.cache\(": "Decorator @st.cache obsoleto (usa @st.cache_data/@st.cache_resource)",
     r"\bunsafe_allow_html\s*=": "unsafe_allow_html vietato (usa st.html(...))",
     r"\bst\.(beta_|legacy_)": "API beta/legacy vietate",
-    # Preferisci API native di navigazione: questi anchor HTML interni sono sconsigliati
-    r"<a\s+href=\"/(?!/)": "Anchor HTML a pagina interna: usa st.page_link(...) o st.switch_page(...)",
+    # Preferisci API native di navigazione: anchor HTML interni sconsigliati
+    r"(?i)<a\b[^>]*\bhref\s*=\s*[\"']\s*/(?!/)": "Anchor HTML a pagina interna: usa st.page_link(...) o st.switch_page(...)",
 }
 
 REQUIRED_IN_ONBOARDING = {

@@ -40,13 +40,19 @@ def write_request(prompt: str) -> str:
     last_path = BASE / "last_request.prompt"
     ensure_within(BASE, last_path)
     safe_write_text(last_path, prompt, encoding="utf-8", atomic=True)
+
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     hist_path = HISTORY / f"{ts}.prompt"
     ensure_within(HISTORY, hist_path)
     safe_write_text(hist_path, prompt, encoding="utf-8", atomic=True)
+
     LOGGER.info(
         "vscode_bridge.prompt_written",
-        extra={"event": "vscode_bridge.prompt_written", "last_path": str(last_path), "history_path": str(hist_path)},
+        extra={
+            "event": "vscode_bridge.prompt_written",
+            "last_path": str(last_path),
+            "history_path": str(hist_path),
+        },
     )
     return str(last_path)
 
@@ -58,7 +64,8 @@ def read_response() -> Optional[str]:
         try:
             content = read_text_safe(BASE, p)
             LOGGER.info(
-                "vscode_bridge.response_read", extra={"event": "vscode_bridge.response_read", "response_path": str(p)}
+                "vscode_bridge.response_read",
+                extra={"event": "vscode_bridge.response_read", "response_path": str(p)},
             )
             return str(content) if content is not None else None
         except Exception as e:
@@ -67,4 +74,12 @@ def read_response() -> Optional[str]:
                 extra={"event": "vscode_bridge.response_error", "response_path": str(p), "error": str(e)},
             )
             return None
+
+    LOGGER.info(
+        "vscode_bridge.response_missing",
+        extra={"event": "vscode_bridge.response_missing", "response_path": str(p)},
+    )
     return None
+
+
+__all__ = ["write_request", "read_response"]

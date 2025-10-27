@@ -4,8 +4,7 @@ Timmy KB Coder (UI dedicata — distinta da onboarding_ui.py)
 Quick demo script:
 1) Ensure folders exist (created automatically on app start):
    - data/
-   - logs/
-   - .timmykb/ (with history/)
+   - .timmykb/ (with history/ and logs/)
 2) Run the app:
    python -m streamlit run timmy_kb_coder.py
 3) Example ingest (from a Python REPL or a separate script):
@@ -65,7 +64,6 @@ def _configure_logging() -> None:
     globals()["LOG_FILE"] = log_file
     # get_structured_logger e' idempotente e non duplica handler; qui attiviamo il file handler
     logger = get_structured_logger("timmy_kb.ui", log_file=log_file, propagate=True)
-
     for handler in logger.handlers:
         if getattr(handler, "_logging_utils_key", "").startswith("timmy_kb.ui::"):
             handler._kb_handler = True
@@ -223,7 +221,7 @@ def main() -> None:
     # Footer
     st.divider()
     st.caption(f"DB path: {get_db_path()}")
-    st.caption(f"Log: {LOGS_DIR / 'timmy_kb.log'}")
+    st.caption(f"Log: {LOG_FILE}")
 
 
 if __name__ == "__main__":
