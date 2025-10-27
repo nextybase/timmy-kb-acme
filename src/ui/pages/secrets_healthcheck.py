@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.settings import Settings

@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, cast
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 import yaml
 
 from pipeline.yaml_utils import yaml_read

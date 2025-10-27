@@ -278,7 +278,8 @@ Prima di aprire una PR:
 **UX & stub‑compat**
 
 - Feedback con `status_guard` o `st.status` (no sleep/progress finti).
-- Evita `with col:` se lo stub non lo supporta; usa helper già presenti.
+ - Evita `with col:` se lo stub non lo supporta; usa gli helper centralizzati:
+   `from ui.utils.ui_controls import columns3, column_button, button`.
 
 **Docs & link**
 

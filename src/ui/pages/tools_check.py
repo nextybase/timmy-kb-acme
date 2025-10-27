@@ -8,7 +8,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict, cast
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError

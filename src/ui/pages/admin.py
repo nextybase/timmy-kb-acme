@@ -12,7 +12,9 @@ from importlib import import_module
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 from google.auth.transport import requests as greq
 from google.oauth2 import id_token
 

@@ -14,6 +14,8 @@ from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.utils.stubs import get_streamlit
+from ui.utils.ui_controls import column_button as _column_button
+from ui.utils.ui_controls import columns3 as _columns3
 
 try:
     from ui.clients_store import set_state as set_client_state
@@ -246,57 +248,7 @@ def _open_tags_raw_modal(slug: str) -> None:
 
 
 # --- piccoli helper per compat con stub di test ---
-def _columns3() -> tuple[Any, Any, Any]:
-    """Restituisce sempre 3 colonne, facendo padding se lo stub ne crea <3>."""
-    make = getattr(st, "columns", None)
-    if not callable(make):
-        return (st, st, st)
-    try:
-        cols = list(make([1, 1, 1]))
-    except Exception:
-        try:
-            cols = list(make(3))
-        except Exception:
-            return (st, st, st)
-    if not cols:
-        return (st, st, st)
-    while len(cols) < 3:
-        cols.append(cols[-1])
-    return cast(Any, cols[0]), cast(Any, cols[1]), cast(Any, cols[2])
-
-
-def _btn(container: Any, *args: Any, **kwargs: Any) -> bool:
-    """Chiama button sul container se esiste, altrimenti degrada a st.button."""
-    fn = getattr(container, "button", None)
-    if callable(fn):
-        try:
-            return bool(fn(*args, **kwargs))
-        except Exception:
-            pass
-    fallback = getattr(st, "button", None)
-    return bool(fallback(*args, **kwargs)) if callable(fallback) else False
-
-
-def _column_button(container: Any, label: str, **kwargs: Any) -> bool:
-    fn = getattr(container, "button", None)
-    if callable(fn):
-        try:
-            return bool(fn(label, **kwargs))
-        except TypeError as exc:
-            if "width" in str(exc):
-                kwargs.pop("width", None)
-                return bool(fn(label, **kwargs))
-            raise
-    fallback = getattr(st, "button", None)
-    if callable(fallback):
-        try:
-            return bool(fallback(label, **kwargs))
-        except TypeError as exc:
-            if "width" in str(exc):
-                kwargs.pop("width", None)
-                return bool(fallback(label, **kwargs))
-            raise
-    return False
+# helper centralizzati in ui.utils.ui_controls (DRY)
 
 
 # ---------------- UI ----------------

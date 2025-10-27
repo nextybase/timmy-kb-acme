@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, cast
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from pipeline.path_utils import read_text_safe
 from ui.chrome import render_chrome_then_require

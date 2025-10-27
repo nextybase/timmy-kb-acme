@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any, Optional, Tuple, cast
+from typing import Optional, Tuple, cast
 
 from ui.utils.stubs import get_streamlit
+from ui.utils.ui_controls import column_button as _column_button
 
 st = get_streamlit()
 
@@ -41,17 +42,7 @@ def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
     return ctx, logger
 
 
-def _column_button(col: Any, label: str, **kwargs: Any) -> bool:
-    btn = getattr(col, "button", None)
-    if not callable(btn):
-        raise AttributeError("Column object does not expose button()")
-    try:
-        return bool(btn(label, **kwargs))
-    except TypeError as exc:
-        if "width" in str(exc):
-            kwargs.pop("width", None)
-            return bool(btn(label, **kwargs))
-        raise
+# usa helper centralizzato per compatibilità con stub e fallback width
 
 
 def _run_convert(slug: str) -> None:

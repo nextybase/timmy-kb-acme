@@ -2,7 +2,9 @@
 # src/ui/pages/home.py
 from __future__ import annotations
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from ui.chrome import header, sidebar
 

@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, cast
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from ui.chrome import render_chrome_then_require
 from ui.utils import diagnostics as diag  # verrà monkeypatchato nei test

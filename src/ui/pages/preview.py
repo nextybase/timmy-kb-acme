@@ -2,7 +2,9 @@
 # src/ui/pages/preview.py
 from __future__ import annotations
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from adapters.preview import start_preview, stop_preview
 from pipeline.context import ClientContext

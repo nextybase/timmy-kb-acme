@@ -11,7 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-import streamlit as st
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
 
 from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.context import ClientContext
