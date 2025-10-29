@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 
@@ -86,9 +87,10 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _setup_logger(level: str) -> logging.Logger:
-    """Istanzia il logger strutturato con livello desiderato."""
-    logger = get_structured_logger("semantic.headless")
+def _setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
+    """Istanzia il logger strutturato con livello desiderato e contesto opzionale."""
+    context = {"slug": slug} if slug else None
+    logger = get_structured_logger("semantic.headless", context=context)
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     return logger
 
@@ -102,7 +104,7 @@ def _safe_len_seq(obj: object) -> int:
 
 def main() -> int:
     args = _parse_args()
-    log = _setup_logger(args.log_level)
+    log = _setup_logger(args.log_level, slug=args.slug)
 
     try:
         # Carichiamo il contesto concreto quando disponibile a runtime
@@ -114,19 +116,26 @@ def main() -> int:
             require_env=False,
             run_id=None,
         )
-    except Exception as e:
-        log.error(f"Impossibile caricare il ClientContext: {e}")
+    except ConfigError as exc:
+        log.error("semantic.headless.context_load_failed", extra={"error": str(exc)}, exc_info=True)
         return 2
+    except Exception as exc:
+        log.error("semantic.headless.context_unexpected", extra={"error": str(exc)}, exc_info=True)
+        return 1
 
     try:
         res = build_markdown_headless(ctx, log, slug=args.slug)
         conv = _safe_len_seq(res.get("converted"))
         enr = _safe_len_seq(res.get("enriched"))
-        log.info(f"Conversione completata: {conv} md, frontmatter aggiornati: {enr}")
-        return 0
-    except Exception as e:
-        log.error(f"Errore durante la build semantica: {e}")
+    except ConfigError as exc:
+        log.error("semantic.headless.run_config_error", extra={"error": str(exc)}, exc_info=True)
+        return 2
+    except Exception as exc:
+        log.error("semantic.headless.run_failed", extra={"error": str(exc)}, exc_info=True)
         return 1
+
+    log.info("semantic.headless.completed", extra={"converted_count": conv, "enriched_count": enr})
+    return 0
 
 
 if __name__ == "__main__":

@@ -37,3 +37,24 @@ def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
     # Il frontmatter deve avere un titolo derivato dal nome file
     text = md.read_text(encoding="utf-8")
     assert "title:" in text or text.startswith("---\n")
+
+
+def test_main_logs_namespaced_events(monkeypatch, caplog):
+    args = SimpleNamespace(slug="dummy", non_interactive=True, no_preview=True, log_level="INFO")
+    monkeypatch.setattr(sh, "_parse_args", lambda: args)
+    monkeypatch.setattr(
+        sh,
+        "_setup_logger",
+        lambda level, slug=None: sh.get_structured_logger("test.headless", context={"slug": slug}),
+    )
+
+    def _boom(**_kwargs):
+        raise sh.ConfigError("boom")
+
+    monkeypatch.setattr("pipeline.context.ClientContext", SimpleNamespace(load=_boom))
+    caplog.set_level("ERROR")
+
+    exit_code = sh.main()
+
+    assert exit_code == 2
+    assert any(rec.message == "semantic.headless.context_load_failed" for rec in caplog.records)
