@@ -322,14 +322,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.environ["CLIENTS_DB_DIR"] = str(clients_db_path.parent)
 
         # Logger stile UI
-        logger = get_structured_logger("tools.gen_dummy_kb")
+        logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
 
         if records_hint:
             try:
                 _ = int(records_hint)
             except Exception:
-                logger.debug("records_hint_non_numeric", extra={"value": records_hint})
+                logger.debug(
+                    "tools.gen_dummy_kb.records_hint_non_numeric",
+                    extra={"value": records_hint, "slug": slug},
+                )
 
         try:
             # 0) PDF Vision dalla root del repo
@@ -340,10 +343,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                     with open_for_read_bytes_selfguard(safe_pdf) as handle:
                         pdf_bytes = handle.read()
                 except Exception:
-                    logger.warning("vision_statement_template_unreadable", extra={"file_path": str(repo_pdf)})
+                    logger.warning(
+                        "tools.gen_dummy_kb.vision_template_unreadable",
+                        extra={"file_path": str(repo_pdf), "slug": slug},
+                    )
                     pdf_bytes = _DEFAULT_VISION_PDF
             else:
-                logger.warning("vision_statement_template_missing", extra={"file_path": str(repo_pdf)})
+                logger.warning(
+                    "tools.gen_dummy_kb.vision_template_missing",
+                    extra={"file_path": str(repo_pdf), "slug": slug},
+                )
                 pdf_bytes = _DEFAULT_VISION_PDF
 
             # 1) Workspace locale (UI helper)
@@ -359,7 +368,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                     drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
                     drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
                 except Exception as e:
-                    logger.warning("drive_provisioning_failed", extra={"error": str(e)})
+                    logger.warning(
+                        "tools.gen_dummy_kb.drive_provisioning_failed",
+                        extra={"error": str(e), "slug": slug},
+                    )
 
             # 3) Vision o YAML basici
             if enable_vision:

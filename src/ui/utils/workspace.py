@@ -67,6 +67,14 @@ def resolve_raw_dir(slug: str) -> Path:
     return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
 
 
+def clear_base_cache(*, slug: str | None = None) -> None:
+    """Svuota la cache dei base_dir quando cambia il perimetro (es. REPO_ROOT_DIR)."""
+    if slug:
+        _BASE_CACHE.pop(slug.strip().lower(), None)
+    else:
+        _BASE_CACHE.clear()
+
+
 def workspace_root(slug: str) -> Path:
     """
     Restituisce la radice del workspace per lo slug validato.

@@ -186,6 +186,8 @@ Esegui nell’ordine (ripetibile per nuovi PDF):
 - **Nessun PDF rilevato** → carica su Drive e **Scarica**, oppure copia in locale e **Rileva PDF**.
 - **README non in PDF** → manca ReportLab → viene caricato **README.txt** (comunque ok).
 - **Tag strani o mancanti** → rivedi mapping (aree/keywords/sinonimi), poi **Arricchisci**.
+- **Preflight “solo questa run” non ha effetto** → verifica che **“Salta il controllo” (persistente)** sia **disattivo**; il bypass one-shot non sovrascrive la preferenza salvata. Dopo aver spuntato il one-shot, deve avvenire un **rerun** (la UI lo innesca automaticamente).
+- **Il bypass one-shot resta appiccicato tra run** → il flag è in `session_state`. Forza un **refresh** o passa `?exit=1` per chiudere la sessione e azzerare lo stato.
 
 ---
 

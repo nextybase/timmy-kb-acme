@@ -101,7 +101,7 @@ slug = render_chrome_then_require()
 
 ```python
 slug = get_slug() or "acme-srl"
-st.query_params["tab"] = "manage"  # se serve cambiare tab
+set_tab("manage")                  # se serve cambiare tab
 ```
 
 **EVITARE**
