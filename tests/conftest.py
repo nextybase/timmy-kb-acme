@@ -15,13 +15,13 @@ for candidate in (REPO_ROOT, SRC_ROOT):
         sys.path.insert(0, str(candidate))
 
 # Reindirizza di default il registry clienti verso una copia interna usata solo dai test
-_DEFAULT_TEST_CLIENTS_DB_DIR = REPO_ROOT / ".pytest_clients_db"
-_DEFAULT_TEST_CLIENTS_DB_DIR.mkdir(parents=True, exist_ok=True)
+_DEFAULT_TEST_CLIENTS_DB_DIR = Path(".pytest_clients_db")
 _DEFAULT_TEST_CLIENTS_DB_FILE = _DEFAULT_TEST_CLIENTS_DB_DIR / "clients.yaml"
+(REPO_ROOT / _DEFAULT_TEST_CLIENTS_DB_DIR).mkdir(parents=True, exist_ok=True)
 if "CLIENTS_DB_DIR" not in os.environ:
     os.environ["CLIENTS_DB_DIR"] = str(_DEFAULT_TEST_CLIENTS_DB_DIR)
 if "CLIENTS_DB_FILE" not in os.environ:
-    os.environ["CLIENTS_DB_FILE"] = str(_DEFAULT_TEST_CLIENTS_DB_FILE)
+    os.environ["CLIENTS_DB_FILE"] = _DEFAULT_TEST_CLIENTS_DB_FILE.name
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
 from timmykb.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
@@ -49,7 +49,7 @@ def dummy_workspace(tmp_path_factory):
     sono sempre presenti nel dict; i file possono non esistere se DUMMY_WS_WITH_SEMANTIC=0).
     """
     base_parent = tmp_path_factory.mktemp("kbws")
-    clients_db_path = base_parent / "clients_db.yaml"
+    clients_db_relative = Path("clients_db/clients.yaml")
     rc = gen_dummy_main(
         [
             "--base-dir",
@@ -59,7 +59,7 @@ def dummy_workspace(tmp_path_factory):
             "--records",
             "0",  # niente finanza per i test generici
             "--clients-db",
-            str(clients_db_path),
+            clients_db_relative.as_posix(),
         ]
     )
     assert rc == 0, "gen_dummy_kb.py non è riuscito a creare il workspace"
@@ -146,6 +146,10 @@ def dummy_workspace(tmp_path_factory):
         assert sem_map.exists(), "semantic/semantic_mapping.yaml mancante"
         assert sem_cart.exists(), "semantic/cartelle_raw.yaml mancante"
 
+    clients_db_dir = base / "clients_db"
+    clients_db_dir.mkdir(parents=True, exist_ok=True)
+    clients_db_file = clients_db_dir / "clients.yaml"
+
     return {
         "base": base,
         "config": cfg,
@@ -157,8 +161,8 @@ def dummy_workspace(tmp_path_factory):
         "slug": DUMMY_SLUG,
         "client_name": f"Dummy {DUMMY_SLUG}",
         "with_semantic": with_semantic,
-        "clients_db_file": clients_db_path,
-        "clients_db_dir": clients_db_path.parent,
+        "clients_db_file": clients_db_file,
+        "clients_db_dir": clients_db_dir,
     }
 
 
@@ -207,14 +211,17 @@ def _stable_env(monkeypatch, dummy_workspace):
     # meglio che punti alla base temporanea del dummy.
     monkeypatch.chdir(dummy_workspace["base"])
     # Reindirizza il registry clienti verso la copia temporanea
-    clients_db_dir = Path(dummy_workspace["clients_db_dir"])
-    clients_db_file = Path(dummy_workspace["clients_db_file"])
+    repo_root_override = Path(dummy_workspace["base"])
+    clients_db_dir = Path("clients_db")
+    clients_db_file = Path("clients.yaml")
     try:
         import ui.clients_store as _clients_store
 
-        monkeypatch.setattr(_clients_store, "REPO_ROOT", clients_db_dir.parent)
+        monkeypatch.setattr(_clients_store, "REPO_ROOT", repo_root_override)
         monkeypatch.setattr(_clients_store, "DB_DIR", clients_db_dir)
         monkeypatch.setattr(_clients_store, "DB_FILE", clients_db_file)
+        monkeypatch.setenv("CLIENTS_DB_DIR", clients_db_dir.as_posix())
+        monkeypatch.setenv("CLIENTS_DB_FILE", clients_db_file.as_posix())
     except Exception:
         pass
     yield

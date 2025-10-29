@@ -35,6 +35,25 @@ SRC_ROOT = SRC_DIR
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
 
+
+def _normalize_relative_path(value: str, *, var_name: str) -> Path:
+    candidate = Path(value.strip())
+    if not value.strip():
+        raise SystemExit(f"{var_name} non può essere vuoto")
+    if candidate.is_absolute():
+        raise SystemExit(f"{var_name} deve indicare un percorso relativo (es. clients_db/clients.yaml)")
+    normalised = Path()
+    for part in candidate.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            raise SystemExit(f"{var_name}: componenti '..' non sono ammesse")
+        normalised /= part
+    if not normalised.parts:
+        raise SystemExit(f"{var_name} non può essere vuoto")
+    return normalised
+
+
 # ------------------------------------------------------------
 # Import delle API usate dalla UI
 # ------------------------------------------------------------
@@ -281,7 +300,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--clients-db",
         dest="clients_db",
         default=None,
-        help="(Legacy) Percorso file clients_db.yaml; imposta CLIENTS_DB_DIR sulla cartella indicata.",
+        help="(Legacy) Percorso relativo (clients_db/clients.yaml); imposta CLIENTS_DB_DIR/FILE per la UI.",
     )
     ap.add_argument(
         "--records",
@@ -308,6 +327,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Gestione override legacy: REPO_ROOT_DIR e CLIENTS_DB_DIR
     prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
     prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
+    prev_clients_db_file = os.environ.get("CLIENTS_DB_FILE")
     workspace_override: Optional[Path] = None
     try:
         if args.base_dir:
@@ -315,11 +335,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             workspace_override = base_override / f"timmy-kb-{slug}"
             os.environ["REPO_ROOT_DIR"] = str(workspace_override)
 
-        clients_db_path: Optional[Path] = None
         if args.clients_db:
-            clients_db_path = Path(args.clients_db).expanduser().resolve()
-            clients_db_path.parent.mkdir(parents=True, exist_ok=True)
-            os.environ["CLIENTS_DB_DIR"] = str(clients_db_path.parent)
+            clients_db_relative = _normalize_relative_path(args.clients_db, var_name="--clients-db")
+            if len(clients_db_relative.parts) < 2:
+                raise SystemExit("--clients-db deve includere anche il nome file (es. clients_db/clients.yaml)")
+            if clients_db_relative.parts[0] != "clients_db":
+                raise SystemExit("--clients-db deve iniziare con 'clients_db/'")
+            db_dir_override = Path(*clients_db_relative.parts[:-1])
+            db_file_override = Path(clients_db_relative.parts[-1])
+            os.environ["CLIENTS_DB_DIR"] = str(db_dir_override)
+            os.environ["CLIENTS_DB_FILE"] = str(db_file_override)
 
         # Logger stile UI
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
@@ -439,6 +464,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 os.environ.pop("CLIENTS_DB_DIR", None)
             else:
                 os.environ["CLIENTS_DB_DIR"] = prev_clients_db_dir
+            if prev_clients_db_file is None:
+                os.environ.pop("CLIENTS_DB_FILE", None)
+            else:
+                os.environ["CLIENTS_DB_FILE"] = prev_clients_db_file
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     accumulano cartelle in repository.
     """
     slug = "dummy"
-    clients_db = tmp_path / "clients_db.yaml"
+    clients_db_relative = Path("clients_db/clients.yaml")
 
     # Esegui lo script con base dir forzata al tmp_path del test
     script = Path(__file__).resolve().parents[1] / "src" / "tools" / "gen_dummy_kb.py"
@@ -28,7 +28,7 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
         "--base-dir",
         str(tmp_path),
         "--clients-db",
-        str(clients_db),
+        clients_db_relative.as_posix(),
     ]
     ret = subprocess.run(cmd, check=False, capture_output=True, text=True)
     assert ret.returncode == 0, f"CLI fallita (rc={ret.returncode}). stdout:\n{ret.stdout}\nstderr:\n{ret.stderr}"
@@ -46,6 +46,10 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
 
     for p in (alpha, beta, readme, summary):
         assert p.is_file(), f"File mancante: {p}"
+
+    # Verifica registry clienti creato sotto il workspace temporaneo
+    clients_db_file = base / clients_db_relative
+    assert clients_db_file.is_file(), f"Registry clienti non creato: {clients_db_file}"
 
     # Extra: nessuna deriva su output/ (idempotenza ambientale)
     assert not (Path("output") / f"timmy-kb-{slug}").exists(), "Lo script ha sporcato output/"

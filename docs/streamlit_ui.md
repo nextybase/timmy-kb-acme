@@ -158,6 +158,12 @@ def save_tags_yaml(slug: str, text: str) -> None:
 
 ---
 
+### Registry clienti (CLIENTS_DB_*)
+
+- `CLIENTS_DB_DIR` e `CLIENTS_DB_FILE` accettano **solo** percorsi relativi al workspace; niente drive letter o path assoluti.
+- Il file deve vivere sotto `clients_db/`; eventuali sottocartelle sono consentite (`clients_db/archive/clients.yaml`).
+- Gli helper della UI rifiutano componenti `..`: se serve un percorso alternativo, monta un workspace dedicato e aggiorna `REPO_ROOT_DIR`.
+
 ## Scan PDF sicuro (DRY)
 
 Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa sempre l’utility condivisa `iter_safe_pdfs` che applica path-safety forte, ignora i symlink e restituisce path canonicalizzati in ordine deterministico.

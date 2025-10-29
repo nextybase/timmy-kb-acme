@@ -2,30 +2,25 @@
 # src/ui/clients_store.py
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 
 import yaml
 
 from pipeline.context import validate_slug
 from pipeline.env_utils import get_env_var
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 # Base sicura ancorata al repo
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
-
-
-def _resolve_db_path(target: Path) -> Path:
-    """Path-safety: garantisce che target resti entro il repo."""
-    return cast(Path, ensure_within_and_resolve(REPO_ROOT, target))
-
-
-DEFAULT_DB_DIR: Path = REPO_ROOT / "clients_db"
-DEFAULT_DB_FILE: Path = DEFAULT_DB_DIR / "clients.yaml"
-# Allow override in tests/consumers
+DEFAULT_DB_DIR: Path = Path("clients_db")
+DEFAULT_DB_FILE: Path = Path("clients.yaml")
+# Allow override (solo percorsi relativi rispetto alla repo root)
 DB_DIR: Path = DEFAULT_DB_DIR
 DB_FILE: Path = DEFAULT_DB_FILE
 
@@ -40,24 +35,52 @@ def _optional_env(name: str) -> Optional[str]:
         return None
 
 
+def _base_repo_root() -> Path:
+    override = os.environ.get("REPO_ROOT_DIR")
+    if override:
+        try:
+            return Path(override).expanduser().resolve()
+        except Exception:
+            return REPO_ROOT
+    return REPO_ROOT
+
+
+def _normalize_relative(value: Union[str, Path], *, var_name: str) -> Path:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        raise ConfigError(f"{var_name} deve essere un percorso relativo")
+    normalised = Path()
+    for part in candidate.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            raise ConfigError(f"{var_name}: componenti '..' non sono ammessi")
+        normalised /= part
+    if not normalised.parts:
+        raise ConfigError(f"{var_name} non può essere vuoto")
+    return normalised
+
+
 def _db_dir() -> Path:
+    base_root = _base_repo_root()
     value = _optional_env("CLIENTS_DB_DIR")
     if value:
-        candidate = Path(value).expanduser()
-        if candidate.is_absolute():
-            return cast(Path, ensure_within_and_resolve(candidate.parent, candidate))
-        return _resolve_db_path(REPO_ROOT / candidate)
-    return _resolve_db_path(DB_DIR)
+        relative = _normalize_relative(value, var_name="CLIENTS_DB_DIR")
+    else:
+        relative = _normalize_relative(DB_DIR, var_name="DB_DIR")
+    target = base_root / relative
+    return cast(Path, ensure_within_and_resolve(base_root, target))
 
 
 def _db_file() -> Path:
+    base_dir = _db_dir()
     value = _optional_env("CLIENTS_DB_FILE")
     if value:
-        candidate = Path(value).expanduser()
-        target = candidate if candidate.is_absolute() else _db_dir() / candidate.name
-        base = target.parent
-        return cast(Path, ensure_within_and_resolve(base, target))
-    return cast(Path, ensure_within_and_resolve(_db_dir(), _db_dir() / DB_FILE.name))
+        relative = _normalize_relative(value, var_name="CLIENTS_DB_FILE")
+    else:
+        relative = _normalize_relative(DB_FILE, var_name="DB_FILE")
+    target = base_dir / relative
+    return cast(Path, ensure_within_and_resolve(base_dir, target))
 
 
 LOG = get_structured_logger("ui.clients_store")

@@ -1,5 +1,6 @@
 import importlib
 import os
+from pathlib import Path
 
 import pytest
 
@@ -10,10 +11,10 @@ def _reset_store(tmp_path):
     module = importlib.import_module("ui.clients_store")
     importlib.reload(module)
     module.REPO_ROOT = tmp_path
-    module.DB_DIR = tmp_path / "clients_db"
-    module.DB_FILE = module.DB_DIR / "clients.yaml"
-    os.environ["CLIENTS_DB_DIR"] = str(module.DB_DIR)
-    os.environ["CLIENTS_DB_FILE"] = str(module.DB_FILE)
+    module.DB_DIR = Path("clients_db")
+    module.DB_FILE = Path("clients.yaml")
+    os.environ["CLIENTS_DB_DIR"] = "clients_db"
+    os.environ["CLIENTS_DB_FILE"] = "clients.yaml"
     return module
 
 
@@ -28,7 +29,7 @@ def store(tmp_path, monkeypatch):
 
 def test_ensure_db_creates_empty_yaml(store):
     store.ensure_db()
-    assert store.DB_FILE.exists()
+    assert store._db_file().exists()
     data = store.load_clients()
     assert data == []
 
