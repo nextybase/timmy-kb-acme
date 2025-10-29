@@ -9,6 +9,25 @@ from src.tools.gen_dummy_kb import main as gen_dummy_main
 from ui.utils.workspace import clear_base_cache
 
 
+def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) -> None:
+    monkeypatch.setattr(gen_dummy_mod, "ensure_local_workspace_for_ui", lambda **_: None)
+    monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: tmp_path / f"timmy-kb-{slug}")
+    monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: tmp_path / "VisionStatement.pdf")
+    if run_vision_return is None:
+        monkeypatch.setattr(gen_dummy_mod, "run_vision", lambda *a, **k: None)
+    else:
+        monkeypatch.setattr(gen_dummy_mod, "run_vision", run_vision_return)
+    monkeypatch.setattr(gen_dummy_mod, "_call_drive_min", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_mod, "_call_drive_build_from_mapping", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_mod, "_write_basic_semantic_yaml", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_mod, "_register_client", lambda *a, **k: None)
+    monkeypatch.setattr(gen_dummy_mod, "safe_write_text", lambda *a, **k: None)
+    monkeypatch.setattr(gen_dummy_mod, "safe_write_bytes", lambda *a, **k: None)
+    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
+    monkeypatch.setattr(gen_dummy_mod, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(gen_dummy_mod, "SRC_ROOT", tmp_path / "src")
+
+
 def test_module_import_has_no_side_effects(tmp_path):
     """Importare il modulo non deve modificare sys.path né fare I/O."""
     before = list(sys.path)
@@ -100,19 +119,7 @@ def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
 
 def test_logs_use_namespaced_events(caplog, tmp_path, monkeypatch):
     caplog.set_level("INFO")
-    monkeypatch.setattr(gen_dummy_mod, "ensure_local_workspace_for_ui", lambda **_: None)
-    monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: tmp_path / f"timmy-kb-{slug}")
-    monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: tmp_path / "VisionStatement.pdf")
-    monkeypatch.setattr(gen_dummy_mod, "run_vision", lambda *a, **k: None)
-    monkeypatch.setattr(gen_dummy_mod, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_mod, "_call_drive_build_from_mapping", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_mod, "_write_basic_semantic_yaml", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_mod, "_register_client", lambda *a, **k: None)
-    monkeypatch.setattr(gen_dummy_mod, "safe_write_text", lambda *a, **k: None)
-    monkeypatch.setattr(gen_dummy_mod, "safe_write_bytes", lambda *a, **k: None)
-    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
-    monkeypatch.setattr(gen_dummy_mod, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(gen_dummy_mod, "SRC_ROOT", tmp_path / "src")
+    _stub_minimal_environment(monkeypatch, tmp_path)
     args = ["--slug", "dummy", "--name", "Acme", "--no-vision", "--no-drive"]
     try:
         exit_code = gen_dummy_main(args)
@@ -120,3 +127,19 @@ def test_logs_use_namespaced_events(caplog, tmp_path, monkeypatch):
         clear_base_cache()
     assert exit_code == 0
     assert any(rec.message.startswith("tools.gen_dummy_kb.") for rec in caplog.records)
+
+
+def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
+    caplog.set_level("ERROR")
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
+    args = ["--slug", "dummy", "--name", "Acme", "--no-drive"]
+    try:
+        exit_code = gen_dummy_main(args)
+    finally:
+        clear_base_cache()
+    assert exit_code == 1
+    assert any(rec.message == "tools.gen_dummy_kb.run_failed" for rec in caplog.records)

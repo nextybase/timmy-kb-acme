@@ -416,10 +416,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
 
         except Exception as e:
-            logger.error("dummy_kb_failed", extra={"slug": slug, "error": str(e)})
+            logger.error(
+                "tools.gen_dummy_kb.run_failed",
+                extra={"slug": slug, "error": str(e)},
+            )
             print(json.dumps({"error": str(e)}), file=sys.stderr)
             return 1
     finally:
+        try:
+            from ui.utils.workspace import clear_base_cache  # late import per evitare dipendenze circolari
+        except Exception:  # pragma: no cover
+            clear_base_cache = None  # type: ignore[assignment]
+        if callable(clear_base_cache):
+            clear_base_cache(slug=slug)
         if args.base_dir:
             if prev_repo_root_dir is None:
                 os.environ.pop("REPO_ROOT_DIR", None)
