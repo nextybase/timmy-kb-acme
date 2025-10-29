@@ -7,6 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+try:
+    import yaml  # runtime dep per import da YAML
+except Exception:  # pragma: no cover
+    yaml = None
+
 __all__ = [
     "load_tags_reviewed",
     "save_tags_reviewed",
@@ -34,7 +39,12 @@ __all__ = [
     "clear_doc_terms",
     "get_folder_id_for_document",
     "get_documents_by_folder",
+    "import_tags_yaml_to_db",
 ]
+
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -628,6 +638,193 @@ def get_folder_id_for_document(conn: sqlite3.Connection, document_id: int) -> in
 def get_documents_by_folder(conn: sqlite3.Connection, folder_id: int) -> list[int]:
     cur = conn.execute("SELECT id FROM documents WHERE folder_id=? ORDER BY id ASC", (folder_id,))
     return [int(r[0]) for r in cur.fetchall()]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# YAML → DB ingestion (idempotente)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_VALID_ROOTS = ("raw/", "book/", "semantic/")
+
+
+def _norm_term(value: Any) -> str:
+    try:
+        normalized = str(value).strip().lower()
+    except Exception:
+        return ""
+    return normalized
+
+
+def _norm_path(value: Any) -> str:
+    """
+    Normalizza percorsi di cartella:
+      - converte in stringa POSIX, rimuove backslash
+      - vieta assoluti e traversal
+      - garantisce prefissi noti (raw/, book/, semantic/)
+    """
+    try:
+        path_str = str(value).strip().replace("\\", "/")
+    except Exception:
+        return ""
+    if not path_str:
+        return ""
+
+    while path_str.startswith("./"):
+        path_str = path_str[2:]
+
+    if path_str.startswith("/") or ".." in path_str.split("/"):
+        raise ConfigError(f"Percorso non valido nel YAML: {value}")
+
+    if not any(path_str.startswith(root) for root in _VALID_ROOTS):
+        path_str = "raw/" + path_str.lstrip("/")
+
+    while "//" in path_str:
+        path_str = path_str.replace("//", "/")
+
+    return path_str.rstrip("/")
+
+
+def _parent_of(path_str: str) -> str | None:
+    if "/" not in path_str:
+        return None
+    parent = path_str.rsplit("/", 1)[0]
+    return parent or None
+
+
+def import_tags_yaml_to_db(
+    yaml_path: str | Path,
+    *,
+    logger: Any | None = None,
+    default_lang: str = "it",
+) -> dict[str, int]:
+    """
+    Importa il vocabolario revisionato da `semantic/tags_reviewed.yaml` nel DB SQLite v2.
+    - Idempotente: usa upsert su terms, term_aliases, folders, folder_terms.
+    - Normalizzazioni:
+        canonical/alias → lowercase+trim
+        folders → path relativo, prefisso raw/ se mancante, divieto di assoluti/..
+    - Schema: garantito via ensure_schema_v2(derive_db_path_from_yaml_path(yaml)).
+    - Logging strutturato: storage.tags_store.import_yaml.* (può ricevere logger esterno).
+    Ritorna conteggi: {"terms": int, "aliases": int, "folders": int, "links": int, "skipped": int}
+    """
+    log = logger or get_structured_logger("storage.tags_store")
+
+    if yaml is None:
+        raise ConfigError("Dependency PyYAML non disponibile per import YAML→DB.")
+
+    ypath = Path(yaml_path)
+    if not ypath.exists():
+        raise ConfigError(f"File YAML non trovato: {ypath}")
+    if ypath.name != "tags_reviewed.yaml":
+        log.warning(
+            "storage.tags_store.import_yaml.nonstandard_name",
+            extra={"yaml": str(ypath)},
+        )
+
+    db_path = derive_db_path_from_yaml_path(ypath)
+    ensure_schema_v2(db_path)
+
+    try:
+        safe_yaml_path = ensure_within_and_resolve(ypath.parent, ypath)
+        raw = read_text_safe(ypath.parent, safe_yaml_path, encoding="utf-8")
+        data = yaml.safe_load(raw) or {}
+    except Exception as exc:  # pragma: no cover - validazione nel test
+        raise ConfigError(f"YAML non valido: {exc}")
+
+    items = data.get("tags") or []
+    if not isinstance(items, list):
+        raise ConfigError("Struttura YAML non valida: 'tags' deve essere una lista.")
+
+    counts = {"terms": 0, "aliases": 0, "folders": 0, "links": 0, "skipped": 0}
+    seen_terms: set[str] = set()
+    seen_folders: set[str] = set()
+    seen_links: set[tuple[str, str]] = set()
+    seen_aliases: set[tuple[str, str]] = set()
+
+    log.info(
+        "storage.tags_store.import_yaml.start",
+        extra={"yaml": str(ypath), "db": str(db_path), "items": len(items)},
+    )
+
+    with get_conn(db_path) as conn:
+        for item in items:
+            if not isinstance(item, dict):
+                counts["skipped"] += 1
+                continue
+            canonical = _norm_term(item.get("canonical") or item.get("name"))
+            if not canonical:
+                counts["skipped"] += 1
+                continue
+
+            try:
+                term_id = upsert_term(conn, canonical, default_lang)
+            except Exception as exc:  # pragma: no cover - propagato in test
+                raise ConfigError(f"Impossibile registrare il termine '{canonical}': {exc}")
+
+            if canonical not in seen_terms:
+                counts["terms"] += 1
+                seen_terms.add(canonical)
+
+            aliases = item.get("aliases") or item.get("synonyms") or []
+            if isinstance(aliases, (list, tuple)):
+                for alias_value in aliases:
+                    alias = _norm_term(alias_value)
+                    if not alias or alias == canonical:
+                        continue
+                    key = (canonical, alias)
+                    if key in seen_aliases:
+                        continue
+                    add_term_alias(conn, term_id, alias)
+                    seen_aliases.add(key)
+                    counts["aliases"] += 1
+
+            folders = item.get("folders") or []
+            if not isinstance(folders, (list, tuple)):
+                counts["skipped"] += 1
+                continue
+
+            for folder_entry in folders:
+                try:
+                    if isinstance(folder_entry, dict):
+                        raw_path = folder_entry.get("path")
+                        weight = float(folder_entry.get("weight", 1.0))
+                        status = str(folder_entry.get("status", "keep"))
+                    else:
+                        raw_path = folder_entry
+                        weight = 1.0
+                        status = "keep"
+                    path = _norm_path(raw_path)
+                except ConfigError:
+                    raise
+                except Exception:
+                    counts["skipped"] += 1
+                    continue
+
+                parent = _parent_of(path)
+                try:
+                    folder_id = upsert_folder(conn, path, parent_path=parent)
+                except Exception as exc:  # pragma: no cover
+                    raise ConfigError(f"Impossibile registrare la cartella '{path}': {exc}")
+
+                if path not in seen_folders:
+                    counts["folders"] += 1
+                    seen_folders.add(path)
+
+                link_key = (canonical, path)
+                if link_key in seen_links:
+                    continue
+                try:
+                    upsert_folder_term(conn, folder_id, term_id, weight=weight, status=status)
+                    counts["links"] += 1
+                    seen_links.add(link_key)
+                except Exception as exc:  # pragma: no cover
+                    raise ConfigError(f"Impossibile associare '{canonical}' a '{path}': {exc}")
+
+    log.info(
+        "storage.tags_store.import_yaml.completed",
+        extra={"yaml": str(ypath), "db": str(db_path), **counts},
+    )
+    return counts
 
 
 if __name__ == "__main__":  # pragma: no cover
