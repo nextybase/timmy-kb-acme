@@ -43,14 +43,21 @@ def _optional_env(name: str) -> Optional[str]:
 def _db_dir() -> Path:
     value = _optional_env("CLIENTS_DB_DIR")
     if value:
-        return Path(value).expanduser().resolve()
+        candidate = Path(value).expanduser()
+        if candidate.is_absolute():
+            return candidate.resolve()
+        return _resolve_db_path(REPO_ROOT / candidate)
     return _resolve_db_path(DB_DIR)
 
 
 def _db_file() -> Path:
     value = _optional_env("CLIENTS_DB_FILE")
     if value:
-        return Path(value).expanduser().resolve()
+        candidate = Path(value).expanduser()
+        if candidate.is_absolute():
+            return candidate.resolve()
+        # Manteniamo filename relativo rispetto a DB_DIR (override)
+        return _resolve_db_path(_db_dir() / candidate.name)
     target = DB_FILE if DB_FILE.is_absolute() else _db_dir() / DB_FILE.name
     return _resolve_db_path(target)
 

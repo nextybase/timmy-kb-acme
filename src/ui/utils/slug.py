@@ -34,7 +34,14 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from .query_params import get_slug as _qp_get
 from .query_params import set_slug as _qp_set
 
-_PERSIST_PATH = Path(__file__).resolve().parents[2] / "clients_db" / "ui_state.json"
+
+def _persist_path() -> Path:
+    from ui.clients_store import _db_dir  # import locale per evitare cicli
+
+    base = _db_dir()
+    return cast(Path, ensure_within_and_resolve(base, base / "ui_state.json"))
+
+
 LOGGER = get_structured_logger("ui.slug")
 
 
@@ -69,7 +76,8 @@ def _sanitize_slug(value: Any) -> Optional[str]:
 
 def _load_persisted() -> Optional[str]:
     try:
-        raw: Any = json.loads(read_text_safe(_PERSIST_PATH.parent, _PERSIST_PATH))
+        path = _persist_path()
+        raw: Any = json.loads(read_text_safe(path.parent, path))
         if not isinstance(raw, dict):
             return None
         value = raw.get("active_slug")
@@ -80,12 +88,12 @@ def _load_persisted() -> Optional[str]:
 
 def _save_persisted(slug: Optional[str]) -> None:
     try:
-        base_dir = _PERSIST_PATH.parent
+        path = _persist_path()
+        base_dir = path.parent
         base_dir.mkdir(parents=True, exist_ok=True)
-        safe_path = ensure_within_and_resolve(base_dir, _PERSIST_PATH)
         payload = json.dumps({"active_slug": slug or ""}, ensure_ascii=False) + "\n"
-        safe_write_text(Path(safe_path), payload, encoding="utf-8", atomic=True)
-        LOGGER.info("ui.slug.persisted", extra={"path": str(safe_path)})
+        safe_write_text(path, payload, encoding="utf-8", atomic=True)
+        LOGGER.info("ui.slug.persisted", extra={"path": str(path)})
     except Exception:
         # la UI non deve rompersi per errori di persistenza
         pass

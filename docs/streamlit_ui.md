@@ -59,7 +59,7 @@ set_tab("manage")              # aggiorna query params + rerun ordinato
 clear_tab()                    # pulisce lo stato
 ```
 
-Non forziamo più `?tab=home` nell’URL: se il parametro manca è il fallback dell’helper a fornire il default. Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina viene idratata.
+Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina viene idratata.
 
 ---
 
@@ -366,6 +366,12 @@ else:
 
 ---
 
+### Tema ufficiale + Enhancement CSS (progressive enhancement)
+
+Il **tema ufficiale** vive in `.streamlit/config.toml` ed è la fonte unica del brand (palette, font, base light/dark). Questo garantisce coerenza visiva anche qualora l’iniezione HTML venga bloccata o filtrata. Gli **enhancement CSS** (iniettati una sola volta via `st.html` o, in fallback, `st.markdown(..., unsafe_allow_html=True)`) servono solo per micro-affinamenti non esposti dalle opzioni native: radius **gentili**, micro-spaziature, focus ring accessibile, piccoli fix di rendering. In pratica: colori e tipografia nel `config.toml`; dettagli tattili e a11y nell’enhancement. Manteniamo gli enhancement **idempotenti**, compatibili con light/dark (evitare override cromatici aggressivi) e confinati in un `<style id="nexty-theme-enhancements">` per tracciabilità e rollback. Criterio di accettazione: con gli enhancement disattivati il brand resta intatto; riattivandoli si percepisce solo un miglioramento della qualità interattiva senza variazioni di palette o regressioni di leggibilità.
+
+---
+
 ## Checklist “UI page”
 
 Prima di aprire una PR:
@@ -391,11 +397,18 @@ Prima di aprire una PR:
  - Evita `with col:` se lo stub non lo supporta; usa gli helper centralizzati:
    `from ui.utils.ui_controls import columns3, column_button, button`.
 
-**Docs & link**
+---
 
-- Aggiorna questa checklist e aggiungi riferimenti a esempi nella doc.
+### Registry dei path UI (SSoT)
+Per evitare divergenze tra `onboarding_ui.py` (router) e i link nelle pagine, i path delle pagine sono definiti una sola volta in `ui.pages.registry.PagePaths`.
+Usa:
+- `from ui.pages.registry import PagePaths` per link diretti (`st.page_link(PagePaths.NEW_CLIENT, ...)`).
+- `from ui.pages.registry import build_pages` nell’entrypoint per generare il `pages` dict per `st.navigation(...)`.
+
+La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X)`, che gestisce `st.switch_page(...)` e il fallback via `?tab=<url_path>`.
 
 ---
+
 
 ## FAQ
 

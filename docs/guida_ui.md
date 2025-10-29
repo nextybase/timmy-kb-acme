@@ -30,6 +30,11 @@ Usa la UI per:
 ```bash
 streamlit run onboarding_ui.py
 ```
+### Accesso rapido alla Guida (sidebar)
+
+Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools → Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
+
+> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in fallback aggiorna automaticamente `?tab=guida` e forza il rerun.
 
 ---
 

@@ -14,10 +14,12 @@ from typing import Any, Iterator, Optional, cast
 import streamlit as st
 
 from pipeline.context import validate_slug
-from pipeline.yaml_utils import yaml_read
+from ui.clients_store import get_all as get_clients
+from ui.pages.registry import PagePaths
+from ui.theme_enhancements import inject_theme_css
+from ui.utils.compat import nav_to
 
 from .landing_slug import _request_shutdown as _shutdown  # deterministico
-from .theme.css import inject_theme_css
 from .utils import clear_active_slug, get_slug, require_active_slug
 from .utils.branding import render_brand_header, render_sidebar_brand
 from .utils.html import esc_text
@@ -115,7 +117,7 @@ def header(slug: str | None) -> None:
     Nota: l'unica chiamata a `st.set_page_config(...)` sta nell'entrypoint.
     Qui iniettiamo solo il CSS brand e rendiamo l'header.
     """
-    inject_theme_css(st)  # CSS brand early-inject (tema gestito nativamente)
+    inject_theme_css()  # CSS enhancement opzionale (idempotente)
 
     subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
     render_brand_header(
@@ -130,31 +132,15 @@ def header(slug: str | None) -> None:
 def sidebar(slug: str | None) -> None:
     """Sidebar con brand, stato cliente e azioni rapide."""
 
-    def _repo_root() -> Path:
-        return Path(__file__).resolve().parents[2]
-
-    def _clients_db_path() -> Path:
-        return _repo_root() / "clients_db" / "clients.yaml"
-
     def _client_display_name(active_slug: Optional[str]) -> str:
         if not active_slug:
             return ""
-        try:
-            db_path = _clients_db_path()
-            if db_path.exists():
-                data = yaml_read(db_path.parent, db_path)
-                if isinstance(data, list):
-                    records = data
-                elif isinstance(data, dict):
-                    records = [{**(value or {}), "slug": key} for key, value in data.items()]
-                else:
-                    records = []
-                for record in records:
-                    if (record or {}).get("slug", "").strip().lower() == active_slug.strip().lower():
-                        name = (record or {}).get("nome", "") or ""
-                        return name.strip() or active_slug
-        except Exception:
-            pass
+        for entry in get_clients():
+            try:
+                if entry.slug.strip().lower() == active_slug.strip().lower():
+                    return (entry.nome or "").strip() or active_slug
+            except Exception:
+                continue
         return active_slug
 
     entry: Any = getattr(st, "sidebar", None)
@@ -207,20 +193,7 @@ def sidebar(slug: str | None) -> None:
                     clear_active_slug(persist=True, update_query=True)
                 except Exception:
                     pass
-                try:
-                    getattr(st, "switch_page", lambda *_args, **_kwargs: None)("src/ui/pages/manage.py")
-                except Exception:
-                    try:
-                        qp = getattr(st, "query_params", {})
-                        try:
-                            if isinstance(qp, dict):
-                                qp.pop("slug", None)
-                                qp["tab"] = "manage"
-                        except Exception:
-                            pass
-                        getattr(st, "rerun", lambda: None)()
-                    except Exception:
-                        pass
+                nav_to(PagePaths.MANAGE)
 
         _call("subheader", "Azioni rapide")
 
@@ -291,19 +264,7 @@ def sidebar(slug: str | None) -> None:
             help="Apri la guida dell'interfaccia nella stessa scheda.",
         )
         if btn_help:
-            try:
-                getattr(st, "switch_page", lambda *_args, **_kwargs: None)("src/ui/pages/guida_ui.py")
-            except Exception:
-                try:
-                    qp = getattr(st, "query_params", {})
-                    if isinstance(qp, dict):
-                        qp["tab"] = "guida"
-                except Exception:
-                    pass
-                try:
-                    getattr(st, "rerun", lambda: None)()
-                except Exception:
-                    pass
+            nav_to(PagePaths.GUIDA)
 
 
 def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:

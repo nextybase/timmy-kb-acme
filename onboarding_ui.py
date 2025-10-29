@@ -56,6 +56,8 @@ from ui.preflight import run_preflight  # noqa: E402
 from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
 from ui.utils.slug import clear_active_slug  # noqa: E402
 from ui.utils.status import status_guard  # noqa: E402
+from ui.pages.registry import build_pages  # noqa: E402
+from ui.theme_enhancements import inject_theme_css  # noqa: E402
 
 # Router/state helper (fallback soft se non presente)
 try:  # noqa: E402
@@ -111,15 +113,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+inject_theme_css()
+
 # Logger strutturato per eventi di preflight
 LOGGER = get_structured_logger("ui.preflight")
 
-# Carica .env (best-effort; utile per preflight)
-if load_dotenv is not None:
+
+def _load_dotenv_best_effort() -> None:
+    """Carica .env solo a runtime, preservando l'import-safe della UI."""
+    if load_dotenv is None:
+        return
     try:
         load_dotenv(override=False)
     except Exception:
-        pass
+        LOGGER.debug("ui.preflight.dotenv_skip", exc_info=True)
 
 _MIN_STREAMLIT_VERSION = (1, 50, 0)
 
@@ -190,6 +197,7 @@ if _truthy(getattr(st, "query_params", {}).get("exit")):
 # - Altrimenti, si mostra l'esito e serve il pulsante "Prosegui".
 # --------------------------------------------------------------------------------------
 if not st.session_state.get("preflight_ok", False):
+    _load_dotenv_best_effort()
     if get_skip_preflight():
         st.session_state["preflight_ok"] = True
     else:
@@ -262,27 +270,7 @@ if not st.session_state.get("preflight_ok", False):
 # Definizione pagine
 # L'ordine definisce la pagina "default" (qui: Home)
 # --------------------------------------------------------------------------------------
-pages = {
-    "Onboarding": [
-        st.Page("src/ui/pages/home.py", title="Home"),
-        st.Page("src/ui/pages/new_client.py", title="Nuovo cliente", url_path="new"),
-        st.Page("src/ui/pages/manage.py", title="Gestisci cliente", url_path="manage"),
-        st.Page("src/ui/pages/semantics.py", title="Semantica", url_path="semantics"),
-        st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
-    ],
-    "Tools": [
-        st.Page("src/ui/pages/settings.py", title="Settings", url_path="settings"),
-        st.Page("src/ui/pages/config_editor.py", title="Config Editor", url_path="config"),
-        st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
-        st.Page("src/ui/pages/guida_ui.py", title="Guida UI", url_path="guida"),
-    ],
-    "Admin": [
-        st.Page("src/ui/pages/admin.py", title="Admin", url_path="admin"),
-        st.Page("src/ui/pages/tools_check.py", title="Tuning", url_path="check"),
-        st.Page("src/ui/pages/secrets_healthcheck.py", title="Secrets Healthcheck", url_path="secrets"),
-        st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),
-    ],
-}
+pages = build_pages()
 
 # --------------------------------------------------------------------------------------
 # Router nativo: requisito Beta 0

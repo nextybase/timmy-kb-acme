@@ -10,8 +10,8 @@ import yaml
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.yaml_utils import yaml_read
 from ui.chrome import render_chrome_then_require
+from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -80,27 +80,15 @@ def _workspace_root(slug: str) -> Path:
 
 
 def _load_clients() -> list[dict[str, Any]]:
-    """Carica l'elenco clienti dal DB (lista di dict normalizzata)."""
+    """Carica l'elenco clienti delegando allo store centrale."""
     try:
-        path = _clients_db_path()
-        if not path.exists():
-            return []
-        data = yaml_read(path.parent, path)
-        if isinstance(data, list):
-            return [dict(item) for item in data if isinstance(item, dict)]
-        if isinstance(data, dict):
-            normalized: list[dict[str, Any]] = []
-            for slug_key, payload in data.items():
-                record = dict(payload) if isinstance(payload, dict) else {}
-                record.setdefault("slug", slug_key)
-                normalized.append(record)
-            return normalized
+        return [entry.to_dict() for entry in get_clients()]
     except Exception as exc:
         LOGGER.warning(
             "ui.manage.clients.load_error",
             extra={"error": str(exc), "path": str(_clients_db_path())},
         )
-    return []
+        return []
 
 
 T = TypeVar("T")

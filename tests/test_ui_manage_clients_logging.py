@@ -20,6 +20,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch):
     fake_chrome.render_chrome_then_require = lambda **_kwargs: "acme"  # type: ignore[attr-defined]
     fake_clients_store = types.ModuleType("ui.clients_store")
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
+    fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
     monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
 
@@ -38,10 +39,11 @@ def test_load_clients_logs_warning_when_broken(caplog, monkeypatch, tmp_path, ma
 
     monkeypatch.setattr(manage_module, "_clients_db_path", lambda: Path(clients_path))
 
-    def _boom(_base: Path, _path: Path):
-        raise RuntimeError("bad yaml")
-
-    monkeypatch.setattr(manage_module, "yaml_read", _boom)
+    monkeypatch.setattr(
+        manage_module,
+        "get_clients",
+        lambda: (_ for _ in ()).throw(RuntimeError("bad yaml")),
+    )
 
     assert manage_module._load_clients() == []
     assert any("ui.manage.clients.load_error" in record.message for record in caplog.records)
