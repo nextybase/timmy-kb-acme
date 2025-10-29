@@ -60,10 +60,11 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
             return
 
         latest = log_files[0]
+        reader = diag.get_safe_reader()
 
         # Tail del log (<= TAIL_BYTES)
         try:
-            tail_bytes = diag.tail_log_bytes(latest, safe_reader=diag.get_safe_reader(), tail_bytes=TAIL_BYTES)
+            tail_bytes = diag.tail_log_bytes(latest, safe_reader=reader, tail_bytes=TAIL_BYTES)
             if tail_bytes:
                 try:
                     st.code(tail_bytes.decode(errors="replace"))
@@ -74,7 +75,7 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
 
         # Download archivio log
         try:
-            archive = diag.build_logs_archive(log_files, slug=slug or "unknown", safe_reader=diag.get_safe_reader())
+            archive = diag.build_logs_archive(log_files, slug=slug or "unknown", safe_reader=reader)
             if archive:
                 st.download_button(
                     "Scarica logs",
