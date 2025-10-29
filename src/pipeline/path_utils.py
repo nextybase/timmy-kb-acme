@@ -31,6 +31,7 @@ Principi:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import unicodedata
 from contextlib import contextmanager
@@ -113,6 +114,51 @@ def ensure_within(base: Path | str, target: Path | str) -> None:
 def ensure_within_and_resolve(base: Path | str, candidate: Path | str) -> Path:
     """Resolve a candidate path ensuring it remains within the base perimeter."""
     return _resolve_and_check(base, candidate)
+
+
+def iter_safe_pdfs(
+    root: Path,
+    *,
+    on_skip: Callable[[Path, str], None] | None = None,
+) -> Iterator[Path]:
+    """
+    Itera ricorsivamente i PDF sotto `root` applicando path-safety forte.
+
+    - Ordine deterministico (case-insensitive sul nome file).
+    - Nessun symlink seguito; i symlink vengono scartati con callback opzionale.
+    - Restituisce SEMPRE path canonicalizzati tramite ensure_within_and_resolve.
+    """
+    try:
+        root_resolved = Path(root).resolve()
+    except Exception as exc:
+        if on_skip:
+            on_skip(Path(root), f"resolve-root:{exc}")
+        return
+    if not root_resolved.exists():
+        return
+
+    for rw, _dirs, files in os.walk(root_resolved, followlinks=False):
+        base = Path(rw)
+        for name in sorted(files, key=str.lower):
+            if not name.lower().endswith(".pdf"):
+                continue
+            candidate = base / name
+            try:
+                if candidate.is_symlink():
+                    if on_skip:
+                        on_skip(candidate, "symlink")
+                    continue
+            except Exception as exc:
+                if on_skip:
+                    on_skip(candidate, f"symlink-check:{exc}")
+                continue
+            try:
+                safe_candidate = ensure_within_and_resolve(root_resolved, candidate)
+            except Exception as exc:
+                if on_skip:
+                    on_skip(candidate, f"resolve:{exc}")
+                continue
+            yield safe_candidate
 
 
 @contextmanager
@@ -398,4 +444,5 @@ __all__ = [
     "sanitize_filename",
     "sorted_paths",  # ordinamento deterministico
     "ensure_valid_slug",  # wrapper interattivo
+    "iter_safe_pdfs",
 ]

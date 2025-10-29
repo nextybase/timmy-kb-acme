@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
+from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 
 __all__ = ["build_markdown_headless"]
@@ -86,17 +87,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _setup_logger(level: str) -> logging.Logger:
-    # Logger semplice, senza emoji (evita UnicodeEncodeError su Windows/cp1252)
-    logger = logging.getLogger("semantic_headless")
-    if logger.handlers:
-        # Evita handler duplicati se richiamato più volte
-        return logger
+    """Istanzia il logger strutturato con livello desiderato."""
+    logger = get_structured_logger("semantic.headless")
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-    h = logging.StreamHandler()
-    fmt = logging.Formatter("%(levelname)s %(name)s | %(message)s")
-    h.setFormatter(fmt)
-    logger.addHandler(h)
-    logger.propagate = False
     return logger
 
 

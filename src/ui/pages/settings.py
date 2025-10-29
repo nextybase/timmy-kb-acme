@@ -6,6 +6,7 @@ from typing import Callable, Optional, cast
 
 from ui.chrome import render_chrome_then_require
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
 # ---- Tipi per gli editor YAML ----

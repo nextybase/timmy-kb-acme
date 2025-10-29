@@ -74,7 +74,7 @@ def test_extract_pdf_text_empty(tmp_path, caplog):
             S._extract_pdf_text(pdf, slug="dummy", logger=logger)
 
     assert any(
-        rec.message == "vision_provision.extract_failed" and getattr(rec, "reason", None) == "empty"
+        rec.message == "semantic.vision.extract_failed" and getattr(rec, "reason", None) == "empty"
         for rec in caplog.records
     )
 
@@ -89,7 +89,7 @@ def test_extract_pdf_text_corrupted(tmp_path, caplog):
             S._extract_pdf_text(pdf, slug="dummy", logger=logger)
 
     assert any(
-        rec.message == "vision_provision.extract_failed" and getattr(rec, "reason", None) == "corrupted"
+        rec.message == "semantic.vision.extract_failed" and getattr(rec, "reason", None) == "corrupted"
         for rec in caplog.records
     )
 

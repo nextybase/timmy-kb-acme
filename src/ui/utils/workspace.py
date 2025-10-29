@@ -1,13 +1,12 @@
 # src/ui/utils/workspace.py
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple, cast
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, validate_slug
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_pdfs, validate_slug
 
 # Import opzionale di Streamlit senza type: ignore.
 # Se non disponibile, st è un Any con valore None.
@@ -18,6 +17,7 @@ except Exception:  # pragma: no cover
 
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
+_BASE_CACHE: dict[str, Path] = {}
 
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:
@@ -58,7 +58,11 @@ def resolve_raw_dir(slug: str) -> Path:
     # Conforma lo slug alle policy di progetto (solleva InvalidSlug/ConfigError se non valido)
     validate_slug(slug_value)
 
-    base_dir = _load_context_base_dir(slug_value) or _fallback_base_dir(slug_value)
+    if slug_value in _BASE_CACHE:
+        base_dir = _BASE_CACHE[slug_value]
+    else:
+        base_dir = _load_context_base_dir(slug_value) or _fallback_base_dir(slug_value)
+        _BASE_CACHE[slug_value] = base_dir
     # Impedisci traversal/symlink: raw deve stare sotto la base del workspace
     return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
 
@@ -77,21 +81,7 @@ def iter_pdfs_safe(root: Path) -> Iterator[Path]:
     Itera i PDF sotto `root` senza seguire symlink.
     Applica ensure_within_and_resolve a ogni candidato.
     """
-    if not root.exists():
-        return
-    for rw, _dirs, files in os.walk(root, followlinks=False):
-        base = Path(rw)
-        for name in files:
-            if not name.lower().endswith(".pdf"):
-                continue
-            candidate = base / name
-            try:
-                # Verifica perimetro per ogni file
-                safe_candidate = cast(Path, ensure_within_and_resolve(root, candidate))
-            except Exception:
-                # fuori perimetro o path sospetto: ignora
-                continue
-            yield safe_candidate
+    yield from iter_safe_pdfs(root)
 
 
 def count_pdfs_safe(root: Path) -> int:

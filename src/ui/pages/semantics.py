@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Optional, Tuple, cast
 
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
 
@@ -104,7 +105,7 @@ def _run_summary(slug: str) -> None:
 
 def _go_preview() -> None:
     try:
-        st.query_params["tab"] = "preview"
+        set_tab("preview")
     except Exception:
         pass
     st.rerun()

@@ -15,15 +15,18 @@
 
 ## Indice
 
+- [Prerequisiti (UI Onboarding)](#prerequisiti-ui-onboarding)
+- [Routing e Deep-Linking (fonte unica)](#routing-e-deep-linking-fonte-unica)
 - [Query string & slug](#query-string--slug)
   - [Perché ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
   - [API consigliata: ](#api-consigliata-uiutilsquery_params)[`ui.utils.query_params`](#api-consigliata-uiutilsquery_params)
-  - [Esempi e anti‑pattern](#esempi-e-anti-pattern)
-- [Path‑safety (lettura/scrittura)](#path-safety-letturascrittura)
+  - [Esempi e anti-pattern](#esempi-e-anti-pattern)
+- [Path-safety (lettura/scrittura)](#path-safety-letturascrittura)
   - [Flusso consigliato](#flusso-consigliato)
   - [Esempi pratici](#esempi-pratici)
-- [Scan PDF sicuro](#scan-pdf-sicuro)
+- [Scan PDF sicuro (DRY)](#scan-pdf-sicuro-dry)
 - [Eventi di log strutturati](#eventi-di-log-strutturati)
+  - [Tassonomia logging](#tassonomia-logging)
   - [Naming & payload](#naming--payload)
   - [Esempi: pagina Manage](#esempi-pagina-manage)
   - [Test con ](#test-con-caplog)[`caplog`](#test-con-caplog)
@@ -31,7 +34,32 @@
 - [Compatibilità con gli stub di Streamlit nei test](#compatibilita-con-gli-stub-di-streamlit-nei-test)
 - [Checklist “UI page”](#checklist-ui-page)
 - [FAQ](#faq)
-- [Anti‑pattern da evitare](#anti-pattern-da-evitare)
+- [Anti-pattern da evitare](#anti-pattern-da-evitare)
+
+---
+
+## Prerequisiti (UI Onboarding)
+
+- **Streamlit ≥ 1.50.0** – il router nativo (`st.Page`, `st.navigation`) è obbligatorio.
+- Deep-linking via `st.query_params` è supportato, ma l’accesso deve passare dagli helper centralizzati (vedi sotto).
+
+---
+
+## Routing e Deep-Linking (fonte unica)
+
+Il routing client-side deve usare le facade in `src/ui/utils/route_state.py`, che mantengono sincronizzati query string e stato interno.
+
+```python
+from ui.utils.route_state import get_tab, set_tab, clear_tab, get_slug_from_qp
+
+current_tab = get_tab("home")  # default se ?tab assente
+slug = get_slug_from_qp()      # slug opzionale
+
+set_tab("manage")              # aggiorna query params + rerun ordinato
+clear_tab()                    # pulisce lo stato
+```
+
+Non forziamo più `?tab=home` nell’URL: se il parametro manca è il fallback dell’helper a fornire il default. Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina viene idratata.
 
 ---
 
@@ -130,27 +158,29 @@ def save_tags_yaml(slug: str, text: str) -> None:
 
 ---
 
-## Scan PDF sicuro
+## Scan PDF sicuro (DRY)
 
-Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa le primitive **safe** che rispettano lo scope del workspace ed escludono symlink non ammessi.
+Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa sempre l’utility condivisa `iter_safe_pdfs` che applica path-safety forte, ignora i symlink e restituisce path canonicalizzati in ordine deterministico.
 
 ```python
-from ui.utils.workspace import workspace_root, iter_pdfs_safe, count_pdfs_safe
+from pipeline.path_utils import iter_safe_pdfs
 
-root = workspace_root(slug)
-n = count_pdfs_safe(root)
-for pdf_path in iter_pdfs_safe(root):
-    ...  # pdf_path è già validato
+for pdf_path in iter_safe_pdfs(raw_dir):
+    ...
 ```
 
-Motivazioni:
-
-- Path traversal e symlink fuori dal workspace sono bloccati a monte.
-- Comportamento coerente cross‑platform (test OK anche su Windows dove i symlink possono non essere disponibili).
+Se sei in UI, `ui.utils.workspace.iter_pdfs_safe` è un wrapper che inoltra alla stessa utility. In questo modo tutte le sezioni della pipeline (UI, semantic, tool CLI) condividono lo stesso comportamento e i test coprono già i corner case (symlink, traversal, Windows).
 
 ---
 
 ## Eventi di log strutturati
+
+### Tassonomia logging
+
+- Vision: `semantic.vision.*` (es. `semantic.vision.create_thread`, `semantic.vision.run_failed`, `semantic.vision.completed`)
+- Conversione/Book: `semantic.convert.*`, `semantic.summary.*`, `semantic.readme.*`, `semantic.book.*`
+- Indicizzazione: `semantic.index.*`
+- Preflight (bypass one-shot): `ui.preflight.once`
 
 ### Naming & payload
 
@@ -162,7 +192,8 @@ Motivazioni:
 
 ```python
 import logging
-LOGGER = logging.getLogger("ui.manage")
+from pipeline.logging_utils import get_structured_logger
+LOGGER = get_structured_logger("ui.manage")
 
 # Apertura editor
 LOGGER.info("ui.manage.tags.open", extra={"slug": slug})

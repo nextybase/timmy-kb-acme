@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import os
 import re
 import time
 from functools import lru_cache
@@ -207,27 +206,23 @@ def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> tupl
 
     safe: list[Path] = []
     discarded = 0
-    for root, _dirs, files in os.walk(raw_dir, followlinks=False):
-        base = Path(root)
-        for name in sorted(files, key=str.lower):
-            if not name.lower().endswith(".pdf"):
-                continue
-            candidate = base / name
-            try:
-                if candidate.is_symlink():
-                    logger.warning("semantic.convert.skip_symlink", extra={"slug": slug, "file_path": str(candidate)})
-                    discarded += 1
-                    continue
-                # Verifica perimetro e risoluzione path (monkeypatchable nei test)
-                safe_path = ppath.ensure_within_and_resolve(raw_dir, candidate)
-                safe.append(safe_path)
-            except Exception as exc:
-                logger.warning(
-                    "semantic.convert.skip_unsafe",
-                    extra={"slug": slug, "file_path": str(candidate), "error": str(exc)},
-                )
-                discarded += 1
-                continue
+
+    def _on_skip(candidate: Path, reason: str) -> None:
+        nonlocal discarded
+        discarded += 1
+        if reason == "symlink":
+            logger.warning(
+                "semantic.convert.skip_symlink",
+                extra={"slug": slug, "file_path": str(candidate)},
+            )
+        else:
+            logger.warning(
+                "semantic.convert.skip_unsafe",
+                extra={"slug": slug, "file_path": str(candidate), "error": reason},
+            )
+
+    for safe_path in ppath.iter_safe_pdfs(raw_dir, on_skip=_on_skip):
+        safe.append(safe_path)
     return safe, discarded
 
 

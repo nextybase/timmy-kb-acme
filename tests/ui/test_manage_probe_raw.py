@@ -8,6 +8,7 @@ from typing import Any, Tuple
 
 import pytest
 
+import ui.utils.workspace
 from tests.ui.streamlit_stub import StreamlitStub
 
 
@@ -84,3 +85,16 @@ def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not any("PDF rilevati" in msg for msg in st_stub.success_messages)
     expected_warn = "`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico."
     assert expected_warn in st_stub.warning_messages
+
+
+def test_iter_pdfs_safe_returns_resolved(tmp_path: Path) -> None:
+    root = tmp_path / "workspace" / "raw"
+    root.mkdir(parents=True)
+    pdf = root / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    try:
+        (root / "link.pdf").symlink_to(pdf)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"Symlink non supportati su questa piattaforma: {exc}")
+    results = list(ui.utils.workspace.iter_pdfs_safe(root))
+    assert results == [pdf.resolve()]

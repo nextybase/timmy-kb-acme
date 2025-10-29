@@ -2,6 +2,7 @@
 # src/ui/pages/home.py
 from __future__ import annotations
 
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()

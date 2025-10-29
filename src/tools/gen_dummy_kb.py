@@ -32,6 +32,7 @@ def _add_paths() -> tuple[Path, Path]:
 
 REPO_ROOT, SRC_DIR = _add_paths()
 SRC_ROOT = SRC_DIR
+from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
 
 # ------------------------------------------------------------
@@ -321,13 +322,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.environ["CLIENTS_DB_DIR"] = str(clients_db_path.parent)
 
         # Logger stile UI
-        logger = logging.getLogger("tools.gen_dummy_kb")
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("%(message)s"))
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-            logger.propagate = False
+        logger = get_structured_logger("tools.gen_dummy_kb")
+        logger.setLevel(logging.INFO)
 
         if records_hint:
             try:

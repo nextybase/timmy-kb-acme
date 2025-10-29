@@ -47,7 +47,9 @@ except ImportError:
 
 
 # Logger strutturato di modulo
-LOGGER = get_structured_logger("semantic.vision_provision")
+EVENT = "semantic.vision"
+LOG_FILE_NAME = "semantic.vision.log"
+LOGGER = get_structured_logger(EVENT)
 
 
 # =========================
@@ -173,7 +175,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
         import fitz
     except Exception as exc:  # pragma: no cover
         logger.warning(
-            "vision_provision.extract_failed",
+            f"{EVENT}.extract_failed",
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "dependency-missing"},
         )
         raise ConfigError(
@@ -189,7 +191,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
                 texts.append(page.get_text("text"))
     except Exception as exc:
         logger.warning(
-            "vision_provision.extract_failed",
+            f"{EVENT}.extract_failed",
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
         )
         raise ConfigError(
@@ -201,7 +203,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
     snapshot = "\n".join(texts).strip()
     if not snapshot:
         logger.info(
-            "vision_provision.extract_failed",
+            f"{EVENT}.extract_failed",
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"},
         )
         raise ConfigError(
@@ -217,7 +219,7 @@ def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
     """Scrive una riga di audit JSONL in modo atomico e sicuro."""
     (base_dir / "logs").mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, ensure_ascii=False) + "\n"
-    safe_append_text(base_dir, base_dir / "logs" / "vision_provision.log", payload)
+    safe_append_text(base_dir, base_dir / "logs" / LOG_FILE_NAME, payload)
 
 
 @dataclass(frozen=True)
@@ -291,16 +293,14 @@ def _call_assistant_json(
     - Usa File Search se abilitato (VISION_USE_KB=1, default) forzando tool_choice=file_search.
     - Restituisce il payload JSON già parsato.
     """
-    LOGGER.debug("semantic.vision.create_thread", extra={"assistant_id": assistant_id})
+    LOGGER.debug(f"{EVENT}.create_thread", extra={"assistant_id": assistant_id})
 
     # Recupero modello assistant per capire se supporta response_format=json_schema
     try:
         asst = client.beta.assistants.retrieve(assistant_id)
         asst_model = getattr(asst, "model", "") or ""
     except Exception as exc:  # pragma: no cover - diagnostico best effort
-        LOGGER.warning(
-            "semantic.vision.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)}
-        )
+        LOGGER.warning(f"{EVENT}.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)})
         asst_model = ""
 
     use_structured = bool(strict_output) and ("gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model)
@@ -343,7 +343,7 @@ def _call_assistant_json(
             "last_error": getattr(run, "last_error", None),
             "incomplete_details": getattr(run, "incomplete_details", None),
         }
-        LOGGER.error("semantic.vision.run_failed", extra=extra)
+        LOGGER.error(f"{EVENT}.run_failed", extra=extra)
         last_error = extra["last_error"] or {}
         reason = (
             getattr(last_error, "message", None)
@@ -371,14 +371,14 @@ def _call_assistant_json(
             break
 
     if not text:
-        LOGGER.error("vision_provision.no_output_text", extra={"assistant_id": assistant_id})
+        LOGGER.error(f"{EVENT}.no_output_text", extra={"assistant_id": assistant_id})
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
 
     try:
         return cast(Dict[str, Any], json.loads(text))
     except json.JSONDecodeError as e:
         LOGGER.error(
-            "vision_provision.invalid_json",
+            f"{EVENT}.invalid_json",
             extra={
                 "assistant_id": assistant_id,
                 "error": str(e),
@@ -566,7 +566,7 @@ def provision_from_vision(
     # Linter (non bloccante): warning su QA
     lint_warnings = _lint_vision_payload(data)
     for w in lint_warnings:
-        logger.warning("vision_provision.lint", extra={"slug": slug, "warning": w})
+        logger.warning(f"{EVENT}.lint", extra={"slug": slug, "warning": w})
 
     # 6) Scrittura YAML
     mapping_yaml_str = vision_to_semantic_mapping_yaml(data, slug=slug)
@@ -599,7 +599,7 @@ def provision_from_vision(
         "lint_warnings": lint_warnings,
     }
     _write_audit_line(paths.base_dir, record)
-    logger.info("vision_provision: completato", extra=record)
+    logger.info(f"{EVENT}.completed", extra=record)
 
     # 8) Retention (best-effort)
     retention_days = _snapshot_retention_days()
@@ -608,7 +608,7 @@ def provision_from_vision(
             purge_old_artifacts(paths.base_dir, retention_days)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                "vision_provision.retention.failed",
+                f"{EVENT}.retention.failed",
                 extra={"slug": slug, "error": str(exc), "days": retention_days},
             )
 

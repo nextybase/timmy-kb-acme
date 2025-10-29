@@ -36,7 +36,7 @@ from typing import Any, Iterable, Mapping
 
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 
 from .config import SemanticConfig
 
@@ -119,17 +119,17 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
     """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
     if not raw_dir.exists():
         return
-    for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
-        try:
-            # Scarta symlink a priori per evitare loop/traversal
-            if p.is_symlink():
-                LOGGER.warning("semantic.auto_tagger.skip_symlink", extra={"file_path": str(p)})
-                continue
-            safe_p = ensure_within_and_resolve(raw_dir, p)
-        except Exception as e:
-            LOGGER.warning("semantic.auto_tagger.skip_unsafe", extra={"file_path": str(p), "error": str(e)})
-            continue
-        yield safe_p
+
+    def _on_skip(candidate: Path, reason: str) -> None:
+        if reason == "symlink":
+            LOGGER.warning("semantic.auto_tagger.skip_symlink", extra={"file_path": str(candidate)})
+        else:
+            LOGGER.warning(
+                "semantic.auto_tagger.skip_unsafe",
+                extra={"file_path": str(candidate), "error": reason},
+            )
+
+    yield from iter_safe_pdfs(raw_dir, on_skip=_on_skip)
 
 
 # ------------------------------ API principali ------------------------------- #

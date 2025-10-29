@@ -14,6 +14,7 @@ st = get_streamlit()
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import load_clients as _load_clients
 from ui.utils import resolve_raw_dir, set_slug
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -77,7 +78,7 @@ def _list_raw_subfolders(slug: str) -> list[str]:
 def _redirect_home() -> None:
     """Redirect immediato alla home nella stessa scheda."""
     try:
-        st.query_params["tab"] = "home"
+        set_tab("home")
     except Exception:
         pass
     st.rerun()

@@ -12,6 +12,7 @@ from importlib import import_module
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()

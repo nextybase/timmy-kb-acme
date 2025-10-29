@@ -88,6 +88,26 @@ Provisioning struttura su **Drive**:
 
 ---
 
+## Preflight: preferenza persistente vs. bypass “solo questa run”
+
+Nella sezione **Prerequisiti** trovi due controlli distinti:
+
+1. **Salta il controllo** (persistente)
+   Aggiorna la preferenza `ui.skip_preflight` in `config/config.yaml`. Da quel momento il preflight viene **saltato** in modo stabile.
+
+2. **Salta il controllo solo per questa esecuzione** (one-shot)
+   Bypassa il preflight **solo** nella sessione corrente, senza toccare la preferenza persistente.
+   Al primo utilizzo logga l’evento: `ui.preflight.once`.
+
+Comportamento:
+- Se la preferenza persistente è attiva, il preflight non viene eseguito.
+- Se non è attiva, puoi usare il bypass one-shot per test/supporto rapido.
+- Il bypass one-shot è idempotente nella stessa sessione (non riloggato più volte).
+
+> Suggerimento: usa il bypass **one-shot** in fase di sviluppo/diagnostica; usa la preferenza **persistente** in ambienti demo o dove il check è superfluo.
+
+---
+
 ## 5) Gestione contenuti → **Gestisci cliente**
 
 **Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.
