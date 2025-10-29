@@ -46,7 +46,6 @@ service_account.json
 # === Jupyter/Notebook/Streamlit ===
 .ipynb_checkpoints/
 *.nbconvert/
-.streamlit/
 
 # === MacOS/Linux/Windows trash ===
 .DS_Store
