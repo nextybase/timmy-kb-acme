@@ -45,7 +45,7 @@ def _db_dir() -> Path:
     if value:
         candidate = Path(value).expanduser()
         if candidate.is_absolute():
-            return candidate.resolve()
+            return cast(Path, ensure_within_and_resolve(candidate.parent, candidate))
         return _resolve_db_path(REPO_ROOT / candidate)
     return _resolve_db_path(DB_DIR)
 
@@ -54,12 +54,10 @@ def _db_file() -> Path:
     value = _optional_env("CLIENTS_DB_FILE")
     if value:
         candidate = Path(value).expanduser()
-        if candidate.is_absolute():
-            return candidate.resolve()
-        # Manteniamo filename relativo rispetto a DB_DIR (override)
-        return _resolve_db_path(_db_dir() / candidate.name)
-    target = DB_FILE if DB_FILE.is_absolute() else _db_dir() / DB_FILE.name
-    return _resolve_db_path(target)
+        target = candidate if candidate.is_absolute() else _db_dir() / candidate.name
+        base = target.parent
+        return cast(Path, ensure_within_and_resolve(base, target))
+    return cast(Path, ensure_within_and_resolve(_db_dir(), _db_dir() / DB_FILE.name))
 
 
 LOG = get_structured_logger("ui.clients_store")
@@ -184,3 +182,10 @@ def get_state(slug: str) -> Optional[str]:
 
 def get_all() -> list[ClientEntry]:
     return load_clients()
+
+
+def get_ui_state_path() -> Path:
+    """Restituisce il percorso persistito per lo slug attivo."""
+    base = _db_dir()
+    target = base / "ui_state.json"
+    return cast(Path, ensure_within_and_resolve(base, target))

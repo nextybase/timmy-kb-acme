@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Optional, cast
 
 from pipeline.logging_utils import get_structured_logger
@@ -29,18 +28,11 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 
 # Manteniamo compat con l'attuale gestione querystring
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import read_text_safe
+from ui.clients_store import get_ui_state_path
 
 from .query_params import get_slug as _qp_get
 from .query_params import set_slug as _qp_set
-
-
-def _persist_path() -> Path:
-    from ui.clients_store import _db_dir  # import locale per evitare cicli
-
-    base = _db_dir()
-    return cast(Path, ensure_within_and_resolve(base, base / "ui_state.json"))
-
 
 LOGGER = get_structured_logger("ui.slug")
 
@@ -76,7 +68,7 @@ def _sanitize_slug(value: Any) -> Optional[str]:
 
 def _load_persisted() -> Optional[str]:
     try:
-        path = _persist_path()
+        path = get_ui_state_path()
         raw: Any = json.loads(read_text_safe(path.parent, path))
         if not isinstance(raw, dict):
             return None
@@ -88,7 +80,7 @@ def _load_persisted() -> Optional[str]:
 
 def _save_persisted(slug: Optional[str]) -> None:
     try:
-        path = _persist_path()
+        path = get_ui_state_path()
         base_dir = path.parent
         base_dir.mkdir(parents=True, exist_ok=True)
         payload = json.dumps({"active_slug": slug or ""}, ensure_ascii=False) + "\n"

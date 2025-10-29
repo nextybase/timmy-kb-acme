@@ -10,7 +10,7 @@ from tests.ui.test_manage_modal_save import _build_streamlit_stub
 
 
 @pytest.fixture(name="manage_module")
-def manage_module(monkeypatch: pytest.MonkeyPatch):
+def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     module, submodules = _build_streamlit_stub(save_button_pressed=False)
     monkeypatch.setitem(sys.modules, "streamlit", module)
     for name, mod in submodules.items():
@@ -21,6 +21,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch):
     fake_clients_store = types.ModuleType("ui.clients_store")
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
     fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
+    fake_clients_store.get_ui_state_path = lambda: tmp_path / "ui_state.json"  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
     monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
 

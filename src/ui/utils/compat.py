@@ -2,7 +2,8 @@
 # src/ui/utils/compat.py
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import MutableMapping
+from typing import Any, Callable, cast
 
 from ui.pages.registry import url_path_for
 from ui.utils.stubs import get_streamlit
@@ -22,14 +23,22 @@ def nav_to(page_path: str) -> None:
         except Exception:
             pass
     qp = getattr(st, "query_params", None)
-    if isinstance(qp, dict):
-        up = url_path_for(page_path)
-        if up:
-            qp["tab"] = up
-            try:
-                getattr(st, "rerun", lambda: None)()
-            except Exception:
-                return
+    up = url_path_for(page_path)
+    if not up:
+        return
+    if isinstance(qp, MutableMapping):
+        mapping = cast(MutableMapping[str, Any], qp)
+        mapping["tab"] = up
+        try:
+            getattr(st, "rerun", lambda: None)()
+        except Exception:
+            return
+    elif hasattr(qp, "__setitem__"):
+        try:
+            qp["tab"] = up  # type: ignore[index]
+            getattr(st, "rerun", lambda: None)()
+        except Exception:
+            return
 
 
 def open_dialog(title: str, render_body: Callable[[], None], *, width: str = "large") -> None:

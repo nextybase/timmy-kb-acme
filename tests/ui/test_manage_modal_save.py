@@ -77,6 +77,7 @@ def patch_streamlit_before_import(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_clients_store = types.ModuleType("ui.clients_store")
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
     fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
+    fake_clients_store.get_ui_state_path = lambda: Path("ui_state.json")  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
     monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
 

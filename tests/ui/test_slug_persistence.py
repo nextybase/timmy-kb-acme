@@ -29,7 +29,7 @@ def _stub_streamlit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_persist_active_slug_atomic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
     persist_path = tmp_path / "state" / "ui_state.json"
-    monkeypatch.setattr(slug_utils, "_persist_path", lambda: persist_path, raising=False)
+    monkeypatch.setattr(slug_utils, "get_ui_state_path", lambda: persist_path, raising=False)
 
     with caplog.at_level(logging.INFO):
         slug_utils.set_active_slug(" ACME ", persist=True, update_query=False)
@@ -45,7 +45,7 @@ def test_persist_active_slug_atomic(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 def test_save_persisted_uses_safe_utils(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     persist_path = tmp_path / "state" / "ui_state.json"
-    monkeypatch.setattr(slug_utils, "_persist_path", lambda: persist_path, raising=False)
+    monkeypatch.setattr(slug_utils, "get_ui_state_path", lambda: persist_path, raising=False)
 
     def fake_safe(path: Path, payload: str, *, encoding: str, atomic: bool) -> None:
         fake_safe.calls = {
