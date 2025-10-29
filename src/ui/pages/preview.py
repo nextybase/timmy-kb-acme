@@ -21,7 +21,7 @@ slug = render_chrome_then_require()
 
 try:
     ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-    logger = get_structured_logger("ui.preview", context={"slug": slug})
+    logger = get_structured_logger("ui.preview", context=ctx)
 except Exception as exc:
     title, body, caption = to_user_message(exc)
     st.error(title)
