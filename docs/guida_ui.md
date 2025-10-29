@@ -108,6 +108,30 @@ Comportamento:
 
 ---
 
+## Vocabolario semantico: YAML vs DB
+
+```mermaid
+flowchart TD
+    A[tags_reviewed.yaml\n(authoring umano)] --> B[Loader YAML\n(validazione + normalizza)]
+    B --> C[_derive_tags_db_path(...)\nDeriva percorso DB]
+    C --> D[ensure_schema_v2(...)\nEnsure schema v2]
+    D --> E[Upsert terms]
+    D --> F[Upsert folders]
+    E --> G[folder_terms]
+    F --> G
+    G --> H[tags.db]
+    H --> I[UI/Pipeline runtime]
+```
+
+| Campo YAML | Destinazione DB               | Note                              |
+|------------|------------------------------|-----------------------------------|
+| `canonical` | `terms.canonical`            | lowercase + trim                  |
+| `aliases[]` | (merge in memoria)           | confluiscono sul canonical        |
+| `folders[]` | `folders.path`               | path relativi e normalizzati      |
+| Link folder/tag | `folder_terms(..., weight)` | `weight` opzionale (default 1.0) |
+
+> Pseudocode ingestion: vedi `storage.tags_store.import_tags_yaml_to_db`.
+
 ## 5) Gestione contenuti → **Gestisci cliente**
 
 **Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.

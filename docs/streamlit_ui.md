@@ -173,6 +173,85 @@ Se sei in UI, `ui.utils.workspace.iter_pdfs_safe` è un wrapper che inoltra alla
 
 ---
 
+## Ingestion Vocabolario (YAML -> DB)
+
+```mermaid
+flowchart TD
+    A[Authoring umano\nsemantic/tags_reviewed.yaml] --> B[Loader YAML\n(validazione + normalizzazione)]
+    B --> C[Derivazione percorso DB\n_derive_tags_db_path(...)]
+    C --> D[Ensure schema v2\nensure_schema_v2(...)]
+    D --> E[Upsert termini canonici\nterms(canonical)]
+    E --> F[Upsert cartelle (percorso)\nfolders(path)]
+    F --> G[Upsert relazioni\nfolder_terms(folder_id, term_id, weight)]
+    G --> H[(SQLite tags.db)]
+    H --> I[Runtime UI/Pipeline\n(normalize/enrich/index)]
+```
+
+```mermaid
+erDiagram
+    TERMS {
+        INTEGER id PK
+        TEXT    canonical  "termine canonico (lowercase, unico)"
+    }
+
+    FOLDERS {
+        INTEGER id PK
+        TEXT    path       "percorso relativo (es. raw/..., book/...)"
+    }
+
+    FOLDER_TERMS {
+        INTEGER folder_id FK
+        INTEGER term_id   FK
+        REAL    weight    "se disponibile (default=1.0)"
+    }
+
+    TERMS ||--o{ FOLDER_TERMS : "tagga"
+    FOLDERS ||--o{ FOLDER_TERMS : "contiene"
+```
+
+| Campo YAML         | Normalizzazione                | Destinazione DB             | Note                                   |
+|--------------------|--------------------------------|-----------------------------|----------------------------------------|
+| `tags[].canonical` | lowercase, trim, deduplicate   | `terms.canonical`           | Unico; merge se duplicato              |
+| `tags[].aliases[]` | lowercase, trim                | (merge in memoria)          | Nessuna tabella `aliases` attualmente |
+| `tags[].folders[]` | percorso relativo normalizzato | `folders.path`              | Path relativi (raw/book/semantic)     |
+| folder -> tag link | -                              | `folder_terms(..., weight)` | `weight` facoltativo (default 1.0)    |
+
+```python
+# Pseudocode: ingest YAML -> DB (layer storage.tags_store)
+def import_tags_yaml_to_db(semantic_dir: Path, yaml_path: Path, logger):
+    db_path = _derive_tags_db_path(yaml_path)
+    _ensure_tags_schema_v2(str(db_path))
+
+    raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    terms: dict[str, int] = {}
+    folders: dict[str, int] = {}
+    links: list[tuple[int, int, float]] = []
+
+    for entry in raw.get("tags", []):
+        canonical = norm(entry.get("canonical"))
+        if not canonical:
+            continue
+        tid = upsert_term(db_path, canonical)
+        terms[canonical] = tid
+
+        for folder_path in map(norm_path, entry.get("folders") or []):
+            if not folder_path:
+                continue
+            fid = upsert_folder(db_path, folder_path)
+            folders[folder_path] = fid
+            links.append((fid, tid, 1.0))
+
+    upsert_folder_terms(db_path, links)
+    logger.info(
+        "semantic.tags_yaml.imported",
+        extra={"db": str(db_path), "terms": len(terms), "links": len(links)},
+    )
+```
+
+> Il loader YAML deve validare lo schema, normalizzare canonical/alias/path e gestire duplicati. L'upsert è idempotente (nessun wipe massivo del DB).
+
+---
+
 ## Eventi di log strutturati
 
 ### Tassonomia logging
