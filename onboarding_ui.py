@@ -268,17 +268,19 @@ pages = {
         st.Page("src/ui/pages/new_client.py", title="Nuovo cliente", url_path="new"),
         st.Page("src/ui/pages/manage.py", title="Gestisci cliente", url_path="manage"),
         st.Page("src/ui/pages/semantics.py", title="Semantica", url_path="semantics"),
+        st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
     ],
     "Tools": [
-        st.Page("src/ui/pages/admin.py", title="Admin", url_path="admin"),
         st.Page("src/ui/pages/settings.py", title="Settings", url_path="settings"),
         st.Page("src/ui/pages/config_editor.py", title="Config Editor", url_path="config"),
-        st.Page("src/ui/pages/secrets_healthcheck.py", title="Secrets Healthcheck", url_path="secrets"),
-        st.Page("src/ui/pages/preview.py", title="Docker Preview", url_path="preview"),
         st.Page("src/ui/pages/cleanup.py", title="Cleanup", url_path="cleanup"),
-        st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),
         st.Page("src/ui/pages/guida_ui.py", title="Guida UI", url_path="guida"),
-        st.Page("src/ui/pages/tools_check.py", title="Healthcheck", url_path="check"),
+    ],
+    "Admin": [
+        st.Page("src/ui/pages/admin.py", title="Admin", url_path="admin"),
+        st.Page("src/ui/pages/tools_check.py", title="Tuning", url_path="check"),
+        st.Page("src/ui/pages/secrets_healthcheck.py", title="Secrets Healthcheck", url_path="secrets"),
+        st.Page("src/ui/pages/diagnostics.py", title="Diagnostica", url_path="diagnostics"),
     ],
 }
 

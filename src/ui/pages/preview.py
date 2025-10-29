@@ -29,7 +29,7 @@ except Exception as exc:
         st.caption(caption or body)
 else:
     col_start, col_stop = st.columns(2)
-    if _column_button(col_start, "Avvia preview", key="btn_preview_start", width="stretch"):
+    if _column_button(col_start, "Avvia preview", key="btn_preview_start"):
         try:
             with status_guard(
                 "Avvio la preview...",
@@ -45,7 +45,7 @@ else:
             st.error(title)
             if caption or body:
                 st.caption(caption or body)
-    if _column_button(col_stop, "Arresta preview", key="btn_preview_stop", width="stretch"):
+    if _column_button(col_stop, "Arresta preview", key="btn_preview_stop"):
         try:
             with status_guard(
                 "Arresto la preview...",
