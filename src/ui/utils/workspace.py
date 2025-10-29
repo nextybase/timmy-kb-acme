@@ -87,11 +87,11 @@ def iter_pdfs_safe(root: Path) -> Iterator[Path]:
             candidate = base / name
             try:
                 # Verifica perimetro per ogni file
-                ensure_within_and_resolve(root, candidate)
+                safe_candidate = cast(Path, ensure_within_and_resolve(root, candidate))
             except Exception:
                 # fuori perimetro o path sospetto: ignora
                 continue
-            yield candidate
+            yield safe_candidate
 
 
 def count_pdfs_safe(root: Path) -> int:

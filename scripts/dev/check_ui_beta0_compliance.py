@@ -27,7 +27,9 @@ GLOBAL_RULES = {
     r"\bunsafe_allow_html\s*=": "unsafe_allow_html vietato (usa st.html(...))",
     r"\bst\.(beta_|legacy_)": "API beta/legacy vietate",
     # Preferisci API native di navigazione: anchor HTML interni sconsigliati
-    r"(?i)<a\b[^>]*\bhref\s*=\s*[\"']\s*/(?!/)": "Anchor HTML a pagina interna: usa st.page_link(...) o st.switch_page(...)",
+    r"(?i)<a\b[^>]*\bhref\s*=\s*[\"']\s*/(?!/)": (
+        "Anchor HTML a pagina interna: usa st.page_link(...) o st.switch_page(...)"
+    ),
 }
 
 REQUIRED_IN_ONBOARDING = {

@@ -147,7 +147,11 @@ if not st.session_state.get("preflight_ok", False):
                         st.warning(f"Impossibile salvare la preferenza: {exc}")
 
                 try:
-                    with status_guard("Controllo prerequisiti…", expanded=True, error_label="Errore nel preflight") as s:
+                    with status_guard(
+                        "Controllo prerequisiti…",
+                        expanded=True,
+                        error_label="Errore nel preflight",
+                    ) as s:
                         results, port_busy = run_preflight()
 
                         # OPENAI/Docker sono opzionali per l'onboarding

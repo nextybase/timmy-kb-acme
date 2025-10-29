@@ -1,15 +1,15 @@
 # src/security/retention.py
 from __future__ import annotations
 
-import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 
-LOGGER = logging.getLogger("security.retention")
+LOGGER = get_structured_logger("security.retention")
 
 _DEFAULT_PATTERNS: tuple[str, ...] = ("semantic/*.snapshot.txt",)
 

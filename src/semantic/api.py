@@ -23,7 +23,7 @@ from pipeline.content_utils import validate_markdown_dir as _validate_md
 from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
-from pipeline.logging_utils import phase_scope
+from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, sorted_paths
 from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
@@ -607,7 +607,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
     """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
     if logger is None:
-        logger = logging.getLogger("semantic.book")
+        logger = get_structured_logger("semantic.book", context={"slug": slug})
     start_ts = time.perf_counter()
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
         ctx_base = cast(Path, getattr(context, "base_dir", None))

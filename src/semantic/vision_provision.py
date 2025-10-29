@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var, get_int
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
@@ -44,11 +45,14 @@ except ImportError:
     except ImportError:  # pragma: no cover
         from ..security.retention import purge_old_artifacts
 
+
+# Logger strutturato di modulo
+LOGGER = get_structured_logger("semantic.vision_provision")
+
+
 # =========================
 # Eccezioni specifiche
 # =========================
-
-
 class HaltError(RuntimeError):
     def __init__(self, message_ui: str, missing: Dict[str, Any]) -> None:
         super().__init__(message_ui)
@@ -161,7 +165,7 @@ def _load_vision_schema() -> Dict[str, Any]:
         raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
 
 
-def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: logging.Logger) -> str:
+def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") -> str:
     """
     Estrae il testo dal PDF. Fallisce rapidamente se il file è corrotto o vuoto.
     """
@@ -287,16 +291,15 @@ def _call_assistant_json(
     - Usa File Search se abilitato (VISION_USE_KB=1, default) forzando tool_choice=file_search.
     - Restituisce il payload JSON già parsato.
     """
-    logger = logging.getLogger("semantic.vision_provision")
-    logger.debug("vision_provision: creating assistant thread", extra={"assistant_id": assistant_id})
+    LOGGER.debug("semantic.vision.create_thread", extra={"assistant_id": assistant_id})
 
     # Recupero modello assistant per capire se supporta response_format=json_schema
     try:
         asst = client.beta.assistants.retrieve(assistant_id)
         asst_model = getattr(asst, "model", "") or ""
     except Exception as exc:  # pragma: no cover - diagnostico best effort
-        logger.warning(
-            "vision_provision.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)}
+        LOGGER.warning(
+            "semantic.vision.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)}
         )
         asst_model = ""
 
@@ -340,7 +343,7 @@ def _call_assistant_json(
             "last_error": getattr(run, "last_error", None),
             "incomplete_details": getattr(run, "incomplete_details", None),
         }
-        logger.error("vision_provision.run_failed", extra=extra)
+        LOGGER.error("semantic.vision.run_failed", extra=extra)
         last_error = extra["last_error"] or {}
         reason = (
             getattr(last_error, "message", None)
@@ -368,13 +371,13 @@ def _call_assistant_json(
             break
 
     if not text:
-        logger.error("vision_provision.no_output_text", extra={"assistant_id": assistant_id})
+        LOGGER.error("vision_provision.no_output_text", extra={"assistant_id": assistant_id})
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
 
     try:
         return cast(Dict[str, Any], json.loads(text))
     except json.JSONDecodeError as e:
-        logger.error(
+        LOGGER.error(
             "vision_provision.invalid_json",
             extra={
                 "assistant_id": assistant_id,
@@ -443,14 +446,12 @@ def _lint_vision_payload(data: Dict[str, Any]) -> List[str]:
 # =========================
 # API principale
 # =========================
-
-
 def prepare_assistant_input(
     ctx: Any,
     slug: str,
     pdf_path: Path,
     model: str,
-    logger: Any,
+    logger: "logging.Logger",
 ) -> str:
     """
     Costruisce il messaggio utente completo da inoltrare all'Assistant.
@@ -477,7 +478,7 @@ def prepare_assistant_input(
 
 def provision_from_vision(
     ctx: Any,
-    logger: logging.Logger,
+    logger: "logging.Logger",
     *,
     slug: str,
     pdf_path: Path,

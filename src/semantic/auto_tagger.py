@@ -30,12 +30,12 @@ from __future__ import annotations
 import csv
 import io
 import json
-import logging
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
 from .config import SemanticConfig
@@ -44,6 +44,8 @@ __all__ = [
     "extract_semantic_candidates",
     "render_tags_csv",
 ]
+
+LOGGER = get_structured_logger("semantic.auto_tagger")
 
 # ------------------------------ helpers base --------------------------------- #
 
@@ -117,16 +119,15 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
     """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
     if not raw_dir.exists():
         return
-    logger = logging.getLogger("semantic.auto_tagger")
     for p in sorted(raw_dir.rglob("*.pdf"), key=lambda x: x.as_posix().lower()):
         try:
             # Scarta symlink a priori per evitare loop/traversal
             if p.is_symlink():
-                logger.warning("Skip PDF symlink", extra={"file_path": str(p)})
+                LOGGER.warning("semantic.auto_tagger.skip_symlink", extra={"file_path": str(p)})
                 continue
             safe_p = ensure_within_and_resolve(raw_dir, p)
         except Exception as e:
-            logger.warning("Skip PDF non sicuro", extra={"file_path": str(p), "error": str(e)})
+            LOGGER.warning("semantic.auto_tagger.skip_unsafe", extra={"file_path": str(p), "error": str(e)})
             continue
         yield safe_p
 
