@@ -1,0 +1,15 @@
+
+
+Azzera selezione cliente
+Azzera selezione cliente
+Genera Dummy
+Genera Dummy
+Esci
+Guida UI
+Guida UI
+Deploy
+
+Genera README in raw/ (Drive)
+Avvia arricchimento semantico
+Avvia arricchimento semantico
+Scarica PDF da Drive → locale

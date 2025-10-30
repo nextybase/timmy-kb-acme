@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -11,10 +12,14 @@ from typing import Dict, Iterator
 import pytest
 import yaml
 
+from ui.pages.registry import PagePaths, url_path_for
+
 pytest.importorskip("playwright.sync_api", reason="Playwright non disponibile: installa playwright per i test e2e.")
-from playwright.sync_api import sync_playwright  # noqa: E402
+from playwright.sync_api import Locator, sync_playwright  # noqa: E402
 
 PORT = 8501
+MANAGE_ROUTE = url_path_for(PagePaths.MANAGE) or "manage"
+PREVIEW_ROUTE = url_path_for(PagePaths.PREVIEW) or "preview"
 E2E_MARKER = pytest.mark.e2e
 
 
@@ -35,7 +40,7 @@ def _wait_for_port(host: str, port: int, timeout: float = 30.0) -> None:
 def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[str, Path]]:
     repo_root = Path(__file__).resolve().parents[2]
     sandbox = tmp_path_factory.mktemp("e2e_repo")
-    slug = "acme-demo"
+    slug = "dummy"
 
     clients_dir = sandbox / "clients_db"
     clients_dir.mkdir(parents=True, exist_ok=True)
@@ -46,8 +51,10 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
     )
 
     workspace = sandbox / "output" / f"timmy-kb-{slug}"
-    (workspace / "raw").mkdir(parents=True, exist_ok=True)
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
     (workspace / "semantic").mkdir(parents=True, exist_ok=True)
+    (raw_dir / "sample.pdf").write_bytes(b"%PDF-1.4\n%EOF\n")
 
     env = os.environ.copy()
     env.update(
@@ -86,6 +93,7 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
         "slug": slug,
         "sandbox": sandbox,
         "log_path": log_path,
+        "repo_root": repo_root,
     }
 
     proc.terminate()
@@ -94,6 +102,12 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
     except subprocess.TimeoutExpired:
         proc.kill()
     log_handle.close()
+    report_dir = repo_root / "playwright-report"
+    try:
+        report_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(log_path, report_dir / "streamlit.log")
+    except Exception:
+        pass
 
 
 def _wait_for_db_state(db_path: Path, slug: str, expected_state: str, timeout: float = 10.0) -> None:
@@ -122,22 +136,78 @@ def _wait_for_log_line(log_path: Path, expected: str, timeout: float = 10.0) -> 
 def test_enable_and_preview(e2e_environment: Dict[str, Path]) -> None:
     slug = e2e_environment["slug"]
     sandbox = e2e_environment["sandbox"]
+    repo_root = e2e_environment["repo_root"]
     base_url = f"http://127.0.0.1:{PORT}"
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
 
-        page.goto(f"{base_url}/?tab=manage&slug={slug}", wait_until="networkidle")
-        page.get_by_role("button", name="Abilita").click()
+        page.goto(f"{base_url}/{MANAGE_ROUTE}?slug={slug}", wait_until="networkidle")
+        page.wait_for_function("window.prerenderReady === true", timeout=20000)
+        report_dir = repo_root / "playwright-report"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        (report_dir / "manage.html").write_text(page.content(), encoding="utf-8")
+        page.screenshot(path=str(report_dir / "manage.png"), full_page=True)
+        buttons_text = "\n".join(page.locator("button").all_inner_texts())
+        (report_dir / "buttons_manage.txt").write_text(buttons_text, encoding="utf-8")
+        use_client_button = page.locator("div[data-testid='stButton']:has-text('Usa questo cliente') button")
+        if use_client_button.count():
+            _click_last(use_client_button)
+            page.wait_for_timeout(1000)
+        page.wait_for_selector("text=Avvia arricchimento semantico", timeout=15000)
+        semantic_button = page.locator("div[data-testid='stButton']:has-text('Avvia arricchimento semantico') button")
+        semantic_button.first.wait_for(state="attached", timeout=15000)
+        (report_dir / "counts_manage.txt").write_text(f"semantic_buttons={semantic_button.count()}\n", encoding="utf-8")
+        _click_last(semantic_button)
+        page.wait_for_selector("textarea", timeout=30000)
+        (report_dir / "manage_modal.html").write_text(page.content(), encoding="utf-8")
+        page.wait_for_selector("text=Abilita", timeout=15000)
+        enable_button = page.locator("div[data-testid='stButton']:has-text('Abilita') button")
+        enable_button.first.wait_for(state="attached", timeout=15000)
+        _click_last(enable_button)
 
         clients_db = sandbox / "clients_db" / "clients.yaml"
         _wait_for_db_state(clients_db, slug, "arricchito", timeout=10.0)
 
-        page.goto(f"{base_url}/?tab=preview&slug={slug}", wait_until="networkidle")
+        page.goto(f"{base_url}/{PREVIEW_ROUTE}?slug={slug}", wait_until="networkidle")
         page.get_by_role("button", name="Avvia preview").click()
 
         preview_log = sandbox / "preview_logs" / f"{slug}.log"
         _wait_for_log_line(preview_log, "PREVIEW_STUB_START", timeout=10.0)
 
         browser.close()
+
+
+def _click_last(locator: Locator) -> None:
+    handles = locator.element_handles()
+    if not handles:
+        return
+
+    def _is_visible(handle: Locator.ElementHandle) -> bool:
+        try:
+            return bool(handle.is_visible())
+        except Exception:
+            try:
+                return bool(
+                    handle.evaluate(
+                        "el => !!(el.offsetParent || el.getClientRects().length) && "
+                        "getComputedStyle(el).visibility !== 'hidden' && "
+                        "getComputedStyle(el).opacity !== '0'"
+                    )
+                )
+            except Exception:
+                return False
+
+    for handle in reversed(handles):
+        if not _is_visible(handle):
+            continue
+        try:
+            handle.scroll_into_view_if_needed(timeout=2000)
+        except Exception:
+            pass
+        handle.click(force=True)
+        return
+
+    # Nessun handle visibile: fallback al click forzato sull'ultimo
+    handles[-1].click(force=True)

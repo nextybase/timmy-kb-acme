@@ -417,7 +417,8 @@ if slug:
     pdf_count = count_pdfs_safe(raw_dir)
     has_pdfs = pdf_count > 0
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    service_ok = run_tags_fn is not None
+    tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
+    service_ok = run_tags_fn is not None or tags_mode == "stub"
 
     open_semantic = _column_button(
         c2,
@@ -431,7 +432,9 @@ if slug:
         ),
     )
     if open_semantic:
-        if run_tags_fn is None:
+        if tags_mode == "stub":
+            _open_tags_raw_modal(slug)
+        elif run_tags_fn is None:
             st.error(
                 "Servizio di estrazione tag non disponibile.",
             )

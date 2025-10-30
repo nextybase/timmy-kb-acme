@@ -19,7 +19,7 @@
 - [Routing e Deep-Linking (fonte unica)](#routing-e-deep-linking-fonte-unica)
 - [Query string & slug](#query-string--slug)
   - [Perché ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
-  - [API consigliata: ](#api-consigliata-uiutilsquery_params)[`ui.utils.query_params`](#api-consigliata-uiutilsquery_params)
+  - [API consigliata: ](#api-consigliata-uiutils-route_state--uiutils-slug)[`ui.utils.route_state` + `ui.utils.slug`](#api-consigliata-uiutils-route_state--uiutils-slug)
   - [Esempi e anti-pattern](#esempi-e-anti-pattern)
 - [Path-safety (lettura/scrittura)](#path-safety-letturascrittura)
   - [Flusso consigliato](#flusso-consigliato)
@@ -65,7 +65,7 @@ Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina vie
 
 ## Query string & slug
 
-Usiamo `st.query_params` (API Streamlit moderna) come SSoT lato UI e i wrapper in `ui.utils.query_params` per leggere/scrivere lo slug. Quando serve garantire la presenza dello slug e rendere coerente l'UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
+`st.query_params` resta l'SSoT lato client, ma l'accesso passa da `ui.utils.route_state` (tab + letture slug) e da `ui.utils.slug` (setter/getter ad alto livello). Quando serve garantire la presenza dello slug e rendere coerente l'UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
 
 ### Perché `st.query_params`
 
@@ -73,17 +73,19 @@ Usiamo `st.query_params` (API Streamlit moderna) come SSoT lato UI e i wrapper i
 - Funziona come dizionario reattivo: gli update triggerano un **rerun** della pagina.
 - È coperto dai nostri stub di test.
 
-### API consigliata: `ui.utils.query_params`
+### API consigliata: `ui.utils.route_state` + `ui.utils.slug`
 
 ```python
-import streamlit as st
-from ui.utils.query_params import get_slug, set_slug
+from ui.utils.route_state import get_tab, set_tab, clear_tab, get_slug_from_qp
+from ui.utils.slug import get_active_slug, set_active_slug, clear_active_slug
 
-# Leggi lo slug (può tornare None)
-slug = get_slug()
+# Legge stato/query params
+tab = get_tab()
+slug = get_slug_from_qp() or get_active_slug()
 
-# Scrivi/aggiorna lo slug (triggera un rerun ordinato)
-set_slug("acme-srl")
+# Aggiorna tab/slug sincronizzando query params e chrome
+set_tab("manage")
+set_active_slug("acme-srl")
 ```
 
 Oppure, quando la pagina **richiede** lo slug:
@@ -100,7 +102,7 @@ slug = render_chrome_then_require()
 **OK**
 
 ```python
-slug = get_slug() or "acme-srl"
+slug = get_slug_from_qp() or get_active_slug() or "acme-srl"
 set_tab("manage")                  # se serve cambiare tab
 ```
 

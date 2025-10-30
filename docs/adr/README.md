@@ -37,3 +37,4 @@ Questo directory raccoglie le **Architecture / Technical Decision Records** del 
 ## ADR disponibili
 
 - [ADR-0001: SQLite come SSoT per i tag runtime](0001-sqlite-ssot-tags.md)
+- [ADR-0003: Playwright per i test end-to-end UI](0003-playwright-e2e-ui.md)
