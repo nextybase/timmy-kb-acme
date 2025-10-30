@@ -11,7 +11,7 @@ def test_validate_tags_reviewed_rejects_semantic_outside_base(tmp_path, monkeypa
     base_dir.mkdir()
     (base_dir / "raw").mkdir()
     context = SimpleNamespace(
-        slug="acme",
+        slug="dummy",
         base_dir=base_dir,
         repo_root_dir=None,
         raw_dir=base_dir / "raw",
@@ -26,4 +26,4 @@ def test_validate_tags_reviewed_rejects_semantic_outside_base(tmp_path, monkeypa
     monkeypatch.setattr("src.tag_onboarding.ClientContext.load", fake_load)
 
     with pytest.raises(PathTraversalError):
-        validate_tags_reviewed("acme")
+        validate_tags_reviewed("dummy")

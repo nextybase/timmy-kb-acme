@@ -40,7 +40,7 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
     inserted = index_markdown_to_db(
         ctx,
         logger,
-        slug="acme",
+        slug="dummy",
         scope="book",
         embeddings_client=FakeEmbClient(),
         db_path=base / "kb.sqlite",

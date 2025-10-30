@@ -6,6 +6,7 @@ from typing import Sequence
 import numpy as np
 
 import timmykb.retriever as r
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import QueryParams, search
 
 
@@ -46,7 +47,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
     # k >= n → ordina tutto; atteso: A, B, C
     params_all = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="q",
         k=10,
@@ -58,7 +59,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
     # k < n (branch nlargest) → atteso: A, B
     params_top2 = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="q",
         k=2,
@@ -81,7 +82,7 @@ def test_search_accepts_nested_numpy_embedding(monkeypatch) -> None:
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="q",
         k=1,
@@ -102,7 +103,7 @@ def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="q",
         k=2,
@@ -131,7 +132,7 @@ def test_search_large_vectors_preserve_order(monkeypatch) -> None:
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="q",
         k=3,

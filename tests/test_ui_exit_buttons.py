@@ -62,8 +62,8 @@ def test_reset_to_landing_clears_state_and_reruns(monkeypatch) -> None:
             self.session_state = {
                 "phase": "something",
                 landing._ui_key("phase"): "prefixed-phase",
-                "slug": "acme",
-                landing._ui_key("slug"): "acme",
+                "slug": "dummy",
+                landing._ui_key("slug"): "dummy",
                 "random": 123,
                 "another": "x",
             }

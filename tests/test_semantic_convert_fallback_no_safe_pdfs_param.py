@@ -31,7 +31,7 @@ def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypat
     monkeypatch.setattr(api, "list_content_markdown", lambda bd: [book / "A.md", book / "B.md"])
 
     caplog.set_level(logging.INFO)
-    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="acme")
+    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
 
     # Deve funzionare senza TypeError e senza passare safe_pdfs
     assert called["ok"] is True

@@ -7,12 +7,12 @@ from timmykb.security.masking import hash_identifier, mask_paths, sha256_path
 
 
 def test_hash_identifier_deterministic() -> None:
-    value = "Cliente ACME SPA"
+    value = "Cliente DUMMY SPA"
     first = hash_identifier(value)
     second = hash_identifier(value)
     assert first == second
     assert len(first) == 12
-    assert first != hash_identifier("cliente acme spa")  # case-sensitive
+    assert first != hash_identifier("cliente dummy spa")  # case-sensitive
 
 
 def test_sha256_path_deterministic(tmp_path: Path) -> None:

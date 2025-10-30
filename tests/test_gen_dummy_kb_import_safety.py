@@ -120,7 +120,7 @@ def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
 def test_logs_use_namespaced_events(caplog, tmp_path, monkeypatch):
     caplog.set_level("INFO")
     _stub_minimal_environment(monkeypatch, tmp_path)
-    args = ["--slug", "dummy", "--name", "Acme", "--no-vision", "--no-drive"]
+    args = ["--slug", "dummy", "--name", "Dummy", "--no-vision", "--no-drive"]
     try:
         exit_code = gen_dummy_main(args)
     finally:
@@ -136,7 +136,7 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
         raise RuntimeError("boom")
 
     _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
-    args = ["--slug", "dummy", "--name", "Acme", "--no-drive"]
+    args = ["--slug", "dummy", "--name", "Dummy", "--no-drive"]
     try:
         exit_code = gen_dummy_main(args)
     finally:

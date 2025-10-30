@@ -19,10 +19,10 @@ def test_render_drive_tree_uses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(drive_service, "get_drive_tree_cache", fake_get_cache)
 
-    result = drive_service.render_drive_tree("acme")
+    result = drive_service.render_drive_tree("dummy")
 
     assert calls.get("get_cache") is True
-    assert calls.get("slug") == "acme"
+    assert calls.get("slug") == "dummy"
     assert result == {"slug": {"id": "123"}}
 
 
@@ -42,10 +42,10 @@ def test_render_drive_diff_delegates_to_cache(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(drive_service, "get_drive_tree_cache", fake_get_cache)
     monkeypatch.setattr(drive_service, "_render_diff_component", fake_diff)
 
-    drive_service.render_drive_diff("acme")
+    drive_service.render_drive_diff("dummy")
 
-    assert captured.get("slug") == "acme"
-    assert captured.get("diff") == ("acme", {"slug": {"files": []}})
+    assert captured.get("slug") == "dummy"
+    assert captured.get("diff") == ("dummy", {"slug": {"files": []}})
 
 
 def test_render_drive_diff_handles_cache_errors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,9 +60,9 @@ def test_render_drive_diff_handles_cache_errors(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(drive_service, "get_drive_tree_cache", fake_get_cache)
     monkeypatch.setattr(drive_service, "_render_diff_component", fake_diff)
 
-    drive_service.render_drive_diff("acme")
+    drive_service.render_drive_diff("dummy")
 
-    assert captured.get("diff") == ("acme", {})
+    assert captured.get("diff") == ("dummy", {})
 
 
 def test_invalidate_drive_index_clears_cache(monkeypatch: pytest.MonkeyPatch) -> None:

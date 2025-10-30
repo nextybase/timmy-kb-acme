@@ -18,7 +18,7 @@ def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):
     caplog.set_level(logging.INFO)
 
     with pytest.raises(ConfigError) as exc:
-        convert_markdown(ctx, logger, slug="acme")
+        convert_markdown(ctx, logger, slug="dummy")
 
     msg = str(exc.value)
     assert ("non \u00e8 una directory" in msg) or ("non" in msg and "una directory" in msg)

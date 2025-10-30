@@ -13,8 +13,8 @@ def test_ensure_safe_adds_structured_context(tmp_path: Path) -> None:
     outside.write_text("malicious", encoding="utf-8")
 
     with pytest.raises(PathTraversalError) as excinfo:
-        _ensure_safe(base, outside, slug="acme")
+        _ensure_safe(base, outside, slug="dummy")
 
     err = excinfo.value
-    assert getattr(err, "slug", None) == "acme"
+    assert getattr(err, "slug", None) == "dummy"
     assert str(getattr(err, "file_path", "")).endswith("evil.pdf")

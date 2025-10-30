@@ -57,7 +57,7 @@ def test_client_context_require_env_missing_raises_configerror(monkeypatch: pyte
 
     # Act & Assert: con require_env=True deve alzare ConfigError chiaro (no KeyError)
     with pytest.raises(ConfigError) as ei:
-        ClientContext.load(slug="acme", interactive=False, require_env=True, run_id=None)
+        ClientContext.load(slug="dummy", interactive=False, require_env=True, run_id=None)
     msg = str(ei.value)
     # Messaggio informativo: cita almeno una delle variabili mancanti
     assert "Variabili d'ambiente" in msg

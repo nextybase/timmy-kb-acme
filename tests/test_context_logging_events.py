@@ -8,6 +8,7 @@ import pytest
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from tests.conftest import DUMMY_SLUG
 
 
 class _Mem(logging.Handler):
@@ -21,7 +22,7 @@ class _Mem(logging.Handler):
 
 def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     # Forza REPO_ROOT_DIR da ENV verso una cartella temporanea vuota
-    repo_root = tmp_path / "kb-acme"
+    repo_root = tmp_path / f"kb-{DUMMY_SLUG}"
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 
     # Logger strutturato con handler in memoria
@@ -31,7 +32,7 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     lg.addHandler(mem)
 
     # require_env=False per non dipendere da variabili esterne
-    ctx = ClientContext.load("acme", logger=lg, interactive=False, require_env=False)
+    ctx = ClientContext.load(DUMMY_SLUG, logger=lg, interactive=False, require_env=False)
     assert ctx.repo_root_dir == repo_root.resolve()
 
     # Verifica eventi

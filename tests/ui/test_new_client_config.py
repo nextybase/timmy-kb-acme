@@ -32,13 +32,13 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     sys.modules.pop("ui.pages.new_client", None)
     new_client = importlib.import_module("ui.pages.new_client")
 
-    slug = "acme"
+    slug = "dummy"
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
     client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
-    (client_cfg_dir / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
+    (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
 
     monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
 
@@ -47,7 +47,7 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"pdf")
 
     updated = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
-    assert "client_name: ACME" in updated
+    assert "client_name: dummy" in updated
     assert updated.count("client_name") == original.count("client_name")
     assert "foo: bar" in updated
 
@@ -76,13 +76,13 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     sys.modules.pop("ui.pages.new_client", None)
     new_client = importlib.import_module("ui.pages.new_client")
 
-    slug = "acme"
+    slug = "dummy"
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
     client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
-    (client_cfg_dir / "config.yaml").write_text("client_name: ACME\n", encoding="utf-8")
+    (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
 
     monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
 

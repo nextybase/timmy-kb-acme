@@ -38,7 +38,7 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     argv_bak = sys.argv[:]
     try:
-        sys.argv = ["gen_vision_yaml.py", "--slug", "acme-srl", "--pdf", str(pdf)]
+        sys.argv = ["gen_vision_yaml.py", "--slug", "dummy-srl", "--pdf", str(pdf)]
         rc = cli.main()
         assert rc == 0
         out, err = capsys.readouterr()
@@ -67,7 +67,7 @@ def test_cli_halt_returns_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
     argv_bak = sys.argv[:]
     try:
-        sys.argv = ["gen_vision_yaml.py", "--slug", "acme-srl", "--pdf", str(pdf)]
+        sys.argv = ["gen_vision_yaml.py", "--slug", "dummy-srl", "--pdf", str(pdf)]
         rc = cli.main()
         assert rc == 2
         out, err = capsys.readouterr()
@@ -98,7 +98,7 @@ def test_cli_config_error_returns_one(tmp_path: Path, monkeypatch: pytest.Monkey
 
     argv_bak = sys.argv[:]
     try:
-        sys.argv = ["gen_vision_yaml.py", "--slug", "acme-srl", "--pdf", str(pdf)]
+        sys.argv = ["gen_vision_yaml.py", "--slug", "dummy-srl", "--pdf", str(pdf)]
         rc = cli.main()
         assert rc == 1
         out, err = capsys.readouterr()
@@ -134,7 +134,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     argv_bak = sys.argv[:]
     try:
-        sys.argv = ["gen_vision_yaml.py", "--slug", "acme-srl", "--pdf", str(missing)]
+        sys.argv = ["gen_vision_yaml.py", "--slug", "dummy-srl", "--pdf", str(missing)]
         rc = cli.main()
         assert rc == 1
         assert called["value"] is False

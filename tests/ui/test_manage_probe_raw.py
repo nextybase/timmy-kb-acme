@@ -78,7 +78,7 @@ def _load_manage_module(
 def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     st_stub = StreamlitStub()
     raw_path = str(Path("output") / "timmy-kb-dummy" / "raw")
-    _load_manage_module(monkeypatch, st_stub, slug="acme", has_raw_result=(True, raw_path))
+    _load_manage_module(monkeypatch, st_stub, slug="dummy", has_raw_result=(True, raw_path))
 
     assert "Avvia arricchimento semantico" in st_stub.button_calls
     assert any("Arricchimento semantico" in msg for msg in st_stub.info_messages)

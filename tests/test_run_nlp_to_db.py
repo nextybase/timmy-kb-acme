@@ -135,7 +135,7 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     ctx = cast(
         ClientContextProtocol,
         SimpleNamespace(
-            slug="acme",
+            slug="dummy",
             base_dir=base_dir,
             raw_dir=raw_dir,
             semantic_dir=semantic_dir,

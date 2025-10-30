@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from typing import Any, Optional, cast
 
-from pipeline.file_utils import safe_read_text, safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -51,7 +51,7 @@ else:
     def _write_stub_log(slug: str, action: str) -> None:
         log_path = _preview_log_path(slug)
         try:
-            existing = safe_read_text(log_path.parent, log_path, encoding="utf-8")
+            existing = read_text_safe(log_path.parent, log_path, encoding="utf-8")
         except FileNotFoundError:
             existing = ""
         payload = existing + f"PREVIEW_STUB_{action.upper()}\n"

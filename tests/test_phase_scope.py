@@ -1,6 +1,7 @@
 import logging
 
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from tests.conftest import DUMMY_SLUG
 
 
 class _ListHandler(logging.Handler):
@@ -23,7 +24,7 @@ def _capture_logger(name: str = "test.phase") -> tuple[logging.Logger, _ListHand
 def test_phase_scope_success_emits_started_and_completed():
     logger, handler = _capture_logger()
 
-    with phase_scope(logger, stage="unit_test", customer="acme") as m:
+    with phase_scope(logger, stage="unit_test", customer=DUMMY_SLUG) as m:
         m.set_artifacts(3)
 
     msgs = [r.msg for r in handler.records]
@@ -35,7 +36,7 @@ def test_phase_scope_success_emits_started_and_completed():
 
     assert getattr(started, "event", None) == "phase_started"
     assert getattr(started, "phase", None) == "unit_test"
-    assert getattr(started, "slug", None) == "acme"
+    assert getattr(started, "slug", None) == DUMMY_SLUG
     assert getattr(started, "run_id", None) == "run-test"
 
     assert getattr(completed, "event", None) == "phase_completed"
@@ -48,7 +49,7 @@ def test_phase_scope_failure_emits_failed(monkeypatch):
     logger, handler = _capture_logger()
 
     try:
-        with phase_scope(logger, stage="failing", customer="acme"):
+        with phase_scope(logger, stage="failing", customer=DUMMY_SLUG):
             raise RuntimeError("boom")
     except RuntimeError:
         pass

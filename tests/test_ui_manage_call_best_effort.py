@@ -16,7 +16,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setitem(sys.modules, name, mod)
 
     fake_chrome = types.ModuleType("ui.chrome")
-    fake_chrome.render_chrome_then_require = lambda **_kwargs: "acme"  # type: ignore[attr-defined]
+    fake_chrome.render_chrome_then_require = lambda **_kwargs: "dummy"  # type: ignore[attr-defined]
     fake_clients_store = types.ModuleType("ui.clients_store")
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
     fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
@@ -38,9 +38,9 @@ def test_call_best_effort_signature_binding(manage_module):
 
     result = manage_module._call_best_effort(
         fn_new,
-        slug="acme",
+        slug="dummy",
         require_env=True,
         sig_only="X",
     )
 
-    assert result == ("X", "acme", True)
+    assert result == ("X", "dummy", True)

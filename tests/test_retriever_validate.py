@@ -6,6 +6,7 @@ from typing import Sequence
 import pytest
 
 import timmykb.retriever as r
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 
@@ -40,7 +41,7 @@ class HappyEmbeddings:
 
 def _params(
     *,
-    project_slug: str = "acme",
+    project_slug: str = DUMMY_SLUG,
     scope: str = "kb",
     query: str = "q",
     k: int = 1,

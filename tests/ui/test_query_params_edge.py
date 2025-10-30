@@ -7,9 +7,9 @@ from ui.utils.query_params import get_slug, set_slug
 
 
 def test_get_slug_with_list_and_whitespace_and_validation_ok():
-    params: MutableMapping[str, Any] = {"slug": ["  acme-01  ", "bad"]}
-    # "acme-01" deve essere normalizzato e validato → accettato
-    assert get_slug(params) == "acme-01"
+    params: MutableMapping[str, Any] = {"slug": ["  dummy-01  ", "bad"]}
+    # "dummy-01" deve essere normalizzato e validato → accettato
+    assert get_slug(params) == "dummy-01"
 
 
 def test_get_slug_non_string_returns_none():
@@ -31,5 +31,5 @@ def test_set_slug_invalid_does_not_write_param():
 
 def test_set_slug_valid_writes_normalized():
     params: MutableMapping[str, Any] = {}
-    set_slug(params, "  ACME-02  ")
-    assert params.get("slug") == "acme-02"
+    set_slug(params, "  dummy-02  ")
+    assert params.get("slug") == "dummy-02"

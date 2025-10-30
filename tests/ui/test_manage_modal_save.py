@@ -73,7 +73,7 @@ def patch_streamlit_before_import(monkeypatch: pytest.MonkeyPatch) -> None:
     for name, mod in submodules.items():
         monkeypatch.setitem(sys.modules, name, mod)
     fake_chrome = types.ModuleType("ui.chrome")
-    fake_chrome.render_chrome_then_require = lambda **_kwargs: "acme"  # type: ignore[attr-defined]
+    fake_chrome.render_chrome_then_require = lambda **_kwargs: "dummy"  # type: ignore[attr-defined]
     fake_clients_store = types.ModuleType("ui.clients_store")
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
     fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
@@ -121,7 +121,7 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     caplog.set_level("INFO")
 
     # Eseguiamo il modal (simula click su "Salva")
-    manage._open_tags_editor_modal("acme")
+    manage._open_tags_editor_modal("dummy")
 
     # Asserzioni: ensure_within_and_resolve chiamato con base_dir e semantic/tags_reviewed.yaml
     assert called_args, "ensure_within_and_resolve non è stato chiamato"

@@ -46,7 +46,7 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
     clients_dir.mkdir(parents=True, exist_ok=True)
     clients_file = clients_dir / "clients.yaml"
     clients_file.write_text(
-        yaml.safe_dump([{"slug": slug, "nome": "Acme Demo", "stato": "nuovo"}], allow_unicode=True),
+        yaml.safe_dump([{"slug": slug, "nome": "Dummy Demo", "stato": "nuovo"}], allow_unicode=True),
         encoding="utf-8",
     )
 

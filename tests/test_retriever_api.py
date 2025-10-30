@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Sequence
 
 import timmykb.retriever as retr
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import QueryParams
 
 
@@ -52,7 +53,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
 
     params = QueryParams(
         db_path=tmp_path / "kb.sqlite",
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="Timmy",
         query="hello",
         k=2,
@@ -66,7 +67,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     assert emb.calls and emb.calls[-1] == ("hello",)
     # pass-through di QueryParams verso fetch_candidates
     assert seen == {
-        "project_slug": "acme",
+        "project_slug": DUMMY_SLUG,
         "scope": "Timmy",
         "limit": retr.MIN_CANDIDATE_LIMIT,
         "db_path": tmp_path / "kb.sqlite",
@@ -93,7 +94,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,
@@ -127,7 +128,7 @@ def test_search_skips_invalid_candidate_embeddings(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=10,
@@ -156,7 +157,7 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=5,
@@ -187,7 +188,7 @@ def test_search_accepts_deque_embedding(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,
@@ -219,7 +220,7 @@ def test_search_accepts_list_of_numpy_arrays(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,

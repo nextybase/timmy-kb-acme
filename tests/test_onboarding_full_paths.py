@@ -7,8 +7,10 @@ from typing import Any
 
 import pytest
 
+from tests.conftest import DUMMY_SLUG
 
-@pytest.mark.parametrize("slug", ["acme"])
+
+@pytest.mark.parametrize("slug", [DUMMY_SLUG])
 def test_onboarding_full_respects_repo_root_dir(tmp_path: Path, monkeypatch: Any, slug: str) -> None:
     """L'orchestratore deve:
 

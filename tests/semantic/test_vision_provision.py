@@ -14,7 +14,7 @@ from semantic.vision_provision import HaltError, provision_from_vision
 class _Ctx:
     """Context minimale: base_dir, client_name e settings letti dal config loader in app."""
 
-    def __init__(self, base_dir: Path, client_name: str = "ACME Srl"):
+    def __init__(self, base_dir: Path, client_name: str = "Dummy Srl"):
         self.base_dir = base_dir
         self.client_name = client_name
         # SSoT: il nome dell'env da cui ricavare l'assistant_id
@@ -44,7 +44,7 @@ def _ok_payload(slug: str) -> dict:
         "version": "1.0-beta",
         "source": "vision",
         "status": "ok",
-        "context": {"slug": slug, "client_name": "ACME Srl"},
+        "context": {"slug": slug, "client_name": "Dummy Srl"},
         "areas": [
             {
                 "key": "governance",
@@ -104,7 +104,7 @@ def _halt_payload(slug: str) -> dict:
         "version": "1.0-beta",
         "source": "vision",
         "status": "halt",
-        "context": {"slug": slug, "client_name": "ACME Srl"},
+        "context": {"slug": slug, "client_name": "Dummy Srl"},
         "missing": {
             "sections": ["Mission", "Framework etico"],
             "details": [
@@ -133,7 +133,7 @@ def _stub_openai_client(monkeypatch):
 
 
 def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    slug = "acme-srl"
+    slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
 
     # crea file PDF vuoto (esistenza richiesta da ensure_within_and_resolve + checks)
@@ -178,7 +178,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    slug = "acme-srl"
+    slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")

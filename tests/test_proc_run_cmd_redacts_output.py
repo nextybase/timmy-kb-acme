@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.proc_utils import CmdError, run_cmd
+from tests.conftest import DUMMY_SLUG
 
 
 def test_run_cmd_redacts_output_in_fail_logs(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):
@@ -28,7 +29,7 @@ def test_run_cmd_redacts_output_in_fail_logs(monkeypatch: pytest.MonkeyPatch, ca
 
     # Logger strutturato con redazione attiva
     class Ctx:
-        slug = "acme"
+        slug = DUMMY_SLUG
         redact_logs = True
 
     lg = get_structured_logger("tests.proc", context=Ctx(), level=logging.DEBUG)

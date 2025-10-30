@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import QueryParams, search
 
 
@@ -24,7 +25,7 @@ def _no_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
 def _base_params(query: str) -> QueryParams:
     return QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query=query,
         k=3,
@@ -48,7 +49,7 @@ def test_search_logs_empty_query(caplog: pytest.LogCaptureFixture) -> None:
         None,
     )
     assert record is not None
-    assert getattr(record, "project_slug") == "acme"
+    assert getattr(record, "project_slug") == DUMMY_SLUG
     assert getattr(record, "scope") == "kb"
 
 
@@ -69,5 +70,5 @@ def test_search_logs_empty_embedding(caplog: pytest.LogCaptureFixture) -> None:
         None,
     )
     assert record is not None
-    assert getattr(record, "project_slug") == "acme"
+    assert getattr(record, "project_slug") == DUMMY_SLUG
     assert getattr(record, "scope") == "kb"

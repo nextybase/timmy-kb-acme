@@ -61,10 +61,10 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
         lambda ctx, logger, vocab, slug, **kwargs: ["file1.md", "file2.md"],
     )
 
-    sem._run_enrich("acme-srl")
+    sem._run_enrich("dummy-srl")
 
     assert state_calls, "set_state non è stato chiamato"
-    assert state_calls[-1] == ("acme-srl", "arricchito")
+    assert state_calls[-1] == ("dummy-srl", "arricchito")
 
 
 def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
@@ -105,7 +105,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
 
-    sem._run_enrich("acme-srl")
+    sem._run_enrich("dummy-srl")
 
     assert errors and "vocabolario canonico assente" in errors[0].lower()
     assert captions and "estrazione tag" in captions[0].lower()
@@ -133,7 +133,7 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     # writer simulato
     monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
 
-    sem._run_summary("acme-srl")
+    sem._run_summary("dummy-srl")
 
     assert state_calls, "set_state non è stato chiamato"
-    assert state_calls[-1] == ("acme-srl", "finito")
+    assert state_calls[-1] == ("dummy-srl", "finito")

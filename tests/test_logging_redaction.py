@@ -6,6 +6,7 @@ from io import StringIO
 from types import SimpleNamespace
 
 from pipeline.logging_utils import get_structured_logger, redact_secrets
+from tests.conftest import DUMMY_SLUG
 
 
 def test_redact_secrets_standalone():
@@ -28,7 +29,7 @@ def test_logger_applies_redaction_filter_to_message_and_extra():
     )
 
     # Context con redazione attiva
-    ctx = SimpleNamespace(redact_logs=True, slug="acme")
+    ctx = SimpleNamespace(redact_logs=True, slug=DUMMY_SLUG)
     lg = get_structured_logger("tests.redaction", context=ctx, level=logging.INFO)
 
     # Usiamo solo il nostro handler per evitare rumore da configurazioni globali

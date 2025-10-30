@@ -12,7 +12,7 @@ def test_collect_only_pdfs(tmp_path):
     (tmp_path / "nested").mkdir()
     (tmp_path / "nested" / "c.pdf").write_bytes(b"0")
 
-    safe, discarded = _collect_safe_pdfs(tmp_path, logger=logger, slug="acme")
+    safe, discarded = _collect_safe_pdfs(tmp_path, logger=logger, slug="dummy")
 
     names = {path.name for path in safe}
     assert "a.pdf" in names

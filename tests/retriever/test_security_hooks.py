@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from pipeline.exceptions import RetrieverError
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import QueryParams, search
 from timmykb.security.throttle import reset_token_buckets, throttle_token_bucket
 
@@ -26,7 +27,7 @@ def _stub_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
 def _base_params(query: str = "hello") -> QueryParams:
     return QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query=query,
         k=1,

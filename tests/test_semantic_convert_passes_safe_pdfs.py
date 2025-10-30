@@ -34,7 +34,7 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     monkeypatch.setattr(api, "_convert_md", _convert_md_stub)
 
     caplog.set_level(logging.INFO)
-    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="acme")
+    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
 
     assert called["ok"] is True
     assert called["safe_pdfs_len"] == 1

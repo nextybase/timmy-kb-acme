@@ -10,6 +10,7 @@ from typing import Iterable
 
 import pytest
 
+from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import (
     QueryParams,
     cosine,
@@ -77,7 +78,7 @@ def _default_params():
     # Usa i default del dataclass (candidate_limit=4000 by design)
     return QueryParams(
         db_path=None,
-        project_slug="acme",
+        project_slug=DUMMY_SLUG,
         scope="kb",
         query="test",
         # k default = 8 nel dataclass

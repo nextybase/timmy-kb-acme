@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.context import ClientContext
 from pipeline.settings import Settings
+from tests.conftest import DUMMY_SLUG
 
 pytestmark = pytest.mark.pipeline
 
@@ -43,7 +44,7 @@ def test_client_context_exposes_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
-    ctx = ClientContext.load(slug="acme", require_env=False, interactive=False)
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False, interactive=False)
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
     assert ctx.settings.ui_skip_preflight is True

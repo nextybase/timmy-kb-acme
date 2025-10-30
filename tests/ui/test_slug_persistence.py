@@ -32,15 +32,15 @@ def test_persist_active_slug_atomic(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     monkeypatch.setattr(slug_utils, "get_ui_state_path", lambda: persist_path, raising=False)
 
     with caplog.at_level(logging.INFO):
-        slug_utils.set_active_slug(" ACME ", persist=True, update_query=False)
+        slug_utils.set_active_slug(" dummy ", persist=True, update_query=False)
 
     saved = json.loads(persist_path.read_text(encoding="utf-8"))
-    assert saved == {"active_slug": "acme"}
+    assert saved == {"active_slug": "dummy"}
     assert any(record.getMessage() == "ui.slug.persisted" for record in caplog.records)
 
-    slug_utils.set_active_slug("acme", persist=True, update_query=False)
+    slug_utils.set_active_slug("dummy", persist=True, update_query=False)
     saved_again = json.loads(persist_path.read_text(encoding="utf-8"))
-    assert saved_again == {"active_slug": "acme"}
+    assert saved_again == {"active_slug": "dummy"}
 
 
 def test_save_persisted_uses_safe_utils(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
