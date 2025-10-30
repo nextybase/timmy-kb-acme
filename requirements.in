@@ -28,7 +28,7 @@ fpdf==1.7.2
 reportlab==4.4.4
 
 # GitHub e container tooling
-PyGithub==2.3.0
+PyGithub==2.8.1
 docker==7.0.0
 
 # NLP/RAG
