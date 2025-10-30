@@ -69,7 +69,7 @@ def install_streamlit_stub(monkeypatch: pytest.MonkeyPatch) -> StreamlitStub:
     setattr(streamlit_module, "cache_resource", _cache_decorator)
     setattr(streamlit_module, "memoize", _cache_decorator)
 
-    class _FragmentStub:
+    class _FragmentRunner:
         def __call__(self, fn=None):
             if fn is None:
 
@@ -83,14 +83,25 @@ def install_streamlit_stub(monkeypatch: pytest.MonkeyPatch) -> StreamlitStub:
 
             return _runner
 
-    def _fragment(name: str):  # type: ignore[unused-argument]
-        return _FragmentStub()
+    def _fragment(name: str | None = None):  # type: ignore[unused-argument]
+        runner = _FragmentRunner()
+        if name is None or callable(name):
+            # Support usage either as decorator or function-style.
+            return runner(name) if callable(name) else runner
+        return runner
 
     setattr(streamlit_module, "fragment", _fragment)
 
     _register_runtime(monkeypatch, stub)
 
     monkeypatch.setitem(sys.modules, "streamlit", streamlit_module)
+
+    try:
+        import ui.utils.streamlit_fragments as streamlit_fragments
+
+        monkeypatch.setattr(streamlit_fragments, "_FRAGMENT", _fragment, raising=False)
+    except Exception:
+        pass
     return stub
 
 

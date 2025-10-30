@@ -24,9 +24,24 @@ if "CLIENTS_DB_FILE" not in os.environ:
     os.environ["CLIENTS_DB_FILE"] = _DEFAULT_TEST_CLIENTS_DB_FILE.name
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
-from timmykb.tools.gen_dummy_kb import main as gen_dummy_main  # type: ignore
+try:
+    from timmykb.tools.gen_dummy_kb import main as _gen_dummy_main  # type: ignore
+except ModuleNotFoundError as exc:
+    if exc.name in {"yaml", "pyyaml"}:
+        _gen_dummy_main = None
+    else:
+        raise
 
 DUMMY_SLUG = "dummy"
+
+
+def _ensure_gen_dummy_available():
+    if _gen_dummy_main is None:
+        pytest.skip(
+            "pyyaml richiesto per generare il workspace dummy (timmykb.tools.gen_dummy_kb)",
+            allow_module_level=True,
+        )
+    return _gen_dummy_main
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -50,6 +65,7 @@ def dummy_workspace(tmp_path_factory):
     """
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_relative = Path("clients_db/clients.yaml")
+    gen_dummy_main = _ensure_gen_dummy_available()
     rc = gen_dummy_main(
         [
             "--base-dir",

@@ -37,7 +37,7 @@ def test_ui_pages_import_stub(module_name: str, monkeypatch: pytest.MonkeyPatch,
     try:
         importlib.import_module(module_name)
     except RuntimeError as exc:
-        if str(exc) not in {"stop requested", "Streamlit fragment did not execute the body"}:
+        if str(exc) != "stop requested":
             raise
     except InvalidSlug:
         # Alcune pagine richiedono slug attivo; l'import può validare e fallire senza side-effect.
