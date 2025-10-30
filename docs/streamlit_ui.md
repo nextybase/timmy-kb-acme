@@ -320,24 +320,57 @@ def test_emette_eventi_tags(caplog, monkeypatch):
 
 ## Gating e SSoT di stato
 
-Per le pagine semantiche, il gating usa la SSoT `SEMANTIC_READY_STATES` e la presenza di PDF in `raw/`:
+1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
+   - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
+   - `VISION=0` disabilita il provisioning Vision (estrazione PDF, tool assistito).
+   - `TAGS=0` disabilita il tagging e la pagina Semantica (inclusa la preview Docker).
+   - Qualsiasi altro valore oppure l'assenza della variabile mantiene il default calcolato dal runtime.
+2. Trasforma i gate in navigation ready con `ui.gating.visible_page_specs(gates)` e passa l'elenco filtrato al router:
 
 ```python
-from ui.constants import SEMANTIC_READY_STATES as ALLOWED_STATES
+from ui.gating import compute_gates, visible_page_specs
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
+gates = compute_gates()
+pages = {
+    group: [st.Page(spec.path, title=spec.title, url_path=spec.url_path or None)]
+    for group, specs in visible_page_specs(gates).items()
+}
+st.navigation(pages)
+```
+
+**Perche**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
+
+### Modalita stub e SSoT semantica
+
+Per le pagine semantiche, oltre ai gate controlliamo lo stato del cliente:
+
+```python
+from ui.constants import SEMANTIC_READY_STATES
 from ui.clients_store import get_state
 from ui.utils.workspace import has_raw_pdfs
 
-state = (get_state(slug) or "").strip().lower()
+state = (get_state(slug) or '').strip().lower()
 ready, raw_dir = has_raw_pdfs(slug)
-if state not in ALLOWED_STATES or not ready:
-    st.info("La semantica sarà disponibile quando lo stato raggiunge 'arricchito' e `raw/` contiene PDF.")
-    st.caption(f"Stato: {state or 'n/d'} — RAW: {raw_dir or 'n/d'}")
+if state not in SEMANTIC_READY_STATES or not ready:
+    st.info("La semantica sara disponibile quando lo stato raggiunge 'arricchito' e raw/ contiene PDF.")
+    st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
     st.stop()
 ```
 
-**Razionale**: evitiamo che la pagina mostri azioni non eseguibili; i test verificano la dipendenza dalla costante SSoT (no whitelist locale).
+**Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.
 
----
+### Env preview stub e logging
+
+Il percorso "Preview Docker" supporta una modalita stub pensata per CI ed e2e:
+
+- `PREVIEW_MODE=stub` forza l'uso della pipeline fake senza container reali.
+- `PREVIEW_LOG_DIR=/percorso/custom` definisce la cartella dove scrivere i log stub (default `logs/preview` dentro al repo).
+- Ogni path viene normalizzato con `ensure_within_and_resolve` e scritto in modo atomico tramite `safe_write_text`.
+- Eventi strutturati emessi: `ui.preview.stub_started`, `ui.preview.stub_stopped`, `ui.preview.start_failed`, `ui.preview.stop_failed`.
+
+Quando abiliti lo stub ricorda di puntare `CLIENTS_DB_PATH` e altre risorse persistenti a directory isolate (`tmp_path` nelle fixture), cosi gli end-to-end non toccano workspace reali.
 
 ## Compatibilità con gli stub di Streamlit nei test
 

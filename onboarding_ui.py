@@ -56,7 +56,8 @@ from ui.preflight import run_preflight  # noqa: E402
 from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
 from ui.utils.slug import clear_active_slug  # noqa: E402
 from ui.utils.status import status_guard  # noqa: E402
-from ui.pages.registry import build_pages  # noqa: E402
+from ui.gating import compute_gates, visible_page_specs  # noqa: E402
+from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
 from ui.theme_enhancements import inject_theme_css  # noqa: E402
 
 # Router/state helper (fallback soft se non presente)
@@ -209,7 +210,7 @@ if not st.session_state.get("preflight_ok", False):
                 new_skip = st.checkbox(
                     "Salta il controllo",
                     value=current_skip,
-                    help="Preferenza persistente (config/config.yaml → ui.skip_preflight).",
+                    help="Preferenza persistente (config/config.yaml -> ui.skip_preflight).",
                 )
                 if new_skip != current_skip:
                     try:
@@ -268,10 +269,17 @@ if not st.session_state.get("preflight_ok", False):
                     st.stop()
 
 # --------------------------------------------------------------------------------------
-# Definizione pagine
-# L'ordine definisce la pagina "default" (qui: Home)
+# Definizione pagine (SSoT + gating)
 # --------------------------------------------------------------------------------------
-pages = build_pages()
+_st = _get_streamlit()
+_pages_specs = visible_page_specs(compute_gates())
+pages = {
+    group: [
+        _st.Page(spec.path, title=spec.title, url_path=(spec.url_path or None))
+        for spec in specs
+    ]
+    for group, specs in _pages_specs.items()
+}
 
 # --------------------------------------------------------------------------------------
 # Router nativo: requisito Beta 0

@@ -7,12 +7,16 @@ import os
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.file_utils import safe_read_text, safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve
 from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
 
 st = get_streamlit()
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
@@ -37,15 +41,21 @@ if _PREVIEW_MODE != "stub":  # pragma: no branch - import reale solo se serve
 
 else:
 
-    def _preview_log_dir() -> Path:
-        base = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
-        base.mkdir(parents=True, exist_ok=True)
-        return base
+    def _preview_log_path(slug: str) -> Path:
+        base_setting = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
+        target_dir = base_setting if base_setting.is_absolute() else REPO_ROOT / base_setting
+        safe_dir = Path(ensure_within_and_resolve(REPO_ROOT, target_dir))
+        safe_dir.mkdir(parents=True, exist_ok=True)
+        return Path(ensure_within_and_resolve(safe_dir, safe_dir / f"{slug}.log"))
 
     def _write_stub_log(slug: str, action: str) -> None:
-        log_path = _preview_log_dir() / f"{slug}.log"
-        with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(f"PREVIEW_STUB_{action.upper()}\n")
+        log_path = _preview_log_path(slug)
+        try:
+            existing = safe_read_text(log_path.parent, log_path, encoding="utf-8")
+        except FileNotFoundError:
+            existing = ""
+        payload = existing + f"PREVIEW_STUB_{action.upper()}\n"
+        safe_write_text(log_path, payload, encoding="utf-8", atomic=True)
 
     def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
         slug = getattr(ctx, "slug", "unknown")
