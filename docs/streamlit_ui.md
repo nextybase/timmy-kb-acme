@@ -160,7 +160,7 @@ def save_tags_yaml(slug: str, text: str) -> None:
 
 ### Registry clienti (CLIENTS_DB_*)
 
-- `CLIENTS_DB_DIR` e `CLIENTS_DB_FILE` accettano **solo** percorsi relativi al workspace; niente drive letter o path assoluti.
+- `CLIENTS_DB_PATH` (alias) o la coppia `CLIENTS_DB_DIR`/`CLIENTS_DB_FILE` accettano **solo** percorsi relativi al workspace; niente drive letter o path assoluti.
 - Il file deve vivere sotto `clients_db/`; eventuali sottocartelle sono consentite (`clients_db/archive/clients.yaml`).
 - Gli helper della UI rifiutano componenti `..`: se serve un percorso alternativo, monta un workspace dedicato e aggiorna `REPO_ROOT_DIR`.
 

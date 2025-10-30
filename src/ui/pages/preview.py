@@ -2,6 +2,11 @@
 # src/ui/pages/preview.py
 from __future__ import annotations
 
+import logging
+import os
+from pathlib import Path
+from typing import Any, Optional, cast
+
 from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -9,11 +14,60 @@ from ui.utils.ui_controls import column_button as _column_button
 
 st = get_streamlit()
 
-from adapters.preview import start_preview, stop_preview
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
 from ui.chrome import render_chrome_then_require
 from ui.utils.status import status_guard
+
+_PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
+
+if _PREVIEW_MODE != "stub":  # pragma: no branch - import reale solo se serve
+    from adapters.preview import start_preview, stop_preview
+
+    def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
+        name = cast(str, start_preview(ctx, logger))
+        if status_widget is not None and hasattr(status_widget, "update"):
+            status_widget.update(label=f"Preview avviata ({name}).", state="complete")
+        return name
+
+    def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
+        stop_preview(logger, container_name=container_name)
+        if status_widget is not None and hasattr(status_widget, "update"):
+            status_widget.update(label="Preview arrestata.", state="complete")
+
+else:
+
+    def _preview_log_dir() -> Path:
+        base = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+
+    def _write_stub_log(slug: str, action: str) -> None:
+        log_path = _preview_log_dir() / f"{slug}.log"
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"PREVIEW_STUB_{action.upper()}\n")
+
+    def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
+        slug = getattr(ctx, "slug", "unknown")
+        _write_stub_log(slug, "start")
+        if status_widget is not None and hasattr(status_widget, "update"):
+            status_widget.update(label="Preview avviata (stub).", state="complete")
+        try:
+            logger.info("ui.preview.stub_started", extra={"slug": slug})
+        except Exception:
+            pass
+        return f"stub-{slug}"
+
+    def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
+        slug = (container_name or "unknown").split("stub-")[-1].strip()
+        _write_stub_log(slug, "stop")
+        if status_widget is not None and hasattr(status_widget, "update"):
+            status_widget.update(label="Preview arrestata (stub).", state="complete")
+        try:
+            logger.info("ui.preview.stub_stopped", extra={"slug": slug})
+        except Exception:
+            pass
+
 
 st.subheader("Preview Docker (HonKit)")
 
@@ -36,15 +90,20 @@ else:
                 expanded=True,
                 error_label="Errore durante l'avvio della preview",
             ) as status:
-                name = start_preview(ctx, logger)
+                name = _start_preview(ctx, logger, status)
                 st.session_state["preview_container"] = name
-                if status is not None and hasattr(status, "update"):
-                    status.update(label=f"Preview avviata ({name}).", state="complete")
         except Exception as exc:
             title, body, caption = to_user_message(exc)
             st.error(title)
             if caption or body:
                 st.caption(caption or body)
+            try:
+                logger.exception(
+                    "ui.preview.start_failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+            except Exception:
+                pass
     if _column_button(col_stop, "Arresta preview", key="btn_preview_stop"):
         try:
             with status_guard(
@@ -52,12 +111,17 @@ else:
                 expanded=True,
                 error_label="Errore durante l'arresto della preview",
             ) as status:
-                stop_preview(logger, container_name=st.session_state.get("preview_container"))
+                _stop_preview(logger, st.session_state.get("preview_container"), status)
                 st.session_state.pop("preview_container", None)
-                if status is not None and hasattr(status, "update"):
-                    status.update(label="Preview arrestata.", state="complete")
         except Exception as exc:
             title, body, caption = to_user_message(exc)
             st.error(title)
             if caption or body:
                 st.caption(caption or body)
+            try:
+                logger.exception(
+                    "ui.preview.stop_failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+            except Exception:
+                pass

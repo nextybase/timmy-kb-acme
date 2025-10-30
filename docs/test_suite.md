@@ -16,8 +16,10 @@ pytest -ra                   # esegue la suite rispettando i marker di default
 pytest -ra -m "push"         # include test che richiedono GitHub
 pytest -ra -m "drive"        # include test che richiedono Google Drive
 pytest -ra -m "slow"         # include smoke / end-to-end lenti
+pytest -ra -m "contract"     # verifica i contratti UI/gating
+pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 ```
-**Default CI:** i test marcati `push` e `drive` sono esclusi per impostazione predefinita.
+**Default CI:** i test marcati `push`, `drive` e `e2e` sono esclusi per impostazione predefinita.
 
 ---
 
@@ -26,6 +28,8 @@ pytest -ra -m "slow"         # include smoke / end-to-end lenti
 - `slow` — test lenti/smoke end-to-end.
 - `push` — richiedono `GITHUB_TOKEN`/rete.
 - `drive` — richiedono `SERVICE_ACCOUNT_FILE`/`DRIVE_ID`.
+- `contract` — snapshot contrattuali dell'interfaccia (navigazione/gate).
+- `e2e` — test end-to-end con Streamlit + Playwright.
 - **Logging strutturato:** usa sempre `get_structured_logger(...)`; gli `extra` devono includere i campi utili (es. `slug`, `file_path`, `scope`).
 - **Path-safety & I/O atomico:** ogni accesso passa da helper della pipeline (`ensure_within_and_resolve`, `safe_write_text/bytes`).
 
@@ -120,6 +124,9 @@ pytest -ra -m "slow"         # include smoke / end-to-end lenti
 ### 14) Process utils — Esecuzione comandi esterni
 - **Redazione tail stdout/stderr:** `tests/test_proc_run_cmd_redacts_output.py`.
 
+### 15) UI end-to-end (Playwright)
+- **Abilita + Preview (marker `e2e`):** `tests/e2e/test_enable_and_preview.py` (Streamlit headless, stub tags/preview, richiede `playwright` + Chromium).
+
 ---
 
 ## Script di supporto (`scripts/`)
@@ -154,6 +161,10 @@ pytest tests/test_semantic_index_markdown_db.py -ra
 pytest tests/test_semantic_api_summary_readme.py::test_write_summary_and_readme_generators_fail_raise -ra
 # filtro per substring
 pytest -k "embedding_pruned" -ra
+# contratti UI
+pytest -m "contract" -ra
+# end-to-end Playwright
+pytest -m "e2e" -ra
 ```
 
 ---

@@ -23,6 +23,7 @@ DEFAULT_DB_FILE: Path = Path("clients.yaml")
 # Allow override (solo percorsi relativi rispetto alla repo root)
 DB_DIR: Path = DEFAULT_DB_DIR
 DB_FILE: Path = DEFAULT_DB_FILE
+PATH_ENV = "CLIENTS_DB_PATH"
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -61,8 +62,23 @@ def _normalize_relative(value: Union[str, Path], *, var_name: str) -> Path:
     return normalised
 
 
+def _path_override() -> Optional[tuple[Path, Path]]:
+    raw = _optional_env(PATH_ENV)
+    if not raw:
+        return None
+    relative = _normalize_relative(raw, var_name=PATH_ENV)
+    rel_dir = relative.parent
+    rel_file = Path(relative.name)
+    return rel_dir, rel_file
+
+
 def _db_dir() -> Path:
     base_root = _base_repo_root()
+    path_override = _path_override()
+    if path_override:
+        rel_dir, _ = path_override
+        target = base_root / rel_dir
+        return cast(Path, ensure_within_and_resolve(base_root, target))
     value = _optional_env("CLIENTS_DB_DIR")
     if value:
         relative = _normalize_relative(value, var_name="CLIENTS_DB_DIR")
@@ -74,6 +90,11 @@ def _db_dir() -> Path:
 
 def _db_file() -> Path:
     base_dir = _db_dir()
+    path_override = _path_override()
+    if path_override:
+        _, rel_file = path_override
+        target = base_dir / rel_file
+        return cast(Path, ensure_within_and_resolve(base_dir, target))
     value = _optional_env("CLIENTS_DB_FILE")
     if value:
         relative = _normalize_relative(value, var_name="CLIENTS_DB_FILE")
@@ -212,3 +233,12 @@ def get_ui_state_path() -> Path:
     base = _db_dir()
     target = base / "ui_state.json"
     return cast(Path, ensure_within_and_resolve(base, target))
+
+
+def get_registry_paths() -> tuple[Path, Path]:
+    """
+    Ritorna la coppia (directory, file) dell'archivio clienti,
+    applicando eventuali override di ambiente.
+    """
+    db_file = _db_file()
+    return db_file.parent, db_file

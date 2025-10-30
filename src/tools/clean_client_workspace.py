@@ -31,8 +31,7 @@ from types import SimpleNamespace, TracebackType
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, cast
 
 # SSoT percorsi registry clienti dalla UI
-from timmykb.ui.clients_store import DB_DIR as CLIENTS_DB_DIR  # type: ignore
-from timmykb.ui.clients_store import DB_FILE as CLIENTS_DB_FILE
+from timmykb.ui.clients_store import get_registry_paths as _get_registry_paths  # type: ignore
 from timmykb.ui.clients_store import load_clients as _load_clients
 from timmykb.ui.clients_store import save_clients as _save_clients
 
@@ -237,7 +236,7 @@ def _delete_on_drive_if_present(
             return True, f"Cartelle Drive eliminate: {deleted_names}."
         return True, "Cartella cliente su Drive eliminata."
     except ConfigError as e:
-        logger.info("tools.clean_client_workspace.drive.ctx_error", extra={"slug": slug, "message": str(e)[:200]})
+        logger.info("tools.clean_client_workspace.drive.ctx_error", extra={"slug": slug, "error": str(e)[:200]})
         # Non blocchiamo: continuiamo con la porzione locale/DB
         return True, "Contesto Drive non disponibile: salto rimozione Drive."
     except Exception as e:  # pragma: no cover
@@ -297,7 +296,7 @@ def _rmtree_best_effort(
                     "retries": retries,
                     "delay": delay,
                     "path": str(resolved),
-                    "message": str(e)[:120],
+                    "error": str(e)[:120],
                 },
             )
             time.sleep(delay)
@@ -361,6 +360,26 @@ def _delete_local_workspace(slug: str, logger: logging.Logger = LOGGER) -> Tuple
     return False, f"Rimozione locale non completa. Residui: {len(residuals)}"
 
 
+def _remove_local_logs(slug: str, logger: logging.Logger = LOGGER) -> Tuple[bool, str]:
+    """
+    Elimina la cartella `output/timmy-kb-<slug>/logs` se presente.
+    """
+    base = ensure_within_and_resolve(REPO_ROOT, OUTPUT_ROOT)
+    logs_dir = ensure_within_and_resolve(base, base / f"timmy-kb-{slug}" / "logs")
+    if not logs_dir.exists():
+        return True, "Log locali assenti (ok)."
+    try:
+        shutil.rmtree(logs_dir, onerror=_try_remove_readonly)
+        logger.info("tools.clean_client_workspace.local.logs_removed", extra={"slug": slug, "path": str(logs_dir)})
+        return True, "Log locali rimossi."
+    except Exception as exc:
+        logger.warning(
+            "tools.clean_client_workspace.local.logs_error",
+            extra={"slug": slug, "error": str(exc)[:200], "path": str(logs_dir)},
+        )
+        return False, f"Errore rimuovendo i log locali: {exc}"
+
+
 # --------------------------------------------------------------------------------------
 # DB (clients.yaml)
 # --------------------------------------------------------------------------------------
@@ -371,8 +390,7 @@ def _remove_from_clients_db(slug: str, logger: logging.Logger = LOGGER) -> Tuple
     Rimuove lo slug dal registry clienti delegando all'SSoT `ui.clients_store`.
     """
     try:
-        db_dir = ensure_within_and_resolve(REPO_ROOT, CLIENTS_DB_DIR)
-        db_file = ensure_within_and_resolve(db_dir, CLIENTS_DB_FILE)
+        db_dir, db_file = _get_registry_paths()
 
         if not db_file.exists():
             logger.info("tools.clean_client_workspace.db.absent", extra={"slug": slug, "path": str(db_file)})
@@ -390,7 +408,7 @@ def _remove_from_clients_db(slug: str, logger: logging.Logger = LOGGER) -> Tuple
         logger.info("tools.clean_client_workspace.db.entry_removed", extra={"slug": slug, "path": str(db_file)})
         return True, "Record rimosso dal DB clienti."
     except Exception as e:  # pragma: no cover
-        logger.error("tools.clean_client_workspace.db.error", extra={"slug": slug, "message": str(e)[:200]})
+        logger.error("tools.clean_client_workspace.db.error", extra={"slug": slug, "error": str(e)[:200]})
         return False, f"Errore aggiornando il DB clienti: {e}"
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
@@ -29,7 +30,7 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
-from ui.utils.workspace import count_pdfs_safe, iter_pdfs_safe, resolve_raw_dir
+from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
@@ -209,24 +210,58 @@ def _open_tags_raw_modal(slug: str) -> None:
             LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
 
         if _column_button(col_b, "Abilita", type="primary"):
-            try:
-                from semantic.api import export_tags_yaml_from_db
-                from semantic.tags_io import write_tags_review_stub_from_csv
-                from storage.tags_store import derive_db_path_from_yaml_path
-
-                write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
-                db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-                export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
+            tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
+            if tags_mode == "stub":
                 try:
-                    set_client_state(slug, "arricchito")
-                except Exception:
-                    pass
-                st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
-                LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Abilitazione non riuscita: {exc}")
-                LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+                    semantic_dir.mkdir(parents=True, exist_ok=True)
+                    payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
+                    safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
+                    try:
+                        updated = set_client_state(slug, "arricchito")
+                    except Exception as exc:
+                        LOGGER.warning(
+                            "ui.manage.state.update_failed",
+                            extra={"slug": slug, "error": str(exc)},
+                        )
+                        updated = False
+                    if updated:
+                        st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+                    else:
+                        st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
+                    LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Abilitazione (stub) non riuscita: {exc}")
+                    LOGGER.warning(
+                        "ui.manage.tags_yaml.stub_error",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+            else:
+                try:
+                    from semantic.api import export_tags_yaml_from_db
+                    from semantic.tags_io import write_tags_review_stub_from_csv
+                    from storage.tags_store import derive_db_path_from_yaml_path
+
+                    write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
+                    db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+                    export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
+                    try:
+                        updated = set_client_state(slug, "arricchito")
+                    except Exception as exc:
+                        LOGGER.warning(
+                            "ui.manage.state.update_failed",
+                            extra={"slug": slug, "error": str(exc)},
+                        )
+                        updated = False
+                    if updated:
+                        st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+                    else:
+                        st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
+                    LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Abilitazione non riuscita: {exc}")
+                    LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
 
     if dialog_factory:
         (dialog_factory("Revisione keyword (tags_raw.csv)")(_body))()
@@ -379,8 +414,8 @@ if slug:
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
-    has_pdfs = any(iter_pdfs_safe(raw_dir))
     pdf_count = count_pdfs_safe(raw_dir)
+    has_pdfs = pdf_count > 0
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     service_ok = run_tags_fn is not None
 
@@ -409,6 +444,10 @@ if slug:
                 run_tags_fn(slug)
                 _open_tags_raw_modal(slug)
             except Exception as exc:  # pragma: no cover
+                LOGGER.exception(
+                    "ui.manage.tags.run_failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
                 st.error(f"Estrazione tag non riuscita: {exc}")
 
     if (get_client_state(slug) or "").strip().lower() == "arricchito":

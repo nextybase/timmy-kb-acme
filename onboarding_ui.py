@@ -198,13 +198,14 @@ if _truthy(getattr(st, "query_params", {}).get("exit")):
 # --------------------------------------------------------------------------------------
 if not st.session_state.get("preflight_ok", False):
     _load_dotenv_best_effort()
-    if get_skip_preflight():
+    skip_preflight = get_skip_preflight()
+    if skip_preflight:
         st.session_state["preflight_ok"] = True
     else:
         box = st.container()
         with box:
             with st.expander("Prerequisiti", expanded=True):
-                current_skip = get_skip_preflight()
+                current_skip = skip_preflight
                 new_skip = st.checkbox(
                     "Salta il controllo",
                     value=current_skip,

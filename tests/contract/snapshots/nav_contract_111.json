@@ -1,0 +1,80 @@
+{
+  "gates": {
+    "drive": true,
+    "tags": true,
+    "vision": true
+  },
+  "navigation": {
+    "Admin": [
+      {
+        "path": "src/ui/pages/admin.py",
+        "title": "Admin",
+        "url_path": "admin"
+      },
+      {
+        "path": "src/ui/pages/tools_check.py",
+        "title": "Tuning",
+        "url_path": "check"
+      },
+      {
+        "path": "src/ui/pages/secrets_healthcheck.py",
+        "title": "Secrets Healthcheck",
+        "url_path": "secrets"
+      },
+      {
+        "path": "src/ui/pages/diagnostics.py",
+        "title": "Diagnostica",
+        "url_path": "diagnostics"
+      }
+    ],
+    "Onboarding": [
+      {
+        "path": "src/ui/pages/home.py",
+        "title": "Home",
+        "url_path": "home"
+      },
+      {
+        "path": "src/ui/pages/new_client.py",
+        "title": "Nuovo cliente",
+        "url_path": "new"
+      },
+      {
+        "path": "src/ui/pages/manage.py",
+        "title": "Gestisci cliente",
+        "url_path": "manage"
+      },
+      {
+        "path": "src/ui/pages/semantics.py",
+        "title": "Semantica",
+        "url_path": "semantics"
+      },
+      {
+        "path": "src/ui/pages/preview.py",
+        "title": "Docker Preview",
+        "url_path": "preview"
+      }
+    ],
+    "Tools": [
+      {
+        "path": "src/ui/pages/settings.py",
+        "title": "Settings",
+        "url_path": "settings"
+      },
+      {
+        "path": "src/ui/pages/config_editor.py",
+        "title": "Config Editor",
+        "url_path": "config"
+      },
+      {
+        "path": "src/ui/pages/cleanup.py",
+        "title": "Cleanup",
+        "url_path": "cleanup"
+      },
+      {
+        "path": "src/ui/pages/guida_ui.py",
+        "title": "Guida UI",
+        "url_path": "guida"
+      }
+    ]
+  }
+}
