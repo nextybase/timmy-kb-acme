@@ -171,10 +171,12 @@ def test_enable_and_preview(e2e_environment: Dict[str, Path]) -> None:
         _wait_for_db_state(clients_db, slug, "arricchito", timeout=10.0)
 
         page.goto(f"{base_url}/{PREVIEW_ROUTE}?slug={slug}", wait_until="networkidle")
-        page.get_by_role("button", name="Avvia preview").click()
-
         preview_log = sandbox / "preview_logs" / f"{slug}.log"
+        page.get_by_role("button", name="Avvia preview").click()
         _wait_for_log_line(preview_log, "PREVIEW_STUB_START", timeout=10.0)
+
+        page.get_by_role("button", name="Arresta preview").click()
+        _wait_for_log_line(preview_log, "PREVIEW_STUB_STOP", timeout=10.0)
 
         browser.close()
 

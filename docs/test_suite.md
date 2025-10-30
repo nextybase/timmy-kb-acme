@@ -22,6 +22,8 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 > Nota: i test `e2e` richiedono le dipendenze extra (`pip install -r requirements-dev.txt`) e l'installazione del browser con `playwright install chromium`.
 **Default CI:** i test marcati `push`, `drive` e `e2e` sono esclusi per impostazione predefinita.
 
+> 📦 **Dipendenze opzionali**: alcuni test UI (es. `tests/ui/test_preview_stub.py`) importano YAML tramite `pyyaml`. Se esegui in modo mirato singoli file, assicurati di avere `pyyaml` installato (lo ottieni automaticamente con `pip install -r requirements-dev.txt`).
+
 ---
 
 ## Marker e convenzioni

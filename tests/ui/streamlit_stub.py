@@ -60,6 +60,9 @@ class StreamlitStub:
         self.session_state[key] = choice
         return choice
 
+    def radio(self, label: str, options: List[str], index: int = 0, key: Optional[str] = None, **_kwargs: Any) -> str:
+        return self.selectbox(label, options, index=index, key=key)
+
     def text_input(self, label: str, value: str = "", key: Optional[str] = None, **_kwargs: Any) -> str:
         key = key or label
         v = self.session_state.get(key, value)
@@ -72,6 +75,21 @@ class StreamlitStub:
     def checkbox(self, label: str, value: bool = False, key: Optional[str] = None, **_kwargs: Any) -> bool:
         key = key or label
         v = bool(self.session_state.get(key, value))
+        self.session_state[key] = v
+        return v
+
+    def toggle(self, label: str, value: bool = False, key: Optional[str] = None, **kwargs: Any) -> bool:
+        return self.checkbox(label, value=value, key=key, **kwargs)
+
+    def number_input(
+        self,
+        label: str,
+        value: float | int = 0,
+        key: Optional[str] = None,
+        **_kwargs: Any,
+    ) -> float | int:
+        key = key or label
+        v = self.session_state.get(key, value)
         self.session_state[key] = v
         return v
 
@@ -181,6 +199,12 @@ class _Column:
     def __init__(self, st: StreamlitStub, index: int) -> None:
         self._st = st
         self._index = index
+
+    def __enter__(self) -> "_Column":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
 
     def button(self, *args: Any, **kwargs: Any) -> bool:
         return self._st.button(*args, **kwargs)
