@@ -27,6 +27,7 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
         return False
 
 
+from storage.tags_store import import_tags_yaml_to_db
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
@@ -96,18 +97,17 @@ T = TypeVar("T")
 
 
 def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
-    """Chiama fn con kwargs, degradando a posizionali in caso di firma diversa."""
+    """Chiama fn con kwargs garantendo corrispondenza con la firma dichiarata."""
+    sig = inspect.signature(fn)
     try:
-        return fn(**kwargs)
+        sig.bind(**kwargs)
     except TypeError:
-        try:
-            sig = inspect.signature(fn)
-            bound = sig.bind_partial(**kwargs)
-            return fn(*bound.args, **bound.kwargs)
-        except Exception:
-            keys = ("slug", "overwrite", "require_env")
-            args = [kwargs[k] for k in keys if k in kwargs]
-            return fn(*args)
+        LOGGER.error(
+            "ui.manage.signature_mismatch",
+            extra={"fn": getattr(fn, "__name__", repr(fn)), "kwargs": sorted(kwargs)},
+        )
+        raise
+    return fn(**kwargs)
 
 
 # -----------------------------------------------------------
@@ -150,6 +150,22 @@ def _open_tags_editor_modal(slug: str) -> None:
                 LOGGER.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
                 yaml_parent.mkdir(parents=True, exist_ok=True)
                 safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
+                if yaml_path.exists():
+                    try:
+                        import_tags_yaml_to_db(yaml_path)
+                        LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+                    except Exception as exc:
+                        LOGGER.warning(
+                            "ui.manage.tags.db_sync_failed",
+                            extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
+                        )
+                        st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                        return
+                else:
+                    LOGGER.warning(
+                        "ui.manage.tags.db_sync_skipped",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
+                    )
                 st.toast("`tags_reviewed.yaml` salvato.")
                 LOGGER.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
                 st.rerun()
@@ -216,6 +232,22 @@ def _open_tags_raw_modal(slug: str) -> None:
                     semantic_dir.mkdir(parents=True, exist_ok=True)
                     payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
                     safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
+                    if yaml_path.exists():
+                        try:
+                            import_tags_yaml_to_db(yaml_path)
+                            LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+                        except Exception as exc:
+                            LOGGER.warning(
+                                "ui.manage.tags.db_sync_failed",
+                                extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
+                            )
+                            st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                            return
+                    else:
+                        LOGGER.warning(
+                            "ui.manage.tags.db_sync_skipped",
+                            extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
+                        )
                     try:
                         updated = set_client_state(slug, "arricchito")
                     except Exception as exc:

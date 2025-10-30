@@ -98,3 +98,53 @@ def test_iter_pdfs_safe_returns_resolved(tmp_path: Path) -> None:
         pytest.skip(f"Symlink non supportati su questa piattaforma: {exc}")
     results = list(ui.utils.workspace.iter_pdfs_safe(root))
     assert results == [pdf.resolve()]
+
+
+def test_manage_tags_editor_syncs_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ui.pages import manage as manage_page
+
+    st_stub = StreamlitStub()
+    st_stub.register_button_sequence("Salva", [True])
+
+    base_dir = tmp_path / "timmy-kb-dummy"
+    semantic_dir = base_dir / "semantic"
+    semantic_dir.mkdir(parents=True)
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+    yaml_path.write_text("version: 2\nkeep_only_listed: true\ntags: []\n", encoding="utf-8")
+    st_stub.session_state["tags_yaml_editor"] = yaml_path.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(manage_page, "st", st_stub)
+    monkeypatch.setattr(manage_page, "_workspace_root", lambda _slug: base_dir)
+
+    called: dict[str, Path] = {}
+
+    def _fake_import(path: str | Path, **_kwargs):
+        called["path"] = Path(path)
+        return {}
+
+    monkeypatch.setattr(manage_page, "import_tags_yaml_to_db", _fake_import)
+
+    manage_page._open_tags_editor_modal("dummy")
+
+    assert called["path"] == yaml_path
+    assert st_stub._rerun_called is True
+
+
+def test_call_best_effort_matches_signature() -> None:
+    from ui.pages import manage as manage_page
+
+    def _fn(*, slug: str, overwrite: bool = False) -> tuple[str, bool]:
+        return slug, overwrite
+
+    result = manage_page._call_best_effort(_fn, slug="dummy", overwrite=True)
+    assert result == ("dummy", True)
+
+
+def test_call_best_effort_raises_on_mismatch() -> None:
+    from ui.pages import manage as manage_page
+
+    def _fn(slug: str, other: int) -> None:
+        return None
+
+    with pytest.raises(TypeError):
+        manage_page._call_best_effort(_fn, slug="dummy")

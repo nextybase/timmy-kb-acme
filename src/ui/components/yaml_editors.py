@@ -13,7 +13,7 @@ from typing import cast
 import yaml
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.yaml_utils import clear_yaml_cache
 
 try:
@@ -22,9 +22,11 @@ except Exception:  # pragma: no cover
     st = None
 
 from pipeline.file_utils import safe_write_text
+from storage.tags_store import import_tags_yaml_to_db
 
 from ..const import DEFAULT_ENCODING
 from ..utils.streamlit_fragments import run_fragment
+from ..utils.workspace import workspace_root
 
 LOGGER = get_structured_logger("ui.components.yaml_editors")
 
@@ -44,12 +46,10 @@ TAGS_FILE = "tags_reviewed.yaml"
 
 
 def _workspace_root(slug: str) -> Path:
-    safe_slug = str(validate_slug(slug))
-    base_root = Path("output")
-    root = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
-    if not Path(root).exists():
+    root = workspace_root(slug)
+    if not root.exists():
         raise ConfigError(f"Workspace locale non trovato: {root}")
-    return cast(Path, root)
+    return root
 
 
 def _semantic_path(slug: str, filename: str) -> Path:
@@ -68,6 +68,15 @@ def _write_yaml_text(slug: str, filename: str, content: str) -> None:
     path = _semantic_path(slug, filename)
     safe_write_text(path, content, encoding=DEFAULT_ENCODING, atomic=True)
     clear_yaml_cache()
+    if filename == TAGS_FILE:
+        try:
+            import_tags_yaml_to_db(path)
+        except Exception as exc:  # pragma: no cover - feedback in UI
+            LOGGER.warning(
+                "ui.yaml_editor.tags.sync_failed",
+                extra={"slug": slug, "file": str(path), "error": str(exc)},
+            )
+            raise
     LOGGER.info("ui.yaml_editor.saved", extra={"slug": slug, "file": str(path)})
 
 

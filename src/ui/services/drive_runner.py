@@ -48,7 +48,7 @@ from ..components.mapping_editor import mapping_to_raw_structure  # usato solo s
 from ..components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
 from ..components.mapping_editor import load_semantic_mapping
 from ..utils import to_kebab  # SSoT normalizzazione + path-safety
-from ..utils.workspace import iter_pdfs_safe, workspace_root
+from ..utils.workspace import workspace_root
 
 # ===== Logger =================================================================
 
@@ -711,15 +711,17 @@ def download_raw_from_drive_with_progress(
     # Local root (raw/)
     workspace_dir = _resolve_workspace(base_root, slug)
     local_root_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
-    Path(local_root_dir).mkdir(parents=True, exist_ok=True)
+    local_root_path = Path(local_root_dir)
+    local_root_path.mkdir(parents=True, exist_ok=True)
 
     # 1) Costruisci la lista dei candidati (categoria/nomefile) nell'ordine atteso
-    candidates: List[Tuple[str, str]] = []
+    candidates: List[Tuple[str, str, Path]] = []
     for f in _drive_list_pdfs(svc, raw_id):
         fname = (f.get("name") or "").strip()
         if not fname.lower().endswith(".pdf"):
             continue
-        candidates.append(("", fname))
+        dest = ensure_within_and_resolve(local_root_path, local_root_path / fname)
+        candidates.append(("", fname, dest))
     for cat in _drive_list_folders(svc, raw_id):
         cat_name = cat.get("name") or ""
         cat_id = cat.get("id") or ""
@@ -729,14 +731,15 @@ def download_raw_from_drive_with_progress(
             fname = (f.get("name") or "").strip()
             if not fname.lower().endswith(".pdf"):
                 continue
-            candidates.append((cat_name, fname))
+            dest = ensure_within_and_resolve(local_root_path, local_root_path / cat_name / fname)
+            candidates.append((cat_name, fname, dest))
 
     total = len(candidates)
 
     # 2) Emissione progress per OGNI candidato (inclusi quelli che risulteranno skippati)
     if callable(on_progress):
         done = 0
-        for cat_name, fname in candidates:
+        for cat_name, fname, _dest in candidates:
             done += 1
             try:
                 label = f"{cat_name}/{fname}" if cat_name else fname
@@ -745,9 +748,7 @@ def download_raw_from_drive_with_progress(
                 pass
 
     # 3) Snapshot dei file presenti PRIMA del download
-    before = {
-        ensure_within_and_resolve(local_root_dir, candidate) for candidate in iter_pdfs_safe(Path(local_root_dir))
-    }
+    before = {dest for *_rest, dest in candidates if dest.exists()}
 
     # 4) Chiamata al downloader sottostante (accetta 'progress', ma qui non lo usiamo per i test)
     downloader = cast(Callable[..., Any], download_drive_pdfs_to_local)
@@ -763,8 +764,7 @@ def download_raw_from_drive_with_progress(
     )
 
     # 5) Diff -> solo file nuovi creati
-    after = {ensure_within_and_resolve(local_root_dir, candidate) for candidate in iter_pdfs_safe(Path(local_root_dir))}
-    created = sorted(after - before)
+    created = sorted({dest for *_rest, dest in candidates if dest.exists() and dest not in before})
     return created
 
 
