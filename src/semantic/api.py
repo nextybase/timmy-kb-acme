@@ -549,6 +549,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
             logger.warning(
                 "semantic.tags_csv.enrichment_failed",
                 extra={"slug": slug, "error": str(exc)},
+                exc_info=True,
             )
             # Se l'arricchimento fallisce, continuiamo con i soli candidati euristici.
 
