@@ -14,7 +14,7 @@ Questo indice raccoglie le regole comuni che gli agent devono seguire nel reposi
 | UI (Streamlit) | `src/ui/AGENTS.md` | Gating: la tab **Semantica** si abilita **solo** quando `raw/` locale è presente.; Evita side‑effects non idempotenti; persistenza solo via util SSoT (no write manuali). | Nessuna azione “Semantica” se RAW vuoto. | UX guidata da stato |
 | Test | `tests/AGENTS.md` | Niente dipendenze di rete (Drive/Git mockati o bypass).; Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati). | Build verde locale; smoke E2E su dummy slug riproducibile. |  |
 | Documentazione | `docs/AGENTS.md` | **cSpell**: eseguire `pre-commit run cspell --all-files` (o `--files docs/...`) prima del commit; aggiungere nuove parole solo se sono termini di dominio verificati.; **Frontmatter & titoli**: i file Markdown devono indicare la versione coerente; niente numerazioni divergenti tra README e docs/. | Spell check pulito su `docs/` e `README.md`, senza ignorare file. |  |
-| Codex (repo) | `.codex/AGENTS.md` | — | — |  |
+| Codex (repo) | `.codex/AGENTS.md` | **Path-safety**: scrivo solo in `src/`, `docs/`, `.codex/` (mai in `config/**`, `.env*`, `output/**`).; **Scritture atomiche**: temp + replace; zero side-effect a import-time. | Micro-PR: 1 change set, motivazione chiara, diff minimale; se tocco X aggiorno docs Y/Z. |  |
 
 <!-- MATRIX:END -->
 
@@ -47,6 +47,7 @@ Questo indice raccoglie le regole comuni che gli agent devono seguire nel reposi
 - Test: `tests/AGENTS.md`
 - Documentazione: `docs/AGENTS.md`
 - Radice progetto: `AGENTS.md`
+- Codex (repo): `.codex/AGENTS.md`
 
 ---
 

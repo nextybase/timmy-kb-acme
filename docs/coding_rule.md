@@ -15,6 +15,7 @@ Regole di sviluppo per **Timmy KB**. Questa è la base iniziale: nessun riferime
 
 ## 2) Stile & Convenzioni
 - **Python ≥ 3.11**, tipizzazione obbligatoria per API pubbliche e funzioni non-trivial.
+- **Evita `Any`** salvo casi motivati e documentati (commento o docstring dedicata).
 - Docstring **Google style** o **PEP257**; `Raises:` per eccezioni rilevanti.
 - **Import order**: stdlib → third-party → locali; usa `isort`/`ruff`.
 - **Line length**: 120.
@@ -34,6 +35,13 @@ def load_reviewed_vocab(base_dir: Path, log) -> dict[str, str]:
       Mappa canone→alias.
     """
 ```
+
+---
+
+## 2bis) API di modulo
+- Esporta l’interfaccia pubblica esplicitando `__all__ = [...]` quando il modulo è consumato da terzi.
+- Per i parametri contestuali complessi preferisci `Protocol` o `TypedDict` locali per descrivere il contratto.
+- Mantieni chiara la separazione tra API pubbliche e helper `_private`.
 
 ---
 
@@ -95,6 +103,7 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=Fa
 ## 6) Error handling
 - Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`, `PushError`).
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
+- Nei moduli interni è vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
 - Mappa gli esiti in **exit codes** standard laddove previsto (0/2/30/40).
 
 ---
@@ -113,7 +122,7 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=Fa
   - Slug invalidi → rifiutati/normalizzati.
   - Traversal via symlink in `raw/` → negato.
   - Parità di firma wrapper UI ↔ backend.
-  - Invarianti su `book/` (presenza `README.md`/`SUMMARY.md` dopo onboarding).
+  - Invarianti su `book/` (solo `.md` tracciati; `README.md`/`SUMMARY.md` sempre presenti; eventuali `.md.fp` restano locali e non vengono commessi).
 - Tooling: `ruff`, `black`, `isort`; type-check con `mypy`/`pyright`.
 - Hook:
 ```bash

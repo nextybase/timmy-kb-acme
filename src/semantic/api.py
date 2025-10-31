@@ -6,9 +6,10 @@ import inspect
 import logging
 import re
 import time
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Tuple, cast
 from weakref import WeakKeyDictionary
 
 from kb_db import get_db_path as _get_db_path
@@ -236,74 +237,91 @@ def list_content_markdown(book_dir: Path) -> list[Path]:
     ]
 
 
-def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
-    """Converte i PDF in RAW in Markdown strutturato dentro book/.
+@dataclass(frozen=True)
+class _RawDiscovery:
+    safe_pdfs: tuple[Path, ...]
+    discarded_unsafe: int
 
-    Regole:
-    - Se RAW **non esiste** → ConfigError.
-    - Se RAW **non contiene PDF**:
-        - NON invocare il converter (evita segnaposto).
-        - Se in book/ ci sono già MD di contenuto → restituiscili.
-        - Altrimenti → ConfigError (fail-fast).
-    - Se RAW **contiene PDF** → invoca sempre il converter.
-    """
-    start_ts = time.perf_counter()
-    base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)
-    ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, md_dir)
 
+def _discover_raw_inputs(raw_dir: Path, logger: logging.Logger, slug: str) -> _RawDiscovery:
+    """Valida `raw_dir` e restituisce i PDF sicuri insieme al conteggio scartati."""
     if not raw_dir.exists():
         raise ConfigError(f"Cartella RAW locale non trovata: {raw_dir}", slug=slug, file_path=raw_dir)
-    # Guard-rail — RAW deve essere una directory (fail-fast tipizzato)
     if not raw_dir.is_dir():
         raise ConfigError(f"Percorso RAW non è una directory: {raw_dir}", slug=slug, file_path=raw_dir)
+    safe_pdfs, discarded = _collect_safe_pdfs(raw_dir, logger, slug)
+    return _RawDiscovery(safe_pdfs=tuple(safe_pdfs), discarded_unsafe=discarded)
 
-    md_dir.mkdir(parents=True, exist_ok=True)
-    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir, slug=slug)
 
-    # Lista PDF sicura prima del phase_scope per decisione di flusso (path-safety per-file)
-    safe_pdfs, discarded_unsafe = _collect_safe_pdfs(raw_dir, logger, slug)
+def _log_conversion_success(
+    logger: logging.Logger,
+    slug: str,
+    *,
+    ms: int,
+    content_count: int,
+    mode: str,
+    reuse_count: Optional[int] = None,
+) -> None:
+    if mode == "reuse" and reuse_count is not None:
+        logger.info(
+            "semantic.convert.reused_existing_content",
+            extra={"slug": slug, "count": reuse_count},
+        )
+    logger.info(
+        "semantic.convert_markdown.done",
+        extra={
+            "slug": slug,
+            "ms": ms,
+            "artifacts": {"content_files": content_count},
+        },
+    )
+    logger.info(
+        "semantic.convert.summary",
+        extra={
+            "slug": slug,
+            "mode": mode,
+            "content_files": content_count,
+        },
+    )
 
-    # KPI aggregato sui PDF scartati (se > 0)
-    if discarded_unsafe > 0:
-        logger.info("semantic.convert.discarded_unsafe", extra={"slug": slug, "count": discarded_unsafe})
 
+def _run_markdown_conversion(
+    shim: _CtxShim,
+    md_dir: Path,
+    logger: logging.Logger,
+    *,
+    safe_pdfs: Sequence[Path],
+    discarded_unsafe: int,
+    start_ts: float,
+) -> List[Path]:
+    slug = shim.slug
     with phase_scope(logger, stage="convert_markdown", customer=slug) as m:
         if safe_pdfs:
-            # 🔁 Evita doppia scansione: passa la lista già validata
-            _call_convert_md(_convert_md, shim, md_dir, safe_pdfs=safe_pdfs)
+            safe_list = list(safe_pdfs)
+            _call_convert_md(_convert_md, shim, md_dir, safe_pdfs=safe_list)
             content_mds = list_content_markdown(md_dir)
         else:
-            # RAW senza PDF: non convertire; usa eventuali MD già presenti
             content_mds = list_content_markdown(md_dir)
             if not content_mds:
                 logger.info(
                     "semantic.convert.no_files",
-                    extra={"slug": slug, "raw_dir": str(raw_dir), "book_dir": str(md_dir)},
+                    extra={"slug": slug, "raw_dir": str(shim.raw_dir), "book_dir": str(md_dir)},
                 )
 
         try:
             m.set_artifacts(len(content_mds))
         except Exception:
             m.set_artifacts(None)
+
         ms = int((time.perf_counter() - start_ts) * 1000)
         if safe_pdfs:
             if content_mds:
-                logger.info(
-                    "semantic.convert_markdown.done",
-                    extra={
-                        "slug": slug,
-                        "ms": ms,
-                        "artifacts": {"content_files": len(content_mds)},
-                    },
-                )
-                logger.info(
-                    "semantic.convert.summary",
-                    extra={
-                        "slug": slug,
-                        "mode": "convert",
-                        "content_files": len(content_mds),
-                    },
+                _log_conversion_success(
+                    logger,
+                    slug,
+                    ms=ms,
+                    content_count=len(content_mds),
+                    mode="convert",
                 )
                 return content_mds
             raise ConversionError(
@@ -311,41 +329,65 @@ def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug
                 slug=slug,
                 file_path=md_dir,
             )
-        # Nessun PDF sicuro
+
         if discarded_unsafe > 0:
-            # RAW conteneva PDF ma tutti scartati: fail-fast (niente riuso legacy)
             raise ConfigError(
                 (
                     f"Trovati solo PDF non sicuri/fuori perimetro in RAW (scartati={discarded_unsafe}). "
                     "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
                 ),
                 slug=slug,
-                file_path=raw_dir,
+                file_path=shim.raw_dir,
             )
+
         if content_mds:
-            # Reuse esplicito di contenuti già presenti
-            logger.info(
-                "semantic.convert.reused_existing_content",
-                extra={"slug": slug, "count": len(content_mds)},
-            )
-            logger.info(
-                "semantic.convert_markdown.done",
-                extra={
-                    "slug": slug,
-                    "ms": ms,
-                    "artifacts": {"content_files": len(content_mds)},
-                },
-            )
-            logger.info(
-                "semantic.convert.summary",
-                extra={
-                    "slug": slug,
-                    "mode": "reuse",
-                    "content_files": len(content_mds),
-                },
+            _log_conversion_success(
+                logger,
+                slug,
+                ms=ms,
+                content_count=len(content_mds),
+                mode="reuse",
+                reuse_count=len(content_mds),
             )
             return content_mds
-        raise ConfigError(f"Nessun PDF trovato in RAW locale: {raw_dir}", slug=slug, file_path=raw_dir)
+
+        raise ConfigError(f"Nessun PDF trovato in RAW locale: {shim.raw_dir}", slug=slug, file_path=shim.raw_dir)
+
+
+def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
+    """Converte i PDF in RAW in Markdown strutturato dentro book/.
+
+    Regole:
+    - Se RAW **non esiste** -> ConfigError.
+    - Se RAW **non contiene PDF**:
+        - NON invocare il converter (evita segnaposto).
+        - Se in book/ ci sono Markdown di contenuto -> restituiscili.
+        - Altrimenti -> ConfigError (fail-fast).
+    - Se RAW **contiene PDF** -> invoca sempre il converter.
+    """
+    start_ts = time.perf_counter()
+    base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)
+    ensure_within(base_dir, raw_dir)
+    ensure_within(base_dir, md_dir)
+
+    md_dir.mkdir(parents=True, exist_ok=True)
+    shim = _CtxShim(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir, slug=slug)
+
+    discovery = _discover_raw_inputs(raw_dir, logger, slug)
+    safe_pdfs = discovery.safe_pdfs
+    discarded_unsafe = discovery.discarded_unsafe
+
+    if discarded_unsafe > 0:
+        logger.info("semantic.convert.discarded_unsafe", extra={"slug": slug, "count": discarded_unsafe})
+
+    return _run_markdown_conversion(
+        shim,
+        md_dir,
+        logger,
+        safe_pdfs=safe_pdfs,
+        discarded_unsafe=discarded_unsafe,
+        start_ts=start_ts,
+    )
 
 
 def enrich_frontmatter(

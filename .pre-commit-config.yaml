@@ -103,6 +103,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: forbid-runtime-asserts
+        name: Forbid runtime asserts in src/
+        entry: python scripts/dev/forbid_runtime_asserts.py
+        language: system
+        pass_filenames: true
+        files: ^src/.*\.py$
+        stages: [pre-commit]
+
+      - id: forbid-path-write-text-bytes
+        name: Forbid Path.write_text/bytes in src/ (use safe_write_*)
+        entry: python scripts/dev/forbid_path_writetext_bytes.py
+        language: system
+        pass_filenames: true
+        files: ^src/.*\.py$
+        stages: [pre-commit]
+
       - id: qa-safe
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python scripts/dev/qa_safe.py

@@ -33,6 +33,15 @@ Note di riferimento (link ufficiali):
 - Ogni `AGENTS.md` locale (root, docs/, src/pipeline/, src/semantic/, src/ui/, tests/) contiene solo override specifici e rimanda all'indice.
 - Obiettivo: evitare duplicazioni e mantenere coerenza tra aree (regole comuni in un solo posto).
 
+### Mantenere la Matrice AGENT aggiornata
+Quando aggiorni un `AGENTS.md` (nuove **Regole** o **Accettazione**), rigenera la tabella in `docs/AGENTS_INDEX.md` eseguendo:
+
+```bash
+pre-commit run agents-matrix-check --all-files
+```
+
+Lo script riallinea automaticamente la matrice tra `<!-- MATRIX:BEGIN/END -->`.
+
 ---
 
 ## Memoria di progetto e file personali
