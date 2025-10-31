@@ -129,6 +129,7 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     cache_key = f"_raw_has_pdf::{raw_dir}"
     now = time.time()
     ttl_seconds = 3.0  # TTL breve per evitare staleness percettibile in UI
+    current_mtime: float | None = None
     if st is not None and hasattr(st, "session_state"):
         cached = st.session_state.get(cache_key)
         if isinstance(cached, dict):
@@ -154,9 +155,11 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
 
     if st is not None and hasattr(st, "session_state"):
         if has_pdf:
+            if current_mtime is None:
+                current_mtime = _dir_mtime(raw_dir)
             st.session_state[cache_key] = {
                 "has_pdf": True,
-                "mtime": _dir_mtime(raw_dir),
+                "mtime": current_mtime,
                 "ts": now,
             }
         else:

@@ -545,9 +545,12 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
                             break
                     if enriched:
                         meta["tags"] = enriched
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "semantic.tags_csv.enrichment_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
             # Se l'arricchimento fallisce, continuiamo con i soli candidati euristici.
-            pass
 
         _render_tags_csv(candidates, csv_path, base_dir=base_dir)
         count = len(candidates)

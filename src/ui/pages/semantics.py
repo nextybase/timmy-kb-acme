@@ -43,6 +43,22 @@ def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
     return ctx, logger
 
 
+def _safe_rerun() -> None:
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
+            rerun_fn()
+        except Exception:
+            pass
+
+
+def _display_user_error(exc: Exception) -> None:
+    title, body, caption = to_user_message(exc)
+    st.error(title)
+    if caption or body:
+        st.caption(caption or body)
+
+
 # usa helper centralizzato per compatibilità con stub e fallback width
 
 
@@ -65,6 +81,10 @@ def _run_enrich(slug: str) -> None:
     if not vocab:
         try:
             logger.warning("ui.semantics.vocab_missing", extra={"slug": slug})
+        except Exception:
+            pass
+        try:
+            set_state(slug, "pronto")
         except Exception:
             pass
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
@@ -108,7 +128,7 @@ def _go_preview() -> None:
         set_tab("preview")
     except Exception:
         pass
-    st.rerun()
+    _safe_rerun()
 
 
 # ---------------- UI ----------------
@@ -149,41 +169,26 @@ if _column_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="s
     try:
         _run_convert(slug)
     except (ConfigError, ConversionError) as e:
-        title, body, caption = to_user_message(e)
-        st.error(title)
-        if caption:
-            st.caption(caption)
-        else:
-            st.caption(body)
+        _display_user_error(e)
     except Exception as e:  # pragma: no cover
-        title, body, caption = to_user_message(e)
-        st.error(title)
-        st.caption(caption or body)
+        _display_user_error(e)
 
 if _column_button(col_a, "Arricchisci frontmatter", key="btn_enrich", width="stretch"):
     try:
         _run_enrich(slug)
     except (ConfigError, ConversionError) as e:
-        title, body, caption = to_user_message(e)
-        st.error(title)
-        st.caption(caption or body)
+        _display_user_error(e)
     except Exception as e:  # pragma: no cover
-        t, b, c = to_user_message(e)
-        st.error(t)
-        st.caption(c or b)
+        _display_user_error(e)
 
 # Colonna B
 if _column_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="stretch"):
     try:
         _run_summary(slug)
     except (ConfigError, ConversionError) as e:
-        t, b, c = to_user_message(e)
-        st.error(t)
-        st.caption(c or b)
+        _display_user_error(e)
     except Exception as e:  # pragma: no cover
-        t, b, c = to_user_message(e)
-        st.error(t)
-        st.caption(c or b)
+        _display_user_error(e)
 
 if _column_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
     _go_preview()
