@@ -240,4 +240,10 @@ def _stable_env(monkeypatch, dummy_workspace):
         monkeypatch.setenv("CLIENTS_DB_FILE", clients_db_file.as_posix())
     except Exception:
         pass
+    try:
+        from ui.utils.stubs import reset_streamlit_stub
+
+        reset_streamlit_stub()
+    except Exception:
+        pass
     yield
