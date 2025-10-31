@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional, TypeVar, cast
 
 import yaml
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.chrome import render_chrome_then_require
@@ -35,6 +36,15 @@ from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
+
+
+def _safe_rerun() -> None:
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
+            rerun_fn()
+        except Exception:
+            pass
 
 
 def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
@@ -141,20 +151,33 @@ def _open_tags_editor_modal(slug: str) -> None:
         col_a, col_b = st.columns(2)
         if _column_button(col_a, "Salva", type="primary"):
             try:
-                yaml.safe_load(content)
+                parsed = yaml.safe_load(content)
+                if parsed is not None and not isinstance(parsed, dict):
+                    raise ConfigError("Top-level YAML deve essere un mapping")
             except Exception as exc:
                 st.error(f"YAML non valido: {exc}")
                 LOGGER.warning("ui.manage.tags.yaml.invalid", extra={"slug": slug, "error": str(exc)})
                 return
+            backup_text: Optional[str] = None
             try:
+                try:
+                    backup_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+                except Exception:
+                    backup_text = None
                 LOGGER.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
                 yaml_parent.mkdir(parents=True, exist_ok=True)
                 safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
                 if yaml_path.exists():
                     try:
-                        import_tags_yaml_to_db(yaml_path)
+                        import_tags_yaml_to_db(yaml_path, logger=LOGGER)
                         LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
                     except Exception as exc:
+                        if backup_text is not None:
+                            safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                            LOGGER.warning(
+                                "ui.manage.tags.rollback",
+                                extra={"slug": slug, "path": str(yaml_path), "reason": "db-sync-error"},
+                            )
                         LOGGER.warning(
                             "ui.manage.tags.db_sync_failed",
                             extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
@@ -168,12 +191,18 @@ def _open_tags_editor_modal(slug: str) -> None:
                     )
                 st.toast("`tags_reviewed.yaml` salvato.")
                 LOGGER.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
-                st.rerun()
+                _safe_rerun()
             except Exception as exc:
+                if backup_text is not None:
+                    safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                    LOGGER.warning(
+                        "ui.manage.tags.rollback",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "save-exception"},
+                    )
                 st.error(f"Errore nel salvataggio: {exc}")
                 LOGGER.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
         if _column_button(col_b, "Chiudi"):
-            st.rerun()
+            _safe_rerun()
 
     if dialog_factory:
         _dialog_fn = dialog_factory("Modifica tags_reviewed.yaml")(_editor_body)
@@ -231,12 +260,23 @@ def _open_tags_raw_modal(slug: str) -> None:
                 try:
                     semantic_dir.mkdir(parents=True, exist_ok=True)
                     payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
+                    previous = None
+                    try:
+                        previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
+                    except Exception:
+                        previous = None
                     safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
                     if yaml_path.exists():
                         try:
-                            import_tags_yaml_to_db(yaml_path)
+                            import_tags_yaml_to_db(yaml_path, logger=LOGGER)
                             LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
                         except Exception as exc:
+                            if previous is not None:
+                                safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
+                                LOGGER.warning(
+                                    "ui.manage.tags.rollback",
+                                    extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
+                                )
                             LOGGER.warning(
                                 "ui.manage.tags.db_sync_failed",
                                 extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
@@ -261,7 +301,7 @@ def _open_tags_raw_modal(slug: str) -> None:
                     else:
                         st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
                     LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
-                    st.rerun()
+                    _safe_rerun()
                 except Exception as exc:
                     st.error(f"Abilitazione (stub) non riuscita: {exc}")
                     LOGGER.warning(
@@ -290,7 +330,7 @@ def _open_tags_raw_modal(slug: str) -> None:
                     else:
                         st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
                     LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
-                    st.rerun()
+                    _safe_rerun()
                 except Exception as exc:
                     st.error(f"Abilitazione non riuscita: {exc}")
                     LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
@@ -344,7 +384,7 @@ if not slug:
         chosen = dict(options).get(selected_label)
         if chosen:
             set_slug(chosen)
-        st.rerun()
+        _safe_rerun()
 
     st.stop()
 
@@ -435,7 +475,7 @@ if slug:
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
                     st.toast("README generati su Drive.")
-                    st.rerun()
+                    _safe_rerun()
                 except Exception:
                     pass
             except Exception as e:  # pragma: no cover
@@ -575,7 +615,7 @@ if slug:
                         if _invalidate_drive_index is not None:
                             _invalidate_drive_index(slug)
                         st.toast("Allineamento Drive→locale completato.")
-                        st.rerun()
+                        _safe_rerun()
                     except Exception:
                         pass
                 except Exception as e:
