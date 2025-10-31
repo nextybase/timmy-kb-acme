@@ -5,9 +5,15 @@ import os
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
+from pipeline.logging_utils import get_structured_logger
 from ui.pages.registry import PagePaths, PageSpec, page_specs
+from ui.utils import get_active_slug
+from ui.utils.workspace import has_raw_pdfs
 
 _DISABLE_VALUES = {"0", "false", "False", "FALSE", "", "off", "OFF"}
+
+_LOGGER = get_structured_logger("ui.gating")
+_LAST_RAW_READY: dict[str, bool] = {}
 
 
 def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -76,8 +82,30 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     Ritorna la mappa {gruppo: [PageSpec, ...]} filtrata in base ai gate.
     """
     groups: dict[str, list[PageSpec]] = {}
+    slug: str | None
+    raw_ready = False
+    try:
+        slug = get_active_slug()
+    except Exception:
+        slug = None
+    if slug:
+        try:
+            ready, _path = has_raw_pdfs(slug)
+            raw_ready = bool(ready)
+        except Exception:
+            raw_ready = False
+    slug_key = slug or "<none>"
+    last_state = _LAST_RAW_READY.get(slug_key)
+    if not raw_ready and last_state is not False:
+        try:
+            _LOGGER.info("ui.gating.sem_hidden", extra={"slug": slug or "", "raw_ready": raw_ready})
+        except Exception:
+            pass
+    _LAST_RAW_READY[slug_key] = raw_ready
     for group, specs in page_specs().items():
         allowed = [spec for spec in specs if _satisfied(_requires(spec), gates)]
+        if not raw_ready:
+            allowed = [spec for spec in allowed if spec.path != PagePaths.SEMANTICS]
         if allowed:
             groups[group] = allowed
     return groups

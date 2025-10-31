@@ -68,6 +68,21 @@ class StreamlitStub:
             return _columns
         return _FunctionStub()
 
+    def reset(self) -> None:
+        self.session_state.clear()
+        self.query_params.clear()
+        self.sidebar = _FunctionStub()
+
+
+_STUB: StreamlitStub | None = None
+
+
+def _get_stub() -> StreamlitStub:
+    global _STUB
+    if _STUB is None:
+        _STUB = StreamlitStub()
+    return _STUB
+
 
 def get_streamlit() -> Any:
     """Restituisce il modulo streamlit oppure lo stub riutilizzabile."""
@@ -76,4 +91,10 @@ def get_streamlit() -> Any:
 
         return st
     except Exception:
-        return cast(Any, StreamlitStub())
+        return cast(Any, _get_stub())
+
+
+def reset_streamlit_stub() -> None:
+    """Reinizializza lo stub condiviso (usato nei test per evitare stato residuo)."""
+    if _STUB is not None:
+        _STUB.reset()

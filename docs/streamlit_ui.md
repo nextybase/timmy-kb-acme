@@ -343,6 +343,7 @@ st.navigation(pages)
 ```
 
 **Perche**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
+In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo slug attivo ha effettivamente PDF validi in `raw/` (`ui.utils.workspace.has_raw_pdfs`). Questo evita di proporre un percorso vuoto al team di onboarding; quando il tab viene nascosto viene comunque emesso `ui.gating.sem_hidden` per telemetria.
 
 ### Modalita stub e SSoT semantica
 
@@ -380,6 +381,7 @@ I test girano con uno **stub** di Streamlit (assenza del runtime reale). Per evi
 
 - Avvolgi le chiamate facoltative con `getattr(st, "api", None)` e verifica che siano **callable**.
 - Fallback per layout:
+- Se devi azzerare lo stato condiviso tra test, chiama `ui.utils.stubs.reset_streamlit_stub()` nelle fixture (`autouse=True` consigliato).
 
 ```python
 _markdown = getattr(st, "markdown", None)

@@ -44,11 +44,6 @@
         "url_path": "manage"
       },
       {
-        "path": "src/ui/pages/semantics.py",
-        "title": "Semantica",
-        "url_path": "semantics"
-      },
-      {
         "path": "src/ui/pages/preview.py",
         "title": "Docker Preview",
         "url_path": "preview"

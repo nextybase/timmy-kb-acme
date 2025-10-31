@@ -23,7 +23,7 @@ from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger, phase_scope
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, sorted_paths
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, sorted_paths, validate_slug
 from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
@@ -58,7 +58,8 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
+    safe_slug = validate_slug(slug)
+    base_dir = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{safe_slug}"
     return {
         "base": base_dir,
         "raw": base_dir / "raw",

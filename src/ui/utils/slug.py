@@ -83,8 +83,18 @@ def _save_persisted(slug: Optional[str]) -> None:
         path = get_ui_state_path()
         base_dir = path.parent
         base_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            current = st.session_state.get("__persisted_slug")
+        except Exception:
+            current = None
+        if current == slug:
+            return
         payload = json.dumps({"active_slug": slug or ""}, ensure_ascii=False) + "\n"
         safe_write_text(path, payload, encoding="utf-8", atomic=True)
+        try:
+            st.session_state["__persisted_slug"] = slug
+        except Exception:
+            pass
         LOGGER.info("ui.slug.persisted", extra={"path": str(path)})
     except Exception:
         # la UI non deve rompersi per errori di persistenza
