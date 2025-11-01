@@ -17,6 +17,18 @@ Nota OS: su Windows l'esperienza migliore è tramite WSL; l'estensione è pienam
 
 ---
 
+## Approccio pratico all’uso di Codex (day-by-day)
+
+**1) Modalità giusta per il task** — Usa *Agent* per refactor/manutenzione locale; *Chat* per brainstorming; *Full Access* solo per migrazioni massicce e su branch dedicati.
+**2) Regole dove servono** — Codex legge gli `AGENTS.md` del repo e il tuo `~/.codex/AGENTS.md`: i primi governano il progetto, il secondo preferenze personali. L’**indice** (`docs/AGENTS_INDEX.md`) resta la SSoT.
+**3) Prompt minimi ma vincolanti** — Chiedi micro-PR idempotenti, diff esplicito e chiusura con `make qa-safe` (o equivalente).
+**4) Coerenza automatica** — Se tocchi un `AGENTS.md`, rigenera la Matrice dell’indice con `pre-commit run agents-matrix-check --all-files`.
+**5) Sicurezza & qualità** — Path-safety/I-O atomico, niente side-effects a import-time; linting/typing e test deterministici **senza rete**.
+
+Obiettivo: accelerare il lavoro senza sorprese. L’agente propone, tu approvi: HiTL come regola, *repo-aware* come prassi.
+
+---
+
 ## Prerequisiti Rapidi
 - Installa l'estensione Codex in VS Code (oppure usa Codex CLI in locale).
 - Crea la cartella di configurazione locale: `~/.codex/` (Windows: `C:\Users\<User>\.codex\`).

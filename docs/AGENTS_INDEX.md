@@ -2,6 +2,19 @@
 
 Questo indice raccoglie le regole comuni che gli agent devono seguire nel repository. Evitare duplicazioni: i singoli `AGENTS.md` nelle sottocartelle devono contenere solo gli override specifici del loro ambito e rimandare qui per tutto il resto.
 
+## Approccio operativo (AGENT-first, HiTL)
+
+Questo repository tratta l’agente come un *teammate* con responsabilità chiare: le **policy comuni** vivono qui, gli `AGENTS.md` di area definiscono solo **override minimi** e rimandano all’indice. L’approccio è **Human-in-the-Loop**: l’agente propone micro-PR idempotenti, **non** introduce side-effects, e chiude il loop con lint/type/test.
+
+Cardini dell’approccio:
+- **SSoT & Safety** — tutte le read/write passano dalle utility e restano nel perimetro del workspace; niente effetti collaterali non dichiarati.
+- **Micro-PR** — cambi piccoli, motivati, con diff chiaro; se tocchi X allinea Y/Z (docs, test, frontmatter).
+- **Matrix come contratto** — questa tabella è il *punto di verità* tra aree: build/test/lint/path-safety/documentazione sono obblighi, non suggerimenti.
+- **Gating UX** — nelle superfici UI le azioni seguono lo **stato** (es. la Semantica si abilita solo con RAW presente), evitando operazioni non idempotenti.
+
+In sintesi: policy **qui**, override **nei loro AGENTS**, e l’agente lavora *on-rails* per garantire coerenza e ripetibilità.
+
+
 <!-- MATRIX:BEGIN -->
 > **Matrice di override (panoramica rapida)**
 > Gli `AGENTS.md` locali definiscono solo le deroghe/override; le policy comuni restano in questo indice.

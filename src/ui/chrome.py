@@ -55,6 +55,12 @@ def _on_dummy_kb() -> None:
                     check=False,
                     timeout=60,
                 )
+            except subprocess.TimeoutExpired:
+                status_widget.update(label="CLI in timeout (60s)", state="error")
+                st.error(
+                    "Operazione interrotta: superato il limite di 60s. Verifica i servizi (Drive/Vision) e riprova."
+                )
+                return
             except Exception as exc:
                 status_widget.update(label="Errore di esecuzione CLI", state="error")
                 st.error(f"Impossibile avviare lo script: {exc}")
