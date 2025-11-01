@@ -62,3 +62,22 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     message, extra = dummy_logger.records[0]
     assert message == "ui.gating.sem_hidden"
     assert extra["slug"] == "dummy"
+
+
+def test_compute_gates_disables_missing_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, Optional[str]] = {}
+
+    def _fake_available(module_name: str, *, attr: Optional[str] = None) -> bool:
+        calls[module_name] = attr
+        return module_name != "ui.services.drive_runner"
+
+    monkeypatch.setattr(gating, "_module_available", _fake_available, raising=False)
+
+    gates = gating.compute_gates({})
+
+    assert gates.drive is False
+    assert gates.vision is True
+    assert gates.tags is True
+    assert calls["ui.services.drive_runner"] == "plan_raw_download"
+    assert calls["ui.services.vision_provision"] == "run_vision"
+    assert calls["ui.services.tags_adapter"] == "run_tags_update"

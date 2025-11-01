@@ -448,7 +448,19 @@ if slug:
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
     # Colonna 1 – README su Drive
-    if _column_button(c1, "Genera README in raw/ (Drive)", key="btn_emit_readmes", type=emit_btn_type, width="stretch"):
+    emit_disabled = _emit_readmes_for_raw is None
+    if emit_disabled:
+        st.info(
+            "Funzione Drive non disponibile: installa gli extra (`pip install .[drive]`) e configura le credenziali."
+        )
+    if _column_button(
+        c1,
+        "Genera README in raw/ (Drive)",
+        key="btn_emit_readmes",
+        type=emit_btn_type,
+        width="stretch",
+        disabled=emit_disabled,
+    ):
         emit_fn = _emit_readmes_for_raw
         if emit_fn is None:
             st.error(
@@ -534,7 +546,19 @@ if slug:
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
 
     # Colonna 3 – Scarica da Drive → locale
-    if _column_button(c3, "Scarica PDF da Drive → locale", key="btn_drive_download", type="secondary", width="stretch"):
+    download_disabled = _plan_raw_download is None or not (os.getenv("SERVICE_ACCOUNT_FILE") and os.getenv("DRIVE_ID"))
+    if download_disabled:
+        st.info(
+            "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive."
+        )
+    if _column_button(
+        c3,
+        "Scarica PDF da Drive → locale",
+        key="btn_drive_download",
+        type="secondary",
+        width="stretch",
+        disabled=download_disabled,
+    ):
 
         def _modal() -> None:
             st.write(

@@ -225,6 +225,7 @@ if not st.session_state.get("preflight_ok", False):
                     help="Bypassa il preflight in questa sessione senza modificare la preferenza persistente.",
                 )
                 if apply_preflight_once(once_skip, st.session_state, LOGGER):
+                    LOGGER.info("ui.preflight.once", extra={"mode": "one_shot"})
                     st.toast("Preflight saltato per questa run.")
                     st.rerun()
 

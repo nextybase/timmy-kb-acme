@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import os
 from dataclasses import dataclass
@@ -23,9 +24,17 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     return raw.strip().casefold() not in _DISABLE_VALUES
 
 
-def _module_available(module_name: str) -> bool:
-    """Ritorna True se il modulo è importabile senza eseguirlo."""
-    return importlib.util.find_spec(module_name) is not None
+def _module_available(module_name: str, *, attr: str | None = None) -> bool:
+    """Ritorna True se il modulo e, opzionalmente, l'attributo richiesto sono disponibili."""
+    if importlib.util.find_spec(module_name) is None:
+        return False
+    if attr is None:
+        return True
+    try:
+        module = importlib.import_module(module_name)
+    except Exception:
+        return False
+    return callable(getattr(module, attr, None))
 
 
 @dataclass(frozen=True)
@@ -47,9 +56,9 @@ def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
     """
     env_map = env if env is not None else os.environ
 
-    drive_available = _module_available("ui.services.drive_runner")
-    vision_available = _module_available("ui.services.vision_provision")
-    tags_available = _module_available("ui.services.tags_adapter")
+    drive_available = _module_available("ui.services.drive_runner", attr="plan_raw_download")
+    vision_available = _module_available("ui.services.vision_provision", attr="run_vision")
+    tags_available = _module_available("ui.services.tags_adapter", attr="run_tags_update")
 
     drive = _flag(env_map, "DRIVE", drive_available)
     vision = _flag(env_map, "VISION", vision_available)
