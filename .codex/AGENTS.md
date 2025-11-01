@@ -1,5 +1,7 @@
 # Codex - Checklist di accettazione
 
+- Prima di qualsiasi intervento, apri e rileggi `docs/runbook_codex.md`.
+
 ## Regole
 - **Path-safety**: scrivo solo in `src/`, `docs/`, `.codex/` (mai in `config/**`, `.env*`, `output/**`).
 - **Scritture atomiche**: temp + replace; zero side-effect a import-time.
