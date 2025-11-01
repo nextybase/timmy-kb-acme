@@ -53,6 +53,7 @@ def _on_dummy_kb() -> None:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=60,
                 )
             except Exception as exc:
                 status_widget.update(label="Errore di esecuzione CLI", state="error")

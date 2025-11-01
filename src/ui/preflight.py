@@ -17,8 +17,10 @@ except Exception:  # pragma: no cover
     st = None
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
+from pipeline.logging_utils import get_structured_logger
 
 CheckItem = Tuple[str, bool, str]
+LOGGER = get_structured_logger("ui.preflight")
 
 
 def _maybe_load_dotenv() -> None:
@@ -53,8 +55,15 @@ def _docker_ok() -> tuple[bool, str]:
             stderr=subprocess.DEVNULL,
             check=True,
             shell=False,
+            timeout=5,
         )
         return True, ""
+    except subprocess.TimeoutExpired as exc:
+        try:
+            LOGGER.warning("ui.preflight.docker_timeout", exc_info=exc)
+        except Exception:
+            pass
+        return False, "Docker non risponde (timeout 5s)"
     except Exception:
         return False, "Docker non in esecuzione (avvialo e riprova)"
 

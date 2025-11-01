@@ -11,6 +11,7 @@ Espone:
 
 import importlib.util
 import os
+from collections.abc import Mapping
 from typing import Any, Dict, Optional
 
 from pipeline.logging_utils import get_structured_logger
@@ -101,20 +102,26 @@ def get_env_var(name: str, default: Optional[str] = None, *, required: bool | No
     return sval
 
 
-def get_bool(name: str, default: bool = False) -> bool:
-    """Parsa un booleano da ENV usando valori comuni truthy/falsy.
+def get_bool(name: str, default: bool = False, *, env: Mapping[str, str] | None = None) -> bool:
+    """Parsa un booleano da ENV (o mapping fornito) usando valori comuni truthy/falsy.
 
     Truthy: 1,true,yes,on (case-insensitive). Falsy: 0,false,no,off.
     Se non impostata o non riconosciuta, ritorna ``default``.
+    Passando ``env`` si evita il caricamento di .env ed è possibile usare mapping custom.
     """
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
-    val = os.environ.get(name)
+    source: Mapping[str, str]
+    if env is not None:
+        source = env
+    else:
+        try:
+            ensure_dotenv_loaded()
+        except Exception:
+            pass
+        source = os.environ
+    val = source.get(name)
     if val is None:
         return bool(default)
-    s = val.strip().lower()
+    s = str(val).strip().lower()
     if s in {"1", "true", "yes", "on"}:
         return True
     if s in {"0", "false", "no", "off"}:

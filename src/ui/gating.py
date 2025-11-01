@@ -10,7 +10,7 @@ from ui.pages.registry import PagePaths, PageSpec, page_specs
 from ui.utils import get_active_slug
 from ui.utils.workspace import has_raw_pdfs
 
-_DISABLE_VALUES = {"0", "false", "False", "FALSE", "", "off", "OFF"}
+_DISABLE_VALUES = {"0", "false", "off", "no", ""}
 
 _LOGGER = get_structured_logger("ui.gating")
 _LAST_RAW_READY: dict[str, bool] = {}
@@ -20,7 +20,7 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     raw = env.get(name)
     if raw is None:
         return default
-    return raw.strip() not in _DISABLE_VALUES
+    return raw.strip().casefold() not in _DISABLE_VALUES
 
 
 def _module_available(module_name: str) -> bool:
