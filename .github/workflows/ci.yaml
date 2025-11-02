@@ -66,6 +66,8 @@ jobs:
         run: black --check src tests
       - name: Ruff (check)
         run: ruff check src tests
+      - name: Pytest light regressions
+        run: pytest -q -m "regression_light"
       - name: Mypy
         run: mypy src
       - name: Pytest (coverage 85%)

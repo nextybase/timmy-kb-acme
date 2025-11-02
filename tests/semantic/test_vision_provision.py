@@ -8,7 +8,10 @@ import pytest
 import yaml
 
 import semantic.vision_provision as vp
+from pipeline.exceptions import ConfigError
 from semantic.vision_provision import HaltError, provision_from_vision
+
+pytestmark = pytest.mark.regression_light
 
 
 class _Ctx:
@@ -195,3 +198,95 @@ def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     sem_dir = tmp_path / "semantic"
     assert not (sem_dir / "semantic_mapping.yaml").exists()
     assert not (sem_dir / "cartelle_raw.yaml").exists()
+
+
+def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-srl"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+
+    def _fail_extract(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("_extract_pdf_text non dovrebbe essere invocato quando prepared_prompt è fornito.")
+
+    monkeypatch.setattr(vp, "_extract_pdf_text", _fail_extract)
+
+    captured: dict[str, object] = {}
+
+    def _fake_call(**kwargs: object) -> dict[str, object]:
+        captured.update({k: v for k, v in kwargs.items() if k in {"user_messages", "strict_output"}})
+        return _ok_payload(slug)
+
+    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
+
+    prepared_prompt = "Prompt precompilato per il Vision Statement."
+
+    res = provision_from_vision(
+        ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        prepared_prompt=prepared_prompt,
+    )
+
+    mapping = Path(res["mapping"])
+    raw = Path(res["cartelle_raw"])
+    assert mapping.exists() and raw.exists()
+
+    user_messages = captured.get("user_messages")
+    assert isinstance(user_messages, list) and user_messages, "user_messages non valorizzato."
+    first_msg = user_messages[0]
+    assert isinstance(first_msg, dict)
+    assert first_msg.get("content") == prepared_prompt
+
+
+def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-srl"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
+    monkeypatch.setenv("ASSISTANT_ID", "asst_fallback")
+
+    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+
+    captured: dict[str, object] = {}
+
+    def _fake_call(**kwargs: object) -> dict[str, object]:
+        captured["assistant_id"] = kwargs.get("assistant_id")
+        return _ok_payload(slug)
+
+    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
+
+    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+
+    assert Path(res["mapping"]).exists()
+    assert Path(res["cartelle_raw"]).exists()
+    assert captured.get("assistant_id") == "asst_fallback"
+
+
+def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-srl"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
+    monkeypatch.delenv("ASSISTANT_ID", raising=False)
+
+    def _fail_extract(*_args: object, **_kwargs: object) -> None:  # pragma: no cover - should not be called
+        raise AssertionError("_extract_pdf_text non dovrebbe essere invocato quando manca l'Assistant ID.")
+
+    monkeypatch.setattr(vp, "_extract_pdf_text", _fail_extract)
+    monkeypatch.setattr(
+        vp,
+        "_call_assistant_json",
+        lambda **_k: pytest.fail("_call_assistant_json non dovrebbe essere raggiunto."),
+    )
+
+    with pytest.raises(ConfigError) as excinfo:
+        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+
+    assert "Assistant ID" in str(excinfo.value)
