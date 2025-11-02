@@ -9,15 +9,11 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, ContextManager, Dict, Literal, Optional, Tuple, cast
 
-import yaml
-
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
-from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
-from semantic.validation import validate_context_slug
 from timmykb.pre_onboarding import ensure_local_workspace_for_ui
 from ui.utils.workspace import workspace_root
 
@@ -42,7 +38,7 @@ def _safe_rerun() -> None:
         try:
             rerun_fn()
         except Exception:
-            # In alcune versioni Streamlit può sollevare eccezioni interne di rerun: ignoriamo.
+            # In alcune versioni Streamlit puÃ² sollevare eccezioni interne di rerun: ignoriamo.
             pass
 
 
@@ -218,7 +214,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     return True, slug, client_name
 
 
-# Legacy helper mantenuto per compatibilità con i test esistenti
+# Legacy helper mantenuto per compatibilitÃ  con i test esistenti
 def _render_logo() -> None:
     render_brand_header(
         st_module=st,
@@ -229,12 +225,21 @@ def _render_logo() -> None:
     )
 
 
-def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
-    """Landing slug-first con verifica e bootstrap Vision Statement."""
+def _normalize_slug_value(value: str | None) -> str:
+    return (value or "").strip()
 
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
 
+def _validate_candidate_slug(candidate: str) -> tuple[bool, Optional[str]]:
+    if not candidate:
+        return False, "Inserisci uno slug."
+    try:
+        validate_slug(candidate)
+    except InvalidSlug:
+        return False, "Slug non valido. Usa solo minuscole, numeri e trattini."
+    return True, None
+
+
+def render_header_form(slug_state: str, log: Optional[logging.Logger]) -> tuple[str, bool]:
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -250,59 +255,53 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         if callable(safe_write):
             safe_write("")
 
-    c1, c2, c3 = st.columns([1, 2, 1])
-    slug_state = _state_get("slug", "")
-    verify_clicked = False
-    form_error = False
-    slug_submitted = False
-    with c2:
+    _, col_form, _ = st.columns([1, 2, 1])
+    with col_form:
         with _safe_form("ls_slug_form", clear_on_submit=False):
-            slug_input = st.text_input(
-                "Slug cliente",
-                value=slug_state,
-                key="ls_slug",
-                placeholder="es. acme",
-            )
-            verify_clicked = _safe_form_submit(
-                "Verifica cliente",
-                type="primary",
-            )
+            slug_input = st.text_input("Slug cliente", value=slug_state, key="ls_slug", placeholder="es. acme")
+            verify_clicked = _safe_form_submit("Verifica cliente", type="primary")
         if get_bool("UI_ALLOW_EXIT", default=False):
             st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
+    return slug_input, verify_clicked
+
+
+def handle_verify_workflow(
+    slug_state: str,
+    slug_input: str,
+    verify_clicked: bool,
+    vision_state: Optional[Dict[str, Any]],
+) -> tuple[str, Dict[str, Any], bool, bool]:
+    slug_state = _normalize_slug_value(slug_state)
+    slug_submitted = False
+    form_error = False
+
+    state_dict: Dict[str, Any] = vision_state if isinstance(vision_state, dict) else {}
 
     if verify_clicked:
-        candidate = (slug_input or "").strip()
-        if not candidate:
-            st.error("Inserisci uno slug.")
+        candidate = _normalize_slug_value(slug_input)
+        valid, message = _validate_candidate_slug(candidate)
+        if not valid:
+            if message:
+                st.error(message)
             _state_set("slug", "")
-            slug_state = ""
-            form_error = True
-        else:
-            try:
-                validate_slug(candidate)
-            except InvalidSlug:
-                st.error("Slug non valido. Usa solo minuscole, numeri e trattini.")
-                form_error = True
-            else:
-                slug_state = candidate
-                slug_submitted = True
-                _state_set("slug", slug_state)
+            return "", state_dict, slug_submitted, True
+        slug_state = candidate
+        _state_set("slug", slug_state)
+        slug_submitted = True
 
-    slug = (slug_state or "").strip()
-    vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))
+    slug = _normalize_slug_value(slug_state)
 
-    if not slug and isinstance(vision_state, dict):
-        persisted_slug = str(vision_state.get("slug") or "").strip()
+    if not slug and state_dict:
+        persisted_slug = _normalize_slug_value(str(state_dict.get("slug") or ""))
         if persisted_slug:
             slug = persisted_slug
-            slug_state = persisted_slug
             _state_set("slug", persisted_slug)
 
-    if not slug or form_error:
-        return False, "", ""
+    if not slug:
+        return "", state_dict, slug_submitted, form_error
 
-    if not vision_state or vision_state.get("slug") != slug:
-        vision_state = {
+    if not state_dict or state_dict.get("slug") != slug:
+        state_dict = {
             "slug": slug,
             "client_name": "",
             "verified": False,
@@ -315,8 +314,16 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
             "mapping_yaml": "",
             "cartelle_yaml": "",
         }
-        _state_set("vision_workflow", vision_state)
+    _state_set("vision_workflow", state_dict)
+    return slug, state_dict, slug_submitted, form_error
 
+
+def render_workspace_summary(
+    slug: str,
+    vision_state: Dict[str, Any],
+    slug_submitted: bool,
+    log: Optional[logging.Logger],
+) -> tuple[bool, str, str]:
     workspace_dir = _workspace_dir_for(slug)
     workspace_exists = workspace_dir.exists()
 
@@ -343,7 +350,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         type=["pdf"],
         accept_multiple_files=False,
         key="ls_pdf",
-        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
+        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
     )
     if uploaded_pdf is not None:
         raw_pdf = uploaded_pdf.read()
@@ -389,6 +396,7 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
                 _state_set("client_name", client_name or slug)
                 st.success("Workspace creato e YAML generati.")
                 try:
+                    base_dir = Path(vision_state["base_dir"])
                     mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
                     cartelle_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("cartelle_raw", ""))))
                     st.json({"mapping": mapping_abs, "cartelle_raw": cartelle_abs}, expanded=False)
@@ -420,96 +428,40 @@ def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str
         cartelle_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
         mapping_content = read_text_safe(base_dir_path, mapping_path, encoding="utf-8")
         cartelle_content = read_text_safe(base_dir_path, cartelle_path, encoding="utf-8")
-    except Exception:  # pragma: no cover
-        mapping_content = vision_state.get("mapping_yaml", "")
-        cartelle_content = vision_state.get("cartelle_yaml", "")
-    else:
-        vision_state["mapping_yaml"] = mapping_content
-        vision_state["cartelle_yaml"] = cartelle_content
-        _state_set("vision_workflow", vision_state)
+    except Exception:
+        st.warning("Non Ã¨ stato possibile leggere le ultime configurazioni YAML generate.")
+        return False, slug, client_name
 
-    st.markdown("### YAML generati (modificabili)")
+    with st.expander("YAML generati (vision/cartelle)", expanded=False):
+        st.code(mapping_content, language="yaml")
+        st.code(cartelle_content, language="yaml")
 
-    with st.form("yaml_editor_form"):
-        updated_vision = st.text_area(
-            "semantic/semantic_mapping.yaml",
-            value=vision_state.get("mapping_yaml", ""),
-            height=280,
-            key="ls_mapping_text",
-        )
-        updated_cartelle = st.text_area(
-            "semantic/cartelle_raw.yaml",
-            value=vision_state.get("cartelle_yaml", ""),
-            height=280,
-            key="ls_cartelle_text",
-        )
-        if _safe_form_submit("Valida & Salva"):
-            try:
-                # --- Parse YAML (mapping + cartelle) ---
-                try:
-                    map_obj = yaml.safe_load(updated_vision) or {}
-                    cart_obj = yaml.safe_load(updated_cartelle) or {}
-                except Exception as e:
-                    raise ConfigError(f"YAML non valido: {e}") from e
+    return True, slug, client_name
 
-                # --- Validazione MAPPING: hard-fail prima di scrivere ---
-                validate_context_slug(map_obj, expected_slug=slug)
 
-                # --- CARTELLE: auto-heal se context/slug assente, hard-fail se mismatch ---
-                changed_cartelle = False
-                if not isinstance(cart_obj, dict):
-                    cart_obj = {}
-                    changed_cartelle = True
-                ctx_obj = cart_obj.get("context")
-                if not isinstance(ctx_obj, dict):
-                    cart_obj["context"] = {"slug": slug}
-                    changed_cartelle = True
-                else:
-                    raw = ctx_obj.get("slug")
-                    payload_slug = raw.strip() if isinstance(raw, str) else ""
-                    if not payload_slug:
-                        ctx_obj["slug"] = slug
-                        changed_cartelle = True
+def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
+    """Landing slug-first con verifica e bootstrap Vision Statement."""
 
-                # Validazione finale su cartelle (SSoT)
-                validate_context_slug(cart_obj, expected_slug=slug)
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per la landing UI.")
 
-                # Se auto-heal applicato, aggiorna il testo da salvare
-                if changed_cartelle:
-                    updated_cartelle = yaml.safe_dump(cart_obj, allow_unicode=True, sort_keys=False, width=100)
+    slug_state = cast(str, _state_get("slug", "") or "")
+    vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))
 
-                # --- Scritture atomiche con path-safety (solo dopo validazione) ---
-                target_map = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
-                target_cart = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
-                safe_write_text(target_map, updated_vision)
-                safe_write_text(target_cart, updated_cartelle)
-                vision_state["mapping_yaml"] = updated_vision
-                vision_state["cartelle_yaml"] = updated_cartelle
-                st.success("YAML aggiornati.")
-            except ConfigError as exc:  # pragma: no cover
-                if log:
-                    log.exception("landing.save_yaml_failed", extra={"slug": slug})
-                if st is not None:
-                    st.error(str(exc))
-                raise
-            except Exception:  # pragma: no cover
-                if log:
-                    log.exception("landing.save_yaml_failed", extra={"slug": slug})
-                _st_notify(
-                    "error",
-                    "Impossibile salvare gli YAML. Slug incoerente o YAML non valido.",
-                )
-            finally:
-                _state_set("vision_workflow", vision_state)
+    slug_input, verify_clicked = render_header_form(slug_state, log)
+    slug, state_dict, slug_submitted, form_error = handle_verify_workflow(
+        slug_state=slug_state,
+        slug_input=slug_input,
+        verify_clicked=verify_clicked,
+        vision_state=vision_state,
+    )
 
-    if st.button("Vai alla configurazione", key="ls_go_configuration", type="primary", width="stretch"):
-        vision_state["workspace_committed"] = True
-        _state_set("vision_workflow", vision_state)
-        _state_set("client_locked", True)
-        _state_set("active_section", "Configurazione")
-        try:
-            _safe_rerun()
-        except Exception:  # pragma: no cover
-            pass
+    if not slug or form_error:
+        return False, "", ""
 
-    return False, slug, client_name
+    return render_workspace_summary(
+        slug=slug,
+        vision_state=state_dict,
+        slug_submitted=slug_submitted,
+        log=log,
+    )

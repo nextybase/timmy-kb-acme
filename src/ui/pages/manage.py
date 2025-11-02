@@ -120,6 +120,195 @@ def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
     return fn(**kwargs)
 
 
+# ---------------- Action handlers ----------------
+def _handle_tags_raw_save(
+    slug: str,
+    content: str,
+    csv_path: Path,
+    semantic_dir: Path,
+) -> bool:
+    header = (content.splitlines() or [""])[0]
+    if "suggested_tags" not in header:
+        st.error("CSV non valido: manca la colonna 'suggested_tags'.")
+        LOGGER.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
+        return False
+
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
+    st.toast("`tags_raw.csv` salvato.")
+    LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
+    return True
+
+
+def _enable_tags_stub(
+    slug: str,
+    semantic_dir: Path,
+    yaml_path: Path,
+) -> bool:
+    try:
+        semantic_dir.mkdir(parents=True, exist_ok=True)
+        payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
+        previous = None
+        try:
+            previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
+        except Exception:
+            previous = None
+        safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
+        if yaml_path.exists():
+            try:
+                import_tags_yaml_to_db(yaml_path, logger=LOGGER)
+                LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+            except Exception as exc:
+                if previous is not None:
+                    safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
+                    LOGGER.warning(
+                        "ui.manage.tags.rollback",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
+                    )
+                LOGGER.warning(
+                    "ui.manage.tags.db_sync_failed",
+                    extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
+                )
+                st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                return False
+        else:
+            LOGGER.warning(
+                "ui.manage.tags.db_sync_skipped",
+                extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
+            )
+
+        try:
+            updated = set_client_state(slug, "arricchito")
+        except Exception as exc:
+            LOGGER.warning(
+                "ui.manage.state.update_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            updated = False
+
+        if updated:
+            st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+        else:
+            st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
+        LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
+        return True
+    except Exception as exc:
+        st.error(f"Abilitazione (stub) non riuscita: {exc}")
+        LOGGER.warning(
+            "ui.manage.tags_yaml.stub_error",
+            extra={"slug": slug, "error": str(exc)},
+        )
+        return False
+
+
+def _enable_tags_service(
+    slug: str,
+    semantic_dir: Path,
+    csv_path: Path,
+    yaml_path: Path,
+) -> bool:
+    try:
+        from semantic.api import export_tags_yaml_from_db
+        from semantic.tags_io import write_tags_review_stub_from_csv
+        from storage.tags_store import derive_db_path_from_yaml_path
+
+        write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
+        db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+        export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
+        try:
+            updated = set_client_state(slug, "arricchito")
+        except Exception as exc:
+            LOGGER.warning(
+                "ui.manage.state.update_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            updated = False
+        if updated:
+            st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+        else:
+            st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
+        LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+        return True
+    except Exception as exc:
+        st.error(f"Abilitazione non riuscita: {exc}")
+        LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+        return False
+
+
+def _handle_tags_raw_enable(
+    slug: str,
+    semantic_dir: Path,
+    csv_path: Path,
+    yaml_path: Path,
+) -> bool:
+    tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
+    if tags_mode == "stub":
+        return _enable_tags_stub(slug, semantic_dir, yaml_path)
+    run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
+    if run_tags_fn is None and tags_mode != "stub":
+        st.error("Servizio di estrazione tag non disponibile.")
+        return False
+    return _enable_tags_service(slug, semantic_dir, csv_path, yaml_path)
+
+
+def _prepare_download_plan(slug: str) -> tuple[list[str], list[str]]:
+    plan_fn = _plan_raw_download
+    if plan_fn is None:
+        raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
+    return _call_best_effort(plan_fn, slug=slug, require_env=True)
+
+
+def _render_download_plan(conflicts: list[str], labels: list[str]) -> None:
+    if conflicts:
+        with st.expander(f"File gi�� presenti in locale ({len(conflicts)})", expanded=True):
+            st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
+    else:
+        st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
+
+    with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
+        st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
+
+
+def _execute_drive_download(slug: str, conflicts: list[str]) -> bool:
+    try:
+        with status_guard(
+            "Scarico file da Drive...",
+            expanded=True,
+            error_label="Errore durante il download",
+        ) as status_widget:
+            download_fn = _download_with_progress or _download_simple
+            if download_fn is None:
+                raise RuntimeError("Funzione di download non disponibile.")
+            try:
+                paths = _call_best_effort(
+                    download_fn,
+                    slug=slug,
+                    require_env=True,
+                    overwrite=bool(conflicts),
+                )
+            except TypeError:
+                paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
+            count = len(paths or [])
+            if status_widget is not None and hasattr(status_widget, "update"):
+                status_widget.update(label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete")
+
+        try:
+            if _invalidate_drive_index is not None:
+                _invalidate_drive_index(slug)
+            st.toast("Allineamento Drive->locale completato.")
+            return True
+        except Exception:
+            return True
+    except Exception as exc:
+        st.error(f"Errore durante il download: {exc}")
+        return False
+
+
+def _render_drive_status_message(disabled: bool, message: str) -> None:
+    if disabled:
+        st.info(message)
+
+
 # -----------------------------------------------------------
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
@@ -244,96 +433,11 @@ def _open_tags_raw_modal(slug: str) -> None:
         col_a, col_b = st.columns(2)
 
         if _column_button(col_a, "Salva raw", type="secondary"):
-            header = (content.splitlines() or [""])[0]
-            if "suggested_tags" not in header:
-                st.error("CSV non valido: manca la colonna 'suggested_tags'.")
-                LOGGER.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
-                return
-            semantic_dir.mkdir(parents=True, exist_ok=True)
-            safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
-            st.toast("`tags_raw.csv` salvato.")
-            LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
+            _handle_tags_raw_save(slug, content, csv_path, semantic_dir)
 
         if _column_button(col_b, "Abilita", type="primary"):
-            tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
-            if tags_mode == "stub":
-                try:
-                    semantic_dir.mkdir(parents=True, exist_ok=True)
-                    payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
-                    previous = None
-                    try:
-                        previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
-                    except Exception:
-                        previous = None
-                    safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
-                    if yaml_path.exists():
-                        try:
-                            import_tags_yaml_to_db(yaml_path, logger=LOGGER)
-                            LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
-                        except Exception as exc:
-                            if previous is not None:
-                                safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
-                                LOGGER.warning(
-                                    "ui.manage.tags.rollback",
-                                    extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
-                                )
-                            LOGGER.warning(
-                                "ui.manage.tags.db_sync_failed",
-                                extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
-                            )
-                            st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
-                            return
-                    else:
-                        LOGGER.warning(
-                            "ui.manage.tags.db_sync_skipped",
-                            extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
-                        )
-                    try:
-                        updated = set_client_state(slug, "arricchito")
-                    except Exception as exc:
-                        LOGGER.warning(
-                            "ui.manage.state.update_failed",
-                            extra={"slug": slug, "error": str(exc)},
-                        )
-                        updated = False
-                    if updated:
-                        st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
-                    else:
-                        st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
-                    LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
-                    _safe_rerun()
-                except Exception as exc:
-                    st.error(f"Abilitazione (stub) non riuscita: {exc}")
-                    LOGGER.warning(
-                        "ui.manage.tags_yaml.stub_error",
-                        extra={"slug": slug, "error": str(exc)},
-                    )
-            else:
-                try:
-                    from semantic.api import export_tags_yaml_from_db
-                    from semantic.tags_io import write_tags_review_stub_from_csv
-                    from storage.tags_store import derive_db_path_from_yaml_path
-
-                    write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
-                    db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-                    export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
-                    try:
-                        updated = set_client_state(slug, "arricchito")
-                    except Exception as exc:
-                        LOGGER.warning(
-                            "ui.manage.state.update_failed",
-                            extra={"slug": slug, "error": str(exc)},
-                        )
-                        updated = False
-                    if updated:
-                        st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
-                    else:
-                        st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
-                    LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
-                    _safe_rerun()
-                except Exception as exc:
-                    st.error(f"Abilitazione non riuscita: {exc}")
-                    LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+            if _handle_tags_raw_enable(slug, semantic_dir, csv_path, yaml_path):
+                _safe_rerun()
 
     if dialog_factory:
         (dialog_factory("Revisione keyword (tags_raw.csv)")(_body))()
@@ -392,19 +496,10 @@ slug = cast(str, slug)
 
 
 def _render_status_block(
-    pdf_count: int | None = None,
-    service_ok: bool | None = None,
-    semantic_dir: Path | None = None,
+    pdf_count: int,
+    service_ok: bool,
+    semantic_dir: Path,
 ) -> None:
-    if pdf_count is None:
-        pdf_count = globals().get("pdf_count", 0)
-    if service_ok is None:
-        service_ok = bool(globals().get("service_ok"))
-    if semantic_dir is None:
-        semantic_dir = cast(Path, globals().get("semantic_dir"))
-        if semantic_dir is None:
-            raise RuntimeError("semantic_dir non disponibile per _render_status_block")
-
     info_fn = getattr(st, "info", None)
     if callable(info_fn):
         info_fn("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
@@ -449,10 +544,10 @@ if slug:
 
     # Colonna 1 – README su Drive
     emit_disabled = _emit_readmes_for_raw is None
-    if emit_disabled:
-        st.info(
-            "Funzione Drive non disponibile: installa gli extra (`pip install .[drive]`) e configura le credenziali."
-        )
+    _render_drive_status_message(
+        emit_disabled,
+        "Funzione Drive non disponibile: installa gli extra (`pip install .[drive]`) e configura le credenziali.",
+    )
     if _column_button(
         c1,
         "Genera README in raw/ (Drive)",
@@ -547,10 +642,10 @@ if slug:
 
     # Colonna 3 – Scarica da Drive → locale
     download_disabled = _plan_raw_download is None or not (os.getenv("SERVICE_ACCOUNT_FILE") and os.getenv("DRIVE_ID"))
-    if download_disabled:
-        st.info(
-            "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive."
-        )
+    _render_drive_status_message(
+        download_disabled,
+        "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive.",
+    )
     if _column_button(
         c3,
         "Scarica PDF da Drive → locale",
@@ -566,12 +661,8 @@ if slug:
             )
             st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
 
-            conflicts, labels = [], []
             try:
-                plan_fn = _plan_raw_download
-                if plan_fn is None:
-                    raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-                conflicts, labels = _call_best_effort(plan_fn, slug=slug, require_env=True)
+                conflicts, labels = _prepare_download_plan(slug)
             except Exception as e:
                 message = f"Impossibile preparare il piano di download: {e}"
                 HttpErrorType: type[BaseException] | None
@@ -589,7 +680,7 @@ if slug:
 
                 if status == 500:
                     st.error(
-                        f"{message}\n"
+                        f"{message}\\n"
                         "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
                         "Riprovare tra qualche minuto e, se il problema persiste, scaricare i PDF manualmente da Drive "
                         "e copiarli nella cartella `raw/`."
@@ -598,52 +689,14 @@ if slug:
                     st.error(message)
                 return
 
-            if conflicts:
-                with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
-                    st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
-            else:
-                st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
-
-            with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
-                st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
+            _render_download_plan(conflicts, labels)
 
             cA, cB = st.columns(2)
             if _column_button(cA, "Annulla", key="dl_cancel"):
                 return
             if _column_button(cB, "Procedi e scarica", key="dl_proceed", type="primary"):
-                try:
-                    with status_guard(
-                        "Scarico file da Drive…",
-                        expanded=True,
-                        error_label="Errore durante il download",
-                    ) as status_widget:
-                        download_fn = _download_with_progress or _download_simple
-                        if download_fn is None:
-                            raise RuntimeError("Funzione di download non disponibile.")
-                        try:
-                            paths = _call_best_effort(
-                                download_fn,
-                                slug=slug,
-                                require_env=True,
-                                overwrite=bool(conflicts),
-                            )
-                        except TypeError:
-                            paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
-                        count = len(paths or [])
-                        if status_widget is not None and hasattr(status_widget, "update"):
-                            status_widget.update(
-                                label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete"
-                            )
-
-                    try:
-                        if _invalidate_drive_index is not None:
-                            _invalidate_drive_index(slug)
-                        st.toast("Allineamento Drive→locale completato.")
-                        _safe_rerun()
-                    except Exception:
-                        pass
-                except Exception as e:
-                    st.error(f"Errore durante il download: {e}")
+                if _execute_drive_download(slug, conflicts):
+                    _safe_rerun()
 
         dialog_builder = getattr(st, "dialog", None)
         if callable(dialog_builder):

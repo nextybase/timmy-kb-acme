@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -14,6 +15,15 @@ except Exception:  # pragma: no cover
     st = None
 
 OUTPUT_ROOT = Path(__file__).resolve().parents[3] / "output"
+
+
+@dataclass(frozen=True)
+class DiffDataset:
+    drive_entries: Dict[str, Dict[str, Any]]
+    local_entries: Dict[str, Dict[str, Any]]
+    only_drive: List[str]
+    only_local: List[str]
+    differences: List[Dict[str, Any]]
 
 
 def _safe_mtime(path: Path) -> Optional[float]:
@@ -212,32 +222,27 @@ def _group_differences_by_category(rows: List[Dict[str, Any]]) -> Dict[str, List
 # ------------------- RENDER -------------------------------------------------------
 
 
-def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str, Any]]]) -> None:
-    if st is None:
-        return
-
-    st.subheader("Differenze Drive/Locale")
+def build_diff_dataset(
+    slug: str,
+    drive_index: Optional[Dict[str, Dict[str, Any]]],
+) -> DiffDataset:
     drive_index = drive_index or {}
     drive_entries = {key: meta for key, meta in drive_index.items() if key == "raw" or key.startswith("raw/")}
 
-    # Risoluzione sicura del workspace e di raw/
     safe_slug = str(validate_slug(slug))
     workspace = ensure_within_and_resolve(OUTPUT_ROOT, OUTPUT_ROOT / f"timmy-kb-{safe_slug}")
     raw_dir = ensure_within_and_resolve(workspace, workspace / "raw")
-
     local_entries = _build_local_index(raw_dir)
 
     drive_keys = set(drive_entries.keys())
     local_keys = set(local_entries.keys())
 
-    # Differenze base
     only_drive = sorted(k for k in (drive_keys - local_keys) if not _is_readme_pdf(k))
     only_local = sorted(k for k in (local_keys - drive_keys) if not _is_readme_pdf(k))
 
     intersections = sorted(drive_keys & local_keys)
     differences: List[Dict[str, Any]] = []
     for key in intersections:
-        # Escludi README.pdf
         if _is_readme_pdf(key):
             continue
 
@@ -284,28 +289,25 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
             }
         )
 
-    if not drive_entries and not local_entries:
-        st.info("Nessun artefatto disponibile: Drive e directory locale risultano vuoti.")
-        return
-
-    st.caption(
-        "Confronto su dimensione e timestamp (s). Differenze di fuso o sincronizzazione possono produrre scostamenti."
+    return DiffDataset(
+        drive_entries=drive_entries,
+        local_entries=local_entries,
+        only_drive=only_drive,
+        only_local=only_local,
+        differences=differences,
     )
 
-    col_drive, col_local, col_diff = st.columns(3)
-    col_drive.metric("Solo Drive", len(only_drive))
-    col_local.metric("Solo locale", len(only_local))
-    col_diff.metric("Differenze", len(differences))
 
-    # --- Solo su Drive (con link) ------------------------------------------------
-    with st.expander("Solo su Drive", expanded=False):
-        if only_drive:
-            grouped_pairs = _group_keys_by_category(only_drive)
+def render_file_actions(dataset: DiffDataset, st_module: Any) -> None:
+    """Rende le sezioni \"Solo su Drive\" e \"Solo su locale\"."""
+    with st_module.expander("Solo su Drive", expanded=False):
+        if dataset.only_drive:
+            grouped_pairs = _group_keys_by_category(dataset.only_drive)
             for category in sorted(grouped_pairs):
-                with st.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
+                with st_module.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
                     md_rows: List[Dict[str, str]] = []
                     for key, rel in grouped_pairs[category]:
-                        meta = drive_entries.get(key, {}) or {}
+                        meta = dataset.drive_entries.get(key, {}) or {}
                         url = _drive_web_url(meta)
                         name = rel if rel else "(cartella)"
                         display = f"[{name}]({url})" if url else name
@@ -316,32 +318,37 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
                                 "mtime": _format_mtime(meta.get("mtime")),
                             }
                         )
-                    st.markdown(_mk_md_table(md_rows, headers=["file", "size", "mtime"]))
+                    st_module.markdown(_mk_md_table(md_rows, headers=["file", "size", "mtime"]))
         else:
-            st.caption("Nessun elemento solo su Drive.")
+            st_module.caption("Nessun elemento solo su Drive.")
 
-    # --- Solo su locale (tabella semplice, senza link locali) --------------------
-    with st.expander("Solo su locale", expanded=False):
-        if only_local:
-            grouped_pairs = _group_keys_by_category(only_local)
+    with st_module.expander("Solo su locale", expanded=False):
+        if dataset.only_local:
+            grouped_pairs = _group_keys_by_category(dataset.only_local)
             for category in sorted(grouped_pairs):
-                with st.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
-                    st.table(_rows_from_pairs(grouped_pairs[category], local_entries))
+                with st_module.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
+                    st_module.table(_rows_from_pairs(grouped_pairs[category], dataset.local_entries))
         else:
-            st.caption("Nessun elemento solo locale.")
+            st_module.caption("Nessun elemento solo locale.")
 
-    # --- Differenze (con link a Drive quando possibile) --------------------------
-    with st.expander("Differenze dimensione/mtime", expanded=False):
-        if differences:
-            diff_groups = _group_differences_by_category(differences)
+
+def render_diff_table(dataset: DiffDataset, st_module: Any) -> None:
+    """Rende la sezione delle differenze dimensione/mtime con eventuali link Drive."""
+    with st_module.expander("Differenze dimensione/mtime", expanded=False):
+        if dataset.differences:
+            diff_groups = _group_differences_by_category(dataset.differences)
             for category in sorted(diff_groups):
-                with st.expander(f"{category} ({len(diff_groups[category])})", expanded=False):
+                with st_module.expander(f"{category} ({len(diff_groups[category])})", expanded=False):
                     diff_rows: List[Dict[str, str]] = []
                     for row in diff_groups[category]:
-                        # Ricostruisci la chiave Drive per recuperare il meta e creare l'URL
                         rel = row.get("path", "")
-                        key_full = f"raw/{category}" if rel == "(cartella)" else f"raw/{category}/{rel}"
-                        meta = drive_entries.get(key_full, {}) if isinstance(drive_entries, dict) else {}
+                        if category == "(root)":
+                            key_full = "raw" if rel == "(cartella)" else f"raw/{rel}"
+                        else:
+                            key_full = f"raw/{category}" if rel == "(cartella)" else f"raw/{category}/{rel}"
+                        meta = (
+                            dataset.drive_entries.get(key_full, {}) if isinstance(dataset.drive_entries, dict) else {}
+                        )
                         url = _drive_web_url(meta)
                         file_cell = f"[{rel}]({url})" if url and rel and rel != "(cartella)" else (rel or "")
                         diff_rows.append(
@@ -354,11 +361,42 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
                                 "local_mtime": str(row.get("local_mtime", "")),
                             }
                         )
-                    st.markdown(
+                    st_module.markdown(
                         _mk_md_table(
                             diff_rows,
                             headers=["path", "motivo", "drive_size", "local_size", "drive_mtime", "local_mtime"],
                         )
                     )
         else:
-            st.caption("Nessuna differenza rilevata.")
+            st_module.caption("Nessuna differenza rilevata.")
+
+
+def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str, Any]]]) -> None:
+    if st is None:
+        return
+
+    st.subheader("Differenze Drive/Locale")
+    dataset = build_diff_dataset(slug, drive_index)
+
+    if not dataset.drive_entries and not dataset.local_entries:
+        st.info("Nessun artefatto disponibile: Drive e directory locale risultano vuoti.")
+        return
+
+    st.caption(
+        "Confronto su dimensione e timestamp (s). Differenze di fuso o sincronizzazione possono produrre scostamenti."
+    )
+    columns = list(st.columns(3))
+    metrics = [
+        ("Solo Drive", len(dataset.only_drive)),
+        ("Solo locale", len(dataset.only_local)),
+        ("Differenze", len(dataset.differences)),
+    ]
+    for col, (label, value) in zip(columns, metrics, strict=False):
+        metric_fn = getattr(col, "metric", None)
+        if callable(metric_fn):
+            metric_fn(label, value)
+        else:  # fallback minimale per gli stub
+            st.write(f"{label}: {value}")
+
+    render_file_actions(dataset, st)
+    render_diff_table(dataset, st)
