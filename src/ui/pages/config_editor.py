@@ -38,50 +38,55 @@ def _copy_section(data: Dict[str, Any]) -> Dict[str, Any]:
     return dict(data or {})
 
 
-def main() -> None:
-    slug = render_chrome_then_require()
-    ctx, settings = _load_context_and_settings(slug)
-    data = settings.as_dict()
-
-    st.subheader(f"Config Editor · {slug}")
-    st.info(
-        "Questa pagina gestisce solo impostazioni applicative. "
-        "Eventuali segreti restano in .env e sono referenziati da chiavi *_env.",
-        icon="ℹ️",
+def _extract_sections(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    return (
+        _copy_section(data.get("vision", {})),
+        _copy_section(data.get("retriever", {})),
+        _copy_section(data.get("ui", {})),
     )
 
-    vision_cfg = _copy_section(data.get("vision", {}))
-    retriever_cfg = _copy_section(data.get("retriever", {}))
-    ui_cfg = _copy_section(data.get("ui", {}))
 
-    assistant_env = vision_cfg.get("assistant_id_env") or "N/D"
+def render_sidebar(slug: str, assistant_env: str, *, st_module: Any | None = None) -> None:
+    st_mod = st_module or get_streamlit()
+    sidebar = getattr(st_mod, "sidebar", st_mod)
+    sidebar.header("Workspace")
+    sidebar.markdown(f"- **Slug:** `{slug}`")
+    sidebar.markdown(f"- **Assistant ENV:** `{assistant_env}`")
 
-    saved_flag = st.session_state.pop("config_editor_saved", False)
-    if saved_flag:
-        st.success("Configurazione aggiornata.")
 
-    with st.form("config_editor_form"):
-        st.markdown("### Vision")
-        vision_engine = st.text_input(
+def render_body(
+    *,
+    st_module: Any | None,
+    data: Dict[str, Any],
+    vision_cfg: Dict[str, Any],
+    retriever_cfg: Dict[str, Any],
+    ui_cfg: Dict[str, Any],
+    assistant_env: str,
+) -> Tuple[bool, Dict[str, Any]]:
+    st_mod = st_module or get_streamlit()
+
+    with st_mod.form("config_editor_form"):
+        st_mod.markdown("### Vision")
+        vision_engine = st_mod.text_input(
             "Engine",
             value=str(vision_cfg.get("engine", "")),
             help="Identificativo del motore conversazionale (es. assistant).",
         )
-        vision_model = st.text_input(
+        vision_model = st_mod.text_input(
             "Model",
             value=str(vision_cfg.get("model", "")),
             help="Nome del modello Vision/Assistant (es. gpt-4o-mini-2024-07-18).",
         )
-        vision_strict = st.toggle(
+        vision_strict = st_mod.toggle(
             "Strict output",
             value=bool(vision_cfg.get("strict_output", True)),
             help="Se attivo, applica controlli aggiuntivi sugli output del modello.",
         )
-        st.caption(f"Assistant ID referenziato via ENV: `{assistant_env}` (non modificabile qui).")
+        st_mod.caption(f"Assistant ID referenziato via ENV: `{assistant_env}` (non modificabile qui).")
 
-        st.markdown("---")
-        st.markdown("### Retriever")
-        candidate_limit = st.number_input(
+        st_mod.markdown("---")
+        st_mod.markdown("### Retriever")
+        candidate_limit = st_mod.number_input(
             "Candidate limit",
             min_value=MIN_CANDIDATE_LIMIT,
             max_value=MAX_CANDIDATE_LIMIT,
@@ -89,7 +94,7 @@ def main() -> None:
             step=500,
             help="Numero massimo di candidati restituiti dal retriever.",
         )
-        latency_budget = st.number_input(
+        latency_budget = st_mod.number_input(
             "Budget latenza (ms)",
             min_value=0,
             max_value=2000,
@@ -97,20 +102,20 @@ def main() -> None:
             step=50,
             help="Tempo massimo (in millisecondi) consentito per una ricerca.",
         )
-        auto_by_budget = st.toggle(
+        auto_by_budget = st_mod.toggle(
             "Auto per budget",
             value=bool(retriever_cfg.get("auto_by_budget", retriever_cfg.get("auto", False))),
             help="Se attivo, riduce automaticamente il numero di candidati in base al budget di latenza.",
         )
 
-        st.markdown("---")
-        st.markdown("### Logging")
-        log_file_path = st.text_input(
+        st_mod.markdown("---")
+        st_mod.markdown("### Logging")
+        log_file_path = st_mod.text_input(
             "Percorso file log",
             value=str(data.get("log_file_path", "logs/onboarding.log")),
             help="Percorso relativo al workspace cliente per il file di log.",
         )
-        log_max_bytes = st.number_input(
+        log_max_bytes = st_mod.number_input(
             "Log max bytes",
             min_value=1024,
             max_value=50 * 1024 * 1024,
@@ -118,7 +123,7 @@ def main() -> None:
             step=1024,
             help="Dimensione massima del file di log prima del rollover.",
         )
-        log_backup_count = st.number_input(
+        log_backup_count = st_mod.number_input(
             "Numero backup log",
             min_value=0,
             max_value=50,
@@ -127,86 +132,184 @@ def main() -> None:
             help="Numero di file di log di backup mantenuti.",
         )
 
-        st.markdown("---")
-        st.markdown("### UI e Debug")
-        skip_preflight = st.toggle(
+        st_mod.markdown("---")
+        st_mod.markdown("### UI e Debug")
+        skip_preflight = st_mod.toggle(
             "Salta preflight iniziale",
             value=bool(ui_cfg.get("skip_preflight", data.get("skip_preflight", False))),
             help="Persistente: memorizza ui.skip_preflight nel config del cliente.",
         )
-        debug_mode = st.toggle(
+        debug_mode = st_mod.toggle(
             "Modalità debug",
             value=bool(data.get("debug", False)),
             help="Abilita flag di debug per i servizi client.",
         )
-        gitbook_image = st.text_input(
+        gitbook_image = st_mod.text_input(
             "Immagine Docker GitBook/HonKit",
             value=str(data.get("gitbook_image", "")),
             help="Repository immagine Docker utilizzata per la preview HonKit.",
         )
-        gitbook_workspace = st.text_input(
+        gitbook_workspace = st_mod.text_input(
             "Workspace GitBook",
             value=str(data.get("gitbook_workspace", "")),
             help="Nome workspace GitBook (se applicabile).",
         )
 
-        submitted = st.form_submit_button("Salva modifiche", type="primary")
+        submitted = st_mod.form_submit_button("Salva modifiche", type="primary")
 
-    if not submitted:
-        return
+    return submitted, {
+        "vision_engine": vision_engine,
+        "vision_model": vision_model,
+        "vision_strict": bool(vision_strict),
+        "candidate_limit": int(candidate_limit),
+        "latency_budget": int(latency_budget),
+        "auto_by_budget": bool(auto_by_budget),
+        "log_file_path": log_file_path,
+        "log_max_bytes": int(log_max_bytes),
+        "log_backup_count": int(log_backup_count),
+        "skip_preflight": bool(skip_preflight),
+        "debug_mode": bool(debug_mode),
+        "gitbook_image": gitbook_image,
+        "gitbook_workspace": gitbook_workspace,
+    }
 
-    validation_errors = []
-    if not vision_engine.strip():
-        validation_errors.append("L'engine Vision non può essere vuoto.")
-    if not vision_model.strip():
-        validation_errors.append("Il modello Vision è obbligatorio.")
-    if validation_errors:
-        for err in validation_errors:
-            st.error(err)
-        return
 
+def _validate_form(values: Dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if not str(values["vision_engine"]).strip():
+        errors.append("L'engine Vision non può essere vuoto.")
+    if not str(values["vision_model"]).strip():
+        errors.append("Il modello Vision è obbligatorio.")
+    return errors
+
+
+def _build_updates(
+    *,
+    vision_cfg: Dict[str, Any],
+    retriever_cfg: Dict[str, Any],
+    ui_cfg: Dict[str, Any],
+    data: Dict[str, Any],
+    values: Dict[str, Any],
+) -> Dict[str, Any]:
     updates: Dict[str, Any] = {}
 
     new_vision = _copy_section(vision_cfg)
-    new_vision["engine"] = vision_engine.strip()
-    new_vision["model"] = vision_model.strip()
-    new_vision["strict_output"] = bool(vision_strict)
+    new_vision["engine"] = str(values["vision_engine"]).strip()
+    new_vision["model"] = str(values["vision_model"]).strip()
+    new_vision["strict_output"] = bool(values["vision_strict"])
     updates["vision"] = new_vision
 
     new_retriever = _copy_section(retriever_cfg)
-    new_retriever["candidate_limit"] = int(candidate_limit)
-    new_retriever["latency_budget_ms"] = int(latency_budget)
-    new_retriever["budget_ms"] = int(latency_budget)
-    new_retriever["auto_by_budget"] = bool(auto_by_budget)
-    new_retriever["auto"] = bool(auto_by_budget)
+    new_retriever["candidate_limit"] = int(values["candidate_limit"])
+    latency_budget = int(values["latency_budget"])
+    new_retriever["latency_budget_ms"] = latency_budget
+    new_retriever["budget_ms"] = latency_budget
+    auto_by_budget = bool(values["auto_by_budget"])
+    new_retriever["auto_by_budget"] = auto_by_budget
+    new_retriever["auto"] = auto_by_budget
     updates["retriever"] = new_retriever
 
-    updates["log_file_path"] = log_file_path.strip()
-    updates["log_max_bytes"] = int(log_max_bytes)
-    updates["log_backup_count"] = int(log_backup_count)
-    updates["debug"] = bool(debug_mode)
+    updates["log_file_path"] = str(values["log_file_path"]).strip()
+    updates["log_max_bytes"] = int(values["log_max_bytes"])
+    updates["log_backup_count"] = int(values["log_backup_count"])
+    updates["debug"] = bool(values["debug_mode"])
 
     new_ui = _copy_section(ui_cfg)
-    new_ui["skip_preflight"] = bool(skip_preflight)
+    new_ui["skip_preflight"] = bool(values["skip_preflight"])
     updates["ui"] = new_ui
 
-    updates["gitbook_image"] = gitbook_image.strip()
-    updates["gitbook_workspace"] = gitbook_workspace.strip()
+    updates["gitbook_image"] = str(values["gitbook_image"]).strip()
+    updates["gitbook_workspace"] = str(values["gitbook_workspace"]).strip()
+    updates.setdefault("skip_preflight", bool(data.get("skip_preflight", False)))
+
+    return updates
+
+
+def handle_actions(
+    ctx: ClientContext,
+    *,
+    st_module: Any | None,
+    data: Dict[str, Any],
+    vision_cfg: Dict[str, Any],
+    retriever_cfg: Dict[str, Any],
+    ui_cfg: Dict[str, Any],
+    form_values: Dict[str, Any],
+) -> bool:
+    st_mod = st_module or get_streamlit()
+
+    validation_errors = _validate_form(form_values)
+    if validation_errors:
+        for err in validation_errors:
+            st_mod.error(err)
+        return False
+
+    updates = _build_updates(
+        vision_cfg=vision_cfg,
+        retriever_cfg=retriever_cfg,
+        ui_cfg=ui_cfg,
+        data=data,
+        values=form_values,
+    )
 
     try:
         update_config_with_drive_ids(ctx, updates, logger=ctx.logger)
     except ConfigError as exc:
-        st.error(f"Impossibile salvare la configurazione: {exc}")
-        return
-    except Exception as exc:
-        st.error(f"Errore imprevisto durante il salvataggio: {exc}")
-        return
+        st_mod.error(f"Impossibile salvare la configurazione: {exc}")
+        return False
+    except Exception as exc:  # pragma: no cover - imprevisti
+        st_mod.error(f"Errore imprevisto durante il salvataggio: {exc}")
+        return False
 
-    st.session_state["config_editor_saved"] = True
+    st_mod.session_state["config_editor_saved"] = True
     try:
-        st.rerun()
+        st_mod.rerun()
     except Exception:
         pass
+    return True
+
+
+def main() -> None:
+    slug = render_chrome_then_require()
+    ctx, settings = _load_context_and_settings(slug)
+    data = settings.as_dict()
+
+    st.subheader(f"Config Editor �� {slug}")
+    st.info(
+        "Questa pagina gestisce solo impostazioni applicative. "
+        "Eventuali segreti restano in .env e sono referenziati da chiavi *_env.",
+        icon="ℹ️",
+    )
+
+    vision_cfg, retriever_cfg, ui_cfg = _extract_sections(data)
+    assistant_env = vision_cfg.get("assistant_id_env") or "N/D"
+
+    render_sidebar(slug, assistant_env, st_module=st)
+
+    saved_flag = st.session_state.pop("config_editor_saved", False)
+    if saved_flag:
+        st.success("Configurazione aggiornata.")
+
+    submitted, form_values = render_body(
+        st_module=st,
+        data=data,
+        vision_cfg=vision_cfg,
+        retriever_cfg=retriever_cfg,
+        ui_cfg=ui_cfg,
+        assistant_env=assistant_env,
+    )
+
+    if not submitted:
+        return
+
+    handle_actions(
+        ctx,
+        st_module=st,
+        data=data,
+        vision_cfg=vision_cfg,
+        retriever_cfg=retriever_cfg,
+        ui_cfg=ui_cfg,
+        form_values=form_values,
+    )
 
 
 if __name__ == "__main__":
