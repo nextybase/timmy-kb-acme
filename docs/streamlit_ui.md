@@ -323,10 +323,10 @@ def test_emette_eventi_tags(caplog, monkeypatch):
 ## Gating e SSoT di stato
 
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
-   - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
-   - `VISION=0` disabilita il provisioning Vision (estrazione PDF, tool assistito).
-  - `TAGS=0` disabilita il tagging e le pagine Semantica e Preview Docker.
-   - Qualsiasi altro valore oppure l'assenza della variabile mantiene il default calcolato dal runtime.
+    - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
+    - `VISION=0` disabilita il provisioning Vision (estrazione PDF, tool assistito).
+    - `TAGS=0` disabilita il tagging e le pagine Semantica e Preview Docker.
+    - Qualsiasi altro valore oppure l'assenza della variabile mantiene il default calcolato dal runtime.
 2. Trasforma i gate in navigation ready con `ui.gating.visible_page_specs(gates)` e passa l'elenco filtrato al router:
 
 ```python

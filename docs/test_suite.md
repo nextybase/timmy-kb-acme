@@ -74,13 +74,13 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Validator unit (tag):** `tests/test_unit_tags_validator.py`.
 - **Reviewed paths:** `tests/test_validate_tags_reviewed_paths.py`.
 
-### 5) UI (Streamlit) – Onboarding workspace e azioni
-- **Landing/paths:** 	est_ui_paths_box.py, 	est_ui_labels.py.
-- **Inizializzazione/rigenerazione:** 	est_ui_regenerate_yaml.py, 	est_ui_save_both_yaml.py, 	est_ui_save_both_yaml_negative.py.
-- **Vision gating/debug:** 	est_ui_vision_gating.py, 	est_ui_debug_expander.py.
-- **Drive services guards:** 	est_ui_drive_services_guards.py.
-- **Preview gating:** 	est_ui_preview_gating.py.
-- **Utilità:** 	est_ui_utils.py.
+### 5) UI (Streamlit) - Onboarding workspace e azioni
+- **Landing/paths:** `tests/test_ui_paths_box.py`, `tests/test_ui_labels.py`.
+- **Inizializzazione/rigenerazione:** `tests/test_ui_regenerate_yaml.py`, `tests/test_ui_save_both_yaml.py`, `tests/test_ui_save_both_yaml_negative.py`.
+- **Vision gating/debug:** `tests/test_ui_vision_gating.py`, `tests/test_ui_debug_expander.py`.
+- **Drive services guards:** `tests/test_ui_drive_services_guards.py`.
+- **Preview gating:** `tests/test_ui_preview_gating.py`.
+- **Utilità:** `tests/test_ui_utils.py`.
 
 > Gli stub Streamlit sono centralizzati in `tests/ui/streamlit_stub.py` e riusati nei test UI.
 
