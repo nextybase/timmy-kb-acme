@@ -42,11 +42,6 @@
         "path": "src/ui/pages/manage.py",
         "title": "Gestisci cliente",
         "url_path": "manage"
-      },
-      {
-        "path": "src/ui/pages/preview.py",
-        "title": "Docker Preview",
-        "url_path": "preview"
       }
     ],
     "Tools": [

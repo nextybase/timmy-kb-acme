@@ -9,10 +9,13 @@ from typing import Any, Optional, cast
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.clients_store import get_state
+from ui.constants import SEMANTIC_READY_STATES
 from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
+from ui.utils.workspace import has_raw_pdfs
 
 st = get_streamlit()
 
@@ -92,46 +95,81 @@ except Exception as exc:
     if caption or body:
         st.caption(caption or body)
 else:
-    col_start, col_stop = st.columns(2)
-    if _column_button(col_start, "Avvia preview", key="btn_preview_start"):
+    raw_ready = False
+    raw_dir: Path | None = None
+    try:
+        ready, raw_path = has_raw_pdfs(slug)
+        raw_ready = bool(ready)
+        raw_dir = raw_path if isinstance(raw_path, Path) else None
+    except Exception:
+        raw_ready = False
+    try:
+        state_value = get_state(slug) or ""
+        state_norm = state_value.strip().lower()
+        semantic_ready = state_norm in SEMANTIC_READY_STATES
+    except Exception:
+        state_norm = ""
+        semantic_ready = False
+    if not raw_ready or not semantic_ready:
+        st.info("Anteprima disponibile dopo l'arricchimento semantico e con PDF presenti in raw/.")
+        st.caption(
+            f"Stato cliente: {state_norm or 'n/d'} · RAW pronto: {'sì' if raw_ready else 'no'}"
+            + (f" (path: {raw_dir})" if raw_dir else "")
+        )
         try:
-            with status_guard(
-                "Avvio la preview...",
-                expanded=True,
-                error_label="Errore durante l'avvio della preview",
-            ) as status:
-                name = _start_preview(ctx, logger, status)
-                st.session_state["preview_container"] = name
-        except Exception as exc:
-            title, body, caption = to_user_message(exc)
-            st.error(title)
-            if caption or body:
-                st.caption(caption or body)
+            logger.info(
+                "ui.preview.not_ready",
+                extra={
+                    "slug": slug,
+                    "raw_ready": raw_ready,
+                    "semantic_ready": semantic_ready,
+                    "state": state_norm,
+                },
+            )
+        except Exception:  # pragma: no cover - logging best effort
+            pass
+        st.session_state.pop("preview_container", None)
+    else:
+        col_start, col_stop = st.columns(2)
+        if _column_button(col_start, "Avvia preview", key="btn_preview_start"):
             try:
-                logger.exception(
-                    "ui.preview.start_failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
-            except Exception:
-                pass
-    if _column_button(col_stop, "Arresta preview", key="btn_preview_stop"):
-        try:
-            with status_guard(
-                "Arresto la preview...",
-                expanded=True,
-                error_label="Errore durante l'arresto della preview",
-            ) as status:
-                _stop_preview(logger, st.session_state.get("preview_container"), status)
-                st.session_state.pop("preview_container", None)
-        except Exception as exc:
-            title, body, caption = to_user_message(exc)
-            st.error(title)
-            if caption or body:
-                st.caption(caption or body)
+                with status_guard(
+                    "Avvio la preview...",
+                    expanded=True,
+                    error_label="Errore durante l'avvio della preview",
+                ) as status:
+                    name = _start_preview(ctx, logger, status)
+                    st.session_state["preview_container"] = name
+            except Exception as exc:
+                title, body, caption = to_user_message(exc)
+                st.error(title)
+                if caption or body:
+                    st.caption(caption or body)
+                try:
+                    logger.exception(
+                        "ui.preview.start_failed",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+                except Exception:
+                    pass
+        if _column_button(col_stop, "Arresta preview", key="btn_preview_stop"):
             try:
-                logger.exception(
-                    "ui.preview.stop_failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
-            except Exception:
-                pass
+                with status_guard(
+                    "Arresto la preview...",
+                    expanded=True,
+                    error_label="Errore durante l'arresto della preview",
+                ) as status:
+                    _stop_preview(logger, st.session_state.get("preview_container"), status)
+                    st.session_state.pop("preview_container", None)
+            except Exception as exc:
+                title, body, caption = to_user_message(exc)
+                st.error(title)
+                if caption or body:
+                    st.caption(caption or body)
+                try:
+                    logger.exception(
+                        "ui.preview.stop_failed",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+                except Exception:
+                    pass
