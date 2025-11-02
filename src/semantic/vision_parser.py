@@ -1,21 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within
 
-if TYPE_CHECKING:
-    from pipeline.path_utils import ensure_within
-
-yaml_module: Any | None = None
 try:
     import yaml as _yaml
-
-    yaml_module = _yaml
 except Exception:  # pragma: no cover
-    yaml_module = None
+    yaml_module: Any | None = None
+else:
+    yaml_module = _yaml
 
 
 def _read_pdf_text(pdf_path: Path) -> str:
@@ -24,103 +23,232 @@ def _read_pdf_text(pdf_path: Path) -> str:
 
         module = importlib.import_module("PyPDF2")
         PdfReader = module.PdfReader
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("PyPDF2 non disponibile: impossibile estrarre testo dal PDF.") from e
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("PyPDF2 non disponibile: impossibile estrarre testo dal PDF.") from exc
 
     try:
         reader = PdfReader(str(pdf_path))
         texts: List[str] = []
         for page in getattr(reader, "pages", []) or []:
             try:
-                t = page.extract_text() or ""
+                extracted = page.extract_text() or ""
             except Exception:
-                t = ""
-            if t:
-                texts.append(t)
+                extracted = ""
+            if extracted:
+                texts.append(extracted)
         return "\n\n".join(texts).strip()
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError(f"Estrazione testo fallita: {e}") from e
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(f"Estrazione testo fallita: {exc}") from exc
 
 
-def _normalize_text(s: str) -> str:
-    # Normalizza newline e spazi multipli
-    s = re.sub(r"\r\n?", "\n", s or "")
-    # Unifica spazi tra parole
-    s = re.sub(r"[ \t\x0b\x0c\u00A0]+", " ", s)
-    return s.strip()
+def _clean_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKC", text or "")
+    replacements = {
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "–": "-",
+        "—": "-",
+        "\u2022": "-",
+        "\u2011": "-",
+        "🔹": "-",
+        "\ufffd": "'",
+    }
+    for old, new in replacements.items():
+        normalized = normalized.replace(old, new)
+    return normalized
+
+
+def _normalize_text(raw: str) -> str:
+    text = re.sub(r"\r\n?", "\n", raw or "")
+    text = text.replace("\u00A0", " ")
+    text = re.sub(r"\n[ \t]+\n", "\n\n", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    return _clean_text(text.strip())
 
 
 def _split_sections(text: str) -> Dict[str, str]:
-    """Placeholder: splitta per heading noti (case-insensitive)."""
     if not text:
         return {}
-    # Titoli noti (regex) -> chiave canonical del modello
+
     patterns: List[Tuple[re.Pattern[str], str]] = [
-        (re.compile(r"\bvision\b", re.IGNORECASE), "vision"),
-        (re.compile(r"\bmission\b", re.IGNORECASE), "mission"),
-        (re.compile(r"framework[-\s]?etico", re.IGNORECASE), "ethical_framework"),
-        (re.compile(r"goal\s*generali", re.IGNORECASE), "goals_general"),
-        (re.compile(r"basket[_\s]?3\b", re.IGNORECASE), "goals_b3"),
-        (re.compile(r"basket[_\s]?6\b", re.IGNORECASE), "goals_b6"),
-        (re.compile(r"basket[_\s]?12\b", re.IGNORECASE), "goals_b12"),
-        (re.compile(r"\buvp\b|unique value proposition", re.IGNORECASE), "uvp"),
-        (re.compile(r"scenario\s*stakeholder.*impatto", re.IGNORECASE), "stakeholders_impact"),
-        (re.compile(r"metriche\s*chiave", re.IGNORECASE), "key_metrics"),
-        (
-            re.compile(r"rischi\s*principali|rischi\s*&\s*mitigazioni", re.IGNORECASE),
-            "risks_mitigations",
-        ),
-        (re.compile(r"modello\s*operativo|operating\s*model", re.IGNORECASE), "operating_model"),
-        (
-            re.compile(r"architettura.*alto\s*livello|architecture.*principles", re.IGNORECASE),
-            "architecture_principles",
-        ),
-        (
-            re.compile(r"strumenti.*governance.*etica|ethics.*governance", re.IGNORECASE),
-            "ethics_governance_tools",
-        ),
-        (re.compile(r"roadmap.*basket", re.IGNORECASE), "roadmap_baskets"),
+        (re.compile(r"^\s*vision\b", re.IGNORECASE | re.MULTILINE), "vision"),
+        (re.compile(r"^\s*mission\b", re.IGNORECASE | re.MULTILINE), "mission"),
+        (re.compile(r"^\s*framework[\s-]+etico", re.IGNORECASE | re.MULTILINE), "framework_etico"),
+        (re.compile(r"^\s*goal\b", re.IGNORECASE | re.MULTILINE), "goal"),
+        (re.compile(r"^\s*descrizione\s+prodotto", re.IGNORECASE | re.MULTILINE), "prodotto_azienda"),
+        (re.compile(r"^\s*descrizione\s+mercato", re.IGNORECASE | re.MULTILINE), "mercato"),
     ]
 
-    # Trova posizioni heading
-    hit_positions: List[Tuple[int, str]] = []
-    for m, key in patterns:
-        for hit in m.finditer(text):
-            hit_positions.append((hit.start(), key))
-    if not hit_positions:
-        return {}
-    hit_positions.sort(key=lambda x: x[0])
+    positions: List[Tuple[int, str]] = []
+    for matcher, key in patterns:
+        match = matcher.search(text)
+        if match:
+            positions.append((match.start(), key))
 
+    if not positions:
+        return {}
+
+    positions.sort(key=lambda item: item[0])
     sections: Dict[str, str] = {}
-    for i, (start, key) in enumerate(hit_positions):
-        end = hit_positions[i + 1][0] if i + 1 < len(hit_positions) else len(text)
+
+    for idx, (start, key) in enumerate(positions):
+        end = positions[idx + 1][0] if idx + 1 < len(positions) else len(text)
         body = text[start:end]
-        # Rimuovi heading dalla sezione (prima riga fino a newline)
         body = re.sub(r"^.*?(\n|$)", "", body, count=1, flags=re.DOTALL)
         sections[key] = body.strip()
+
     return sections
 
 
+def _normalize_block(body: str) -> str:
+    if not body:
+        return ""
+
+    text = body.replace("\u00A0", " ")
+    text = re.sub(r"\r\n?", "\n", text)
+    paragraphs: List[str] = []
+    for chunk in re.split(r"\n\s*\n", text):
+        piece = re.sub(r"\s+", " ", chunk).strip()
+        if piece:
+            paragraphs.append(_clean_text(piece))
+    if not paragraphs:
+        return ""
+    counts = [len(p.split()) for p in paragraphs if p]
+    if counts and (sum(counts) / len(counts)) <= 3:
+        return " ".join(paragraphs)
+    return "\n\n".join(paragraphs)
+
+
+def _format_bullets(text: str) -> str:
+    rewritten = re.sub(r"\s*-\s+", "\n- ", text).strip()
+    if not rewritten:
+        return ""
+
+    prefix_parts: List[str] = []
+    bullets: List[str] = []
+    current: List[str] = []
+
+    for raw_line in rewritten.splitlines():
+        line = raw_line.strip()
+        if line.startswith("- "):
+            content = line[2:].strip()
+            if content.lower().startswith("goal") or not bullets:
+                if current:
+                    bullets.append(" ".join(current).strip())
+                    current = []
+                if prefix_parts and not bullets:
+                    # finalize prefix before first bullet
+                    bullets.append(" ".join(prefix_parts).strip())
+                    prefix_parts = []
+                bullets.append(f"- {content}")
+            else:
+                if bullets:
+                    bullets[-1] = f"{bullets[-1]} {content}"
+                else:
+                    prefix_parts.append(content)
+        else:
+            if bullets:
+                bullets[-1] = f"{bullets[-1]} {line}"
+            else:
+                prefix_parts.append(line)
+
+    if current:
+        bullets.append(" ".join(current).strip())
+
+    header = " ".join(prefix_parts).strip()
+    body = "\n".join(bullets).strip()
+    return "\n".join(part for part in (header, body) if part)
+
+
+def _strip_heading(text: str, *labels: str) -> str:
+    lowered = text.lower()
+    for label in labels:
+        target = label.lower()
+        if lowered.startswith(target):
+            return text[len(label) :].lstrip(" :-")
+    return text
+
+
+def _split_goal_baskets(goal_text: str) -> Dict[str, List[str]]:
+    buckets: Dict[str, List[str]] = {"b3": [], "b6": [], "b12": []}
+    if not goal_text:
+        return buckets
+
+    formatted = _format_bullets(goal_text)
+    pattern = re.compile(
+        r"^-+\s*Goal\s*(\d+)\s*[-–]?\s*(.*?)(?=\n-+\s*Goal\s*\d+|\Z)",
+        re.IGNORECASE | re.DOTALL | re.MULTILINE,
+    )
+    for match in pattern.finditer(formatted):
+        number = int(match.group(1))
+        body = _clean_text(" ".join(match.group(2).split()))
+        if not body:
+            continue
+        if number <= 1:
+            buckets["b3"].append(body)
+        elif number == 2:
+            buckets["b6"].append(body)
+        else:
+            buckets["b12"].append(body)
+
+    if all(not values for values in buckets.values()):
+        fallback = _to_list(formatted)
+        for idx, body in enumerate(fallback):
+            if idx == 0:
+                buckets["b3"].append(body)
+            elif idx == 1:
+                buckets["b6"].append(body)
+            else:
+                buckets["b12"].append(body)
+
+    return buckets
+
+
 def _to_list(body: str) -> List[str]:
-    # Placeholder: split per righe non vuote, normalizzate
-    lines = []
-    for ln in (body or "").splitlines():
-        s = ln.strip().lstrip("-•*")
-        s = re.sub(r"\s+", " ", s)
-        if s:
-            lines.append(s)
-    return lines
+    if not body:
+        return []
+
+    text = body.replace("\u00A0", " ")
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"\n[ \t]*(\n[ \t]*)+", "\n\n", text)
+
+    items: List[str] = []
+    current: List[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                items.append(" ".join(current))
+                current = []
+            continue
+
+        bullet = re.match(r"^[-*•\u2022]+\s*", stripped)
+        if bullet:
+            remainder = stripped[bullet.end() :].strip()
+            parts = remainder.split()
+            is_subword = len(parts) <= 2 and not remainder.endswith((".", "!", "?", ";", ":"))
+            if current and not is_subword:
+                items.append(" ".join(current))
+                current = []
+            stripped = remainder
+
+        if stripped:
+            current.append(stripped)
+
+    if current:
+        items.append(" ".join(current))
+
+    cleaned = [_clean_text(re.sub(r"\s+", " ", item).strip()) for item in items if item.strip()]
+    if cleaned:
+        avg_len = sum(len(entry.split()) for entry in cleaned) / len(cleaned)
+        if avg_len <= 2:
+            return [_normalize_block(" ".join(cleaned))]
+    return cleaned
 
 
 def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
-    """Estrae testo dal PDF e genera `out_yaml_path` con schema YAML stabile.
-
-    Schema:
-      meta.title, vision, mission,
-      ethical_framework[], goals.general[], goals.baskets.{b3,b6,b12}[],
-      uvp[], stakeholders_impact[], key_metrics[], risks_mitigations[],
-      operating_model[], architecture_principles[], ethics_governance_tools[], roadmap_baskets[]
-    """
     pdf_path = Path(pdf_path)
     out_yaml_path = Path(out_yaml_path)
     if not pdf_path.is_file():
@@ -133,32 +261,44 @@ def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
 
     sections = _split_sections(text)
 
-    # Costruisci payload strutturato
+    vision = _normalize_block(sections.get("vision", ""))
+    mission = _strip_heading(_normalize_block(sections.get("mission", "")), "mission")
+    framework = _strip_heading(
+        _normalize_block(sections.get("framework_etico", "")),
+        "framework etico",
+    )
+    goal = _strip_heading(_normalize_block(sections.get("goal", "")), "goal")
+    prodotto = _strip_heading(
+        _normalize_block(sections.get("prodotto_azienda", "")),
+        "descrizione prodotto/azienda",
+        "prodotto/azienda",
+        "descrizione prodotto",
+    )
+    mercato = _strip_heading(
+        _normalize_block(sections.get("mercato", "")),
+        "descrizione mercato",
+        "mercato",
+    )
+
+    goal_buckets = _split_goal_baskets(goal)
+
     payload: Dict[str, object] = {
         "meta": {"title": pdf_path.stem},
-        "vision": sections.get("vision", ""),
-        "mission": sections.get("mission", ""),
-        "ethical_framework": _to_list(sections.get("ethical_framework", "")),
-        "goals": {
-            "general": _to_list(sections.get("goals_general", "")),
-            "baskets": {
-                "b3": _to_list(sections.get("goals_b3", "")),
-                "b6": _to_list(sections.get("goals_b6", "")),
-                "b12": _to_list(sections.get("goals_b12", "")),
-            },
+        "sections": {
+            "vision": vision,
+            "mission": mission,
+            "framework_etico": _format_bullets(framework),
+            "goal": _format_bullets(goal),
+            "prodotto_azienda": _format_bullets(prodotto),
+            "mercato": _format_bullets(mercato),
         },
-        "uvp": _to_list(sections.get("uvp", "")),
-        "stakeholders_impact": _to_list(sections.get("stakeholders_impact", "")),
-        "key_metrics": _to_list(sections.get("key_metrics", "")),
-        "risks_mitigations": _to_list(sections.get("risks_mitigations", "")),
-        "operating_model": _to_list(sections.get("operating_model", "")),
-        "architecture_principles": _to_list(sections.get("architecture_principles", "")),
-        "ethics_governance_tools": _to_list(sections.get("ethics_governance_tools", "")),
-        "roadmap_baskets": _to_list(sections.get("roadmap_baskets", "")),
+        "goals": {
+            "b3": goal_buckets["b3"],
+            "b6": goal_buckets["b6"],
+            "b12": goal_buckets["b12"],
+        },
     }
 
-    # Serializza YAML in modo sicuro/atomico
-    # Evita scritture fuori perimetro
     base_dir = out_yaml_path.parent.parent if out_yaml_path.name else out_yaml_path.parent
     ensure_within(base_dir, out_yaml_path)
 

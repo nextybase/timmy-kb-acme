@@ -1,160 +1,192 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/pages/tools_check.py
-# Flusso: mostra prompt → Prosegui → esegue Vision (senza force, con retry auto se gate) → mostra output → STOP.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import List, Optional
 
-from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
+from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import read_text_safe
+from ui.chrome import render_chrome_then_require
+from ui.fine_tuning import open_system_prompt_modal, open_vision_modal, run_pdf_to_yaml_config
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
-
-from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError
-from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-
-# servizi Vision
-from semantic.vision_provision import prepare_assistant_input
-from ui.chrome import render_chrome_then_require
-from ui.services.vision_provision import provision_from_vision
-from ui.utils.workspace import workspace_root
-
 LOG = get_structured_logger("ui.tools_check")
 
+_SS_VISION_OPEN = "ft_open_vision_modal"
+_SS_SYS_OPEN = "ft_open_system_prompt"
 
-def _client_pdf_path(base_dir: Path) -> Path:
-    cfg = cast(Path, ensure_within_and_resolve(base_dir, base_dir / "config"))
-    return cast(Path, ensure_within_and_resolve(cfg, cfg / "VisionStatement.pdf"))
+try:
+    import yaml
+except Exception:  # pragma: no cover
+    yaml = None  # type: ignore
 
 
 def _is_gate_error(err: Exception) -> bool:
-    """
-    Rileva il gate Vision:
-    - messaggi con 'vision' e radice 'eseguit*' (case/diacritics tolerant)
-    - presenza del marker 'file=vision_hash'
-    - oppure attributo err.file_path che punta al sentinel '.vision_hash'
-    """
-    msg = str(err).casefold()
-    file_path = getattr(err, "file_path", "") or ""
-    has_sentinel = Path(str(file_path)).name == ".vision_hash"
-    text_hit = ("vision" in msg and "eseguit" in msg) or ("file=vision_hash" in msg)
-    return has_sentinel or text_hit
+    """Compat per suite legacy: rileva il gate Vision dalle eccezioni."""
+    message = str(err).casefold()
+    if "vision" in message and "eseguit" in message:
+        return True
+    if "file=vision_hash" in message:
+        return True
+    marker = getattr(err, "file_path", None)
+    if isinstance(marker, (str, Path)) and Path(marker).name == ".vision_hash":
+        return True
+    return False
+
+
+def _st_rerun() -> None:
+    rerun = getattr(st, "rerun", None)
+    if callable(rerun):
+        rerun()
+
+
+def _trigger_modal(flag_key: str) -> None:
+    st.session_state[flag_key] = True
+    _st_rerun()
+
+
+def _consume_flag(flag_key: str) -> bool:
+    if flag_key in st.session_state and st.session_state[flag_key]:
+        st.session_state[flag_key] = False
+        return True
+    return False
+
+
+def _render_controls(slug: str) -> None:
+    col_vision, col_pdf, col_sys = st.columns([1, 1, 1])
+    with col_vision:
+        if st.button("Apri Vision Statement", type="primary", key="btn_open_vision_modal"):
+            st.session_state[_SS_SYS_OPEN] = False
+            _trigger_modal(_SS_VISION_OPEN)
+
+    with col_pdf:
+        if st.button(
+            "PDF -> YAML (config/)",
+            key="btn_pdf_to_yaml",
+            help="Converte config/VisionStatement.pdf in config/vision_statement.yaml",
+        ):
+            try:
+                run_pdf_to_yaml_config()
+            except Exception as exc:  # pragma: no cover
+                LOG.warning("ui.tools_check.pdf_to_yaml_error", extra={"err": str(exc)})
+                st.error(f"Errore durante la conversione: {exc}")
+
+    with col_sys:
+        if st.button("Apri System Prompt", key="btn_open_system_prompt"):
+            st.session_state[_SS_VISION_OPEN] = False
+            _trigger_modal(_SS_SYS_OPEN)
+
+    if _consume_flag(_SS_VISION_OPEN):
+        open_vision_modal(slug=slug)
+    elif _consume_flag(_SS_SYS_OPEN):
+        open_system_prompt_modal()
+
+    last_result = st.session_state.get("ft_last_vision_result")
+    if last_result:
+        with st.expander("Ultimo output Vision", expanded=False):
+            mapping_data = None
+            if isinstance(last_result, dict):
+                mapping_path = last_result.get("mapping")
+                if isinstance(mapping_path, str) and yaml is not None:
+                    try:
+                        mapping_file = Path(mapping_path)
+                        text = read_text_safe(mapping_file.parent, mapping_file)
+                        mapping_data = yaml.safe_load(text) or {}
+                    except Exception as exc:
+                        st.warning(f"Impossibile leggere semantic_mapping.yaml: {exc}")
+
+            if isinstance(mapping_data, dict) and mapping_data.get("areas"):
+                areas = mapping_data.get("areas") or []
+                st.markdown("### Aree generate")
+                for idx, area in enumerate(areas, start=1):
+                    title = f"{idx}. {area.get('key', 'area')}"
+                    with st.expander(title, expanded=False):
+                        ambito = area.get("ambito", "")
+                        breve = area.get("descrizione_breve", "")
+                        dettagli = area.get("descrizione_dettagliata", {}) or {}
+                        include = dettagli.get("include") or []
+                        exclude = dettagli.get("exclude") or []
+                        artefatti_note = dettagli.get("artefatti_note")
+                        documents = area.get("documents") or []
+                        artefatti = area.get("artefatti") or []
+                        correlazioni = area.get("correlazioni") or {}
+
+                        st.markdown(f"**Ambito:** `{ambito}`  \n" f"**Descrizione breve:** {breve}")
+
+                        if include:
+                            st.markdown("**Include:**")
+                            st.markdown("\n".join(f"- {item}" for item in include))
+                        if exclude:
+                            st.markdown("**Exclude:**")
+                            st.markdown("\n".join(f"- {item}" for item in exclude))
+                        if artefatti_note:
+                            st.markdown(f"**Note artefatti:** {artefatti_note}")
+
+                        if documents:
+                            st.markdown("**Documents:**")
+                            st.markdown("\n".join(f"- {doc}" for doc in documents))
+
+                        if artefatti:
+                            st.markdown("**Artefatti:**")
+                            st.markdown("\n".join(f"- {art}" for art in artefatti))
+
+                        entities = correlazioni.get("entities") or []
+                        relations = correlazioni.get("relations") or []
+                        hints = correlazioni.get("chunking_hints") or []
+                        if entities or relations or hints:
+                            st.markdown("**Correlazioni:**")
+                            if entities:
+                                st.markdown("*Entities*")
+                                st.markdown(
+                                    "\n".join(f"- `{ent.get('id')}` ({ent.get('label', '-')})" for ent in entities)
+                                )
+                            if relations:
+                                st.markdown("*Relations*")
+                                relation_lines: List[str] = []
+                                for rel in relations:
+                                    subj = rel.get("subj")
+                                    pred = rel.get("pred")
+                                    obj = rel.get("obj")
+                                    card = rel.get("card")
+                                    relation_lines.append(f"- {subj} --{pred}--> {obj} ({card})")
+                                st.markdown("\n".join(relation_lines))
+                            if hints:
+                                st.markdown("*Chunking hints*")
+                                st.markdown("\n".join(f"- {hint}" for hint in hints))
+
+                metadata_policy = mapping_data.get("metadata_policy")
+                if metadata_policy:
+                    with st.expander("Metadata policy", expanded=False):
+                        st.json(metadata_policy)
+
+                with st.expander("JSON completo", expanded=False):
+                    st.json(mapping_data)
+            elif last_result:
+                with st.expander("JSON completo", expanded=False):
+                    st.json(last_result)
+
+
+def _render_advanced_options() -> None:
+    with st.expander("Opzioni avanzate"):
+        if st.button("Azzera stato pagina", key="btn_reset_state", type="secondary"):
+            keys_to_clear = [k for k in st.session_state if str(k).startswith(("ft_", "_SS_"))]
+            for key in keys_to_clear:
+                st.session_state.pop(key, None)
+            st.success("Stato ripulito.")
 
 
 def main() -> None:
-    # Richiede slug selezionato e disegna chrome coerente
-    slug = render_chrome_then_require()
-    base_dir = workspace_root(slug)
-    pdf_path = _client_pdf_path(base_dir)
+    render_chrome_then_require(allow_without_slug=True)
+    slug: Optional[str] = st.session_state.get("active_slug") or "dummy"
 
-    st.header("Tools > Check")
-    st.caption("Anteprima del prompt, poi esecuzione Vision e visualizzazione dell’output.")
+    st.header("Tools > Tuning")
+    st.caption("Interfaccia rapida per modali Vision/System Prompt e conversione PDF -> YAML.")
 
-    # 1) Costruzione prompt (no token)
-    try:
-        with st.spinner("Preparo il prompt Vision..."):
-            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-            # Usa model="" per evitare warning/typing; il parametro è opzionale a livello logico
-            prepared_prompt: str = prepare_assistant_input(ctx, slug=slug, pdf_path=pdf_path, model="", logger=LOG)
-    except Exception as exc:
-        st.error(f"Impossibile generare il prompt: {exc}")
-        LOG.warning("ui.tools_check.prompt_error", extra={"slug": slug, "err": str(exc)})
-        st.stop()
-
-    # 2) Gate sul prompt
-    st.subheader("Prompt Vision generato")
-    st.text_area("Prompt", value=prepared_prompt, height=420, label_visibility="collapsed", disabled=True)
-    c1, c2 = st.columns(2)
-    if c1.button("Annulla", type="secondary"):
-        st.info("Operazione annullata.")
-        st.stop()
-    go = c2.button("Prosegui", type="primary")
-    if not go:
-        st.stop()
-
-    # 3) Esecuzione Vision: tentativo normale → retry automatico forzato solo se scatta il gate
-    forced = False
-    result: Dict[str, Any] = {}
-    try:
-        with st.spinner("Contatto l’assistente..."):
-            result = provision_from_vision(
-                ctx,
-                logger=LOG,
-                slug=slug,
-                pdf_path=pdf_path,
-                prepared_prompt=prepared_prompt,
-                force=False,  # primo tentativo: non forzare
-                model=None,
-            )
-    except ConfigError as e:
-        if _is_gate_error(e):
-            forced = True
-            with st.spinner("Vision già eseguita: rigenero forzando..."):
-                result = provision_from_vision(
-                    ctx,
-                    logger=LOG,
-                    slug=slug,
-                    pdf_path=pdf_path,
-                    prepared_prompt=prepared_prompt,
-                    force=True,  # retry invisibile all’utente
-                    model=None,
-                )
-        else:
-            st.error(str(e))
-            LOG.warning("ui.tools_check.run_error", extra={"slug": slug, "type": e.__class__.__name__})
-            st.stop()
-    except Exception as e:
-        st.error(f"Errore durante l'esecuzione della Vision: {e}")
-        LOG.warning("ui.tools_check.run_error", extra={"slug": slug, "err": str(e)})
-        st.stop()
-
-    # 4) Output Assistente (+ caption sul tipo di esecuzione) → STOP
-    st.subheader("Output Assistente")
-
-    # Caption discreta sul tipo di esecuzione
-    if forced:
-        st.caption("Esecuzione: **rigenerata forzando** (gate rilevato).")
-    else:
-        st.caption("Esecuzione: **normale** (nessun gate rilevato).")
-
-    shown = False
-
-    # a) YAML del mapping generato (se presente)
-    mapping_path = Path(result.get("mapping", "")) if isinstance(result, dict) else None
-    if mapping_path and mapping_path.exists():
-        try:
-            yaml_text = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
-            st.code(yaml_text, language="yaml")
-            shown = True
-        except Exception:
-            pass
-
-    # b) Eventuale JSON “raw” affiancato (best effort)
-    if mapping_path:
-        maybe_json = mapping_path.with_suffix(".json")
-        if maybe_json.exists():
-            try:
-                raw = read_text_safe(maybe_json.parent, maybe_json, encoding="utf-8")
-                st.code(json.dumps(json.loads(raw), ensure_ascii=False, indent=2), language="json")
-                shown = True
-            except Exception:
-                pass
-
-    # c) Estratto testuale se disponibile nel risultato
-    if isinstance(result, dict) and result.get("assistant_text_excerpt"):
-        st.write(result["assistant_text_excerpt"])
-        shown = True
-
-    if not shown:
-        st.info("Risultato generato. Nessun payload testuale aggiuntivo da mostrare per questa esecuzione.")
-
-    st.success("Completato. Il flusso si ferma qui.")
-    st.stop()
+    _render_controls(slug=slug or "dummy")
+    _render_advanced_options()
 
 
 if __name__ == "__main__":
