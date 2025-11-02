@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import types
 from pathlib import Path
-from typing import Any, Iterable, List, Tuple
+from typing import Any
 
 import pytest
 
 from pipeline.drive import download as drv
-from pipeline.drive.download import MIME_FOLDER, MIME_PDF, download_drive_pdfs_to_local
+from pipeline.drive.download import MIME_PDF, download_drive_pdfs_to_local
+from pipeline.drive.download_steps import DriveCandidate
 from pipeline.exceptions import PipelineError
 
 pytestmark = pytest.mark.regression_light
@@ -29,13 +30,6 @@ class _LoggerStub:
         self.debugs.append((event, extra))
 
 
-def _walk_items() -> Iterable[Tuple[List[str], dict[str, Any]]]:
-    yield ([], {"id": "folder-1", "name": "Reports", "mimeType": MIME_FOLDER})
-    yield (["Reports"], {"id": "pdf-new", "name": "report finale.pdf", "mimeType": MIME_PDF, "size": "12"})
-    yield (["Reports"], {"id": "pdf-same", "name": "existing.pdf", "mimeType": MIME_PDF, "size": "42"})
-    yield (["Reports"], {"id": "note-raw", "name": "notes.txt", "mimeType": "text/plain", "size": "5"})
-
-
 def test_download_drive_pdfs_to_local_downloads_new_and_skips_existing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -48,7 +42,27 @@ def test_download_drive_pdfs_to_local_downloads_new_and_skips_existing(
     existing_file.write_bytes(b"x" * 42)
 
     monkeypatch.setattr(drv, "get_structured_logger", lambda *_a, **_k: _LoggerStub())
-    monkeypatch.setattr(drv, "_walk_drive_tree", lambda *_a, **_k: _walk_items())
+    new_dest = local_root / "Reports" / "report-finale.pdf"
+    candidates = [
+        DriveCandidate(
+            category="Reports",
+            filename="report-finale.pdf",
+            destination=new_dest,
+            remote_id="pdf-new",
+            remote_size=12,
+            metadata={"mimeType": MIME_PDF},
+        ),
+        DriveCandidate(
+            category="Reports",
+            filename="existing.pdf",
+            destination=existing_file,
+            remote_id="pdf-same",
+            remote_size=42,
+            metadata={"mimeType": MIME_PDF},
+        ),
+    ]
+
+    monkeypatch.setattr(drv, "discover_candidates", lambda **_k: candidates)
 
     downloaded: list[Path] = []
 
@@ -85,10 +99,18 @@ def test_download_drive_pdfs_to_local_overwrite_rewrites_file(
     existing.parent.mkdir(parents=True, exist_ok=True)
     existing.write_bytes(b"old")
 
-    def _single_item() -> Iterable[Tuple[List[str], dict[str, Any]]]:
-        yield (["Reports"], {"id": "pdf-new", "name": "existing.pdf", "mimeType": MIME_PDF, "size": "11"})
+    candidates = [
+        DriveCandidate(
+            category="Reports",
+            filename="existing.pdf",
+            destination=existing,
+            remote_id="pdf-new",
+            remote_size=11,
+            metadata={"mimeType": MIME_PDF},
+        )
+    ]
 
-    monkeypatch.setattr(drv, "_walk_drive_tree", lambda *_a, **_k: _single_item())
+    monkeypatch.setattr(drv, "discover_candidates", lambda **_k: candidates)
     monkeypatch.setattr(drv, "get_structured_logger", lambda *_a, **_k: _LoggerStub())
 
     downloaded: list[Path] = []
@@ -116,10 +138,20 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
     ctx = types.SimpleNamespace(base_dir=tmp_path, slug="acme")
     local_root = tmp_path / "raw"
 
-    def _single_item() -> Iterable[Tuple[List[str], dict[str, Any]]]:
-        yield ([], {"id": "pdf-fail", "name": "broken.pdf", "mimeType": MIME_PDF, "size": "10"})
+    dest = local_root / "broken.pdf"
+    candidates = [
+        DriveCandidate(
+            category="",
+            filename="broken.pdf",
+            destination=dest,
+            remote_id="pdf-fail",
+            remote_size=10,
+            metadata={"mimeType": MIME_PDF},
+        )
+    ]
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(drv, "_walk_drive_tree", lambda *_a, **_k: _single_item())
+    monkeypatch.setattr(drv, "discover_candidates", lambda **_k: candidates)
 
     def _fail_download(*_a: Any, **_k: Any) -> None:
         raise RuntimeError("boom")

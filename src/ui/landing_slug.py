@@ -240,6 +240,8 @@ def _validate_candidate_slug(candidate: str) -> tuple[bool, Optional[str]]:
 
 
 def render_header_form(slug_state: str, log: Optional[logging.Logger]) -> tuple[str, bool]:
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per la landing UI.")
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -271,6 +273,8 @@ def handle_verify_workflow(
     verify_clicked: bool,
     vision_state: Optional[Dict[str, Any]],
 ) -> tuple[str, Dict[str, Any], bool, bool]:
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per la landing UI.")
     slug_state = _normalize_slug_value(slug_state)
     slug_submitted = False
     form_error = False
@@ -324,6 +328,8 @@ def render_workspace_summary(
     slug_submitted: bool,
     log: Optional[logging.Logger],
 ) -> tuple[bool, str, str]:
+    if st is None:
+        raise RuntimeError("Streamlit non disponibile per la landing UI.")
     workspace_dir = _workspace_dir_for(slug)
     workspace_exists = workspace_dir.exists()
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing, contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
@@ -691,6 +692,150 @@ def _parent_of(path_str: str) -> str | None:
     return parent or None
 
 
+@dataclass(frozen=True)
+class _TagMutation:
+    canonical: str
+    aliases: list[str]
+    folders: list[tuple[str, float, str]]
+
+
+def parse_yaml_safe(yaml_path: str | Path) -> tuple[Path, Path, list[Any]]:
+    if yaml is None:
+        raise ConfigError("Dependency PyYAML non disponibile per import YAML→DB.")
+
+    ypath = Path(yaml_path)
+    if not ypath.exists():
+        raise ConfigError(f"File YAML non trovato: {ypath}")
+
+    db_path = derive_db_path_from_yaml_path(ypath)
+    ensure_schema_v2(db_path)
+
+    try:
+        safe_yaml_path = ensure_within_and_resolve(ypath.parent, ypath)
+        raw = read_text_safe(ypath.parent, safe_yaml_path, encoding="utf-8")
+        data = yaml.safe_load(raw) or {}
+    except Exception as exc:  # pragma: no cover
+        raise ConfigError(f"YAML non valido: {exc}")
+
+    items = data.get("tags") or []
+    if not isinstance(items, list):
+        raise ConfigError("Struttura YAML non valida: 'tags' deve essere una lista.")
+
+    return ypath, Path(db_path), items
+
+
+def build_mutations(items: list[Any]) -> tuple[list[_TagMutation], int]:
+    mutations: list[_TagMutation] = []
+    skipped = 0
+
+    for item in items:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+
+        canonical = _norm_term(item.get("canonical") or item.get("name"))
+        if not canonical:
+            skipped += 1
+            continue
+
+        raw_aliases = item.get("aliases") or item.get("synonyms") or []
+        aliases: list[str] = []
+        if isinstance(raw_aliases, (list, tuple)):
+            for alias_value in raw_aliases:
+                alias = _norm_term(alias_value)
+                if not alias or alias == canonical:
+                    continue
+                if alias not in aliases:
+                    aliases.append(alias)
+
+        raw_folders = item.get("folders") or []
+        if not isinstance(raw_folders, (list, tuple)):
+            skipped += 1
+            continue
+
+        folder_entries: list[tuple[str, float, str]] = []
+        for entry in raw_folders:
+            try:
+                if isinstance(entry, dict):
+                    raw_path = entry.get("path")
+                    weight = float(entry.get("weight", 1.0))
+                    status = str(entry.get("status", "keep"))
+                else:
+                    raw_path = entry
+                    weight = 1.0
+                    status = "keep"
+                path = _norm_path(raw_path)
+            except ConfigError:
+                raise
+            except Exception:
+                skipped += 1
+                continue
+            folder_entries.append((path, weight, status))
+
+        mutations.append(_TagMutation(canonical=canonical, aliases=aliases, folders=folder_entries))
+
+    return mutations, skipped
+
+
+def persist_with_transaction(
+    conn: Any,
+    mutations: list[_TagMutation],
+    *,
+    default_lang: str,
+) -> dict[str, int]:
+    counts = {"terms": 0, "aliases": 0, "folders": 0, "links": 0, "skipped": 0}
+    seen_terms: set[str] = set()
+    seen_aliases: set[tuple[str, str]] = set()
+    seen_folders: set[str] = set()
+    seen_links: set[tuple[str, str]] = set()
+
+    for mutation in mutations:
+        canonical = mutation.canonical
+
+        try:
+            term_id = upsert_term(conn, canonical, default_lang)
+        except Exception as exc:  # pragma: no cover
+            raise ConfigError(f"Impossibile registrare il termine '{canonical}': {exc}")
+
+        if canonical not in seen_terms:
+            counts["terms"] += 1
+            seen_terms.add(canonical)
+
+        for alias in mutation.aliases:
+            key = (canonical, alias)
+            if key in seen_aliases:
+                continue
+            add_term_alias(conn, term_id, alias)
+            seen_aliases.add(key)
+            counts["aliases"] += 1
+
+        if not mutation.folders:
+            continue
+
+        for path, weight, status in mutation.folders:
+            parent = _parent_of(path)
+            try:
+                folder_id = upsert_folder(conn, path, parent_path=parent)
+            except Exception as exc:  # pragma: no cover
+                raise ConfigError(f"Impossibile registrare la cartella '{path}': {exc}")
+
+            if path not in seen_folders:
+                counts["folders"] += 1
+                seen_folders.add(path)
+
+            link_key = (canonical, path)
+            if link_key in seen_links:
+                continue
+            try:
+                upsert_folder_term(conn, folder_id, term_id, weight=float(weight), status=str(status))
+            except Exception as exc:  # pragma: no cover
+                raise ConfigError(f"Impossibile associare '{canonical}' a '{path}': {exc}")
+            counts["links"] += 1
+            seen_links.add(link_key)
+
+    return counts
+
+
 def import_tags_yaml_to_db(
     yaml_path: str | Path,
     *,
@@ -709,116 +854,28 @@ def import_tags_yaml_to_db(
     """
     log = logger or get_structured_logger("storage.tags_store")
 
-    if yaml is None:
-        raise ConfigError("Dependency PyYAML non disponibile per import YAML→DB.")
-
-    ypath = Path(yaml_path)
-    if not ypath.exists():
-        raise ConfigError(f"File YAML non trovato: {ypath}")
+    ypath, db_path, items = parse_yaml_safe(yaml_path)
     if ypath.name != "tags_reviewed.yaml":
         log.warning(
             "storage.tags_store.import_yaml.nonstandard_name",
             extra={"yaml": str(ypath)},
         )
 
-    db_path = derive_db_path_from_yaml_path(ypath)
-    ensure_schema_v2(db_path)
-
-    try:
-        safe_yaml_path = ensure_within_and_resolve(ypath.parent, ypath)
-        raw = read_text_safe(ypath.parent, safe_yaml_path, encoding="utf-8")
-        data = yaml.safe_load(raw) or {}
-    except Exception as exc:  # pragma: no cover - validazione nel test
-        raise ConfigError(f"YAML non valido: {exc}")
-
-    items = data.get("tags") or []
-    if not isinstance(items, list):
-        raise ConfigError("Struttura YAML non valida: 'tags' deve essere una lista.")
-
-    counts = {"terms": 0, "aliases": 0, "folders": 0, "links": 0, "skipped": 0}
-    seen_terms: set[str] = set()
-    seen_folders: set[str] = set()
-    seen_links: set[tuple[str, str]] = set()
-    seen_aliases: set[tuple[str, str]] = set()
+    mutations, skipped = build_mutations(items)
 
     log.info(
         "storage.tags_store.import_yaml.start",
         extra={"yaml": str(ypath), "db": str(db_path), "items": len(items)},
     )
 
-    with get_conn(db_path) as conn:
-        for item in items:
-            if not isinstance(item, dict):
-                counts["skipped"] += 1
-                continue
-            canonical = _norm_term(item.get("canonical") or item.get("name"))
-            if not canonical:
-                counts["skipped"] += 1
-                continue
+    with get_conn(str(db_path)) as conn:
+        counts = persist_with_transaction(
+            conn,
+            mutations,
+            default_lang=default_lang,
+        )
 
-            try:
-                term_id = upsert_term(conn, canonical, default_lang)
-            except Exception as exc:  # pragma: no cover - propagato in test
-                raise ConfigError(f"Impossibile registrare il termine '{canonical}': {exc}")
-
-            if canonical not in seen_terms:
-                counts["terms"] += 1
-                seen_terms.add(canonical)
-
-            aliases = item.get("aliases") or item.get("synonyms") or []
-            if isinstance(aliases, (list, tuple)):
-                for alias_value in aliases:
-                    alias = _norm_term(alias_value)
-                    if not alias or alias == canonical:
-                        continue
-                    key = (canonical, alias)
-                    if key in seen_aliases:
-                        continue
-                    add_term_alias(conn, term_id, alias)
-                    seen_aliases.add(key)
-                    counts["aliases"] += 1
-
-            folders = item.get("folders") or []
-            if not isinstance(folders, (list, tuple)):
-                counts["skipped"] += 1
-                continue
-
-            for folder_entry in folders:
-                try:
-                    if isinstance(folder_entry, dict):
-                        raw_path = folder_entry.get("path")
-                        weight = float(folder_entry.get("weight", 1.0))
-                        status = str(folder_entry.get("status", "keep"))
-                    else:
-                        raw_path = folder_entry
-                        weight = 1.0
-                        status = "keep"
-                    path = _norm_path(raw_path)
-                except ConfigError:
-                    raise
-                except Exception:
-                    counts["skipped"] += 1
-                    continue
-
-                parent = _parent_of(path)
-                try:
-                    folder_id = upsert_folder(conn, path, parent_path=parent)
-                except Exception as exc:  # pragma: no cover
-                    raise ConfigError(f"Impossibile registrare la cartella '{path}': {exc}")
-
-                if path not in seen_folders:
-                    counts["folders"] += 1
-                    seen_folders.add(path)
-
-                link_key = (canonical, path)
-                if link_key in seen_links:
-                    continue
-                try:
-                    upsert_folder_term(conn, folder_id, term_id, weight=weight, status=status)
-                    counts["links"] += 1
-                    seen_links.add(link_key)
-                except Exception as exc:  # pragma: no cover
-                    raise ConfigError(f"Impossibile associare '{canonical}' a '{path}': {exc}")
+    counts["skipped"] += skipped
 
     log.info(
         "storage.tags_store.import_yaml.completed",

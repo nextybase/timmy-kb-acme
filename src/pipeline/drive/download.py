@@ -42,6 +42,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from googleapiclient.http import MediaIoBaseDownload
 
+from pipeline.drive.download_steps import discover_candidates
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
 from pipeline.path_utils import ensure_within, sanitize_filename
@@ -116,6 +117,22 @@ def _ensure_dest(base_dir: Path, local_root_dir: Path, rel_parts: List[str], fil
     dest_path = (dest_dir / filename).resolve()
     ensure_within(base_dir, dest_path)
     return dest_path
+
+
+def _list_drive_folders(service: Any, parent_id: str) -> List[Dict[str, Any]]:
+    return [
+        item
+        for item in _list_children(service, parent_id, fields="id, name, mimeType")
+        if item.get("mimeType") == MIME_FOLDER
+    ]
+
+
+def _list_drive_pdfs(service: Any, parent_id: str) -> List[Dict[str, Any]]:
+    return [
+        item
+        for item in _list_children(service, parent_id, fields="id, name, mimeType, size")
+        if item.get("mimeType") != MIME_FOLDER
+    ]
 
 
 def _download_one_pdf_atomic(
@@ -215,37 +232,25 @@ def download_drive_pdfs_to_local(
         },
     )
 
+    candidates = discover_candidates(
+        service=service,
+        raw_folder_id=remote_root_folder_id,
+        list_folders=_list_drive_folders,
+        list_pdfs=_list_drive_pdfs,
+        ensure_dest=_ensure_dest,
+        base_dir=base_dir,
+        local_root=local_root_dir,
+        logger=logger,
+    )
+
     downloaded = 0
     errors: List[Tuple[str, str]] = []
 
-    # DFS sul tree Drive
-    for rel_parts, item in _walk_drive_tree(service, remote_root_folder_id):
-        mime = item.get("mimeType")
-        if mime == MIME_FOLDER:
-            # opzionale: crea i folder locali in anticipo (non strettamente necessario)
-            try:
-                _ = _ensure_dest(base_dir, local_root_dir, rel_parts, "__keep__").parent
-            except Exception as e:
-                logger.warning("folder.ensure.fail", extra={"parts": rel_parts, "error": str(e)})
-            continue
+    for cand in candidates:
+        dest_path = cand.destination
+        remote_size = cand.remote_size
+        file_id = cand.remote_id
 
-        if mime != MIME_PDF:
-            continue  # scarichiamo solo PDF
-
-        file_id = item["id"]
-        name = sanitize_filename(item.get("name") or f"{file_id}.pdf")
-        if not name.lower().endswith(".pdf"):
-            name = f"{name}.pdf"
-
-        # Prepara destinazione con guard-rail STRONG
-        try:
-            dest_path = _ensure_dest(base_dir, local_root_dir, rel_parts, name)
-        except Exception as e:
-            logger.warning("dest.ensure.fail", extra={"file": name, "error": str(e)})
-            continue
-
-        # Idempotenza semplice: skip se size invariata
-        remote_size = int(item.get("size") or 0)
         if dest_path.exists() and remote_size > 0:
             try:
                 local_size = dest_path.stat().st_size
@@ -264,7 +269,6 @@ def download_drive_pdfs_to_local(
             except OSError:
                 pass
 
-        # Download atomico
         try:
             _download_one_pdf_atomic(
                 service,

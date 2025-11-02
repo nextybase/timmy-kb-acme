@@ -230,6 +230,19 @@ class _Paths:
     cartelle_yaml: Path
 
 
+@dataclass(frozen=True)
+class _VisionPrepared:
+    slug: str
+    display_name: str
+    safe_pdf: Path
+    prompt_text: str
+    assistant_id: str
+    run_instructions: str
+    use_kb: bool
+    client: Any
+    paths: _Paths
+
+
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
     base = Path(ctx_base_dir)
     sem_dir = ensure_within_and_resolve(base, base / "semantic")
@@ -287,6 +300,7 @@ def _call_assistant_json(
     user_messages: List[Dict[str, str]],
     strict_output: bool = True,
     run_instructions: Optional[str] = None,
+    use_kb: bool = True,
 ) -> Dict[str, Any]:
     """
     Invoca l'Assistant preconfigurato usando Threads/Runs con Structured Outputs (JSON Schema).
@@ -310,8 +324,7 @@ def _call_assistant_json(
     for msg in user_messages:
         client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg["content"])
 
-    _use_kb = get_bool("VISION_USE_KB", default=True)
-    tool_choice = {"type": "file_search"} if _use_kb else "auto"
+    tool_choice = {"type": "file_search"} if use_kb else "auto"
 
     response_format = (
         {
@@ -476,6 +489,152 @@ def prepare_assistant_input(
     return "\n".join(user_block_lines)
 
 
+def _prepare_payload(
+    ctx: Any,
+    slug: str,
+    pdf_path: Path,
+    *,
+    prepared_prompt: Optional[str],
+    model: Optional[str],
+    logger: "logging.Logger",
+) -> _VisionPrepared:
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    try:
+        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+    except ConfigError as exc:
+        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+    if not Path(safe_pdf).exists():
+        raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
+
+    paths = _resolve_paths(str(base_dir))
+    paths.semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    client = make_openai_client()
+
+    vision_cfg: Dict[str, Any] = {}
+    try:
+        vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
+    except Exception:
+        vision_cfg = {}
+    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip() or "OBNEXT_ASSISTANT_ID"
+    assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
+    if not assistant_id:
+        raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
+
+    display_name = getattr(ctx, "client_name", None) or slug
+    prompt_text = (
+        prepared_prompt
+        if prepared_prompt is not None
+        else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
+    )
+
+    use_kb = get_bool("VISION_USE_KB", default=True)
+    if use_kb:
+        run_instructions = (
+            "Durante QUESTA run puoi usare **File Search** (KB allegata all'assistente) "
+            "per verifiche e contesto. I blocchi del Vision Statement restano la fonte primaria. "
+            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+        )
+    else:
+        run_instructions = (
+            "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
+            "usa esclusivamente i blocchi forniti dall'utente. "
+            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+        )
+
+    return _VisionPrepared(
+        slug=slug,
+        display_name=display_name,
+        safe_pdf=Path(safe_pdf),
+        prompt_text=prompt_text,
+        assistant_id=assistant_id,
+        run_instructions=run_instructions,
+        use_kb=use_kb,
+        client=client,
+        paths=paths,
+    )
+
+
+def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
+    return _call_assistant_json(
+        client=prepared.client,
+        assistant_id=prepared.assistant_id,
+        user_messages=[{"role": "user", "content": prepared.prompt_text}],
+        strict_output=True,
+        run_instructions=prepared.run_instructions,
+        use_kb=prepared.use_kb,
+    )
+
+
+def _persist_outputs(
+    prepared: _VisionPrepared,
+    payload: Dict[str, Any],
+    logger: "logging.Logger",
+) -> Dict[str, Any]:
+    slug = prepared.slug
+    _validate_json_payload(payload, expected_slug=slug)
+
+    areas = payload.get("areas")
+    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
+        raise ConfigError("Aree fuori range (3..9)")
+
+    system_folders = payload.get("system_folders")
+    if not isinstance(system_folders, dict) or "identity" not in system_folders or "glossario" not in system_folders:
+        raise ConfigError("System folders mancanti (identity, glossario)")
+
+    lint_warnings = _lint_vision_payload(payload)
+    for warning in lint_warnings:
+        logger.warning(f"{EVENT}.lint", extra={"slug": slug, "warning": warning})
+
+    mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
+    safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
+
+    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug)
+    safe_write_text(prepared.paths.cartelle_yaml, cartelle_yaml_str)
+
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        import importlib.metadata as _ilm
+
+        _sdk_version = _ilm.version("openai")
+    except Exception:
+        _sdk_version = ""
+    record = {
+        "ts": ts,
+        "slug": slug,
+        "client_hash": hash_identifier(prepared.display_name),
+        "pdf_hash": sha256_path(prepared.safe_pdf),
+        "vision_engine": "assistant-inline",
+        "input_mode": "inline-only",
+        "strict_output": True,
+        "yaml_paths": mask_paths(prepared.paths.mapping_yaml, prepared.paths.cartelle_yaml),
+        "sdk_version": _sdk_version,
+        "project": _optional_env("OPENAI_PROJECT") or "",
+        "base_url": _optional_env("OPENAI_BASE_URL") or "",
+        "sections": list(REQUIRED_SECTIONS_CANONICAL),
+        "lint_warnings": lint_warnings,
+    }
+    _write_audit_line(prepared.paths.base_dir, record)
+    logger.info(f"{EVENT}.completed", extra=record)
+
+    retention_days = _snapshot_retention_days()
+    if retention_days > 0:
+        try:
+            purge_old_artifacts(prepared.paths.base_dir, retention_days)
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                f"{EVENT}.retention.failed",
+                extra={"slug": slug, "error": str(exc), "days": retention_days},
+            )
+
+    return {
+        "mapping": str(prepared.paths.mapping_yaml),
+        "cartelle_raw": str(prepared.paths.cartelle_yaml),
+    }
+
+
 def provision_from_vision(
     ctx: Any,
     logger: "logging.Logger",
@@ -491,125 +650,17 @@ def provision_from_vision(
     """
     ensure_dotenv_loaded()
 
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
-    try:
-        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
-    except ConfigError as e:
-        raise e.__class__(str(e), slug=slug, file_path=getattr(e, "file_path", None)) from e
-    if not Path(safe_pdf).exists():
-        raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
-
-    paths = _resolve_paths(str(base_dir))
-    paths.semantic_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1) Client OpenAI + Assistant ID (bloccante se assente)
-    client = make_openai_client()
-    vision_cfg: Dict[str, Any] = {}
-    try:
-        vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
-    except Exception:
-        vision_cfg = {}
-    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip() or "OBNEXT_ASSISTANT_ID"
-    assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
-    if not assistant_id:
-        raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
-
-    display_name = getattr(ctx, "client_name", None) or slug
-
-    # Costruzione messaggio utente: SOLO blocchi testuali (niente file_search)
-    prompt_text = (
-        prepared_prompt
-        if prepared_prompt is not None
-        else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
+    prepared = _prepare_payload(
+        ctx,
+        slug,
+        pdf_path,
+        prepared_prompt=prepared_prompt,
+        model=model,
+        logger=logger,
     )
 
-    # Run instructions: KB attiva di default, disattivabile con VISION_USE_KB=0/false/no/off
-    _use_kb = get_bool("VISION_USE_KB", default=True)
-    if _use_kb:
-        run_instructions = (
-            "Durante QUESTA run puoi usare **File Search** (KB allegata all'assistente) "
-            "per verifiche e contesto. I blocchi del Vision Statement restano la fonte primaria. "
-            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
-        )
-    else:
-        run_instructions = (
-            "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
-            "usa esclusivamente i blocchi forniti dall'utente. "
-            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
-        )
+    response = _invoke_assistant(prepared)
+    if response.get("status") == "halt":
+        raise HaltError(response.get("message_ui", "Vision insufficiente"), response.get("missing", {}))
 
-    # 4) Invocazione Assistant con Structured Outputs
-    data = _call_assistant_json(
-        client=client,
-        assistant_id=assistant_id,
-        user_messages=[{"role": "user", "content": prompt_text}],
-        strict_output=True,
-        run_instructions=run_instructions,
-    )
-
-    if data.get("status") == "halt":
-        raise HaltError(data.get("message_ui", "Vision insufficiente"), data.get("missing", {}))
-
-    # 5) Validazioni hard + linter soft
-    _validate_json_payload(data, expected_slug=slug)
-
-    areas = data.get("areas")
-    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
-        raise ConfigError("Aree fuori range (3..9)")
-
-    system_folders = data.get("system_folders")
-    if not isinstance(system_folders, dict) or "identity" not in system_folders or "glossario" not in system_folders:
-        raise ConfigError("System folders mancanti (identity, glossario)")
-
-    # Linter (non bloccante): warning su QA
-    lint_warnings = _lint_vision_payload(data)
-    for w in lint_warnings:
-        logger.warning(f"{EVENT}.lint", extra={"slug": slug, "warning": w})
-
-    # 6) Scrittura YAML
-    mapping_yaml_str = vision_to_semantic_mapping_yaml(data, slug=slug)
-    safe_write_text(paths.mapping_yaml, mapping_yaml_str)
-
-    cartelle_yaml_str = json_to_cartelle_raw_yaml(data, slug=slug)
-    safe_write_text(paths.cartelle_yaml, cartelle_yaml_str)
-
-    # 7) Audit (best-effort)
-    ts = datetime.now(timezone.utc).isoformat()
-    try:
-        import importlib.metadata as _ilm
-
-        _sdk_version = _ilm.version("openai")
-    except Exception:
-        _sdk_version = ""
-    record = {
-        "ts": ts,
-        "slug": slug,
-        "client_hash": hash_identifier(display_name),
-        "pdf_hash": sha256_path(Path(safe_pdf)),
-        "vision_engine": "assistant-inline",
-        "input_mode": "inline-only",
-        "strict_output": True,
-        "yaml_paths": mask_paths(paths.mapping_yaml, paths.cartelle_yaml),
-        "sdk_version": _sdk_version,
-        "project": _optional_env("OPENAI_PROJECT") or "",
-        "base_url": _optional_env("OPENAI_BASE_URL") or "",
-        "sections": list(REQUIRED_SECTIONS_CANONICAL),
-        "lint_warnings": lint_warnings,
-    }
-    _write_audit_line(paths.base_dir, record)
-    logger.info(f"{EVENT}.completed", extra=record)
-
-    # 8) Retention (best-effort)
-    retention_days = _snapshot_retention_days()
-    if retention_days > 0:
-        try:
-            purge_old_artifacts(paths.base_dir, retention_days)
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                f"{EVENT}.retention.failed",
-                extra={"slug": slug, "error": str(exc), "days": retention_days},
-            )
-
-    return {"mapping": str(paths.mapping_yaml), "cartelle_raw": str(paths.cartelle_yaml)}
+    return _persist_outputs(prepared, response, logger)

@@ -255,7 +255,8 @@ def _prepare_download_plan(slug: str) -> tuple[list[str], list[str]]:
     plan_fn = _plan_raw_download
     if plan_fn is None:
         raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-    return _call_best_effort(plan_fn, slug=slug, require_env=True)
+    result = _call_best_effort(plan_fn, slug=slug, require_env=True)
+    return cast(tuple[list[str], list[str]], result)
 
 
 def _render_download_plan(conflicts: list[str], labels: list[str]) -> None:

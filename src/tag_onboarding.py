@@ -26,8 +26,9 @@ import re
 import sys
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional, Sequence, cast
 
 import storage.tags_store as tags_store
 from pipeline.config_utils import get_client_config
@@ -205,6 +206,192 @@ def scan_raw_to_db(
 
 
 # ============================= NLP → DB (doc_terms / terms / folder_terms) =======================
+
+
+@dataclass(frozen=True)
+class _DocTask:
+    doc_id: int
+    pdf_path: Path
+
+
+def _collect_raw_docs(
+    conn: Any,
+    *,
+    raw_dir_path: Path,
+    only_missing: bool,
+    rebuild: bool,
+    log: logging.Logger,
+) -> tuple[list[_DocTask], int]:
+    docs = list_documents(conn)
+    tasks: list[_DocTask] = []
+
+    def _abs_path_for(doc: dict[str, Any]) -> Path:
+        folder_id_val = doc.get("folder_id")
+        try:
+            folder_id = int(folder_id_val) if folder_id_val is not None else None
+        except (TypeError, ValueError):
+            folder_id = None
+
+        folder_db_path = Path("raw")
+        if folder_id is not None:
+            row = conn.execute("SELECT path FROM folders WHERE id=?", (folder_id,)).fetchone()
+            if row is not None and row[0]:
+                folder_db_path = Path(str(row[0]))
+
+        parts: Sequence[str] = folder_db_path.parts
+        if parts and parts[0] == "raw":
+            parts = parts[1:]
+        folder_fs_path = raw_dir_path.joinpath(*parts)
+
+        if folder_id is not None and not folder_fs_path.exists():
+            log.warning(
+                "NLP skip: cartella non trovata",
+                extra={"folder_id": folder_id, "folder_path": str(folder_fs_path)},
+            )
+
+        filename_val = doc.get("filename")
+        if not isinstance(filename_val, str) or not filename_val.strip():
+            raise ValueError("filename mancante o non valido")
+
+        candidate = folder_fs_path / filename_val
+        return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
+
+    for doc in docs:
+        doc_id_val = doc.get("id")
+        try:
+            doc_id = int(doc_id_val)
+        except (TypeError, ValueError):
+            log.warning("ID documento non valido", extra={"doc": doc})
+            continue
+
+        if only_missing and has_doc_terms(conn, doc_id):
+            continue
+        if rebuild:
+            clear_doc_terms(conn, doc_id)
+
+        try:
+            pdf_path = _abs_path_for(doc)
+        except ValueError:
+            log.warning("NLP skip: filename non valido", extra={"doc": doc})
+            continue
+        if not pdf_path.exists():
+            log.warning("NLP skip: file non trovato", extra={"file_path": str(pdf_path)})
+            continue
+
+        tasks.append(_DocTask(doc_id=doc_id, pdf_path=pdf_path))
+
+    return tasks, len(docs)
+
+
+def _process_document(
+    task: _DocTask,
+    *,
+    lang: str,
+    topn_doc: int,
+    model: str,
+) -> list[tuple[str, float, str]]:
+    from nlp.nlp_keywords import extract_text_from_pdf, fuse_and_dedup, keybert_scores, spacy_candidates, yake_scores
+
+    text = extract_text_from_pdf(str(task.pdf_path))
+    cand_spa = spacy_candidates(text, lang=lang)
+    sc_y = yake_scores(text, top_k=int(topn_doc) * 2, lang=lang)
+    sc_kb = keybert_scores(text, set(cand_spa), model_name=model, top_k=int(topn_doc) * 2)
+    fused = fuse_and_dedup(text, cand_spa, sc_y, sc_kb)
+    fused.sort(key=lambda x: x[1], reverse=True)
+    return [(phrase, score, "ensemble") for phrase, score in fused[: int(topn_doc)]]
+
+
+def _persist_sections(
+    conn: Any,
+    *,
+    topk_folder: int,
+    cluster_thr: float,
+    model: str,
+    log: logging.Logger,
+) -> dict[str, Any]:
+    from nlp.nlp_keywords import cluster_synonyms, topn_by_folder
+
+    folders = conn.execute("SELECT id, path FROM folders ORDER BY id").fetchall()
+    phrase_global: dict[str, float] = {}
+    folder_stats: dict[int, list[tuple[str, float]]] = {}
+
+    for frow in folders:
+        fid = int(frow[0])
+        doc_ids = get_documents_by_folder(conn, fid)
+        if not doc_ids:
+            continue
+        q = "SELECT phrase, score FROM doc_terms WHERE document_id IN (" + ",".join(["?"] * len(doc_ids)) + ")"
+        rows = conn.execute(q, tuple(doc_ids)).fetchall()
+
+        phrase_agg: dict[str, float] = {}
+        for r in rows:
+            ph = str(r[0])
+            sc = float(r[1])
+            phrase_agg[ph] = phrase_agg.get(ph, 0.0) + sc
+
+        if not phrase_agg:
+            continue
+
+        maxv = max(phrase_agg.values()) if phrase_agg else 1.0
+        if maxv <= 0:
+            maxv = 1.0
+        norm_items = [(p, (w / maxv)) for p, w in phrase_agg.items()]
+        norm_items = topn_by_folder(norm_items, k=int(topk_folder))
+
+        for phrase, weight in norm_items:
+            weight_f = float(weight)
+            prev = phrase_global.get(phrase)
+            if prev is None or weight_f > prev:
+                phrase_global[phrase] = weight_f
+        folder_stats[fid] = norm_items
+
+        log.debug("Aggregazione cartella", extra={"folder_id": fid, "terms": len(norm_items)})
+
+    global_list = list(phrase_global.items())
+    clusters = cluster_synonyms(global_list, model_name=model, sim_thr=float(cluster_thr))
+    if clusters:
+        aliases = sum(max(0, len(c.get("synonyms", []) or [])) for c in clusters)
+        avg_size = sum(len(c.get("members", []) or []) for c in clusters) / max(1, len(clusters))
+        log.info(
+            "Cluster calcolati",
+            extra={"k": len(clusters), "avg_size": avg_size, "aliases": aliases},
+        )
+
+    phrase_to_tid: dict[str, int] = {}
+    terms_count = 0
+    alias_count = 0
+    for cl in clusters:
+        canon = cl["canonical"]
+        tid = upsert_term(conn, canon)
+        terms_count += 1
+        phrase_to_tid[canon] = tid
+        for al in cl.get("synonyms", []) or []:
+            tags_store.add_term_alias(conn, tid, al)
+            alias_count += 1
+            phrase_to_tid[al] = tid
+
+    folder_terms_count = 0
+    for fid, items in folder_stats.items():
+        term_agg: dict[int, float] = {}
+        for phrase, weight in items:
+            tid = phrase_to_tid.get(phrase)
+            if tid is None:
+                continue
+            term_agg[tid] = term_agg.get(tid, 0.0) + float(weight)
+
+        log.debug("Aggregazione termini per folder", extra={"folder_id": fid, "terms": len(term_agg)})
+        for tid, weight in sorted(term_agg.items(), key=lambda kv: kv[1], reverse=True):
+            upsert_folder_term(conn, fid, tid, float(weight), status="keep", note=None)
+            folder_terms_count += 1
+
+    return {
+        "terms": terms_count,
+        "aliases": alias_count,
+        "folders": len(folder_stats),
+        "folder_terms": folder_terms_count,
+    }
+
+
 def run_nlp_to_db(
     slug: str,
     raw_dir: Path | str,
@@ -227,193 +414,52 @@ def run_nlp_to_db(
     log = get_structured_logger("tag_onboarding")
 
     with get_conn(str(db_path_path)) as conn:
-        docs = list_documents(conn)
-        processed = 0
+        tasks, total_docs = _collect_raw_docs(
+            conn,
+            raw_dir_path=raw_dir_path,
+            only_missing=only_missing,
+            rebuild=rebuild,
+            log=log,
+        )
         saved_items = 0
 
-        # Per risalire al path assoluto del PDF: usare folders.path (tipo 'raw/..')
-        def abs_path_for(doc: dict[str, Any]) -> Path:
-            folder_id: int | None = None
-            folder_id_raw = doc.get("folder_id")
-            if folder_id_raw is not None:
-                try:
-                    folder_id = int(folder_id_raw)
-                except (TypeError, ValueError):
-                    folder_id = None
-
-            folder_db_path = Path("raw")
-            if folder_id is not None:
-                row = conn.execute("SELECT path FROM folders WHERE id=?", (folder_id,)).fetchone()
-                if row is not None and row[0]:
-                    folder_db_path = Path(str(row[0]))
-
-            folder_parts = folder_db_path.parts
-            if folder_parts and folder_parts[0] == "raw":
-                folder_parts = folder_parts[1:]
-            folder_fs_path = raw_dir_path.joinpath(*folder_parts)
-
-            if folder_id is not None and not folder_fs_path.exists():
-                log.warning(
-                    "NLP skip: cartella non trovata",
-                    extra={"folder_id": folder_id, "folder_path": str(folder_fs_path)},
-                )
-
-            filename_val = doc.get("filename")
-            if not isinstance(filename_val, str) or not filename_val.strip():
-                raise ValueError("filename mancante o non valido")
-
-            candidate = folder_fs_path / filename_val
-            return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
-
-        for i, doc in enumerate(docs, start=1):
-            doc_id_raw = cast(Any, doc.get("id"))
-            try:
-                doc_id = int(doc_id_raw)
-            except (TypeError, ValueError):
-                log.warning("ID documento non valido", extra={"doc": doc})
-                continue
-
-            if only_missing and has_doc_terms(conn, doc_id):
-                continue
-            if rebuild:
-                clear_doc_terms(conn, doc_id)
-
-            try:
-                pdf_path = abs_path_for(doc)
-            except ValueError:
-                log.warning("NLP skip: filename non valido", extra={"doc": doc})
-                continue
-            if not pdf_path.exists():
-                log.warning("NLP skip: file non trovato", extra={"file_path": str(pdf_path)})
-                continue
-
-            # import lazy per evitare E402
-            from nlp.nlp_keywords import (
-                extract_text_from_pdf,
-                fuse_and_dedup,
-                keybert_scores,
-                spacy_candidates,
-                yake_scores,
+        for idx, task in enumerate(tasks, start=1):
+            top_items = _process_document(
+                task,
+                lang=lang,
+                topn_doc=topn_doc,
+                model=model,
             )
-
-            text = extract_text_from_pdf(str(pdf_path))
-            cand_spa = spacy_candidates(text, lang=lang)
-            sc_y = yake_scores(text, top_k=int(topn_doc) * 2, lang=lang)
-            sc_kb = keybert_scores(text, set(cand_spa), model_name=model, top_k=int(topn_doc) * 2)
-            fused = fuse_and_dedup(text, cand_spa, sc_y, sc_kb)
-            fused.sort(key=lambda x: x[1], reverse=True)
-            top_items = [(p, s, "ensemble") for p, s in fused[: int(topn_doc)]]
             if top_items:
-                # salva
                 from storage.tags_store import save_doc_terms as _save_dt
 
-                _save_dt(conn, doc_id, top_items)
+                _save_dt(conn, task.doc_id, top_items)
                 saved_items += len(top_items)
-                processed += 1
 
-            if i % 100 == 0:
-                log.info("NLP progress", extra={"processed": i, "documents": len(docs)})
+            if total_docs and idx % 100 == 0:
+                log.info("NLP progress", extra={"processed": idx, "documents": total_docs})
 
-        # Aggregazione per cartella: somma grezza poi normalizzazione max=1
-        from nlp.nlp_keywords import topn_by_folder  # import locale
-
-        folders = conn.execute("SELECT id, path FROM folders ORDER BY id").fetchall()
-        phrase_global: dict[str, float] = {}
-        folder_stats: dict[int, list[tuple[str, float]]] = {}
-
-        for frow in folders:
-            fid = int(frow[0])
-            doc_ids = get_documents_by_folder(conn, fid)
-            if not doc_ids:
-                continue
-            q = "SELECT phrase, score FROM doc_terms WHERE document_id IN (" + ",".join(["?"] * len(doc_ids)) + ")"
-            rows = conn.execute(q, tuple(doc_ids)).fetchall()
-
-            phrase_agg: dict[str, float] = {}
-            for r in rows:
-                ph = str(r[0])
-                sc = float(r[1])
-                phrase_agg[ph] = phrase_agg.get(ph, 0.0) + sc
-
-            if not phrase_agg:
-                continue
-
-            maxv = max(phrase_agg.values()) if phrase_agg else 1.0
-            if maxv <= 0:
-                maxv = 1.0
-            norm_items = [(p, (w / maxv)) for p, w in phrase_agg.items()]
-            norm_items = topn_by_folder(norm_items, k=int(topk_folder))
-
-            for phrase, weight in norm_items:
-                weight_f = float(weight)
-                prev = phrase_global.get(phrase)
-                if prev is None or weight_f > prev:
-                    phrase_global[phrase] = weight_f
-            folder_stats[fid] = norm_items
-
-            log.debug("Aggregazione cartella", extra={"folder_id": fid, "terms": len(norm_items)})
-
-        # Clustering globale per frasi
-        global_list = list(phrase_global.items())
-        from nlp.nlp_keywords import cluster_synonyms  # import locale
-
-        clusters = cluster_synonyms(global_list, model_name=model, sim_thr=float(cluster_thr))
-        if clusters:
-            aliases = sum(max(0, len(c.get("synonyms", []) or [])) for c in clusters)
-            avg_size = sum(len(c.get("members", []) or []) for c in clusters) / max(1, len(clusters))
-            log.info(
-                "Cluster calcolati",
-                extra={"k": len(clusters), "avg_size": avg_size, "aliases": aliases},
-            )
-
-        # Persistenza terms/aliases
-        phrase_to_tid: dict[str, int] = {}
-        terms_count = 0
-        alias_count = 0
-        for cl in clusters:
-            canon = cl["canonical"]
-            tid = upsert_term(conn, canon)
-            terms_count += 1
-            phrase_to_tid[canon] = tid
-            for al in cl.get("synonyms", []) or []:
-                tags_store.add_term_alias(conn, tid, al)
-                alias_count += 1
-                phrase_to_tid[al] = tid
-
-        # Map folder items to canonical term_id e salva in folder_terms
-        folder_terms_count = 0
-        for fid, items in folder_stats.items():
-            term_agg: dict[int, float] = {}
-            for p, w in items:
-                tid = phrase_to_tid.get(p)
-                if tid is None:
-                    continue
-                term_agg[tid] = term_agg.get(tid, 0.0) + float(w)
-
-            log.debug("Aggregazione termini per folder", extra={"folder_id": fid, "terms": len(term_agg)})
-            for tid, weight in sorted(term_agg.items(), key=lambda kv: kv[1], reverse=True):
-                upsert_folder_term(conn, fid, tid, float(weight), status="keep", note=None)
-                folder_terms_count += 1
+        section_stats = _persist_sections(
+            conn,
+            topk_folder=topk_folder,
+            cluster_thr=cluster_thr,
+            model=model,
+            log=log,
+        )
 
         log.info(
             "NLP completato",
             extra={
-                "documents": len(docs),
+                "documents": total_docs,
                 "doc_terms": saved_items,
-                "terms": terms_count,
-                "aliases": alias_count,
-                "folders": len(folder_stats),
-                "folder_terms": folder_terms_count,
+                **section_stats,
             },
         )
 
         return {
-            "documents": len(docs),
+            "documents": total_docs,
             "doc_terms": saved_items,
-            "terms": terms_count,
-            "aliases": alias_count,
-            "folders": len(folder_stats),
-            "folder_terms": folder_terms_count,
+            **section_stats,
         }
 
 

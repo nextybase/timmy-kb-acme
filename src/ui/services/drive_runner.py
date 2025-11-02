@@ -5,10 +5,11 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
 from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext  # Import pipeline (obbligatori in v1.8.0)
+from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
 from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
 
 create_drive_folder: Callable[..., Any] | None
@@ -56,6 +57,11 @@ from ..utils.workspace import workspace_root
 def _get_logger(context: Optional[object] = None) -> Any:
     """Ritorna un logger strutturato del modulo pipeline.logging_utils."""
     return get_structured_logger("ui.services.drive_runner", context=context)
+
+
+def _ui_ensure_dest(base_dir: Path, local_root: Path, rel_parts: Sequence[str], filename: str) -> Path:
+    target = local_root.joinpath(*rel_parts, filename)
+    return cast(Path, ensure_within_and_resolve(base_dir, target))
 
 
 def _require_drive_utils_ui() -> None:
@@ -714,43 +720,23 @@ def download_raw_from_drive_with_progress(
     local_root_path = Path(local_root_dir)
     local_root_path.mkdir(parents=True, exist_ok=True)
 
-    # 1) Costruisci la lista dei candidati (categoria/nomefile) nell'ordine atteso
-    candidates: List[Tuple[str, str, Path]] = []
-    for f in _drive_list_pdfs(svc, raw_id):
-        fname = (f.get("name") or "").strip()
-        if not fname.lower().endswith(".pdf"):
-            continue
-        dest = ensure_within_and_resolve(local_root_path, local_root_path / fname)
-        candidates.append(("", fname, dest))
-    for cat in _drive_list_folders(svc, raw_id):
-        cat_name = cat.get("name") or ""
-        cat_id = cat.get("id") or ""
-        if not cat_name or not cat_id:
-            continue
-        for f in _drive_list_pdfs(svc, cat_id):
-            fname = (f.get("name") or "").strip()
-            if not fname.lower().endswith(".pdf"):
-                continue
-            dest = ensure_within_and_resolve(local_root_path, local_root_path / cat_name / fname)
-            candidates.append((cat_name, fname, dest))
+    log = logger or _get_logger(ctx)
 
-    total = len(candidates)
+    candidates = discover_candidates(
+        service=svc,
+        raw_folder_id=raw_id,
+        list_folders=_drive_list_folders,
+        list_pdfs=_drive_list_pdfs,
+        ensure_dest=_ui_ensure_dest,
+        base_dir=workspace_dir,
+        local_root=local_root_path,
+        logger=log,
+    )
 
-    # 2) Emissione progress per OGNI candidato (inclusi quelli che risulteranno skippati)
-    if callable(on_progress):
-        done = 0
-        for cat_name, fname, _dest in candidates:
-            done += 1
-            try:
-                label = f"{cat_name}/{fname}" if cat_name else fname
-                on_progress(done, total, label)
-            except Exception:
-                pass
+    emit_progress(candidates, on_progress)
+    before = snapshot_existing(candidates)
 
-    # 3) Snapshot dei file presenti PRIMA del download
-    before = {dest for *_rest, dest in candidates if dest.exists()}
-
-    # 4) Chiamata al downloader sottostante (accetta 'progress', ma qui non lo usiamo per i test)
+    # Download dei PDF (progress disabilitato, gestito a monte)
     downloader = cast(Callable[..., Any], download_drive_pdfs_to_local)
     _ = downloader(
         svc,
@@ -763,9 +749,7 @@ def download_raw_from_drive_with_progress(
         overwrite=overwrite,
     )
 
-    # 5) Diff -> solo file nuovi creati
-    created = sorted({dest for *_rest, dest in candidates if dest.exists() and dest not in before})
-    return created
+    return cast(list[Path], compute_created(candidates, before))
 
 
 def _resolve_workspace(base_root: Path | str, slug: str) -> Path:
