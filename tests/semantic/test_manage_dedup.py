@@ -16,11 +16,7 @@ def test_manage_shows_single_caption(monkeypatch):
     )
     monkeypatch.setattr(manage, "st", st, raising=True)
     # setup dir & flags
-    manage.pdf_count = 0  # o stub del calcolo
-    manage.service_ok = True  # idem
-    manage.semantic_dir = Path(".")  # senza tags.db
-    # invoca il blocco che costruisce i messaggi
-    # (adatta la chiamata secondo l'organizzazione della pagina)
-    manage._render_status_block()  # se non esiste, chiama main() entro un contesto stub
+    semantic_dir = Path(".")  # senza tags.db
+    manage._render_status_block(pdf_count=0, service_ok=True, semantic_dir=semantic_dir)
     assert calls["caption"] == 1
     assert calls["warning"] == 1

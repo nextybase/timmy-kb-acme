@@ -12,6 +12,7 @@
 - **Frontmatter & titoli**: i file Markdown devono indicare la versione coerente; niente numerazioni divergenti tra README e docs/.
 - **Link & snippet**: privilegiare link relativi; per snippet usare blocchi con linguaggio e mantenere esempi aggiornati (Python 3.11, Streamlit 1.50.0).
 - **Verifiche automatiche**: usare `pre-commit run agents-matrix-check --all-files` quando si toccano gli `AGENTS.md` per mantenere la matrice aggiornata.
+- **Pattern aggiornati**: documentare sempre l’uso dei nuovi orchestratori (`pipeline.github_utils._prepare_repo/_stage_changes`, `tools.gen_dummy_kb.build_payload`) e dei guardrail condivisi (`ui.pages.tools_check._is_gate_error`) quando la guida cita workflow Streamlit o CLI.
 
 ## Accettazione
 - Spell check pulito su `docs/` e `README.md`, senza ignorare file.

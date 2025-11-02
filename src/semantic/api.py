@@ -243,6 +243,23 @@ class _RawDiscovery:
     discarded_unsafe: int
 
 
+@dataclass(frozen=True)
+class _CollectedMarkdown:
+    contents: list[str]
+    rel_paths: list[str]
+    skipped_io: int
+    skipped_empty: int
+    total_files: int
+
+
+@dataclass(frozen=True)
+class _EmbeddingResult:
+    contents: list[str]
+    rel_paths: list[str]
+    embeddings: list[list[float]]
+    vectors_empty: int
+
+
 def _discover_raw_inputs(raw_dir: Path, logger: logging.Logger, slug: str) -> _RawDiscovery:
     """Valida `raw_dir` e restituisce i PDF sicuri insieme al conteggio scartati."""
     if not raw_dir.exists():
@@ -352,6 +369,205 @@ def _run_markdown_conversion(
             return content_mds
 
         raise ConfigError(f"Nessun PDF trovato in RAW locale: {shim.raw_dir}", slug=slug, file_path=shim.raw_dir)
+
+
+def _collect_markdown_inputs(
+    book_dir: Path,
+    files: Sequence[Path],
+    logger: logging.Logger,
+    slug: str,
+) -> _CollectedMarkdown:
+    from pipeline.path_utils import read_text_safe
+
+    contents: list[str] = []
+    rel_paths: list[str] = []
+    skipped_io = 0
+    skipped_empty = 0
+
+    for f in files:
+        try:
+            text = read_text_safe(book_dir, f, encoding="utf-8")
+        except Exception as exc:
+            logger.warning(
+                "semantic.index.read_failed",
+                extra={"slug": slug, "file_path": str(f), "error": str(exc)},
+            )
+            skipped_io += 1
+            continue
+        if not text or not text.strip():
+            logger.info(
+                "semantic.index.skip_empty_file",
+                extra={"slug": slug, "file_path": str(f)},
+            )
+            skipped_empty += 1
+            continue
+        contents.append(text)
+        rel_paths.append(f.name)
+
+    return _CollectedMarkdown(
+        contents=contents,
+        rel_paths=rel_paths,
+        skipped_io=skipped_io,
+        skipped_empty=skipped_empty,
+        total_files=len(files),
+    )
+
+
+def _compute_embeddings_for_markdown(
+    collected: _CollectedMarkdown,
+    embeddings_client: _EmbeddingsClient,
+    logger: logging.Logger,
+    slug: str,
+) -> tuple[Optional[_EmbeddingResult], int]:
+    if not collected.contents:
+        return None, 0
+
+    try:
+        vecs_raw = embeddings_client.embed_texts(collected.contents)
+    except Exception as exc:
+        logger.error(
+            "semantic.index.embedding_error",
+            extra={"slug": slug, "error": str(exc), "count": len(collected.contents)},
+        )
+        raise
+
+    vecs = normalize_embeddings(vecs_raw)
+    vectors_empty = 0
+
+    if len(vecs) == 0:
+        logger.warning("semantic.index.no_embeddings", extra={"slug": slug, "count": 0})
+        return None, 0
+
+    contents = list(collected.contents)
+    rel_paths = list(collected.rel_paths)
+
+    original_contents_len = len(contents)
+    original_embeddings_len = len(vecs)
+
+    if original_embeddings_len != original_contents_len:
+        logger.warning(
+            "semantic.index.mismatched_embeddings",
+            extra={"slug": slug, "embeddings": original_embeddings_len, "contents": original_contents_len},
+        )
+        min_len = min(original_embeddings_len, original_contents_len)
+        dropped_mismatch = (original_contents_len - min_len) + (original_embeddings_len - min_len)
+        if dropped_mismatch > 0:
+            logger.info(
+                "semantic.index.embedding_pruned",
+                extra={
+                    "slug": slug,
+                    "cause": "mismatch",
+                    "dropped": int(dropped_mismatch),
+                    "kept": int(min_len),
+                    "contents": int(original_contents_len),
+                    "embeddings": int(original_embeddings_len),
+                },
+            )
+        vectors_empty += max(0, dropped_mismatch)
+        contents = contents[:min_len]
+        rel_paths = rel_paths[:min_len]
+        vecs = vecs[:min_len]
+
+    original_candidate_count = len(contents)
+    filtered_contents: list[str] = []
+    filtered_paths: list[str] = []
+    filtered_vecs: list[list[float]] = []
+
+    for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
+        if len(emb) == 0:
+            continue
+        filtered_contents.append(text)
+        filtered_paths.append(rel_name)
+        filtered_vecs.append(list(emb))
+
+    dropped_empty = original_candidate_count - len(filtered_contents)
+    if dropped_empty > 0 and len(filtered_contents) == 0:
+        logger.warning(
+            "semantic.index.first_embedding_empty",
+            extra={"slug": slug, "cause": "empty_embedding"},
+        )
+        logger.warning(
+            "semantic.index.all_embeddings_empty",
+            extra={"event": "semantic.index.all_embeddings_empty", "slug": slug, "count": len(vecs)},
+        )
+        vectors_empty += max(0, dropped_empty)
+        return None, vectors_empty
+
+    if dropped_empty > 0:
+        logger.info(
+            "semantic.index.embedding_pruned",
+            extra={
+                "slug": slug,
+                "cause": "empty_embedding",
+                "dropped": int(dropped_empty),
+                "kept": int(len(filtered_contents)),
+                "candidates": int(original_candidate_count),
+            },
+        )
+    vectors_empty += max(0, dropped_empty)
+
+    return (
+        _EmbeddingResult(
+            contents=filtered_contents,
+            rel_paths=filtered_paths,
+            embeddings=filtered_vecs,
+            vectors_empty=vectors_empty,
+        ),
+        vectors_empty,
+    )
+
+
+def _persist_markdown_embeddings(
+    result: _EmbeddingResult,
+    *,
+    scope: str,
+    slug: str,
+    db_path: Path | None,
+    logger: logging.Logger,
+) -> int:
+    from datetime import datetime as _dt
+
+    version = _dt.utcnow().strftime("%Y%m%d")
+    inserted_total = 0
+    for text, rel_name, emb in zip(result.contents, result.rel_paths, result.embeddings, strict=False):
+        meta = {"file": rel_name}
+        inserted_total += _insert_chunks(
+            project_slug=slug,
+            scope=scope,
+            path=rel_name,
+            version=version,
+            meta_dict=meta,
+            chunks=[text],
+            embeddings=[list(emb)],
+            db_path=db_path,
+            ensure_schema=False,
+        )
+
+    logger.info(
+        "semantic.index.completed",
+        extra={"slug": slug, "inserted": inserted_total, "files": len(result.rel_paths)},
+    )
+    return inserted_total
+
+
+def _log_index_skips(
+    logger: logging.Logger,
+    slug: str,
+    *,
+    skipped_io: int,
+    skipped_empty: int,
+    vectors_empty: int,
+) -> None:
+    if skipped_io > 0 or skipped_empty > 0 or vectors_empty > 0:
+        logger.info(
+            "semantic.index.skips",
+            extra={
+                "slug": slug,
+                "skipped_io": int(skipped_io),
+                "skipped_no_text": int(skipped_empty),
+                "vectors_empty": int(vectors_empty),
+            },
+        )
 
 
 def convert_markdown(context: ClientContextType, logger: logging.Logger, *, slug: str) -> List[Path]:
@@ -693,7 +909,6 @@ def index_markdown_to_db(
 
     files = list_content_markdown(book_dir)
     if not files:
-        # Telemetria completa anche su branch "vuoto"
         with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
             logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
             try:
@@ -707,47 +922,33 @@ def index_markdown_to_db(
         )
         return 0
 
-    from pipeline.path_utils import read_text_safe
+    total_files = len(files)
+    logger.info(
+        "semantic.index.collect.start",
+        extra={"slug": slug, "files": total_files},
+    )
+    collected = _collect_markdown_inputs(book_dir, files, logger, slug)
+    logger.info(
+        "semantic.index.collect.done",
+        extra={
+            "slug": slug,
+            "files": total_files,
+            "usable": len(collected.contents),
+            "skipped_io": collected.skipped_io,
+            "skipped_no_text": collected.skipped_empty,
+        },
+    )
 
-    contents: list[str] = []
-    rel_paths: list[str] = []
-    skipped_io = 0
-    skipped_no_text = 0
-
-    for f in files:
-        try:
-            text = read_text_safe(book_dir, f, encoding="utf-8")
-        except Exception as e:
-            logger.warning(
-                "semantic.index.read_failed",
-                extra={"slug": slug, "file_path": str(f), "error": str(e)},
-            )
-            skipped_io += 1
-            continue
-        if not text or not text.strip():
-            logger.info(
-                "semantic.index.skip_empty_file",
-                extra={"slug": slug, "file_path": str(f)},
-            )
-            skipped_no_text += 1
-            continue
-        contents.append(text)
-        rel_paths.append(f.name)
-
-    if not contents:
-        # phase_scope anche su "no contents"
+    if not collected.contents:
         with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
             logger.info("semantic.index.no_valid_contents", extra={"slug": slug, "book_dir": str(book_dir)})
-            if skipped_io > 0 or skipped_no_text > 0:
-                logger.info(
-                    "semantic.index.skips",
-                    extra={
-                        "slug": slug,
-                        "skipped_io": skipped_io,
-                        "skipped_no_text": skipped_no_text,
-                        "vectors_empty": 0,
-                    },
-                )
+            _log_index_skips(
+                logger,
+                slug,
+                skipped_io=collected.skipped_io,
+                skipped_empty=collected.skipped_empty,
+                vectors_empty=0,
+            )
             try:
                 m.set_artifacts(0)
             except Exception:
@@ -755,186 +956,90 @@ def index_markdown_to_db(
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
             "semantic.index.done",
-            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
+            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": total_files}},
         )
         return 0
 
-    from datetime import datetime as _dt
-
     with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as m:
-        # 🔑 init DB UNA SOLA VOLTA (fondamentale per i test di performance)
         try:
             _init_kb_db(db_path)
-        except Exception as e:
+        except Exception as exc:
             try:
                 effective = _get_db_path() if db_path is None else Path(db_path).resolve()
             except Exception:
                 effective = db_path or Path("data/kb.sqlite")
             raise ConfigError(
-                f"Inizializzazione DB fallita: {e}",
+                f"Inizializzazione DB fallita: {exc}",
                 slug=slug,
                 file_path=effective,
-            ) from e
-
-        try:
-            vecs_raw = embeddings_client.embed_texts(contents)
-        except Exception as e:
-            logger.error(
-                "semantic.index.embedding_error",
-                extra={"slug": slug, "error": str(e), "count": len(contents)},
-            )
-            raise
-        vecs = normalize_embeddings(vecs_raw)
-
-        # Accumulatori per un SOLO evento `semantic.index.skips` a fine fase
-        vectors_empty = 0  # drop per mismatch + per embeddings vuoti
-
-        if len(vecs) == 0:
-            logger.warning("semantic.index.no_embeddings", extra={"slug": slug, "count": 0})
-            try:
-                m.set_artifacts(0)
-            except Exception:
-                m.set_artifacts(None)
-            # Unico evento di skips per questo ramo
-            logger.info(
-                "semantic.index.skips",
-                extra={
-                    "slug": slug,
-                    "skipped_io": skipped_io,
-                    "skipped_no_text": skipped_no_text,
-                    "vectors_empty": 0,
-                },
-            )
-            ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "semantic.index.done",
-                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
-            )
-            return 0
-
-        # Indicizzazione parziale su mismatch (senza abort) — accumula vectors_empty
-        original_contents_len = len(contents)
-        original_embeddings_len = len(vecs)
-        if original_embeddings_len != original_contents_len:
-            logger.warning(
-                "semantic.index.mismatched_embeddings",
-                extra={"slug": slug, "embeddings": original_embeddings_len, "contents": original_contents_len},
-            )
-            min_len = min(original_embeddings_len, original_contents_len)
-            dropped_mismatch = (original_contents_len - min_len) + (original_embeddings_len - min_len)
-            if dropped_mismatch > 0:
-                logger.info(
-                    "semantic.index.embedding_pruned",
-                    extra={
-                        "slug": slug,
-                        "cause": "mismatch",
-                        "dropped": int(dropped_mismatch),
-                        "kept": int(min_len),
-                        "contents": int(original_contents_len),
-                        "embeddings": int(original_embeddings_len),
-                    },
-                )
-            vectors_empty += max(0, dropped_mismatch)
-            contents = contents[:min_len]
-            rel_paths = rel_paths[:min_len]
-            vecs = vecs[:min_len]
-
-        original_candidate_count = len(contents)
-        # Filtro embeddings vuoti per-item → accumula vectors_empty
-        filtered_contents: list[str] = []
-        filtered_paths: list[str] = []
-        filtered_vecs: list[list[float]] = []
-        for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
-            if len(emb) == 0:
-                continue
-            filtered_contents.append(text)
-            filtered_paths.append(rel_name)
-            filtered_vecs.append(list(emb))
-
-        dropped_empty = original_candidate_count - len(filtered_contents)
-        if dropped_empty > 0 and len(filtered_contents) == 0:
-            # Compat test legacy + evento strutturato
-            logger.warning(
-                "semantic.index.first_embedding_empty",
-                extra={"slug": slug, "cause": "empty_embedding"},
-            )
-            logger.warning(
-                "semantic.index.all_embeddings_empty",
-                extra={"event": "semantic.index.all_embeddings_empty", "slug": slug, "count": len(vecs)},
-            )
-            vectors_empty += dropped_empty
-            try:
-                m.set_artifacts(0)
-            except Exception:
-                m.set_artifacts(None)
-            # Unico evento di skips per questo ramo terminale
-            logger.info(
-                "semantic.index.skips",
-                extra={
-                    "slug": slug,
-                    "skipped_io": skipped_io,
-                    "skipped_no_text": skipped_no_text,
-                    "vectors_empty": int(vectors_empty),
-                },
-            )
-            ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "semantic.index.done",
-                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": len(files)}},
-            )
-            return 0
-
-        if dropped_empty > 0:
-            logger.info(
-                "semantic.index.embedding_pruned",
-                extra={
-                    "slug": slug,
-                    "cause": "empty_embedding",
-                    "dropped": int(dropped_empty),
-                    "kept": int(len(filtered_contents)),
-                    "candidates": int(original_candidate_count),
-                },
-            )
-        vectors_empty += max(0, dropped_empty)
-
-        # KPI aggregato sugli skip — EMESSO UNA SOLA VOLTA (se > 0)
-        if skipped_io > 0 or skipped_no_text > 0 or vectors_empty > 0:
-            logger.info(
-                "semantic.index.skips",
-                extra={
-                    "slug": slug,
-                    "skipped_io": int(skipped_io),
-                    "skipped_no_text": int(skipped_no_text),
-                    "vectors_empty": int(vectors_empty),
-                },
-            )
-
-        contents, rel_paths, vecs = filtered_contents, filtered_paths, filtered_vecs
-
-        version = _dt.utcnow().strftime("%Y%m%d")
-        inserted_total = 0
-        for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
-            meta = {"file": rel_name}
-            inserted_total += _insert_chunks(
-                project_slug=slug,
-                scope=scope,
-                path=rel_name,
-                version=version,
-                meta_dict=meta,
-                chunks=[text],
-                embeddings=[list(emb)],
-                db_path=db_path,
-                ensure_schema=False,  # 🔒 evita init ripetuti: schema già creato
-            )
+            ) from exc
 
         logger.info(
-            "semantic.index.completed",
-            extra={"slug": slug, "inserted": inserted_total, "files": len(rel_paths)},
+            "semantic.index.embed.start",
+            extra={"slug": slug, "count": len(collected.contents)},
         )
+        embeddings_result, vectors_empty = _compute_embeddings_for_markdown(
+            collected,
+            embeddings_client,
+            logger,
+            slug,
+        )
+        if embeddings_result is None:
+            _log_index_skips(
+                logger,
+                slug,
+                skipped_io=collected.skipped_io,
+                skipped_empty=collected.skipped_empty,
+                vectors_empty=vectors_empty,
+            )
+            try:
+                m.set_artifacts(0)
+            except Exception:
+                m.set_artifacts(None)
+            ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "semantic.index.done",
+                extra={"slug": slug, "ms": ms, "artifacts": {"inserted": 0, "files": total_files}},
+            )
+            return 0
+
+        logger.info(
+            "semantic.index.embed.done",
+            extra={"slug": slug, "count": len(embeddings_result.contents)},
+        )
+
+        _log_index_skips(
+            logger,
+            slug,
+            skipped_io=collected.skipped_io,
+            skipped_empty=collected.skipped_empty,
+            vectors_empty=embeddings_result.vectors_empty,
+        )
+
+        logger.info(
+            "semantic.index.persist.start",
+            extra={"slug": slug, "files": len(embeddings_result.contents)},
+        )
+        inserted_total = _persist_markdown_embeddings(
+            embeddings_result,
+            scope=scope,
+            slug=slug,
+            db_path=db_path,
+            logger=logger,
+        )
+        logger.info(
+            "semantic.index.persist.done",
+            extra={"slug": slug, "inserted": inserted_total, "files": len(embeddings_result.contents)},
+        )
+
         ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(
             "semantic.index.done",
-            extra={"slug": slug, "ms": ms, "artifacts": {"inserted": inserted_total, "files": len(rel_paths)}},
+            extra={
+                "slug": slug,
+                "ms": ms,
+                "artifacts": {"inserted": inserted_total, "files": len(embeddings_result.contents)},
+            },
         )
         try:
             m.set_artifacts(inserted_total)

@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TextIO
 
 import yaml
 
@@ -109,12 +109,10 @@ try:
 except Exception:
 
     def _safe_write_text(path: Path, text: str, *, encoding="utf-8", atomic=False) -> None:  # type: ignore
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding=encoding)
+        raise RuntimeError("safe_write_text unavailable: install pipeline.file_utils dependency")  # pragma: no cover
 
     def _safe_write_bytes(path: Path, data: bytes, *, atomic=False) -> None:  # type: ignore
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        raise RuntimeError("safe_write_bytes unavailable: install pipeline.file_utils dependency")  # pragma: no cover
 
 
 # Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finch� non si esegue il tool.
@@ -274,23 +272,15 @@ def _register_client(slug: str, client_name: str) -> None:
         set_state(slug, "nuovo")  # type: ignore[misc]
 
 
-# ------------------------------------------------------------
-# Main
-# ------------------------------------------------------------
-def main(argv: Optional[list[str]] = None) -> int:
-    ensure_dotenv_loaded()
-
+def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Genera una KB dummy usando gli entry-point della UI (pre_onboarding + Vision + (Drive opz.))."
     )
     ap.add_argument("--slug", default="dummy", help="Slug del cliente (default: dummy)")
     ap.add_argument("--name", default=None, help='Nome visuale del cliente (default: "Dummy <slug>")')
-    # Nuove opzioni richieste: disabilitare Drive / Vision
     ap.add_argument("--no-drive", action="store_true", help="Disabilita tutti i passi Drive")
     ap.add_argument("--no-vision", action="store_true", help="Non invocare Vision: genera YAML basici")
-    # Back-compat (non usato dalla UI nuova): se qualcuno passa --with-drive
     ap.add_argument("--with-drive", action="store_true", help="(Legacy) Abilita Drive se possibile")
-    # Opzioni legacy mantenute per compatibilità con test/script esistenti
     ap.add_argument(
         "--base-dir",
         default=None,
@@ -307,7 +297,111 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=None,
         help="(Legacy) Numero di record finanza da generare (non più utilizzato).",
     )
-    args = ap.parse_args(argv)
+    return ap.parse_args(argv)
+
+
+def build_payload(
+    *,
+    slug: str,
+    client_name: str,
+    enable_drive: bool,
+    enable_vision: bool,
+    records_hint: Optional[str],
+    logger: logging.Logger,
+) -> dict[str, Any]:
+    if records_hint:
+        try:
+            _ = int(records_hint)
+        except Exception:
+            logger.debug(
+                "tools.gen_dummy_kb.records_hint_non_numeric",
+                extra={"value": records_hint, "slug": slug},
+            )
+
+    repo_pdf = REPO_ROOT / "config" / "VisionStatement.pdf"
+    if repo_pdf.exists():
+        try:
+            safe_pdf = ensure_within_and_resolve(REPO_ROOT, repo_pdf)
+            with open_for_read_bytes_selfguard(safe_pdf) as handle:
+                pdf_bytes = handle.read()
+        except Exception:
+            logger.warning(
+                "tools.gen_dummy_kb.vision_template_unreadable",
+                extra={"file_path": str(repo_pdf), "slug": slug},
+            )
+            pdf_bytes = _DEFAULT_VISION_PDF
+    else:
+        logger.warning(
+            "tools.gen_dummy_kb.vision_template_missing",
+            extra={"file_path": str(repo_pdf), "slug": slug},
+        )
+        pdf_bytes = _DEFAULT_VISION_PDF
+
+    ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
+
+    base_dir = _client_base(slug)
+    pdf_path = _pdf_path(slug)
+
+    drive_min_info = drive_build_info = None
+    if enable_drive:
+        try:
+            drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
+            drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
+        except Exception as exc:
+            logger.warning(
+                "tools.gen_dummy_kb.drive_provisioning_failed",
+                extra={"error": str(exc), "slug": slug},
+            )
+
+    if enable_vision:
+        ctx = _Ctx(base_dir)
+        run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
+    else:
+        _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+
+    _register_client(slug, client_name)
+
+    cfg_out: dict[str, Any] = {}
+    if callable(get_client_config) and ClientContext:
+        try:
+            ctx_cfg = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[misc]
+            cfg = get_client_config(ctx_cfg) or {}
+            cfg_out = {
+                "drive_folder_id": cfg.get("drive_folder_id"),
+                "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
+            }
+        except Exception:
+            cfg_out = {}
+
+    return {
+        "slug": slug,
+        "client_name": client_name,
+        "paths": {
+            "base": str(base_dir),
+            "config": str(base_dir / "config" / "config.yaml"),
+            "vision_pdf": str(pdf_path),
+            "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
+            "cartelle_raw": str(base_dir / "semantic" / "cartelle_raw.yaml"),
+        },
+        "drive_min": drive_min_info or {},
+        "drive_build": drive_build_info or {},
+        "config_ids": cfg_out,
+        "vision_used": bool(enable_vision),
+        "drive_used": bool(enable_drive),
+    }
+
+
+def emit_structure(payload: dict[str, Any], *, stream: TextIO = sys.stdout) -> None:
+    print(json.dumps(payload, indent=2, ensure_ascii=False, default=str), file=stream)
+
+
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
+def main(argv: Optional[list[str]] = None) -> int:
+    ensure_dotenv_loaded()
+
+    args = parse_args(argv)
 
     slug = args.slug.strip()
     client_name = (args.name or f"Dummy {slug}").strip()
@@ -324,7 +418,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not args.no_vision:
             enable_vision = False
 
-    # Gestione override legacy: REPO_ROOT_DIR e CLIENTS_DB_DIR
     prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
     prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
     prev_clients_db_file = os.environ.get("CLIENTS_DB_FILE")
@@ -346,106 +439,26 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.environ["CLIENTS_DB_DIR"] = str(db_dir_override)
             os.environ["CLIENTS_DB_FILE"] = str(db_file_override)
 
-        # Logger stile UI
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
 
-        if records_hint:
-            try:
-                _ = int(records_hint)
-            except Exception:
-                logger.debug(
-                    "tools.gen_dummy_kb.records_hint_non_numeric",
-                    extra={"value": records_hint, "slug": slug},
-                )
-
         try:
-            # 0) PDF Vision dalla root del repo
-            repo_pdf = REPO_ROOT / "config" / "VisionStatement.pdf"
-            if repo_pdf.exists():
-                try:
-                    safe_pdf = ensure_within_and_resolve(REPO_ROOT, repo_pdf)
-                    with open_for_read_bytes_selfguard(safe_pdf) as handle:
-                        pdf_bytes = handle.read()
-                except Exception:
-                    logger.warning(
-                        "tools.gen_dummy_kb.vision_template_unreadable",
-                        extra={"file_path": str(repo_pdf), "slug": slug},
-                    )
-                    pdf_bytes = _DEFAULT_VISION_PDF
-            else:
-                logger.warning(
-                    "tools.gen_dummy_kb.vision_template_missing",
-                    extra={"file_path": str(repo_pdf), "slug": slug},
-                )
-                pdf_bytes = _DEFAULT_VISION_PDF
-
-            # 1) Workspace locale (UI helper)
-            ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
-
-            base_dir = _client_base(slug)
-            pdf_path = _pdf_path(slug)
-
-            # 2) Drive (opzionale)
-            drive_min_info = drive_build_info = None
-            if enable_drive:
-                try:
-                    drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
-                    drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
-                except Exception as e:
-                    logger.warning(
-                        "tools.gen_dummy_kb.drive_provisioning_failed",
-                        extra={"error": str(e), "slug": slug},
-                    )
-
-            # 3) Vision o YAML basici
-            if enable_vision:
-                ctx = _Ctx(base_dir)
-                run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
-            else:
-                _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
-
-            # 4) Registry UI
-            _register_client(slug, client_name)
-
-            # 5) Output diagnostico
-            cfg_out: dict[str, Any] = {}
-            if callable(get_client_config) and ClientContext:
-                try:
-                    ctx_cfg = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[misc]
-                    cfg = get_client_config(ctx_cfg) or {}
-                    cfg_out = {
-                        "drive_folder_id": cfg.get("drive_folder_id"),
-                        "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
-                    }
-                except Exception:
-                    cfg_out = {}
-
-            result = {
-                "slug": slug,
-                "client_name": client_name,
-                "paths": {
-                    "base": str(base_dir),
-                    "config": str(base_dir / "config" / "config.yaml"),
-                    "vision_pdf": str(pdf_path),
-                    "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
-                    "cartelle_raw": str(base_dir / "semantic" / "cartelle_raw.yaml"),
-                },
-                "drive_min": drive_min_info or {},
-                "drive_build": drive_build_info or {},
-                "config_ids": cfg_out,
-                "vision_used": bool(enable_vision),
-                "drive_used": bool(enable_drive),
-            }
-            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+            payload = build_payload(
+                slug=slug,
+                client_name=client_name,
+                enable_drive=enable_drive,
+                enable_vision=enable_vision,
+                records_hint=records_hint,
+                logger=logger,
+            )
+            emit_structure(payload)
             return 0
-
-        except Exception as e:
+        except Exception as exc:
             logger.error(
                 "tools.gen_dummy_kb.run_failed",
-                extra={"slug": slug, "error": str(e)},
+                extra={"slug": slug, "error": str(exc)},
             )
-            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            emit_structure({"error": str(exc)}, stream=sys.stderr)
             return 1
     finally:
         try:

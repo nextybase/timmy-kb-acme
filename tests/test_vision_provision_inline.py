@@ -178,7 +178,15 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
 
     captured = {"user_messages": None}
 
-    def _fake_call(client, *, assistant_id, user_messages, strict_output=True, run_instructions=None):
+    def _fake_call(
+        client,
+        *,
+        assistant_id,
+        user_messages,
+        strict_output=True,
+        run_instructions=None,
+        **kwargs,
+    ):
         captured["user_messages"] = user_messages
         return output_parsed
 
