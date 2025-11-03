@@ -22,7 +22,10 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 > Nota: i test `e2e` richiedono le dipendenze extra (`pip install -r requirements-dev.txt`) e l'installazione del browser con `playwright install chromium`.
 **Default CI:** i test marcati `push`, `drive` e `e2e` sono esclusi per impostazione predefinita.
 
-> 📦 **Dipendenze opzionali**: alcuni test UI (es. `tests/ui/test_preview_stub.py`) importano YAML tramite `pyyaml`. Se esegui in modo mirato singoli file, assicurati di avere `pyyaml` installato (lo ottieni automaticamente con `pip install -r requirements-dev.txt`).
+> 📦 **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic), alcuni test richiedono
+> `google.oauth2.service_account` e `googleapiclient.http` (gating Drive), `fitz`
+> / PyMuPDF (Vision inline) o Playwright + Chromium (e2e). Installa gli extra
+> con `pip install -r requirements-dev.txt` e, per i browser, `playwright install chromium`.
 
 ---
 
@@ -57,9 +60,11 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Error handling & exit-code:** `test_semantic_api_errors.py`, `test_semantic_onboarding_exitcodes.py`.
 
 ### 3) Vision AI — Mapping da PDF e provisioning
-- **Vision pipeline (PyMuPDF opzionale):** `test_vision_ai.py`, `test_vision_ai_module.py` (*skipped se PyMuPDF assente*).
-- **Provisioning da Vision:** `test_vision_provision.py`.
-- **Path-safety Vision:** `test_semantic_vision_path_safety.py`.
+- **Config e sezioni Vision:** `test_vision_cfg.py`, `test_vision_sections.py`,
+  `test_vision_prompt_includes_client_name.py`.
+- **Provisioning da Vision (PyMuPDF opzionale):** `tests/test_vision_provision_inline.py`,
+  `tests/semantic/test_vision_provision.py`, `tests/semantic/test_vision_parser_headers.py`.
+- **Path-safety Vision:** `tests/test_semantic_vision_path_safety.py`.
 
 ### 4) Orchestratori e CLI — Onboarding e flussi operativi
 - **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`.
