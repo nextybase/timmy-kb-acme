@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/provision_from_yaml.py
 from __future__ import annotations
 

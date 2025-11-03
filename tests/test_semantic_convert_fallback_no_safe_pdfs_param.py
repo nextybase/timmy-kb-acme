@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_convert_fallback_no_safe_pdfs_param.py
 import logging
 from types import SimpleNamespace

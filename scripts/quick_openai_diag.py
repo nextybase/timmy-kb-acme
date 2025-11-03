@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/quick_openai_diag.py
 from __future__ import annotations
 

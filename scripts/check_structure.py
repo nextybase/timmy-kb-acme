@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # salva come: scripts/check_structure.py  (esegui dalla root del repo)
 import argparse
 import sys

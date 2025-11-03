@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/storage/test_import_tags_yaml_to_db.py
 from __future__ import annotations
 

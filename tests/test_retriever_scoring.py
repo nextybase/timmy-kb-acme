@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_retriever_scoring.py
 from __future__ import annotations
 

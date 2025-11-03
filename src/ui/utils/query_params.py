@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/ui/utils/query_params.py
 from __future__ import annotations
 

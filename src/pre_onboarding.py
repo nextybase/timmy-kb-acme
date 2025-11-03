@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pre_onboarding.py
 """
 Orchestratore della fase di pre-onboarding per Timmy-KB.

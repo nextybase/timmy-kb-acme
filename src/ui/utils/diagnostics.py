@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Helper per funzionalità diagnostiche della UI."""
 
 from __future__ import annotations

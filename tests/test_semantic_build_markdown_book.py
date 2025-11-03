@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_build_markdown_book.py
 from pathlib import Path
 

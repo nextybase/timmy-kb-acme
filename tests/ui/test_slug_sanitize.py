@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_slug_sanitize.py
 from ui.utils.slug import _sanitize_slug
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/vscode_bridge.py
 """Bridge tra UI Streamlit e watcher di VS Code.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Esempio di ingest per Timmy KB.
 
 Uso:

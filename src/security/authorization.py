@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # path: src/security/authorization.py
 from __future__ import annotations
 

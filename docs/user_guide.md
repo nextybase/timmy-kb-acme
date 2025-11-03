@@ -31,7 +31,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
 - È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
- - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI (modello `gpt-5`).
+ - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI usando il modello definito in `config/config.yaml` (recuperato tramite `get_vision_model()`).
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
@@ -82,6 +82,18 @@ output/timmy-kb-<slug>/
 - **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` è attivo.
+
+## Impostazioni retriever (UI)
+La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:
+
+```yaml
+retriever:
+  candidate_limit: 4000
+  latency_budget_ms: 300
+  auto_by_budget: false
+```
+
+La UI applica immediatamente le modifiche e i test di regressione coprono il pass-through verso `semantic.api`.
 
 ---
 ## Controllo caratteri & encoding (UTF-8)

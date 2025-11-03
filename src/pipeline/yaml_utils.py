@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Utility centralizzata per la lettura YAML sicura e uniforme.
 
 Obiettivi

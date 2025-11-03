@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/semantic/semantic_extractor.py
 """Fase 2 - Arricchimento semantico
 --------------------------------

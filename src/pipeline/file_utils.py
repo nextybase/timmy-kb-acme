@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/file_utils.py
 """
 File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.

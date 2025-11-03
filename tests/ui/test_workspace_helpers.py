@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_workspace_helpers.py
 from pathlib import Path
 

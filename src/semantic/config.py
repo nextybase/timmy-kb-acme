@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/semantic/config.py
 """Loader della configurazione semantica cliente-specifica.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/peek_folder_terms.py
 import sqlite3
 import sys

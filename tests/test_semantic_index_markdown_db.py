@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_index_markdown_db.py
 import logging
 from dataclasses import dataclass

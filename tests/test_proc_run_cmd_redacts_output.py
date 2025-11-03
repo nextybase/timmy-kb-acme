@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_proc_run_cmd_redacts_output.py
 from __future__ import annotations
 

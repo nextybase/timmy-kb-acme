@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/migrations/001_schema_v2.py
 from __future__ import annotations
 

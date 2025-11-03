@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 import timmy_kb_coder as coder
 
 

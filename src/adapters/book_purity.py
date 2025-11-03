@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/adapters/book_purity.py
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/semantic/test_vision_provision.py
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_index_markdown_partial_mismatch.py
 import logging
 from types import SimpleNamespace

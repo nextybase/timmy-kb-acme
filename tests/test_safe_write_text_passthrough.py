@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_safe_write_text_passthrough.py
 from __future__ import annotations
 

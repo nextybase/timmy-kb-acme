@@ -8,8 +8,8 @@ impostazioni di business/UX versionate in modo sicuro.
 
 | Ambito | Contenuto | Esempi ammessi | Esempi vietati |
 |--------|-----------|----------------|----------------|
-| `.env` (non versionato) | **Segreti** e valori runtime sensibili, referenziati dal codice tramite nomi di variabile. Deve restare fuori dal repository (solo `.env.example` è versionato). | `OPENAI_API_KEY=sk‑live‑…`<br>`OBNEXT_ASSISTANT_ID=asst_123`<br>`SERVICE_ACCOUNT_FILE=C:\path\sa.json` | `vision_model=gpt-4o`<br>`candidate_limit=4000` |
-| `config/config.yaml` (versionato) | **Configurazione applicativa mutabile**: modelli, soglie, mapping UI, parametri retriever, preferenze logging. Non contiene mai valori segreti. | `vision.model: gpt-4o-mini-2024-07-18`<br>`retriever.candidate_limit: 3000`<br>`ui.skip_preflight: true` | `openai_api_key: sk-…`<br>`drive_id: 1234567890`<br>`assistant_id: asst_123` |
+| `.env` (non versionato) | **Segreti** e valori runtime sensibili, referenziati dal codice tramite nomi di variabile. Deve restare fuori dal repository (solo `.env.example` è versionato). | `OPENAI_API_KEY=sk‑live‑…`<br>`OBNEXT_ASSISTANT_ID=asst_123`<br>`SERVICE_ACCOUNT_FILE=C:\path\sa.json` | `vision_model=<modello legacy>`<br>`candidate_limit=4000` |
+| `config/config.yaml` (versionato) | **Configurazione applicativa mutabile**: modelli, soglie, mapping UI, parametri retriever, preferenze logging. Non contiene mai valori segreti. | `vision.model: <modello predefinito>`<br>`retriever.candidate_limit: 3000`<br>`ui.skip_preflight: true` | `openai_api_key: sk-…`<br>`drive_id: 1234567890`<br>`assistant_id: asst_123` |
 
 > ℹ️ Se un campo ha bisogno di un segreto, il valore nel YAML **deve terminare con**
 > `_env` e contenere solo il nome della variabile, non il valore:
@@ -17,7 +17,7 @@ impostazioni di business/UX versionate in modo sicuro.
 ```yaml
 # ✅ corretto
 vision:
-  model: gpt-4o-mini-2024-07-18
+  model: "<modello predefinito>"
   assistant_id_env: OBNEXT_ASSISTANT_ID
 ```
 

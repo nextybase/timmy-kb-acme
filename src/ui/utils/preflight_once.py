@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Utility per gestire il bypass del preflight su singola run."""
 
 from __future__ import annotations

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/assistants_smoke.py
 from __future__ import annotations
 import json

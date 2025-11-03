@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/pipeline/test_drive_client_errors.py
 from __future__ import annotations
 

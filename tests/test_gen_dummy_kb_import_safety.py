@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_gen_dummy_kb_import_safety.py
 from __future__ import annotations
 

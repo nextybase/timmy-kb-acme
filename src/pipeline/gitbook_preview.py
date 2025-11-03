@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/gitbook_preview.py
 """Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 import logging
 
 from pipeline.logging_utils import get_structured_logger, phase_scope

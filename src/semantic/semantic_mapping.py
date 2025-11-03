@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/semantic/semantic_mapping.py
 """Fase 2 — Arricchimento semantico (consuma tags_reviewed).
 

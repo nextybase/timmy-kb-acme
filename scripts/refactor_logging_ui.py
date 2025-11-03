@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/refactor_logging_ui.py
 from __future__ import annotations
 

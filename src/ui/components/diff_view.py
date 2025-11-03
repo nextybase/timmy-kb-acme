@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/ui/components/diff_view.py
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils.py  (aggiunta di due test mirati)
 from pathlib import Path
 

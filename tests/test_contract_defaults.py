@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 import inspect
 
 from timmykb.tag_onboarding import tag_onboarding_main

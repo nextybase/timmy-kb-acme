@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 import logging
 
 from timmykb.semantic.tags_extractor import copy_local_pdfs_to_raw

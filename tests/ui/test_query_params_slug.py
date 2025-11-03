@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_query_params_slug.py
 from ui.utils.query_params import get_slug, set_slug
 

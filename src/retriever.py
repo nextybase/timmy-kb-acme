@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/retriever.py
 """Utility di ricerca basata su embedding per la Timmy KB.
 

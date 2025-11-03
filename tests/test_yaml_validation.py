@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 from timmykb.tag_onboarding import _validate_tags_reviewed
 
 

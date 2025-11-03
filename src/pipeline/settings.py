@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Loader centralizzato per config/config.yaml con helper typed."""
 
 from __future__ import annotations

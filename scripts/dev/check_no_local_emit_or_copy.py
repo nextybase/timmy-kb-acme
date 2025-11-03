@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 """
 Fail-fast su helper duplicati per ingest/CSV:
 - Vietate definizioni locali di `_copy_local_pdfs_to_raw` fuori da `src/semantic/`.

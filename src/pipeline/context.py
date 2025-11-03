@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/context.py
 """ClientContext – contenitore unico di stato e configurazione per Timmy-KB.
 

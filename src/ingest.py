@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Utility di ingestion per Timmy KB.
 
 Funzioni:

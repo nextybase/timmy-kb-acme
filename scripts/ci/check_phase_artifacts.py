@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
 """Soft check: avvisa se alcune fasi risultano con artifacts=0.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/kb_db.py
 """Archivio SQLite leggero per Timmy KB.
 

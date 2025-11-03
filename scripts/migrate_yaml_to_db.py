@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/migrate_yaml_to_db.py
 """
 Migra un file `tags_reviewed.yaml` verso il database SQLite `tags.db` adiacente.

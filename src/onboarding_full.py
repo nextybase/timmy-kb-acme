@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: GPL-3.0-only
 """Onboarding FULL (fase 2): push GitHub e preflight su 'book/'.
 
 Questo orchestratore:

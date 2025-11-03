@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Tests per l'integrazione di ClientContext con Settings."""
 
 from __future__ import annotations

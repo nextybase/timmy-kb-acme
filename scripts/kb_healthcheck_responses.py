@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/kb_healthcheck_responses.py
 # Verifica l'uso reale della KB (File Search) con Responses API, mostrando citations.
 # Requisiti: openai>=2.3.0, python-dotenv

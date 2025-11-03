@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_query_params_edge.py
 from __future__ import annotations
 

@@ -123,7 +123,7 @@ Note operative
 
 - YAML e usato per il bootstrap iniziale; a runtime la fonte di verita e SQLite (semantic/tags.db).
 - La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
-- La generazione del mapping Vision usa `semantic/vision_ai.py`: salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e richiama il modello `gpt-4.1-mini`.
+- La generazione del mapping Vision usa `semantic/vision_ai.py`: salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e chiama sempre il modello definito in `config/config.yaml`, letto via `get_vision_model()`.
 - L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log "Embedding vuoti scartati").
 - Indicizzazione parziale: su mismatch tra `contents` ed `embeddings` si indicizza sul minimo comune; vengono emessi `semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned` e un solo `semantic.index.skips` con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
 - Telemetria run vuoti: i rami "no files"/"no contents" entrano in `phase_scope` con `artifact_count=0` e chiudono con `semantic.index.done`.

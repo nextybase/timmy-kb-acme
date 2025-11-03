@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_landing_slug_paths.py
 from __future__ import annotations
 

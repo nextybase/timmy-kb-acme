@@ -58,5 +58,6 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 ## 6) Note finali
 
 - In caso di dubbio, aprire prima una **discussion**.
-- Le modifiche devono essere **retro‑compatibili** salvo pianificato diversamente.
+- Le modifiche devono essere **retro-compatibili** salvo pianificato diversamente.
 - La qualità del codice e la coerenza con le guide valgono quanto la funzionalità stessa.
+- Tutti i contributori devono attenersi a [LICENSE](LICENSE), [Code of Conduct](CODE_OF_CONDUCT.md) e [Security Policy](SECURITY.md).

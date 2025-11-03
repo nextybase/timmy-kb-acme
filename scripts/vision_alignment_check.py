@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/vision_alignment_check.py
 # Health-check 1:1 con il flusso Vision (Assistants v2), robusto e “sempre verboso”.
 # Compatibile con openai==2.3.0. Requisiti: python-dotenv.

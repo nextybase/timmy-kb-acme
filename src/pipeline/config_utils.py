@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/config_utils.py
 """Configurazione cliente e utilities (SSoT + path-safety).
 

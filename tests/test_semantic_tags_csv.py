@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_tags_csv.py
 # cspell:ignore rels
 import csv

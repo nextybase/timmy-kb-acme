@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/smoke_e2e.py
 from __future__ import annotations
 

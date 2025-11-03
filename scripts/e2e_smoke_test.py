@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/e2e_smoke_test.py
 import argparse
 import sqlite3

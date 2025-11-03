@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 def test__drive_list_pdfs_paginates(monkeypatch):
     # Importa il modulo target (senza prefisso 'src.' per evitare duplicati mypy)
     import ui.services.drive_runner as dr

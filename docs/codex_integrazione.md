@@ -79,7 +79,7 @@ L'estensione si appoggia al Codex CLI open‑source. La configurazione avanzata 
 
 Esempio `~/.codex/config.toml`:
 ```toml
-model = "gpt-5"
+# model = "override-locale"  # scommenta solo se vuoi forzare un modello diverso dal valore letto via get_vision_model()
 approval_mode = "agent"   # agent | chat | full
 
 [mcp_servers.files]
@@ -88,6 +88,7 @@ type = "filesystem"
 root = "/home/<user>/workspace/timmy-kb-acme"
 # Windows
 # root = "C:/Users/<User>/clienti/timmy-kb-acme"
+# Il modello Vision resta quello definito in `config/config.yaml` e viene letto a runtime tramite `get_vision_model()`.
 ```
 
 MCP è un protocollo standard per esporre tool/contesto a un agente; in Codex si abilita dichiarando `mcp_servers` nella config. Architettura host-server e filtri tool sono documentati anche nell'Agents SDK di OpenAI.

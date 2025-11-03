@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
 from pathlib import Path
 from types import SimpleNamespace

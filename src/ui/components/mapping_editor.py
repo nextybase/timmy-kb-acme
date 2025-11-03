@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/ui/components/mapping_editor.py
 from __future__ import annotations
 

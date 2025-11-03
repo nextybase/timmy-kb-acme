@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """
 Namespace package per le API pubbliche di Timmy KB.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # scripts/kb_healthcheck.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations

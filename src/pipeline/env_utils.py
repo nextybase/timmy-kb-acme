@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
 """Env utilities senza side-effects a import-time.

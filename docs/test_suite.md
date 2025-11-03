@@ -1,5 +1,7 @@
 # Test Suite — v1.0 Beta
 
+> **TL;DR:** panoramica su marker Pytest, dipendenze opzionali e comandi rapidi: usala per scegliere quali test eseguire (drive/push/e2e) e per mantenere la suite verde in CI.
+
 Guida ufficiale alla suite **Pytest** del progetto. Allineata a: logging centralizzato con redazione, dipendenze SSoT (pip-tools), UI import-safe, **stub Streamlit centralizzati** e **helper symlink unificato**. Nessun riferimento a legacy o migrazioni.
 
 ---

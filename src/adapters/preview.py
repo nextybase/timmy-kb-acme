@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/adapters/preview.py
 """
 Adapter: gestione preview GitBook/HonKit.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Prompt builder for Timmy KB Coder.
 
 build_prompt(next_premise, coding_rules, task, retrieved) -> str

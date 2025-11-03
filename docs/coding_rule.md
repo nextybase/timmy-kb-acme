@@ -1,5 +1,7 @@
 # Coding Rules — v1.0 Beta
 
+> **TL;DR:** consulta queste regole prima di toccare pipeline o UI: usa gli helper SSoT, niente side-effect a import-time, logging e path-safety sono vincolanti.
+
 Regole di sviluppo per **Timmy KB**. Questa è la base iniziale: nessun riferimento a legacy o migrazioni. Obiettivo: codice coerente, sicuro e riproducibile.
 
 ---

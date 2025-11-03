@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Test per la pipeline GitHub refactorata (push orchestrator)."""
 
 from __future__ import annotations

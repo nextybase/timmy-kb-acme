@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 """Fail if deprecated Streamlit API patterns are present."""
 
 from __future__ import annotations

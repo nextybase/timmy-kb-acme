@@ -1,237 +1,69 @@
 # Timmy KB — README (v1.0 Beta)
 
-Pipeline per generare una Knowledge Base Markdown AI‑ready a partire dai PDF del cliente, con arricchimento semantico, anteprima locale (HonKit via Docker) e push opzionale su GitHub.
+Pipeline per generare una Knowledge Base Markdown pronta per l’uso AI a partire dai PDF del cliente, con arricchimento semantico, anteprima locale (HonKit) e push opzionale su GitHub.
+
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![CI](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 ---
 
-## Prerequisiti
+## Prerequisiti rapidi
+- Python ≥ 3.11, `pip` e `pip-tools`
+- (Opz.) Docker per la preview HonKit
+- Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive
+- Token GitHub se abiliti il push finale
 
-- Python ≥ 3.11
-- Docker (solo per la preview)
-- Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive per il tagging
-- (Opz.) `GITHUB_TOKEN` per il push
-
-### Variabili d’ambiente (principali)
-- `SERVICE_ACCOUNT_FILE` – JSON del Service Account (Drive)
-- `DRIVE_ID` – ID cartella root dello spazio Drive (RAW parent)
-- `GITHUB_TOKEN` – richiesto per il push GitHub
-- `GIT_DEFAULT_BRANCH` – branch di default (es. `main`)
-- `OPENAI_API_KEY` o `OPENAI_API_KEY_FOLDER`
-- `YAML_STRUCTURE_FILE` – opzionale (default `config/cartelle_raw.yaml`)
-- `LOG_REDACTION` – `auto` (default) | `on` | `off`
-- `ENV`, `CI`
+Variabili d’ambiente principali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
 
 ---
 
-## Gestione dipendenze (SSoT con pip‑tools)
+## Quickstart essenziale
 
-Installazione con pin generati da `pip-compile`:
-
+### Interfaccia Streamlit
 ```bash
-# Runtime
-pip install -r requirements.txt
-
-# Dev/Test (include runtime + toolchain)
-pip install -r requirements-dev.txt
-
-# Opzionali (NLP/RAG, integrazioni)
-pip install -r requirements-optional.txt
+streamlit run onboarding_ui.py
 ```
+La UI guida l’onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user_guide.md).
 
-Aggiornare i pin modificando i file `*.in` e rigenerando:
-
-```bash
-pip-compile requirements.in
-pip-compile requirements-dev.in
-pip-compile requirements-optional.in
-# constraints.txt viene rigenerato da requirements.in
-```
-
-> Alternativa “extras” (per ambienti non pin‑locked):
-> `pip install .[drive]` oppure, in sviluppo, `pip install -e ".[drive]"`.
-
----
-
-## Onboarding: flusso end‑to‑end
-
-1. **Pre‑onboarding**
-   Crea la struttura locale (e opzionale remota su Drive), copia i template semantici, genera `config.yaml`.
-
-2. **Tag Onboarding (HiTL)**
-   Default sorgente = **Drive**: scarica PDF dalla cartella RAW su Drive e genera `semantic/tags_raw.csv`. Dopo checkpoint umano produce `README_TAGGING.md` e `tags_reviewed.yaml`.
-
-3. **Semantic Onboarding**
-   Converte i PDF in `book/*.md`, arricchisce i frontmatter dai tag canonici (`semantic/tags.db`), genera `README.md` e `SUMMARY.md`. (Opz.) avvia la preview Docker (HonKit).
-
-4. **Onboarding Full (Push)**
-   Preflight su `book/` (solo `.md`), garantisce `README.md` e `SUMMARY.md`, push su GitHub via `GITHUB_TOKEN`.
-
----
-
-## Modalità d’uso
-
-### Interattiva (prompt guidati)
-
-```bash
-py src/pre_onboarding.py
-py src/tag_onboarding.py
-py - <<PY
-from semantic.api import convert_markdown, enrich_frontmatter, write_summary_and_readme
-from pipeline.context import ClientContext
-from pipeline.logging_utils import get_structured_logger
-
-slug = "acme"
-ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-log = get_structured_logger("semantic.manual")
-
-convert_markdown(ctx, log, slug=slug)
-from semantic.vocab_loader import load_reviewed_vocab
-vocab = load_reviewed_vocab(ctx.base_dir, log)
-enrich_frontmatter(ctx, log, vocab, slug=slug)
-write_summary_and_readme(ctx, log, slug=slug)
-PY
-py src/onboarding_full.py
-```
-
-### CLI / Batch (senza prompt)
-
+### CLI automatizzata
 ```bash
 py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive
 py src/tag_onboarding.py --slug acme --non-interactive --proceed
 py src/semantic_onboarding.py --slug acme --non-interactive
 py src/onboarding_full.py --slug acme --non-interactive
 ```
-
-### Interfaccia (Streamlit)
-
-```bash
-streamlit run onboarding_ui.py
-```
-Requisito: Streamlit ≥ 1.50. Guida: `docs/guida_ui.md`.
+Ogni step può essere eseguito singolarmente; l’orchestrazione dettagliata è descritta nella [User Guide](docs/user_guide.md).
 
 ---
 
-## Struttura output per cliente
-
-```
-output/
-  timmy-kb-<slug>/
-    raw/      # PDF caricati/scaricati
-    book/     # Markdown + SUMMARY.md + README.md
-    semantic/ # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv, tags_reviewed.yaml, vision_statement.txt, tags.db, finance.db (opz.)
-    config/   # config.yaml (aggiornato con eventuali ID Drive)
-    logs/     # log centralizzati (pre_onboarding, tag_onboarding, onboarding_full)
-```
-
-> Lo slug deve essere valido secondo le regole in `config/config.yaml`.
+## Dipendenze & QA
+- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configuration.md](docs/configuration.md).
+- Hook consigliati:
+  ```bash
+  pre-commit install --hook-type pre-commit --hook-type pre-push
+  make qa-safe     # lint + typing
+  pytest -q        # suite rapida (dataset dummy)
+  ```
+- Per l’elenco completo dei test e dei tag consulta [docs/test_suite.md](docs/test_suite.md).
 
 ---
 
-## Vision Statement → YAML
-
-```bash
-py src/tools/gen_vision_yaml.py --slug <slug>
-```
-- Input: `VisionStatement.pdf` (in `config/`, `raw/` o `config/` globale del repo)
-- Output: `semantic/semantic_mapping.yaml` e `semantic/vision_statement.txt`
-- Richiede `OPENAI_API_KEY` o `OPENAI_API_KEY_FOLDER`.
-
----
-
-## Logging, sicurezza, exit codes
-
-- **Logging centralizzato** in `output/timmy-kb-<slug>/logs/`, con `run_id` e redazione automatica dei segreti.
-- **Path‑safety** enforced e scritture **atomiche** per ogni I/O di repo/sandbox.
-- Exit codes (principali): `0` OK; `2` ConfigError; `30` PreviewError; `40` PushError.
-
-_Esempio logger_
-
-```python
-from pipeline.logging_utils import get_structured_logger
-log = get_structured_logger(__name__, run_id=None, context={"slug": "acme"})
-log.info("semantic.index.start", extra={"slug": "acme"})
-```
+## Documentazione & riferimenti
+- [User Guide](docs/user_guide.md) – flussi UI/CLI, Vision, workspace.
+- [Developer Guide](docs/developer_guide.md) – SSoT, pipeline, logging, get_vision_model().
+- [Coding Rules](docs/coding_rule.md) e [Architecture Overview](docs/architecture.md).
+- [Configuration split](docs/configuration.md) e [Runbook Codex](docs/runbook_codex.md).
+- [CONTRIBUTING](CONTRIBUTING.md) – policy PR e micro-PR.
+- [LICENSE](LICENSE) – GPL-3.0.
+- [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
 ---
 
-## Preflight UI
+## Telemetria & sicurezza
+- Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti.
+- Path-safety e scritture atomiche per ogni operazione su workspace/Drive.
+- CSpell, gitleaks e controlli SPDX sono inclusi nella configurazione `pre-commit`.
 
-La UI verifica `.env` e librerie; degrada in modo sicuro se Docker non è presente e nasconde il box *Prerequisiti* quando tutto è OK.
-
----
-
-## Impostazioni retriever (UI)
-
-Configurabili dalla sidebar; salvate in `config.yaml` alla chiave `retriever`.
-
-```yaml
-retriever:
-  candidate_limit: 4000
-  latency_budget_ms: 300
-  auto_by_budget: false
-```
-
----
-
-## Drive: installazione (extras)
-
-```bash
-pip install .[drive]
-# sviluppo
-pip install -e ".[drive]"
-```
-
-Per ambienti pin‑locked, usa i `requirements‑optional(.in/.txt)` rigenerati con pip‑tools.
-
----
-
-## QA locale
-
-Hook pre-commit e comandi rapidi:
-
-```bash
-pre-commit install --hook-type pre-commit --hook-type pre-push
-make qa-safe     # isort/black/ruff/mypy (se presenti)
-make ci-safe     # qa-safe + pytest
-pytest -ra       # dopo aver generato il dataset dummy
-```
-
-Vedi anche: [docs/test_suite.md](docs/test_suite.md)
-
----
-
-## Ingest/CSV — Best practice
-
-Usa le API pubbliche in `semantic.api` per copiare PDF e generare `tags_raw.csv`; evita helper interni non pubblici.
-
----
-
-## Licenza & SPDX
-
-Il progetto è distribuito sotto licenza **GPL-3.0** (vedi `LICENSE`).
-
-Per coerenza e tracciabilità, aggiungi l’header SPDX nei file sorgente:
-
-```text
-SPDX-License-Identifier: GPL-3.0-only
-```
-
-> Nota: se desideri adottare la formula “or later”, puoi usare
-> `GPL-3.0-or-later` e allineare di conseguenza i nuovi header. In assenza di
-> una scelta esplicita a livello di sorgenti, usiamo **GPL-3.0-only** come
-> impostazione conservativa.
-
-### Dipendenze e licenze di terze parti
-- La gestione dipendenze è basata su **pip-tools** (`*.in` → `*.txt`), come
-  indicato nelle istruzioni di setup e rebuild dei requirements.
-- Alcune funzionalità opzionali usano **PyMuPDF** (`pymupdf`); verifica le
-  implicazioni di licenza quando abiliti tali feature e consulta la sezione
-  sicurezza dedicata (`SECURITY.md` / `docs/SECURITY.md`).
-
----
-
-## Note operative
-
-- La preview richiede Docker; se assente viene saltata.
-- Nel push GitHub vengono inclusi solo i `.md` in `book/`.
-- Per scenari air‑gapped: `--source=local` e popolamento manuale di `raw/`.
+Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user_guide.md) e della [Developer Guide](docs/developer_guide.md).

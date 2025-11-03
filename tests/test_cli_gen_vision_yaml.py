@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_cli_gen_vision_yaml.py
 from __future__ import annotations
 

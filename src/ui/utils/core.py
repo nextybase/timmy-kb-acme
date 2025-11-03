@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/ui/utils/core.py
 from __future__ import annotations
 

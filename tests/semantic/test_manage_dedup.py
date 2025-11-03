@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_manage_dedup.py
 import types
 from pathlib import Path

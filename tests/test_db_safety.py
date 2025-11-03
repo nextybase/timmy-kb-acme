@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_kb_db_path_safety.py
 from pathlib import Path
 

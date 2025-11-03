@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # src/semantic/auto_tagger.py
 """
 MVP: generatore di candidati semantici basato su euristiche (path/filename).

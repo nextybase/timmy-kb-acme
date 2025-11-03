@@ -219,6 +219,13 @@ repos:
         files: ^src/(ui|pipeline|semantic)/.*\.py$
         stages: [pre-commit, pre-push]
 
+      - id: add-spdx-headers
+        name: Auto add missing SPDX headers
+        entry: python scripts/dev/add_spdx_headers.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-spdx-headers
         name: Check SPDX headers in Python files
         entry: python scripts/dev/check_spdx_headers.py

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_vocab_loader_failfast.py
 from __future__ import annotations
 

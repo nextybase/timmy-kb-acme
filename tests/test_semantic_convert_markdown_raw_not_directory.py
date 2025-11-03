@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_convert_markdown_raw_not_directory.py
 import logging
 from types import SimpleNamespace

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
 from pipeline.logging_utils import get_structured_logger

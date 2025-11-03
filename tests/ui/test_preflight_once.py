@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_preflight_once.py
 from ui.utils.preflight_once import apply_preflight_once
 
