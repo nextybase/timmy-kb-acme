@@ -219,6 +219,15 @@ repos:
         files: ^src/(ui|pipeline|semantic)/.*\.py$
         stages: [pre-commit, pre-push]
 
+      - id: check-spdx-headers
+        name: Check SPDX headers in Python files
+        entry: python scripts/dev/check_spdx_headers.py
+        language: system
+        pass_filenames: true
+        types_or: [python]
+        files: ^(src|tests|scripts)/.*\.py$
+        stages: [pre-commit]
+
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.18.1
     hooks:
