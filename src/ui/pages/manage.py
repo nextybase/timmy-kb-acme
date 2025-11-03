@@ -14,6 +14,7 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state as get_client_state
 from ui.manage import _helpers as manage_helpers
+from ui.manage import drive as drive_component
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
@@ -220,70 +221,6 @@ def _handle_tags_raw_enable(
         st.error("Servizio di estrazione tag non disponibile.")
         return False
     return _enable_tags_service(slug, semantic_dir, csv_path, yaml_path)
-
-
-def _prepare_download_plan(slug: str) -> tuple[list[str], list[str]]:
-    plan_fn = _plan_raw_download
-    if plan_fn is None:
-        raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-    result = manage_helpers.call_best_effort(plan_fn, logger=LOGGER, slug=slug, require_env=True)
-    return cast(tuple[list[str], list[str]], result)
-
-
-def _render_download_plan(conflicts: list[str], labels: list[str]) -> None:
-    if conflicts:
-        with st.expander(f"File gi�� presenti in locale ({len(conflicts)})", expanded=True):
-            st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
-    else:
-        st.info("Nessun conflitto rilevato: nessun file verrebbe sovrascritto.")
-
-    with st.expander(f"Anteprima destinazioni ({len(labels)})", expanded=False):
-        st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
-
-
-def _execute_drive_download(slug: str, conflicts: list[str]) -> bool:
-    try:
-        with status_guard(
-            "Scarico file da Drive...",
-            expanded=True,
-            error_label="Errore durante il download",
-        ) as status_widget:
-            download_fn = _download_with_progress or _download_simple
-            if download_fn is None:
-                raise RuntimeError("Funzione di download non disponibile.")
-            try:
-                paths = manage_helpers.call_best_effort(
-                    download_fn,
-                    slug=slug,
-                    require_env=True,
-                    overwrite=bool(conflicts),
-                )
-            except TypeError:
-                paths = manage_helpers.call_best_effort(
-                    download_fn,
-                    logger=LOGGER,
-                    slug=slug,
-                    overwrite=bool(conflicts),
-                )
-            count = len(paths or [])
-            if status_widget is not None and hasattr(status_widget, "update"):
-                status_widget.update(label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete")
-
-        try:
-            if _invalidate_drive_index is not None:
-                _invalidate_drive_index(slug)
-            st.toast("Allineamento Drive->locale completato.")
-            return True
-        except Exception:
-            return True
-    except Exception as exc:
-        st.error(f"Errore durante il download: {exc}")
-        return False
-
-
-def _render_drive_status_message(disabled: bool, message: str) -> None:
-    if disabled:
-        st.info(message)
 
 
 # -----------------------------------------------------------
@@ -521,7 +458,8 @@ if slug:
 
     # Colonna 1 – README su Drive
     emit_disabled = _emit_readmes_for_raw is None
-    _render_drive_status_message(
+    drive_component.render_drive_status_message(
+        st,
         emit_disabled,
         "Funzione Drive non disponibile: installa gli extra (`pip install .[drive]`) e configura le credenziali.",
     )
@@ -634,7 +572,8 @@ if slug:
 
     # Colonna 3 – Scarica da Drive → locale
     download_disabled = _plan_raw_download is None or not (os.getenv("SERVICE_ACCOUNT_FILE") and os.getenv("DRIVE_ID"))
-    _render_drive_status_message(
+    drive_component.render_drive_status_message(
+        st,
         download_disabled,
         "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive.",
     )
@@ -654,7 +593,11 @@ if slug:
             st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
 
             try:
-                conflicts, labels = _prepare_download_plan(slug)
+                conflicts, labels = drive_component.prepare_download_plan(
+                    _plan_raw_download,
+                    slug=slug,
+                    logger=LOGGER,
+                )
             except Exception as e:
                 message = f"Impossibile preparare il piano di download: {e}"
                 HttpErrorType: type[BaseException] | None
@@ -681,13 +624,22 @@ if slug:
                     st.error(message)
                 return
 
-            _render_download_plan(conflicts, labels)
+            drive_component.render_download_plan(st, conflicts, labels)
 
             cA, cB = st.columns(2)
             if _column_button(cA, "Annulla", key="dl_cancel"):
                 return
             if _column_button(cB, "Procedi e scarica", key="dl_proceed", type="primary"):
-                if _execute_drive_download(slug, conflicts):
+                if drive_component.execute_drive_download(
+                    slug,
+                    conflicts,
+                    download_with_progress=_download_with_progress,
+                    download_simple=_download_simple,
+                    invalidate_index=_invalidate_drive_index,
+                    logger=LOGGER,
+                    st=st,
+                    status_guard=status_guard,
+                ):
                     _safe_rerun()
 
         dialog_builder = getattr(st, "dialog", None)
