@@ -55,27 +55,39 @@ def render_brand_header(
     if include_anchor:
         st_module.write("")  # no-op placeholder per compatibilità
 
+    def _call(obj: Any, method: str, *args: Any, **kwargs: Any) -> None:
+        fn = getattr(obj, method, None)
+        if callable(fn):
+            try:
+                fn(*args, **kwargs)
+            except Exception:
+                pass
+
     if show_logo and logo_path.is_file():
         col_logo, col_title = st_module.columns([1, 5])
         with col_logo:
             st_module.image(str(logo_path), use_column_width=True)
         with col_title:
-            st_module.title("Onboarding NeXT - Clienti")
+            _call(col_title, "title", "Onboarding NeXT - Clienti")
             if subtitle:
-                st_module.caption(subtitle)
+                _call(col_title, "caption", subtitle)
     else:
-        st_module.title("Onboarding NeXT - Clienti")
+        _call(st_module, "title", "Onboarding NeXT - Clienti")
         if subtitle:
-            st_module.caption(subtitle)
+            _call(st_module, "caption", subtitle)
 
 
 def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
     if st_module is None:
         return
     logo_path = _logo_for_theme(repo_root)
-    if logo_path.is_file():
-        target = getattr(st_module, "sidebar", st_module)
-        target.image(str(logo_path), use_column_width=True)
+    target = getattr(st_module, "sidebar", st_module)
+    image_fn = getattr(target, "image", None)
+    if callable(image_fn) and logo_path.is_file():
+        try:
+            image_fn(str(logo_path), use_column_width=True)
+        except Exception:
+            pass
 
 
 __all__ = ["get_favicon_path", "render_brand_header", "render_sidebar_brand"]
