@@ -157,11 +157,20 @@ _ensure_streamlit_api()
 
 # Imposta un valore di default della query string per coerenza con deep-linking
 def _hydrate_query_defaults() -> None:
-    # Non forziamo più ?tab=home nell'URL: gli helper restituiscono i default.
-    from ui.utils.route_state import get_tab, get_slug_from_qp  # lazy import per compatibilità test
+    """Hydrate defaults for query parameters without forzare ?tab=home nell'URL."""
+    try:
+        from ui.utils.route_state import get_tab as _get_tab, get_slug_from_qp as _get_slug
+    except Exception:
+        _ = get_tab("home")
+        _ = get_slug_from_qp()
+        return
+    try:
+        _ = _get_tab("home")
+        _ = _get_slug()
+    except Exception:
+        _ = get_tab("home")
+        _ = get_slug_from_qp()
 
-    _ = get_tab("home")
-    _ = get_slug_from_qp()
 
 
 _hydrate_query_defaults()

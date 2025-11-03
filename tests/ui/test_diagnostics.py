@@ -57,9 +57,11 @@ def test_tail_log_bytes_prefers_safe_reader(tmp_path: Path) -> None:
 
 
 def test_build_logs_archive_applies_limits(tmp_path: Path) -> None:
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
     files = []
     for idx in range(3):
-        path = tmp_path / f"log{idx}.txt"
+        path = logs_dir / f"log{idx}.txt"
         path.write_text(f"log-{idx}", encoding="utf-8")
         files.append(path)
 
@@ -80,9 +82,9 @@ def test_build_logs_archive_applies_limits(tmp_path: Path) -> None:
     assert data is not None
     archive = zipfile.ZipFile(io.BytesIO(data))
     names = sorted(archive.namelist())
-    assert names == ["log0.txt", "log1.txt"]
-    assert archive.read("log0.txt") == b"log-0"
-    assert archive.read("log1.txt") == b"log-1"
+    assert names == ["logs/log0.txt", "logs/log1.txt"]
+    assert archive.read("logs/log0.txt") == b"log-0"
+    assert archive.read("logs/log1.txt") == b"log-1"
 
 
 def test_build_logs_archive_returns_none_on_errors(tmp_path: Path) -> None:

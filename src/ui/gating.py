@@ -4,6 +4,7 @@ import importlib
 import importlib.util
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Iterable, Mapping, Sequence
 
 from pipeline.logging_utils import get_structured_logger
@@ -27,6 +28,7 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     return raw.strip().casefold() not in _DISABLE_VALUES
 
 
+@lru_cache(maxsize=16)
 def _module_available(module_name: str, *, attr: str | None = None) -> bool:
     """Ritorna True se il modulo e, opzionalmente, l'attributo richiesto sono disponibili."""
     if importlib.util.find_spec(module_name) is None:

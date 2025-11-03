@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, ContextManager, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
 from pipeline.exceptions import ConfigError, PathTraversalError
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
 
 SafeReader = Callable[[Path], ContextManager[io.BufferedReader]]
 
@@ -148,7 +148,11 @@ def build_logs_archive(
                 if written_total >= max_total_bytes:
                     break
                 try:
-                    with zf.open(file_path.name, mode="w") as zout:
+                    parent_component = sanitize_filename(file_path.parent.name) if file_path.parent else ""
+                    basename = sanitize_filename(file_path.name)
+                    arc_components = [part for part in (parent_component, basename) if part]
+                    arcname = "/".join(arc_components) or basename
+                    with zf.open(arcname, mode="w") as zout:
                         reader_cm: ContextManager[io.BufferedReader]
                         if safe_reader:
                             reader_cm = safe_reader(file_path)

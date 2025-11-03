@@ -29,7 +29,12 @@ from ui.utils.status import status_guard
 _PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
 
 if _PREVIEW_MODE != "stub":  # pragma: no branch - import reale solo se serve
-    from adapters.preview import start_preview, stop_preview
+    try:
+        from adapters.preview import start_preview, stop_preview
+    except Exception:
+        _PREVIEW_MODE = "stub"
+
+if _PREVIEW_MODE != "stub":  # pragma: no branch - definizioni reali solo se disponibili
 
     def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
         name = cast(str, start_preview(ctx, logger))
