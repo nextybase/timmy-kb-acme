@@ -59,6 +59,7 @@ from ui.utils.status import status_guard  # noqa: E402
 from ui.gating import compute_gates, visible_page_specs  # noqa: E402
 from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
 from ui.theme_enhancements import inject_theme_css  # noqa: E402
+from ui.utils.branding import get_favicon_path  # noqa: E402
 
 # Router/state helper (fallback soft se non presente)
 try:  # noqa: E402
@@ -108,8 +109,11 @@ except Exception:  # pragma: no cover
         return None
 
 
+REPO_ROOT = Path(__file__).resolve().parent
+
 st.set_page_config(
     page_title="Onboarding NeXT - Clienti",
+    page_icon=str(get_favicon_path(REPO_ROOT)),
     layout="wide",
     initial_sidebar_state="expanded",
 )

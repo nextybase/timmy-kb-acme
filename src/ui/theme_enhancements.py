@@ -139,6 +139,16 @@ def inject_theme_css() -> None:
 
       a:focus {{ text-decoration: underline !important; }}
 
+      .brand-logo {{
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }}
+
+      .brand-logo--sidebar {{
+        margin: 0 auto 1rem auto;
+      }}
+
       button[data-testid="baseButton-primary"],
       .stButton>button[kind="primary"],
       .stDownloadButton>button[kind="primary"],
