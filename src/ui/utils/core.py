@@ -56,19 +56,22 @@ def safe_write_text(
     _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic, fsync=fsync)
 
 
+def _normalize_theme_value(value: object | None) -> str | None:
+    if isinstance(value, str):
+        candidate = value.strip().lower()
+        if candidate in {"light", "dark"}:
+            return candidate
+    if isinstance(value, dict):
+        return _normalize_theme_value(value.get("base"))
+    return None
+
+
 def get_theme_base(default: str = "light") -> str:
     """Restituisce la base tema Streamlit ('light'/'dark') sincronizzando la sessione."""
     try:
         import streamlit as st
     except Exception:
         return default
-
-    def _normalize(value: object | None) -> str | None:
-        if isinstance(value, str):
-            candidate = value.strip().lower()
-            if candidate in {"light", "dark"}:
-                return candidate
-        return None
 
     state = getattr(st, "session_state", None)
 
@@ -77,14 +80,20 @@ def get_theme_base(default: str = "light") -> str:
     option_base: str | None = None
     if callable(getter):
         try:
-            option_base = _normalize(getter("theme.base"))
+            option_base = _normalize_theme_value(getter("theme.base"))
         except Exception:
             option_base = None
 
     # 2) Eventuale override manuale già presente in sessione
     session_base: str | None = None
     if state is not None:
-        session_base = _normalize(state.get("brand_theme")) or _normalize(state.get("_ui_theme_base"))
+        session_base = (
+            _normalize_theme_value(state.get("brand_theme"))
+            or _normalize_theme_value(state.get("_ui_theme_base"))
+            or _normalize_theme_value(state.get("theme"))
+            or _normalize_theme_value(state.get("_theme"))
+            or _normalize_theme_value(state.get("_current_theme"))
+        )
 
     # 3) Fallback da contesto runtime (caso legacy)
     runtime_base: str | None = None
@@ -98,14 +107,20 @@ def get_theme_base(default: str = "light") -> str:
         session = getattr(ctx, "session", None)
         client = getattr(session, "client", None) if session is not None else None
         theme_obj = getattr(client, "theme", None) if client is not None else None
-        runtime_base = _normalize(getattr(theme_obj, "base", None))
+        runtime_base = _normalize_theme_value(getattr(theme_obj, "base", None))
         if runtime_base is None and isinstance(theme_obj, dict):
-            runtime_base = _normalize(theme_obj.get("base"))
+            runtime_base = _normalize_theme_value(theme_obj.get("base"))
         nested = getattr(theme_obj, "_theme", None)
         if runtime_base is None and isinstance(nested, dict):
-            runtime_base = _normalize(nested.get("base"))
+            runtime_base = _normalize_theme_value(nested.get("base"))
+        if runtime_base is None:
+            runtime_base = _normalize_theme_value(getattr(theme_obj, "_user_theme", None))
 
-    base = option_base or session_base or runtime_base or _normalize(default) or "light"
+    # Se la configurazione è "system", preferiamo session/runtime
+    if option_base == "system":
+        option_base = None
+
+    base = option_base or session_base or runtime_base or _normalize_theme_value(default) or "light"
 
     if state is not None:
         state["brand_theme"] = base
