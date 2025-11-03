@@ -73,7 +73,7 @@ def render_brand_header(
         else:
             columns = None
         if not columns or len(columns) < 2:
-            _call(st_module, "image", str(logo_path), use_column_width=True)
+            _call(st_module, "image", str(logo_path))
             _call(st_module, "title", "Onboarding NeXT - Clienti")
             if subtitle:
                 _call(st_module, "caption", subtitle)
@@ -81,9 +81,9 @@ def render_brand_header(
         col_logo, col_title = columns[0], columns[1]
         try:
             with col_logo:
-                _call(col_logo, "image", str(logo_path), use_column_width=True)
+                _call(col_logo, "image", str(logo_path))
         except Exception:
-            _call(col_logo, "image", str(logo_path), use_column_width=True)
+            _call(col_logo, "image", str(logo_path))
         try:
             with col_title:
                 _call(col_title, "title", "Onboarding NeXT - Clienti")
@@ -107,7 +107,7 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
     image_fn = getattr(target, "image", None)
     if callable(image_fn) and logo_path.is_file():
         try:
-            image_fn(str(logo_path), use_column_width=True)
+            image_fn(str(logo_path))
         except Exception:
             pass
 
