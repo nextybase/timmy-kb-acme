@@ -52,9 +52,6 @@ def render_brand_header(
 
     logo_path = _logo_for_theme(repo_root)
 
-    if include_anchor:
-        st_module.write("")  # no-op placeholder per compatibilità
-
     def _call(obj: Any, method: str, *args: Any, **kwargs: Any) -> None:
         fn = getattr(obj, method, None)
         if callable(fn):
@@ -63,11 +60,36 @@ def render_brand_header(
             except Exception:
                 pass
 
+    if include_anchor:
+        _call(st_module, "write", "")
+
     if show_logo and logo_path.is_file():
-        col_logo, col_title = st_module.columns([1, 5])
-        with col_logo:
-            st_module.image(str(logo_path), use_column_width=True)
-        with col_title:
+        columns_fn = getattr(st_module, "columns", None)
+        if callable(columns_fn):
+            try:
+                columns = columns_fn([1, 5])
+            except Exception:
+                columns = None
+        else:
+            columns = None
+        if not columns or len(columns) < 2:
+            _call(st_module, "image", str(logo_path), use_column_width=True)
+            _call(st_module, "title", "Onboarding NeXT - Clienti")
+            if subtitle:
+                _call(st_module, "caption", subtitle)
+            return
+        col_logo, col_title = columns[0], columns[1]
+        try:
+            with col_logo:
+                _call(col_logo, "image", str(logo_path), use_column_width=True)
+        except Exception:
+            _call(col_logo, "image", str(logo_path), use_column_width=True)
+        try:
+            with col_title:
+                _call(col_title, "title", "Onboarding NeXT - Clienti")
+                if subtitle:
+                    _call(col_title, "caption", subtitle)
+        except Exception:
             _call(col_title, "title", "Onboarding NeXT - Clienti")
             if subtitle:
                 _call(col_title, "caption", subtitle)
