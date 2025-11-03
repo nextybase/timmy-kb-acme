@@ -149,7 +149,7 @@ def render_brand_header(
     show_logo: bool = True,
 ) -> None:
     """Renderizza l'header brand dell'app (logo + titolo + sottotitolo opzionale)."""
-    if st_module is None:
+    if st_module is None or st is None:
         return
 
     if include_anchor:
@@ -178,13 +178,9 @@ def render_brand_header(
             col_logo, col_title = st_module.columns([1, 5])
             with col_logo:
                 if img_tag:
-                    html_fn = getattr(col_logo, "html", None)
-                    if callable(html_fn):
-                        html_fn(img_tag, height=0)
-                    else:
-                        col_logo.image(str(logo_path))
+                    st.html(img_tag)
                 else:
-                    st_module.image(str(logo_path))
+                    st.image(str(logo_path))
             with col_title:
                 st_module.title("Onboarding NeXT - Clienti")
                 if subtitle:
@@ -210,15 +206,11 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
             assets["dark_logo"] if base == "dark" and assets.get("dark_logo") else assets.get("light_logo") or ""
         )
         if initial_logo:
-            html_fn = getattr(sidebar, "html", None)
             snippet = (
                 '<img data-brand-logo="sidebar" class="brand-logo brand-logo--sidebar" '
                 f'src="{initial_logo}" alt="NeXT logo" />'
             )
-            if callable(html_fn):
-                html_fn(snippet, height=0)
-            else:
-                sidebar.image(str(logo_path))
+            st.html(snippet)
         elif logo_path.exists():
             sidebar.image(str(logo_path))
     except Exception:
