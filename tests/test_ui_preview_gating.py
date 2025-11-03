@@ -6,13 +6,13 @@ from typing import Sequence
 
 import pytest
 
+import ui.gating as gating
 from ui.gating import GateState, PagePaths, PageSpec, visible_page_specs
 
 
 @pytest.fixture(autouse=True)
-def _reset_gating_caches(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ui.gating._LAST_RAW_READY", {}, raising=False)
-    monkeypatch.setattr("ui.gating._LAST_PREVIEW_READY", {}, raising=False)
+def _reset_gating_caches() -> None:
+    gating.reset_gating_cache()
 
 
 def _fake_page_specs() -> dict[str, Sequence[PageSpec]]:

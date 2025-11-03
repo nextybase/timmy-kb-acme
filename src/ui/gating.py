@@ -22,6 +22,17 @@ _LAST_RAW_READY: dict[str, bool] = {}
 _LAST_PREVIEW_READY: dict[str, bool] = {}
 
 
+def reset_gating_cache(slug: str | None = None) -> None:
+    """Resetta le cache gating per lo slug indicato (o completamente se slug=None)."""
+    if slug is None:
+        _LAST_RAW_READY.clear()
+        _LAST_PREVIEW_READY.clear()
+        return
+    slug_key = slug or "<none>"
+    _LAST_RAW_READY.pop(slug_key, None)
+    _LAST_PREVIEW_READY.pop(slug_key, None)
+
+
 def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     raw = env.get(name)
     if raw is None:

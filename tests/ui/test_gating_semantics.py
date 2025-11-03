@@ -10,8 +10,8 @@ from ui.gating import GateState, PagePaths, visible_page_specs
 
 
 @pytest.fixture(autouse=True)
-def _reset_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    gating._LAST_RAW_READY.clear()
+def _reset_state() -> None:
+    gating.reset_gating_cache()
 
 
 def _semantics_visible(groups: dict[str, list[gating.PageSpec]]) -> bool:
@@ -59,10 +59,9 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     visible_page_specs(gates)
     visible_page_specs(gates)  # seconda invocazione: nessun log addizionale
 
-    assert len(dummy_logger.records) == 1
-    message, extra = dummy_logger.records[0]
-    assert message == "ui.gating.sem_hidden"
-    assert extra["slug"] == "dummy"
+    sem_logs = [extra for message, extra in dummy_logger.records if message == "ui.gating.sem_hidden"]
+    assert len(sem_logs) == 1
+    assert sem_logs[0]["slug"] == "dummy"
 
 
 def test_compute_gates_disables_missing_services(monkeypatch: pytest.MonkeyPatch) -> None:

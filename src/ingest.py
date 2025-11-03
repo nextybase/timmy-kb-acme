@@ -15,6 +15,7 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 
 from __future__ import annotations
 
+from functools import lru_cache
 from glob import glob
 from pathlib import Path
 from typing import Any, List, Optional, Sequence, cast
@@ -66,8 +67,8 @@ def _is_binary(base_dir: Path, path: Path) -> bool:
         return True
 
 
-def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -> List[str]:
-    """Divide il testo in chunk basati su token quando possibile, altrimenti per caratteri."""
+@lru_cache(maxsize=1)
+def _get_encoder() -> Any:
     try:
         import tiktoken
     except Exception as exc:
@@ -76,9 +77,14 @@ def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -
         ) from exc
 
     try:
-        enc = tiktoken.get_encoding("cl100k_base")
+        return tiktoken.get_encoding("cl100k_base")
     except Exception as exc:
         raise ConfigError("Impossibile inizializzare l'encoding 'cl100k_base' di tiktoken.") from exc
+
+
+def _chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 40) -> List[str]:
+    """Divide il testo in chunk basati su token quando possibile, altrimenti per caratteri."""
+    enc = _get_encoder()
     tokens = enc.encode(text)
     chunks = []
     step = max(1, target_tokens - overlap_tokens)

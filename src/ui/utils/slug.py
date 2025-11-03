@@ -66,6 +66,36 @@ def _sanitize_slug(value: Any) -> Optional[str]:
     return slug
 
 
+def _clear_gating_cache() -> None:
+    try:
+        from ui.gating import reset_gating_cache as _reset  # lazy import per evitare cicli
+    except Exception:
+        return
+    try:
+        _reset()
+    except Exception:
+        pass
+
+
+def _current_session_slug() -> Optional[str]:
+    try:
+        return _sanitize_slug(st.session_state.get("__active_slug"))
+    except Exception:
+        return None
+
+
+def _set_session_slug(value: Optional[str]) -> None:
+    prev = _current_session_slug()
+    try:
+        st.session_state["__active_slug"] = value
+    except Exception:
+        if prev != value:
+            _clear_gating_cache()
+        return
+    if prev != value:
+        _clear_gating_cache()
+
+
 def _load_persisted() -> Optional[str]:
     try:
         path = get_ui_state_path()
@@ -112,7 +142,7 @@ def get_active_slug() -> Optional[str]:
     # lettura da query/sessione…
     s = _sanitize_slug(_qp_get())
     if s:
-        st.session_state["__active_slug"] = s
+        _set_session_slug(s)
         _save_persisted(s)
         return s
 
@@ -123,7 +153,7 @@ def get_active_slug() -> Optional[str]:
 
     s = _load_persisted()
     if s:
-        st.session_state["__active_slug"] = s
+        _set_session_slug(s)
         _qp_set(s)
         return s
 
@@ -133,7 +163,7 @@ def get_active_slug() -> Optional[str]:
 def set_active_slug(slug: Optional[str], *, persist: bool = True, update_query: bool = True) -> None:
     # set attivo…
     s = _sanitize_slug(slug)
-    st.session_state["__active_slug"] = s
+    _set_session_slug(s)
     if persist:
         _save_persisted(s)
     if update_query:
@@ -148,6 +178,7 @@ def clear_active_slug(*, persist: bool = True, update_query: bool = True) -> Non
     - querystring (?slug)
     """
     # 1) session
+    _set_session_slug(None)
     st.session_state.pop("__active_slug", None)
     # 2) persistenza
     if persist:
