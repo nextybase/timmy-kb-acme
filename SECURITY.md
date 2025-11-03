@@ -27,7 +27,13 @@ Il team si impegna a rispondere entro **72 ore** dalla ricezione della segnalazi
 - Non includere credenziali o dati sensibili nei commit
 - Utilizzare file `.env` per variabili di ambiente
 - Validare sempre gli input esterni nelle funzioni
-- Tenere aggiornate le dipendenze (vedi `requirements.txt`)
+- Gestione dipendenze con **pip-tools**:
+  - modifica solo i file `requirements*.in`
+  - rigenera i pin con `pip-compile` → `requirements*.txt` (e `constraints.txt` se previsto)
+  - installa sempre dai `.txt` generati
+  - evita installazioni “ad hoc” non riproducibili
+- Esegui periodicamente uno **scan** con `pip-audit` (già incluso tra le dipendenze degli hook QA).
+- Per note su licenze e componenti opzionali (es. uso di PyMuPDF per funzioni Vision) vedi anche `docs/SECURITY.md`.
 
 ---
 
