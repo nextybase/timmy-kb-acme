@@ -9,6 +9,8 @@ from functools import lru_cache
 from typing import Iterable, Mapping, Sequence
 
 from pipeline.logging_utils import get_structured_logger
+
+__all__ = ["GateState", "compute_gates", "visible_page_specs", "reset_gating_cache"]
 from ui.clients_store import get_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.pages.registry import PagePaths, PageSpec, page_specs
@@ -27,6 +29,10 @@ def reset_gating_cache(slug: str | None = None) -> None:
     if slug is None:
         _LAST_RAW_READY.clear()
         _LAST_PREVIEW_READY.clear()
+        try:
+            _module_available.cache_clear()
+        except AttributeError:
+            pass
         return
     slug_key = slug or "<none>"
     _LAST_RAW_READY.pop(slug_key, None)

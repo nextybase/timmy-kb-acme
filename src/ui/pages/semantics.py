@@ -32,6 +32,14 @@ except Exception:  # pragma: no cover
         return False, None
 
 
+try:
+    from ui.gating import reset_gating_cache as _reset_gating_cache
+except Exception:  # pragma: no cover
+
+    def _reset_gating_cache(_slug: str | None = None) -> None:
+        return
+
+
 # SSoT: stati ammessi per la pagina Semantica
 ALLOWED_STATES = SEMANTIC_READY_STATES
 
@@ -87,6 +95,8 @@ def _run_enrich(slug: str) -> None:
             set_state(slug, "pronto")
         except Exception:
             pass
+        else:
+            _reset_gating_cache(slug)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
         st.caption("Vai su **Gestisci cliente** e completa l'estrazione tag, poi riprova.")
         return
@@ -104,6 +114,8 @@ def _run_enrich(slug: str) -> None:
     except Exception:
         # Lo stato non blocca l'uso della pagina; eventuale errore non è fatale per l'utente
         pass
+    else:
+        _reset_gating_cache(slug)
 
 
 def _run_summary(slug: str) -> None:
@@ -121,6 +133,8 @@ def _run_summary(slug: str) -> None:
         set_state(slug, "finito")
     except Exception:
         pass
+    else:
+        _reset_gating_cache(slug)
 
 
 def _go_preview() -> None:

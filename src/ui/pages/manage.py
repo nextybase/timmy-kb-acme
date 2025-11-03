@@ -34,6 +34,14 @@ from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
 
+try:
+    from ui.gating import reset_gating_cache as _reset_gating_cache
+except Exception:  # pragma: no cover - fallback per test headless
+
+    def _reset_gating_cache(_slug: str | None = None) -> None:
+        return
+
+
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
 
@@ -128,7 +136,8 @@ def _handle_tags_raw_save(
     semantic_dir: Path,
 ) -> bool:
     header = (content.splitlines() or [""])[0]
-    if "suggested_tags" not in header:
+    header_tokens = {token.strip().lower() for token in header.split(",")}
+    if "suggested_tags" not in header_tokens:
         st.error("CSV non valido: manca la colonna 'suggested_tags'.")
         LOGGER.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
         return False
@@ -188,6 +197,7 @@ def _enable_tags_stub(
 
         if updated:
             st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+            _reset_gating_cache(slug)
         else:
             st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
         LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
@@ -225,6 +235,7 @@ def _enable_tags_service(
             updated = False
         if updated:
             st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+            _reset_gating_cache(slug)
         else:
             st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
         LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
@@ -246,6 +257,10 @@ def _handle_tags_raw_enable(
         return _enable_tags_stub(slug, semantic_dir, yaml_path)
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     if run_tags_fn is None and tags_mode != "stub":
+        LOGGER.error(
+            "ui.manage.tags.service_missing",
+            extra={"slug": slug, "mode": tags_mode or "default"},
+        )
         st.error("Servizio di estrazione tag non disponibile.")
         return False
     return _enable_tags_service(slug, semantic_dir, csv_path, yaml_path)
@@ -615,6 +630,10 @@ if slug:
         if tags_mode == "stub":
             _open_tags_raw_modal(slug)
         elif run_tags_fn is None:
+            LOGGER.error(
+                "ui.manage.tags.service_missing",
+                extra={"slug": slug, "mode": tags_mode or "default"},
+            )
             st.error(
                 "Servizio di estrazione tag non disponibile.",
             )
