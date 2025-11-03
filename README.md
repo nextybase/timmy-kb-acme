@@ -206,6 +206,30 @@ Usa le API pubbliche in `semantic.api` per copiare PDF e generare `tags_raw.csv`
 
 ---
 
+## Licenza & SPDX
+
+Il progetto è distribuito sotto licenza **GPL-3.0** (vedi `LICENSE`).
+
+Per coerenza e tracciabilità, aggiungi l’header SPDX nei file sorgente:
+
+```text
+SPDX-License-Identifier: GPL-3.0-only
+```
+
+> Nota: se desideri adottare la formula “or later”, puoi usare
+> `GPL-3.0-or-later` e allineare di conseguenza i nuovi header. In assenza di
+> una scelta esplicita a livello di sorgenti, usiamo **GPL-3.0-only** come
+> impostazione conservativa.
+
+### Dipendenze e licenze di terze parti
+- La gestione dipendenze è basata su **pip-tools** (`*.in` → `*.txt`), come
+  indicato nelle istruzioni di setup e rebuild dei requirements.
+- Alcune funzionalità opzionali usano **PyMuPDF** (`pymupdf`); verifica le
+  implicazioni di licenza quando abiliti tali feature e consulta la sezione
+  sicurezza dedicata (`SECURITY.md` / `docs/SECURITY.md`).
+
+---
+
 ## Note operative
 
 - La preview richiede Docker; se assente viene saltata.
