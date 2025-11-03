@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-3.0-only
+from __future__ import annotations
+
+import inspect
+from pathlib import Path
+from typing import Any, Callable, Optional, TypeVar
+
+from ui.clients_store import get_all as get_clients
+from ui.utils.workspace import resolve_raw_dir
+
+T = TypeVar("T")
+
+
+def repo_root(manage_file: Path) -> Path:
+    """Restituisce la root del repository partendo dal file della pagina manage."""
+    return manage_file.resolve().parents[3]
+
+
+def clients_db_path(manage_file: Path) -> Path:
+    """Percorso al file clients_db/clients.yaml partendo da manage.py."""
+    return repo_root(manage_file) / "clients_db" / "clients.yaml"
+
+
+def workspace_root(slug: str) -> Path:
+    """Restituisce la radice workspace sicura per lo slug dato."""
+    raw_dir = Path(resolve_raw_dir(slug))
+    return raw_dir.parent
+
+
+def load_clients(logger: Any, manage_file: Path) -> list[dict[str, Any]]:
+    """Carica l'elenco clienti delegando allo store centrale."""
+    try:
+        return [entry.to_dict() for entry in get_clients()]
+    except Exception as exc:  # pragma: no cover - logging degradato
+        logger.warning(
+            "ui.manage.clients.load_error",
+            extra={"error": str(exc), "path": str(clients_db_path(manage_file))},
+        )
+        return []
+
+
+def safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
+    """Importa una funzione (modulo:callable) se disponibile, altrimenti None."""
+    try:
+        pkg, func = fn_path.split(":")
+        module = __import__(pkg, fromlist=[func])
+        candidate = getattr(module, func, None)
+        return candidate if callable(candidate) else None
+    except Exception:  # pragma: no cover - risoluzioni opzionali
+        return None
+
+
+def call_best_effort(fn: Callable[..., T], *, logger: Any, **kwargs: Any) -> T:
+    """Chiama fn con kwargs garantendo corrispondenza con la firma dichiarata."""
+    sig = inspect.signature(fn)
+    try:
+        sig.bind(**kwargs)
+    except TypeError:
+        logger.error(
+            "ui.manage.signature_mismatch",
+            extra={"fn": getattr(fn, "__name__", repr(fn)), "kwargs": sorted(kwargs)},
+        )
+        raise
+    return fn(**kwargs)

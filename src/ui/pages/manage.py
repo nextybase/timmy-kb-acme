@@ -2,10 +2,9 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
-import inspect
 import os
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import Any, Callable, Optional, cast
 
 import yaml
 
@@ -13,8 +12,8 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.chrome import render_chrome_then_require
-from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
+from ui.manage import _helpers as manage_helpers
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
@@ -32,7 +31,7 @@ from storage.tags_store import import_tags_yaml_to_db
 from ui.utils import set_slug
 from ui.utils.core import safe_write_text
 from ui.utils.status import status_guard
-from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
+from ui.utils.workspace import count_pdfs_safe
 
 try:
     from ui.gating import reset_gating_cache as _reset_gating_cache
@@ -55,77 +54,23 @@ def _safe_rerun() -> None:
             pass
 
 
-def _safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
-    """Importa una funzione se disponibile, altrimenti None. Formato: 'pkg.mod:func'."""
-    try:
-        pkg, func = fn_path.split(":")
-        mod = __import__(pkg, fromlist=[func])
-        fn = getattr(mod, func, None)
-        return fn if callable(fn) else None
-    except Exception:
-        return None
-
+_MANAGE_FILE = Path(__file__).resolve()
 
 # Services (gestiscono cache e bridging verso i component)
-_render_drive_diff = _safe_get("ui.services.drive:render_drive_diff")
-_invalidate_drive_index = _safe_get("ui.services.drive:invalidate_drive_index")
-_emit_readmes_for_raw = _safe_get("ui.services.drive_runner:emit_readmes_for_raw")
+_render_drive_diff = manage_helpers.safe_get("ui.services.drive:render_drive_diff")
+_invalidate_drive_index = manage_helpers.safe_get("ui.services.drive:invalidate_drive_index")
+_emit_readmes_for_raw = manage_helpers.safe_get("ui.services.drive_runner:emit_readmes_for_raw")
 
 # Download & pre-analisi (nuovo servizio estratto)
-_plan_raw_download = _safe_get("ui.services.drive_runner:plan_raw_download")
-_download_with_progress = _safe_get("ui.services.drive_runner:download_raw_from_drive_with_progress")
-_download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
+_plan_raw_download = manage_helpers.safe_get("ui.services.drive_runner:plan_raw_download")
+_download_with_progress = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive_with_progress")
+_download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
-_run_cleanup = _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
+_run_cleanup = manage_helpers.safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
 
 # Arricchimento semantico (estrazione tag ? stub + YAML)
-_run_tags_update = _safe_get("ui.services.tags_adapter:run_tags_update")
-
-
-# ---------------- Helpers ----------------
-def _repo_root() -> Path:
-    # manage.py -> pages -> ui -> src -> REPO_ROOT
-    return Path(__file__).resolve().parents[3]
-
-
-def _clients_db_path() -> Path:
-    return _repo_root() / "clients_db" / "clients.yaml"
-
-
-def _workspace_root(slug: str) -> Path:
-    """Restituisce la radice workspace sicura per lo slug (validato)."""
-    raw_dir = Path(resolve_raw_dir(slug))  # valida slug + path safety, tipizzato per mypy
-    return raw_dir.parent
-
-
-def _load_clients() -> list[dict[str, Any]]:
-    """Carica l'elenco clienti delegando allo store centrale."""
-    try:
-        return [entry.to_dict() for entry in get_clients()]
-    except Exception as exc:
-        LOGGER.warning(
-            "ui.manage.clients.load_error",
-            extra={"error": str(exc), "path": str(_clients_db_path())},
-        )
-        return []
-
-
-T = TypeVar("T")
-
-
-def _call_best_effort(fn: Callable[..., T], **kwargs: Any) -> T:
-    """Chiama fn con kwargs garantendo corrispondenza con la firma dichiarata."""
-    sig = inspect.signature(fn)
-    try:
-        sig.bind(**kwargs)
-    except TypeError:
-        LOGGER.error(
-            "ui.manage.signature_mismatch",
-            extra={"fn": getattr(fn, "__name__", repr(fn)), "kwargs": sorted(kwargs)},
-        )
-        raise
-    return fn(**kwargs)
+_run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update")
 
 
 # ---------------- Action handlers ----------------
@@ -270,7 +215,7 @@ def _prepare_download_plan(slug: str) -> tuple[list[str], list[str]]:
     plan_fn = _plan_raw_download
     if plan_fn is None:
         raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-    result = _call_best_effort(plan_fn, slug=slug, require_env=True)
+    result = manage_helpers.call_best_effort(plan_fn, logger=LOGGER, slug=slug, require_env=True)
     return cast(tuple[list[str], list[str]], result)
 
 
@@ -296,14 +241,19 @@ def _execute_drive_download(slug: str, conflicts: list[str]) -> bool:
             if download_fn is None:
                 raise RuntimeError("Funzione di download non disponibile.")
             try:
-                paths = _call_best_effort(
+                paths = manage_helpers.call_best_effort(
                     download_fn,
                     slug=slug,
                     require_env=True,
                     overwrite=bool(conflicts),
                 )
             except TypeError:
-                paths = _call_best_effort(download_fn, slug=slug, overwrite=bool(conflicts))
+                paths = manage_helpers.call_best_effort(
+                    download_fn,
+                    logger=LOGGER,
+                    slug=slug,
+                    overwrite=bool(conflicts),
+                )
             count = len(paths or [])
             if status_widget is not None and hasattr(status_widget, "update"):
                 status_widget.update(label=f"Download completato. File nuovi/aggiornati: {count}.", state="complete")
@@ -329,7 +279,7 @@ def _render_drive_status_message(disabled: bool, message: str) -> None:
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str) -> None:
-    base_dir = _workspace_root(slug)
+    base_dir = manage_helpers.workspace_root(slug)
     yaml_path = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
     yaml_parent = yaml_path.parent
     try:
@@ -419,7 +369,7 @@ def _open_tags_editor_modal(slug: str) -> None:
 
 
 def _open_tags_raw_modal(slug: str) -> None:
-    base_dir = _workspace_root(slug)
+    base_dir = manage_helpers.workspace_root(slug)
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
     csv_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.csv"))
     yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
@@ -473,7 +423,7 @@ slug = render_chrome_then_require(allow_without_slug=True)
 
 if not slug:
     st.subheader("Seleziona cliente")
-    clients = _load_clients()
+    clients = manage_helpers.load_clients(LOGGER, _MANAGE_FILE)
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
@@ -587,9 +537,20 @@ if slug:
                 ) as status_widget:
                     try:
                         # NIENTE creazione struttura, NIENTE split: solo emissione PDF da semantic_mapping.yaml
-                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False, require_env=True)
+                        result = manage_helpers.call_best_effort(
+                            emit_fn,
+                            logger=LOGGER,
+                            slug=slug,
+                            ensure_structure=False,
+                            require_env=True,
+                        )
                     except TypeError:
-                        result = _call_best_effort(emit_fn, slug=slug, ensure_structure=False)
+                        result = manage_helpers.call_best_effort(
+                            emit_fn,
+                            logger=LOGGER,
+                            slug=slug,
+                            ensure_structure=False,
+                        )
                     count = len(result or {})
                     if status_widget is not None and hasattr(status_widget, "update"):
                         status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
@@ -605,7 +566,7 @@ if slug:
                 st.error(f"Impossibile generare i README: {e}")
 
     # Colonna 2  -  Arricchimento semantico (estrazione tag)
-    base_dir = _workspace_root(slug)
+    base_dir = manage_helpers.workspace_root(slug)
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
