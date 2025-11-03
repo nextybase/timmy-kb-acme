@@ -61,7 +61,10 @@ _MANAGE_FILE = Path(__file__).resolve()
 
 def _clients_db_path() -> Path:
     """Percorso al registro clienti (per compat test/log)."""
-    return manage_helpers.clients_db_path(_MANAGE_FILE)
+    path = manage_helpers.clients_db_path(_MANAGE_FILE)
+    if isinstance(path, Path):
+        return path
+    return Path(path)
 
 
 def _load_clients() -> list[dict[str, Any]]:
@@ -70,8 +73,9 @@ def _load_clients() -> list[dict[str, Any]]:
         entries = get_clients()
         result: list[dict[str, Any]] = []
         for entry in entries:
-            if hasattr(entry, "to_dict"):
-                result.append(entry.to_dict())  # type: ignore[call-arg]
+            to_dict = getattr(entry, "to_dict", None)
+            if callable(to_dict):
+                result.append(cast(dict[str, Any], to_dict()))
             elif isinstance(entry, dict):
                 result.append(dict(entry))
             else:
@@ -86,8 +90,11 @@ def _load_clients() -> list[dict[str, Any]]:
 
 
 def _workspace_root(slug: str) -> Path:
-    """Wrapper per compatibilità test: delega agli helper condivisi."""
-    return manage_helpers.workspace_root(slug)
+    """Wrapper per compatibilita test: delega agli helper condivisi."""
+    root = manage_helpers.workspace_root(slug)
+    if isinstance(root, Path):
+        return root
+    return Path(root)
 
 
 def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
@@ -95,19 +102,19 @@ def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
     return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
 
 
-def safe_write_text(*args: Any, **kwargs: Any) -> Any:
-    """Wrapper esposto per compatibilità con i test legacy."""
-    return _core_safe_write_text(*args, **kwargs)
+def safe_write_text(*args: Any, **kwargs: Any) -> None:
+    """Wrapper esposto per compatibilita con i test legacy."""
+    _core_safe_write_text(*args, **kwargs)
 
 
-def read_text_safe(*args: Any, **kwargs: Any) -> Any:
-    """Wrapper esposto per compatibilità con i test legacy."""
-    return _core_read_text_safe(*args, **kwargs)
+def read_text_safe(*args: Any, **kwargs: Any) -> Optional[str]:
+    """Wrapper esposto per compatibilita con i test legacy."""
+    return cast(Optional[str], _core_read_text_safe(*args, **kwargs))
 
 
-def import_tags_yaml_to_db(*args: Any, **kwargs: Any) -> Any:
-    """Wrapper esposto per compatibilità con i test legacy."""
-    return _core_import_tags_yaml_to_db(*args, **kwargs)
+def import_tags_yaml_to_db(*args: Any, **kwargs: Any) -> None:
+    """Wrapper esposto per compatibilita con i test legacy."""
+    _core_import_tags_yaml_to_db(*args, **kwargs)
 
 
 # Services (gestiscono cache e bridging verso i component)
@@ -131,14 +138,16 @@ def _handle_tags_raw_save(
     csv_path: Path,
     semantic_dir: Path,
 ) -> bool:
-    return tags_component.handle_tags_raw_save(
+    result = tags_component.handle_tags_raw_save(
         slug,
         content,
         csv_path,
         semantic_dir,
         st=st,
         logger=LOGGER,
+        write_fn=safe_write_text,
     )
+    return bool(result)
 
 
 def _enable_tags_stub(
@@ -146,7 +155,7 @@ def _enable_tags_stub(
     semantic_dir: Path,
     yaml_path: Path,
 ) -> bool:
-    return tags_component.enable_tags_stub(
+    result = tags_component.enable_tags_stub(
         slug,
         semantic_dir,
         yaml_path,
@@ -154,7 +163,11 @@ def _enable_tags_stub(
         logger=LOGGER,
         set_client_state=set_client_state,
         reset_gating_cache=_reset_gating_cache,
+        read_fn=read_text_safe,
+        write_fn=safe_write_text,
+        import_yaml_fn=import_tags_yaml_to_db,
     )
+    return bool(result)
 
 
 def _enable_tags_service(
@@ -163,7 +176,7 @@ def _enable_tags_service(
     csv_path: Path,
     yaml_path: Path,
 ) -> bool:
-    return tags_component.enable_tags_service(
+    result = tags_component.enable_tags_service(
         slug,
         semantic_dir,
         csv_path,
@@ -173,6 +186,7 @@ def _enable_tags_service(
         set_client_state=set_client_state,
         reset_gating_cache=_reset_gating_cache,
     )
+    return bool(result)
 
 
 def _handle_tags_raw_enable(
@@ -183,7 +197,7 @@ def _handle_tags_raw_enable(
 ) -> bool:
     tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    return tags_component.handle_tags_raw_enable(
+    result = tags_component.handle_tags_raw_enable(
         slug,
         semantic_dir,
         csv_path,
@@ -194,7 +208,11 @@ def _handle_tags_raw_enable(
         run_tags_fn=run_tags_fn,
         set_client_state=set_client_state,
         reset_gating_cache=_reset_gating_cache,
+        read_fn=read_text_safe,
+        write_fn=safe_write_text,
+        import_yaml_fn=import_tags_yaml_to_db,
     )
+    return bool(result)
 
 
 # -----------------------------------------------------------
@@ -202,62 +220,38 @@ def _handle_tags_raw_enable(
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str) -> None:
     base_dir = _workspace_root(slug)
-    resolver = globals()["ensure_within_and_resolve"]
-    original_resolver = getattr(tags_component, "ensure_within_and_resolve", resolver)
-    original_writer = getattr(tags_component, "safe_write_text", safe_write_text)
-    original_reader = getattr(tags_component, "read_text_safe", read_text_safe)
-    original_importer = getattr(tags_component, "import_tags_yaml_to_db", import_tags_yaml_to_db)
-    tags_component.ensure_within_and_resolve = resolver  # type: ignore[assignment]
-    tags_component.safe_write_text = safe_write_text  # type: ignore[assignment]
-    tags_component.read_text_safe = read_text_safe  # type: ignore[assignment]
-    tags_component.import_tags_yaml_to_db = import_tags_yaml_to_db  # type: ignore[assignment]
-    try:
-        tags_component.open_tags_editor_modal(
-            slug,
-            base_dir,
-            st=st,
-            logger=LOGGER,
-            column_button=_column_button,
-            set_client_state=set_client_state,
-            reset_gating_cache=_reset_gating_cache,
-            path_resolver=resolver,
-        )
-    finally:
-        tags_component.ensure_within_and_resolve = original_resolver  # type: ignore[assignment]
-        tags_component.safe_write_text = original_writer  # type: ignore[assignment]
-        tags_component.read_text_safe = original_reader  # type: ignore[assignment]
-        tags_component.import_tags_yaml_to_db = original_importer  # type: ignore[assignment]
+    tags_component.open_tags_editor_modal(
+        slug,
+        base_dir,
+        st=st,
+        logger=LOGGER,
+        column_button=_column_button,
+        set_client_state=set_client_state,
+        reset_gating_cache=_reset_gating_cache,
+        path_resolver=ensure_within_and_resolve,
+        read_fn=read_text_safe,
+        write_fn=safe_write_text,
+        import_yaml_fn=import_tags_yaml_to_db,
+    )
 
 
 def _open_tags_raw_modal(slug: str) -> None:
     base_dir = _workspace_root(slug)
-    resolver = globals()["ensure_within_and_resolve"]
-    original_resolver = getattr(tags_component, "ensure_within_and_resolve", resolver)
-    original_writer = getattr(tags_component, "safe_write_text", safe_write_text)
-    original_reader = getattr(tags_component, "read_text_safe", read_text_safe)
-    original_importer = getattr(tags_component, "import_tags_yaml_to_db", import_tags_yaml_to_db)
-    tags_component.ensure_within_and_resolve = resolver  # type: ignore[assignment]
-    tags_component.safe_write_text = safe_write_text  # type: ignore[assignment]
-    tags_component.read_text_safe = read_text_safe  # type: ignore[assignment]
-    tags_component.import_tags_yaml_to_db = import_tags_yaml_to_db  # type: ignore[assignment]
-    try:
-        tags_component.open_tags_raw_modal(
-            slug,
-            base_dir,
-            st=st,
-            logger=LOGGER,
-            column_button=_column_button,
-            tags_mode=os.getenv("TAGS_MODE", "").strip().lower(),
-            run_tags_fn=cast(Optional[Callable[[str], Any]], _run_tags_update),
-            set_client_state=set_client_state,
-            reset_gating_cache=_reset_gating_cache,
-            path_resolver=resolver,
-        )
-    finally:
-        tags_component.ensure_within_and_resolve = original_resolver  # type: ignore[assignment]
-        tags_component.safe_write_text = original_writer  # type: ignore[assignment]
-        tags_component.read_text_safe = original_reader  # type: ignore[assignment]
-        tags_component.import_tags_yaml_to_db = original_importer  # type: ignore[assignment]
+    tags_component.open_tags_raw_modal(
+        slug,
+        base_dir,
+        st=st,
+        logger=LOGGER,
+        column_button=_column_button,
+        tags_mode=os.getenv("TAGS_MODE", "").strip().lower(),
+        run_tags_fn=cast(Optional[Callable[[str], Any]], _run_tags_update),
+        set_client_state=set_client_state,
+        reset_gating_cache=_reset_gating_cache,
+        path_resolver=ensure_within_and_resolve,
+        read_fn=read_text_safe,
+        write_fn=safe_write_text,
+        import_yaml_fn=import_tags_yaml_to_db,
+    )
 
 
 # --- piccoli helper per compat con stub di test ---

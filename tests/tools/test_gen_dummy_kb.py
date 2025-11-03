@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import logging
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
@@ -104,3 +106,118 @@ def test_parse_args_defaults() -> None:
     assert parsed.slug == "dummy"
     assert parsed.no_drive is False
     assert parsed.no_vision is False
+
+
+def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_root = _setup_repo_root(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    semantic_dir = workspace / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(gen_dummy_kb, "ensure_local_workspace_for_ui", lambda **_: None)
+    monkeypatch.setattr(gen_dummy_kb, "_client_base", lambda slug: workspace)
+    monkeypatch.setattr(gen_dummy_kb, "_pdf_path", lambda slug: workspace / "config" / "VisionStatement.pdf")
+    monkeypatch.setattr(gen_dummy_kb, "_write_basic_semantic_yaml", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "_register_client", lambda *a, **k: None)
+    monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
+
+    calls: list[bool] = []
+
+    def _run_vision(
+        _ctx: Any, *, slug: str, pdf_path: Path, logger: logging.Logger, force: bool = False, **_: Any
+    ) -> None:
+        calls.append(force)
+        if not force:
+            raise gen_dummy_kb.ConfigError(
+                "Vision già eseguito per questo PDF.",
+                slug=slug,
+                file_path=str(pdf_path.parent / ".vision_hash"),
+            )
+
+    monkeypatch.setattr(gen_dummy_kb, "run_vision", _run_vision)
+    monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
+    monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
+
+    payload = gen_dummy_kb.build_payload(
+        slug="demo",
+        client_name="Demo Spa",
+        enable_drive=False,
+        enable_vision=True,
+        records_hint=None,
+        logger=logging.getLogger("test-gen-dummy"),
+    )
+
+    assert payload["vision_used"] is True
+    assert calls == [False]
+
+
+def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_root = _setup_repo_root(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(gen_dummy_kb, "ensure_local_workspace_for_ui", lambda **_: None)
+    monkeypatch.setattr(gen_dummy_kb, "_client_base", lambda slug: workspace)
+    monkeypatch.setattr(gen_dummy_kb, "_pdf_path", lambda slug: workspace / "config" / "VisionStatement.pdf")
+    monkeypatch.setattr(gen_dummy_kb, "_write_basic_semantic_yaml", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "run_vision", lambda *a, **k: None)
+    monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
+    monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
+
+    called = False
+
+    def _tracker(*_: Any, **__: Any) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(gen_dummy_kb, "_register_client", _tracker)
+
+    gen_dummy_kb.build_payload(
+        slug="demo",
+        client_name="Demo Spa",
+        enable_drive=False,
+        enable_vision=False,
+        records_hint=None,
+        logger=logging.getLogger("test-gen-dummy"),
+    )
+
+    assert called is False
+
+
+def test_main_triggers_cleanup_before_build(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_root = _setup_repo_root(tmp_path)
+    monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(gen_dummy_kb, "ensure_dotenv_loaded", lambda: None)
+    monkeypatch.setitem(sys.modules, "ui.utils.workspace", types.SimpleNamespace(clear_base_cache=lambda **_: None))
+
+    calls: list[str] = []
+
+    def _fake_cleanup(slug: str, client_name: str, logger: logging.Logger) -> None:
+        calls.append("cleanup")
+
+    def _fake_build_payload(
+        *,
+        slug: str,
+        client_name: str,
+        enable_drive: bool,
+        enable_vision: bool,
+        records_hint: str | None,
+        logger: logging.Logger,
+    ) -> dict[str, Any]:
+        calls.append("build")
+        return {"slug": slug, "client_name": client_name}
+
+    monkeypatch.setattr(gen_dummy_kb, "_purge_previous_state", _fake_cleanup)
+    monkeypatch.setattr(gen_dummy_kb, "build_payload", _fake_build_payload)
+    monkeypatch.setattr(gen_dummy_kb, "emit_structure", lambda payload, stream=sys.stdout: calls.append("emit"))
+
+    exit_code = gen_dummy_kb.main(["--slug", "demo", "--no-drive", "--no-vision", "--base-dir", str(tmp_path)])
+
+    assert exit_code == 0
+    assert calls[:2] == ["cleanup", "build"]

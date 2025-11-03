@@ -4,7 +4,7 @@ from __future__ import annotations
 import contextlib
 import io
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence, cast
 
 from ui.manage import _helpers as manage_helpers
 
@@ -23,9 +23,9 @@ _PERFORM_CLEANUP_PATHS: Sequence[str] = (
 
 def _first_available(paths: Sequence[str]) -> Optional[Callable[..., Any]]:
     for path in paths:
-        fn = manage_helpers.safe_get(path)
-        if callable(fn):
-            return fn
+        candidate = manage_helpers.safe_get(path)
+        if callable(candidate):
+            return cast(Callable[..., Any], candidate)
     return None
 
 
@@ -112,7 +112,7 @@ def open_cleanup_modal(
 
             if callable(perform_cleanup):
                 try:
-                    results = perform_cleanup(slug, client_name=client_name)  # type: ignore[arg-type]
+                    results = perform_cleanup(slug, client_name=client_name)
                     code = int(results.get("exit_code", 1)) if isinstance(results, dict) else 1
                 except Exception as exc:  # pragma: no cover - logging gestito a monte
                     runner_error = exc

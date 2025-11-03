@@ -10,6 +10,7 @@ import importlib
 import json
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Optional, TextIO
@@ -34,6 +35,11 @@ REPO_ROOT, SRC_DIR = _add_paths()
 SRC_ROOT = SRC_DIR
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
+
+try:
+    from pipeline.exceptions import ConfigError  # type: ignore
+except Exception:  # pragma: no cover
+    ConfigError = Exception  # type: ignore[assignment]
 
 
 def _normalize_relative_path(value: str, *, var_name: str) -> Path:
@@ -72,6 +78,11 @@ try:
 except Exception:
     ensure_drive_minimal_and_upload_config = None
     build_drive_from_mapping = None
+
+try:
+    from tools.clean_client_workspace import perform_cleanup as _perform_cleanup  # type: ignore
+except Exception:  # pragma: no cover - il cleanup completo può non essere disponibile in ambienti ridotti
+    _perform_cleanup = None  # type: ignore[assignment]
 
 # Registry UI (clienti)
 try:
@@ -264,12 +275,57 @@ def _call_drive_build_from_mapping(
     return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
 
 
-def _register_client(slug: str, client_name: str) -> None:
-    """Registra il cliente nel registry UI come fa la pagina UI."""
-    if ClientEntry and upsert_client and set_state:
-        entry = ClientEntry(slug=slug, nome=client_name, stato="nuovo")  # type: ignore[call-arg]
-        upsert_client(entry)  # type: ignore[misc]
-        set_state(slug, "nuovo")  # type: ignore[misc]
+def _register_client(slug: str, client_name: str) -> None:  # pragma: no cover - mantenuto per compatibilità test
+    """
+    In precedenza registrava il cliente nel registry UI.
+    Per la dummy KB lo lasciamo come no-op per evitare side-effect nel DB clienti.
+    """
+    return
+
+
+def _purge_previous_state(slug: str, client_name: str, logger: logging.Logger) -> None:
+    """
+    Rimuove eventuali residui precedenti (locale + Drive + registry) prima di rigenerare la Dummy KB.
+
+    - Usa `tools.clean_client_workspace.perform_cleanup` se disponibile.
+    - In ogni caso prova a cancellare la cartella locale `output/timmy-kb-<slug>`.
+    """
+
+    if callable(_perform_cleanup):
+        try:
+            results = _perform_cleanup(slug, client_name=client_name)
+            exit_code = results.get("exit_code")
+            logger.info(
+                "tools.gen_dummy_kb.cleanup.completed",
+                extra={"slug": slug, "exit_code": exit_code, "results": results},
+            )
+        except Exception as exc:
+            logger.warning(
+                "tools.gen_dummy_kb.cleanup.failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+
+    base_dir = _client_base(slug)
+    try:
+        if base_dir.exists():
+            shutil.rmtree(base_dir)
+            logger.info("tools.gen_dummy_kb.cleanup.local_deleted", extra={"slug": slug})
+    except Exception as exc:
+        logger.warning(
+            "tools.gen_dummy_kb.cleanup.local_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+
+    sentinel = base_dir / "semantic" / ".vision_hash"
+    try:
+        if sentinel.exists():
+            sentinel.unlink()
+    except Exception as exc:
+        # L'assenza del sentinel è già sufficiente; eventuali errori qui non sono bloccanti.
+        logger.debug(
+            "tools.gen_dummy_kb.cleanup.sentinel_unlink_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -355,11 +411,22 @@ def build_payload(
 
     if enable_vision:
         ctx = _Ctx(base_dir)
-        run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
+        try:
+            run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
+        except ConfigError as exc:
+            message = str(exc)
+            sentinel = getattr(exc, "file_path", "") or ""
+            normalized = message.casefold().replace("à", "a")
+            already_ran = ".vision_hash" in sentinel or "vision gia eseguito" in normalized
+            if already_ran:
+                logger.info(
+                    "tools.gen_dummy_kb.vision_already_completed",
+                    extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
+                )
+            else:
+                raise
     else:
         _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
-
-    _register_client(slug, client_name)
 
     cfg_out: dict[str, Any] = {}
     if callable(get_client_config) and ClientContext:
@@ -441,6 +508,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
+
+        _purge_previous_state(slug, client_name, logger)
 
         try:
             payload = build_payload(

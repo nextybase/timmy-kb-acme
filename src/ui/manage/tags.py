@@ -43,6 +43,7 @@ def handle_tags_raw_save(
     *,
     st: Any,
     logger: Any,
+    write_fn: Optional[Callable[..., None]] = None,
 ) -> bool:
     header = (content.splitlines() or [""])[0]
     header_tokens = {token.strip().lower() for token in header.split(",")}
@@ -52,7 +53,8 @@ def handle_tags_raw_save(
         return False
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
+    writer = write_fn or safe_write_text
+    writer(csv_path, content, encoding="utf-8", atomic=True)
     st.toast("`tags_raw.csv` salvato.")
     logger.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
     return True
@@ -67,21 +69,27 @@ def enable_tags_stub(
     logger: Any,
     set_client_state: Callable[[str, str], bool],
     reset_gating_cache: Callable[[str | None], None],
+    read_fn: Optional[Callable[..., str | None]] = None,
+    write_fn: Optional[Callable[..., None]] = None,
+    import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> bool:
     try:
         semantic_dir.mkdir(parents=True, exist_ok=True)
+        reader = read_fn or read_text_safe
+        writer = write_fn or safe_write_text
+        importer = import_yaml_fn or import_tags_yaml_to_db
         try:
-            previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
+            previous = reader(semantic_dir, yaml_path, encoding="utf-8")
         except Exception:
             previous = None
-        safe_write_text(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
+        writer(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
         if yaml_path.exists():
             try:
-                import_tags_yaml_to_db(yaml_path, logger=logger)
+                importer(yaml_path, logger=logger)
                 logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
             except Exception as exc:
                 if previous is not None:
-                    safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
+                    writer(yaml_path, previous, encoding="utf-8", atomic=True)
                     logger.warning(
                         "ui.manage.tags.rollback",
                         extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
@@ -166,6 +174,9 @@ def handle_tags_raw_enable(
     run_tags_fn: Optional[Callable[[str], Any]],
     set_client_state: Callable[[str, str], bool],
     reset_gating_cache: Callable[[str | None], None],
+    read_fn: Optional[Callable[..., str | None]] = None,
+    write_fn: Optional[Callable[..., None]] = None,
+    import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> bool:
     if tags_mode == "stub":
         return enable_tags_stub(
@@ -176,6 +187,9 @@ def handle_tags_raw_enable(
             logger=logger,
             set_client_state=set_client_state,
             reset_gating_cache=reset_gating_cache,
+            read_fn=read_fn,
+            write_fn=write_fn,
+            import_yaml_fn=import_yaml_fn,
         )
     if run_tags_fn is None and tags_mode != "stub":
         logger.error(
@@ -206,11 +220,17 @@ def open_tags_editor_modal(
     set_client_state: Callable[[str, str], bool],
     reset_gating_cache: Callable[[str | None], None],
     path_resolver: Callable[[Path, Path], Path] = ensure_within_and_resolve,
+    read_fn: Optional[Callable[..., str | None]] = None,
+    write_fn: Optional[Callable[..., None]] = None,
+    import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
     yaml_path = Path(path_resolver(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
     yaml_parent = yaml_path.parent
+    reader = read_fn or read_text_safe
+    writer = write_fn or safe_write_text
+    importer = import_yaml_fn or import_tags_yaml_to_db
     try:
-        initial_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+        initial_text = reader(yaml_parent, yaml_path, encoding="utf-8")
     except Exception:
         initial_text = DEFAULT_TAGS_YAML
     logger.info("ui.manage.tags.open", extra={"slug": slug})
@@ -240,19 +260,19 @@ def open_tags_editor_modal(
             backup_text: Optional[str]
             try:
                 try:
-                    backup_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+                    backup_text = reader(yaml_parent, yaml_path, encoding="utf-8")
                 except Exception:
                     backup_text = None
                 logger.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
                 yaml_parent.mkdir(parents=True, exist_ok=True)
-                safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
+                writer(yaml_path, content, encoding="utf-8", atomic=True)
                 if yaml_path.exists():
                     try:
-                        import_tags_yaml_to_db(yaml_path, logger=logger)
+                        importer(yaml_path, logger=logger)
                         logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
                     except Exception as exc:
                         if backup_text is not None:
-                            safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                            writer(yaml_path, backup_text, encoding="utf-8", atomic=True)
                             logger.warning(
                                 "ui.manage.tags.rollback",
                                 extra={"slug": slug, "path": str(yaml_path), "reason": "db-sync-error"},
@@ -274,7 +294,7 @@ def open_tags_editor_modal(
                 st.rerun()
             except Exception as exc:
                 if backup_text is not None:
-                    safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                    writer(yaml_path, backup_text, encoding="utf-8", atomic=True)
                     logger.warning(
                         "ui.manage.tags.rollback",
                         extra={"slug": slug, "path": str(yaml_path), "reason": "save-exception"},
@@ -305,12 +325,18 @@ def open_tags_raw_modal(
     set_client_state: Callable[[str, str], bool],
     reset_gating_cache: Callable[[str | None], None],
     path_resolver: Callable[[Path, Path], Path] = ensure_within_and_resolve,
+    read_fn: Optional[Callable[..., str | None]] = None,
+    write_fn: Optional[Callable[..., None]] = None,
+    import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
     semantic_dir = Path(path_resolver(base_dir, base_dir / "semantic"))
     csv_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_raw.csv"))
     yaml_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
+    reader = read_fn or read_text_safe
+    writer = write_fn or safe_write_text
+    importer = import_yaml_fn or import_tags_yaml_to_db
     try:
-        initial_text = read_text_safe(semantic_dir, csv_path, encoding="utf-8")
+        initial_text = reader(semantic_dir, csv_path, encoding="utf-8")
     except Exception:
         initial_text = DEFAULT_TAGS_CSV
 
@@ -335,7 +361,15 @@ def open_tags_raw_modal(
         col_a, col_b = st.columns(2)
 
         if column_button(col_a, "Salva raw", type="secondary"):
-            handle_tags_raw_save(slug, content, csv_path, semantic_dir, st=st, logger=logger)
+            handle_tags_raw_save(
+                slug,
+                content,
+                csv_path,
+                semantic_dir,
+                st=st,
+                logger=logger,
+                write_fn=writer,
+            )
 
         if column_button(col_b, "Abilita", type="primary"):
             if handle_tags_raw_enable(
@@ -349,6 +383,9 @@ def open_tags_raw_modal(
                 run_tags_fn=run_tags_fn,
                 set_client_state=set_client_state,
                 reset_gating_cache=reset_gating_cache,
+                read_fn=reader,
+                write_fn=writer,
+                import_yaml_fn=importer,
             ):
                 st.rerun()
 

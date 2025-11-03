@@ -47,9 +47,9 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     for p in (alpha, beta, readme, summary):
         assert p.is_file(), f"File mancante: {p}"
 
-    # Verifica registry clienti creato sotto il workspace temporaneo
+    # Registry clienti: la dummy non deve registrarsi nel DB
     clients_db_file = base / clients_db_relative
-    assert clients_db_file.is_file(), f"Registry clienti non creato: {clients_db_file}"
+    assert not clients_db_file.exists(), "Registry clienti non dovrebbe essere generato per la dummy"
 
     # Extra: nessuna deriva su output/ (idempotenza ambientale)
     assert not (Path("output") / f"timmy-kb-{slug}").exists(), "Lo script ha sporcato output/"

@@ -46,25 +46,54 @@ def _on_dummy_kb() -> None:
     def _run_and_render(cmd: list[str]) -> None:
         st.caption("Esecuzione comando:")
         st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
+        timeout_seconds = 120
         with st.status(f"Genero dataset dummy per '{slug}'…", expanded=True) as status_widget:
+            fallback_used = False
+            result = None
+            executed_cmd = cmd
             try:
                 result = subprocess.run(  # noqa: S603 - slug sanificato, shell disabilitata
                     cmd,
                     capture_output=True,
                     text=True,
                     check=False,
-                    timeout=60,
+                    timeout=timeout_seconds,
                 )
             except subprocess.TimeoutExpired:
-                status_widget.update(label="CLI in timeout (60s)", state="error")
-                st.error(
-                    "Operazione interrotta: superato il limite di 60s. Verifica i servizi (Drive/Vision) e riprova."
-                )
-                return
+                fallback_used = True
+                fallback_cmd = list(cmd)
+                if "--no-vision" not in fallback_cmd:
+                    fallback_cmd.append("--no-vision")
+                status_widget.write("⚠️ Vision non completata entro 120s: eseguo fallback senza Vision (`--no-vision`).")
+                st.warning("Vision non ha completato entro 120 secondi: procedo con un fallback rapido senza Vision.")
+                executed_cmd = fallback_cmd
+                try:
+                    result = subprocess.run(  # noqa: S603
+                        fallback_cmd,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=timeout_seconds,
+                    )
+                except subprocess.TimeoutExpired:
+                    status_widget.update(label="CLI in timeout anche senza Vision (120s)", state="error")
+                    st.error(
+                        "Vision e fallback `--no-vision` non hanno completato entro 120s. "
+                        "Verifica i servizi (Drive/Vision) e riprova."
+                    )
+                    return
+                except Exception as exc:
+                    status_widget.update(label="Errore durante il fallback `--no-vision`", state="error")
+                    st.error(f"Fallback `--no-vision` fallito: {exc}")
+                    return
             except Exception as exc:
                 status_widget.update(label="Errore di esecuzione CLI", state="error")
                 st.error(f"Impossibile avviare lo script: {exc}")
                 return
+
+            if fallback_used and executed_cmd:
+                with st.expander("Comando fallback eseguito", expanded=False):
+                    st.code(" ".join(shlex.quote(t) for t in executed_cmd), language="bash")
 
             if result.stdout:
                 with st.expander("Output CLI", expanded=False):
@@ -74,7 +103,17 @@ def _on_dummy_kb() -> None:
                     st.text(result.stderr)
 
             if result.returncode == 0:
-                status_widget.update(label="Dummy generato correttamente.", state="complete")
+                if fallback_used:
+                    status_widget.update(
+                        label="Dummy generato senza Vision (fallback completato).",
+                        state="complete",
+                    )
+                    st.warning(
+                        "Vision non è stata eseguita perché ha superato il timeout: puoi rigenerarla manualmente "
+                        "con `gen_dummy_kb.py --slug <slug>` o dalla pagina Vision."
+                    )
+                else:
+                    status_widget.update(label="Dummy generato correttamente.", state="complete")
                 st.toast("Dataset dummy creato. Verifica clients_db/output per i dettagli.")
                 st.success("Operazione completata.")
             else:

@@ -1,9 +1,25 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence, cast
+from typing import Any, Callable, ContextManager, Optional, Protocol, Sequence, cast
 
 from ui.manage._helpers import call_best_effort
+
+
+class StreamlitLike(Protocol):
+    def expander(self, label: str, *, expanded: bool = ...) -> ContextManager[Any]: ...
+
+    def markdown(self, body: str) -> Any: ...
+
+    def info(self, body: str) -> Any: ...
+
+    def toast(self, body: str) -> Any: ...
+
+    def error(self, body: str) -> Any: ...
+
+
+class StatusGuard(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> ContextManager[Any]: ...
 
 
 def prepare_download_plan(
@@ -19,7 +35,7 @@ def prepare_download_plan(
     return conflicts, labels
 
 
-def render_download_plan(st: object, conflicts: Sequence[str], labels: Sequence[str]) -> None:
+def render_download_plan(st: StreamlitLike, conflicts: Sequence[str], labels: Sequence[str]) -> None:
     if conflicts:
         with st.expander(f"File già presenti in locale ({len(conflicts)})", expanded=True):
             st.markdown("\n".join(f"- `{x}`" for x in sorted(conflicts)))
@@ -38,8 +54,8 @@ def execute_drive_download(
     download_simple: Optional[Callable[..., Sequence[str]]],
     invalidate_index: Optional[Callable[[str], None]],
     logger: object,
-    st: object,
-    status_guard: Callable[..., object],
+    st: StreamlitLike,
+    status_guard: StatusGuard,
 ) -> bool:
     download_fn = download_with_progress or download_simple
     if download_fn is None:
@@ -85,6 +101,6 @@ def execute_drive_download(
         return False
 
 
-def render_drive_status_message(st: object, disabled: bool, message: str) -> None:
+def render_drive_status_message(st: StreamlitLike, disabled: bool, message: str) -> None:
     if disabled:
         st.info(message)
