@@ -6,15 +6,16 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
-import yaml
-
-from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import read_text_safe as _core_read_text_safe
 from ui.chrome import render_chrome_then_require
+from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
 from ui.manage import _helpers as manage_helpers
+from ui.manage import cleanup as cleanup_component
 from ui.manage import drive as drive_component
+from ui.manage import tags as tags_component
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
@@ -28,11 +29,11 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
         return False
 
 
-from storage.tags_store import import_tags_yaml_to_db
+from storage.tags_store import import_tags_yaml_to_db as _core_import_tags_yaml_to_db
 from ui.utils import set_slug
-from ui.utils.core import safe_write_text
+from ui.utils.core import safe_write_text as _core_safe_write_text
 from ui.utils.status import status_guard
-from ui.utils.workspace import count_pdfs_safe
+from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
 
 try:
     from ui.gating import reset_gating_cache as _reset_gating_cache
@@ -58,6 +59,32 @@ def _safe_rerun() -> None:
 _MANAGE_FILE = Path(__file__).resolve()
 
 
+def _clients_db_path() -> Path:
+    """Percorso al registro clienti (per compat test/log)."""
+    return manage_helpers.clients_db_path(_MANAGE_FILE)
+
+
+def _load_clients() -> list[dict[str, Any]]:
+    """Wrapper resiliente che espone get_clients con logging uniforme."""
+    try:
+        entries = get_clients()
+        result: list[dict[str, Any]] = []
+        for entry in entries:
+            if hasattr(entry, "to_dict"):
+                result.append(entry.to_dict())  # type: ignore[call-arg]
+            elif isinstance(entry, dict):
+                result.append(dict(entry))
+            else:
+                result.append(vars(entry))
+        return result
+    except Exception as exc:
+        LOGGER.warning(
+            "ui.manage.clients.load_error",
+            extra={"error": str(exc), "path": str(_clients_db_path())},
+        )
+        return []
+
+
 def _workspace_root(slug: str) -> Path:
     """Wrapper per compatibilità test: delega agli helper condivisi."""
     return manage_helpers.workspace_root(slug)
@@ -66,6 +93,21 @@ def _workspace_root(slug: str) -> Path:
 def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
     """Compat per i test esistenti: delega alla versione in manage_helpers."""
     return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
+
+
+def safe_write_text(*args: Any, **kwargs: Any) -> Any:
+    """Wrapper esposto per compatibilità con i test legacy."""
+    return _core_safe_write_text(*args, **kwargs)
+
+
+def read_text_safe(*args: Any, **kwargs: Any) -> Any:
+    """Wrapper esposto per compatibilità con i test legacy."""
+    return _core_read_text_safe(*args, **kwargs)
+
+
+def import_tags_yaml_to_db(*args: Any, **kwargs: Any) -> Any:
+    """Wrapper esposto per compatibilità con i test legacy."""
+    return _core_import_tags_yaml_to_db(*args, **kwargs)
 
 
 # Services (gestiscono cache e bridging verso i component)
@@ -78,9 +120,6 @@ _plan_raw_download = manage_helpers.safe_get("ui.services.drive_runner:plan_raw_
 _download_with_progress = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive_with_progress")
 _download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive")
 
-# Tool di pulizia workspace (locale + DB + Drive)
-_run_cleanup = manage_helpers.safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
-
 # Arricchimento semantico (estrazione tag ? stub + YAML)
 _run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update")
 
@@ -92,18 +131,14 @@ def _handle_tags_raw_save(
     csv_path: Path,
     semantic_dir: Path,
 ) -> bool:
-    header = (content.splitlines() or [""])[0]
-    header_tokens = {token.strip().lower() for token in header.split(",")}
-    if "suggested_tags" not in header_tokens:
-        st.error("CSV non valido: manca la colonna 'suggested_tags'.")
-        LOGGER.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
-        return False
-
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
-    st.toast("`tags_raw.csv` salvato.")
-    LOGGER.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
-    return True
+    return tags_component.handle_tags_raw_save(
+        slug,
+        content,
+        csv_path,
+        semantic_dir,
+        st=st,
+        logger=LOGGER,
+    )
 
 
 def _enable_tags_stub(
@@ -111,61 +146,15 @@ def _enable_tags_stub(
     semantic_dir: Path,
     yaml_path: Path,
 ) -> bool:
-    try:
-        semantic_dir.mkdir(parents=True, exist_ok=True)
-        payload = "version: 2\nkeep_only_listed: true\ntags: []\n"
-        previous = None
-        try:
-            previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
-        except Exception:
-            previous = None
-        safe_write_text(yaml_path, payload, encoding="utf-8", atomic=True)
-        if yaml_path.exists():
-            try:
-                import_tags_yaml_to_db(yaml_path, logger=LOGGER)
-                LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
-            except Exception as exc:
-                if previous is not None:
-                    safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
-                    LOGGER.warning(
-                        "ui.manage.tags.rollback",
-                        extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
-                    )
-                LOGGER.warning(
-                    "ui.manage.tags.db_sync_failed",
-                    extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
-                )
-                st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
-                return False
-        else:
-            LOGGER.warning(
-                "ui.manage.tags.db_sync_skipped",
-                extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
-            )
-
-        try:
-            updated = set_client_state(slug, "arricchito")
-        except Exception as exc:
-            LOGGER.warning(
-                "ui.manage.state.update_failed",
-                extra={"slug": slug, "error": str(exc)},
-            )
-            updated = False
-
-        if updated:
-            st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
-            _reset_gating_cache(slug)
-        else:
-            st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
-        LOGGER.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
-        return True
-    except Exception as exc:
-        st.error(f"Abilitazione (stub) non riuscita: {exc}")
-        LOGGER.warning(
-            "ui.manage.tags_yaml.stub_error",
-            extra={"slug": slug, "error": str(exc)},
-        )
-        return False
+    return tags_component.enable_tags_stub(
+        slug,
+        semantic_dir,
+        yaml_path,
+        st=st,
+        logger=LOGGER,
+        set_client_state=set_client_state,
+        reset_gating_cache=_reset_gating_cache,
+    )
 
 
 def _enable_tags_service(
@@ -174,33 +163,16 @@ def _enable_tags_service(
     csv_path: Path,
     yaml_path: Path,
 ) -> bool:
-    try:
-        from semantic.api import export_tags_yaml_from_db
-        from semantic.tags_io import write_tags_review_stub_from_csv
-        from storage.tags_store import derive_db_path_from_yaml_path
-
-        write_tags_review_stub_from_csv(semantic_dir, csv_path, LOGGER)
-        db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-        export_tags_yaml_from_db(semantic_dir, db_path, LOGGER)
-        try:
-            updated = set_client_state(slug, "arricchito")
-        except Exception as exc:
-            LOGGER.warning(
-                "ui.manage.state.update_failed",
-                extra={"slug": slug, "error": str(exc)},
-            )
-            updated = False
-        if updated:
-            st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
-            _reset_gating_cache(slug)
-        else:
-            st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
-        LOGGER.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
-        return True
-    except Exception as exc:
-        st.error(f"Abilitazione non riuscita: {exc}")
-        LOGGER.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
-        return False
+    return tags_component.enable_tags_service(
+        slug,
+        semantic_dir,
+        csv_path,
+        yaml_path,
+        st=st,
+        logger=LOGGER,
+        set_client_state=set_client_state,
+        reset_gating_cache=_reset_gating_cache,
+    )
 
 
 def _handle_tags_raw_enable(
@@ -210,17 +182,19 @@ def _handle_tags_raw_enable(
     yaml_path: Path,
 ) -> bool:
     tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
-    if tags_mode == "stub":
-        return _enable_tags_stub(slug, semantic_dir, yaml_path)
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    if run_tags_fn is None and tags_mode != "stub":
-        LOGGER.error(
-            "ui.manage.tags.service_missing",
-            extra={"slug": slug, "mode": tags_mode or "default"},
-        )
-        st.error("Servizio di estrazione tag non disponibile.")
-        return False
-    return _enable_tags_service(slug, semantic_dir, csv_path, yaml_path)
+    return tags_component.handle_tags_raw_enable(
+        slug,
+        semantic_dir,
+        csv_path,
+        yaml_path,
+        st=st,
+        logger=LOGGER,
+        tags_mode=tags_mode,
+        run_tags_fn=run_tags_fn,
+        set_client_state=set_client_state,
+        reset_gating_cache=_reset_gating_cache,
+    )
 
 
 # -----------------------------------------------------------
@@ -228,137 +202,62 @@ def _handle_tags_raw_enable(
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str) -> None:
     base_dir = _workspace_root(slug)
-    yaml_path = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
-    yaml_parent = yaml_path.parent
+    resolver = globals()["ensure_within_and_resolve"]
+    original_resolver = getattr(tags_component, "ensure_within_and_resolve", resolver)
+    original_writer = getattr(tags_component, "safe_write_text", safe_write_text)
+    original_reader = getattr(tags_component, "read_text_safe", read_text_safe)
+    original_importer = getattr(tags_component, "import_tags_yaml_to_db", import_tags_yaml_to_db)
+    tags_component.ensure_within_and_resolve = resolver  # type: ignore[assignment]
+    tags_component.safe_write_text = safe_write_text  # type: ignore[assignment]
+    tags_component.read_text_safe = read_text_safe  # type: ignore[assignment]
+    tags_component.import_tags_yaml_to_db = import_tags_yaml_to_db  # type: ignore[assignment]
     try:
-        initial_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
-    except Exception:
-        initial_text = "version: 2\nkeep_only_listed: true\ntags: []\n"
-
-    # evento apertura editor
-    LOGGER.info("ui.manage.tags.open", extra={"slug": slug})
-
-    dialog_factory = getattr(st, "dialog", None)
-
-    def _editor_body() -> None:
-        caption_fn = getattr(st, "caption", None)
-        if callable(caption_fn):
-            caption_fn("Modifica e salva il file `semantic/tags_reviewed.yaml`.")
-        content = st.text_area(
-            "Contenuto YAML",
-            value=initial_text,
-            height=420,
-            key="tags_yaml_editor",
-            label_visibility="collapsed",
+        tags_component.open_tags_editor_modal(
+            slug,
+            base_dir,
+            st=st,
+            logger=LOGGER,
+            column_button=_column_button,
+            set_client_state=set_client_state,
+            reset_gating_cache=_reset_gating_cache,
+            path_resolver=resolver,
         )
-        col_a, col_b = st.columns(2)
-        if _column_button(col_a, "Salva", type="primary"):
-            try:
-                parsed = yaml.safe_load(content)
-                if parsed is not None and not isinstance(parsed, dict):
-                    raise ConfigError("Top-level YAML deve essere un mapping")
-            except Exception as exc:
-                st.error(f"YAML non valido: {exc}")
-                LOGGER.warning("ui.manage.tags.yaml.invalid", extra={"slug": slug, "error": str(exc)})
-                return
-            backup_text: Optional[str] = None
-            try:
-                try:
-                    backup_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
-                except Exception:
-                    backup_text = None
-                LOGGER.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
-                yaml_parent.mkdir(parents=True, exist_ok=True)
-                safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
-                if yaml_path.exists():
-                    try:
-                        import_tags_yaml_to_db(yaml_path, logger=LOGGER)
-                        LOGGER.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
-                    except Exception as exc:
-                        if backup_text is not None:
-                            safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
-                            LOGGER.warning(
-                                "ui.manage.tags.rollback",
-                                extra={"slug": slug, "path": str(yaml_path), "reason": "db-sync-error"},
-                            )
-                        LOGGER.warning(
-                            "ui.manage.tags.db_sync_failed",
-                            extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
-                        )
-                        st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
-                        return
-                else:
-                    LOGGER.warning(
-                        "ui.manage.tags.db_sync_skipped",
-                        extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
-                    )
-                st.toast("`tags_reviewed.yaml` salvato.")
-                LOGGER.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
-                _safe_rerun()
-            except Exception as exc:
-                if backup_text is not None:
-                    safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
-                    LOGGER.warning(
-                        "ui.manage.tags.rollback",
-                        extra={"slug": slug, "path": str(yaml_path), "reason": "save-exception"},
-                    )
-                st.error(f"Errore nel salvataggio: {exc}")
-                LOGGER.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
-        if _column_button(col_b, "Chiudi"):
-            _safe_rerun()
-
-    if dialog_factory:
-        _dialog_fn = dialog_factory("Modifica tags_reviewed.yaml")(_editor_body)
-        _dialog_fn()
-    else:
-        with st.container(border=True):
-            st.subheader("Modifica tags_reviewed.yaml")
-            _editor_body()
+    finally:
+        tags_component.ensure_within_and_resolve = original_resolver  # type: ignore[assignment]
+        tags_component.safe_write_text = original_writer  # type: ignore[assignment]
+        tags_component.read_text_safe = original_reader  # type: ignore[assignment]
+        tags_component.import_tags_yaml_to_db = original_importer  # type: ignore[assignment]
 
 
 def _open_tags_raw_modal(slug: str) -> None:
     base_dir = _workspace_root(slug)
-    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
-    csv_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.csv"))
-    yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
+    resolver = globals()["ensure_within_and_resolve"]
+    original_resolver = getattr(tags_component, "ensure_within_and_resolve", resolver)
+    original_writer = getattr(tags_component, "safe_write_text", safe_write_text)
+    original_reader = getattr(tags_component, "read_text_safe", read_text_safe)
+    original_importer = getattr(tags_component, "import_tags_yaml_to_db", import_tags_yaml_to_db)
+    tags_component.ensure_within_and_resolve = resolver  # type: ignore[assignment]
+    tags_component.safe_write_text = safe_write_text  # type: ignore[assignment]
+    tags_component.read_text_safe = read_text_safe  # type: ignore[assignment]
+    tags_component.import_tags_yaml_to_db = import_tags_yaml_to_db  # type: ignore[assignment]
     try:
-        initial_text = read_text_safe(semantic_dir, csv_path, encoding="utf-8")
-    except Exception:
-        initial_text = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
-
-    LOGGER.info("ui.manage.tags_raw.open", extra={"slug": slug})
-    dialog_factory = getattr(st, "dialog", None)
-
-    def _body() -> None:
-        cap = getattr(st, "caption", None)
-        if callable(cap):
-            cap(
-                "Modifica `semantic/tags_raw.csv`. **Salva raw** aggiorna il CSV; "
-                "**Abilita** genera `tags_reviewed.yaml` e abilita la Semantica."
-            )
-
-        content = st.text_area(
-            "Contenuto CSV",
-            value=initial_text,
-            height=420,
-            key="tags_csv_editor",
-            label_visibility="collapsed",
+        tags_component.open_tags_raw_modal(
+            slug,
+            base_dir,
+            st=st,
+            logger=LOGGER,
+            column_button=_column_button,
+            tags_mode=os.getenv("TAGS_MODE", "").strip().lower(),
+            run_tags_fn=cast(Optional[Callable[[str], Any]], _run_tags_update),
+            set_client_state=set_client_state,
+            reset_gating_cache=_reset_gating_cache,
+            path_resolver=resolver,
         )
-        col_a, col_b = st.columns(2)
-
-        if _column_button(col_a, "Salva raw", type="secondary"):
-            _handle_tags_raw_save(slug, content, csv_path, semantic_dir)
-
-        if _column_button(col_b, "Abilita", type="primary"):
-            if _handle_tags_raw_enable(slug, semantic_dir, csv_path, yaml_path):
-                _safe_rerun()
-
-    if dialog_factory:
-        (dialog_factory("Revisione keyword (tags_raw.csv)")(_body))()
-    else:
-        with st.container(border=True):
-            st.subheader("Revisione keyword (tags_raw.csv)")
-            _body()
+    finally:
+        tags_component.ensure_within_and_resolve = original_resolver  # type: ignore[assignment]
+        tags_component.safe_write_text = original_writer  # type: ignore[assignment]
+        tags_component.read_text_safe = original_reader  # type: ignore[assignment]
+        tags_component.import_tags_yaml_to_db = original_importer  # type: ignore[assignment]
 
 
 # --- piccoli helper per compat con stub di test ---
@@ -368,6 +267,16 @@ def _open_tags_raw_modal(slug: str) -> None:
 # ---------------- UI ----------------
 
 slug = render_chrome_then_require(allow_without_slug=True)
+
+_cleanup_last = st.session_state.pop("__cleanup_done", None)
+if isinstance(_cleanup_last, dict) and _cleanup_last.get("text"):
+    level = (_cleanup_last.get("level") or "success").strip().lower()
+    if level == "warning":
+        st.warning(_cleanup_last["text"])
+    elif level == "error":
+        st.error(_cleanup_last["text"])
+    else:
+        st.success(_cleanup_last["text"])
 
 if not slug:
     st.subheader("Seleziona cliente")
@@ -649,3 +558,38 @@ if slug:
             (runner if callable(runner) else _modal)()
         else:
             _modal()
+
+    # --- Danger zone: cleanup ---
+    cleanup_client_name = cleanup_component.client_display_name(slug, get_clients)
+    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir)
+    st.markdown("---")
+    with st.expander("Danger zone · Cleanup cliente", expanded=False):
+        st.markdown(f"**Cliente:** {cleanup_client_name}  \\\n**Google Drive:** `{slug}`")
+        if cleanup_raw_folders:
+            folders = ", ".join(f"`{name}`" for name in cleanup_raw_folders)
+            st.markdown(f"**Cartelle RAW:** {folders}")
+        else:
+            st.markdown("**Cartelle RAW:** *(nessuna cartella trovata o RAW non presente)*")
+        st.caption("Elimina workspace locale, registro clienti e (se configurato) la cartella Drive.")
+
+        run_cleanup_fn = cleanup_component.resolve_run_cleanup()
+        perform_cleanup_fn = cleanup_component.resolve_perform_cleanup()
+        if run_cleanup_fn is None and perform_cleanup_fn is None:
+            st.info(
+                "Funzioni di cleanup non disponibili. Installa il modulo `tools.clean_client_workspace` "
+                "per abilitare la cancellazione guidata."
+            )
+        if st.button(
+            "Cancella cliente…",
+            key="manage_cleanup_open_confirm",
+            type="secondary",
+            help="Rimozione completa: locale, DB e Drive",
+        ):
+            cleanup_component.open_cleanup_modal(
+                st=st,
+                slug=slug,
+                client_name=cleanup_client_name,
+                set_slug=set_slug,
+                run_cleanup=run_cleanup_fn,
+                perform_cleanup=perform_cleanup_fn,
+            )

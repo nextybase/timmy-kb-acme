@@ -1,0 +1,360 @@
+# SPDX-License-Identifier: GPL-3.0-only
+from __future__ import annotations
+
+from pathlib import Path
+from textwrap import dedent
+from typing import Any, Callable, Optional
+
+import yaml
+
+from pipeline.exceptions import ConfigError
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from storage.tags_store import import_tags_yaml_to_db
+from ui.utils.core import safe_write_text
+
+__all__ = [
+    "handle_tags_raw_save",
+    "handle_tags_raw_enable",
+    "enable_tags_service",
+    "enable_tags_stub",
+    "open_tags_editor_modal",
+    "open_tags_raw_modal",
+]
+
+DEFAULT_TAGS_YAML = (
+    dedent(
+        """\
+    version: 2
+    keep_only_listed: true
+    tags: []
+    """
+    ).strip()
+    + "\n"
+)
+
+DEFAULT_TAGS_CSV = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
+
+
+def handle_tags_raw_save(
+    slug: str,
+    content: str,
+    csv_path: Path,
+    semantic_dir: Path,
+    *,
+    st: Any,
+    logger: Any,
+) -> bool:
+    header = (content.splitlines() or [""])[0]
+    header_tokens = {token.strip().lower() for token in header.split(",")}
+    if "suggested_tags" not in header_tokens:
+        st.error("CSV non valido: manca la colonna 'suggested_tags'.")
+        logger.warning("ui.manage.tags_raw.invalid_header", extra={"slug": slug})
+        return False
+
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    safe_write_text(csv_path, content, encoding="utf-8", atomic=True)
+    st.toast("`tags_raw.csv` salvato.")
+    logger.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
+    return True
+
+
+def enable_tags_stub(
+    slug: str,
+    semantic_dir: Path,
+    yaml_path: Path,
+    *,
+    st: Any,
+    logger: Any,
+    set_client_state: Callable[[str, str], bool],
+    reset_gating_cache: Callable[[str | None], None],
+) -> bool:
+    try:
+        semantic_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            previous = read_text_safe(semantic_dir, yaml_path, encoding="utf-8")
+        except Exception:
+            previous = None
+        safe_write_text(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
+        if yaml_path.exists():
+            try:
+                import_tags_yaml_to_db(yaml_path, logger=logger)
+                logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+            except Exception as exc:
+                if previous is not None:
+                    safe_write_text(yaml_path, previous, encoding="utf-8", atomic=True)
+                    logger.warning(
+                        "ui.manage.tags.rollback",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "stub-db-error"},
+                    )
+                logger.warning(
+                    "ui.manage.tags.db_sync_failed",
+                    extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
+                )
+                st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                return False
+        else:
+            logger.warning(
+                "ui.manage.tags.db_sync_skipped",
+                extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
+            )
+
+        try:
+            updated = set_client_state(slug, "arricchito")
+        except Exception as exc:
+            logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
+            updated = False
+
+        if updated:
+            st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+            reset_gating_cache(slug)
+        else:
+            st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
+        logger.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
+        return True
+    except Exception as exc:
+        st.error(f"Abilitazione (stub) non riuscita: {exc}")
+        logger.warning("ui.manage.tags_yaml.stub_error", extra={"slug": slug, "error": str(exc)})
+        return False
+
+
+def enable_tags_service(
+    slug: str,
+    semantic_dir: Path,
+    csv_path: Path,
+    yaml_path: Path,
+    *,
+    st: Any,
+    logger: Any,
+    set_client_state: Callable[[str, str], bool],
+    reset_gating_cache: Callable[[str | None], None],
+) -> bool:
+    try:
+        from semantic.api import export_tags_yaml_from_db
+        from semantic.tags_io import write_tags_review_stub_from_csv
+        from storage.tags_store import derive_db_path_from_yaml_path
+
+        write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
+        db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+        export_tags_yaml_from_db(semantic_dir, db_path, logger)
+        try:
+            updated = set_client_state(slug, "arricchito")
+        except Exception as exc:
+            logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
+            updated = False
+        if updated:
+            st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+            reset_gating_cache(slug)
+        else:
+            st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
+        logger.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+        return True
+    except Exception as exc:
+        st.error(f"Abilitazione non riuscita: {exc}")
+        logger.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+        return False
+
+
+def handle_tags_raw_enable(
+    slug: str,
+    semantic_dir: Path,
+    csv_path: Path,
+    yaml_path: Path,
+    *,
+    st: Any,
+    logger: Any,
+    tags_mode: str,
+    run_tags_fn: Optional[Callable[[str], Any]],
+    set_client_state: Callable[[str, str], bool],
+    reset_gating_cache: Callable[[str | None], None],
+) -> bool:
+    if tags_mode == "stub":
+        return enable_tags_stub(
+            slug,
+            semantic_dir,
+            yaml_path,
+            st=st,
+            logger=logger,
+            set_client_state=set_client_state,
+            reset_gating_cache=reset_gating_cache,
+        )
+    if run_tags_fn is None and tags_mode != "stub":
+        logger.error(
+            "ui.manage.tags.service_missing",
+            extra={"slug": slug, "mode": tags_mode or "default"},
+        )
+        st.error("Servizio di estrazione tag non disponibile.")
+        return False
+    return enable_tags_service(
+        slug,
+        semantic_dir,
+        csv_path,
+        yaml_path,
+        st=st,
+        logger=logger,
+        set_client_state=set_client_state,
+        reset_gating_cache=reset_gating_cache,
+    )
+
+
+def open_tags_editor_modal(
+    slug: str,
+    base_dir: Path,
+    *,
+    st: Any,
+    logger: Any,
+    column_button: Callable[..., bool],
+    set_client_state: Callable[[str, str], bool],
+    reset_gating_cache: Callable[[str | None], None],
+    path_resolver: Callable[[Path, Path], Path] = ensure_within_and_resolve,
+) -> None:
+    yaml_path = Path(path_resolver(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
+    yaml_parent = yaml_path.parent
+    try:
+        initial_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+    except Exception:
+        initial_text = DEFAULT_TAGS_YAML
+    logger.info("ui.manage.tags.open", extra={"slug": slug})
+    dialog_factory = getattr(st, "dialog", None)
+
+    def _editor_body() -> None:
+        caption_fn = getattr(st, "caption", None)
+        if callable(caption_fn):
+            caption_fn("Modifica e salva il file `semantic/tags_reviewed.yaml`.")
+        content = st.text_area(
+            "Contenuto YAML",
+            value=initial_text,
+            height=420,
+            key="tags_yaml_editor",
+            label_visibility="collapsed",
+        )
+        col_a, col_b = st.columns(2)
+        if column_button(col_a, "Salva", type="primary"):
+            try:
+                parsed = yaml.safe_load(content)
+                if parsed is not None and not isinstance(parsed, dict):
+                    raise ConfigError("Top-level YAML deve essere un mapping")
+            except Exception as exc:
+                st.error(f"YAML non valido: {exc}")
+                logger.warning("ui.manage.tags.yaml.invalid", extra={"slug": slug, "error": str(exc)})
+                return
+            backup_text: Optional[str]
+            try:
+                try:
+                    backup_text = read_text_safe(yaml_parent, yaml_path, encoding="utf-8")
+                except Exception:
+                    backup_text = None
+                logger.info("ui.manage.tags.yaml.valid", extra={"slug": slug})
+                yaml_parent.mkdir(parents=True, exist_ok=True)
+                safe_write_text(yaml_path, content, encoding="utf-8", atomic=True)
+                if yaml_path.exists():
+                    try:
+                        import_tags_yaml_to_db(yaml_path, logger=logger)
+                        logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+                    except Exception as exc:
+                        if backup_text is not None:
+                            safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                            logger.warning(
+                                "ui.manage.tags.rollback",
+                                extra={"slug": slug, "path": str(yaml_path), "reason": "db-sync-error"},
+                            )
+                        logger.warning(
+                            "ui.manage.tags.db_sync_failed",
+                            extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
+                        )
+                        st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                        return
+                else:
+                    logger.warning(
+                        "ui.manage.tags.db_sync_skipped",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
+                    )
+                st.toast("`tags_reviewed.yaml` salvato.")
+                logger.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
+                reset_gating_cache(slug)
+                st.rerun()
+            except Exception as exc:
+                if backup_text is not None:
+                    safe_write_text(yaml_path, backup_text, encoding="utf-8", atomic=True)
+                    logger.warning(
+                        "ui.manage.tags.rollback",
+                        extra={"slug": slug, "path": str(yaml_path), "reason": "save-exception"},
+                    )
+                st.error(f"Errore nel salvataggio: {exc}")
+                logger.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
+        if column_button(col_b, "Chiudi"):
+            st.rerun()
+
+    if dialog_factory:
+        runner = dialog_factory("Modifica tags_reviewed.yaml")(_editor_body)
+        runner()
+    else:
+        with st.container(border=True):
+            st.subheader("Modifica tags_reviewed.yaml")
+            _editor_body()
+
+
+def open_tags_raw_modal(
+    slug: str,
+    base_dir: Path,
+    *,
+    st: Any,
+    logger: Any,
+    column_button: Callable[..., bool],
+    tags_mode: str,
+    run_tags_fn: Optional[Callable[[str], Any]],
+    set_client_state: Callable[[str, str], bool],
+    reset_gating_cache: Callable[[str | None], None],
+    path_resolver: Callable[[Path, Path], Path] = ensure_within_and_resolve,
+) -> None:
+    semantic_dir = Path(path_resolver(base_dir, base_dir / "semantic"))
+    csv_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_raw.csv"))
+    yaml_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
+    try:
+        initial_text = read_text_safe(semantic_dir, csv_path, encoding="utf-8")
+    except Exception:
+        initial_text = DEFAULT_TAGS_CSV
+
+    logger.info("ui.manage.tags_raw.open", extra={"slug": slug})
+    dialog_factory = getattr(st, "dialog", None)
+
+    def _body() -> None:
+        caption_fn = getattr(st, "caption", None)
+        if callable(caption_fn):
+            caption_fn(
+                "Modifica `semantic/tags_raw.csv`. **Salva raw** aggiorna il CSV; "
+                "**Abilita** genera `tags_reviewed.yaml` e abilita la Semantica."
+            )
+
+        content = st.text_area(
+            "Contenuto CSV",
+            value=initial_text,
+            height=420,
+            key="tags_csv_editor",
+            label_visibility="collapsed",
+        )
+        col_a, col_b = st.columns(2)
+
+        if column_button(col_a, "Salva raw", type="secondary"):
+            handle_tags_raw_save(slug, content, csv_path, semantic_dir, st=st, logger=logger)
+
+        if column_button(col_b, "Abilita", type="primary"):
+            if handle_tags_raw_enable(
+                slug,
+                semantic_dir,
+                csv_path,
+                yaml_path,
+                st=st,
+                logger=logger,
+                tags_mode=tags_mode,
+                run_tags_fn=run_tags_fn,
+                set_client_state=set_client_state,
+                reset_gating_cache=reset_gating_cache,
+            ):
+                st.rerun()
+
+    if dialog_factory:
+        (dialog_factory("Revisione keyword (tags_raw.csv)")(_body))()
+    else:
+        with st.container(border=True):
+            st.subheader("Revisione keyword (tags_raw.csv)")
+            _body()

@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
+
+import ui.manage.tags as tags
 
 
 class _StreamlitStub:
@@ -15,6 +18,9 @@ class _StreamlitStub:
     def error(self, message: str) -> None:
         self.errors.append(message)
 
+    def info(self, message: str) -> None:
+        self.warnings.append(message)
+
     def toast(self, message: str) -> None:
         self.toasts.append(message)
 
@@ -22,22 +28,16 @@ class _StreamlitStub:
         self.warnings.append(message)
 
 
-@pytest.fixture()
-def manage_module(monkeypatch: pytest.MonkeyPatch) -> tuple[object, _StreamlitStub]:
-    import ui.pages.manage as manage  # type: ignore
-
-    stub = _StreamlitStub()
-    monkeypatch.setattr(manage, "st", stub, raising=True)
-    return manage, stub
-
-
 def test_handle_tags_raw_save_normalizes_header_tokens(
-    manage_module: tuple[object, _StreamlitStub],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    manage, st_stub = manage_module
+    st_stub = _StreamlitStub()
+    logger = logging.getLogger("test.manage.tags.save")
+    logger.propagate = True
+    caplog.set_level("WARNING", logger=logger.name)
+
     semantic_dir = tmp_path / "semantic"
     csv_path = semantic_dir / "tags_raw.csv"
 
@@ -47,11 +47,17 @@ def test_handle_tags_raw_save_normalizes_header_tokens(
         written["path"] = path
         written["content"] = content
 
-    monkeypatch.setattr(manage, "safe_write_text", _fake_write, raising=True)
-    caplog.set_level("WARNING")
+    monkeypatch.setattr(tags, "safe_write_text", _fake_write, raising=True)
 
     content = "Name , SUGGESTED_TAGS , Other\nrow1\n"
-    ok = manage._handle_tags_raw_save("dummy", content, csv_path, semantic_dir)
+    ok = tags.handle_tags_raw_save(
+        "dummy",
+        content,
+        csv_path,
+        semantic_dir,
+        st=st_stub,
+        logger=logger,
+    )
 
     assert ok is True
     assert not st_stub.errors
@@ -61,24 +67,31 @@ def test_handle_tags_raw_save_normalizes_header_tokens(
 
 
 def test_handle_tags_raw_enable_logs_when_service_missing(
-    manage_module: tuple[object, _StreamlitStub],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    manage, st_stub = manage_module
-    monkeypatch.setattr(manage, "_run_tags_update", None, raising=True)
-    monkeypatch.delenv("TAGS_MODE", raising=False)
-    monkeypatch.setattr(manage, "_enable_tags_stub", lambda *a, **k: False, raising=True)
-    monkeypatch.setattr(manage, "_enable_tags_service", lambda *a, **k: False, raising=True)
-
-    caplog.set_level("ERROR")
+    st_stub = _StreamlitStub()
+    logger = logging.getLogger("test.manage.tags.enable")
+    logger.propagate = True
+    caplog.set_level("ERROR", logger=logger.name)
 
     semantic_dir = tmp_path / "semantic"
     csv_path = tmp_path / "tags_raw.csv"
     yaml_path = tmp_path / "tags_reviewed.yaml"
 
-    ok = manage._handle_tags_raw_enable("dummy", semantic_dir, csv_path, yaml_path)
+    ok = tags.handle_tags_raw_enable(
+        "dummy",
+        semantic_dir,
+        csv_path,
+        yaml_path,
+        st=st_stub,
+        logger=logger,
+        tags_mode="default",
+        run_tags_fn=None,
+        set_client_state=lambda _slug, _state: False,
+        reset_gating_cache=lambda _slug: None,
+    )
 
     assert ok is False
     assert st_stub.errors  # segnalazione utente
