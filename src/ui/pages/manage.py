@@ -56,6 +56,17 @@ def _safe_rerun() -> None:
 
 _MANAGE_FILE = Path(__file__).resolve()
 
+
+def _workspace_root(slug: str) -> Path:
+    """Wrapper per compatibilità test: delega agli helper condivisi."""
+    return manage_helpers.workspace_root(slug)
+
+
+def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
+    """Compat per i test esistenti: delega alla versione in manage_helpers."""
+    return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
+
+
 # Services (gestiscono cache e bridging verso i component)
 _render_drive_diff = manage_helpers.safe_get("ui.services.drive:render_drive_diff")
 _invalidate_drive_index = manage_helpers.safe_get("ui.services.drive:invalidate_drive_index")
@@ -279,7 +290,7 @@ def _render_drive_status_message(disabled: bool, message: str) -> None:
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str) -> None:
-    base_dir = manage_helpers.workspace_root(slug)
+    base_dir = _workspace_root(slug)
     yaml_path = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
     yaml_parent = yaml_path.parent
     try:
@@ -369,7 +380,7 @@ def _open_tags_editor_modal(slug: str) -> None:
 
 
 def _open_tags_raw_modal(slug: str) -> None:
-    base_dir = manage_helpers.workspace_root(slug)
+    base_dir = _workspace_root(slug)
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
     csv_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.csv"))
     yaml_path = Path(ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
@@ -566,7 +577,7 @@ if slug:
                 st.error(f"Impossibile generare i README: {e}")
 
     # Colonna 2  -  Arricchimento semantico (estrazione tag)
-    base_dir = manage_helpers.workspace_root(slug)
+    base_dir = _workspace_root(slug)
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
