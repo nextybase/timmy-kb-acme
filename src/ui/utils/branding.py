@@ -81,6 +81,34 @@ def _ensure_brand_assets(repo_root: Path) -> Dict[str, str]:
       const LIGHT_ICON = "{light_icon}";
       const DARK_ICON = "{dark_icon}";
 
+      function currentTheme() {{
+        const doc = window.parent.document;
+        const attr = doc.documentElement.getAttribute("data-theme");
+        if (attr) {{
+          return attr;
+        }}
+        try {{
+          const stored = window.parent.localStorage.getItem("st-theme");
+          if (stored) {{
+            const parsed = JSON.parse(stored);
+            if (parsed?.theme?.base) return parsed.theme.base;
+            if (parsed?.base) return parsed.base;
+          }}
+        }} catch (err) {{}}
+        return "light";
+      }}
+
+      function updateLogoNodes(root, src) {{
+        if (!root) return;
+        try {{
+          root.querySelectorAll("img[data-brand-logo]").forEach((img) => {{
+            if (img.src !== src) {{
+              img.src = src;
+            }}
+          }});
+        }} catch (err) {{}}
+      }}
+
       function setFavicon(theme) {{
         if (!LIGHT_ICON) return;
         const doc = window.parent.document;
@@ -96,17 +124,17 @@ def _ensure_brand_assets(repo_root: Path) -> Dict[str, str]:
       function setLogo(theme) {{
         const src = theme === "dark" ? (DARK_LOGO || LIGHT_LOGO) : LIGHT_LOGO;
         if (!src) return;
-        const nodes = window.parent.document.querySelectorAll("img[data-brand-logo]");
-        nodes.forEach((img) => {{
-          if (img.src !== src) {{
-            img.src = src;
-          }}
+        const doc = window.parent.document;
+        updateLogoNodes(doc, src);
+        doc.querySelectorAll("iframe").forEach((frame) => {{
+          try {{
+            updateLogoNodes(frame.contentDocument, src);
+          }} catch (err) {{}}
         }});
       }}
 
       function applyTheme() {{
-        const doc = window.parent.document;
-        const theme = doc.documentElement.getAttribute("data-theme") || "light";
+        const theme = currentTheme();
         setLogo(theme);
         setFavicon(theme);
       }}
@@ -116,6 +144,12 @@ def _ensure_brand_assets(repo_root: Path) -> Dict[str, str]:
         attributes: true,
         attributeFilter: ["data-theme"]
       }});
+      window.parent.addEventListener("storage", (event) => {{
+        if (event.key === "st-theme") {{
+          applyTheme();
+        }}
+      }});
+      setTimeout(applyTheme, 50);
       applyTheme();
     }})();
     </script>
