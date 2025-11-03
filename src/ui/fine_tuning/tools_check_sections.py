@@ -11,7 +11,6 @@ from pipeline.path_utils import read_text_safe
 from ui.utils.stubs import get_streamlit
 
 from .pdf_tools import run_pdf_to_yaml_config
-from .styles import apply_button_theme
 from .system_prompt_modal import open_system_prompt_modal
 from .vision_modal import open_vision_modal
 
@@ -64,8 +63,6 @@ def render_controls(
     """Renderizza i controlli principali della pagina tools_check."""
     st = st_module or get_streamlit()
     log = logger or LOG
-
-    apply_button_theme()
 
     col_vision, col_pdf, col_sys = st.columns([1, 1, 1])
     with col_vision:
