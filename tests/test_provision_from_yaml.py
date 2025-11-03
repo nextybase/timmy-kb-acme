@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
+
+yaml = pytest.importorskip("yaml")
+
 
 # --- bootstrap: aggiungi src/ al sys.path come fa la UI ---
 ROOT = Path(__file__).resolve().parents[1]

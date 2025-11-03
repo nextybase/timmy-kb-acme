@@ -5,7 +5,9 @@ import logging
 from pathlib import Path
 
 import pytest
-import yaml
+
+yaml = pytest.importorskip("yaml")
+
 
 import semantic.vision_provision as vp
 from pipeline.exceptions import ConfigError

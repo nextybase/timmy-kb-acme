@@ -6,6 +6,11 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip(
+    "google.oauth2.service_account",
+    reason="Client Google non disponibile: installa google-auth",
+)
+
 from pipeline.drive.client import get_file_metadata, list_drive_files
 from pipeline.exceptions import ConfigError
 

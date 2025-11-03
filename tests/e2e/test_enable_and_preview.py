@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Dict, Iterator
 
 import pytest
-import yaml
+
+yaml = pytest.importorskip("yaml")
+
 
 from ui.pages.registry import PagePaths, url_path_for
 

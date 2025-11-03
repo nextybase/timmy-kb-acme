@@ -6,6 +6,11 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip(
+    "googleapiclient.http",
+    reason="Client Google Drive non disponibile: installa google-api-python-client",
+)
+
 from pipeline.drive import download as drv
 from pipeline.drive.download import MIME_PDF, download_drive_pdfs_to_local
 from pipeline.drive.download_steps import DriveCandidate
