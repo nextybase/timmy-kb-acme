@@ -40,6 +40,7 @@ Ogni step può essere eseguito singolarmente; l’orchestrazione dettagliata è 
 
 ## Dipendenze & QA
 - Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configuration.md](docs/configuration.md).
+- L'import del vocabolario (`tags_reviewed.yaml`) funziona anche senza PyYAML grazie a un parser fallback minimale, ma per YAML complessi raccomandiamo di installare PyYAML: in fallback viene emesso il log `storage.tags_store.import_yaml.fallback`.
 - Hook consigliati:
   ```bash
   pre-commit install --hook-type pre-commit --hook-type pre-push

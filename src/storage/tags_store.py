@@ -48,6 +48,223 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
+LOG = get_structured_logger("storage.tags_store")
+
+
+def _strip_yaml_comment(line: str) -> str:
+    """Rimuove i commenti YAML preservando le stringhe."""
+
+    result_chars: list[str] = []
+    in_single = False
+    in_double = False
+    escape = False
+    for ch in line:
+        if ch == "#" and not in_single and not in_double:
+            break
+        result_chars.append(ch)
+        if ch == "\\" and in_double and not escape:
+            escape = True
+            continue
+        if ch == '"' and not in_single and not escape:
+            in_double = not in_double
+        elif ch == "'" and not in_double:
+            in_single = not in_single
+        escape = False
+    return "".join(result_chars).rstrip()
+
+
+def _split_top_level(value: str, delimiter: str) -> list[str]:
+    """Suddivide una stringa rispettando parentesi e stringhe nidificate."""
+
+    parts: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    in_single = False
+    in_double = False
+    escape = False
+    for ch in value:
+        if ch == delimiter and depth == 0 and not in_single and not in_double:
+            part = "".join(buf).strip()
+            if part:
+                parts.append(part)
+            buf = []
+            continue
+        buf.append(ch)
+        if ch == "\\" and in_double and not escape:
+            escape = True
+            continue
+        if ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth -= 1
+        elif ch == '"' and not in_single and not escape:
+            in_double = not in_double
+        elif ch == "'" and not in_double:
+            in_single = not in_single
+        escape = False
+    part = "".join(buf).strip()
+    if part:
+        parts.append(part)
+    return parts
+
+
+def _parse_inline_sequence(value: str) -> list[Any]:
+    inner = value[1:-1].strip()
+    if not inner:
+        return []
+    return [_parse_scalar(token) for token in _split_top_level(inner, ",")]
+
+
+def _parse_inline_mapping(value: str) -> dict[str, Any]:
+    inner = value[1:-1].strip()
+    if not inner:
+        return {}
+    result: dict[str, Any] = {}
+    for token in _split_top_level(inner, ","):
+        key, sep, remainder = token.partition(":")
+        if not sep:
+            raise ConfigError("Mapping inline non valido nel fallback YAML.")
+        key_clean = key.strip().strip('"').strip("'")
+        result[key_clean] = _parse_scalar(remainder.strip())
+    return result
+
+
+def _parse_inline_structure(value: str) -> Any:
+    if value.startswith("{") and value.endswith("}"):
+        return _parse_inline_mapping(value)
+    if value.startswith("[") and value.endswith("]"):
+        return _parse_inline_sequence(value)
+    raise ConfigError("Fallback YAML non supporta la struttura inline fornita.")
+
+
+def _parse_scalar(token: str) -> Any:
+    token = token.strip()
+    if token == "":
+        return ""
+    lowered = token.lower()
+    if token.startswith('"') and token.endswith('"'):
+        try:
+            return json.loads(token)
+        except Exception:
+            return token[1:-1]
+    if token.startswith("'") and token.endswith("'"):
+        return token[1:-1]
+    if lowered in {"null", "none"}:
+        return None
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    if token.startswith("{") or token.startswith("["):
+        return _parse_inline_structure(token)
+    try:
+        if any(marker in token for marker in (".", "e", "E")):
+            return float(token)
+        return int(token)
+    except Exception:
+        return token
+
+
+class _StackEntry:
+    __slots__ = ("indent", "container", "parent", "key")
+
+    def __init__(self, indent: int, container: Any, parent: Any | None, key: str | None):
+        self.indent = indent
+        self.container = container
+        self.parent = parent
+        self.key = key
+
+
+def _ensure_list_context(entry: _StackEntry) -> list[Any]:
+    container = entry.container
+    if isinstance(container, list):
+        return container
+    if isinstance(container, dict) and not container:
+        if entry.parent is None or entry.key is None:
+            raise ConfigError("Struttura YAML non valida: lista senza chiave padre.")
+        new_list: list[Any] = []
+        entry.parent[entry.key] = new_list
+        entry.container = new_list
+        return new_list
+    raise ConfigError("Struttura YAML non valida: atteso elenco.")
+
+
+def _parse_yaml_minimal(text: str) -> dict[str, Any]:
+    """Parser minimale per `tags_reviewed.yaml` quando PyYAML non è disponibile."""
+
+    root: dict[str, Any] = {}
+    stack: list[_StackEntry] = [_StackEntry(-1, root, None, None)]
+
+    for raw_line in text.splitlines():
+        line = _strip_yaml_comment(raw_line)
+        if not line.strip():
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+
+        while len(stack) > 1 and indent <= stack[-1].indent:
+            stack.pop()
+
+        ctx = stack[-1]
+        container = ctx.container
+
+        if stripped.startswith("-"):
+            list_ctx = _ensure_list_context(ctx)
+            item_content = stripped[1:].strip()
+            if not item_content:
+                value: dict[str, Any] = {}
+                list_ctx.append(value)
+                stack.append(_StackEntry(indent, value, list_ctx, None))
+                continue
+
+            if item_content.startswith("{") or item_content.startswith("["):
+                value = _parse_inline_structure(item_content)
+                list_ctx.append(value)
+                if isinstance(value, dict):
+                    stack.append(_StackEntry(indent, value, list_ctx, None))
+                continue
+
+            if ":" in item_content:
+                key, _, remainder = item_content.partition(":")
+                key = key.strip()
+                value_dict: dict[str, Any] = {}
+                list_ctx.append(value_dict)
+                stack.append(_StackEntry(indent, value_dict, list_ctx, None))
+                remainder = remainder.strip()
+                if remainder:
+                    value_dict[key] = _parse_scalar(remainder)
+                else:
+                    nested_dict: dict[str, Any] = {}
+                    value_dict[key] = nested_dict
+                    stack.append(_StackEntry(indent, nested_dict, value_dict, key))
+                continue
+
+            list_ctx.append(_parse_scalar(item_content))
+            continue
+
+        if ":" not in stripped:
+            raise ConfigError("Linea YAML non interpretabile senza PyYAML.")
+
+        key, _, remainder = stripped.partition(":")
+        key = key.strip()
+        remainder = remainder.strip()
+
+        if not isinstance(container, dict):
+            raise ConfigError("Struttura YAML non valida: atteso dizionario.")
+
+        if remainder:
+            value = _parse_scalar(remainder)
+            container[key] = value
+            if isinstance(value, dict):
+                stack.append(_StackEntry(indent, value, container, key))
+            elif isinstance(value, list):
+                stack.append(_StackEntry(indent, value, container, key))
+        else:
+            nested_dict: dict[str, Any] = {}
+            container[key] = nested_dict
+            stack.append(_StackEntry(indent, nested_dict, container, key))
+
+    return root
+
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -701,9 +918,6 @@ class _TagMutation:
 
 
 def parse_yaml_safe(yaml_path: str | Path) -> tuple[Path, Path, list[Any]]:
-    if yaml is None:
-        raise ConfigError("Dependency PyYAML non disponibile per import YAML→DB.")
-
     ypath = Path(yaml_path)
     if not ypath.exists():
         raise ConfigError(f"File YAML non trovato: {ypath}")
@@ -714,9 +928,18 @@ def parse_yaml_safe(yaml_path: str | Path) -> tuple[Path, Path, list[Any]]:
     try:
         safe_yaml_path = ensure_within_and_resolve(ypath.parent, ypath)
         raw = read_text_safe(ypath.parent, safe_yaml_path, encoding="utf-8")
-        data = yaml.safe_load(raw) or {}
+        if yaml is not None:
+            data = yaml.safe_load(raw) or {}
+        else:
+            LOG.warning(
+                "storage.tags_store.import_yaml.fallback",
+                extra={"yaml": str(ypath), "reason": "pyyaml_missing"},
+            )
+            data = _parse_yaml_minimal(raw)
+    except ConfigError:
+        raise
     except Exception as exc:  # pragma: no cover
-        raise ConfigError(f"YAML non valido: {exc}")
+        raise ConfigError("YAML non valido o non supportato: installare PyYAML per casi complessi.") from exc
 
     items = data.get("tags") or []
     if not isinstance(items, list):

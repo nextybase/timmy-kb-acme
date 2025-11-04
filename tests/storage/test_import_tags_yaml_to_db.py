@@ -95,7 +95,7 @@ tags:
         import_tags_yaml_to_db(bad_yaml)
 
 
-def test_import_yaml_requires_yaml_dependency(monkeypatch, tmp_path: Path):
+def test_import_yaml_without_pyyaml_fallback(monkeypatch, tmp_path: Path):
     semantic_dir = tmp_path / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     yaml_path = semantic_dir / "tags_reviewed.yaml"
@@ -106,7 +106,8 @@ def test_import_yaml_requires_yaml_dependency(monkeypatch, tmp_path: Path):
     old_yaml = ts.yaml
     try:
         ts.yaml = None  # simula PyYAML mancante
-        with pytest.raises(ConfigError):
-            import_tags_yaml_to_db(yaml_path)
+        stats = import_tags_yaml_to_db(yaml_path)
+        assert stats["terms"] == 2
+        assert stats["skipped"] == 0
     finally:
         ts.yaml = old_yaml

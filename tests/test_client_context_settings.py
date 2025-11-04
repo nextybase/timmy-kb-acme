@@ -13,6 +13,8 @@ from tests.conftest import DUMMY_SLUG
 
 pytestmark = pytest.mark.pipeline
 
+pytest.importorskip("yaml")
+
 
 @pytest.fixture()
 def repo_with_config(tmp_path: Path) -> Path:

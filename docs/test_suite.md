@@ -24,7 +24,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 > Nota: i test `e2e` richiedono le dipendenze extra (`pip install -r requirements-dev.txt`) e l'installazione del browser con `playwright install chromium`.
 **Default CI:** i test marcati `push`, `drive` e `e2e` sono esclusi per impostazione predefinita.
 
-> 📦 **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic), alcuni test richiedono
+> 📦 **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic; esiste un parser fallback minimale ma raccomandiamo PyYAML per YAML complessi), alcuni test richiedono
 > `google.oauth2.service_account` e `googleapiclient.http` (gating Drive), `fitz`
 > / PyMuPDF (Vision inline) o Playwright + Chromium (e2e). Installa gli extra
 > con `pip install -r requirements-dev.txt` e, per i browser, `playwright install chromium`.
@@ -123,10 +123,12 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Drive:** `test_drive_guards.py`, `test_drive_runner_pagination.py`, `test_drive_runner_progress.py`, `test_tag_onboarding_drive_guard_main.py`.
 - **Finance tab (IO safety):** `test_finance_tab_io_safety.py`.
 - **Client OpenAI (fallback/config):** `test_client_factory.py`.
+- **ClientContext settings (richiede PyYAML):** `test_client_context_settings.py` usa `pytest.importorskip("yaml")` per saltare l'integrazione se la libreria non è installata.
 
 ### 12) Vocab e loader — SQLite, fallback e fail-fast
 - **Vocab loader:** `test_vocab_loader.py`, `test_vocab_loader_failfast.py`, `test_vocab_loader_sqlite_errors.py`.
 - **Integrazione DB:** `tests/test_vocab_loader_integration_db.py`.
+- **Import tag YAML → SQLite (fallback):** `tests/storage/test_import_tags_yaml_to_db.py` verifica l'import e il log `storage.tags_store.import_yaml.fallback` quando PyYAML non è disponibile.
 
 ### 13) Script e qualità repo
 - **Sanitizzazione file (test):** `tests/scripts/test_forbid_control_chars.py`.
