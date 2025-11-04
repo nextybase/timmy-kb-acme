@@ -232,7 +232,7 @@ def list_content_markdown(book_dir: Path) -> list[Path]:
     """Elenco dei Markdown 'di contenuto' in book_dir, escludendo README/SUMMARY."""
     return [
         p
-        for p in sorted_paths(book_dir.glob("*.md"), base=book_dir)
+        for p in sorted_paths(book_dir.rglob("*.md"), base=book_dir)
         if p.name.lower() not in {"readme.md", "summary.md"}
     ]
 
@@ -642,7 +642,6 @@ def enrich_frontmatter(
         for md in mds:
             name = md.name
             title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
-            tags = _guess_tags_for_name(name, vocab, inv=inv)
             try:
                 text = read_text_safe(md_dir, md, encoding="utf-8")
             except OSError as e:
@@ -652,6 +651,9 @@ def enrich_frontmatter(
                 )
                 continue
             meta, body = _parse_frontmatter(text)
+            raw_list = _as_list_str(meta.get("tags_raw"))
+            canonical_from_raw = _canonicalize_tags(raw_list, inv)
+            tags = canonical_from_raw or _guess_tags_for_name(name, vocab, inv=inv)
             new_meta = _merge_frontmatter(meta, title=title, tags=tags)
             if meta == new_meta:
                 continue
@@ -662,7 +664,13 @@ def enrich_frontmatter(
                 touched.append(md)
                 logger.info(
                     "semantic.frontmatter.updated",
-                    extra={"slug": slug, "file_path": str(md), "tags": tags},
+                    extra={
+                        "slug": slug,
+                        "file_path": str(md),
+                        "tags": tags,
+                        "tags_raw": raw_list,
+                        "canonical_from_raw": canonical_from_raw,
+                    },
                 )
             except OSError as e:
                 logger.warning(
@@ -1158,3 +1166,17 @@ def _guess_tags_for_name(
         if pat.search(s):
             found.update(canon_set)
     return sorted(found)
+
+
+def _canonicalize_tags(raw_tags: List[str], inv: Dict[str, Set[str]]) -> List[str]:
+    canon: Set[str] = set()
+    for tag in raw_tags:
+        normalized = tag.strip().lower()
+        if not normalized:
+            continue
+        mapped = inv.get(normalized)
+        if mapped:
+            canon.update(mapped)
+        else:
+            canon.add(tag.strip())
+    return sorted(canon)

@@ -2,15 +2,17 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable, TypeAlias, cast
+from typing import Any, Iterable, Mapping, TypeAlias, cast
 from urllib.parse import quote
 
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve  # SSoT path-safety forte
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve  # SSoT path-safety forte
+from semantic.auto_tagger import extract_semantic_candidates
+from semantic.config import SemanticConfig, load_semantic_config
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
 
 __all__ = [
@@ -81,24 +83,53 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
     return out
 
 
-def _append_folder_headings(lines: list[str], folder_parts: Iterable[str], *, emitted: set[tuple[int, str]]) -> None:
-    """Appende heading per ogni sottocartella lungo il percorso."""
-    cumulative: list[str] = []
-    for depth, folder in enumerate(folder_parts):
-        level = 2 + depth
-        cumulative.append(folder)
-        key_path = "/".join(part.lower() for part in cumulative)
-        key = (depth, key_path)
-        if key not in emitted:
-            lines += ["", f"{'#' * level} {_titleize(folder)}"]
-            emitted.add(key)
+def _dump_frontmatter(meta: dict[str, Any]) -> str:
+    """Serializza il dizionario `meta` in frontmatter YAML, con fallback minimo."""
+    try:
+        import yaml
+
+        payload = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip()
+        return f"---\n{payload}\n---\n"
+    except Exception:
+        lines = ["---"]
+        for key, value in meta.items():
+            if isinstance(value, list):
+                lines.append(f"{key}:")
+                for item in value:
+                    lines.append(f"  - {item}")
+            elif value is not None:
+                lines.append(f"{key}: {value}")
+        lines.append("---\n")
+        return "\n".join(lines)
 
 
-def _append_pdf_section(lines: list[str], file_stem: str, *, level: int, filename: str) -> None:
-    lines += [
-        f"{'#' * level} {_titleize(file_stem)}",
-        f"(Contenuto estratto/conversione da `{filename}`)",
-    ]
+def _write_markdown_for_pdf(
+    pdf_path: Path,
+    raw_root: Path,
+    target_root: Path,
+    candidates: Mapping[str, Mapping[str, Any]],
+    cfg: SemanticConfig,
+) -> Path:
+    """Genera un file Markdown 1:1 per il PDF indicato, includendo frontmatter completo."""
+    rel_pdf = pdf_path.relative_to(raw_root)
+    md_candidate = target_root / rel_pdf.with_suffix(".md")
+    md_path = ensure_within_and_resolve(target_root, md_candidate)
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+
+    candidate_meta = candidates.get(rel_pdf.as_posix(), {}) if candidates else {}
+    tags_raw = candidate_meta.get("tags") or []
+
+    meta: dict[str, Any] = {
+        "title": _titleize(pdf_path.stem),
+        "source_category": rel_pdf.parent.as_posix() or None,
+        "source_file": rel_pdf.name,
+        "created_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "tags_raw": sorted({str(t).strip() for t in tags_raw if str(t).strip()}),
+    }
+
+    body = f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*\n"
+    safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
+    return md_path
 
 
 def _group_safe_pdfs_by_category(
@@ -137,28 +168,6 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
     return out
 
 
-def _render_category_markdown(cat_dir: Path, pdfs: list[Path], *, rel_base: Path | None = None) -> str:
-    """Costruisce il contenuto Markdown per una singola categoria."""
-    lines: list[str] = [f"# {_titleize(cat_dir.name)}"]
-    if not pdfs:
-        lines += ["", "_Nessun PDF trovato in questa categoria._"]
-        return "\n".join(lines)
-
-    emitted_folders: set[tuple[int, str]] = set()
-    for pdf in pdfs:
-        base = rel_base or cat_dir
-        try:
-            rel_parts = list(pdf.relative_to(base).parts)
-        except Exception:
-            rel_parts = [pdf.name]
-        folder_parts = rel_parts[:-1]
-        _append_folder_headings(lines, folder_parts, emitted=emitted_folders)
-        file_stem = Path(rel_parts[-1]).stem
-        level = 2 + max(0, len(folder_parts))
-        _append_pdf_section(lines, file_stem, level=level, filename=rel_parts[-1])
-    return "\n".join(lines)
-
-
 # -----------------------------
 # API
 # -----------------------------
@@ -192,9 +201,35 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
     readme = target / "README.md"
+
+    sections: list[str] = []
+    try:
+        cfg = load_semantic_config(ctx.base_dir)
+        areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
+        if isinstance(areas_data, dict):
+            iterable = areas_data.items()
+        elif isinstance(areas_data, list):
+            iterable = (
+                (item.get("key") or item.get("name") or f"area_{idx}", item)
+                for idx, item in enumerate(areas_data)
+                if isinstance(item, dict)
+            )
+        else:
+            iterable = ()
+        for key, meta in iterable:
+            display = _titleize(str(key))
+            descr = str((meta or {}).get("descrizione") or "").strip()
+            section_body = f"## {display}\n"
+            if descr:
+                section_body += f"\n{descr}\n"
+            sections.append(section_body.strip())
+    except Exception:
+        pass
+
+    content = "\n\n".join(sections).strip() or "Contenuti generati/curati automaticamente."
     safe_write_text(
         readme,
-        f"# {title}\n\nContenuti generati/curati automaticamente.\n",
+        f"# {title}\n\n{content}\n",
         encoding="utf-8",
         atomic=True,
     )
@@ -208,14 +243,29 @@ def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pa
     target.mkdir(parents=True, exist_ok=True)
 
     summary = target / "SUMMARY.md"
-    items: list[str] = []
-    for p in sorted(target.glob("*.md"), key=lambda p: p.name.lower()):
-        name = p.name.lower()
-        if name in {"readme.md", "summary.md"}:
-            continue
-        items.append(f"- [{p.stem}]({quote(p.name)})")
+    lines: list[str] = ["# Summary", ""]
 
-    safe_write_text(summary, "# Summary\n\n" + "\n".join(items) + "\n", encoding="utf-8", atomic=True)
+    def iter_markdown() -> Iterable[Path]:
+        for md in sorted(target.rglob("*.md"), key=lambda p: p.relative_to(target).as_posix().lower()):
+            name = md.name.lower()
+            if name in {"readme.md", "summary.md"}:
+                continue
+            yield md.relative_to(target)
+
+    emitted_headers: set[str] = set()
+    for rel in iter_markdown():
+        parts = list(rel.parts)
+        file_name = parts.pop()
+        for depth, part in enumerate(parts):
+            key = "/".join(parts[: depth + 1])
+            if key not in emitted_headers:
+                indent = "    " * depth
+                lines.append(f"{indent}- **{_titleize(part)}**")
+                emitted_headers.add(key)
+        indent = "    " * len(parts)
+        lines.append(f"{indent}- [{_titleize(Path(file_name).stem)}]({quote(rel.as_posix())})")
+
+    safe_write_text(summary, "\n".join(lines).rstrip() + "\n", encoding="utf-8", atomic=True)
     return summary
 
 
@@ -253,9 +303,11 @@ def convert_files_to_structured_markdown(
             file_path=str(raw_root),
         )
 
+    cfg = load_semantic_config(base)
+    candidates = extract_semantic_candidates(raw_root, cfg)
+
     written: set[Path] = set()
 
-    # Sorgente PDF: o elenco già validato (nuovo) o discovery legacy
     if safe_pdfs is not None:
         root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
     else:
@@ -267,25 +319,16 @@ def convert_files_to_structured_markdown(
         )
         cat_items = _iter_category_pdfs(raw_root)
 
-    # PDF direttamente in raw/: produce un file aggregato
-    if root_pdfs:
-        root_md = target / f"{raw_root.name}.md"
-        content = _render_category_markdown(raw_root, root_pdfs)
-        safe_write_text(root_md, content + "\n", encoding="utf-8", atomic=True)
-        written.add(root_md)
+    for pdf in root_pdfs:
+        written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
 
-    # Categorie = directory immediate sotto raw/
-    for cat_dir, pdfs in cat_items:
-        md_file = target / f"{cat_dir.name}.md"
-        cat_dir_resolved = ensure_within_and_resolve(raw_root, cat_dir)
+    for _cat_dir, pdfs in cat_items:
         safe_list = (
             pdfs if safe_pdfs is not None else _filter_safe_pdfs(base, raw_root, pdfs, slug=getattr(ctx, "slug", None))
         )
-        content = _render_category_markdown(cat_dir, safe_list, rel_base=cat_dir_resolved)
-        safe_write_text(md_file, content + "\n", encoding="utf-8", atomic=True)
-        written.add(md_file)
+        for pdf in safe_list:
+            written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
 
-    # Cleanup idempotente: rimuovi .md orfani in book/ (escludi README.md e SUMMARY.md)
     for candidate in target.glob("*.md"):
         low = candidate.name.lower()
         if low in {"readme.md", "summary.md"}:

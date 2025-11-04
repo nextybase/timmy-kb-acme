@@ -14,9 +14,14 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
-    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    config_dir = base / "config"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
 
     # PDF reali (anche annidati)
     root_pdf = raw / "root.pdf"
@@ -55,25 +60,30 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     ctx = _ctx(base, raw, book)
     cu.convert_files_to_structured_markdown(ctx, md_dir=book, safe_pdfs=safe_pdfs)
 
-    # File attesi:
-    # - raw.md (per i PDF in root/)
-    # - cat1.md, cat2.md (categorie immediate)
-    expected = {book / "raw.md", book / "cat1.md", book / "cat2.md"}
-    produced = set(book.glob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
+    # File attesi: un markdown per ogni PDF (stessa struttura delle cartelle raw/)
+    expected = {
+        book / "root.md",
+        book / "cat1" / "doc1.md",
+        book / "cat2" / "doc2.md",
+        book / "cat1" / "sub" / "deep.md",
+    }
+    produced = set(book.rglob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
     assert expected.issubset(produced)
 
     # L'orphan deve essere stato rimosso
     assert not orphan.exists()
 
-    # Contenuti basilari attesi (titoli e sezioni)
-    assert "# Raw" in (book / "raw.md").read_text(encoding="utf-8")
-    cat1_txt = (book / "cat1.md").read_text(encoding="utf-8")
-    assert "# Cat1" in cat1_txt
+    # Contenuti basilari attesi (frontmatter + riferimenti al PDF)
+    root_txt = (book / "root.md").read_text(encoding="utf-8")
+    assert "source_file: root.pdf" in root_txt
+    cat1_txt = (book / "cat1" / "doc1.md").read_text(encoding="utf-8")
+    assert "tags_raw" in cat1_txt
     assert "doc1.pdf" in cat1_txt  # riferimento al file
-    # Presenza di heading per sottocartella "sub" (capitalizzata)
-    assert "## Sub" in cat1_txt or "### Sub" in cat1_txt
+    # Presenza del file annidato
+    deep_txt = (book / "cat1" / "sub" / "deep.md").read_text(encoding="utf-8")
+    assert "deep.pdf" in deep_txt
 
     # Idempotenza: seconda esecuzione non cambia i file generati e non esplora legacy
     cu.convert_files_to_structured_markdown(ctx, md_dir=book, safe_pdfs=safe_pdfs)
-    produced2 = set(book.glob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
+    produced2 = set(book.rglob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
     assert produced2 == produced

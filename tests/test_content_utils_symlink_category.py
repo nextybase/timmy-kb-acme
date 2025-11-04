@@ -19,10 +19,16 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
+    semantic_dir = base / "semantic"
+    config_dir = base / "config"
     real = raw / "real"
     sub = real / "sub"
     sub.mkdir(parents=True, exist_ok=True)
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     pdf = sub / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%\n")
 
@@ -31,10 +37,8 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
 
     ctx = _Ctx(base)
 
-    # Non deve alzare eccezioni e deve produrre un markdown di categoria
+    # Non deve alzare eccezioni e deve produrre markdown per il PDF reale
     convert_files_to_structured_markdown(ctx)
 
-    # Il nome del file può riflettere il nome alias o real in base alla risoluzione; accettiamo entrambi
-    alias_md = ctx.md_dir / "alias.md"
-    real_md = ctx.md_dir / "real.md"
-    assert alias_md.exists() or real_md.exists()
+    real_md = ctx.md_dir / "real" / "sub" / "doc.md"
+    assert real_md.exists()

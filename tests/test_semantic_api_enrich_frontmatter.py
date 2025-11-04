@@ -25,7 +25,17 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     book = base / "book"
     # Prepare two MD files: one without frontmatter, one with existing frontmatter
     _write(book / "data_governance-intro.md", "Body A\n")
-    existing = "---\n" "title: Existing Title\n" "tags:\n" "  - alpha\n" "---\n" "Existing body\n"
+    existing = (
+        "---\n"
+        "title: Existing Title\n"
+        "tags:\n"
+        "  - alpha\n"
+        "tags_raw:\n"
+        "  - Policy\n"
+        "  - analysis\n"
+        "---\n"
+        "Existing body\n"
+    )
     _write(book / "analytics_report.md", existing)
 
     # Monkeypatch get_paths to confine I/O under tmp_path
@@ -68,6 +78,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     text_b = (book / "analytics_report.md").read_text(encoding="utf-8")
     meta_b, body_b = sapi._parse_frontmatter(text_b)
     assert meta_b.get("title") == "Existing Title"
-    assert set(meta_b.get("tags") or []) >= {"alpha", "analytics"}
-    assert "governance" not in (meta_b.get("tags") or [])
+    tags_b = set(meta_b.get("tags") or [])
+    assert tags_b >= {"alpha", "analytics", "governance"}
+    assert meta_b.get("tags_raw") == ["Policy", "analysis"]
     assert "Existing body" in body_b

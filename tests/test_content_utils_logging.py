@@ -50,8 +50,14 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
+    semantic_dir = base / "semantic"
+    config_dir = base / "config"
     (raw / "cat").mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
 
     root_pdf = raw / "x.pdf"
     cat_pdf = raw / "cat" / "y.pdf"

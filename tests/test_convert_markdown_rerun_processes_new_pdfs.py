@@ -41,17 +41,17 @@ def test_convert_markdown_rerun_processes_new_pdfs(tmp_path: Path):
     ctx = _Ctx(base, slug="dummy")
     logger = _NoopLogger()
 
-    # Primo run: un PDF in raw/foo → deve produrre book/foo.md
+    # Primo run: un PDF in raw/foo -> deve produrre book/foo/a.md
     _touch(ctx.raw_dir / "foo" / "a.pdf")
     mds_first = convert_markdown(ctx, logger=logger, slug="dummy")
-    assert (ctx.md_dir / "foo.md").exists()
-    assert any(p.name == "foo.md" for p in mds_first)
+    assert (ctx.md_dir / "foo" / "a.md").exists()
+    assert any(p.relative_to(ctx.md_dir).as_posix() == "foo/a.md" for p in mds_first)
 
-    # Secondo run: aggiungo un nuovo PDF in raw/bar → deve produrre anche book/bar.md
+    # Secondo run: aggiungo un nuovo PDF in raw/bar -> deve produrre anche book/bar/b.md
     _touch(ctx.raw_dir / "bar" / "b.pdf")
     mds_second = convert_markdown(ctx, logger=logger, slug="dummy")
-    assert (ctx.md_dir / "bar.md").exists()
+    assert (ctx.md_dir / "bar" / "b.md").exists()
 
     # I Markdown di contenuto devono includere entrambi (README/SUMMARY esclusi)
-    names = {p.name for p in mds_second}
-    assert {"foo.md", "bar.md"}.issubset(names)
+    names = {p.relative_to(ctx.md_dir).as_posix() for p in mds_second}
+    assert {"foo/a.md", "bar/b.md"}.issubset(names)
