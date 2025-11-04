@@ -7,15 +7,21 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import io
 import json
 import logging
+import multiprocessing as mp
 import os
 import shutil
 import sys
 from pathlib import Path
+from textwrap import dedent
 from typing import Any, Optional, TextIO
 
-import yaml
+try:
+    import yaml
+except Exception:
+    yaml = None  # type: ignore
 
 
 # ------------------------------------------------------------
@@ -34,7 +40,12 @@ def _add_paths() -> tuple[Path, Path]:
 REPO_ROOT, SRC_DIR = _add_paths()
 SRC_ROOT = SRC_DIR
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
+from pipeline.path_utils import (  # noqa: E402
+    ensure_within_and_resolve,
+    open_for_read_bytes_selfguard,
+    read_text_safe,
+    to_kebab,
+)
 
 try:
     from pipeline.exceptions import ConfigError  # type: ignore
@@ -75,9 +86,11 @@ try:
     _drive_mod = importlib.import_module("ui.services.drive_runner")
     ensure_drive_minimal_and_upload_config = getattr(_drive_mod, "ensure_drive_minimal_and_upload_config", None)
     build_drive_from_mapping = getattr(_drive_mod, "build_drive_from_mapping", None)
+    emit_readmes_for_raw = getattr(_drive_mod, "emit_readmes_for_raw", None)
 except Exception:
     ensure_drive_minimal_and_upload_config = None
     build_drive_from_mapping = None
+    emit_readmes_for_raw = None
 
 try:
     from tools.clean_client_workspace import perform_cleanup as _perform_cleanup  # type: ignore
@@ -188,19 +201,89 @@ def _pdf_path(slug: str) -> Path:
     return _client_base(slug) / "config" / "VisionStatement.pdf"
 
 
-def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -> dict[str, str]:
-    """
-    Genera YAML "basici" senza passare da Vision:
-      - semantic/semantic_mapping.yaml
-      - semantic/cartelle_raw.yaml
-    Crea anche le cartelle raw/ di base (contracts/reports/presentations).
-    """
-    sem_dir = base_dir / "semantic"
-    sem_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir = base_dir / "raw"
-    for name in ("contracts", "reports", "presentations"):
-        (raw_dir / name).mkdir(parents=True, exist_ok=True)
+def _yaml_quote(value: str) -> str:
+    """Serializza stringhe in stile YAML sfruttando json.dumps per escaping."""
+    return json.dumps(str(value), ensure_ascii=False)
 
+
+def _render_default_mapping_yaml(slug: str, client_name: str) -> str:
+    return (
+        dedent(
+            f"""\
+            context:
+              slug: {_yaml_quote(slug)}
+              client_name: {_yaml_quote(client_name)}
+            contracts:
+              ambito: "Contrattualistica e forniture"
+              descrizione: "Documenti contrattuali, NDA, ordini di acquisto, accordi quadro e appendici."
+              keywords:
+                - "contratto"
+                - "NDA"
+                - "fornitore"
+                - "ordine"
+                - "appendice"
+            reports:
+              ambito: "Reportistica e analisi"
+              descrizione: "Report periodici, metriche operative, analisi interne e rendicontazioni."
+              keywords:
+                - "report"
+                - "analisi"
+                - "rendiconto"
+                - "KPI"
+                - "metriche"
+            presentations:
+              ambito: "Presentazioni e materiali"
+              descrizione: "Slide, presentazioni per stakeholder, materiali divulgativi e executive brief."
+              keywords:
+                - "presentazione"
+                - "slide"
+                - "deck"
+                - "brief"
+                - "stakeholder"
+            synonyms:
+              contracts:
+                - "contratti"
+                - "accordi"
+                - "forniture"
+              reports:
+                - "rendiconti"
+                - "analitiche"
+                - "reportistica"
+              presentations:
+                - "slide"
+                - "deck"
+                - "presentazioni"
+            system_folders:
+              identity: "book/identity"
+              glossario: "book/glossario"
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _render_default_cartelle_yaml(slug: str) -> str:
+    return (
+        dedent(
+            f"""\
+            version: 1
+            folders:
+              - "raw/contracts"
+              - "raw/reports"
+              - "raw/presentations"
+            system_folders:
+              identity: "book/identity"
+              glossario: "book/glossario"
+            meta:
+              source: "dummy"
+              slug: {_yaml_quote(slug)}
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _default_mapping_data(slug: str, client_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
     mapping = {
         "context": {"slug": slug, "client_name": client_name},
         "contracts": {
@@ -226,15 +309,57 @@ def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -
         "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
     }
     cartelle = {
+        "version": 1,
         "folders": ["raw/contracts", "raw/reports", "raw/presentations"],
         "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
         "meta": {"source": "dummy", "slug": slug},
     }
+    return mapping, cartelle
 
+
+def _mapping_categories_from_default(mapping: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    categories: dict[str, dict[str, Any]] = {}
+    for key in ("contracts", "reports", "presentations"):
+        section = mapping.get(key) or {}
+        cat_key = to_kebab(str(key))
+        categories[cat_key] = {
+            "ambito": str(section.get("ambito") or key.title()),
+            "descrizione": str(section.get("descrizione") or ""),
+            "keywords": [str(x).strip() for x in section.get("keywords") or [] if str(x).strip()],
+        }
+    return categories
+
+
+def _safe_dump_yaml(path: Path, data: Any, *, fallback: str) -> None:
+    if yaml is not None:
+        _safe_write_text(
+            path,
+            yaml.safe_dump(data, allow_unicode=True, sort_keys=False),  # type: ignore[arg-type]
+            encoding="utf-8",
+            atomic=True,
+        )
+        return
+    _safe_write_text(path, fallback, encoding="utf-8", atomic=True)
+
+
+def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -> dict[str, str]:
+    """
+    Genera YAML "basici" senza passare da Vision:
+      - semantic/semantic_mapping.yaml
+      - semantic/cartelle_raw.yaml
+    Crea anche le cartelle raw/ di base (contracts/reports/presentations).
+    """
+    sem_dir = base_dir / "semantic"
+    sem_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = base_dir / "raw"
+    for name in ("contracts", "reports", "presentations"):
+        (raw_dir / name).mkdir(parents=True, exist_ok=True)
+
+    mapping_data, cartelle_data = _default_mapping_data(slug, client_name)
     mapping_path = sem_dir / "semantic_mapping.yaml"
     cartelle_path = sem_dir / "cartelle_raw.yaml"
-    _safe_write_text(mapping_path, yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False))
-    _safe_write_text(cartelle_path, yaml.safe_dump(cartelle, allow_unicode=True, sort_keys=False))
+    _safe_dump_yaml(mapping_path, mapping_data, fallback=_render_default_mapping_yaml(slug, client_name))
+    _safe_dump_yaml(cartelle_path, cartelle_data, fallback=_render_default_cartelle_yaml(slug))
 
     # Genera contenuti minimi in book/ per i test smoke (alpha/beta + README/SUMMARY).
     book_dir = base_dir / "book"
@@ -250,7 +375,198 @@ def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -
         if not target.exists():
             _safe_write_text(target, content, encoding="utf-8", atomic=True)
 
-    return {"mapping": str(mapping_path), "cartelle": str(cartelle_path)}
+    categories = _mapping_categories_from_default(mapping_data)
+
+    return {"mapping": str(mapping_path), "cartelle": str(cartelle_path), "categories": categories}
+
+
+def _render_local_readme_bytes(title: str, descr: str, examples: list[str]) -> tuple[bytes, str]:
+    """Replica minimale del renderer PDF dei README (fallback su TXT se reportlab assente)."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.pdfgen import canvas
+
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        x, y = 2 * cm, height - 2 * cm
+
+        def draw_line(text: str, font: str = "Helvetica", size: int = 11, leading: int = 14) -> None:
+            nonlocal y
+            c.setFont(font, size)
+            for line in (text or "").splitlines() or [""]:
+                c.drawString(x, y, line[:120])
+                y -= leading
+                if y < 2 * cm:
+                    c.showPage()
+                    y = height - 2 * cm
+
+        c.setTitle(f"README - {title}")
+        draw_line(f"README - {title}", font="Helvetica-Bold", size=14, leading=18)
+        y -= 4
+        draw_line("")
+        draw_line("Ambito:", font="Helvetica-Bold", size=12, leading=16)
+        draw_line(descr or "")
+        draw_line("")
+        draw_line("Esempi:", font="Helvetica-Bold", size=12, leading=16)
+        for ex in examples or []:
+            draw_line(f"- {ex}")
+        c.showPage()
+        c.save()
+        data = buf.getvalue()
+        buf.close()
+        return data, "application/pdf"
+    except Exception:
+        lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
+        lines.extend(f"- {ex}" for ex in (examples or []))
+        return ("\n".join(lines)).encode("utf-8"), "text/plain"
+
+
+def _ensure_local_readmes(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> list[str]:
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    written: list[str] = []
+    catalogue = categories or {}
+    candidate_dirs: set[Path] = {p for p in raw_dir.iterdir() if p.is_dir()}
+    for key in catalogue.keys():
+        candidate_dirs.add(raw_dir / to_kebab(key))
+
+    for subdir in sorted(candidate_dirs):
+        subdir.mkdir(parents=True, exist_ok=True)
+        cat_key = to_kebab(subdir.name)
+        meta = catalogue.get(cat_key) or catalogue.get(subdir.name) or {}
+        title = str(meta.get("ambito") or subdir.name.replace("-", " ").title())
+        descr = str(meta.get("descrizione") or "")
+        raw_keywords = meta.get("keywords")
+        if isinstance(raw_keywords, list):
+            keywords = [str(x).strip() for x in raw_keywords if str(x).strip()]
+        else:
+            keywords = []
+        data, mime = _render_local_readme_bytes(title, descr, keywords)
+        filename = "README.pdf" if mime == "application/pdf" else "README.txt"
+        target = subdir / filename
+        if mime == "application/pdf":
+            _safe_write_bytes(target, data, atomic=True)
+        else:
+            _safe_write_text(target, data.decode("utf-8"), encoding="utf-8", atomic=True)
+        written.append(str(target))
+    return written
+
+
+def _load_mapping_categories(base_dir: Path) -> dict[str, dict[str, Any]]:
+    mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
+    if not mapping_path.exists():
+        return {}
+    if yaml is None:
+        return {}
+    try:
+        text = read_text_safe(base_dir, mapping_path, encoding="utf-8")  # type: ignore[arg-type]
+        data = yaml.safe_load(text) or {}
+    except Exception:
+        return {}
+
+    categories: dict[str, dict[str, Any]] = {}
+
+    areas = data.get("areas")
+    if isinstance(areas, list):
+        for area in areas:
+            if not isinstance(area, dict):
+                continue
+            key = to_kebab(str(area.get("key") or area.get("ambito") or area.get("title") or ""))
+            if not key:
+                continue
+            keywords: list[str] = []
+            for field in ("documents", "artefatti", "chunking_hints"):
+                raw = area.get(field)
+                if isinstance(raw, list):
+                    keywords.extend(str(x).strip() for x in raw if str(x).strip())
+            descr = str(
+                area.get("descrizione_breve") or area.get("descrizione") or area.get("ambito") or key.replace("-", " ")
+            )
+            categories[key] = {
+                "ambito": str(area.get("ambito") or key.replace("-", " ").title()),
+                "descrizione": descr,
+                "keywords": keywords,
+            }
+    if categories:
+        return categories
+
+    for key, section in data.items():
+        if key in {"context", "synonyms", "system_folders"}:
+            continue
+        if not isinstance(section, dict):
+            continue
+        cat_key = to_kebab(str(key))
+        if not cat_key:
+            continue
+        keywords = section.get("keywords") if isinstance(section.get("keywords"), list) else []
+        categories[cat_key] = {
+            "ambito": str(section.get("ambito") or cat_key.replace("-", " ").title()),
+            "descrizione": str(section.get("descrizione") or section.get("descrizione_breve") or ""),
+            "keywords": [str(x).strip() for x in keywords if str(x).strip()],
+        }
+    return categories
+
+
+def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str) -> None:
+    """Esegue run_vision in un sottoprocesso e restituisce esito tramite queue."""
+    ctx = _Ctx(Path(base_dir))
+    logger = get_structured_logger("tools.gen_dummy_kb.vision", context={"slug": slug})
+    try:
+        run_vision(ctx, slug=slug, pdf_path=Path(pdf_path), logger=logger)
+        queue.put({"status": "ok"})
+    except Exception as exc:  # noqa: BLE001
+        payload: dict[str, Any] = {
+            "status": "error",
+            "error": str(exc),
+            "exc_type": exc.__class__.__name__,
+        }
+        file_path = getattr(exc, "file_path", None)
+        if file_path:
+            payload["file_path"] = str(file_path)
+        queue.put(payload)
+
+
+def _run_vision_with_timeout(
+    *,
+    base_dir: Path,
+    slug: str,
+    pdf_path: Path,
+    timeout_s: float,
+    logger: logging.Logger,
+) -> tuple[bool, Optional[dict[str, Any]]]:
+    ctx = mp.get_context("spawn")
+    queue: mp.Queue = ctx.Queue()
+    proc = ctx.Process(target=_vision_worker, args=(queue, slug, str(base_dir), str(pdf_path)))
+    proc.daemon = False
+    proc.start()
+    proc.join(timeout_s)
+    if proc.is_alive():
+        logger.warning(
+            "tools.gen_dummy_kb.vision_timeout",
+            extra={"slug": slug, "timeout_s": timeout_s},
+        )
+        proc.terminate()
+        proc.join(5)
+        queue.close()
+        queue.join_thread()
+        return False, {"reason": "timeout"}
+    try:
+        result = queue.get_nowait()
+    except Exception:
+        result = {"status": "error", "reason": "no-result"}
+    finally:
+
+        queue.close()
+        queue.join_thread()
+    exit_code = proc.exitcode
+    if exit_code not in (0, None) and result.get("status") == "ok":
+        result = {"status": "error", "exit_code": exit_code}
+    if result.get("status") == "ok":
+        return True, None
+    return False, result  # type: ignore[return-value]
 
 
 def _call_drive_min(slug: str, client_name: str, base_dir: Path, logger: logging.Logger) -> Optional[dict[str, Any]]:
@@ -273,6 +589,26 @@ def _call_drive_build_from_mapping(
     if not callable(build_drive_from_mapping):
         return None
     return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
+
+
+def _call_drive_emit_readmes(slug: str, base_dir: Path, logger: logging.Logger) -> Optional[dict[str, Any]]:
+    """Upload dei README delle cartelle RAW su Drive (best-effort)."""
+    if not callable(emit_readmes_for_raw):
+        return None
+    try:
+        base_root = base_dir.parent
+        return emit_readmes_for_raw(  # type: ignore[misc]
+            slug,
+            base_root=base_root,
+            require_env=False,
+            ensure_structure=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "tools.gen_dummy_kb.drive_readmes_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+        return None
 
 
 def _register_client(slug: str, client_name: str) -> None:  # pragma: no cover - mantenuto per compatibilità test
@@ -398,35 +734,64 @@ def build_payload(
     base_dir = _client_base(slug)
     pdf_path = _pdf_path(slug)
 
-    drive_min_info = drive_build_info = None
+    drive_min_info = drive_build_info = drive_readmes_info = None
+    categories_for_readmes: dict[str, dict[str, Any]] = {}
+    fallback_info: Optional[dict[str, Any]] = None
+    vision_completed = False
+
+    if enable_vision:
+        success, vision_meta = _run_vision_with_timeout(
+            base_dir=base_dir,
+            slug=slug,
+            pdf_path=pdf_path,
+            timeout_s=120.0,
+            logger=logger,
+        )
+        if success:
+            vision_completed = True
+            categories_for_readmes = _load_mapping_categories(base_dir)
+        else:
+            reason = vision_meta or {}
+            message = str(reason.get("error") or "")
+            sentinel = str(reason.get("file_path") or "")
+            normalized = message.casefold().replace("à", "a")
+            if reason.get("reason") == "timeout":
+                logger.warning(
+                    "tools.gen_dummy_kb.vision_fallback_no_vision",
+                    extra={"slug": slug, "mode": "timeout"},
+                )
+                fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+                categories_for_readmes = fallback_info.get("categories", {})
+            elif ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
+                logger.info(
+                    "tools.gen_dummy_kb.vision_already_completed",
+                    extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
+                )
+                vision_completed = True
+                categories_for_readmes = _load_mapping_categories(base_dir)
+            else:
+                raise ConfigError(message or "Vision fallita", slug=slug, file_path=reason.get("file_path"))
+    else:
+        fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+        categories_for_readmes = fallback_info.get("categories", {})
+
+    if not categories_for_readmes:
+        categories_for_readmes = _load_mapping_categories(base_dir)
+
+    local_readmes = _ensure_local_readmes(base_dir, categories_for_readmes)
+
     if enable_drive:
         try:
             drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
             drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
+            drive_readmes_info = _call_drive_emit_readmes(slug, base_dir, logger)
         except Exception as exc:
             logger.warning(
                 "tools.gen_dummy_kb.drive_provisioning_failed",
                 extra={"error": str(exc), "slug": slug},
             )
 
-    if enable_vision:
-        ctx = _Ctx(base_dir)
-        try:
-            run_vision(ctx, slug=slug, pdf_path=pdf_path, logger=logger)
-        except ConfigError as exc:
-            message = str(exc)
-            sentinel = getattr(exc, "file_path", "") or ""
-            normalized = message.casefold().replace("à", "a")
-            already_ran = ".vision_hash" in sentinel or "vision gia eseguito" in normalized
-            if already_ran:
-                logger.info(
-                    "tools.gen_dummy_kb.vision_already_completed",
-                    extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
-                )
-            else:
-                raise
-    else:
-        _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+    fallback_used = bool(fallback_info)
 
     cfg_out: dict[str, Any] = {}
     if callable(get_client_config) and ClientContext:
@@ -452,9 +817,12 @@ def build_payload(
         },
         "drive_min": drive_min_info or {},
         "drive_build": drive_build_info or {},
+        "drive_readmes": drive_readmes_info or {},
         "config_ids": cfg_out,
-        "vision_used": bool(enable_vision),
+        "vision_used": bool(vision_completed),
         "drive_used": bool(enable_drive),
+        "fallback_used": fallback_used,
+        "local_readmes": local_readmes,
     }
 
 

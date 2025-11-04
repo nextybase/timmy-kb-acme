@@ -26,7 +26,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 
 > 📦 **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic; esiste un parser fallback minimale ma raccomandiamo PyYAML per YAML complessi), alcuni test richiedono
 > `google.oauth2.service_account` e `googleapiclient.http` (gating Drive), `fitz`
-> / PyMuPDF (Vision inline) o Playwright + Chromium (e2e). Installa gli extra
+> / PyMuPDF (Vision inline), `reportlab` (README.pdf generati dagli script) o Playwright + Chromium (e2e). Installa gli extra
 > con `pip install -r requirements-dev.txt` e, per i browser, `playwright install chromium`.
 
 ---
@@ -72,6 +72,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`.
 - **Orchestratori & tag onboarding:** `test_tag_onboarding_cli_smoke.py`, `test_tag_onboarding_helpers.py`, `test_onboarding_full_paths.py`.
 - **CLI & contratti/exit-codes:** `test_cli_env_missing.py`, `test_cli_gen_vision_yaml.py`, `test_contract_defaults.py`, `test_contract_artifacts.py`.
+- **Dummy KB / fallback Vision:** `tests/tools/test_gen_dummy_kb.py` copre workspace idempotente, fallback YAML senza PyYAML, README locali generati (PDF o TXT) e upload Drive best-effort.
 - **NLP → DB:** `test_run_nlp_to_db.py`.
 
 ### 4bis) Tag review e provisioning

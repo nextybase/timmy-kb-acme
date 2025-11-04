@@ -152,7 +152,7 @@ def _ensure_streamlit_api() -> None:
     if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st, "Page") or not hasattr(st, "navigation"):
         raise RuntimeError(
             "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 0. "
-            "Aggiorna con `pip install --upgrade streamlit==1.50.*`."
+            'Aggiorna con `pip install --upgrade "streamlit>=1.50.0"`.'
         )
 
 
