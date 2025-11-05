@@ -89,6 +89,38 @@ def _resolve_within_base(base: Path, candidate: Path) -> Path:
     return ensure_within_and_resolve(base, candidate)
 
 
+def create_lock_file(path: Path, *, payload: str = "", mode: int = 0o600) -> None:
+    """Crea un lock file esclusivo scrivendo opzionalmente un payload."""
+    path = Path(path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        raise ConfigError(f"Impossibile creare la directory padre del lock: {exc}", file_path=str(path)) from exc
+
+    lock_str = _extended_str(path)
+    try:
+        fd = os.open(lock_str, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        raise ConfigError(f"Impossibile creare il lock file: {exc}", file_path=str(path)) from exc
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            if payload:
+                handle.write(payload)
+    except Exception as exc:
+        raise ConfigError(f"Scrittura lock file fallita: {exc}", file_path=str(path)) from exc
+
+
+def remove_lock_file(path: Path) -> None:
+    """Rimuove il lock file se presente."""
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError as exc:
+        raise ConfigError(f"Impossibile rimuovere il lock file: {exc}", file_path=str(path)) from exc
+
+
 def safe_write_text(
     path: Path,
     data: str,

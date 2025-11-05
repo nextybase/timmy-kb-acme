@@ -1,0 +1,41 @@
+name: verify-agents-matrix
+
+on:
+  pull_request:
+    paths:
+      - ".codex/AGENTS.md"
+      - "src/**/AGENTS.md"
+      - "tests/**/AGENTS.md"
+      - "docs/AGENTS_INDEX.md"
+      - "scripts/gen_agents_matrix.py"
+      - ".github/workflows/agents-matrix.yml"
+      - "docs/**"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  agents-matrix-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Validate agents matrix
+        run: python scripts/gen_agents_matrix.py --check
+
+      - name: Detect matrix diff
+        run: git diff --exit-code docs/AGENTS_INDEX.md

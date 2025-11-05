@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Optional, Protocol, runtime_checkable
 
 from pipeline.exceptions import ConfigError
 from pipeline.gitbook_preview import run_gitbook_docker_preview, stop_container_safely
@@ -32,7 +32,16 @@ __all__ = ["start_preview", "stop_preview"]
 _CONTAINER_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
 
-def _default_container_name(context: Any) -> str:
+@runtime_checkable
+class _PreviewContext(Protocol):
+    @property
+    def slug(self) -> str: ...
+
+    @property
+    def redact_logs(self) -> bool: ...
+
+
+def _default_container_name(context: _PreviewContext | object) -> str:
     slug = getattr(context, "slug", "kb")
     # hardening: slug “docker-friendly”
     safe_slug = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(slug)).strip("-") or "kb"
@@ -67,11 +76,11 @@ def _docker_unavailable_hint(msg: str) -> str | None:
 
 
 def start_preview(
-    context: Any,
+    context: _PreviewContext | object,
     logger: logging.Logger,
     *,
     port: int = 4000,
-    container_name: Optional[str] = None,
+    container_name: str | None = None,
 ) -> str:
     """Avvia la preview HonKit in modalità detached e ritorna il nome del container.
 

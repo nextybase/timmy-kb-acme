@@ -35,7 +35,9 @@ import logging
 import os
 import re
 import unicodedata
+from collections import OrderedDict
 from contextlib import contextmanager
+from dataclasses import dataclass
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
 from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, Sequence, TextIO, Tuple
@@ -55,6 +57,38 @@ _WIN_UNC_PREFIX = "\\\\?\\UNC\\"
 # -----------------------------------------------------------------------------
 # Consenti lettere/numeri/underscore/punto/trattino; sostituisci il resto.
 _SANITIZE_DISALLOWED_RE = re.compile(r"[^\w.\-]+", flags=re.UNICODE)
+
+
+# Cache opportunistica per iter_safe_pdfs
+_SAFE_PDF_CACHE_CAPACITY = 8
+
+
+@dataclass(frozen=True)
+class _SafePdfCacheEntry:
+    mtime: float
+    files: tuple[Path, ...]
+
+
+_SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
+
+
+def _dir_mtime(path: Path) -> float:
+    try:
+        return float(path.stat().st_mtime)
+    except Exception:
+        return 0.0
+
+
+def clear_iter_safe_pdfs_cache(*, root: Path | None = None) -> None:
+    """Invalidates the cached PDF listings (entire cache or a specific root)."""
+    if root is None:
+        _SAFE_PDF_CACHE.clear()
+        return
+    try:
+        resolved = Path(root).resolve()
+    except Exception:
+        return
+    _SAFE_PDF_CACHE.pop(resolved, None)
 
 
 # Comprimi ripetizioni del carattere di rimpiazzo (iniettata dinamicamente)
@@ -211,15 +245,56 @@ def iter_safe_pdfs(
     root: Path,
     *,
     on_skip: Callable[[Path, str], None] | None = None,
+    use_cache: bool = False,
 ) -> Iterator[Path]:
     """Convenience wrapper che restituisce solo file PDF in modo path-safe."""
-    yield from iter_safe_paths(
-        root,
-        include_dirs=False,
-        include_files=True,
-        suffixes=(".pdf",),
-        on_skip=on_skip,
+    if not use_cache:
+        yield from iter_safe_paths(
+            root,
+            include_dirs=False,
+            include_files=True,
+            suffixes=(".pdf",),
+            on_skip=on_skip,
+        )
+        return
+
+    try:
+        resolved_root = Path(root).resolve()
+    except Exception as exc:
+        if on_skip:
+            on_skip(Path(root), f"resolve-root:{exc}")
+        return
+
+    if not resolved_root.exists() or not resolved_root.is_dir():
+        clear_iter_safe_pdfs_cache(root=resolved_root)
+        return
+
+    current_mtime = _dir_mtime(resolved_root)
+    cached = _SAFE_PDF_CACHE.get(resolved_root)
+    if cached and abs(cached.mtime - current_mtime) <= 1e-6:
+        _SAFE_PDF_CACHE.move_to_end(resolved_root)
+        for cached_path in cached.files:
+            yield cached_path
+        return
+
+    pdfs = tuple(
+        iter_safe_paths(
+            resolved_root,
+            include_dirs=False,
+            include_files=True,
+            suffixes=(".pdf",),
+            on_skip=on_skip,
+        )
     )
+    if pdfs:
+        _SAFE_PDF_CACHE[resolved_root] = _SafePdfCacheEntry(mtime=current_mtime, files=pdfs)
+        while len(_SAFE_PDF_CACHE) > _SAFE_PDF_CACHE_CAPACITY:
+            _SAFE_PDF_CACHE.popitem(last=False)
+    else:
+        _SAFE_PDF_CACHE.pop(resolved_root, None)
+
+    for pdf in pdfs:
+        yield pdf
 
 
 @contextmanager
@@ -556,6 +631,7 @@ __all__ = [
     "ensure_valid_slug",  # wrapper interattivo
     "iter_safe_paths",
     "iter_safe_pdfs",
+    "clear_iter_safe_pdfs_cache",
     "to_extended_length_path",
     "strip_extended_length_path",
 ]

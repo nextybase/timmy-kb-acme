@@ -142,3 +142,21 @@ jobs:
             **/clients.yaml
             **/preview_logs/**/*.log
             **/streamlit.log
+
+  push-tests:
+    needs: build
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-push-tests')) ||
+      startsWith(github.ref, 'refs/heads/push-tests/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
+        with: { python-version: "3.11" }
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install --requirement requirements-dev.txt
+      - name: Pytest push markers
+        run: pytest -q -m "push"

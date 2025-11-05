@@ -33,7 +33,13 @@ from typing import List
 from pipeline.exceptions import PipelineError  # eccezione tipizzata per la pipeline
 from pipeline.path_utils import ensure_within  # STRONG: SSoT per write/delete
 from pipeline.path_utils import is_safe_subpath  # SOFT: pre-check booleano per shortlist/letture
-from pipeline.path_utils import iter_safe_paths, normalize_path, sanitize_filename, sorted_paths
+from pipeline.path_utils import (
+    clear_iter_safe_pdfs_cache,
+    iter_safe_paths,
+    normalize_path,
+    sanitize_filename,
+    sorted_paths,
+)
 
 __all__ = ["copy_local_pdfs_to_raw"]
 
@@ -119,4 +125,5 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         summary = "; ".join([f"{s} -> {d} ({m})" for s, d, m in failures])
         raise PipelineError(f"Copie PDF fallite: {len(failures)}. Dettagli: {summary}")
 
+    clear_iter_safe_pdfs_cache(root=raw_dir)
     return copied

@@ -223,7 +223,7 @@ def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> tupl
                 extra={"slug": slug, "file_path": str(candidate), "error": reason},
             )
 
-    for safe_path in ppath.iter_safe_pdfs(raw_dir, on_skip=_on_skip):
+    for safe_path in ppath.iter_safe_pdfs(raw_dir, on_skip=_on_skip, use_cache=True):
         safe.append(safe_path)
     return safe, discarded
 

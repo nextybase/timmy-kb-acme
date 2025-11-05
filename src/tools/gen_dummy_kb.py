@@ -16,12 +16,39 @@ import shutil
 import sys
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Optional, TextIO
+from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
 try:
     import yaml
 except Exception:
     yaml = None  # type: ignore
+
+
+class _PayloadPaths(TypedDict):
+    base: str
+    config: str
+    vision_pdf: str
+    semantic_mapping: str
+    cartelle_raw: str
+
+
+class _PayloadConfigIds(TypedDict, total=False):
+    drive_folder_id: Optional[str]
+    drive_raw_folder_id: Optional[str]
+
+
+class _DummyPayload(TypedDict):
+    slug: str
+    client_name: str
+    paths: _PayloadPaths
+    drive_min: Dict[str, Any]
+    drive_build: Dict[str, Any]
+    drive_readmes: Dict[str, Any]
+    config_ids: _PayloadConfigIds
+    vision_used: bool
+    drive_used: bool
+    fallback_used: bool
+    local_readmes: List[str]
 
 
 # ------------------------------------------------------------
@@ -700,7 +727,7 @@ def build_payload(
     enable_vision: bool,
     records_hint: Optional[str],
     logger: logging.Logger,
-) -> dict[str, Any]:
+) -> _DummyPayload:
     if records_hint:
         try:
             _ = int(records_hint)
@@ -734,9 +761,12 @@ def build_payload(
     base_dir = _client_base(slug)
     pdf_path = _pdf_path(slug)
 
-    drive_min_info = drive_build_info = drive_readmes_info = None
-    categories_for_readmes: dict[str, dict[str, Any]] = {}
-    fallback_info: Optional[dict[str, Any]] = None
+    cfg_out: _PayloadConfigIds = _PayloadConfigIds()
+    drive_min_info: Dict[str, Any] | None = None
+    drive_build_info: Dict[str, Any] | None = None
+    drive_readmes_info: Dict[str, Any] | None = None
+    categories_for_readmes: Dict[str, Dict[str, Any]] = {}
+    fallback_info: Optional[Dict[str, Any]] = None
     vision_completed = False
 
     if enable_vision:
@@ -803,7 +833,7 @@ def build_payload(
                 "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
             }
         except Exception:
-            cfg_out = {}
+            cfg_out = _PayloadConfigIds()
 
     return {
         "slug": slug,
@@ -826,7 +856,7 @@ def build_payload(
     }
 
 
-def emit_structure(payload: dict[str, Any], *, stream: TextIO = sys.stdout) -> None:
+def emit_structure(payload: _DummyPayload | Dict[str, Any], *, stream: TextIO = sys.stdout) -> None:
     print(json.dumps(payload, indent=2, ensure_ascii=False, default=str), file=stream)
 
 

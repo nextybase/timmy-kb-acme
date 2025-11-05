@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple, cast
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, iter_safe_pdfs, validate_slug
+from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs, validate_slug
 
 # Import opzionale di Streamlit senza type: ignore.
 # Se non disponibile, st è un Any con valore None.
@@ -74,6 +74,7 @@ def clear_base_cache(*, slug: str | None = None) -> None:
         _BASE_CACHE.pop(slug.strip().lower(), None)
     else:
         _BASE_CACHE.clear()
+    clear_iter_safe_pdfs_cache()
 
 
 def workspace_root(slug: str) -> Path:
@@ -85,17 +86,17 @@ def workspace_root(slug: str) -> Path:
     return raw_dir.parent
 
 
-def iter_pdfs_safe(root: Path) -> Iterator[Path]:
+def iter_pdfs_safe(root: Path, *, use_cache: bool = False) -> Iterator[Path]:
     """
     Itera i PDF sotto `root` senza seguire symlink.
     Applica ensure_within_and_resolve a ogni candidato.
     """
-    yield from iter_safe_pdfs(root)
+    yield from iter_safe_pdfs(root, use_cache=use_cache)
 
 
-def count_pdfs_safe(root: Path) -> int:
+def count_pdfs_safe(root: Path, *, use_cache: bool = False) -> int:
     """Conta i PDF in modo sicuro usando iter_pdfs_safe."""
-    return sum(1 for _ in iter_pdfs_safe(root))
+    return sum(1 for _ in iter_pdfs_safe(root, use_cache=use_cache))
 
 
 def _dir_mtime(p: Path) -> float:
@@ -144,7 +145,7 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     # Scansione robusta utilizzando l'helper condiviso
     try:
         # basta verificare l'esistenza del primo elemento
-        first = next(iter_pdfs_safe(raw_dir), None)
+        first = next(iter_pdfs_safe(raw_dir, use_cache=True), None)
         has_pdf = first is not None
     except Exception as e:
         # Non scrivere cache negative su errore: segnala e rientra

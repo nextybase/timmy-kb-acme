@@ -148,7 +148,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 Strumenti CLI che fungono da estensioni e smoke manuali della suite:
 - **Smoke E2E rapidi:** `scripts/smoke_e2e.py`, `scripts/e2e_smoke_test.py`.
 - **Gating Semantica:** `tools/smoke_semantics_gating.py` (verifica che la pagina Semantica compaia solo con PDF in `raw/`).
-- **Benchmark retriever/semantic:** `scripts/bench_embeddings_normalization.py` (output opzionale in JSON).
+- **Benchmark retriever/semantic:** `scripts/bench_embeddings_normalization.py` (output opzionale in JSON con metrica `pdf_scan` per il costo di iterazione dei PDF, utile a monitorare la cache opportunistica introdotta in `iter_safe_pdfs`).
 - **SBOM:** `scripts/sbom.sh` (genera `sbom.json`).
 - **Migrazioni operative:** `scripts/migrate_yaml_to_db.py` (conversioni YAML → SQLite per i tag).
 

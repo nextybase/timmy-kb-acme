@@ -29,7 +29,11 @@ import numpy as np
 
 import timmykb.retriever as retr
 from timmykb.pipeline.file_utils import safe_write_text
-from timmykb.pipeline.path_utils import ensure_within_and_resolve
+from timmykb.pipeline.path_utils import (
+    clear_iter_safe_pdfs_cache,
+    ensure_within_and_resolve,
+    iter_safe_pdfs,
+)
 
 
 def _timeit(fn: Callable[[], object], rounds: int = 5) -> float:
@@ -98,7 +102,19 @@ def _prepare_md(book: "Path", n_files: int) -> None:
         safe_write_text(target, f"# File {i}\ncontenuto {i}", encoding="utf-8", atomic=True)
 
 
-def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, int]]]:
+def _prepare_raw_pdfs(raw_dir: "Path", n_files: int) -> None:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    for p in raw_dir.glob("*.pdf"):
+        try:
+            p.unlink()
+        except Exception:
+            pass
+    for i in range(n_files):
+        pdf_path = ensure_within_and_resolve(raw_dir, raw_dir / f"F{i:04d}.pdf")
+        safe_write_text(pdf_path, "%PDF-1.4\n% Timmy KB bench\n", encoding="utf-8", atomic=True)
+
+
+def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, int]], Dict[str, Dict[str, float]]]:
     import logging
     from dataclasses import dataclass
     from pathlib import Path
@@ -134,13 +150,17 @@ def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict
     sizes_md: Dict[str, int] = {"S": 2, "M": 50, "L": 200}
     times: Dict[str, Dict[str, float]] = {}
     arts: Dict[str, Dict[str, int]] = {}
+    scan_costs: Dict[str, Dict[str, float]] = {}
 
     for label, n in sizes_md.items():
         slug = f"bench{label}"
         base = Path("output") / f"timmy-kb-{slug}"
         book = base / "book"
+        raw_dir = base / "raw"
         base.mkdir(parents=True, exist_ok=True)
         _prepare_md(book, n)
+        _prepare_raw_pdfs(raw_dir, n)
+        clear_iter_safe_pdfs_cache(root=raw_dir)
         ctx = Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug=slug)
         logger = logging.getLogger(f"bench.semantic.{label}")
 
@@ -171,8 +191,12 @@ def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict
             "list_of_ndarray": a_ln,
             "generator_batch": a_gb,
         }
+        scan_costs[label] = {
+            "cold": _timeit(lambda: sum(1 for _ in iter_safe_pdfs(raw_dir, use_cache=False))),
+            "warm_cached": _timeit(lambda: sum(1 for _ in iter_safe_pdfs(raw_dir, use_cache=True))),
+        }
 
-    return times, arts
+    return times, arts, scan_costs
 
 
 def _compute_delta(cur: Dict[str, Dict[str, float]], base: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
@@ -208,9 +232,14 @@ def main() -> int:
         # --------------------------------------------------------------
         # Benchmark normalizzazione in semantic.api.index_markdown_to_db
         # --------------------------------------------------------------
-        res_sem_times, res_sem_art = _bench_semantic_index()
+        res_sem_times, res_sem_art, res_scan = _bench_semantic_index()
         print("\nBenchmark normalizzazione semantic.index_markdown_to_db (s, best-of-5):")
         for sz, items in res_sem_times.items():
+            print(f"  [{sz}]")
+            for k, v in items.items():
+                print(f"    {k:>18}: {v:.6f}")
+        print("\nCosto iterazione PDF (s, best-of-5):")
+        for sz, items in res_scan.items():
             print(f"  [{sz}]")
             for k, v in items.items():
                 print(f"    {k:>18}: {v:.6f}")
@@ -224,6 +253,7 @@ def main() -> int:
                 "retriever": results,
                 "semantic_index_markdown_to_db": res_sem_times,
                 "semantic_index_artifacts": res_sem_art,
+                "pdf_scan": res_scan,
                 "env": {
                     "python": os.environ.get("pythonLocation") or os.environ.get("PYTHON_VERSION"),
                     "github_sha": os.environ.get("GITHUB_SHA"),
@@ -238,9 +268,11 @@ def main() -> int:
                         bdata = json.load(bf)
                     b_ret = bdata.get("retriever") or {}
                     b_sem = bdata.get("semantic_index_markdown_to_db") or {}
+                    b_scan = bdata.get("pdf_scan") or {}
                     payload["delta_pct"] = {
                         "retriever": _compute_delta(results, b_ret),
                         "semantic_index_markdown_to_db": _compute_delta(res_sem_times, b_sem),
+                        "pdf_scan": _compute_delta(res_scan, b_scan),
                     }
             except Exception:
                 pass

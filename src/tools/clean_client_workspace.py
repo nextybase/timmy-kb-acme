@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace, TracebackType
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict, cast
 
 # SSoT percorsi registry clienti dalla UI
 from timmykb.ui.clients_store import get_registry_paths as _get_registry_paths  # type: ignore
@@ -88,25 +88,47 @@ def _confirm_irreversible(slug: str, assume_yes: bool) -> bool:
 # --------------------------------------------------------------------------------------
 
 
+class _DriveCandidate(TypedDict, total=False):
+    id: str
+    name: Optional[str]
+    parents: Optional[List[str]]
+
+
+class _CleanupDetail(TypedDict):
+    ok: bool
+    message: str
+
+
+class _CleanupReport(TypedDict, total=False):
+    drive: _CleanupDetail
+    local: _CleanupDetail
+    registry: _CleanupDetail
+    exit_code: int
+
+
 def _collect_drive_folder_candidates(
     service: Any,
     drive_parent_id: str,
     slug: str,
     client_name: Optional[str] = None,
-) -> Tuple[List[Dict[str, Any]], List[str]]:
+) -> Tuple[List[_DriveCandidate], List[str]]:
     """
     Ritorna una lista di possibili cartelle Drive da eliminare e i termini di ricerca utilizzati.
     """
-    candidates: List[Dict[str, Any]] = []
+    candidates: List[_DriveCandidate] = []
     seen_ids: set[str] = set()
     used_terms: List[str] = []
 
-    def _record(item: Dict[str, Any]) -> None:
+    def _record(item: Mapping[str, Any]) -> None:
         file_id = cast(Optional[str], item.get("id"))
         if not file_id or file_id in seen_ids:
             return
         seen_ids.add(file_id)
-        candidates.append({"id": file_id, "name": item.get("name"), "parents": item.get("parents")})
+        parents = item.get("parents")
+        parent_ids: Optional[List[str]] = None
+        if isinstance(parents, list):
+            parent_ids = [str(p) for p in parents]
+        candidates.append({"id": file_id, "name": cast(Optional[str], item.get("name")), "parents": parent_ids})
 
     sanitized_slug = slug.replace("'", "\\'")
     query = f"name = '{sanitized_slug}' and mimeType = '{MIME_FOLDER_CACHED}' and trashed = false"
@@ -431,11 +453,11 @@ def _remove_from_clients_db(slug: str, logger: logging.Logger = LOGGER) -> Tuple
         return False, f"Errore aggiornando il DB clienti: {e}"
 
 
-def perform_cleanup(slug: str, client_name: Optional[str] = None) -> Dict[str, Any]:
+def perform_cleanup(slug: str, client_name: Optional[str] = None) -> _CleanupReport:
     """
     Esegue la sequenza di cleanup (Drive → locale → registry) e ritorna dettagli.
     """
-    results: Dict[str, Any] = {}
+    results: _CleanupReport = {}
 
     ok_drive, msg_drive = _delete_on_drive_if_present(slug, LOGGER, client_name=client_name)
     results["drive"] = {"ok": bool(ok_drive), "message": msg_drive}

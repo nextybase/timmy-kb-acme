@@ -5,14 +5,14 @@
 Cosa fa
 -------
 - **Rileva o crea** il repository remoto del cliente (`timmy-kb-<slug>`).
-- **Pubblica** i soli file Markdown presenti in `book/` (escludendo `.bak`), preservando l’albero.
-- **Gestisce branch di default** con SSoT di chiavi d’ambiente (`DEFAULT_GIT_BRANCH_ENV_KEYS`).
-- **Esegue push incrementale** con retry (pull --rebase → nuovo push) oppure
+- **Pubblica** i soli file Markdown presenti in `book/` (escludendo `.bak`), preservando lâ€™albero.
+- **Gestisce branch di default** con SSoT di chiavi dâ€™ambiente (`DEFAULT_GIT_BRANCH_ENV_KEYS`).
+- **Esegue push incrementale** con retry (pull --rebase â†’ nuovo push) oppure
   **force push governato** (`--force-with-lease`) con allow-list di branch e `force_ack`.
 - **Sicurezza path**: STRONG guard con `ensure_within` per tutte le scritture/cancellezioni.
 - **Credenziali via env**: header HTTP Basic in `GIT_HTTP_EXTRAHEADER` (il token non compare).
 - **Working dir temporanea sicura** sotto la base cliente:
-  il clone avviene in una sottocartella **non esistente** (no `git clone` in dir già presente).
+  il clone avviene in una sottocartella **non esistente** (no `git clone` in dir giÃ  presente).
 
 API principale (stabile)
 ------------------------
@@ -40,6 +40,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, runtime_checkable
@@ -48,7 +49,7 @@ from github import Github
 from github.GithubException import GithubException
 
 from pipeline.constants import DEFAULT_GIT_BRANCH_ENV_KEYS
-from pipeline.env_utils import get_env_var  # 🔐 env resolver (no masking qui)
+from pipeline.env_utils import get_env_var  # ðŸ” env resolver (no masking qui)
 
 try:
     from pipeline.env_utils import get_force_allowed_branches  # per log/errore esplicativo
@@ -85,18 +86,22 @@ except ImportError:  # pragma: no cover
         return any(fnmatch(branch_value, str(pattern).strip()) for pattern in patterns if str(pattern).strip())
 
 
-from pipeline.exceptions import ForcePushError, PipelineError, PushError
+from pipeline.exceptions import ConfigError, ForcePushError, PipelineError, PushError
+from pipeline.file_utils import create_lock_file, remove_lock_file
 from pipeline.logging_utils import get_structured_logger, redact_secrets
-from pipeline.path_utils import (  # sicurezza path + ordinamento deterministico
+from pipeline.path_utils import (  # sicurezza path
     ensure_within,
+    ensure_within_and_resolve,
     is_safe_subpath,
     iter_safe_paths,
     sorted_paths,
 )
-from pipeline.proc_utils import CmdError, run_cmd  # ✅ timeout/retry wrapper
+from pipeline.proc_utils import CmdError, run_cmd  # âœ… timeout/retry wrapper
 
 # Logger di modulo (fallback); nei flussi reali useremo quello contestualizzato
 logger: logging.Logger = get_structured_logger("pipeline.github_utils")
+
+_LEASE_DIRNAME = ".github_push.lockdir"
 
 
 @runtime_checkable
@@ -104,16 +109,111 @@ class _SupportsContext(Protocol):
     """Protocol minimale per il contesto richiesto da queste utility.
 
     Richiede:
-        - slug: str — identificativo cliente, usato per naming e logging.
-        - md_dir: Path — directory che contiene i markdown da pubblicare.
-        - env: dict — mappa di variabili d'ambiente risolte (opzionale).
-        - base_dir: Path — base della working area cliente (es. output/timmy-kb-<slug>)
+        - slug: str â€” identificativo cliente, usato per naming e logging.
+        - md_dir: Path â€” directory che contiene i markdown da pubblicare.
+        - env: dict â€” mappa di variabili d'ambiente risolte (opzionale).
+        - base_dir: Path â€” base della working area cliente (es. output/timmy-kb-<slug>)
     """
 
     slug: str
     md_dir: Path
     env: dict[str, Any]
     base_dir: Path
+
+
+def _is_env_flag_enabled(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "y", "on"}
+
+
+def _resolve_env_flag(context: _SupportsContext, name: str) -> bool:
+    env_map = getattr(context, "env", None)
+    if isinstance(env_map, Mapping):
+        if name in env_map:
+            return _is_env_flag_enabled(env_map.get(name))
+    return _is_env_flag_enabled(os.environ.get(name))
+
+
+def should_push(context: _SupportsContext) -> bool:
+    """Determina se il push puï¿½ï¿½ avvenire secondo i flag di sicurezza/env."""
+    if _resolve_env_flag(context, "TIMMY_NO_GITHUB"):
+        return False
+    if _resolve_env_flag(context, "SKIP_GITHUB_PUSH"):
+        return False
+    return True
+
+
+class LeaseLock:
+    """Lock file-based per evitare push concorrenti sullo stesso workspace."""
+
+    def __init__(
+        self,
+        base_dir: Path,
+        *,
+        slug: str,
+        logger: logging.Logger | None = None,
+        timeout_s: float = 10.0,
+        poll_interval_s: float = 0.25,
+        dirname: str = _LEASE_DIRNAME,
+    ) -> None:
+        self._logger = logger or get_structured_logger("pipeline.github_utils.lock")
+        self._slug = slug
+        self._timeout_s = max(timeout_s, 0.1)
+        self._poll_interval_s = max(poll_interval_s, 0.05)
+        self._lock_path = ensure_within_and_resolve(base_dir, base_dir / dirname)
+        self._acquired = False
+
+    def __enter__(self) -> "LeaseLock":
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self.release()
+
+    def acquire(self) -> None:
+        deadline = time.monotonic() + self._timeout_s
+        while True:
+            try:
+                create_lock_file(Path(self._lock_path), payload=f"{os.getpid()}:{time.time():.3f}\n")
+                self._acquired = True
+                self._logger.debug(
+                    "github_utils.lock.acquire",
+                    extra={"slug": self._slug, "lock_path": str(self._lock_path)},
+                )
+                return
+            except FileExistsError:
+                if time.monotonic() >= deadline:
+                    raise PushError(
+                        "Workspace gia' in uso: lock GitHub attivo. Riprova piu' tardi.",
+                        slug=self._slug,
+                        file_path=self._lock_path,
+                    )
+                time.sleep(self._poll_interval_s)
+            except ConfigError as exc:
+                raise PushError(
+                    f"Impossibile creare il lock GitHub: {exc}",
+                    slug=self._slug,
+                    file_path=self._lock_path,
+                ) from exc
+
+    def release(self) -> None:
+        if not self._acquired:
+            return
+        try:
+            remove_lock_file(Path(self._lock_path))
+            self._logger.debug(
+                "github_utils.lock.release",
+                extra={"slug": self._slug, "lock_path": str(self._lock_path)},
+            )
+        except ConfigError as exc:
+            self._logger.debug(
+                "github_utils.lock.release_failed",
+                extra={"slug": self._slug, "lock_path": str(self._lock_path), "error": str(exc)},
+            )
+        finally:
+            self._acquired = False
 
 
 # ----------------------------
@@ -152,7 +252,7 @@ def _sanitize_env(*envs: Mapping[str, Any], allow: Optional[Iterable[str]] = Non
       - merge dei dizionari passati,
       - scarta chiavi con valore None,
       - converte SEMPRE chiavi e valori in str,
-      - se 'allow' è specificato, dai dizionari aggiuntivi include SOLO quelle chiavi.
+      - se 'allow' Ã¨ specificato, dai dizionari aggiuntivi include SOLO quelle chiavi.
     """
     out: dict[str, str] = dict(os.environ)  # baseline sicura
     allow_set = set(allow or [])
@@ -210,7 +310,7 @@ def _mask_ack(tag: str) -> str:
         return ""
     if len(tag) <= 4:
         return "***"
-    return f"{tag[:2]}…{tag[-2:]}"
+    return f"{tag[:2]}â€¦{tag[-2:]}"
 
 
 # ----------------------------
@@ -233,19 +333,19 @@ def _ensure_or_create_repo(gh: Github, user: Any, repo_name: str, *, logger: log
     """Recupera o crea il repository remoto `repo_name` sotto l'utente/auth corrente.
 
     Restituisce:
-        Oggetto repository (PyGithub), tipizzato come `Any` per compatibilità runtime.
+        Oggetto repository (PyGithub), tipizzato come `Any` per compatibilitÃ  runtime.
     """
     try:
         repo = user.get_repo(repo_name)
-        msg = f"🔄 Repository remoto trovato: {repo.full_name}"
+        msg = f"ðŸ”„ Repository remoto trovato: {repo.full_name}"
         logger.info(redact_secrets(msg) if redact_logs else msg, extra={"repo": repo.full_name})
         return repo
     except GithubException:
-        msg = f"➕ Repository non trovato. Creazione di {repo_name}..."
+        msg = f"âž• Repository non trovato. Creazione di {repo_name}..."
         logger.info(redact_secrets(msg) if redact_logs else msg, extra={"repo": repo_name})
         try:
             repo = user.create_repo(repo_name, private=True)
-            msg = f"✅ Repository creato: {repo.full_name}"
+            msg = f"âœ… Repository creato: {repo.full_name}"
             logger.info(redact_secrets(msg) if redact_logs else msg, extra={"repo": repo.full_name})
             return repo
         except GithubException as e:
@@ -258,7 +358,7 @@ def _prepare_tmp_dir(base_dir: Path) -> Path:
     """Prepara una working dir per il clone **dentro** la base cliente.
 
     Ritorna un percorso di *clone* (non ancora esistente). Il parent viene creato
-    con `mkdtemp`, così `git clone <url> <dir>` non fallisce per directory già esistente.
+    con `mkdtemp`, cosÃ¬ `git clone <url> <dir>` non fallisce per directory giÃ  esistente.
     """
     temp_parent = Path(tempfile.mkdtemp(prefix=".push_", dir=str(base_dir)))
     ensure_within(base_dir, temp_parent)
@@ -317,7 +417,7 @@ def _stage_changes(
     committed = _stage_and_commit(tmp_dir, env, commit_msg=commit_msg)
     if not committed:
         logger.info(
-            "📝  Nessuna modifica da pubblicare (working dir identica)",
+            "ðŸ“  Nessuna modifica da pubblicare (working dir identica)",
             extra={"slug": slug},
         )
         return False
@@ -338,7 +438,7 @@ def _push_with_retry(
         _run(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
     try:
-        logger.info(f"📤 Push su origin/{default_branch}")
+        logger.info(f"ðŸ“¤ Push su origin/{default_branch}")
         _attempt_push()
     except CmdError:
         logger.warning("Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...")
@@ -355,7 +455,7 @@ def _push_with_retry(
                 "Push fallito dopo retry con rebase. "
                 "Possibili conflitti tra contenuto locale e remoto. "
                 "Suggerimenti: usare un branch dedicato (GIT_DEFAULT_BRANCH) e aprire una PR, "
-                "oppure — consapevolmente — abilitare il force in orchestratore."
+                "oppure â€” consapevolmente â€” abilitare il force in orchestratore."
             )
             safe = redact_secrets(raw) if redact_logs else raw
             raise PushError(safe) from e2
@@ -377,7 +477,7 @@ def _force_push_with_lease(
     local_sha = _git_rev_parse("HEAD", cwd=tmp_dir, env=env)
 
     logger.info(
-        "📌 Force push governato (with-lease)",
+        "ðŸ“Œ Force push governato (with-lease)",
         extra={
             "branch": default_branch,
             "local_sha": local_sha,
@@ -456,7 +556,7 @@ def _prepare_repo(
     )
 
     logger.info(
-        "🚀  Clonazione repo remoto in working dir temporanea",
+        "ðŸš€  Clonazione repo remoto in working dir temporanea",
         extra={"slug": context.slug, "file_path": str(tmp_dir)},
     )
 
@@ -508,7 +608,7 @@ def _prepare_repo(
             op="git checkout",
         )
         logger.info(
-            "🔄  Pull --rebase per sincronizzazione iniziale",
+            "ðŸ”„  Pull --rebase per sincronizzazione iniziale",
             extra={"slug": context.slug, "branch": default_branch},
         )
         _run(["git", "pull", "--rebase", "origin", default_branch], cwd=tmp_dir, env=env, op="git pull --rebase")
@@ -516,7 +616,7 @@ def _prepare_repo(
         _run(["git", "checkout", "-B", default_branch], cwd=tmp_dir, env=env, op="git checkout")
 
     logger.info(
-        "🧹 Preparazione contenuti da book/",
+        "ðŸ§¹ Preparazione contenuti da book/",
         extra={"slug": context.slug, "file_path": str(book_dir)},
     )
     _copy_md_tree(md_files, book_dir, tmp_dir)
@@ -546,6 +646,13 @@ def push_output_to_github(
             slug=getattr(context, "slug", None),
         )
 
+    if not should_push(context):
+        local_logger.info(
+            "Push GitHub disabilitato da variabili d'ambiente (TIMMY_NO_GITHUB/SKIP_GITHUB_PUSH).",
+            extra={"slug": context.slug},
+        )
+        return
+
     book_dir = context.md_dir
     if not book_dir.exists():
         raise PipelineError(
@@ -568,7 +675,7 @@ def push_output_to_github(
 
     md_files = _collect_md_files(book_dir)
     if not md_files:
-        msg = "🛑 Nessun file .md valido trovato nella cartella book. Push annullato."
+        msg = "ðŸ›‘ Nessun file .md valido trovato nella cartella book. Push annullato."
         local_logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
         return
 
@@ -579,9 +686,11 @@ def push_output_to_github(
 
     default_branch = _resolve_default_branch(context)
     local_logger.info(
-        f"🚧 Preparazione push su GitHub (branch: {default_branch})",
+        f"ðŸš§ Preparazione push su GitHub (branch: {default_branch})",
         extra={"slug": context.slug, "branch": default_branch},
     )
+    lock = LeaseLock(base_dir, slug=context.slug, logger=local_logger)
+    lock.acquire()
 
     repo = None
     tmp_dir: Path | None = None
@@ -635,15 +744,16 @@ def push_output_to_github(
             _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
 
         local_logger.info(
-            f"📦 Push completato su {repo.full_name} ({default_branch})",
+            f"ðŸ“¦ Push completato su {repo.full_name} ({default_branch})",
             extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
         )
     except CmdError as e:
         tail = (e.stderr or e.stdout or "").strip()
         tail = tail[-2000:] if tail else ""
-        raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) → {tail}"
+        raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) â†’ {tail}"
         safe = redact_secrets(raw) if redact_logs else raw
         raise PushError(safe, slug=context.slug) from e
     finally:
+        lock.release()
         if tmp_dir is not None:
             _cleanup_tmp_dir(tmp_dir, base_dir)

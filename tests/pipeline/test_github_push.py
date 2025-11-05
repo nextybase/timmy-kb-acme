@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 import pytest
 
 from pipeline import github_utils
-from pipeline.exceptions import ForcePushError
+from pipeline.exceptions import ForcePushError, PushError
 
 
 @dataclass
@@ -126,3 +127,37 @@ def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert res is False
     assert any("Nessuna modifica" in msg for msg in recorded)
     assert called["commit_msg"].startswith("Aggiornamento contenuto KB")
+
+
+@pytest.mark.push
+def test_should_push_respects_env_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ctx = _make_context(tmp_path)
+    ctx.env["TIMMY_NO_GITHUB"] = "true"
+    assert github_utils.should_push(ctx) is False
+
+    ctx.env.clear()
+    monkeypatch.setenv("SKIP_GITHUB_PUSH", "1")
+    assert github_utils.should_push(ctx) is False
+
+    monkeypatch.delenv("SKIP_GITHUB_PUSH", raising=False)
+    assert github_utils.should_push(ctx) is True
+
+
+@pytest.mark.push
+def test_lease_lock_blocks_second_acquisition(tmp_path: Path) -> None:
+    base_dir = tmp_path / "workspace"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger("tests.github.lock")
+
+    lock_one = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.3, poll_interval_s=0.05)
+    lock_one.acquire()
+    try:
+        lock_two = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+        with pytest.raises(PushError):
+            lock_two.acquire()
+    finally:
+        lock_one.release()
+
+    lock_three = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+    lock_three.acquire()
+    lock_three.release()
