@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import io
-import os
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, ContextManager, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
 from pipeline.exceptions import ConfigError, PathTraversalError
-from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, sanitize_filename
 
 SafeReader = Callable[[Path], ContextManager[io.BufferedReader]]
 
@@ -43,10 +42,19 @@ def count_files_with_limit(root: Optional[Path], *, limit: int = MAX_DIAGNOSTIC_
     if root is None or not root.is_dir():
         return 0, False
     total = 0
-    for _dirpath, _dirnames, filenames in os.walk(root):
-        total += len(filenames)
+    truncated = False
+
+    def _on_skip(_path: Path, _reason: str) -> None:
+        # Ignora silenziosamente elementi non accessibili/symlink.
+        return
+
+    for _ in iter_safe_paths(root, include_files=True, include_dirs=False, on_skip=_on_skip):
+        total += 1
         if total >= limit:
-            return limit, True
+            truncated = True
+            break
+    if truncated:
+        return limit, True
     return total, False
 
 

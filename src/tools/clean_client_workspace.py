@@ -39,7 +39,7 @@ from ..pipeline.context import ClientContext
 from ..pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files
 from ..pipeline.exceptions import ConfigError
 from ..pipeline.logging_utils import get_structured_logger
-from ..pipeline.path_utils import ensure_within_and_resolve
+from ..pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths
 
 MIME_FOLDER_CACHED = MIME_FOLDER
 
@@ -303,14 +303,33 @@ def _rmtree_best_effort(
 
     # Best-effort per pulire quasi tutto, isolando i file bloccati
     if resolved.exists():
-        for p in sorted(resolved.rglob("*"), key=len, reverse=True):
+        skipped_symlinks: list[Path] = []
+
+        def _on_skip(path: Path, reason: str) -> None:
+            if reason == "symlink":
+                skipped_symlinks.append(path)
+
+        entries = list(iter_safe_paths(resolved, include_dirs=True, include_files=True, on_skip=_on_skip))
+        entries.sort(
+            key=lambda p: len(p.relative_to(resolved).parts),
+            reverse=True,
+        )
+
+        for p in entries:
             try:
-                if p.is_file() or p.is_symlink():
+                if p.is_file():
                     p.unlink(missing_ok=True)
                 elif p.is_dir():
                     p.rmdir()
             except Exception:
                 residuals.append(str(p))
+
+        for sym in skipped_symlinks:
+            try:
+                safe_sym = ensure_within_and_resolve(resolved, sym)
+                safe_sym.unlink(missing_ok=True)
+            except Exception:
+                residuals.append(str(sym))
         # Ritenta la rimozione della root se vuota
         try:
             resolved.rmdir()

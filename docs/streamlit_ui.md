@@ -178,6 +178,7 @@ for pdf_path in iter_safe_pdfs(raw_dir):
 ```
 
 Se sei in UI, `ui.utils.workspace.iter_pdfs_safe` è un wrapper che inoltra alla stessa utility. In questo modo tutte le sezioni della pipeline (UI, semantic, tool CLI) condividono lo stesso comportamento e i test coprono già i corner case (symlink, traversal, Windows).
+Per altri casi d'uso (alberi completi, Markdown, ecc.) usa `pipeline.path_utils.iter_safe_paths(...)`, che replica le stesse guardie per directory e file generici. Evita nuove implementazioni basate su `os.walk`/`Path.rglob`.
 
 ---
 

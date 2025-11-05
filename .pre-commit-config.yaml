@@ -210,6 +210,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
+      - id: streamlit-ui-guard
+        name: Streamlit UI guard (router + path-safety + logging)
+        entry: python scripts/dev/check_streamlit_ui.py --ci
+        language: system
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
 
       # 🔒 Nuovo: vieta ValueError ai boundary runtime (cross-platform)
       - id: forbid-legacy-valueerror

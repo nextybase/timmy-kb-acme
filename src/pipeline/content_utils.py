@@ -10,7 +10,7 @@ from urllib.parse import quote
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve  # SSoT path-safety forte
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths  # SSoT path-safety forte
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig, load_semantic_config
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
@@ -52,8 +52,8 @@ def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) ->
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
     # Nota: filtrato a valle in _filter_safe_pdfs (per base/raw_root)
     return sorted(
-        (p for p in cat_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf"),
-        key=lambda p: p.as_posix().lower(),
+        iter_safe_paths(cat_dir, include_dirs=False, include_files=True, suffixes=(".pdf",)),
+        key=lambda p: p.relative_to(cat_dir).as_posix().lower(),
     )
 
 
@@ -113,7 +113,7 @@ def _write_markdown_for_pdf(
     """Genera un file Markdown 1:1 per il PDF indicato, includendo frontmatter completo."""
     rel_pdf = pdf_path.relative_to(raw_root)
     md_candidate = target_root / rel_pdf.with_suffix(".md")
-    md_path = ensure_within_and_resolve(target_root, md_candidate)
+    md_path = cast(Path, ensure_within_and_resolve(target_root, md_candidate))
     md_path.parent.mkdir(parents=True, exist_ok=True)
 
     candidate_meta = candidates.get(rel_pdf.as_posix(), {}) if candidates else {}
@@ -136,7 +136,7 @@ def _group_safe_pdfs_by_category(
     raw_root: Path,
     safe_pdfs: list[Path],
 ) -> tuple[list[Path], CategoryGroups]:
-    """Dato un elenco di PDF *già* validati (risolti dentro raw_root),
+    """Dato un elenco di PDF *giÃ * validati (risolti dentro raw_root),
     restituisce:
       - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
     """
@@ -206,16 +206,20 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
     try:
         cfg = load_semantic_config(ctx.base_dir)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
+        iterable: Iterable[tuple[str, Any]]
         if isinstance(areas_data, dict):
-            iterable = areas_data.items()
+            iterable = list(areas_data.items())
         elif isinstance(areas_data, list):
-            iterable = (
-                (item.get("key") or item.get("name") or f"area_{idx}", item)
+            iterable = [
+                (
+                    str(item.get("key") or item.get("name") or f"area_{idx}"),
+                    item,
+                )
                 for idx, item in enumerate(areas_data)
                 if isinstance(item, dict)
-            )
+            ]
         else:
-            iterable = ()
+            iterable = []
         for key, meta in iterable:
             display = _titleize(str(key))
             descr = str((meta or {}).get("descrizione") or "").strip()
@@ -246,7 +250,8 @@ def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pa
     lines: list[str] = ["# Summary", ""]
 
     def iter_markdown() -> Iterable[Path]:
-        for md in sorted(target.rglob("*.md"), key=lambda p: p.relative_to(target).as_posix().lower()):
+        candidates = iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",))
+        for md in sorted(candidates, key=lambda p: p.relative_to(target).as_posix().lower()):
             name = md.name.lower()
             if name in {"readme.md", "summary.md"}:
                 continue
@@ -277,8 +282,8 @@ def convert_files_to_structured_markdown(
 ) -> None:
     """Converte i PDF in RAW in un set di .md strutturati nella cartella `md_dir`.
 
-    Se `safe_pdfs` è fornito, **non** esegue alcuna discovery su disco e assume
-    che la lista sia già validata e risolta all’interno di `ctx.raw_dir`.
+    Se `safe_pdfs` Ã¨ fornito, **non** esegue alcuna discovery su disco e assume
+    che la lista sia giÃ  validata e risolta allâ€™interno di `ctx.raw_dir`.
     """
     base = ctx.base_dir
     raw_root = ctx.raw_dir

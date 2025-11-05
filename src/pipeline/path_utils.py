@@ -32,13 +32,12 @@ Principi:
 from __future__ import annotations
 
 import logging
-import os
 import re
 import unicodedata
 from contextlib import contextmanager
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, TextIO, Tuple
+from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
@@ -117,49 +116,105 @@ def ensure_within_and_resolve(base: Path | str, candidate: Path | str) -> Path:
     return _resolve_and_check(base, candidate)
 
 
-def iter_safe_pdfs(
+def iter_safe_paths(
     root: Path,
     *,
+    include_dirs: bool = False,
+    include_files: bool = True,
+    suffixes: Sequence[str] | None = None,
     on_skip: Callable[[Path, str], None] | None = None,
 ) -> Iterator[Path]:
     """
-    Itera ricorsivamente i PDF sotto `root` applicando path-safety forte.
+    Itera ricorsivamente percorsi sotto `root` applicando path-safety forte.
 
-    - Ordine deterministico (case-insensitive sul nome file).
-    - Nessun symlink seguito; i symlink vengono scartati con callback opzionale.
-    - Restituisce SEMPRE path canonicalizzati tramite ensure_within_and_resolve.
+    Args:
+        root: directory da scandire.
+        include_dirs: se True, restituisce anche le directory non-root.
+        include_files: se True, restituisce i file ammessi.
+        suffixes: lista di suffissi (minuscoli) da accettare per i file;
+            se None accetta tutti i file.
+        on_skip: callback opzionale invocata con (path, motivo) per
+            symlink, errori di resolve o altre condizioni scartate.
     """
+
+    if not include_dirs and not include_files:
+        return
+
+    suffix_set = None
+    if suffixes is not None:
+        suffix_set = {s.lower() for s in suffixes}
+
     try:
         root_resolved = Path(root).resolve()
     except Exception as exc:
         if on_skip:
             on_skip(Path(root), f"resolve-root:{exc}")
         return
-    if not root_resolved.exists():
+
+    if not root_resolved.exists() or not root_resolved.is_dir():
         return
 
-    for rw, _dirs, files in os.walk(root_resolved, followlinks=False):
-        base = Path(rw)
-        for name in sorted(files, key=str.lower):
-            if not name.lower().endswith(".pdf"):
-                continue
-            candidate = base / name
+    def _traverse(current: Path) -> Iterator[Path]:
+        try:
+            entries = sorted(current.iterdir(), key=lambda p: p.name.lower())
+        except Exception as exc:
+            if on_skip:
+                on_skip(current, f"iterdir:{exc}")
+            return
+
+        for entry in entries:
             try:
-                if candidate.is_symlink():
+                safe_entry = ensure_within_and_resolve(root_resolved, entry)
+            except Exception as exc:
+                if on_skip:
+                    on_skip(entry, f"resolve:{exc}")
+                continue
+
+            try:
+                if entry.is_symlink():
                     if on_skip:
-                        on_skip(candidate, "symlink")
+                        on_skip(entry, "symlink")
                     continue
             except Exception as exc:
                 if on_skip:
-                    on_skip(candidate, f"symlink-check:{exc}")
+                    on_skip(entry, f"symlink-check:{exc}")
                 continue
+
             try:
-                safe_candidate = ensure_within_and_resolve(root_resolved, candidate)
+                is_dir = entry.is_dir()
             except Exception as exc:
                 if on_skip:
-                    on_skip(candidate, f"resolve:{exc}")
+                    on_skip(entry, f"stat:{exc}")
                 continue
-            yield safe_candidate
+
+            if is_dir:
+                if include_dirs:
+                    yield safe_entry
+                yield from _traverse(safe_entry)
+            else:
+                if not include_files:
+                    continue
+                if suffix_set is not None:
+                    if safe_entry.suffix.lower() not in suffix_set:
+                        continue
+                yield safe_entry
+
+    yield from _traverse(root_resolved)
+
+
+def iter_safe_pdfs(
+    root: Path,
+    *,
+    on_skip: Callable[[Path, str], None] | None = None,
+) -> Iterator[Path]:
+    """Convenience wrapper che restituisce solo file PDF in modo path-safe."""
+    yield from iter_safe_paths(
+        root,
+        include_dirs=False,
+        include_files=True,
+        suffixes=(".pdf",),
+        on_skip=on_skip,
+    )
 
 
 @contextmanager
@@ -445,5 +500,6 @@ __all__ = [
     "sanitize_filename",
     "sorted_paths",  # ordinamento deterministico
     "ensure_valid_slug",  # wrapper interattivo
+    "iter_safe_paths",
     "iter_safe_pdfs",
 ]

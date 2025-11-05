@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pipeline.exceptions import ConfigError, PipelineError
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, iter_safe_paths
 
 
 def _as_path(value: Any) -> Optional[Path]:
@@ -68,9 +68,7 @@ def ensure_book_purity(context: Any, logger: logging.Logger) -> None:
     }
 
     bad: list[Path] = []
-    for p in book_dir.rglob("*"):
-        if not p.is_file():
-            continue
+    for p in iter_safe_paths(book_dir, include_dirs=False, include_files=True):
         if _is_under_ignored_subdir(book_dir, p):
             continue
         name = p.name.lower()

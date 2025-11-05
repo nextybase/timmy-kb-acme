@@ -48,6 +48,8 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
     ensure_within_and_resolve,
+    iter_safe_paths,
+    iter_safe_pdfs,
     open_for_read_bytes_selfguard,
 )
 from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
@@ -177,7 +179,7 @@ def scan_raw_to_db(
         # registra root 'raw'
         upsert_folder(conn, "raw", None)
 
-        for path in raw_dir_path.rglob("*"):
+        for path in iter_safe_paths(raw_dir_path, include_dirs=True, include_files=True):
             if path.is_dir():
                 upsert_folder_chain(conn, raw_dir_path, path)
                 folders_count += 1
@@ -715,7 +717,7 @@ def _download_from_drive(
             redact_logs=getattr(context, "redact_logs", False),
         )
         try:
-            pdfs = [p for p in raw_dir.rglob("*.pdf") if p.is_file()]
+            pdfs = list(iter_safe_pdfs(raw_dir))
             m.set_artifacts(len(pdfs))
         except Exception:
             m.set_artifacts(None)

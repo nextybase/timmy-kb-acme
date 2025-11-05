@@ -2,13 +2,12 @@
 # src/ui/components/diff_view.py
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from pipeline.path_utils import ensure_within_and_resolve, validate_slug
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, validate_slug
 
 try:
     import streamlit as st
@@ -42,50 +41,27 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     # Indichiamo sempre la radice "raw" (come fa l’indice Drive)
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
 
-    # Scansione sicura: niente rglob (per evitare follow dei symlink e traversal),
-    # uso os.walk con filtro su symlink e ensure_within_and_resolve per ogni file/dir.
-    for root, dirs, files in os.walk(raw_dir, followlinks=False):
-        base = Path(root)
+    for directory in iter_safe_paths(raw_dir, include_dirs=True, include_files=False):
+        rel_dir = directory.relative_to(raw_dir).as_posix()
+        if not rel_dir:
+            continue
+        key = f"raw/{rel_dir}"
+        index[key] = {"type": "dir", "size": None, "mtime": _safe_mtime(directory)}
 
-        # Evita di scendere in symlink a directory
-        dirs[:] = [d for d in dirs if not (base / d).is_symlink()]
-        # Indicizza anche le directory intermedie per allineare il diff con l'indice Drive
-        for dirname in dirs:
-            candidate_dir = base / dirname
-            try:
-                safe_dir = ensure_within_and_resolve(raw_dir, candidate_dir)
-            except Exception:
-                continue
-            rel_dir = safe_dir.relative_to(raw_dir).as_posix()
-            if not rel_dir:
-                continue
-            key = f"raw/{rel_dir}"
-            index[key] = {"type": "dir", "size": None, "mtime": _safe_mtime(safe_dir)}
-
-        for name in files:
-            candidate = base / name
-            # Salta symlink a file
-            if candidate.is_symlink():
-                continue
-            try:
-                safe = ensure_within_and_resolve(raw_dir, candidate)
-            except Exception:
-                # File fuori dal perimetro raw/ (o path sospetto): ignora
-                continue
-
-            rel = safe.relative_to(raw_dir).as_posix()
-            if not rel:
-                continue
-            key = f"raw/{rel}"
-            try:
-                stat = safe.stat()
-                index[key] = {
-                    "type": "file",
-                    "size": int(stat.st_size),
-                    "mtime": float(stat.st_mtime),
-                }
-            except OSError:  # pragma: no cover
-                index[key] = {"type": "file", "size": None, "mtime": None}
+    for file_path in iter_safe_paths(raw_dir, include_dirs=False, include_files=True):
+        rel = file_path.relative_to(raw_dir).as_posix()
+        if not rel:
+            continue
+        key = f"raw/{rel}"
+        try:
+            stat = file_path.stat()
+            index[key] = {
+                "type": "file",
+                "size": int(stat.st_size),
+                "mtime": float(stat.st_mtime),
+            }
+        except OSError:  # pragma: no cover
+            index[key] = {"type": "file", "size": None, "mtime": None}
 
     return index
 
@@ -145,7 +121,7 @@ def _mk_md_table(rows: List[Dict[str, str]], headers: List[str]) -> str:
 def _is_readme_pdf(path: str) -> bool:
     """True se il basename è README.pdf (case-insensitive)."""
     try:
-        return os.path.basename(path).lower() == "readme.pdf"
+        return Path(path).name.lower() == "readme.pdf"
     except Exception:
         return False
 

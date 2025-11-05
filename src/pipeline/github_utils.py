@@ -90,6 +90,7 @@ from pipeline.logging_utils import get_structured_logger, redact_secrets
 from pipeline.path_utils import (  # sicurezza path + ordinamento deterministico
     ensure_within,
     is_safe_subpath,
+    iter_safe_paths,
     sorted_paths,
 )
 from pipeline.proc_utils import CmdError, run_cmd  # ✅ timeout/retry wrapper
@@ -218,7 +219,11 @@ def _mask_ack(tag: str) -> str:
 def _collect_md_files(book_dir: Path) -> list[Path]:
     """Seleziona file .md validi (no .bak), ricorsivamente, con ordinamento deterministico."""
     md_iter = sorted_paths(
-        (f for f in book_dir.rglob("*.md") if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)),
+        (
+            f
+            for f in iter_safe_paths(book_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+            if not f.name.endswith(".bak") and is_safe_subpath(f, book_dir)
+        ),
         base=book_dir,
     )
     return list(md_iter)

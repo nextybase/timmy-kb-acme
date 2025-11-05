@@ -24,7 +24,7 @@ from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger, phase_scope
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, sorted_paths, validate_slug
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths, sorted_paths, validate_slug
 from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
@@ -232,7 +232,9 @@ def list_content_markdown(book_dir: Path) -> list[Path]:
     """Elenco dei Markdown 'di contenuto' in book_dir, escludendo README/SUMMARY."""
     return [
         p
-        for p in sorted_paths(book_dir.rglob("*.md"), base=book_dir)
+        for p in sorted_paths(
+            iter_safe_paths(book_dir, include_dirs=False, include_files=True, suffixes=(".md",)), base=book_dir
+        )
         if p.name.lower() not in {"readme.md", "summary.md"}
     ]
 
@@ -247,6 +249,7 @@ class _RawDiscovery:
 class _CollectedMarkdown:
     contents: list[str]
     rel_paths: list[str]
+    frontmatters: list[Dict[str, Any]]
     skipped_io: int
     skipped_empty: int
     total_files: int
@@ -256,6 +259,7 @@ class _CollectedMarkdown:
 class _EmbeddingResult:
     contents: list[str]
     rel_paths: list[str]
+    frontmatters: list[Dict[str, Any]]
     embeddings: list[list[float]]
     vectors_empty: int
 
@@ -381,6 +385,7 @@ def _collect_markdown_inputs(
 
     contents: list[str] = []
     rel_paths: list[str] = []
+    frontmatters: list[Dict[str, Any]] = []
     skipped_io = 0
     skipped_empty = 0
 
@@ -394,19 +399,25 @@ def _collect_markdown_inputs(
             )
             skipped_io += 1
             continue
-        if not text or not text.strip():
+        meta, body = _parse_frontmatter(text)
+        payload = (body or "").lstrip("\ufeff").strip()
+        if not payload:
+            payload = text.strip()
+        if not payload:
             logger.info(
                 "semantic.index.skip_empty_file",
                 extra={"slug": slug, "file_path": str(f)},
             )
             skipped_empty += 1
             continue
-        contents.append(text)
-        rel_paths.append(f.name)
+        contents.append(payload)
+        rel_paths.append(f.relative_to(book_dir).as_posix())
+        frontmatters.append(dict(meta or {}))
 
     return _CollectedMarkdown(
         contents=contents,
         rel_paths=rel_paths,
+        frontmatters=frontmatters,
         skipped_io=skipped_io,
         skipped_empty=skipped_empty,
         total_files=len(files),
@@ -440,6 +451,7 @@ def _compute_embeddings_for_markdown(
 
     contents = list(collected.contents)
     rel_paths = list(collected.rel_paths)
+    frontmatters = list(collected.frontmatters)
 
     original_contents_len = len(contents)
     original_embeddings_len = len(vecs)
@@ -467,18 +479,21 @@ def _compute_embeddings_for_markdown(
         contents = contents[:min_len]
         rel_paths = rel_paths[:min_len]
         vecs = vecs[:min_len]
+        frontmatters = frontmatters[:min_len]
 
     original_candidate_count = len(contents)
     filtered_contents: list[str] = []
     filtered_paths: list[str] = []
     filtered_vecs: list[list[float]] = []
+    filtered_fronts: list[Dict[str, Any]] = []
 
-    for text, rel_name, emb in zip(contents, rel_paths, vecs, strict=False):
+    for text, rel_name, emb, meta in zip(contents, rel_paths, vecs, frontmatters, strict=False):
         if len(emb) == 0:
             continue
         filtered_contents.append(text)
         filtered_paths.append(rel_name)
         filtered_vecs.append(list(emb))
+        filtered_fronts.append(meta)
 
     dropped_empty = original_candidate_count - len(filtered_contents)
     if dropped_empty > 0 and len(filtered_contents) == 0:
@@ -510,6 +525,7 @@ def _compute_embeddings_for_markdown(
         _EmbeddingResult(
             contents=filtered_contents,
             rel_paths=filtered_paths,
+            frontmatters=filtered_fronts,
             embeddings=filtered_vecs,
             vectors_empty=vectors_empty,
         ),
@@ -529,14 +545,19 @@ def _persist_markdown_embeddings(
 
     version = _dt.utcnow().strftime("%Y%m%d")
     inserted_total = 0
-    for text, rel_name, emb in zip(result.contents, result.rel_paths, result.embeddings, strict=False):
-        meta = {"file": rel_name}
+    for text, rel_name, emb, meta in zip(
+        result.contents, result.rel_paths, result.embeddings, result.frontmatters, strict=False
+    ):
+        payload_meta: Dict[str, Any] = {"file": rel_name}
+        if isinstance(meta, dict):
+            filtered_meta = {k: v for k, v in meta.items() if v not in (None, "", [], {})}
+            payload_meta.update(filtered_meta)
         inserted_total += _insert_chunks(
             project_slug=slug,
             scope=scope,
             path=rel_name,
             version=version,
-            meta_dict=meta,
+            meta_dict=payload_meta,
             chunks=[text],
             embeddings=[list(emb)],
             db_path=db_path,
@@ -879,12 +900,25 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         ctx_base = cast(Path, getattr(context, "base_dir", None))
         base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
-        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
         mds = convert_markdown(context, logger, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
-        if vocab or not _LAST_VOCAB_STUBBED:
+        vocab_missing = False
+        vocab: Dict[str, Dict[str, Set[str]]] | None
+        try:
+            vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
+        except ConfigError as exc:
+            vocab_missing = True
+            logger.warning(
+                "semantic.book.vocab_missing",
+                extra={
+                    "slug": slug,
+                    "error": str(exc),
+                    "file_path": getattr(exc, "file_path", None),
+                },
+            )
+            vocab = {}
+        if not vocab_missing and (vocab or not _LAST_VOCAB_STUBBED):
             enrich_frontmatter(context, logger, vocab, slug=slug)
-
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))

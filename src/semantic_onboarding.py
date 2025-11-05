@@ -11,6 +11,7 @@ from pathlib import Path
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.path_utils import iter_safe_paths
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 
@@ -87,7 +88,11 @@ def main() -> int:
             content_mds = list_content_markdown(book_dir)
         except Exception:
             # Fallback robusto nel caso l'helper non sia disponibile/rompa
-            content_mds = [p for p in book_dir.rglob("*.md") if p.name not in {"README.md", "SUMMARY.md"}]
+            content_mds = [
+                p
+                for p in iter_safe_paths(book_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+                if p.name not in {"README.md", "SUMMARY.md"}
+            ]
 
         summary_extra = {
             "book_dir": str(book_dir),

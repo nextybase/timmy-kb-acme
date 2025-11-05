@@ -16,7 +16,7 @@ flowchart LR
       TAG[tag_onboarding.py]
       SEMCLI[semantic_onboarding.py (wrapper di semantic.api)]
       FULL[onboarding_full.py]
-      VISIONCLI[gen_vision_yaml.py]
+      VISIONCLI[tools/gen_vision_yaml.py]
     end
 
     subgraph Pipeline
@@ -30,11 +30,11 @@ flowchart LR
 
     subgraph Semantic
       SEMANTIC[semantic.api + semantic.tags_io + semantic.semantic_mapping]
-      SVISION[semantic.vision_*]
+      SVISION[semantic.vision_provision + UI services]
     end
 
     subgraph Storage
-      DB[(SQLite: semantic/tags.db\nsemantic/finance.db)]
+      DB[(SQLite: semantic/tags.db)]
       FILES[[output/timmy-kb-<slug>]]
     end
 
@@ -56,8 +56,8 @@ flowchart LR
     CLI --> PRE
     CLI --> TAG
     CLI --> SEMCLI
-    CLI --> VISIONCLI
     CLI --> FULL
+    CLI --> VISIONCLI
 
     PRE --> PCTX
     PRE --> PDRIVE
@@ -68,9 +68,8 @@ flowchart LR
     TAG --> DB
 
     SEMCLI --> SEMANTIC
-    VISIONCLI --> SVISION
     SEMANTIC --> PCONT
-    SVISION --> FILES
+    VISIONCLI --> SVISION
     SEMANTIC --> FILES
     SEMANTIC --> DB
 
@@ -92,7 +91,7 @@ sequenceDiagram
     participant PRE as pre_onboarding
     participant TAG as tag_onboarding
     participant SEM as semantic.api
-    participant FS as Local FS (output/…)
+    participant FS as Local FS (output/timmy-kb-<slug>)
     participant DB as SQLite (tags.db)
     participant GH as GitHub
     participant DRV as Google Drive
@@ -123,7 +122,9 @@ Note operative
 
 - YAML e usato per il bootstrap iniziale; a runtime la fonte di verita e SQLite (semantic/tags.db).
 - La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
-- La generazione del mapping Vision usa `semantic/vision_ai.py`: salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e chiama sempre il modello definito in `config/config.yaml`, letto via `get_vision_model()`.
+- La generazione del mapping Vision usa `semantic/vision_provision.py` (con interfaccia UI in `ui/services/vision_provision.py`): salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e chiama sempre il modello definito in `config/config.yaml`, letto via `get_vision_model()`.
+- Entry point CLI aggiuntivi (`ingest.py`, `retriever.py`, `semantic_headless.py`, `kb_db.py`) orchestrano step stand-alone riusando gli helper di pipeline e semantic.
+- Lo stato di tagging e di UI condiviso vive in `storage/tags_store.py` (JSON atomico) e `clients_db/ui_state.json`; restano nel perimetro `output/timmy-kb-<slug>` come SSoT locale.
 - L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log "Embedding vuoti scartati").
 - Indicizzazione parziale: su mismatch tra `contents` ed `embeddings` si indicizza sul minimo comune; vengono emessi `semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned` e un solo `semantic.index.skips` con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.
 - Telemetria run vuoti: i rami "no files"/"no contents" entrano in `phase_scope` con `artifact_count=0` e chiudono con `semantic.index.done`.

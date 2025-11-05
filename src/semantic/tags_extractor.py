@@ -33,7 +33,7 @@ from typing import List
 from pipeline.exceptions import PipelineError  # eccezione tipizzata per la pipeline
 from pipeline.path_utils import ensure_within  # STRONG: SSoT per write/delete
 from pipeline.path_utils import is_safe_subpath  # SOFT: pre-check booleano per shortlist/letture
-from pipeline.path_utils import normalize_path, sanitize_filename, sorted_paths
+from pipeline.path_utils import iter_safe_paths, normalize_path, sanitize_filename, sorted_paths
 
 __all__ = ["copy_local_pdfs_to_raw"]
 
@@ -64,7 +64,10 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     copied = 0
     failures: list[tuple[Path, Path, str]] = []
     pdfs: List[Path] = [
-        p for p in sorted_paths(src_dir.rglob("*"), base=src_dir) if p.is_file() and p.suffix.lower() == ".pdf"
+        p
+        for p in sorted_paths(
+            iter_safe_paths(src_dir, include_dirs=False, include_files=True, suffixes=(".pdf",)), base=src_dir
+        )
     ]
 
     for src in pdfs:
