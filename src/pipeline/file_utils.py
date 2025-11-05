@@ -18,7 +18,7 @@ Indice (ruolo funzioni):
   scrittura **testo** sicura.
   - Crea le directory mancanti.
   - `atomic=True`: usa temp file + `os.replace()` atomico. Con `fsync=True` fa flush+fsync.
-  - `atomic=False`: scrive direttamente e può fare fsync sul file.
+  - `atomic=False`: scrive direttamente e puo fare fsync sul file.
   - Sempre prova a fsync-are la directory (best-effort).
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
@@ -76,6 +76,19 @@ def _fsync_dir_best_effort(dir_path: Path) -> None:
         _logger.debug("fsync(dir) best-effort fallito", extra={"dir_path": str(dir_path)})
 
 
+def _extended_str(path: Path) -> str:
+    return to_extended_length_path(path) if os.name == "nt" else str(path)
+
+
+def _resolve_within_base(base: Path, candidate: Path) -> Path:
+    if os.name == "nt":
+        guard_base = Path(to_extended_length_path(base))
+        guard_candidate = Path(to_extended_length_path(candidate))
+        resolved = ensure_within_and_resolve(guard_base, guard_candidate)
+        return strip_extended_length_path(resolved)
+    return ensure_within_and_resolve(base, candidate)
+
+
 def safe_write_text(
     path: Path,
     data: str,
@@ -100,12 +113,13 @@ def safe_write_text(
     except Exception as e:
         raise ConfigError(f"Impossibile creare la directory padre: {e}", file_path=str(path)) from e
 
-    path_ext_str = to_extended_length_path(path)
-    parent_ext_path = Path(to_extended_length_path(path.parent))
+    parent_path = path.parent
+    path_str = _extended_str(path)
+    parent_str = _extended_str(parent_path)
 
     if not atomic:
         try:
-            with open(path_ext_str, "w", encoding=encoding, newline="") as f:
+            with open(path_str, "w", encoding=encoding, newline="") as f:
                 f.write(data)
                 if fsync:
                     try:
@@ -116,7 +130,7 @@ def safe_write_text(
                     _fsync_file(f.fileno(), path=path, strict=True)
                 else:
                     _fsync_file(f.fileno(), path=path, strict=False)
-            _fsync_dir_best_effort(parent_ext_path)
+            _fsync_dir_best_effort(parent_path)
             return
         except Exception as e:
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
@@ -128,11 +142,12 @@ def safe_write_text(
             mode="w",
             encoding=encoding,
             delete=False,
-            dir=str(parent_ext_path),
+            dir=parent_str,
             prefix=".tmp-",
             newline="",
         ) as tmp:
-            tmp_path = Path(tmp.name)
+            tmp_name = tmp.name
+            tmp_path = Path(tmp_name)
             tmp.write(data)
             if fsync:
                 try:
@@ -140,12 +155,12 @@ def safe_write_text(
                 except Exception:
                     # flush best-effort; fsync strict intercetterà eventuali errori
                     pass
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_path), strict=True)
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=True)
             else:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_path), strict=False)
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=False)
 
-        os.replace(str(tmp_path), path_ext_str)  # atomic move
-        _fsync_dir_best_effort(parent_ext_path)
+        os.replace(tmp_name, path_str)  # atomic move
+        _fsync_dir_best_effort(parent_path)
     except Exception as e:
         # Proviamo a rimuovere il temp se esiste
         try:
@@ -170,18 +185,19 @@ def safe_write_bytes(
     except Exception as e:
         raise ConfigError(f"Impossibile creare la directory padre: {e}", file_path=str(path)) from e
 
-    path_ext_str = to_extended_length_path(path)
-    parent_ext_path = Path(to_extended_length_path(path.parent))
+    parent_path = path.parent
+    path_str = _extended_str(path)
+    parent_str = _extended_str(parent_path)
 
     if not atomic:
         try:
-            with open(path_ext_str, "wb") as f:
+            with open(path_str, "wb") as f:
                 f.write(data)
                 if fsync:
                     _fsync_file(f.fileno(), path=path, strict=True)
                 else:
                     _fsync_file(f.fileno(), path=path, strict=False)
-            _fsync_dir_best_effort(parent_ext_path)
+            _fsync_dir_best_effort(parent_path)
             return
         except Exception as e:
             raise ConfigError(f"Scrittura file (bytes) fallita: {e}", file_path=str(path)) from e
@@ -191,18 +207,19 @@ def safe_write_bytes(
         with tempfile.NamedTemporaryFile(
             mode="wb",
             delete=False,
-            dir=str(parent_ext_path),
+            dir=parent_str,
             prefix=".tmp-",
         ) as tmp:
-            tmp_path = Path(tmp.name)
+            tmp_name = tmp.name
+            tmp_path = Path(tmp_name)
             tmp.write(data)
             if fsync:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_path), strict=True)
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=True)
             else:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_path), strict=False)
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=False)
 
-        os.replace(str(tmp_path), path_ext_str)
-        _fsync_dir_best_effort(parent_ext_path)
+        os.replace(tmp_name, path_str)
+        _fsync_dir_best_effort(parent_path)
     except Exception as e:
         try:
             if tmp_path is not None and tmp_path.exists():
@@ -223,7 +240,7 @@ def safe_append_text(
 ) -> None:
     """Appende testo in modo sicuro usando path-safety, lock file e append diretto.
 
-    Nota: su Windows può emergere PermissionError durante create/unlink concorrenti
+    Nota: su Windows puo emergere PermissionError durante create/unlink concorrenti
     del lock file. Lo trattiamo come contesa del lock (al pari di FileExistsError),
     con piccoli retry fino a lock_timeout.
     """
@@ -233,26 +250,20 @@ def safe_append_text(
     if not candidate.is_absolute():
         candidate = resolved_base / candidate
 
-    if os.name == "nt":
-        guard_base = Path(to_extended_length_path(resolved_base))
-        guard_candidate = Path(to_extended_length_path(candidate))
-        resolved = ensure_within_and_resolve(guard_base, guard_candidate)
-        resolved = strip_extended_length_path(resolved)
-    else:
-        resolved = ensure_within_and_resolve(resolved_base, candidate)
-
+    resolved = _resolve_within_base(resolved_base, candidate)
     resolved.parent.mkdir(parents=True, exist_ok=True)
 
+    parent_path = resolved.parent
+    resolved_str = _extended_str(resolved)
     lock_path = resolved.parent / f"{resolved.name}.lock"
-    resolved_ext = Path(to_extended_length_path(resolved))
-    lock_path_ext = Path(to_extended_length_path(lock_path))
+    lock_path_str = _extended_str(lock_path)
+
     deadline = time.monotonic() + max(lock_timeout, 0.0)
     lock_fd: Optional[int] = None
 
-    # Tentativo di acquisizione lock con retry su contesa (FileExistsError/PermissionError)
     while True:
         try:
-            lock_fd = os.open(str(lock_path_ext), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            lock_fd = os.open(lock_path_str, os.O_CREAT | os.O_EXCL | os.O_RDWR)
             break
         except (FileExistsError, PermissionError):
             if time.monotonic() > deadline:
@@ -260,7 +271,7 @@ def safe_append_text(
                     "Timeout nell'acquisire il lock per l'append.",
                     file_path=str(resolved),
                 )
-            time.sleep(0.05)  # backoff breve per ridurre la probabilità di race
+            time.sleep(0.05)
             continue
         except OSError as exc:
             raise ConfigError(
@@ -270,7 +281,7 @@ def safe_append_text(
 
     try:
         try:
-            with open(str(resolved_ext), "a", encoding=encoding, newline="") as f:
+            with open(resolved_str, "a", encoding=encoding, newline="") as f:
                 f.write(data)
                 if fsync:
                     try:
@@ -280,7 +291,7 @@ def safe_append_text(
                     _fsync_file(f.fileno(), path=resolved, strict=True)
                 else:
                     _fsync_file(f.fileno(), path=resolved, strict=False)
-            _fsync_dir_best_effort(resolved_ext.parent)
+            _fsync_dir_best_effort(parent_path)
         except Exception as exc:
             raise ConfigError(
                 f"Append fallito: {exc}",
@@ -293,6 +304,6 @@ def safe_append_text(
             except Exception:
                 _logger.debug("Chiusura lock fallita", extra={"lock_path": str(lock_path)})
         try:
-            lock_path_ext.unlink(missing_ok=True)
+            Path(lock_path_str).unlink(missing_ok=True)
         except Exception:
             _logger.debug("Rimozione lock fallita", extra={"lock_path": str(lock_path)})

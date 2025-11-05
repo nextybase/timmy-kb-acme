@@ -8,7 +8,6 @@ from typing import Any, Callable, Optional, cast
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
-from pipeline.path_utils import read_text_safe as _core_read_text_safe
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
@@ -16,6 +15,7 @@ from ui.manage import _helpers as manage_helpers
 from ui.manage import cleanup as cleanup_component
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
+from ui.manage.compat import import_tags_yaml_to_db, read_text_safe, safe_write_text
 from ui.pages.registry import PagePaths
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -30,9 +30,7 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
         return False
 
 
-from storage.tags_store import import_tags_yaml_to_db as _core_import_tags_yaml_to_db
 from ui.utils import set_slug
-from ui.utils.core import safe_write_text as _core_safe_write_text
 from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
 
@@ -101,21 +99,6 @@ def _workspace_root(slug: str) -> Path:
 def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
     """Compat per i test esistenti: delega alla versione in manage_helpers."""
     return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
-
-
-def safe_write_text(*args: Any, **kwargs: Any) -> None:
-    """Wrapper esposto per compatibilita con i test legacy."""
-    _core_safe_write_text(*args, **kwargs)
-
-
-def read_text_safe(*args: Any, **kwargs: Any) -> Optional[str]:
-    """Wrapper esposto per compatibilita con i test legacy."""
-    return cast(Optional[str], _core_read_text_safe(*args, **kwargs))
-
-
-def import_tags_yaml_to_db(*args: Any, **kwargs: Any) -> None:
-    """Wrapper esposto per compatibilita con i test legacy."""
-    _core_import_tags_yaml_to_db(*args, **kwargs)
 
 
 # Services (gestiscono cache e bridging verso i component)

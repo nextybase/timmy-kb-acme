@@ -17,7 +17,7 @@ Indice funzioni principali (ruolo):
     istanzia un logger con handler console (sempre) e file (opzionale),
     aggiunge i filtri di contesto e redazione.
 - `metrics_scope(logger, *, stage, customer=None)`:
-    context manager leggero che logga start/end/fail di una microfase.
+    alias di `phase_scope` per retro-compatibilità (stessa telemetria strutturata).
 - `redact_secrets(msg)`:
     redige pattern comuni di segreti in testo libero.
 - `mask_partial(value, keep=3)`, `mask_id_map(d)`, `mask_updates(d)`:
@@ -410,40 +410,17 @@ class phase_scope:
         return False
 
 
-class metrics_scope:
-    """Context manager leggero per misurare micro-fasi e loggare in modo uniforme.
+def metrics_scope(logger: logging.Logger, *, stage: str, customer: Optional[str] = None) -> phase_scope:
+    """
+    Alias di phase_scope mantenuto per retro-compatibilità.
 
-    Esempio:
-        with metrics_scope(logger, stage="drive_upload", customer=context.slug):
-            upload_config_to_drive_folder(...)
-
-    Log prodotti:
-        INFO -> start:<stage> | slug=<customer>
-        INFO -> end:<stage>   | slug=<customer>
-        ERROR -> fail:<stage>: <exc> | slug=<customer>
+    In precedenza metrics_scope emetteva log ad-hoc ([start], [end], [fail]).
+    Ora convoglia tutto su phase_scope, offrendo un'unica semantica strutturata:
+    eventi phase_started/phase_completed/phase_failed, status, duration_ms,
+    rtifact_count.
     """
 
-    def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
-        self.logger = logger
-        self.stage = stage
-        self.customer = customer
-
-    def __enter__(self) -> "metrics_scope":
-        self.logger.info(f"[start] {self.stage}", extra={"slug": self.customer})
-        return self
-
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc: Optional[BaseException],
-        tb: Optional[TracebackType],
-    ) -> Literal[False]:
-        if exc:
-            self.logger.error(f"[fail] {self.stage}: {exc}", extra={"slug": self.customer})
-        else:
-            self.logger.info(f"[end] {self.stage}", extra={"slug": self.customer})
-        # non sopprimere eccezioni
-        return False
+    return phase_scope(logger, stage=stage, customer=customer)
 
 
 __all__ = [

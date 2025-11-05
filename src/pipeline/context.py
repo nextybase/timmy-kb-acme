@@ -62,7 +62,7 @@ def validate_slug(slug: str) -> str:
         raise ConfigError(str(e), slug=slug) from e
 
 
-@dataclass
+@dataclass(slots=True)
 class ClientContext:
     """Contesto unificato per le pipeline Timmy-KB.
 
