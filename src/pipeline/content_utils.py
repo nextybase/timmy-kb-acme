@@ -334,7 +334,7 @@ def convert_files_to_structured_markdown(
         for pdf in safe_list:
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
 
-    for candidate in target.glob("*.md"):
+    for candidate in iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",)):
         low = candidate.name.lower()
         if low in {"readme.md", "summary.md"}:
             continue

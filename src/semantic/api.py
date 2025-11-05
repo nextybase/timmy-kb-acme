@@ -655,7 +655,7 @@ def enrich_frontmatter(
                 extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
             )
 
-    mds = sorted_paths(md_dir.glob("*.md"), base=md_dir)
+    mds = list_content_markdown(md_dir)
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
 

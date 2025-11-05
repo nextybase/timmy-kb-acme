@@ -37,6 +37,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
         "Existing body\n"
     )
     _write(book / "analytics_report.md", existing)
+    _write(book / "risk" / "analytics_nested.md", "Nested body\n")
 
     # Monkeypatch get_paths to confine I/O under tmp_path
     monkeypatch.setattr(
@@ -64,8 +65,8 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     )
 
     # Both files should be processed (one already had frontmatter, but tags/title may change)
-    names = {p.name for p in touched}
-    assert {"data_governance-intro.md", "analytics_report.md"}.issubset(names)
+    names = {p.relative_to(book).as_posix() for p in touched}
+    assert {"data_governance-intro.md", "analytics_report.md", "risk/analytics_nested.md"}.issubset(names)
 
     # Verify first file: title inferred from filename, tags include governance
     text_a = (book / "data_governance-intro.md").read_text(encoding="utf-8")
@@ -82,3 +83,10 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     assert tags_b >= {"alpha", "analytics", "governance"}
     assert meta_b.get("tags_raw") == ["Policy", "analysis"]
     assert "Existing body" in body_b
+
+    text_nested = (book / "risk" / "analytics_nested.md").read_text(encoding="utf-8")
+    meta_nested, body_nested = sapi._parse_frontmatter(text_nested)
+    assert meta_nested.get("title") == "analytics nested"
+    tags_nested = set(meta_nested.get("tags") or [])
+    assert "analytics" in tags_nested
+    assert body_nested.strip() == "Nested body"

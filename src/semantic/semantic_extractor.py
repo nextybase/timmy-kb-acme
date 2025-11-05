@@ -23,7 +23,7 @@ import yaml
 
 from pipeline.exceptions import ConfigError, InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, is_safe_subpath, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, is_safe_subpath, iter_safe_paths, read_text_safe
 
 
 class _Ctx(Protocol):
@@ -49,7 +49,8 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
     if not context.md_dir.exists() or not context.md_dir.is_dir():
         raise InputDirectoryMissing(f"Directory markdown non valida: {context.md_dir}", slug=context.slug)
 
-    files = sorted(context.md_dir.glob("*.md"))
+    iterator = iter_safe_paths(context.md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+    files = sorted(iterator, key=lambda p: p.relative_to(context.md_dir).as_posix().lower())
     logger.info(
         "📄 Trovati %d file markdown",
         len(files),

@@ -28,7 +28,7 @@ from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
 from pipeline.logging_utils import get_structured_logger, phase_scope
-from pipeline.path_utils import ensure_valid_slug, ensure_within  # SSoT guardia STRONG
+from pipeline.path_utils import ensure_valid_slug, ensure_within, iter_safe_paths  # SSoT guardia STRONG
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
@@ -135,7 +135,11 @@ def onboarding_full_main(
             # artifact_count: numero di file .md in book/
             try:
                 md_dir = getattr(context, "md_dir", None)
-                count = sum(1 for p in (md_dir.glob("*.md") if md_dir else []) if p.is_file())
+                if md_dir:
+                    iterator = iter_safe_paths(md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+                    count = sum(1 for p in iterator if p.name.lower() not in {"readme.md", "summary.md"})
+                else:
+                    count = 0
                 m.set_artifacts(count)
             except Exception:
                 m.set_artifacts(None)
@@ -147,7 +151,11 @@ def onboarding_full_main(
         _ensure_book_purity(context, logger)
         try:
             md_dir = getattr(context, "md_dir", None)
-            count = sum(1 for p in (md_dir.glob("*.md") if md_dir else []) if p.is_file())
+            if md_dir:
+                iterator = iter_safe_paths(md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+                count = sum(1 for p in iterator if p.name.lower() not in {"readme.md", "summary.md"})
+            else:
+                count = 0
             m.set_artifacts(count)
         except Exception:
             m.set_artifacts(None)
