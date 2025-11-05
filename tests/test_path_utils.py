@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+import pipeline.path_utils as path_utils
 from pipeline.exceptions import PathTraversalError
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve
+from pipeline.file_utils import safe_write_bytes
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 
 
 def test_ensure_within_ok_fail(tmp_path: Path) -> None:
@@ -64,3 +66,34 @@ def test_symlink_inside_outside(tmp_path: Path) -> None:
 
     with pytest.raises(PathTraversalError):
         ensure_within(base, bad_link)
+
+
+def test_safe_write_pdf_refreshes_cache(tmp_path: Path) -> None:
+    workspace = tmp_path / "client"
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True)
+
+    pdf_one = raw_dir / "doc1.pdf"
+    pdf_two = raw_dir / "doc2.pdf"
+
+    safe_write_bytes(pdf_one, b"%PDF-1.4\n", atomic=True)
+    first_listing = list(iter_safe_pdfs(raw_dir, use_cache=True))
+    assert pdf_one.resolve() in first_listing
+
+    safe_write_bytes(pdf_two, b"%PDF-1.4\n", atomic=True)
+
+    original_iter_safe_paths = path_utils.iter_safe_paths
+
+    def _boom(*args: object, **kwargs: object) -> list[Path]:
+        raise AssertionError("iter_safe_paths should not be invoked when cache is prewarmed")
+
+    path_utils.iter_safe_paths = _boom
+    try:
+        cached_listing = list(path_utils.iter_safe_pdfs(raw_dir, use_cache=True))
+    finally:
+        path_utils.iter_safe_paths = original_iter_safe_paths
+
+    resolved_listing = {item.resolve() for item in cached_listing}
+    assert pdf_one.resolve() in resolved_listing
+    assert pdf_two.resolve() in resolved_listing
+    assert len(resolved_listing) == 2

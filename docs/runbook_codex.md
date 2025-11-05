@@ -51,12 +51,13 @@ Riferimenti: [Developer Guide → Configurazione](developer_guide.md), [Configur
 
 ---
 
-## 3) Sicurezza & path‑safety (vincolante)
+## 3) Sicurezza & path-safety (vincolante)
 
-- **Path‑safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
+- **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
 - **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
 - **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` è attivo.
-- **UI import‑safe:** nessun side‑effect a import‑time; wrapper mantengono la **parità di firma** col backend.
+- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL configurabile via `TIMMY_SAFE_PDF_CACHE_TTL` (default 300s); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
+- **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parità di firma** col backend.
 
 **Snippet tipici**
 ```python
@@ -149,6 +150,7 @@ py src/onboarding_full.py --slug <slug>
 **Orchestrazione interna (regole)**
 - Usa sempre gli helper Git: `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
 - Nelle unit test, stubbare `_prepare_repo`/`_stage_changes` secondo gli esempi nei test.
+- Lock GitHub configurabile via env: `TIMMY_GITHUB_LOCK_TIMEOUT_S`, `TIMMY_GITHUB_LOCK_POLL_S`, `TIMMY_GITHUB_LOCK_DIRNAME` (default 10s/0.25s/.github_push.lockdir).
 
 **Rollback**
 - **Push fallito (rete/rate):** `_push_with_retry` ripete con backoff; se esaurito, lascia stato locale coerente (ripetibile).
@@ -244,6 +246,8 @@ streamlit run onboarding_ui.py
 # Orchestrazione CLI
 py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive
 py src/tag_onboarding.py --slug <slug> --non-interactive --proceed
+# Tuning NLP parallelo (worker auto se non specificato)
+py src/tag_onboarding.py --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 py src/semantic_onboarding.py --slug <slug> --non-interactive
 py src/onboarding_full.py --slug <slug> --non-interactive
 

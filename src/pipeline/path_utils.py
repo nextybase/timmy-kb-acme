@@ -74,6 +74,20 @@ class _SafePdfCacheEntry:
 _SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
 
 
+def _read_default_pdf_cache_ttl() -> float:
+    raw_value = os.environ.get("TIMMY_SAFE_PDF_CACHE_TTL")
+    if raw_value is None:
+        return 300.0
+    try:
+        ttl_value = float(str(raw_value).strip())
+    except (TypeError, ValueError):
+        return 300.0
+    return max(0.0, ttl_value)
+
+
+_SAFE_PDF_CACHE_DEFAULT_TTL = _read_default_pdf_cache_ttl()
+
+
 def _dir_mtime(path: Path) -> float:
     try:
         return float(path.stat().st_mtime)
@@ -91,6 +105,76 @@ def clear_iter_safe_pdfs_cache(*, root: Path | None = None) -> None:
     except Exception:
         return
     _SAFE_PDF_CACHE.pop(resolved, None)
+
+
+def _resolve_raw_root_from_path(path: Path | str) -> Path | None:
+    try:
+        resolved = Path(path).resolve()
+    except Exception:
+        return None
+    parts = list(resolved.parts)
+    for idx, part in enumerate(parts):
+        if part.lower() == "raw":
+            return Path(*parts[: idx + 1])
+    return None
+
+
+def preload_iter_safe_pdfs_cache(
+    root: Path,
+    *,
+    on_skip: Callable[[Path, str], None] | None = None,
+) -> tuple[Path, ...]:
+    """
+    Pre-carica la cache dei PDF sicuri per `root`, restituendo lo snapshot.
+
+    Se `root` non �� valido viene effettuata solo l'invalidazione.
+    """
+    try:
+        resolved_root = Path(root).resolve()
+    except Exception:
+        return tuple()
+
+    if not resolved_root.exists() or not resolved_root.is_dir():
+        clear_iter_safe_pdfs_cache(root=resolved_root)
+        return tuple()
+
+    pdfs = tuple(
+        iter_safe_paths(
+            resolved_root,
+            include_dirs=False,
+            include_files=True,
+            suffixes=(".pdf",),
+            on_skip=on_skip,
+        )
+    )
+    if pdfs:
+        _SAFE_PDF_CACHE[resolved_root] = _SafePdfCacheEntry(
+            mtime=_dir_mtime(resolved_root),
+            files=pdfs,
+            timestamp=time.time(),
+        )
+        while len(_SAFE_PDF_CACHE) > _SAFE_PDF_CACHE_CAPACITY:
+            _SAFE_PDF_CACHE.popitem(last=False)
+    else:
+        _SAFE_PDF_CACHE.pop(resolved_root, None)
+    return pdfs
+
+
+def refresh_iter_safe_pdfs_cache_for_path(
+    path: Path,
+    *,
+    prewarm: bool = True,
+    on_skip: Callable[[Path, str], None] | None = None,
+) -> None:
+    """
+    Invalida (ed opzionalmente pre-riscalda) la cache PDF se `path` ricade in un albero `raw/`.
+    """
+    raw_root = _resolve_raw_root_from_path(path)
+    if raw_root is None:
+        return
+    clear_iter_safe_pdfs_cache(root=raw_root)
+    if prewarm:
+        preload_iter_safe_pdfs_cache(raw_root, on_skip=on_skip)
 
 
 # Comprimi ripetizioni del carattere di rimpiazzo (iniettata dinamicamente)
@@ -274,9 +358,10 @@ def iter_safe_pdfs(
 
     current_mtime = _dir_mtime(resolved_root)
     cached = _SAFE_PDF_CACHE.get(resolved_root)
+    effective_ttl = cache_ttl_s if cache_ttl_s is not None else _SAFE_PDF_CACHE_DEFAULT_TTL
     if cached and abs(cached.mtime - current_mtime) <= 1e-6:
-        if cache_ttl_s is not None and cache_ttl_s >= 0:
-            if (time.time() - cached.timestamp) > cache_ttl_s:
+        if effective_ttl and effective_ttl > 0:
+            if (time.time() - cached.timestamp) > effective_ttl:
                 cached = None
         if cached:
             _SAFE_PDF_CACHE.move_to_end(resolved_root)
@@ -284,25 +369,7 @@ def iter_safe_pdfs(
                 yield cached_path
             return
 
-    pdfs = tuple(
-        iter_safe_paths(
-            resolved_root,
-            include_dirs=False,
-            include_files=True,
-            suffixes=(".pdf",),
-            on_skip=on_skip,
-        )
-    )
-    if pdfs:
-        _SAFE_PDF_CACHE[resolved_root] = _SafePdfCacheEntry(
-            mtime=current_mtime,
-            files=pdfs,
-            timestamp=time.time(),
-        )
-        while len(_SAFE_PDF_CACHE) > _SAFE_PDF_CACHE_CAPACITY:
-            _SAFE_PDF_CACHE.popitem(last=False)
-    else:
-        _SAFE_PDF_CACHE.pop(resolved_root, None)
+    pdfs = preload_iter_safe_pdfs_cache(resolved_root, on_skip=on_skip)
 
     for pdf in pdfs:
         yield pdf
@@ -643,6 +710,8 @@ __all__ = [
     "iter_safe_paths",
     "iter_safe_pdfs",
     "clear_iter_safe_pdfs_cache",
+    "preload_iter_safe_pdfs_cache",
+    "refresh_iter_safe_pdfs_cache_for_path",
     "to_extended_length_path",
     "strip_extended_length_path",
 ]

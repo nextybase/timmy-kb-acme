@@ -23,11 +23,15 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import re
 import sys
 import time
 import uuid
+from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any, Optional, Sequence, cast
 
@@ -60,7 +64,6 @@ from storage.tags_store import (
     derive_db_path_from_yaml_path,
     ensure_schema_v2,
     get_conn,
-    get_documents_by_folder,
     has_doc_terms,
     list_documents,
 )
@@ -217,6 +220,12 @@ class _DocTask:
     pdf_path: Path
 
 
+@dataclass(frozen=True)
+class _FolderCache:
+    paths_by_id: dict[int, Path]
+    doc_ids_by_folder: dict[Optional[int], list[int]]
+
+
 def _collect_raw_docs(
     conn: Any,
     *,
@@ -224,9 +233,30 @@ def _collect_raw_docs(
     only_missing: bool,
     rebuild: bool,
     log: logging.Logger,
-) -> tuple[list[_DocTask], int]:
+) -> tuple[list[_DocTask], int, _FolderCache]:
     docs = list_documents(conn)
     tasks: list[_DocTask] = []
+    paths_by_id: dict[int, Path] = {}
+    doc_ids_by_folder: defaultdict[Optional[int], list[int]] = defaultdict(list)
+    doc_terms_index: set[int] = set()
+    if only_missing or rebuild:
+        doc_terms_index = {
+            int(row[0])
+            for row in conn.execute("SELECT DISTINCT document_id FROM doc_terms").fetchall()
+            if row[0] is not None
+        }
+
+    for row in conn.execute("SELECT id, path FROM folders ORDER BY id ASC").fetchall():
+        try:
+            folder_id = int(row[0])
+        except (TypeError, ValueError):
+            continue
+        folder_path_str = row[1]
+        if folder_path_str:
+            folder_path = Path(str(folder_path_str))
+        else:
+            folder_path = Path("raw")
+        paths_by_id[folder_id] = folder_path
 
     def _abs_path_for(doc: dict[str, Any]) -> Path:
         folder_id_val = doc.get("folder_id")
@@ -237,9 +267,7 @@ def _collect_raw_docs(
 
         folder_db_path = Path("raw")
         if folder_id is not None:
-            row = conn.execute("SELECT path FROM folders WHERE id=?", (folder_id,)).fetchone()
-            if row is not None and row[0]:
-                folder_db_path = Path(str(row[0]))
+            folder_db_path = paths_by_id.get(folder_id, Path("raw"))
 
         parts: Sequence[str] = folder_db_path.parts
         if parts and parts[0] == "raw":
@@ -267,9 +295,19 @@ def _collect_raw_docs(
             log.warning("ID documento non valido", extra={"doc": doc})
             continue
 
-        if only_missing and has_doc_terms(conn, doc_id):
+        folder_id_val = doc.get("folder_id")
+        try:
+            folder_id = int(folder_id_val) if folder_id_val is not None else None
+        except (TypeError, ValueError):
+            folder_id = None
+        doc_ids_by_folder[folder_id].append(doc_id)
+
+        if only_missing and doc_id in doc_terms_index:
             continue
-        if rebuild:
+        if rebuild and doc_id in doc_terms_index:
+            clear_doc_terms(conn, doc_id)
+            doc_terms_index.discard(doc_id)
+        elif rebuild:
             clear_doc_terms(conn, doc_id)
 
         try:
@@ -283,7 +321,11 @@ def _collect_raw_docs(
 
         tasks.append(_DocTask(doc_id=doc_id, pdf_path=pdf_path))
 
-    return tasks, len(docs)
+    cache = _FolderCache(
+        paths_by_id=paths_by_id,
+        doc_ids_by_folder={k: v for k, v in doc_ids_by_folder.items()},
+    )
+    return tasks, len(docs), cache
 
 
 def _process_document(
@@ -311,31 +353,38 @@ def _persist_sections(
     cluster_thr: float,
     model: str,
     log: logging.Logger,
+    folder_cache: _FolderCache,
 ) -> dict[str, Any]:
     from nlp.nlp_keywords import cluster_synonyms, topn_by_folder
 
-    folders = conn.execute("SELECT id, path FROM folders ORDER BY id").fetchall()
-    phrase_global: dict[str, float] = {}
     folder_stats: dict[int, list[tuple[str, float]]] = {}
+    doc_to_folder: dict[int, Optional[int]] = {}
 
-    for frow in folders:
-        fid = int(frow[0])
-        doc_ids = get_documents_by_folder(conn, fid)
-        if not doc_ids:
+    for folder_id, doc_ids in folder_cache.doc_ids_by_folder.items():
+        for doc_id in doc_ids:
+            doc_to_folder[doc_id] = folder_id
+
+    totals_by_folder: dict[int, dict[str, float]] = {}
+    rows = conn.execute("SELECT document_id, phrase, score FROM doc_terms ORDER BY document_id ASC").fetchall()
+    for row in rows:
+        try:
+            doc_id = int(row[0])
+        except (TypeError, ValueError):
             continue
-        q = "SELECT phrase, score FROM doc_terms WHERE document_id IN (" + ",".join(["?"] * len(doc_ids)) + ")"
-        rows = conn.execute(q, tuple(doc_ids)).fetchall()
+        folder_id = doc_to_folder.get(doc_id)
+        if folder_id is None:
+            continue
+        phrase = str(row[1])
+        score = float(row[2])
+        folder_totals = totals_by_folder.setdefault(folder_id, {})
+        folder_totals[phrase] = folder_totals.get(phrase, 0.0) + score
 
-        phrase_agg: dict[str, float] = {}
-        for r in rows:
-            ph = str(r[0])
-            sc = float(r[1])
-            phrase_agg[ph] = phrase_agg.get(ph, 0.0) + sc
-
+    phrase_global: dict[str, float] = {}
+    for fid, phrase_agg in totals_by_folder.items():
         if not phrase_agg:
             continue
 
-        maxv = max(phrase_agg.values()) if phrase_agg else 1.0
+        maxv = max(phrase_agg.values())
         if maxv <= 0:
             maxv = 1.0
         norm_items = [(p, (w / maxv)) for p, w in phrase_agg.items()]
@@ -408,6 +457,8 @@ def run_nlp_to_db(
     model: str = "paraphrase-multilingual-MiniLM-L12-v2",
     rebuild: bool = False,
     only_missing: bool = False,
+    max_workers: int | None = None,
+    worker_batch_size: int = 4,
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
     base_dir_path = Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
@@ -416,8 +467,16 @@ def run_nlp_to_db(
     ensure_schema_v2(str(db_path_path))
     log = get_structured_logger("tag_onboarding")
 
+    worker_batch_size = max(1, int(worker_batch_size))
+    if max_workers is None:
+        cpu_count = os.cpu_count() or 1
+        worker_count = max(1, min(32, cpu_count))
+    else:
+        worker_count = max(1, int(max_workers))
+    parallel_enabled = worker_count > 1
+
     with get_conn(str(db_path_path)) as conn:
-        tasks, total_docs = _collect_raw_docs(
+        tasks, total_docs, folder_cache = _collect_raw_docs(
             conn,
             raw_dir_path=raw_dir_path,
             only_missing=only_missing,
@@ -426,21 +485,58 @@ def run_nlp_to_db(
         )
         saved_items = 0
 
-        for idx, task in enumerate(tasks, start=1):
-            top_items = _process_document(
-                task,
-                lang=lang,
-                topn_doc=topn_doc,
-                model=model,
+        process_func = partial(
+            _process_document,
+            lang=lang,
+            topn_doc=topn_doc,
+            model=model,
+        )
+
+        if parallel_enabled:
+            log.info(
+                "NLP executor configurato",
+                extra={"workers": worker_count, "batch_size": worker_batch_size},
             )
-            if top_items:
-                from storage.tags_store import save_doc_terms as _save_dt
+            executor = ThreadPoolExecutor(max_workers=worker_count)
+            pending: deque[tuple[_DocTask, Any]] = deque()
+            capacity = max(worker_batch_size * worker_count, worker_count)
 
-                _save_dt(conn, task.doc_id, top_items)
-                saved_items += len(top_items)
+            def _drain(queue: deque[tuple[_DocTask, Any]], current_index: int) -> int:
+                nonlocal saved_items
+                task, future = queue.popleft()
+                top_items = future.result()
+                current_index += 1
+                if top_items:
+                    from storage.tags_store import save_doc_terms as _save_dt
 
-            if total_docs and idx % 100 == 0:
-                log.info("NLP progress", extra={"processed": idx, "documents": total_docs})
+                    _save_dt(conn, task.doc_id, top_items)
+                    saved_items += len(top_items)
+
+                if total_docs and current_index % 100 == 0:
+                    log.info("NLP progress", extra={"processed": current_index, "documents": total_docs})
+                return current_index
+
+            idx = 0
+            try:
+                for task in tasks:
+                    pending.append((task, executor.submit(process_func, task)))
+                    if len(pending) >= capacity:
+                        idx = _drain(pending, idx)
+                while pending:
+                    idx = _drain(pending, idx)
+            finally:
+                executor.shutdown(wait=True)
+        else:
+            for idx, task in enumerate(tasks, start=1):
+                top_items = process_func(task)
+                if top_items:
+                    from storage.tags_store import save_doc_terms as _save_dt
+
+                    _save_dt(conn, task.doc_id, top_items)
+                    saved_items += len(top_items)
+
+                if total_docs and idx % 100 == 0:
+                    log.info("NLP progress", extra={"processed": idx, "documents": total_docs})
 
         section_stats = _persist_sections(
             conn,
@@ -448,6 +544,7 @@ def run_nlp_to_db(
             cluster_thr=cluster_thr,
             model=model,
             log=log,
+            folder_cache=folder_cache,
         )
 
         log.info(
@@ -455,6 +552,8 @@ def run_nlp_to_db(
             extra={
                 "documents": total_docs,
                 "doc_terms": saved_items,
+                "workers": worker_count,
+                "batch_size": worker_batch_size,
                 **section_stats,
             },
         )
@@ -462,6 +561,8 @@ def run_nlp_to_db(
         return {
             "documents": total_docs,
             "doc_terms": saved_items,
+            "workers": worker_count,
+            "batch_size": worker_batch_size,
             **section_stats,
         }
 
@@ -930,6 +1031,23 @@ def _parse_args() -> argparse.Namespace:
         help="Modello SentenceTransformer",
     )
     p.add_argument(
+        "--nlp-workers",
+        type=int,
+        default=None,
+        help="Numero di worker paralleli per l'estrazione NLP (default: auto, minimo 1).",
+    )
+    p.add_argument(
+        "--nlp-batch-size",
+        type=int,
+        default=4,
+        help="Dimensione chunk per il mapping parallelo (default: 4).",
+    )
+    p.add_argument(
+        "--nlp-no-parallel",
+        action="store_true",
+        help="Disattiva l'esecuzione parallela forzando 1 worker (utile per debug).",
+    )
+    p.add_argument(
         "--rebuild",
         action="store_true",
         help="Ricostruisce doc_terms cancellando quelli esistenti",
@@ -1002,6 +1120,7 @@ if __name__ == "__main__":
             db_override=args.db,
         )
         lang = args.lang if args.lang != "auto" else "it"
+        worker_override = 1 if args.nlp_no_parallel else args.nlp_workers
         stats = run_nlp_to_db(
             slug,
             raw_dir,
@@ -1014,6 +1133,8 @@ if __name__ == "__main__":
             model=str(args.model),
             rebuild=bool(args.rebuild),
             only_missing=bool(args.only_missing),
+            max_workers=worker_override if worker_override is not None else None,
+            worker_batch_size=int(args.nlp_batch_size),
         )
         log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
         log.info("cli.tag_onboarding.nlp_completed", extra=stats)

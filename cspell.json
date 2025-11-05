@@ -80,7 +80,12 @@
     "programmativo",
     "wrappa",
     "versionata",
-    "stubbare"
+    "stubbare",
+    "lockdir",
+    "spacy",
+    "yake",
+    "keybert",
+    "eagere"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

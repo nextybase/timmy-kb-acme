@@ -38,3 +38,4 @@ Questo directory raccoglie le **Architecture / Technical Decision Records** del 
 
 - [ADR-0001: SQLite come SSoT per i tag runtime](0001-sqlite-ssot-tags.md)
 - [ADR-0003: Playwright per i test end-to-end UI](0003-playwright-e2e-ui.md)
+- [ADR-0004: Ottimizzazione performance pipeline NLP e cache RAW](0004-nlp-performance-tuning.md)

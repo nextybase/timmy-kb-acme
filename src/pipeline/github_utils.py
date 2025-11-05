@@ -136,6 +136,48 @@ def _resolve_env_flag(context: _SupportsContext, name: str) -> bool:
     return _is_env_flag_enabled(os.environ.get(name))
 
 
+def _coerce_positive_float(value: Any, *, default: float, minimum: float) -> float:
+    if value is None:
+        return default
+    try:
+        coerced = float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    if coerced <= 0:
+        return max(minimum, default)
+    return max(minimum, coerced)
+
+
+def _resolve_lock_config(context: _SupportsContext) -> dict[str, Any]:
+    env_map = getattr(context, "env", {}) or {}
+    timeout_default = 10.0
+    poll_default = 0.25
+    dirname_default = _LEASE_DIRNAME
+
+    timeout_value = env_map.get("TIMMY_GITHUB_LOCK_TIMEOUT_S")
+    poll_value = env_map.get("TIMMY_GITHUB_LOCK_POLL_S")
+    dirname_value = env_map.get("TIMMY_GITHUB_LOCK_DIRNAME")
+
+    timeout_s = _coerce_positive_float(
+        timeout_value if timeout_value is not None else os.environ.get("TIMMY_GITHUB_LOCK_TIMEOUT_S"),
+        default=timeout_default,
+        minimum=0.1,
+    )
+    poll_interval_s = _coerce_positive_float(
+        poll_value if poll_value is not None else os.environ.get("TIMMY_GITHUB_LOCK_POLL_S"),
+        default=poll_default,
+        minimum=0.05,
+    )
+    dirname = (
+        str(dirname_value or os.environ.get("TIMMY_GITHUB_LOCK_DIRNAME") or dirname_default).strip() or dirname_default
+    )
+    return {
+        "timeout_s": timeout_s,
+        "poll_interval_s": poll_interval_s,
+        "dirname": dirname,
+    }
+
+
 def should_push(context: _SupportsContext) -> bool:
     """Determina se il push puï¿½ï¿½ avvenire secondo i flag di sicurezza/env."""
     if _resolve_env_flag(context, "TIMMY_NO_GITHUB"):
@@ -689,7 +731,8 @@ def push_output_to_github(
         f"ðŸš§ Preparazione push su GitHub (branch: {default_branch})",
         extra={"slug": context.slug, "branch": default_branch},
     )
-    lock = LeaseLock(base_dir, slug=context.slug, logger=local_logger)
+    lock_config = _resolve_lock_config(context)
+    lock = LeaseLock(base_dir, slug=context.slug, logger=local_logger, **lock_config)
     lock.acquire()
 
     repo = None

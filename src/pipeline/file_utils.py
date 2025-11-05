@@ -37,9 +37,20 @@ from typing import Optional
 
 from .exceptions import ConfigError
 from .logging_utils import get_structured_logger
-from .path_utils import ensure_within_and_resolve, strip_extended_length_path, to_extended_length_path
+from .path_utils import (
+    ensure_within_and_resolve,
+    refresh_iter_safe_pdfs_cache_for_path,
+    strip_extended_length_path,
+    to_extended_length_path,
+)
 
 _logger = get_structured_logger("pipeline.file_utils")
+
+
+def _post_write_hooks(path: Path) -> None:
+    """Hook post-scrittura per mantenere coerenza cache/path utilities."""
+    if Path(path).suffix.lower() == ".pdf":
+        refresh_iter_safe_pdfs_cache_for_path(Path(path), prewarm=True)
 
 
 def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -> None:
@@ -163,6 +174,7 @@ def safe_write_text(
                 else:
                     _fsync_file(f.fileno(), path=path, strict=False)
             _fsync_dir_best_effort(parent_path)
+            _post_write_hooks(path)
             return
         except Exception as e:
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
@@ -193,6 +205,7 @@ def safe_write_text(
 
         os.replace(tmp_name, path_str)  # atomic move
         _fsync_dir_best_effort(parent_path)
+        _post_write_hooks(path)
     except Exception as e:
         # Proviamo a rimuovere il temp se esiste
         try:
@@ -230,6 +243,7 @@ def safe_write_bytes(
                 else:
                     _fsync_file(f.fileno(), path=path, strict=False)
             _fsync_dir_best_effort(parent_path)
+            _post_write_hooks(path)
             return
         except Exception as e:
             raise ConfigError(f"Scrittura file (bytes) fallita: {e}", file_path=str(path)) from e
@@ -252,6 +266,7 @@ def safe_write_bytes(
 
         os.replace(tmp_name, path_str)
         _fsync_dir_best_effort(parent_path)
+        _post_write_hooks(path)
     except Exception as e:
         try:
             if tmp_path is not None and tmp_path.exists():

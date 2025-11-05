@@ -37,6 +37,7 @@ from pipeline.path_utils import (
     clear_iter_safe_pdfs_cache,
     iter_safe_paths,
     normalize_path,
+    preload_iter_safe_pdfs_cache,
     sanitize_filename,
     sorted_paths,
 )
@@ -126,4 +127,5 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         raise PipelineError(f"Copie PDF fallite: {len(failures)}. Dettagli: {summary}")
 
     clear_iter_safe_pdfs_cache(root=raw_dir)
+    preload_iter_safe_pdfs_cache(raw_dir)
     return copied
