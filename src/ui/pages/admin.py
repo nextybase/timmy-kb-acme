@@ -22,8 +22,9 @@ from google.oauth2 import id_token
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 
-# ✨ Coerenza con le altre pagine UI
+# Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
+from ui.pages.registry import PagePaths
 
 # ---------- Chrome coerente ----------
 # L'entrypoint imposta page_config; qui solo header+sidebar come in home.py
@@ -182,12 +183,12 @@ def _handle_oauth_callback(code: Optional[str], state: Optional[str]) -> None:
         "exp": now + SESSION_TTL_SECONDS,
     }
     st.success(f"Accesso effettuato: {idinfo.get('email')}")
-    st.page_link("src/ui/pages/home.py", label="Vai alla Home", icon="🏠")
+    st.page_link(PagePaths.HOME, label="Vai alla Home", icon="\U0001F3E0")
     st.stop()
 
 
 def _mask(s: str) -> str:
-    return s[:8] + "..." + s[-10:] if s and len(s) > 20 else (s or "∅")
+    return s[:8] + "..." + s[-10:] if s and len(s) > 20 else (s or "...")
 
 
 # ---------- UI ----------
@@ -205,8 +206,8 @@ if not cfg["client_id"] or not cfg["redirect_uri"]:
 else:
     user = _enforce_session_ttl()
     if user:
-        st.success(f"Accesso già attivo: {user.get('email')}")
-        st.page_link("src/ui/pages/home.py", label="Vai alla Home", icon="\U0001F3E0")
+        st.success(f"Accesso gia' attivo: {user.get('email')}")
+        st.page_link(PagePaths.HOME, label="Vai alla Home", icon="\U0001F3E0")
         st.stop()
 
     _ensure_session()

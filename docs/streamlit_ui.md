@@ -285,7 +285,7 @@ def import_tags_yaml_to_db(semantic_dir: Path, yaml_path: Path, logger):
 
 - Schema: `ui.<pagina>.<sottoarea>.<azione>` (es.: `ui.manage.tags.save`).
 - **Niente PII** o contenuto file; payload **minimale** (`slug`, path relativo/basename, messaggio errore redatto).
-- Usa `logging.getLogger("ui.<pagina>")` (o il logger strutturato dove previsto) e lascia ai filtri globali la redazione.
+- Usa **solo** `get_structured_logger("ui.<pagina>")`; i filtri globali gestiscono la redazione.
 
 ### Esempi: pagina Manage
 
@@ -354,7 +354,7 @@ pages = {
 st.navigation(pages)
 ```
 
-**Perche**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
+**Perché**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
 In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo slug attivo ha effettivamente PDF validi in `raw/` (`ui.utils.workspace.has_raw_pdfs`). Analogamente la pagina *Preview* viene resa visibile solo se sono presenti PDF validi e lo stato cliente appartiene a `SEMANTIC_READY_STATES`; in caso contrario il router emette `ui.gating.sem_hidden`/`ui.gating.preview_hidden` per telemetria.
 
 ### Modalita stub e SSoT semantica

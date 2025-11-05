@@ -16,6 +16,7 @@ from ui.manage import _helpers as manage_helpers
 from ui.manage import cleanup as cleanup_component
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
+from ui.pages.registry import PagePaths
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
@@ -468,7 +469,7 @@ if slug:
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
         # Sostituisce anchor HTML interno con API native di navigazione
         if hasattr(st, "page_link"):
-            st.page_link("src/ui/pages/semantics.py", label="➡️ Prosegui con l’arricchimento semantico")
+            st.page_link(PagePaths.SEMANTICS, label="➡️ Prosegui con l’arricchimento semantico")
         else:
             st.link_button("➡️ Prosegui con l’arricchimento semantico", url="/semantics")
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
