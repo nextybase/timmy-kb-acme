@@ -9,6 +9,7 @@ import pytest
 
 from pipeline import file_utils
 from pipeline.exceptions import ConfigError
+from pipeline.path_utils import strip_extended_length_path
 
 # Nota: i test seguono una simulazione best-effort; non abbiamo crash reali di processo ma
 # verifichiamo che l'utility resti robusta in scenari di concorrenza e errori controllati.
@@ -69,8 +70,9 @@ def test_safe_append_text_failure_leaves_file_intact(tmp_path: Path, monkeypatch
     _orig_open = _bi.open
 
     def flaky_open(path, mode="r", *args, **kwargs):  # type: ignore[no-untyped-def]
-        if str(path) == str(target) and "a" in str(mode):
-            raise ConfigError("simulated failure", file_path=str(path))
+        candidate = strip_extended_length_path(path)
+        if candidate == target and "a" in str(mode):
+            raise ConfigError("simulated failure", file_path=str(candidate))
         return _orig_open(path, mode, *args, **kwargs)
 
     monkeypatch.setattr(_bi, "open", flaky_open)

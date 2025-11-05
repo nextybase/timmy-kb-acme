@@ -27,7 +27,7 @@ In sintesi: policy **qui**, override **nei loro AGENTS**, e l’agente lavora *o
 | UI (Streamlit) | `src/ui/AGENTS.md` | Riferimento operativo: segui le linee guida di `docs/streamlit_ui.md` (router, stato, I/O, logging).; Gating: la tab **Semantica** si abilita **solo** quando `raw/` locale e presente. | Nessuna azione "Semantica" se RAW vuoto. | UX guidata da stato |
 | Test | `tests/AGENTS.md` | Niente dipendenze di rete (Drive/Git mockati o bypass).; Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati). | Build verde locale; smoke E2E su dummy slug riproducibile. |  |
 | Documentazione | `docs/AGENTS.md` | **cSpell**: eseguire `pre-commit run cspell --all-files` (o `--files docs/...`) prima del commit; aggiungere nuove parole solo se sono termini di dominio verificati.; **Frontmatter & titoli**: i file Markdown devono indicare la versione coerente; niente numerazioni divergenti tra README e docs/. | Spell check pulito su `docs/` e `README.md`, senza ignorare file. |  |
-| Codex (repo) | `.codex/AGENTS.md` | **Path-safety**: scrivo solo in `src/`, `docs/`, `.codex/` (mai in `config/**`, `.env*`, `output/**`).; **Scritture atomiche**: temp + replace; zero side-effect a import-time. | Micro-PR: 1 change set, motivazione chiara, diff minimale; se tocco X aggiorno docs Y/Z. |  |
+| Codex (repo) | `.codex/AGENTS.md` | **Path-safety**: scrivo solo in `src/`, `tests/`, `docs/`, `.codex/` (mai in `config/**`, `.env*`, `output/**`).; **Scritture atomiche**: temp + replace; zero side-effect a import-time. | Micro-PR: 1 change set, motivazione chiara, diff minimale; se tocco X aggiorno docs Y/Z. |  |
 
 <!-- MATRIX:END -->
 

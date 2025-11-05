@@ -32,6 +32,7 @@ Principi:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import unicodedata
 from contextlib import contextmanager
@@ -44,6 +45,10 @@ from .logging_utils import get_structured_logger
 
 # Logger di modulo
 _logger = get_structured_logger("pipeline.path_utils")
+
+# Prefissi path estesi Windows
+_WIN_EXTENDED_PREFIX = "\\\\?\\"
+_WIN_UNC_PREFIX = "\\\\?\\UNC\\"
 
 # -----------------------------------------------------------------------------
 # Regex precompilate (micro-ottimizzazioni e chiarezza)
@@ -457,6 +462,55 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
     return [q for _, q in items]
 
 
+def to_extended_length_path(path: Path | str) -> str:
+    """
+    Restituisce il path con prefisso esteso Windows (\\?\\) quando necessario.
+
+    - Su sistemi non-Windows ritorna semplicemente `str(path)`.
+    - Su Windows converte in percorso assoluto normalizzato e aggiunge il prefisso
+      extended-length. I path UNC (`\\\\server\\share`) vengono trasformati in
+      `\\\\?\\UNC\\server\\share`.
+    - Path gi\u00e0 estesi vengono restituiti invariati.
+    """
+    path_obj = Path(path)
+    path_str = str(path_obj)
+    if os.name != "nt":
+        return path_str
+
+    if path_str.startswith(_WIN_EXTENDED_PREFIX) or path_str.startswith(_WIN_UNC_PREFIX):
+        return os.path.normpath(path_str)
+
+    # Garantisce path assoluto senza richiedere l'esistenza sul filesystem
+    if not path_obj.is_absolute():
+        path_obj = path_obj.absolute()
+        path_str = str(path_obj)
+    else:
+        path_str = os.path.normpath(path_str)
+
+    if path_str.startswith("\\\\"):
+        return _WIN_UNC_PREFIX + path_str[2:]
+
+    return _WIN_EXTENDED_PREFIX + path_str.lstrip("\\")
+
+
+def strip_extended_length_path(path: Path | str) -> Path:
+    """
+    Rimuove il prefisso esteso Windows restituendo un `Path` normale.
+    Su sistemi non-Windows ritorna semplicemente `Path(path)`.
+    """
+    path_str = str(path)
+    if os.name != "nt":
+        return Path(path_str)
+
+    if path_str.startswith(_WIN_UNC_PREFIX):
+        return Path("\\" * 2 + path_str[len(_WIN_UNC_PREFIX) :])
+
+    if path_str.startswith(_WIN_EXTENDED_PREFIX):
+        return Path(path_str[len(_WIN_EXTENDED_PREFIX) :])
+
+    return Path(path_str)
+
+
 def ensure_valid_slug(
     initial_slug: str | None,
     *,
@@ -502,4 +556,6 @@ __all__ = [
     "ensure_valid_slug",  # wrapper interattivo
     "iter_safe_paths",
     "iter_safe_pdfs",
+    "to_extended_length_path",
+    "strip_extended_length_path",
 ]
