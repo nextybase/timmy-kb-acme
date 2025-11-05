@@ -417,7 +417,7 @@ def metrics_scope(logger: logging.Logger, *, stage: str, customer: Optional[str]
     In precedenza metrics_scope emetteva log ad-hoc ([start], [end], [fail]).
     Ora convoglia tutto su phase_scope, offrendo un'unica semantica strutturata:
     eventi phase_started/phase_completed/phase_failed, status, duration_ms,
-    rtifact_count.
+    artifact_count.
     """
 
     return phase_scope(logger, stage=stage, customer=customer)

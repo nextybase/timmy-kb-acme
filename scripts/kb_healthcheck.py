@@ -25,6 +25,17 @@ from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
 
+# ---- UI config (SSoT del modello Vision) -------------------------------------
+try:
+    from ui.config_store import get_vision_model  # type: ignore
+except Exception:
+    try:
+        from src.ui.config_store import get_vision_model  # type: ignore
+    except Exception:
+
+        def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:  # type: ignore
+            return default
+
 
 def _optional_env(name: str) -> Optional[str]:
     try:
@@ -267,7 +278,11 @@ def main() -> None:
     )
     parser.add_argument("--slug", default="dummy", help="Slug cliente (default: dummy)")
     parser.add_argument("--force", action="store_true", help="Forza rigenerazione Vision")
-    parser.add_argument("--model", default=None, help="Annotazione modello (per sentinel hash)")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Modello Vision; se omesso si usa il default configurato (get_vision_model())",
+    )
     parser.add_argument(
         "--include-prompt",
         action="store_true",
@@ -321,7 +336,7 @@ def main() -> None:
                     ctx=ctx,
                     slug=slug,
                     pdf_path=workspace_pdf,
-                    model=args.model or "gpt-4.1-mini",
+                    model=(args.model or get_vision_model()),
                     logger=logger,
                 )
             except Exception as exc:
@@ -338,7 +353,7 @@ def main() -> None:
             slug=slug,
             pdf_path=workspace_pdf,
             force=args.force,
-            model=args.model,
+            model=(args.model or get_vision_model()),
             logger=logger,
             preview_prompt=False,
             prepared_prompt_override=prepared_prompt,

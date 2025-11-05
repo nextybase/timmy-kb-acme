@@ -14,6 +14,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.config_store import get_vision_model
 from ui.imports import get_streamlit
 
 
@@ -200,7 +201,8 @@ def provision_from_vision(
             logger=logger,
             slug=slug,
             pdf_path=safe_pdf,
-            model=model or "gpt-4.1-mini",
+            # onora default centralizzato
+            model=(model or get_vision_model()),
             force=force,
             prepared_prompt=prepared_prompt,
         )
@@ -209,7 +211,7 @@ def provision_from_vision(
         raise
 
     # Aggiorna sentinel JSON (con log utile ai test)
-    _save_hash(base_dir, digest=digest, model=model or "gpt-4.1-mini")
+    _save_hash(base_dir, digest=digest, model=(model or get_vision_model()))
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
 
     # Ritorno coerente con la firma documentata
@@ -254,7 +256,8 @@ def run_vision(
                     ctx=ctx,
                     slug=slug,
                     pdf_path=safe_pdf,
-                    model=model or "gpt-4.1-mini",
+                    # stessa sorgente del default usato in esecuzione
+                    model=(model or get_vision_model()),
                     logger=eff_logger,
                 )
             st.text_area("Prompt", value=prepared_prompt, height=420, disabled=True)
