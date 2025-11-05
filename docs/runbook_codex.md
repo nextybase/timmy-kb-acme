@@ -164,6 +164,7 @@ Riferimenti: [.codex/AGENTS](../.codex/AGENTS.md).
 - **SSoT di policy:** [AGENTS Index](AGENTS_INDEX.md).
 - Gli `AGENTS.md` locali (UI, Pipeline, Semantica, Test, Documentazione, Codex) contengono **solo override** e rimandano all’indice.
 - Tenere allineata la **matrice** con `pre-commit run agents-matrix-check --all-files` quando si toccano gli `AGENTS.md`.
+- La CI (`job build` in `.github/workflows/ci.yaml`) esegue `python scripts/gen_agents_matrix.py --check` e fallisce se la matrice non è aggiornata.
 
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [docs/AGENTS.md](AGENTS.md), [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/semantic/AGENTS.md](../src/semantic/AGENTS.md), [src/pipeline/AGENTS.md](../src/pipeline/AGENTS.md), [tests/AGENTS.md](../tests/AGENTS.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
 

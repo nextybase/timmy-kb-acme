@@ -381,7 +381,7 @@ def _collect_markdown_inputs(
     logger: logging.Logger,
     slug: str,
 ) -> _CollectedMarkdown:
-    from pipeline.path_utils import read_text_safe
+    from pipeline.frontmatter_utils import read_frontmatter as _read_fm
 
     contents: list[str] = []
     rel_paths: list[str] = []
@@ -391,7 +391,7 @@ def _collect_markdown_inputs(
 
     for f in files:
         try:
-            text = read_text_safe(book_dir, f, encoding="utf-8")
+            meta, body = _read_fm(book_dir, f, encoding="utf-8", use_cache=True)
         except Exception as exc:
             logger.warning(
                 "semantic.index.read_failed",
@@ -399,10 +399,10 @@ def _collect_markdown_inputs(
             )
             skipped_io += 1
             continue
-        meta, body = _parse_frontmatter(text)
+        # meta/body already read via cached reader
         payload = (body or "").lstrip("\ufeff").strip()
-        if not payload:
-            payload = text.strip()
+        if not payload and meta:
+            payload = _shared_dump_frontmatter(meta).strip()
         if not payload:
             logger.info(
                 "semantic.index.skip_empty_file",
@@ -635,7 +635,7 @@ def enrich_frontmatter(
     slug: str,
     allow_empty_vocab: bool = False,
 ) -> List[Path]:
-    from pipeline.path_utils import read_text_safe
+    from pipeline.frontmatter_utils import read_frontmatter as _read_fm
 
     start_ts = time.perf_counter()
     base_dir, raw_dir, md_dir = _resolve_ctx_paths(context, slug)  # noqa: F841
@@ -664,14 +664,14 @@ def enrich_frontmatter(
             name = md.name
             title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
             try:
-                text = read_text_safe(md_dir, md, encoding="utf-8")
+                meta, body = _read_fm(md_dir, md, encoding="utf-8", use_cache=True)
             except OSError as e:
                 logger.warning(
                     "semantic.frontmatter.read_failed",
                     extra={"slug": slug, "file_path": str(md), "error": str(e)},
                 )
                 continue
-            meta, body = _parse_frontmatter(text)
+            # meta/body already read via cached reader
             raw_list = _as_list_str(meta.get("tags_raw"))
             canonical_from_raw = _canonicalize_tags(raw_list, inv)
             tags = canonical_from_raw or _guess_tags_for_name(name, vocab, inv=inv)
@@ -1100,44 +1100,19 @@ def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set
     return inv
 
 
-def _parse_frontmatter(md_text: str) -> Tuple[Dict[str, Any], str]:
-    if not md_text.startswith("---"):
-        return {}, md_text
-    try:
-        import yaml
-    except Exception:
-        return {}, md_text
-    try:
-        import re as _re
-
-        m = _re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", md_text, flags=_re.DOTALL)
-        if not m:
-            return {}, md_text
-        header = m.group(1)
-        body = md_text[m.end() :]
-        meta = yaml.safe_load(header) or {}
-        if not isinstance(meta, dict):
-            return {}, md_text
-        return cast(Dict[str, Any], meta), body
-    except Exception:
-        return {}, md_text
+from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
+from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
 
 
-def _dump_frontmatter(meta: Dict[str, Any]) -> str:
-    try:
-        import yaml
+def _parse_frontmatter(md_text: str) -> Tuple[Dict[str, Any], str]:  # compat wrapper
+    meta_raw, body = _shared_parse_frontmatter(md_text)
+    meta_dict: Dict[str, Any] = dict(meta_raw or {})
+    return meta_dict, body
 
-        return "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip() + "\n---\n"
-    except Exception:
-        lines = ["---"]
-        if "title" in meta:
-            title_val = str(meta["title"]).replace('"', '\\"')
-            lines.append(f'title: "{title_val}"')
-        if "tags" in meta and isinstance(meta["tags"], list):
-            lines.append("tags:")
-            lines.extend([f"  - {t}" for t in meta["tags"]])
-        lines.append("---\n")
-        return "\n".join(lines)
+
+def _dump_frontmatter(meta: Dict[str, Any]) -> str:  # compat wrapper
+    meta_dict: Dict[str, Any] = dict(meta)
+    return cast(str, _shared_dump_frontmatter(meta_dict))
 
 
 def _as_list_str(x: Any) -> list[str]:

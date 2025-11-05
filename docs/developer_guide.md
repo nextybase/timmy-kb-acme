@@ -71,7 +71,23 @@ log.info("ui.preview.open", extra={"slug": "acme", "page": "preview"})
 
 **Regola d’uso nei servizi/UI:** il logger viene creato per modulo e passato in call‑chain dove necessario, evitando stati globali.
 
----
+
+## Frontmatter (SSoT)
+Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
+`pipeline.frontmatter_utils`:
+
+- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l’SSoT.
+- `read_frontmatter(base, path, use_cache=True)` effettua path‑safety e caching (invalidazione su mtime/size).
+- Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat già presenti.
+
+Esempio rapido:
+```python
+from pipeline.frontmatter_utils import read_frontmatter, dump_frontmatter
+meta, body = read_frontmatter(base_dir, md_path)
+new_text = dump_frontmatter({**meta, "title": "Nuovo titolo"}) + body
+```
+
+------
 
 ## Path-safety & IO sicuro
 - Deriva i path dal workspace cliente (mai costruire manualmente stringhe tipo `output/timmy-kb-<slug>`).

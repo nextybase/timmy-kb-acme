@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
+from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths  # SSoT path-safety forte
 from semantic.auto_tagger import extract_semantic_candidates
@@ -83,24 +84,9 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
     return out
 
 
-def _dump_frontmatter(meta: dict[str, Any]) -> str:
-    """Serializza il dizionario `meta` in frontmatter YAML, con fallback minimo."""
-    try:
-        import yaml
-
-        payload = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip()
-        return f"---\n{payload}\n---\n"
-    except Exception:
-        lines = ["---"]
-        for key, value in meta.items():
-            if isinstance(value, list):
-                lines.append(f"{key}:")
-                for item in value:
-                    lines.append(f"  - {item}")
-            elif value is not None:
-                lines.append(f"{key}: {value}")
-        lines.append("---\n")
-        return "\n".join(lines)
+def _dump_frontmatter(meta: dict[str, Any]) -> str:  # compat wrapper
+    meta_dict: dict[str, Any] = dict(meta)
+    return cast(str, _shared_dump_frontmatter(meta_dict))
 
 
 def _write_markdown_for_pdf(
@@ -136,7 +122,7 @@ def _group_safe_pdfs_by_category(
     raw_root: Path,
     safe_pdfs: list[Path],
 ) -> tuple[list[Path], CategoryGroups]:
-    """Dato un elenco di PDF *giÃ * validati (risolti dentro raw_root),
+    """Dato un elenco di PDF *giÃƒÂ * validati (risolti dentro raw_root),
     restituisce:
       - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
     """
@@ -282,8 +268,8 @@ def convert_files_to_structured_markdown(
 ) -> None:
     """Converte i PDF in RAW in un set di .md strutturati nella cartella `md_dir`.
 
-    Se `safe_pdfs` Ã¨ fornito, **non** esegue alcuna discovery su disco e assume
-    che la lista sia giÃ  validata e risolta allâ€™interno di `ctx.raw_dir`.
+    Se `safe_pdfs` ÃƒÂ¨ fornito, **non** esegue alcuna discovery su disco e assume
+    che la lista sia giÃƒÂ  validata e risolta allÃ¢â‚¬â„¢interno di `ctx.raw_dir`.
     """
     base = ctx.base_dir
     raw_root = ctx.raw_dir
