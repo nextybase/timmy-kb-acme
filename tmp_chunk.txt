@@ -1,9 +1,0 @@
-   k: int = 8
-    candidate_limit: int = 4000
-
-
-# --------------------------- SSoT per il default limite ---------------------------
-
-
-def _default_candidate_limit() -> int:
-    """Singola fonte di ve

@@ -5,6 +5,7 @@ __pycache__/
 *.pyd
 *.pyo
 *.log
+.python-version
 
 # === Virtualenv ===
 venv/
@@ -13,10 +14,12 @@ ENV/
 .venv/
 .ENV/
 
-# === VSCode settings ===
+# === Editors/IDEs ===
 .vscode/*
 !.vscode/tasks.json
 !.vscode/keybindings.json
+.idea/
+.fleet/
 
 # === Pytest, Coverage ===
 .cache/
@@ -28,10 +31,11 @@ ENV/
 coverage.*
 .coverage
 *.coverage
+coverage.xml
 htmlcov/
 .tox/
 
-# === Output Pipeline ===
+# === Output Pipeline / Workspace locali ===
 output/
 tmp_repo_push/
 logs/
@@ -69,10 +73,16 @@ book.json
 qodana.report/
 qodana.sarif.json
 
-# === Artefatti temporanei ===
+# === Artefatti temporanei (prefissi vari) ===
+**/.tmp-*
+**/tmp-*
+**/temp-*
+**/tmp_*
+**/temp_*
+*.tmp
+*.diff
 *_log.txt
 pytest*.txt
-*.diff
 e2e*.json
 qodana*.json
 Users/
@@ -83,7 +93,6 @@ build/
 dist/
 **/*.dist-info/
 **/*.egg-info/
-
 *.egg-info/
 src/timmy_kb.egg-info/
 
