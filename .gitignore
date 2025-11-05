@@ -102,3 +102,6 @@ node_modules/
 !scripts/
 !scripts/**
 clients_db/
+
+# E2E reports
+playwright-report/
