@@ -294,3 +294,47 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
     pruned = pruned_records[-1]
     assert getattr(pruned, "cause", None) == "empty_embedding"
     assert getattr(pruned, "dropped", None) == 1
+
+
+def test_index_preserves_frontmatter_and_metadata(tmp_path):
+    base = tmp_path / "output" / "timmy-kb-dummy"
+    book = base / "book"
+    (book / "guide").mkdir(parents=True, exist_ok=True)
+    (book / "guide" / "Intro.md").write_text(
+        """---
+title: "Introduzione"
+tags:
+  - Alpha
+  - Beta
+source_category: guida
+created_at: "2025-01-01T00:00:00"
+---
+Contenuto principale del capitolo.
+""",
+        encoding="utf-8",
+    )
+
+    class Emb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [[1.0, 0.5, 0.25] for _ in texts]
+
+    dbp = tmp_path / "db_frontmatter.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="dummy",
+        scope="book",
+        embeddings_client=Emb(),
+        db_path=dbp,
+    )
+    assert inserted == 1
+
+    candidates = list(fetch_candidates("dummy", "book", limit=1, db_path=dbp))
+    assert candidates, "nessun candidato restituito dal DB"
+    candidate = candidates[0]
+    assert candidate["content"] == "Contenuto principale del capitolo."
+    assert candidate["meta"]["file"] == "guide/Intro.md"
+    assert candidate["meta"]["title"] == "Introduzione"
+    assert candidate["meta"]["source_category"] == "guida"
+    assert candidate["meta"]["created_at"] == "2025-01-01T00:00:00"
+    assert candidate["meta"]["tags"] == ["Alpha", "Beta"]
