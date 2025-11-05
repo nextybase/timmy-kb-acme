@@ -217,6 +217,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
+      - id: forbid-hardcoded-vision-model
+        name: Forbid hardcoded Vision model in UI services
+        entry: python scripts/dev/check_no_hardcoded_vision_model.py
+        language: system
+        files: ^src/ui/services/.*\.py$
+        pass_filenames: true
+        stages: [pre-commit, pre-push]
+
       # 🔒 Nuovo: vieta ValueError ai boundary runtime (cross-platform)
       - id: forbid-legacy-valueerror
         name: Forbid ValueError in runtime layers
