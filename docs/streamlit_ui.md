@@ -61,6 +61,17 @@ clear_tab()                    # pulisce lo stato
 
 Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina viene idratata.
 
+Esempio router completo nell'entrypoint:
+
+```python
+import streamlit as st
+from ui.pages.registry import build_pages
+
+pages = build_pages()
+navigation = st.navigation(pages, position="top")
+navigation.run()
+```
+
 ---
 
 ## Query string & slug
@@ -426,7 +437,7 @@ Prima di aprire una PR:
 
 - Usa `st.Page`/`st.navigation` e niente router legacy.
 - Se la pagina richiede slug: `render_chrome_then_require()` / `require_active_slug()`.
-- Navigazione interna con `st.page_link` / `st.switch_page` (no `<a href="/...">`).
+- Navigazione interna con `st.page_link`; usa `ui.utils.compat.nav_to(PagePaths.X)` solo dopo side-effects (salvataggi, reset) dove serve rerun controllato.
 
 **File I/O**
 
@@ -440,6 +451,7 @@ Prima di aprire una PR:
 **UX & stub‑compat**
 
 - Feedback con `status_guard` o `st.status` (no sleep/progress finti).
+- Modali: preferisci `ui.utils.compat.open_dialog(...)` (wrappa `st.dialog` e degrada inline se non supportato).
  - Evita `with col:` se lo stub non lo supporta; usa gli helper centralizzati:
    `from ui.utils.ui_controls import columns3, column_button, button`.
 
@@ -451,7 +463,7 @@ Usa:
 - `from ui.pages.registry import PagePaths` per link diretti (`st.page_link(PagePaths.NEW_CLIENT, ...)`).
 - `from ui.pages.registry import build_pages` nell’entrypoint per generare il `pages` dict per `st.navigation(...)`.
 
-La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X)`, che gestisce `st.switch_page(...)` e il fallback via `?tab=<url_path>`.
+La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X)`, che gestisce `st.switch_page(...)` e il fallback via `?tab=<url_path>`. Preferisci il link dichiarativo (`st.page_link(...)`) quando non hai side-effect da completare prima del rerun.
 
 ---
 
