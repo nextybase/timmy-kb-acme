@@ -105,3 +105,4 @@ clients_db/
 
 # E2E reports
 playwright-report/
+bench_artifacts/

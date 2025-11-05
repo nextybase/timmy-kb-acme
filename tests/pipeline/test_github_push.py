@@ -161,3 +161,73 @@ def test_lease_lock_blocks_second_acquisition(tmp_path: Path) -> None:
     lock_three = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
     lock_three.acquire()
     lock_three.release()
+
+
+def test_push_with_retry_recovers_after_transient(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[tuple[tuple[str, ...], str]] = []
+    push_failures = {"count": 0}
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, Any] | None, op: str) -> None:
+        calls.append((tuple(cmd), op))
+        if cmd[:3] == ["git", "push", "origin"] and push_failures["count"] == 0:
+            push_failures["count"] += 1
+            raise github_utils.CmdError(
+                "push failed",
+                cmd=cmd,
+                attempts=2,
+                attempt=1,
+                op=op,
+                stdout="err",
+                stderr="err",
+            )
+
+    monkeypatch.setattr(github_utils, "_run", _fake_run)
+
+    logger = logging.getLogger("tests.github.retry")
+    github_utils._push_with_retry(tmp_path, {}, "main", logger=logger, redact_logs=False)
+
+    push_calls = [c for c in calls if c[0][:3] == ("git", "push", "origin")]
+    pull_calls = [c for c in calls if c[0][:4] == ("git", "pull", "--rebase", "origin")]
+    assert len(push_calls) == 2
+    assert len(pull_calls) == 1
+
+
+def test_push_with_retry_raises_after_double_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def _always_fail(cmd: list[str], *, cwd: Path, env: dict[str, Any] | None, op: str) -> None:
+        raise github_utils.CmdError("failure", cmd=cmd, attempts=1, attempt=1, op=op, stdout="err", stderr="err")
+
+    monkeypatch.setattr(github_utils, "_run", _always_fail)
+
+    with pytest.raises(PushError):
+        github_utils._push_with_retry(
+            tmp_path, {}, "main", logger=logging.getLogger("tests.github.retry"), redact_logs=False
+        )
+
+
+def test_force_push_with_lease_uses_remote_sha(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[tuple[tuple[str, ...], str]] = []
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, Any] | None, op: str) -> None:
+        calls.append((tuple(cmd), op))
+
+    def _fake_git_rev_parse(ref: str, *, cwd: Path, env: dict[str, Any] | None) -> str:
+        if ref.startswith("origin/"):
+            return "remote-sha"
+        return "local-sha"
+
+    monkeypatch.setattr(github_utils, "_run", _fake_run)
+    monkeypatch.setattr(github_utils, "_git_rev_parse", _fake_git_rev_parse)
+
+    logger = logging.getLogger("tests.github.force")
+    github_utils._force_push_with_lease(
+        tmp_dir=tmp_path,
+        env={},
+        default_branch="main",
+        force_ack="ack-token",
+        logger=logger,
+        redact_logs=False,
+    )
+
+    assert calls[0][0] == ("git", "fetch", "origin", "main")
+    push_cmd = calls[-1][0]
+    assert push_cmd[0:3] == ("git", "push", "--force-with-lease=refs/heads/main:remote-sha")

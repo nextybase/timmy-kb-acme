@@ -34,6 +34,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 import unicodedata
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -67,6 +68,7 @@ _SAFE_PDF_CACHE_CAPACITY = 8
 class _SafePdfCacheEntry:
     mtime: float
     files: tuple[Path, ...]
+    timestamp: float
 
 
 _SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
@@ -246,6 +248,7 @@ def iter_safe_pdfs(
     *,
     on_skip: Callable[[Path, str], None] | None = None,
     use_cache: bool = False,
+    cache_ttl_s: float | None = None,
 ) -> Iterator[Path]:
     """Convenience wrapper che restituisce solo file PDF in modo path-safe."""
     if not use_cache:
@@ -272,10 +275,14 @@ def iter_safe_pdfs(
     current_mtime = _dir_mtime(resolved_root)
     cached = _SAFE_PDF_CACHE.get(resolved_root)
     if cached and abs(cached.mtime - current_mtime) <= 1e-6:
-        _SAFE_PDF_CACHE.move_to_end(resolved_root)
-        for cached_path in cached.files:
-            yield cached_path
-        return
+        if cache_ttl_s is not None and cache_ttl_s >= 0:
+            if (time.time() - cached.timestamp) > cache_ttl_s:
+                cached = None
+        if cached:
+            _SAFE_PDF_CACHE.move_to_end(resolved_root)
+            for cached_path in cached.files:
+                yield cached_path
+            return
 
     pdfs = tuple(
         iter_safe_paths(
@@ -287,7 +294,11 @@ def iter_safe_pdfs(
         )
     )
     if pdfs:
-        _SAFE_PDF_CACHE[resolved_root] = _SafePdfCacheEntry(mtime=current_mtime, files=pdfs)
+        _SAFE_PDF_CACHE[resolved_root] = _SafePdfCacheEntry(
+            mtime=current_mtime,
+            files=pdfs,
+            timestamp=time.time(),
+        )
         while len(_SAFE_PDF_CACHE) > _SAFE_PDF_CACHE_CAPACITY:
             _SAFE_PDF_CACHE.popitem(last=False)
     else:

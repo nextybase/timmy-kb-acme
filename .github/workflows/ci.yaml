@@ -74,11 +74,22 @@ jobs:
         run: mypy src
       - name: Pytest (coverage 85%)
         run: pytest -ra --cov=src --cov-report=xml --cov-fail-under=85
+      - name: Benchmark embeddings
+        run: |
+          mkdir -p bench_artifacts
+          python scripts/bench_embeddings_normalization.py --json bench_artifacts/bench_embeddings.json
+          if [ ! -f bench_artifacts/bench_embeddings.json ]; then echo '{"status": "missing"}' > bench_artifacts/bench_embeddings.json; fi
       - name: Upload coverage artifact
         uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
         with:
           name: coverage-xml
           path: coverage.xml
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
+        with:
+          name: bench-embeddings
+          path: bench_artifacts/bench_embeddings.json
       - name: Publish coverage summary
         if: always()
         shell: bash
