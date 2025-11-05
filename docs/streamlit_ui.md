@@ -477,7 +477,7 @@ R: No. Usa **sempre** `safe_write_text(..., atomic=True)` per garantire atomicit
 R: Non è path‑safe e può seguire symlink non desiderati. Usa `iter_pdfs_safe`/`count_pdfs_safe`.
 
 **D: Dove metto i log?**\
-R: Logger di pagina (es. `logging.getLogger('ui.manage')`) con eventi `ui.manage.*`. I filtri globali si occupano di redazione.
+R: Logger strutturato di pagina: `from pipeline.logging_utils import get_structured_logger` → `LOGGER = get_structured_logger('ui.manage')`. Eventi `ui.manage.*`.
 
 **D: Come gestisco la validazione YAML?**\
 R: Valida **prima** di scrivere (`yaml.safe_load`) e, in caso di errore, emetti `ui.<pagina>.<area>.yaml.invalid` senza persist.

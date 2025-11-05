@@ -25,7 +25,8 @@ from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SRC = REPO_ROOT / "src"
+# Limitiamo il controllo alla UI per evitare falsi positivi sugli altri layer.
+SRC = REPO_ROOT / "src" / "ui"
 
 SKIP_DIR_NAMES = {
     ".git",
@@ -99,7 +100,7 @@ def grep_find(root: Path, pattern: str) -> list[tuple[Path, int, str]]:
 
 
 def check_router() -> list[str]:
-    # Passa se trovi almeno uno fra st.Page e st.navigation in tutto il repo (src/)
+    # Passa se trovi almeno uno fra st.Page e st.navigation nel codice UI.
     hits = sum(grep_count(SRC, p) for p in REQUIRED_ROUTER_ANY)
     if hits == 0:
         return [

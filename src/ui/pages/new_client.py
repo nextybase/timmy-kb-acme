@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, cast
 
+from ui.pages.registry import PagePaths
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
@@ -548,6 +549,6 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
     eff_q = esc_url_component(eff)
     # Navigazione nativa (preferita) con fallback
     if hasattr(st, "page_link"):
-        st.page_link("src/ui/pages/manage.py", label="➡️ Vai a Gestisci cliente")
+        st.page_link(PagePaths.MANAGE, label="➡️ Vai a Gestisci cliente")
     else:
         st.link_button("➡️ Vai a Gestisci cliente", url=f"/manage?slug={eff_q}")

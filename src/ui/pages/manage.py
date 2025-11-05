@@ -281,7 +281,7 @@ if not slug:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
         # Sostituisce anchor HTML interno con page_link / fallback
         if hasattr(st, "page_link"):
-            st.page_link("src/ui/pages/new_client.py", label="➕ Crea nuovo cliente")
+            st.page_link(PagePaths.NEW_CLIENT, label="➕ Crea nuovo cliente")
         else:
             st.link_button("➕ Crea nuovo cliente", url="/new?tab=new")
         st.stop()
