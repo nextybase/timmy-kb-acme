@@ -41,6 +41,7 @@ import os
 import shutil
 import tempfile
 import time
+from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, runtime_checkable
@@ -121,6 +122,15 @@ class _SupportsContext(Protocol):
     base_dir: Path
 
 
+@dataclass(frozen=True)
+class _PushPlan:
+    base_dir: Path
+    book_dir: Path
+    md_files: Sequence[Path]
+    default_branch: str
+    lock_config: dict[str, Any]
+
+
 def _is_env_flag_enabled(value: Any) -> bool:
     if value is None:
         return False
@@ -185,6 +195,70 @@ def should_push(context: _SupportsContext) -> bool:
     if _resolve_env_flag(context, "SKIP_GITHUB_PUSH"):
         return False
     return True
+
+
+def _build_push_plan(
+    context: _SupportsContext,
+    *,
+    github_token: str,
+    do_push: bool,
+    redact_logs: bool,
+    logger: logging.Logger,
+) -> _PushPlan | None:
+    if not github_token:
+        raise PipelineError(
+            "GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.",
+            slug=getattr(context, "slug", None),
+        )
+
+    if not should_push(context):
+        logger.info(
+            "Push GitHub disabilitato da variabili d'ambiente (TIMMY_NO_GITHUB/SKIP_GITHUB_PUSH).",
+            extra={"slug": context.slug},
+        )
+        return None
+
+    book_dir = context.md_dir
+    if not book_dir.exists():
+        raise PipelineError(
+            f"Cartella book non trovata: {book_dir}",
+            slug=context.slug,
+            file_path=book_dir,
+        )
+
+    base_dir = getattr(context, "base_dir", None)
+    if not base_dir:
+        raise PipelineError("Context.base_dir assente: impossibile determinare la working area.", slug=context.slug)
+    try:
+        ensure_within(base_dir, book_dir)
+    except Exception:
+        raise PipelineError(
+            f"Percorso book non sicuro: {book_dir} (fuori da {base_dir})",
+            slug=context.slug,
+            file_path=book_dir,
+        )
+
+    md_files = _collect_md_files(book_dir)
+    if not md_files:
+        msg = "📄 Nessun file .md valido trovato nella cartella book. Push annullato."
+        logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+        return None
+
+    if not do_push:
+        msg = "Push disattivato: do_push=False (dry run a carico dell'orchestratore)."
+        logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
+        return None
+
+    default_branch = _resolve_default_branch(context)
+    lock_config = _resolve_lock_config(context)
+
+    return _PushPlan(
+        base_dir=base_dir,
+        book_dir=book_dir,
+        md_files=tuple(md_files),
+        default_branch=default_branch,
+        lock_config=lock_config,
+    )
 
 
 class LeaseLock:
@@ -671,7 +745,6 @@ def push_output_to_github(
     *,
     github_token: str,
     do_push: bool = True,
-    # governance del force (no I/O qui)
     force_push: bool = False,
     force_ack: str | None = None,
     redact_logs: bool = False,
@@ -682,57 +755,21 @@ def push_output_to_github(
     global logger
     logger = local_logger
 
-    if not github_token:
-        raise PipelineError(
-            "GITHUB_TOKEN mancante o vuoto: impossibile eseguire push.",
-            slug=getattr(context, "slug", None),
-        )
-
-    if not should_push(context):
-        local_logger.info(
-            "Push GitHub disabilitato da variabili d'ambiente (TIMMY_NO_GITHUB/SKIP_GITHUB_PUSH).",
-            extra={"slug": context.slug},
-        )
-        return
-
-    book_dir = context.md_dir
-    if not book_dir.exists():
-        raise PipelineError(
-            f"Cartella book non trovata: {book_dir}",
-            slug=context.slug,
-            file_path=book_dir,
-        )
-
-    base_dir = getattr(context, "base_dir", None)
-    if not base_dir:
-        raise PipelineError("Context.base_dir assente: impossibile determinare la working area.", slug=context.slug)
-    try:
-        ensure_within(base_dir, book_dir)
-    except Exception:
-        raise PipelineError(
-            f"Percorso book non sicuro: {book_dir} (fuori da {base_dir})",
-            slug=context.slug,
-            file_path=book_dir,
-        )
-
-    md_files = _collect_md_files(book_dir)
-    if not md_files:
-        msg = "ðŸ›‘ Nessun file .md valido trovato nella cartella book. Push annullato."
-        local_logger.warning(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
-        return
-
-    if do_push is False:
-        msg = "Push disattivato: do_push=False (dry run a carico dell'orchestratore)."
-        local_logger.info(redact_secrets(msg) if redact_logs else msg, extra={"slug": context.slug})
-        return
-
-    default_branch = _resolve_default_branch(context)
-    local_logger.info(
-        f"ðŸš§ Preparazione push su GitHub (branch: {default_branch})",
-        extra={"slug": context.slug, "branch": default_branch},
+    plan = _build_push_plan(
+        context,
+        github_token=github_token,
+        do_push=do_push,
+        redact_logs=redact_logs,
+        logger=local_logger,
     )
-    lock_config = _resolve_lock_config(context)
-    lock = LeaseLock(base_dir, slug=context.slug, logger=local_logger, **lock_config)
+    if plan is None:
+        return
+
+    local_logger.info(
+        "Preparazione push su GitHub",
+        extra={"slug": context.slug, "branch": plan.default_branch},
+    )
+    lock = LeaseLock(plan.base_dir, slug=context.slug, logger=local_logger, **plan.lock_config)
     lock.acquire()
 
     repo = None
@@ -743,15 +780,15 @@ def push_output_to_github(
             repo, tmp_dir, env = _prepare_repo(
                 context,
                 github_token=github_token,
-                md_files=md_files,
-                default_branch=default_branch,
-                base_dir=base_dir,
-                book_dir=book_dir,
+                md_files=list(plan.md_files),
+                default_branch=plan.default_branch,
+                base_dir=plan.base_dir,
+                book_dir=plan.book_dir,
                 redact_logs=redact_logs,
                 logger=local_logger,
             )
             try:
-                prepare_phase.set_artifacts(len(md_files))
+                prepare_phase.set_artifacts(len(plan.md_files))
             except Exception:
                 prepare_phase.set_artifacts(None)
 
@@ -778,11 +815,11 @@ def push_output_to_github(
                         "Force push richiesto senza ACK. Serve force_ack valorizzato.",
                         slug=context.slug,
                     )
-                if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):
+                if not is_branch_allowed_for_force(plan.default_branch, context, allow_if_unset=True):
                     patterns = get_force_allowed_branches(context)
                     patterns_str = ", ".join(patterns) if patterns else "(lista vuota)"
                     raise ForcePushError(
-                        f"Force push NON consentito sul branch '{default_branch}'. "
+                        f"Force push NON consentito sul branch '{plan.default_branch}'. "
                         f"Branch ammessi (GIT_FORCE_ALLOWED_BRANCHES): {patterns_str}",
                         slug=context.slug,
                     )
@@ -790,25 +827,31 @@ def push_output_to_github(
                 _force_push_with_lease(
                     tmp_dir,
                     env,
-                    default_branch,
+                    plan.default_branch,
                     force_ack,
                     logger=local_logger,
                     redact_logs=redact_logs,
                 )
             else:
-                _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
+                _push_with_retry(
+                    tmp_dir,
+                    env,
+                    plan.default_branch,
+                    logger=local_logger,
+                    redact_logs=redact_logs,
+                )
 
         local_logger.info(
-            f"ðŸ“¦ Push completato su {repo.full_name} ({default_branch})",
-            extra={"slug": context.slug, "repo": repo.full_name, "branch": default_branch},
+            "Push GitHub completato",
+            extra={"slug": context.slug, "repo": repo.full_name, "branch": plan.default_branch},
         )
     except CmdError as e:
         tail = (e.stderr or e.stdout or "").strip()
         tail = tail[-2000:] if tail else ""
-        raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) â†’ {tail}"
+        raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) -> {tail}"
         safe = redact_secrets(raw) if redact_logs else raw
         raise PushError(safe, slug=context.slug) from e
     finally:
         lock.release()
         if tmp_dir is not None:
-            _cleanup_tmp_dir(tmp_dir, base_dir)
+            _cleanup_tmp_dir(tmp_dir, plan.base_dir)
