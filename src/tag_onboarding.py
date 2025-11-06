@@ -40,7 +40,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.logging_utils import get_structured_logger, phase_scope, tail_path
+from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
@@ -48,8 +48,6 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     iter_safe_paths,
     open_for_read_bytes_selfguard,
 )
-from semantic.api import build_tags_csv
-from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from semantic.types import ClientContextProtocol
 from storage.tags_store import (
     clear_doc_terms,
@@ -63,6 +61,7 @@ from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder, upsert_folder_term, upsert_term
 from tag_onboarding_context import ContextResources, prepare_context
 from tag_onboarding_raw import copy_from_local, download_from_drive
+from tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
 
 yaml: Any | None
 try:
@@ -711,32 +710,6 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     return 0
 
 
-def _emit_csv_phase(
-    context: ClientContext,
-    logger: logging.Logger,
-    *,
-    slug: str,
-    raw_dir: Path,
-    semantic_dir: Path,
-) -> Path:
-    """Emette il CSV dei tag grezzi e ritorna il path al file generato."""
-    with phase_scope(logger, stage="emit_csv", customer=context.slug) as m:
-        csv_path: Path = build_tags_csv(context, logger, slug=slug)
-        try:
-            line_count = 0
-            with open_for_read_bytes_selfguard(csv_path) as f:
-                for chunk in iter(lambda: f.read(8192), b""):
-                    line_count += chunk.count(b"\n")
-            m.set_artifacts(max(0, line_count - 1))
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "cli.tag_onboarding.csv_emitted",
-        extra={"file_path": str(csv_path), "file_path_tail": tail_path(csv_path)},
-    )
-    return csv_path
-
-
 def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: logging.Logger) -> bool:
     """Checkpoint HiTL: decide se proseguire con la generazione degli stub."""
     if non_interactive:
@@ -751,20 +724,6 @@ def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: l
         logger.info("cli.tag_onboarding.user_aborted")
         return False
     return True
-
-
-def _emit_stub_phase(semantic_dir: Path, csv_path: Path, logger: logging.Logger, *, context: ClientContext) -> None:
-    with phase_scope(logger, stage="semantic_stub", customer=context.slug) as m:
-        write_tagging_readme(semantic_dir, logger)
-        write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
-        try:
-            m.set_artifacts(2)
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "Arricchimento semantico completato",
-        extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
-    )
 
 
 def tag_onboarding_main(
@@ -811,14 +770,14 @@ def tag_onboarding_main(
         raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
     # Fase 1: CSV in semantic/
-    csv_path = _emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
+    csv_path = emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
 
     # Checkpoint HiTL
     if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
         return
 
     # Fase 2: stub in semantic/
-    _emit_stub_phase(semantic_dir, csv_path, logger, context=context)
+    emit_stub_phase(semantic_dir, csv_path, logger, context=context)
 
 
 # ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
