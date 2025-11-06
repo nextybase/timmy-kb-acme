@@ -51,6 +51,7 @@ def test_push_output_to_github_skips_when_no_markdown(monkeypatch: pytest.Monkey
 def test_push_output_to_github_success_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ctx = _make_context(tmp_path)
     calls: list[tuple[str, Any]] = []
+    stages: list[str] = []
 
     tmp_dir = ctx.base_dir / "tmp-clone"
 
@@ -69,6 +70,22 @@ def test_push_output_to_github_success_path(monkeypatch: pytest.MonkeyPatch, tmp
     def _fail_force(*_: Any, **__: Any) -> None:
         raise AssertionError("force push non previsto")
 
+    class _PhaseSpy:
+        def __init__(self, _logger: Any, *, stage: str, customer: Any = None) -> None:  # noqa: D401 - helper test
+            stages.append(stage)
+            self.stage = stage
+            self.customer = customer
+
+        def __enter__(self) -> "_PhaseSpy":
+            return self
+
+        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+            return False
+
+        def set_artifacts(self, _: Any) -> None:
+            return None
+
+    monkeypatch.setattr(github_utils, "phase_scope", _PhaseSpy)
     monkeypatch.setattr(github_utils, "_prepare_repo", _fake_prepare)
     monkeypatch.setattr(github_utils, "_stage_changes", _fake_stage)
     monkeypatch.setattr(github_utils, "_push_with_retry", _fake_push)
@@ -81,6 +98,7 @@ def test_push_output_to_github_success_path(monkeypatch: pytest.MonkeyPatch, tmp
 
     assert ("stage", None) in calls
     assert any(call[0] == "push" for call in calls)
+    assert stages == ["prepare_repo", "stage_changes", "push_with_retry"]
     assert not tmp_dir.exists()
 
 

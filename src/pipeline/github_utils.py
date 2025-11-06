@@ -88,7 +88,7 @@ except ImportError:  # pragma: no cover
 
 from pipeline.exceptions import ConfigError, ForcePushError, PipelineError, PushError
 from pipeline.file_utils import create_lock_file, remove_lock_file
-from pipeline.logging_utils import get_structured_logger, redact_secrets
+from pipeline.logging_utils import get_structured_logger, phase_scope, redact_secrets
 from pipeline.path_utils import (  # sicurezza path
     ensure_within,
     ensure_within_and_resolve,
@@ -739,52 +739,64 @@ def push_output_to_github(
     tmp_dir: Path | None = None
     env: dict[str, Any] | None = None
     try:
-        repo, tmp_dir, env = _prepare_repo(
-            context,
-            github_token=github_token,
-            md_files=md_files,
-            default_branch=default_branch,
-            base_dir=base_dir,
-            book_dir=book_dir,
-            redact_logs=redact_logs,
-            logger=local_logger,
-        )
+        with phase_scope(local_logger, stage="prepare_repo", customer=context.slug) as prepare_phase:
+            repo, tmp_dir, env = _prepare_repo(
+                context,
+                github_token=github_token,
+                md_files=md_files,
+                default_branch=default_branch,
+                base_dir=base_dir,
+                book_dir=book_dir,
+                redact_logs=redact_logs,
+                logger=local_logger,
+            )
+            try:
+                prepare_phase.set_artifacts(len(md_files))
+            except Exception:
+                prepare_phase.set_artifacts(None)
 
-        committed = _stage_changes(
-            tmp_dir,
-            env,
-            slug=context.slug,
-            force_ack=force_ack,
-            logger=local_logger,
-        )
+        with phase_scope(local_logger, stage="stage_changes", customer=context.slug) as stage_phase:
+            committed = _stage_changes(
+                tmp_dir,
+                env,
+                slug=context.slug,
+                force_ack=force_ack,
+                logger=local_logger,
+            )
+            try:
+                stage_phase.set_artifacts(1 if committed else 0)
+            except Exception:
+                stage_phase.set_artifacts(None)
         if not committed:
             return
 
-        if force_push:
-            if not force_ack:
-                raise ForcePushError(
-                    "Force push richiesto senza ACK. Serve force_ack valorizzato.",
-                    slug=context.slug,
-                )
-            if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):
-                patterns = get_force_allowed_branches(context)
-                patterns_str = ", ".join(patterns) if patterns else "(lista vuota)"
-                raise ForcePushError(
-                    f"Force push NON consentito sul branch '{default_branch}'. "
-                    f"Branch ammessi (GIT_FORCE_ALLOWED_BRANCHES): {patterns_str}",
-                    slug=context.slug,
-                )
+        push_stage = "force_push" if force_push else "push_with_retry"
+        with phase_scope(local_logger, stage=push_stage, customer=context.slug):
+            if force_push:
+                if not force_ack:
+                    raise ForcePushError(
+                        "Force push richiesto senza ACK. Serve force_ack valorizzato.",
+                        slug=context.slug,
+                    )
+                if not is_branch_allowed_for_force(default_branch, context, allow_if_unset=True):
+                    patterns = get_force_allowed_branches(context)
+                    patterns_str = ", ".join(patterns) if patterns else "(lista vuota)"
+                    raise ForcePushError(
+                        f"Force push NON consentito sul branch '{default_branch}'. "
+                        f"Branch ammessi (GIT_FORCE_ALLOWED_BRANCHES): {patterns_str}",
+                        slug=context.slug,
+                    )
 
-            _force_push_with_lease(
-                tmp_dir,
-                env,
-                default_branch,
-                force_ack,
-                logger=local_logger,
-                redact_logs=redact_logs,
-            )
-        else:
-            _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
+                _force_push_with_lease(
+                    tmp_dir,
+                    env,
+                    default_branch,
+                    force_ack,
+                    logger=local_logger,
+                    redact_logs=redact_logs,
+                )
+            else:
+                _push_with_retry(tmp_dir, env, default_branch, logger=local_logger, redact_logs=redact_logs)
 
         local_logger.info(
             f"ðŸ“¦ Push completato su {repo.full_name} ({default_branch})",
