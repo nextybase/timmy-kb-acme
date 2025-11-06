@@ -36,27 +36,19 @@ from pathlib import Path
 from typing import Any, Optional, Sequence, cast
 
 import storage.tags_store as tags_store
-from pipeline.config_utils import get_client_config
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
-
-try:
-    from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
-except Exception:  # pragma: no cover
-    download_drive_pdfs_to_local = None
-    get_drive_service = None
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.file_utils import safe_write_text  # scritture atomiche
-from pipeline.logging_utils import get_structured_logger, mask_partial, phase_scope, tail_path
+from pipeline.logging_utils import get_structured_logger, phase_scope, tail_path
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
     ensure_within_and_resolve,
     iter_safe_paths,
-    iter_safe_pdfs,
     open_for_read_bytes_selfguard,
 )
-from semantic.api import build_tags_csv, copy_local_pdfs_to_raw
+from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from semantic.types import ClientContextProtocol
 from storage.tags_store import (
@@ -69,6 +61,8 @@ from storage.tags_store import (
 )
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder, upsert_folder_term, upsert_term
+from tag_onboarding_context import ContextResources, prepare_context
+from tag_onboarding_raw import copy_from_local, download_from_drive
 
 yaml: Any | None
 try:
@@ -76,30 +70,9 @@ try:
 except Exception:  # pragma: no cover
     yaml = None
 
-
-def _require_drive_utils() -> None:
-    missing: list[str] = []
-    if not callable(get_drive_service):
-        missing.append("get_drive_service")
-    if not callable(download_drive_pdfs_to_local):
-        missing.append("download_drive_pdfs_to_local")
-    if missing:
-        raise ConfigError(
-            "Sorgente Drive selezionata ma dipendenze non installate. "
-            f"Funzioni mancanti: {', '.join(missing)}.\n"
-            "Installa gli extra: pip install .[drive]"
-        )
-
-
 _INVALID_CHARS_RE = re.compile(r'[\/:*?"<>|]')
-__all__ = [
-    "tag_onboarding_main",
-    "validate_tags_reviewed",
-    "_validate_tags_reviewed",  # esposto per i test unitari
-]
 
 
-# ───────────────────────────── Helpers UX ─────────────────────────────────────────────
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
     return input(msg).strip()
@@ -794,74 +767,6 @@ def _emit_stub_phase(semantic_dir: Path, csv_path: Path, logger: logging.Logger,
     )
 
 
-def _download_from_drive(
-    context: ClientContext,
-    logger: logging.Logger,
-    *,
-    raw_dir: Path,
-    non_interactive: bool,
-) -> None:
-    """Scarica PDF da Drive in raw/ applicando le stesse guardie e metriche."""
-    cfg = get_client_config(context) or {}
-    drive_raw_folder_id = cfg.get("drive_raw_folder_id")
-    if not drive_raw_folder_id:
-        raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
-    _require_drive_utils()
-    service = get_drive_service(context)
-    with phase_scope(logger, stage="drive_download", customer=context.slug) as m:
-        download_drive_pdfs_to_local(
-            service=service,
-            remote_root_folder_id=drive_raw_folder_id,
-            local_root_dir=raw_dir,
-            progress=not non_interactive,
-            context=context,
-            redact_logs=getattr(context, "redact_logs", False),
-        )
-        try:
-            pdfs = list(iter_safe_pdfs(raw_dir))
-            m.set_artifacts(len(pdfs))
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "cli.tag_onboarding.drive_download_completed",
-        extra={"folder_id": mask_partial(drive_raw_folder_id)},
-    )
-
-
-def _copy_from_local(
-    logger: logging.Logger,
-    *,
-    raw_dir: Path,
-    local_path: Optional[str],
-    non_interactive: bool,
-    context: ClientContext,
-) -> None:
-    """Copia PDF da sorgente locale in raw/ evitando duplicazioni."""
-    if not local_path:
-        local_path = str(raw_dir)
-        logger.info(
-            "Nessun --local-path fornito: uso RAW del cliente come sorgente",
-            extra={"raw": str(raw_dir), "slug": context.slug},
-        )
-    src_dir = Path(local_path).expanduser().resolve()
-    if src_dir == raw_dir.expanduser().resolve():
-        logger.info(
-            "cli.tag_onboarding.source_matches_raw",
-            extra={"raw": str(raw_dir)},
-        )
-        return
-    with phase_scope(logger, stage="local_copy", customer=context.slug) as m:
-        copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
-        try:
-            m.set_artifacts(int(copied))
-        except Exception:
-            m.set_artifacts(None)
-    logger.info(
-        "cli.tag_onboarding.local_copy_completed",
-        extra={"count": copied, "raw_tail": tail_path(raw_dir)},
-    )
-
-
 def tag_onboarding_main(
     slug: str,
     *,
@@ -876,40 +781,26 @@ def tag_onboarding_main(
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
     # Context + logger coerenti con orchestratori
-    context: ClientContext = ClientContext.load(
+    resources: ContextResources = prepare_context(
         slug=slug,
-        interactive=not non_interactive,
-        require_env=(source == "drive"),
+        non_interactive=non_interactive,
         run_id=run_id,
+        require_env=(source == "drive"),
     )
-
-    # Path base per il cliente
-    base_dir = getattr(context, "base_dir", None) or (
-        Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-    )
-    ensure_within(base_dir.parent, base_dir)  # base_dir dentro output/
-    raw_dir = getattr(context, "raw_dir", None) or (base_dir / "raw")
-    semantic_dir = base_dir / "semantic"
-    ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, semantic_dir)
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-
-    # Log file sotto la sandbox cliente
-    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    ensure_within(base_dir, log_file)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
+    context = resources.context
+    raw_dir = resources.raw_dir
+    semantic_dir = resources.semantic_dir
+    logger = resources.logger
 
     logger.info("cli.tag_onboarding.started", extra={"slug": slug, "source": source})
 
     # Sorgente di PDF
     if source == "drive":
-        _download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
+        download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
 
     # B) LOCALE
     elif source == "local":
-        _copy_from_local(
+        copy_from_local(
             logger,
             raw_dir=raw_dir,
             local_path=local_path,
