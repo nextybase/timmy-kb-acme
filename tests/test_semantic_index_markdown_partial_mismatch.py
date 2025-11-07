@@ -3,7 +3,8 @@
 import logging
 from types import SimpleNamespace
 
-from timmykb.semantic.api import index_markdown_to_db
+from semantic import embedding_service
+from semantic.api import index_markdown_to_db
 
 
 class FakeEmbClient:
@@ -27,8 +28,8 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
     caplog.set_level(logging.INFO)
 
     # stub del DB per evitare IO reale
-    monkeypatch.setattr("src.semantic.api._init_kb_db", lambda db_path=None: None)
-    monkeypatch.setattr("src.semantic.api._get_db_path", lambda: base / "kb.sqlite")
+    monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path=None: None, raising=True)
+    monkeypatch.setattr(embedding_service, "_get_db_path", lambda: base / "kb.sqlite", raising=True)
 
     calls = {"count": 0}
 
@@ -36,7 +37,7 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
         calls["count"] += 1
         return 1
 
-    monkeypatch.setattr("src.semantic.api._insert_chunks", lambda **kw: fake_insert_chunks(**kw))
+    monkeypatch.setattr(embedding_service, "_insert_chunks", lambda **kw: fake_insert_chunks(**kw), raising=True)
 
     inserted = index_markdown_to_db(
         ctx,

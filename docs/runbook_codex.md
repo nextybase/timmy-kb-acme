@@ -106,7 +106,9 @@ Riferimenti: [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [User Guide](user_guide
 
 ### 5.3 Scenario *Full Access* (eccezione)
 - Consentito **solo** su branch di lavoro dedicati per task espliciti (migrazioni/operazioni massive).
-- Deve usare gli helper GitHub interni: `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
+- Deve usare gli helper GitHub interni: `pipeline.github_push_flow._prepare_repo/_stage_changes/_push_with_retry/_force_push_with_lease`, oltre ai flag gestiti in `pipeline.github_env_flags`.
+- Per la pipeline semantic, delega sempre a `semantic.convert_service`, `semantic.frontmatter_service` e `semantic.embedding_service`; `semantic.api` resta un facade che re-esporta le funzioni pubbliche.
+- Le fasi NLP (doc_terms/cluster) vanno orchestrate tramite `semantic.nlp_runner.run_doc_terms_pipeline` e lo shim `tag_onboarding.run_nlp_to_db`, che gestiscono telemetria, retry e accessi DB in modo sicuro.
 - Ogni operazione è tracciata a log; PR o commit devono essere **atomici** e verificabili.
 
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS](../.codex/AGENTS.md).

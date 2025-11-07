@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConversionError
-from semantic.api import _call_convert_md, _CtxShim  # test su funzione interna by design
+from semantic.context_paths import ContextPaths
+from semantic.convert_service import _call_convert_md  # test su funzione interna by design
 
 
 def test_call_convert_md_wraps_typeerror_with_context(tmp_path: Path):
@@ -18,7 +19,7 @@ def test_call_convert_md_wraps_typeerror_with_context(tmp_path: Path):
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
 
-    ctx = _CtxShim(base_dir=base, raw_dir=raw, md_dir=book, slug="zzz")
+    ctx = ContextPaths(base_dir=base, raw_dir=raw, md_dir=book, slug="zzz")
 
     with pytest.raises(ConversionError) as ei:
         _call_convert_md(bad_converter, ctx, book)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SPDX_TOKEN = "SPDX-License-Identifier"
+SPDX_TOKEN = "SPDX-License-Identifier"  # noqa: S105 - SPDX marker, non-segreto
 
 def has_spdx_header(path: Path) -> bool:
     try:

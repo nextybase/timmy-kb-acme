@@ -3,7 +3,8 @@
 import logging
 from types import SimpleNamespace
 
-import timmykb.semantic.api as api
+from semantic import api as sapi
+from semantic import convert_service
 
 
 def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch, caplog):
@@ -18,7 +19,7 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
 
     # Forziamo la discovery sicura: ritorna il PDF trovato
-    monkeypatch.setattr(api, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))
+    monkeypatch.setattr(convert_service, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))
 
     called = {"ok": False, "safe_pdfs_len": -1}
 
@@ -30,12 +31,17 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
         return None
 
     # list_content_markdown finge che il converter abbia prodotto 1 file
-    monkeypatch.setattr(api, "list_content_markdown", lambda bd: [book / "content.md"])
+    monkeypatch.setattr(
+        convert_service,
+        "list_content_markdown",
+        lambda bd: [book / "content.md"],
+        raising=True,
+    )
     # sostituisci il converter reale con lo stub
-    monkeypatch.setattr(api, "_convert_md", _convert_md_stub)
+    monkeypatch.setattr(convert_service, "_convert_md", _convert_md_stub)
 
     caplog.set_level(logging.INFO)
-    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
+    out = sapi.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
 
     assert called["ok"] is True
     assert called["safe_pdfs_len"] == 1

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from types import SimpleNamespace
 
-import timmykb.semantic.api as sapi
 import timmykb.semantic_headless as sh
+from semantic import api as sapi
+from semantic import frontmatter_service as front
 
 
 def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
@@ -26,10 +27,15 @@ def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
 
     # Generatori SUMMARY/README no-op minimi
     monkeypatch.setattr(
-        sapi, "_gen_summary", lambda shim: (shim.md_dir / "SUMMARY.md").write_text("* [x](x.md)", "utf-8")
+        front,
+        "_gen_summary",
+        lambda shim: (shim.md_dir / "SUMMARY.md").write_text("* [x](x.md)", "utf-8"),
+        raising=True,
     )
-    monkeypatch.setattr(sapi, "_gen_readme", lambda shim: (shim.md_dir / "README.md").write_text("# Book", "utf-8"))
-    monkeypatch.setattr(sapi, "_validate_md", lambda shim: None)
+    monkeypatch.setattr(
+        front, "_gen_readme", lambda shim: (shim.md_dir / "README.md").write_text("# Book", "utf-8"), raising=True
+    )
+    monkeypatch.setattr(front, "_validate_md", lambda shim: None, raising=True)
 
     # Esegue headless
     out = sh.build_markdown_headless(ctx, sapi.logging.getLogger("test.headless"), slug="dummy")

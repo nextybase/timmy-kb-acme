@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import semantic.api as sapi
+import semantic.convert_service as conv
+import semantic.embedding_service as semb
+import semantic.frontmatter_service as front
 
 
 @dataclass
@@ -44,7 +47,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
         ) -> Iterable[list[float]]:  # type: ignore[override]
             return [[1.0, 0.0] for _ in texts]
 
-    monkeypatch.setattr(sapi, "_insert_chunks", lambda **kwargs: 1)
+    monkeypatch.setattr(semb, "_insert_chunks", lambda **kwargs: 1)
 
     caplog.set_level(logging.INFO)
     _ = sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=None)
@@ -79,12 +82,12 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
         (target / "A.md").write_text("A", encoding="utf-8")
         (target / "B.md").write_text("B", encoding="utf-8")
 
-    monkeypatch.setattr(sapi, "_convert_md", _fake_convert)
+    monkeypatch.setattr(conv, "_convert_md", _fake_convert)
     monkeypatch.setattr(
-        sapi, "_gen_summary", lambda ctx: (ctx.md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+        front, "_gen_summary", lambda ctx: (ctx.md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
     )
     monkeypatch.setattr(
-        sapi, "_gen_readme", lambda ctx: (ctx.md_dir / "README.md").write_text("# R\n", encoding="utf-8")
+        front, "_gen_readme", lambda ctx: (ctx.md_dir / "README.md").write_text("# R\n", encoding="utf-8")
     )
     # Evita enrich_frontmatter post build
     monkeypatch.setattr(sapi, "_load_reviewed_vocab", lambda base_dir, logger: {}, raising=True)
@@ -127,7 +130,7 @@ def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplo
     def _boom(**kwargs: Any) -> int:  # type: ignore[no-untyped-def]
         raise RuntimeError("db boom")
 
-    monkeypatch.setattr(sapi, "_insert_chunks", _boom)
+    monkeypatch.setattr(semb, "_insert_chunks", _boom)
 
     caplog.set_level(logging.INFO)
     import pytest

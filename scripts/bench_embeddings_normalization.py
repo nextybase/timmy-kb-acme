@@ -114,7 +114,11 @@ def _prepare_raw_pdfs(raw_dir: "Path", n_files: int) -> None:
         safe_write_text(pdf_path, "%PDF-1.4\n% Timmy KB bench\n", encoding="utf-8", atomic=True)
 
 
-def _bench_semantic_index() -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, int]], Dict[str, Dict[str, float]]]:
+def _bench_semantic_index() -> Tuple[
+    Dict[str, Dict[str, float]],
+    Dict[str, Dict[str, int]],
+    Dict[str, Dict[str, float]],
+]:
     import logging
     from dataclasses import dataclass
     from pathlib import Path

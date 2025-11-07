@@ -297,6 +297,66 @@ def _score_candidates(
         )
 
 
+def _materialize_query_vector(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+) -> tuple[Sequence[float] | None, float]:
+    """Calcola l'embedding della query e restituisce (vettore, ms)."""
+    t0 = time.time()
+    q_raw = embeddings_client.embed_texts([params.query])
+    t_ms = (time.time() - t0) * 1000.0
+    q_vecs = normalize_embeddings(q_raw)
+    if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
+        LOGGER.warning(
+            "retriever.query.invalid",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "reason": "empty_embedding",
+            },
+        )
+        return None, t_ms
+    return q_vecs[0], t_ms
+
+
+def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
+    """Carica tutti i candidati e restituisce (lista, ms)."""
+    t0 = time.time()
+    candidates = list(
+        fetch_candidates(
+            params.project_slug,
+            params.scope,
+            limit=params.candidate_limit,
+            db_path=params.db_path,
+        )
+    )
+    return candidates, (time.time() - t0) * 1000.0
+
+
+def _rank_candidates(
+    query_vector: Sequence[float],
+    candidates: Sequence[dict[str, Any]],
+    k: int,
+) -> tuple[list[dict[str, Any]], int, dict[str, int], float]:
+    """Restituisce (risultati, numero_candidati, stats, ms)."""
+    stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
+    total_candidates = len(candidates)
+    t0 = time.time()
+    scored_iter = _score_candidates(query_vector, candidates, stats=stats)
+    top_k = max(0, int(k))
+    if top_k == 0 or total_candidates == 0:
+        results: list[dict[str, Any]] = []
+    else:
+        if top_k >= total_candidates:
+            scored_sorted = sorted(scored_iter, key=lambda t: (-t[0]["score"], t[1]))
+            results = [item for item, _ in scored_sorted]
+        else:
+            topk = nlargest(top_k, scored_iter, key=lambda t: (t[0]["score"], -t[1]))
+            results = [item for item, _ in sorted(topk, key=lambda t: (-t[0]["score"], t[1]))]
+    elapsed_ms = (time.time() - t0) * 1000.0
+    return results, total_candidates, stats, elapsed_ms
+
+
 # ---------------- Wrapper pubblico per calibrazione candidate_limit -------------
 
 
@@ -388,61 +448,24 @@ def search(
     if params.candidate_limit == 0:
         return []
 
-    t0 = time.time()
+    t_total_start = time.time()
 
     # 1) Embedding della query
-    t_emb0 = time.time()
-    q_raw = embeddings_client.embed_texts([params.query])
-    t_emb_ms = (time.time() - t_emb0) * 1000.0
-
-    # Normalizzazione SSoT
-    q_vecs = normalize_embeddings(q_raw)
-    # Verifiche esplicite di vuoto
-    if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
-        LOGGER.warning(
-            "retriever.query.invalid",
-            extra={
-                "project_slug": params.project_slug,
-                "scope": params.scope,
-                "reason": "empty_embedding",
-            },
-        )
+    query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
+    if query_vector is None:
         return []
-    qv = q_vecs[0]
 
     # 2) Caricamento candidati dal DB
-    t_fetch0 = time.time()
-    cands = list(
-        fetch_candidates(
-            params.project_slug,
-            params.scope,
-            limit=params.candidate_limit,
-            db_path=params.db_path,
-        )
+    candidates, t_fetch_ms = _load_candidates(params)
+
+    # 3) Scoring + ranking deterministico
+    scored_items, candidates_count, coerce_stats, t_score_sort_ms = _rank_candidates(
+        query_vector,
+        candidates,
+        params.k,
     )
-    t_fetch_ms = (time.time() - t_fetch0) * 1000.0
-    n = len(cands)
 
-    # 3) Scoring (generator) con indice per tie-break deterministico
-    coerce_stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
-    scored_iter = _score_candidates(qv, cands, stats=coerce_stats)
-
-    # 4) Ordinamento e top-k con tie-break deterministico (score desc, idx asc)
-    k = max(0, int(params.k))
-    if k == 0 or n == 0:
-        out: list[dict[str, Any]] = []
-    else:
-        if k >= n:
-            # Caso semplice: ordina tutto
-            scored_sorted = sorted(scored_iter, key=lambda t: (-t[0]["score"], t[1]))
-            out = [item for item, _ in scored_sorted]
-        else:
-            # O(n log k) mantenendo ordinamento finale deterministico
-            topk = nlargest(k, scored_iter, key=lambda t: (t[0]["score"], -t[1]))
-            out = [item for item, _ in sorted(topk, key=lambda t: (-t[0]["score"], t[1]))]
-
-    dt = (time.time() - t0) * 1000.0
-    t_score_sort_ms = max(0.0, dt - t_emb_ms - t_fetch_ms)
+    total_ms = (time.time() - t_total_start) * 1000.0
 
     # Logging metriche (campi chiave + timing + coerce)
     try:
@@ -453,9 +476,9 @@ def search(
                 "scope": params.scope,
                 "k": int(params.k),
                 "candidate_limit": int(params.candidate_limit),
-                "candidates": int(n),
+                "candidates": int(candidates_count),
                 "ms": {
-                    "total": float(dt),
+                    "total": float(total_ms),
                     "embed": float(t_emb_ms),
                     "fetch": float(t_fetch_ms),
                     "score_sort": float(t_score_sort_ms),
@@ -472,14 +495,14 @@ def search(
         LOGGER.info(
             ("search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms"),
             params.k,
-            n,
+            candidates_count,
             params.candidate_limit,
-            dt,
+            total_ms,
             t_emb_ms,
             t_fetch_ms,
             t_score_sort_ms,
         )
-    return out
+    return scored_items
 
 
 def with_config_candidate_limit(

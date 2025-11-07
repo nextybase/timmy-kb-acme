@@ -12,7 +12,8 @@
 - **Frontmatter & titoli**: i file Markdown devono indicare la versione coerente; niente numerazioni divergenti tra README e docs/.
 - **Link & snippet**: privilegiare link relativi; per snippet usare blocchi con linguaggio e mantenere esempi aggiornati (Python 3.11, Streamlit 1.50.0).
 - **Verifiche automatiche**: usare `pre-commit run agents-matrix-check --all-files` quando si toccano gli `AGENTS.md` per mantenere la matrice aggiornata.
-- **Pattern aggiornati**: documentare sempre l’uso dei nuovi orchestratori (`pipeline.github_utils._prepare_repo/_stage_changes`, `tools.gen_dummy_kb.build_payload`) e dei guardrail condivisi (`ui.pages.tools_check._is_gate_error`) quando la guida cita workflow Streamlit o CLI.
+- **Pattern aggiornati**: documentare sempre l’uso dei nuovi orchestratori (`pipeline.github_push_flow._prepare_repo/_stage_changes/_push_with_retry/_force_push_with_lease`, `tools.gen_dummy_kb.build_payload`) e dei guardrail condivisi (`ui.pages.tools_check._is_gate_error`) quando la guida cita workflow Streamlit o CLI.
+- **Moduli semantic**: quando si tocchi `semantic.api`, preferire i service dedicati (`semantic.convert_service`, `semantic.frontmatter_service`, `semantic.embedding_service`, `semantic.mapping_loader`). I test possono monkeypatchare i wrapper re-esportati in `semantic.api`.
 
 ## Accettazione
 - Spell check pulito su `docs/` e `README.md`, senza ignorare file.

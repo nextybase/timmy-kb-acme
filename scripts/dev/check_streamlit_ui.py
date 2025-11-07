@@ -20,7 +20,6 @@ Note: le deprecazioni Streamlit (experimental_ / cache / unsafe_allow_html / use
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Iterable
 

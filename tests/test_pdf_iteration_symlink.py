@@ -7,6 +7,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError, ConversionError
 from semantic import api as sapi
+from semantic import convert_service
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
 from tests.utils.symlink import make_symlink
@@ -89,7 +90,7 @@ def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Pa
     (ctx.md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
 
     # Falsifica converter a no-op
-    monkeypatch.setattr(sapi, "_call_convert_md", lambda *a, **k: None)
+    monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None)
 
     with pytest.raises(ConversionError):
         sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)

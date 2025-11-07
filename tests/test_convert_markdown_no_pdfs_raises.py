@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
+from semantic import convert_service
 
 
 class _Ctx:
@@ -45,7 +46,7 @@ def test_convert_markdown_without_pdfs_raises_configerror(tmp_path: Path, monkey
 
     # Se non ci sono PDF, il converter NON deve essere chiamato: falliremmo qui
     monkeypatch.setattr(
-        sapi,
+        convert_service,
         "_call_convert_md",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("converter should NOT be called when RAW has no PDFs")),
     )
@@ -71,7 +72,7 @@ def test_convert_markdown_without_pdfs_returns_existing_book_md(tmp_path: Path, 
 
     # Il converter NON deve essere chiamato quando non ci sono PDF in RAW
     monkeypatch.setattr(
-        sapi,
+        convert_service,
         "_call_convert_md",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("converter should NOT be called when RAW has no PDFs")),
     )

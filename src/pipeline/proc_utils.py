@@ -27,6 +27,7 @@ import shlex
 import socket
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -40,6 +41,9 @@ __all__ = [
     "docker_available",
     "run_docker_preview",
     "stop_docker_preview",
+    "CmdContext",
+    "cmd_attempt",
+    "retry_loop",
 ]
 
 
@@ -125,6 +129,149 @@ def _default_timeout_for(op: Optional[str]) -> int:
     return int(get_int("PROC_CMD_TIMEOUT", 60) or 60)
 
 
+# ----------------------------------- Command core -----------------------------------
+
+
+@dataclass(frozen=True)
+class CmdContext:
+    argv: Sequence[str]
+    op: str
+    attempts: int
+    timeout_s: float
+    cwd: Optional[str]
+    cwd_log: str
+    env: Mapping[str, str]
+    capture: bool
+    redactor: Callable[[str], str]
+    logger: Optional[logging.Logger]
+    backoff: float
+
+    def command_for_log(self) -> str:
+        return _render_cmd_for_log(self.argv, self.redactor)
+
+
+def cmd_attempt(context: CmdContext, attempt: int) -> subprocess.CompletedProcess[Any]:
+    """Esegue un singolo tentativo di comando e gestisce logging/risposte."""
+    start = _now_ms()
+    if context.logger:
+        context.logger.debug(
+            "run_cmd.start",
+            extra={
+                "op": context.op,
+                "attempt": attempt,
+                "attempts": context.attempts,
+                "cwd": context.cwd_log,
+                "timeout_s": context.timeout_s,
+                "cmd": context.command_for_log(),
+            },
+        )
+
+    try:
+        cp = subprocess.run(
+            context.argv,
+            cwd=context.cwd,
+            env=context.env,
+            capture_output=context.capture,
+            text=context.capture,
+            timeout=context.timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        duration = _now_ms() - start
+        err = CmdError(
+            f"Timeout esecuzione: {context.op} ({context.timeout_s:.1f}s)",
+            cmd=context.argv,
+            code=None,
+            stdout=None,
+            stderr=None,
+            timeout=True,
+            attempt=attempt,
+            attempts=context.attempts,
+            duration_ms=duration,
+            op=context.op,
+        )
+        if context.logger:
+            context.logger.error(
+                "run_cmd.timeout",
+                extra={
+                    "op": context.op,
+                    "attempt": attempt,
+                    "attempts": context.attempts,
+                    "duration_ms": duration,
+                    "timeout_s": context.timeout_s,
+                    "cmd": context.command_for_log(),
+                    "cwd": context.cwd_log,
+                },
+            )
+        raise err
+
+    duration = _now_ms() - start
+
+    if cp.returncode == 0:
+        if context.logger:
+            context.logger.info(
+                "run_cmd.ok",
+                extra={
+                    "op": context.op,
+                    "attempt": attempt,
+                    "attempts": context.attempts,
+                    "duration_ms": duration,
+                    "returncode": 0,
+                },
+            )
+        return cp
+
+    err = CmdError(
+        f"Comando fallito (exit {cp.returncode}): {context.op}",
+        cmd=context.argv,
+        code=cp.returncode,
+        stdout=_tail(cp.stdout),
+        stderr=_tail(cp.stderr),
+        timeout=False,
+        attempt=attempt,
+        attempts=context.attempts,
+        duration_ms=duration,
+        op=context.op,
+    )
+
+    if context.logger:
+        context.logger.warning(
+            "run_cmd.fail",
+            extra={
+                "op": context.op,
+                "attempt": attempt,
+                "attempts": context.attempts,
+                "duration_ms": duration,
+                "returncode": cp.returncode,
+                "stderr_tail": context.redactor(_tail(cp.stderr) or ""),
+                "stdout_tail": context.redactor(_tail(cp.stdout) or ""),
+            },
+        )
+    raise err
+
+
+def retry_loop(context: CmdContext) -> subprocess.CompletedProcess[Any]:
+    """Gestisce il ciclo di retry/backoff utilizzando cmd_attempt."""
+    delay_s: float = 0.0
+    last_error: Optional[CmdError] = None
+
+    for attempt in range(1, context.attempts + 1):
+        if delay_s > 0:
+            time.sleep(delay_s)
+        try:
+            return cmd_attempt(context, attempt)
+        except CmdError as exc:
+            last_error = exc
+            if attempt >= context.attempts:
+                raise
+            delay_s = delay_s * context.backoff if delay_s > 0 else 1.0
+            continue
+
+    if last_error is not None:
+        raise last_error
+    raise CmdError("Unexpected state: no result from retry_loop", cmd=context.argv, op=context.op)
+
+
 # ------------------------------------- Public API -----------------------------------
 
 
@@ -161,17 +308,13 @@ def run_cmd(
     Raises:
         CmdError: in caso di timeout o returncode != 0 al termine dei tentativi.
     """
-    argv = _to_argv(cmd)
+    argv = list(_to_argv(cmd))
     redactor = redactor or redact_secrets
     attempts = max(1, int(retries) + 1)
     op_label = op or (argv[0] if argv else "cmd")
     eff_timeout = float(timeout if timeout is not None else _default_timeout_for(op_label))
     merged_env = _merge_env(os.environ, env)
 
-    delay_s: float = 0.0
-    last_err: Optional[CmdError] = None
-
-    # cwd normalizzato per i log (se fornito)
     cwd_log = ""
     if cwd:
         try:
@@ -179,121 +322,21 @@ def run_cmd(
         except Exception:
             cwd_log = str(cwd)
 
-    for attempt in range(1, attempts + 1):
-        if delay_s > 0:
-            time.sleep(delay_s)
+    context = CmdContext(
+        argv=tuple(argv),
+        op=op_label,
+        attempts=attempts,
+        timeout_s=eff_timeout,
+        cwd=cwd,
+        cwd_log=cwd_log,
+        env=merged_env,
+        capture=bool(capture),
+        redactor=redactor,
+        logger=logger,
+        backoff=float(backoff),
+    )
 
-        start = _now_ms()
-        try:
-            if logger:
-                logger.debug(
-                    "run_cmd.start",
-                    extra={
-                        "op": op_label,
-                        "attempt": attempt,
-                        "attempts": attempts,
-                        "cwd": cwd_log,
-                        "timeout_s": eff_timeout,
-                        "cmd": _render_cmd_for_log(argv, redactor),
-                    },
-                )
-
-            cp = subprocess.run(
-                argv,
-                cwd=cwd,
-                env=merged_env,
-                capture_output=capture,
-                text=capture,
-                timeout=eff_timeout,
-                check=False,
-            )
-            duration = _now_ms() - start
-
-            if cp.returncode == 0:
-                if logger:
-                    logger.info(
-                        "run_cmd.ok",
-                        extra={
-                            "op": op_label,
-                            "attempt": attempt,
-                            "attempts": attempts,
-                            "duration_ms": duration,
-                            "returncode": 0,
-                        },
-                    )
-                return cp
-
-            # Non-zero exit
-            err = CmdError(
-                f"Comando fallito (exit {cp.returncode}): {op_label}",
-                cmd=argv,
-                code=cp.returncode,
-                stdout=_tail(cp.stdout),
-                stderr=_tail(cp.stderr),
-                timeout=False,
-                attempt=attempt,
-                attempts=attempts,
-                duration_ms=duration,
-                op=op_label,
-            )
-            last_err = err
-
-            if logger:
-                logger.warning(
-                    "run_cmd.fail",
-                    extra={
-                        "op": op_label,
-                        "attempt": attempt,
-                        "attempts": attempts,
-                        "duration_ms": duration,
-                        "returncode": cp.returncode,
-                        "stderr_tail": redactor(_tail(cp.stderr) or ""),
-                        "stdout_tail": redactor(_tail(cp.stdout) or ""),
-                    },
-                )
-
-        except subprocess.TimeoutExpired:
-            duration = _now_ms() - start
-            err = CmdError(
-                f"Timeout esecuzione: {op_label} ({eff_timeout:.1f}s)",
-                cmd=argv,
-                code=None,
-                stdout=None,
-                stderr=None,
-                timeout=True,
-                attempt=attempt,
-                attempts=attempts,
-                duration_ms=duration,
-                op=op_label,
-            )
-            last_err = err
-
-            if logger:
-                logger.error(
-                    "run_cmd.timeout",
-                    extra={
-                        "op": op_label,
-                        "attempt": attempt,
-                        "attempts": attempts,
-                        "duration_ms": duration,
-                        "timeout_s": eff_timeout,
-                        "cmd": _render_cmd_for_log(argv, redactor),
-                        "cwd": cwd_log,
-                    },
-                )
-
-        # Retry?
-        if attempt < attempts:
-            delay_s = delay_s * backoff if delay_s > 0 else 1.0  # 1s → 1.5s → 2.25s …
-            continue
-
-        # Fine tentativi → solleva l'ultimo errore
-        if last_err is None:
-            raise CmdError("Unexpected state: no captured error on failure", cmd=argv, op=op_label)
-        raise last_err
-
-    # Fallback per type checker: non raggiungibile a runtime
-    raise CmdError("Unexpected state: no result from run_cmd", cmd=argv, op=op_label)
+    return retry_loop(context)
 
 
 def wait_for_port(

@@ -5,7 +5,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
-import semantic.api as sem
+from semantic import api as sapi
+from semantic import convert_service, frontmatter_service
 
 
 class _Ctx:
@@ -43,21 +44,10 @@ def test_convert_markdown_respects_ctx_overrides(tmp_path: Path, monkeypatch):
     def _fake_convert_md(ctxlike, md_dir: Path):
         (md_dir / "A.md").write_text("# A\n", encoding="utf-8")
 
-    monkeypatch.setattr(sem, "_convert_md", _fake_convert_md, raising=True)
-
-    # Falsifica i generatori README/SUMMARY per non fare I/O complesso
-    def _fake_summary(shim):
-        (shim.md_dir / "SUMMARY.md").write_text("* [A](A.md)", "utf-8")
-
-    def _fake_readme(shim):
-        (shim.md_dir / "README.md").write_text("# Book", "utf-8")
-
-    monkeypatch.setattr(sem, "_gen_summary", _fake_summary, raising=True)
-    monkeypatch.setattr(sem, "_gen_readme", _fake_readme, raising=True)
-    monkeypatch.setattr(sem, "_validate_md", lambda shim: None, raising=True)
+    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test
-    mds = sem.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
+    mds = sapi.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
     assert (book / "A.md").exists()
     assert any(p.name == "A.md" for p in mds)
@@ -78,23 +68,17 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
         # convert_markdown restituisce path relativi alla cartella book
         return [p.relative_to(book)]
 
-    monkeypatch.setattr(sem, "convert_markdown", _fake_convert_md, raising=True)
+    monkeypatch.setattr(sapi, "convert_markdown", _fake_convert_md, raising=True)
 
     # README/SUMMARY
-    monkeypatch.setattr(
-        sem,
-        "_gen_summary",
-        lambda shim: (shim.md_dir / "SUMMARY.md").write_text("* [B](B.md)", "utf-8"),
-        raising=True,
-    )
-    monkeypatch.setattr(
-        sem,
-        "_gen_readme",
-        lambda shim: (shim.md_dir / "README.md").write_text("# Book", "utf-8"),
-        raising=True,
-    )
-    monkeypatch.setattr(sem, "_validate_md", lambda shim: None, raising=True)
+    def _fake_write_summary(context, logger, *, slug):  # noqa: ANN001
+        summary = context.md_dir / "SUMMARY.md"
+        readme = context.md_dir / "README.md"
+        summary.write_text("* [B](B.md)", encoding="utf-8")
+        readme.write_text("# Book", encoding="utf-8")
+        return summary, readme
 
+    monkeypatch.setattr(frontmatter_service, "write_summary_and_readme", _fake_write_summary, raising=True)
     # intercetta la base_dir passata a load_reviewed_vocab
     seen_base: Dict[str, str] = {}
 
@@ -103,11 +87,11 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
         # ritorna vocab non vuoto per forzare enrich_frontmatter
         return {"ai": {"aliases": {"artificial intelligence"}}}
 
-    monkeypatch.setattr(sem, "load_reviewed_vocab", _fake_load_vocab, raising=True)
+    monkeypatch.setattr(sapi, "load_reviewed_vocab", _fake_load_vocab, raising=True)
     # enrich_frontmatter no-op che non fallisce
-    monkeypatch.setattr(sem, "enrich_frontmatter", lambda *a, **k: [], raising=True)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *a, **k: [], raising=True)
 
-    out = sem.build_markdown_book(cast(Any, ctx), _logger(), slug=ctx.slug)
+    out = sapi.build_markdown_book(cast(Any, ctx), _logger(), slug=ctx.slug)
     assert (book / "README.md").exists()
     assert (book / "SUMMARY.md").exists()
     assert any(p.name == "B.md" for p in out)

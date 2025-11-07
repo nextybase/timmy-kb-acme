@@ -85,7 +85,8 @@
     "spacy",
     "yake",
     "keybert",
-    "eagere"
+    "eagere",
+    "monkeypatchare"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

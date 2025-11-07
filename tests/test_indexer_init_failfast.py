@@ -8,6 +8,7 @@ import pytest
 
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError
+from semantic import embedding_service
 
 
 class _Ctx:
@@ -50,7 +51,7 @@ def test_indexer_init_db_failfast_raises_configerror(tmp_path: Path, monkeypatch
     def _boom(_pth):
         raise sqlite3.OperationalError("init failed")
 
-    monkeypatch.setattr(sapi, "_init_kb_db", _boom, raising=True)
+    monkeypatch.setattr(embedding_service, "_init_kb_db", _boom, raising=True)
 
     with pytest.raises(ConfigError) as ei:
         _ = sapi.index_markdown_to_db(

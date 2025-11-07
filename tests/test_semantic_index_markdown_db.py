@@ -7,7 +7,7 @@ from typing import Any, Iterable, cast
 
 import numpy as np
 
-import semantic.api as api
+import semantic.embedding_service as emb_service
 from kb_db import fetch_candidates
 from semantic.api import index_markdown_to_db
 
@@ -216,7 +216,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
     def boom(**kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("db boom")
 
-    monkeypatch.setattr(api, "_insert_chunks", boom)
+    monkeypatch.setattr(emb_service, "_insert_chunks", boom)
 
     caplog.set_level(logging.INFO)
     logger = logging.getLogger("test")

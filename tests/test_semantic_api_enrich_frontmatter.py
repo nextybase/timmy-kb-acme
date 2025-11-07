@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Set, cast
 
 import semantic.api as sapi
+from semantic import frontmatter_service as front
 
 
 @dataclass
@@ -57,7 +58,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
         "analytics": {"aliases": {"analytics", "analysis"}},
     }
 
-    touched = sapi.enrich_frontmatter(
+    touched = front.enrich_frontmatter(
         cast(Any, DummyCtx()),  # bypass nominal type; context non usato dalla funzione
         logging.getLogger("test"),
         vocab,
@@ -70,14 +71,14 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     # Verify first file: title inferred from filename, tags include governance
     text_a = (book / "data_governance-intro.md").read_text(encoding="utf-8")
-    meta_a, body_a = sapi._parse_frontmatter(text_a)
+    meta_a, body_a = front._parse_frontmatter(text_a)
     assert meta_a.get("title") == "data governance intro"
     assert "governance" in (meta_a.get("tags") or [])
     assert body_a.strip() == "Body A"
 
     # Verify second file: title preserved, tags merged (alpha + analytics)
     text_b = (book / "analytics_report.md").read_text(encoding="utf-8")
-    meta_b, body_b = sapi._parse_frontmatter(text_b)
+    meta_b, body_b = front._parse_frontmatter(text_b)
     assert meta_b.get("title") == "Existing Title"
     tags_b = set(meta_b.get("tags") or [])
     assert tags_b >= {"alpha", "analytics", "governance"}
@@ -85,7 +86,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     assert "Existing body" in body_b
 
     text_nested = (book / "risk" / "analytics_nested.md").read_text(encoding="utf-8")
-    meta_nested, body_nested = sapi._parse_frontmatter(text_nested)
+    meta_nested, body_nested = front._parse_frontmatter(text_nested)
     assert meta_nested.get("title") == "analytics nested"
     tags_nested = set(meta_nested.get("tags") or [])
     assert "analytics" in tags_nested

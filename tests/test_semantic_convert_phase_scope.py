@@ -7,12 +7,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from pipeline.exceptions import ConversionError
 from semantic import api as sapi
+from semantic import convert_service
 
 
-def _make_ctx(base_dir: Path) -> object:
+def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> object:
     # Minimal context shim compatible con ClientContextProtocol
-    return SimpleNamespace(base_dir=base_dir)
+    return SimpleNamespace(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir)
 
 
 def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monkeypatch):
@@ -25,12 +27,14 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
     (raw / "a.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 
     # Falsa conversione: scrive un file di contenuto in book/
-    def _fake_convert(ctx, safe_pdfs=None):  # noqa: ANN001
-        (ctx.md_dir / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
+    def _fake_convert(ctx, *, md_dir=None, safe_pdfs=None):  # noqa: ANN001
+        target_dir = Path(md_dir or ctx.md_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
 
-    monkeypatch.setattr("semantic.api._convert_md", _fake_convert)
+    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert, raising=True)
 
-    ctx = _make_ctx(base)
+    ctx = _make_ctx(base, raw, book)
     logger = logging.getLogger("test.convert")
     caplog.set_level(logging.INFO)
 
@@ -51,16 +55,16 @@ def test_convert_markdown_phase_failed_on_no_output(tmp_path: Path, caplog, monk
     # Un PDF sicuro ma la conversione non produce contenuti
     (raw / "b.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 
-    def _noop_convert(ctx, safe_pdfs=None):  # noqa: ANN001
+    def _noop_convert(ctx, *, md_dir=None, safe_pdfs=None):  # noqa: ANN001
         return None
 
-    monkeypatch.setattr("semantic.api._convert_md", _noop_convert)
+    monkeypatch.setattr(convert_service, "_convert_md", _noop_convert, raising=True)
 
-    ctx = _make_ctx(base)
+    ctx = _make_ctx(base, raw, book)
     logger = logging.getLogger("test.convert")
     caplog.set_level(logging.INFO)
 
-    with pytest.raises(sapi.ConversionError):
+    with pytest.raises(ConversionError):
         sapi.convert_markdown(ctx, logger, slug="x")
 
     # Deve risultare un phase_failed (non completed)

@@ -8,6 +8,7 @@ from typing import List
 import pytest
 
 import semantic.api as sapi
+from semantic import embedding_service
 
 
 class _Ctx:
@@ -60,7 +61,7 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
 
     monkeypatch.setattr(kdb, "init_db", _counting_init, raising=True)
     # Patch anche il riferimento importato in semantic.api
-    monkeypatch.setattr(sapi, "_init_kb_db", _counting_init, raising=True)
+    monkeypatch.setattr(embedding_service, "_init_kb_db", _counting_init, raising=True)
 
     inserted = sapi.index_markdown_to_db(
         ctx, logger, slug=ctx.slug, scope="book", embeddings_client=_EmbClient(), db_path=db_path
@@ -90,7 +91,7 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
         return real_init(pth)
 
     monkeypatch.setattr(kdb, "init_db", _slow_init, raising=True)
-    monkeypatch.setattr(sapi, "_init_kb_db", _slow_init, raising=True)
+    monkeypatch.setattr(embedding_service, "_init_kb_db", _slow_init, raising=True)
 
     t0 = time.perf_counter()
     _ = sapi.index_markdown_to_db(

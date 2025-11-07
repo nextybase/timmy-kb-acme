@@ -10,8 +10,11 @@ from typing import Any
 
 import pytest
 
+from pipeline import github_push_flow as github_flow
 from pipeline import github_utils
 from pipeline.exceptions import ForcePushError, PushError
+from pipeline.github_env_flags import should_push
+from pipeline.github_lease import LeaseLock
 
 
 @dataclass
@@ -87,9 +90,9 @@ def test_push_output_to_github_success_path(monkeypatch: pytest.MonkeyPatch, tmp
 
     monkeypatch.setattr(github_utils, "phase_scope", _PhaseSpy)
     monkeypatch.setattr(github_utils, "_prepare_repo", _fake_prepare)
-    monkeypatch.setattr(github_utils, "_stage_changes", _fake_stage)
-    monkeypatch.setattr(github_utils, "_push_with_retry", _fake_push)
-    monkeypatch.setattr(github_utils, "_force_push_with_lease", _fail_force)
+    monkeypatch.setattr(github_utils, "_stage_changes_flow", _fake_stage)
+    monkeypatch.setattr(github_utils, "_push_with_retry_flow", _fake_push)
+    monkeypatch.setattr(github_utils, "_force_push_with_lease_flow", _fail_force)
 
     github_utils.push_output_to_github(
         ctx,
@@ -113,7 +116,7 @@ def test_push_output_to_github_force_push_requires_ack(monkeypatch: pytest.Monke
         return repo, tmp_dir, {}
 
     monkeypatch.setattr(github_utils, "_prepare_repo", _fake_prepare)
-    monkeypatch.setattr(github_utils, "_stage_changes", lambda *a, **k: True)
+    monkeypatch.setattr(github_utils, "_stage_changes_flow", lambda *a, **k: True)
 
     with pytest.raises(ForcePushError):
         github_utils.push_output_to_github(
@@ -138,9 +141,9 @@ def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_pat
         called.update(kwargs)
         return False
 
-    monkeypatch.setattr(github_utils, "_stage_and_commit", _fake_stage_and_commit)
+    monkeypatch.setattr(github_flow, "_stage_and_commit", _fake_stage_and_commit)
 
-    res = github_utils._stage_changes(tmp_path, {}, slug="demo", force_ack=None, logger=_Recorder())  # type: ignore[arg-type]
+    res = github_flow._stage_changes(tmp_path, {}, slug="demo", force_ack=None, logger=_Recorder())  # type: ignore[arg-type]
 
     assert res is False
     assert any("Nessuna modifica" in msg for msg in recorded)
@@ -151,14 +154,14 @@ def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_pat
 def test_should_push_respects_env_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ctx = _make_context(tmp_path)
     ctx.env["TIMMY_NO_GITHUB"] = "true"
-    assert github_utils.should_push(ctx) is False
+    assert should_push(ctx) is False
 
     ctx.env.clear()
     monkeypatch.setenv("SKIP_GITHUB_PUSH", "1")
-    assert github_utils.should_push(ctx) is False
+    assert should_push(ctx) is False
 
     monkeypatch.delenv("SKIP_GITHUB_PUSH", raising=False)
-    assert github_utils.should_push(ctx) is True
+    assert should_push(ctx) is True
 
 
 @pytest.mark.push
@@ -167,16 +170,16 @@ def test_lease_lock_blocks_second_acquisition(tmp_path: Path) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("tests.github.lock")
 
-    lock_one = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.3, poll_interval_s=0.05)
+    lock_one = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.3, poll_interval_s=0.05)
     lock_one.acquire()
     try:
-        lock_two = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+        lock_two = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
         with pytest.raises(PushError):
             lock_two.acquire()
     finally:
         lock_one.release()
 
-    lock_three = github_utils.LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+    lock_three = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
     lock_three.acquire()
     lock_three.release()
 
@@ -199,10 +202,10 @@ def test_push_with_retry_recovers_after_transient(monkeypatch: pytest.MonkeyPatc
                 stderr="err",
             )
 
-    monkeypatch.setattr(github_utils, "_run", _fake_run)
+    monkeypatch.setattr(github_flow, "_run", _fake_run)
 
     logger = logging.getLogger("tests.github.retry")
-    github_utils._push_with_retry(tmp_path, {}, "main", logger=logger, redact_logs=False)
+    github_flow._push_with_retry(tmp_path, {}, "main", logger=logger, redact_logs=False)
 
     push_calls = [c for c in calls if c[0][:3] == ("git", "push", "origin")]
     pull_calls = [c for c in calls if c[0][:4] == ("git", "pull", "--rebase", "origin")]
@@ -214,10 +217,10 @@ def test_push_with_retry_raises_after_double_failure(monkeypatch: pytest.MonkeyP
     def _always_fail(cmd: list[str], *, cwd: Path, env: dict[str, Any] | None, op: str) -> None:
         raise github_utils.CmdError("failure", cmd=cmd, attempts=1, attempt=1, op=op, stdout="err", stderr="err")
 
-    monkeypatch.setattr(github_utils, "_run", _always_fail)
+    monkeypatch.setattr(github_flow, "_run", _always_fail)
 
     with pytest.raises(PushError):
-        github_utils._push_with_retry(
+        github_flow._push_with_retry(
             tmp_path, {}, "main", logger=logging.getLogger("tests.github.retry"), redact_logs=False
         )
 
@@ -233,11 +236,11 @@ def test_force_push_with_lease_uses_remote_sha(monkeypatch: pytest.MonkeyPatch, 
             return "remote-sha"
         return "local-sha"
 
-    monkeypatch.setattr(github_utils, "_run", _fake_run)
-    monkeypatch.setattr(github_utils, "_git_rev_parse", _fake_git_rev_parse)
+    monkeypatch.setattr(github_flow, "_run", _fake_run)
+    monkeypatch.setattr(github_flow, "_git_rev_parse", _fake_git_rev_parse)
 
     logger = logging.getLogger("tests.github.force")
-    github_utils._force_push_with_lease(
+    github_flow._force_push_with_lease(
         tmp_dir=tmp_path,
         env={},
         default_branch="main",

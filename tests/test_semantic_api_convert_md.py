@@ -7,15 +7,16 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConversionError
-from timmykb.semantic.api import _call_convert_md, _CtxShim
+from semantic.context_paths import ContextPaths
+from semantic.convert_service import _call_convert_md
 
 
 def _ctx(
     base: Path = Path("."),
     raw: Path = Path("."),
     md: Path = Path("book"),
-) -> _CtxShim:
-    return _CtxShim(base_dir=base, raw_dir=raw, md_dir=md, slug="x")
+) -> ContextPaths:
+    return ContextPaths(base_dir=base, raw_dir=raw, md_dir=md, slug="x")
 
 
 def test_call_convert_md_raises_on_non_callable() -> None:
@@ -28,7 +29,7 @@ def test_call_convert_md_calls_without_md_dir() -> None:
     called = {"ok": False}
 
     def f(ctx):
-        assert isinstance(ctx, _CtxShim)
+        assert isinstance(ctx, ContextPaths)
         called["ok"] = True
 
     _call_convert_md(f, _ctx(), Path("book"))
@@ -39,7 +40,7 @@ def test_call_convert_md_calls_with_md_dir_kw() -> None:
     called = {"ok": False, "md": None}
 
     def f(ctx, *, md_dir: Path):
-        assert isinstance(ctx, _CtxShim)
+        assert isinstance(ctx, ContextPaths)
         called["ok"] = True
         called["md"] = md_dir
 

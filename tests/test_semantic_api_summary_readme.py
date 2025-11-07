@@ -11,6 +11,7 @@ import pytest
 
 import semantic.api as sapi
 from pipeline.exceptions import ConversionError
+from semantic import frontmatter_service as front
 
 
 @dataclass
@@ -49,10 +50,10 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     def _fake_readme(ctx) -> None:
         (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
 
-    monkeypatch.setattr(sapi, "_gen_summary", _fake_summary)
-    monkeypatch.setattr(sapi, "_gen_readme", _fake_readme)
+    monkeypatch.setattr(front, "_gen_summary", _fake_summary, raising=True)
+    monkeypatch.setattr(front, "_gen_readme", _fake_readme, raising=True)
     # Validazione: no-op per il test (la funzione reale viene testata altrove)
-    monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
+    monkeypatch.setattr(front, "_validate_md", lambda ctx: None, raising=True)
 
     sapi.write_summary_and_readme(
         cast(Any, DummyCtx()),  # bypass nominal type di ClientContext
@@ -88,8 +89,8 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     def _boom_readme(ctx) -> None:
         raise RuntimeError("readme failed")
 
-    monkeypatch.setattr(sapi, "_gen_summary", _boom_summary)
-    monkeypatch.setattr(sapi, "_gen_readme", _boom_readme)
+    monkeypatch.setattr(front, "_gen_summary", _boom_summary, raising=True)
+    monkeypatch.setattr(front, "_gen_readme", _boom_readme, raising=True)
 
     logger = logging.getLogger("test")
     with pytest.raises(ConversionError) as exc:
@@ -128,9 +129,9 @@ def test_write_summary_and_readme_logs_errors_with_context(
     def _ok_readme(ctx) -> None:
         (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
 
-    monkeypatch.setattr(sapi, "_gen_summary", _boom_summary)
-    monkeypatch.setattr(sapi, "_gen_readme", _ok_readme)
-    monkeypatch.setattr(sapi, "_validate_md", lambda ctx: None)
+    monkeypatch.setattr(front, "_gen_summary", _boom_summary, raising=True)
+    monkeypatch.setattr(front, "_gen_readme", _ok_readme, raising=True)
+    monkeypatch.setattr(front, "_validate_md", lambda ctx: None, raising=True)
 
     logger = logging.getLogger("test.summary")
     with caplog.at_level(logging.ERROR):

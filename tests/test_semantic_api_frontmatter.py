@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, Set
 
-from semantic.api import (
+from semantic.frontmatter_service import (
     _build_inverse_index,
     _dump_frontmatter,
     _guess_tags_for_name,

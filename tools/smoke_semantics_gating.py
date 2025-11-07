@@ -38,7 +38,15 @@ def _ci_dump_nav(env: Mapping[str, str]) -> dict:
     script = repo_root / "tools" / "ci_dump_nav.py"
     merged_env = os.environ.copy()
     merged_env.update(env)
-    output = subprocess.check_output([sys.executable, str(script)], text=True, cwd=repo_root, env=merged_env)
+    result = subprocess.run(  # noqa: S603 - invocazione controllata di script repo
+        [sys.executable, str(script)],
+        text=True,
+        cwd=repo_root,
+        env=merged_env,
+        check=True,
+        capture_output=True,
+    )
+    output = result.stdout
     start = output.find("{")
     if start < 0:
         raise RuntimeError("Output JSON non trovato in tools/ci_dump_nav.py")
@@ -89,7 +97,8 @@ def run_smoke(verbose: bool = False) -> None:
         if verbose:
             print("Scenario A (senza PDF):")
             print(json.dumps(nav_without, indent=2))
-        assert not _has_semantics(nav_without), "Semantica non dovrebbe essere visibile senza PDF in raw/"
+        if _has_semantics(nav_without):
+            raise RuntimeError("Semantica non dovrebbe essere visibile senza PDF in raw/")
 
         # Scenario B: workspace CON PDF
         raw_b = workspace_root / f"timmy-kb-{slug_b}" / "raw"
@@ -100,7 +109,8 @@ def run_smoke(verbose: bool = False) -> None:
         if verbose:
             print("Scenario B (con PDF):")
             print(json.dumps(nav_with, indent=2))
-        assert _has_semantics(nav_with), "Semantica deve essere visibile quando raw/ contiene PDF"
+        if not _has_semantics(nav_with):
+            raise RuntimeError("Semantica deve essere visibile quando raw/ contiene PDF")
 
         if verbose:
             print("Smoke semantics gating: OK")
@@ -115,9 +125,6 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         run_smoke(verbose=args.verbose)
-    except AssertionError as exc:
-        print(f"[ERRORE] {exc}", file=sys.stderr)
-        return 1
     except Exception as exc:  # pragma: no cover
         print(f"[ERRORE] {exc}", file=sys.stderr)
         return 2

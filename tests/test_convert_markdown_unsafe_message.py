@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
+from semantic import convert_service
 
 
 class _Ctx:
@@ -83,7 +84,7 @@ def test_mixed_unsafe_and_valid_pdfs_processes_valid_ones(tmp_path: Path, monkey
 
     # Evita conversione reale; prepara un MD finto per simulare l'output
     (ctx.md_dir / "doc.md").write_text("# Doc\n", encoding="utf-8")
-    monkeypatch.setattr(sapi, "_call_convert_md", lambda *a, **k: None, raising=True)
+    monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None, raising=True)
 
     mds = sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
     names = {p.name for p in mds}

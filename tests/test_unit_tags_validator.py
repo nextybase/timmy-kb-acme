@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-from timmykb.tag_onboarding import _validate_tags_reviewed
+from semantic.tags_validator import validate_tags_reviewed
 
 
 def test_validate_ok_minimal():
@@ -13,13 +13,13 @@ def test_validate_ok_minimal():
             {"name": "ml", "action": "merge_into:AI"},
         ],
     }
-    res = _validate_tags_reviewed(data)
+    res = validate_tags_reviewed(data)
     assert res["errors"] == []
     assert res["count"] == 3
 
 
 def test_validate_missing_keys():
-    res = _validate_tags_reviewed({})
+    res = validate_tags_reviewed({})
     # Deve segnalare i 4 campi obbligatori
     assert any("version" in e for e in res["errors"])
     assert any("reviewed_at" in e for e in res["errors"])
@@ -39,7 +39,7 @@ def test_validate_duplicates_and_illegal_chars():
             {"name": "merge-no-target", "action": "merge_into:"},  # merge senza target
         ],
     }
-    res = _validate_tags_reviewed(data)
+    res = validate_tags_reviewed(data)
     errs = "\n".join(res["errors"])
     assert "duplicato" in errs.lower()
     assert "caratteri non permessi" in errs.lower()

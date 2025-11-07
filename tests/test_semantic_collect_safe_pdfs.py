@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import logging
 
-from semantic.api import _collect_safe_pdfs
+from semantic.convert_service import _collect_safe_pdfs
 
 
 def test_collect_only_pdfs(tmp_path):

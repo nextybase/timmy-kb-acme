@@ -3,7 +3,8 @@
 import logging
 from types import SimpleNamespace
 
-import timmykb.semantic.api as api
+from semantic import api as sapi
+from semantic import convert_service
 
 
 def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypatch, caplog):
@@ -18,7 +19,7 @@ def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypat
     ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
 
     # Discovery sicura → c'è un PDF valido
-    monkeypatch.setattr(api, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))
+    monkeypatch.setattr(convert_service, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))
 
     called = {"ok": False}
 
@@ -27,12 +28,17 @@ def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypat
         called["ok"] = True
         return None
 
-    monkeypatch.setattr(api, "_convert_md", _legacy_convert_md)
+    monkeypatch.setattr(convert_service, "_convert_md", _legacy_convert_md)
     # Simula contenuti prodotti
-    monkeypatch.setattr(api, "list_content_markdown", lambda bd: [book / "A.md", book / "B.md"])
+    monkeypatch.setattr(
+        convert_service,
+        "list_content_markdown",
+        lambda bd: [book / "A.md", book / "B.md"],
+        raising=True,
+    )
 
     caplog.set_level(logging.INFO)
-    out = api.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
+    out = sapi.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
 
     # Deve funzionare senza TypeError e senza passare safe_pdfs
     assert called["ok"] is True

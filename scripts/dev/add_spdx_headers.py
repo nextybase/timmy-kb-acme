@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-SPDX_TOKEN = "SPDX-License-Identifier"
+SPDX_TOKEN = "SPDX-License-Identifier"  # noqa: S105 - SPDX marker, non-segreto
 ENCODING_RE = re.compile(rb"^#.*coding[:=]\s*([-\w.]+)")
 
 DEFAULT_INCLUDE_DIRS = ("src", "tests", "scripts")
