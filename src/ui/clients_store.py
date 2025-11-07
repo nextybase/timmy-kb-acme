@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
@@ -123,6 +124,7 @@ def ensure_db() -> None:
     db_dir.mkdir(parents=True, exist_ok=True)
     if not db_file.exists():
         safe_write_text(db_file, "[]\n", encoding="utf-8", atomic=True)
+        _cached_clients.cache_clear()
 
 
 def _parse_entries(text: str) -> list[ClientEntry]:
@@ -143,15 +145,24 @@ def _parse_entries(text: str) -> list[ClientEntry]:
     return entries
 
 
+@lru_cache(maxsize=32)
+def _cached_clients(db_dir: str, db_file: str, mtime: float) -> tuple[ClientEntry, ...]:
+    try:
+        text = read_text_safe(Path(db_dir), Path(db_file), encoding="utf-8")
+    except Exception:
+        return ()
+    return tuple(_parse_entries(text))
+
+
 def load_clients() -> list[ClientEntry]:
     ensure_db()
+    db_dir = _db_dir()
+    db_file = _db_file()
     try:
-        db_dir = _db_dir()
-        db_file = _db_file()
-        txt = read_text_safe(db_dir, db_file, encoding="utf-8")
+        mtime = float(db_file.stat().st_mtime)
     except Exception:
-        return []
-    return _parse_entries(txt)
+        mtime = 0.0
+    return list(_cached_clients(str(db_dir), str(db_file), mtime))
 
 
 def save_clients(entries: list[ClientEntry]) -> None:
@@ -159,6 +170,7 @@ def save_clients(entries: list[ClientEntry]) -> None:
     payload: list[dict[str, Any]] = [e.to_dict() for e in entries]
     text: str = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
     safe_write_text(_db_file(), text, encoding="utf-8", atomic=True)
+    _cached_clients.cache_clear()
 
 
 def upsert_client(entry: ClientEntry) -> None:

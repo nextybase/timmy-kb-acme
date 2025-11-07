@@ -5,7 +5,10 @@ Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
 
-Nota: la UI usa la facade pubblica `semantic.api` per tutta la logica semantica.
+Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
+`semantic.convert_service`, `semantic.frontmatter_service`,
+`semantic.embedding_service` e `semantic.mapping_loader` (riesportate da
+`semantic.api` per compatibilita`).
 
 ---
 
@@ -30,7 +33,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
-- È presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
+- E' presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
  - Dopo l'upload di `config/VisionStatement.pdf`, il tool `gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI usando il modello definito in `config/config.yaml` (recuperato tramite `get_vision_model()`).
 
 Guida completa: [guida_ui.md](guida_ui.md).
@@ -48,13 +51,45 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME"
 py src/tag_onboarding.py --slug acme --proceed
 
 # 3) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
-Esempio headless via `semantic.api` riportato in README.
+Esegui la pipeline semantica con gli helper modulari:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+
+from pipeline.context import ClientContext
+from pipeline.logging_utils import get_structured_logger
+from semantic.convert_service import convert_markdown
+from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
+from semantic.vocab_loader import load_reviewed_vocab
+
+slug = "acme"
+ctx = ClientContext.load(Path.cwd(), slug=slug)
+log = get_structured_logger("docs.semantic", context={"slug": slug})
+
+convert_markdown(ctx, log, slug=slug)
+vocab = load_reviewed_vocab(ctx.base_dir, log)
+enrich_frontmatter(ctx, log, vocab, slug=slug, allow_empty_vocab=True)
+write_summary_and_readme(ctx, log, slug=slug)
+PY
+```
+
+(Puoi continuare a usare `py src/semantic_onboarding.py` come orchestratore
+della sequenza se preferisci una CLI dedicata.)
+
+Per l'indicizzazione nel DB semantico puoi delegare a
+`semantic.embedding_service.index_markdown_to_db`, passando il client embeddings
+adottato nel tuo ambiente (es. quello configurato nella UI retriever).
+
+Per l'indicizzazione nel DB semantico puoi delegare a
+`semantic.embedding_service.index_markdown_to_db`, passando il client embeddings
+adottato nel tuo ambiente (es. quello configurato nella UI retriever).
 
 # 4) Push finale (se richiesto)
 py src/onboarding_full.py --slug acme
 ```
 
-Modalità **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra.
+Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra.
 
 ---
 
@@ -79,9 +114,9 @@ output/timmy-kb-<slug>/
 ---
 
 ## Note operative
-- **RAW locale è la sorgente** per conversione/enrichment; Drive è usato per provisioning/ingest.
+- **RAW locale e` la sorgente** per conversione/enrichment; Drive e` usato per provisioning/ingest.
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
-- Log con redazione automatica se `LOG_REDACTION` è attivo.
+- Log con redazione automatica se `LOG_REDACTION` e` attivo.
 
 ## Impostazioni retriever (UI)
 La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:
@@ -93,7 +128,7 @@ retriever:
   auto_by_budget: false
 ```
 
-La UI applica immediatamente le modifiche e i test di regressione coprono il pass-through verso `semantic.api`.
+La UI applica immediatamente le modifiche e i test di regressione coprono il pass-through verso gli helper di `semantic.embedding_service`.
 
 ---
 ## Controllo caratteri & encoding (UTF-8)

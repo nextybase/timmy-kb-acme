@@ -14,7 +14,7 @@ flowchart LR
     subgraph Orchestrators
       PRE[pre_onboarding.py]
       TAG[tag_onboarding.py]
-      SEMCLI[semantic_onboarding.py (wrapper di semantic.api)]
+      SEMCLI[semantic_onboarding.py (wrapper dei service semantic.*)]
       FULL[onboarding_full.py]
       VISIONCLI[tools/gen_vision_yaml.py]
     end
@@ -29,7 +29,7 @@ flowchart LR
     end
 
     subgraph Semantic
-      SEMANTIC[semantic.api + semantic.tags_io + semantic.semantic_mapping]
+      SEMANTIC[semantic.convert/frontmatter/embedding/mapping + semantic.nlp_runner]
       SVISION[semantic.vision_provision + UI services]
     end
 
@@ -90,7 +90,7 @@ sequenceDiagram
     participant UI as Streamlit UI / CLI
     participant PRE as pre_onboarding
     participant TAG as tag_onboarding
-    participant SEM as semantic.api
+    participant SEM as semantic services
     participant FS as Local FS (output/timmy-kb-<slug>)
     participant DB as SQLite (tags.db)
     participant GH as GitHub

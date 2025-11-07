@@ -406,11 +406,22 @@ if slug:
     raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
 
-    pdf_count = count_pdfs_safe(raw_dir)
+    pdf_count = count_pdfs_safe(raw_dir, use_cache=True)
     has_pdfs = pdf_count > 0
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
-    service_ok = run_tags_fn is not None or tags_mode == "stub"
+    can_stub = tags_mode == "stub"
+    can_run_service = run_tags_fn is not None
+    prerequisites_ok = can_stub or (can_run_service and has_pdfs)
+    semantic_help = (
+        "Estrae keyword dai PDF in raw/, genera/aggiorna tags_raw.csv e lo stub (DB). "
+        "Poi puoi rivedere il CSV e abilitare lo YAML."
+        if prerequisites_ok
+        else (
+            "Disponibile solo quando il servizio di estrazione è attivo e raw/ contiene PDF "
+            "(oppure usa TAGS_MODE=stub)."
+        )
+    )
 
     open_semantic = _column_button(
         c2,
@@ -418,11 +429,10 @@ if slug:
         key="btn_semantic_start",
         type="primary",
         width="stretch",
-        help=(
-            "Estrae keyword dai PDF in raw/, genera/aggiorna tags_raw.csv e lo stub (DB). "
-            "Poi puoi rivedere il CSV e abilitare lo YAML."
-        ),
+        help=semantic_help,
+        disabled=not prerequisites_ok,
     )
+    service_ok = can_stub or can_run_service
     if open_semantic:
         if tags_mode == "stub":
             _open_tags_raw_modal(slug)

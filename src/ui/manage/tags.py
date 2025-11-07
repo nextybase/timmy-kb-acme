@@ -82,10 +82,10 @@ def enable_tags_stub(
             previous = reader(semantic_dir, yaml_path, encoding="utf-8")
         except Exception:
             previous = None
-        writer(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
+        importer_counts: dict[str, int] | None = None
         if yaml_path.exists():
             try:
-                importer(yaml_path, logger=logger)
+                importer_counts = importer(yaml_path, logger=logger)
                 logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
             except Exception as exc:
                 if previous is not None:
@@ -106,14 +106,21 @@ def enable_tags_stub(
                 extra={"slug": slug, "path": str(yaml_path), "reason": "file-missing"},
             )
 
+        has_terms = bool(importer_counts and importer_counts.get("terms"))
+        target_state = "arricchito" if has_terms else "pronto"
         try:
-            updated = set_client_state(slug, "arricchito")
+            updated = set_client_state(slug, target_state)
         except Exception as exc:
             logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
             updated = False
 
         if updated:
-            st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+            if has_terms:
+                st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+            else:
+                st.warning(
+                    "Vocabolario ancora vuoto: stato riportato a 'pronto'. Compila lo YAML prima dell'arricchimento."
+                )
             reset_gating_cache(slug)
         else:
             st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
@@ -371,7 +378,19 @@ def open_tags_raw_modal(
                 write_fn=writer,
             )
 
-        if column_button(col_b, "Abilita", type="primary"):
+        enable_disabled = tags_mode != "stub" and run_tags_fn is None
+        enable_help = (
+            "Abilita genera `tags_reviewed.yaml` e aggiorna il DB semantico."
+            if not enable_disabled
+            else "Servizio tagging non disponibile: installa/abilita `ui.services.tags_adapter` o usa TAGS_MODE=stub."
+        )
+        if column_button(
+            col_b,
+            "Abilita",
+            type="primary",
+            disabled=enable_disabled,
+            help=enable_help,
+        ):
             if handle_tags_raw_enable(
                 slug,
                 semantic_dir,

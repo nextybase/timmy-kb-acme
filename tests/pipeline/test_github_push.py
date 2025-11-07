@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import pytest
 
@@ -15,6 +17,8 @@ from pipeline import github_utils
 from pipeline.exceptions import ForcePushError, PushError
 from pipeline.github_env_flags import should_push
 from pipeline.github_lease import LeaseLock
+
+GIT_BIN = shutil.which("git") or "git"
 
 
 @dataclass
@@ -57,10 +61,13 @@ def test_push_output_to_github_success_path(monkeypatch: pytest.MonkeyPatch, tmp
     stages: list[str] = []
 
     tmp_dir = ctx.base_dir / "tmp-clone"
+    book_dir = ctx.md_dir
+    md_files = list(book_dir.glob("*.md"))
 
     def _fake_prepare(*_: Any, **__: Any) -> tuple[Any, Path, dict[str, Any]]:
         tmp_dir.mkdir(parents=True, exist_ok=True)
         repo = type("Repo", (), {"full_name": "demo/repo"})()
+        github_flow._copy_md_tree(md_files, book_dir, tmp_dir)
         return repo, tmp_dir, {}
 
     def _fake_stage(*_: Any, **kwargs: Any) -> bool:
@@ -252,3 +259,130 @@ def test_force_push_with_lease_uses_remote_sha(monkeypatch: pytest.MonkeyPatch, 
     assert calls[0][0] == ("git", "fetch", "origin", "main")
     push_cmd = calls[-1][0]
     assert push_cmd[0:3] == ("git", "push", "--force-with-lease=refs/heads/main:remote-sha")
+
+
+def _run_git(args: list[str], *, cwd: Path | None = None) -> None:
+    subprocess.run([GIT_BIN, *args], cwd=cwd, check=True)
+
+
+def test_push_output_to_github_end_to_end_smoke(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    remote_repo = tmp_path / "remote.git"
+    _run_git(["init", "--bare", remote_repo.as_posix()])
+
+    seed_dir = tmp_path / "seed"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    _run_git(["init"], cwd=seed_dir)
+    _run_git(["config", "user.name", "Smoke Tester"], cwd=seed_dir)
+    _run_git(["config", "user.email", "smoke@example.com"], cwd=seed_dir)
+    (seed_dir / "README.md").write_text("seed", encoding="utf-8")
+    _run_git(["add", "README.md"], cwd=seed_dir)
+    _run_git(["commit", "-m", "seed"], cwd=seed_dir)
+    _run_git(["branch", "-M", "main"], cwd=seed_dir)
+    _run_git(["remote", "add", "origin", remote_repo.as_posix()], cwd=seed_dir)
+    _run_git(["push", "-u", "origin", "main"], cwd=seed_dir)
+    subprocess.run([GIT_BIN, "--git-dir", str(remote_repo), "symbolic-ref", "HEAD", "refs/heads/main"], check=True)
+
+    ctx = _make_context(tmp_path)
+    ctx.env["GIT_DEFAULT_BRANCH"] = "main"
+
+    captured_plan: dict[str, Any] = {}
+    original_build_plan = github_utils._build_push_plan
+
+    def _build_push_plan_with_trace(*args: Any, **kwargs: Any) -> Any:
+        plan = original_build_plan(*args, **kwargs)
+        captured_plan["plan"] = plan
+        return plan
+
+    monkeypatch.setattr(github_utils, "_build_push_plan", _build_push_plan_with_trace)
+
+    copies: list[tuple[list[Path], Path, Path]] = []
+    original_copy_tree = github_flow._copy_md_tree
+    stub_called = {"value": False}
+
+    def _copy_md_tree_with_trace(md_files: Sequence[Path], book_dir: Path, dst_root: Path) -> None:
+        copies.append((list(md_files), book_dir, dst_root))
+        original_copy_tree(md_files, book_dir, dst_root)
+
+    monkeypatch.setattr(github_flow, "_copy_md_tree", _copy_md_tree_with_trace)
+
+    status_snapshot: dict[str, str] = {}
+    original_stage_and_commit = github_flow._stage_and_commit
+
+    def _stage_and_commit_with_trace(
+        tmp_dir: Path,
+        env: dict[str, Any] | None,
+        *,
+        commit_msg: str,
+    ) -> bool:
+        status_snapshot["files_before"] = sorted(p.name for p in tmp_dir.glob("*") if p.is_file())
+        status_snapshot["tree_before"] = sorted(str(p.relative_to(tmp_dir)) for p in tmp_dir.rglob("*.md"))
+        before = subprocess.run(
+            [GIT_BIN, "status", "--short"],
+            cwd=tmp_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        status_snapshot["before"] = before.stdout
+        result = original_stage_and_commit(tmp_dir, env, commit_msg=commit_msg)
+        after = subprocess.run(
+            [GIT_BIN, "status", "--short"],
+            cwd=tmp_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        status_snapshot["after"] = after.stdout
+        status_snapshot["files_after"] = sorted(p.name for p in tmp_dir.glob("*") if p.is_file())
+        status_snapshot["tree_after"] = sorted(str(p.relative_to(tmp_dir)) for p in tmp_dir.rglob("*.md"))
+        return result
+
+    monkeypatch.setattr(github_flow, "_stage_and_commit", _stage_and_commit_with_trace)
+    monkeypatch.setattr(github_utils, "_stage_and_commit", _stage_and_commit_with_trace)
+
+    def _prepare_repo(
+        context: Any,
+        *,
+        github_token: str,
+        md_files: list[Path],
+        default_branch: str,
+        base_dir: Path,
+        book_dir: Path,
+        redact_logs: bool,
+        logger: logging.Logger,
+    ) -> tuple[Any, Path, dict[str, Any]]:
+        stub_called["value"] = True
+        tmp_dir = github_flow._prepare_tmp_dir(base_dir)
+        _run_git(["clone", remote_repo.as_posix(), str(tmp_dir)])
+        _run_git(["checkout", "-B", default_branch], cwd=tmp_dir)
+        github_flow._copy_md_tree(md_files, book_dir, tmp_dir)
+        repo = type("Repo", (), {"full_name": "smoke/repo"})()
+        return repo, tmp_dir, {}
+
+    monkeypatch.setattr(github_utils, "_prepare_repo", _prepare_repo)
+
+    github_utils.push_output_to_github(
+        ctx,
+        github_token="smoketoken",  # noqa: S106 - token fittizio
+        do_push=True,
+    )
+
+    plan = captured_plan.get("plan")
+    assert plan is not None, "push plan not built"
+    assert len(plan.md_files) > 0, "nessun markdown nel push plan"
+    status_snapshot["plan_md_files"] = [str(p) for p in plan.md_files]
+    status_snapshot["book_dir"] = str(plan.book_dir)
+    status_snapshot["book_contents"] = sorted(p.name for p in plan.book_dir.glob("*.md"))
+    status_snapshot["copies"] = [([str(p) for p in bundle[0]], str(bundle[1]), str(bundle[2])) for bundle in copies]
+    status_snapshot["prepare_called"] = stub_called["value"]
+
+    assert status_snapshot.get("before", "").strip(), f"git status before commit empty: {status_snapshot}"
+    assert status_snapshot.get("after", "").strip() == "", f"git status after commit not clean: {status_snapshot}"
+
+    show = subprocess.run(
+        [GIT_BIN, "--git-dir", str(remote_repo), "show", "main:foo.md"],
+        capture_output=True,
+        text=True,
+    )
+    assert show.returncode == 0, f"git show failed with code {show.returncode}: {show.stderr}\nstatus={status_snapshot}"
+    assert "# demo" in show.stdout

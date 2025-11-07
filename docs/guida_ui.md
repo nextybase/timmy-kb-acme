@@ -178,6 +178,12 @@ Esegui nell’ordine (ripetibile per nuovi PDF):
    - **SUMMARY.md:** ricostruisce l’indice navigabile di `book/` in base a cartelle e file presenti.
    - **README.md:** crea/aggiorna il README radice e, ove previsto, i README di categoria usando **ambito**/**descrizione** dal mapping.
    - **Idempotenza:** sicuro da rilanciare; modifica solo ciò che è cambiato.
+   - **Sotto il cofano:** i pulsanti richiamano rispettivamente
+     `semantic.convert_service.convert_markdown`, `semantic.frontmatter_service.enrich_frontmatter`
+     e `semantic.frontmatter_service.write_summary_and_readme`, passando lo stesso `ClientContext`
+     della sessione UI. Il vocabolario arriva da `semantic.vocab_loader.load_reviewed_vocab`.
+     Se vuoi replicare il comportamento da terminale trovi un esempio completo nella
+     [User Guide](user_guide.md#quick-start----terminale-orchestratori).
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
