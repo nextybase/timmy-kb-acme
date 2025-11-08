@@ -62,6 +62,11 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
         latest = log_files[0]
         reader = diag.get_safe_reader()
 
+        summary = diag.build_workspace_summary(slug or "unknown", log_files, base_dir=base_dir)
+        if summary:
+            st.caption("Workspace summary")
+            st.json(summary)
+
         # Tail del log (<= TAIL_BYTES)
         try:
             tail_bytes = diag.tail_log_bytes(latest, safe_reader=reader, tail_bytes=TAIL_BYTES)

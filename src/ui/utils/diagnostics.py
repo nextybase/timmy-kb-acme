@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, ContextManager, Dict, Iterator, List, Optional, Sequence, Tuple, cast
 
@@ -72,6 +74,30 @@ def summarize_workspace_folders(base_dir: Optional[Path]) -> Optional[Dict[str, 
     }
 
 
+def build_workspace_summary(
+    slug: str,
+    log_files: Sequence[Path],
+    *,
+    base_dir: Optional[Path] = None,
+) -> Optional[Dict[str, object]]:
+    """Costruisce un riepilogo JSON del workspace (counts + log selezionati)."""
+    resolved = base_dir or resolve_base_dir(slug)
+    if resolved is None:
+        return None
+    try:
+        counts = summarize_workspace_folders(resolved)
+    except Exception:
+        counts = None
+    safe_names = [sanitize_filename(path.name) for path in log_files if path]
+    return {
+        "slug": slug,
+        "base_dir": str(resolved),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "counts": counts,
+        "log_files": safe_names,
+    }
+
+
 def collect_log_files(base_dir: Optional[Path]) -> List[Path]:
     """Restituisce i file log (ordinati per mtime desc) garantendo path-safety."""
     if base_dir is None:
@@ -122,13 +148,14 @@ def tail_log_bytes(
 ) -> Optional[bytes]:
     """Ritorna gli ultimi tail_bytes del file, usando il reader sicuro se possibile."""
     try:
-        size = path.stat().st_size
+        safe_path = ensure_within_and_resolve(path.parent, path)
+        size = safe_path.stat().st_size
         offset = max(0, size - tail_bytes)
         if safe_reader:
-            with safe_reader(path) as fh:
+            with safe_reader(safe_path) as fh:
                 fh.seek(offset)
                 return fh.read(tail_bytes)
-        with path.open("rb") as fh:
+        with _open_binary(safe_path) as fh:
             fh.seek(offset)
             return fh.read(tail_bytes)
     except Exception:
@@ -151,35 +178,65 @@ def build_logs_archive(
     selected = list(files[:max_files])
     written_total = 0
     buffer = io.BytesIO()
+    logs_root: Optional[Path] = None
+    base_dir = resolve_base_dir(slug)
+    workspace_summary = build_workspace_summary(slug, selected, base_dir=base_dir)
+    included_logs: list[str] = []
+    if base_dir:
+        try:
+            logs_root = ensure_within_and_resolve(base_dir, base_dir / "logs")
+        except (ConfigError, PathTraversalError):
+            logs_root = None
+    if logs_root is None and selected:
+        logs_root = selected[0].resolve().parent
+    summary_written = False
     try:
         with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for file_path in selected:
                 if written_total >= max_total_bytes:
                     break
                 try:
-                    parent_component = sanitize_filename(file_path.parent.name) if file_path.parent else ""
-                    basename = sanitize_filename(file_path.name)
+                    safe_path: Optional[Path] = None
+                    if logs_root is not None:
+                        try:
+                            safe_path = ensure_within_and_resolve(logs_root, file_path)
+                        except (ConfigError, PathTraversalError):
+                            safe_path = None
+                    if safe_path is None:
+                        safe_path = ensure_within_and_resolve(file_path.parent, file_path)
+                    parent_component = sanitize_filename(safe_path.parent.name) if safe_path.parent else ""
+                    basename = sanitize_filename(safe_path.name)
                     arc_components = [part for part in (parent_component, basename) if part]
                     arcname = "/".join(arc_components) or basename
-                    with zf.open(arcname, mode="w") as zout:
-                        reader_cm: ContextManager[io.BufferedReader]
-                        if safe_reader:
-                            reader_cm = safe_reader(file_path)
-                        else:
-                            reader_cm = _open_binary(file_path)
-                        with reader_cm as fh:
+                    reader_cm: ContextManager[io.BufferedReader]
+                    if safe_reader:
+                        reader_cm = safe_reader(safe_path)
+                    else:
+                        reader_cm = _open_binary(safe_path)
+                    with reader_cm as fh:
+                        with zf.open(arcname, mode="w") as zout:
                             while written_total < max_total_bytes:
                                 chunk = fh.read(min(chunk_size, max_total_bytes - written_total))
                                 if not chunk:
                                     break
                                 zout.write(chunk)
                                 written_total += len(chunk)
+                    included_logs.append(basename if basename else safe_path.name)
                 except Exception:
                     continue
+            if workspace_summary:
+                workspace_summary["log_files"] = included_logs
+            if workspace_summary and written_total > 0:
+                try:
+                    payload = json.dumps(workspace_summary, indent=2).encode("utf-8")
+                    zf.writestr("workspace_summary.json", payload)
+                    summary_written = True
+                except Exception:
+                    pass
     except Exception:
         return None
 
-    if written_total == 0:
+    if written_total == 0 and not summary_written:
         return None
 
     return buffer.getvalue()
@@ -194,5 +251,6 @@ def _safe_mtime(path: Path) -> float:
 
 @contextmanager
 def _open_binary(path: Path) -> Iterator[io.BufferedReader]:
-    with path.open("rb") as fh:
+    safe_path = ensure_within_and_resolve(path.parent, path)
+    with safe_path.open("rb") as fh:
         yield fh

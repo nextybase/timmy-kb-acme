@@ -35,6 +35,22 @@ DEFAULT_TAGS_YAML = (
 DEFAULT_TAGS_CSV = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
 
 
+def _validate_tags_yaml_payload(content: str) -> dict[str, Any]:
+    """Valida la struttura minima di `tags_reviewed.yaml` e ritorna il payload."""
+    parsed = yaml.safe_load(content)
+    if not isinstance(parsed, dict):
+        raise ConfigError("Top-level YAML deve essere un mapping")
+    version = str(parsed.get("version") or "").strip()
+    if version not in {"2", "2.0"}:
+        raise ConfigError("Campo 'version' mancante o non supportato (atteso '2').")
+    if "keep_only_listed" not in parsed:
+        raise ConfigError("Campo obbligatorio 'keep_only_listed' mancante.")
+    tags_payload = parsed.get("tags")
+    if not isinstance(tags_payload, list):
+        raise ConfigError("Campo 'tags' deve essere una lista.")
+    return parsed
+
+
 def handle_tags_raw_save(
     slug: str,
     content: str,
@@ -157,6 +173,14 @@ def enable_tags_service(
         from semantic.tags_io import write_tags_review_stub_from_csv
         from storage.tags_store import derive_db_path_from_yaml_path
 
+        if not csv_path.exists():
+            st.error("`tags_raw.csv` mancante: salva o rigenera il CSV prima di abilitare la semantica.")
+            logger.warning(
+                "ui.manage.tags_raw.missing",
+                extra={"slug": slug, "path": str(csv_path)},
+            )
+            return False
+
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
         db_path = Path(derive_db_path_from_yaml_path(yaml_path))
         export_tags_yaml_from_db(semantic_dir, db_path, logger)
@@ -266,9 +290,7 @@ def open_tags_editor_modal(
         col_a, col_b = st.columns(2)
         if column_button(col_a, "Salva", type="primary"):
             try:
-                parsed = yaml.safe_load(content)
-                if parsed is not None and not isinstance(parsed, dict):
-                    raise ConfigError("Top-level YAML deve essere un mapping")
+                _validate_tags_yaml_payload(content)
             except Exception as exc:
                 st.error(f"YAML non valido: {exc}")
                 logger.warning("ui.manage.tags.yaml.invalid", extra={"slug": slug, "error": str(exc)})

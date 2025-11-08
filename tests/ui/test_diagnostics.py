@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+import pytest
 
 from ui.utils import diagnostics as diag
 
@@ -83,7 +86,13 @@ def test_build_logs_archive_applies_limits(tmp_path: Path) -> None:
     assert data is not None
     archive = zipfile.ZipFile(io.BytesIO(data))
     names = sorted(archive.namelist())
-    assert names == ["logs/log0.txt", "logs/log1.txt"]
+    assert "logs/log0.txt" in names
+    assert "logs/log1.txt" in names
+    if "workspace_summary.json" in names:
+        summary = archive.read("workspace_summary.json")
+        payload = json.loads(summary)
+        assert payload["slug"] == "demo"
+        assert len(payload.get("log_files", [])) <= 2
     assert archive.read("logs/log0.txt") == b"log-0"
     assert archive.read("logs/log1.txt") == b"log-1"
 
@@ -97,3 +106,31 @@ def test_build_logs_archive_returns_none_on_errors(tmp_path: Path) -> None:
         yield  # pragma: no cover
 
     assert diag.build_logs_archive([missing], slug="demo", safe_reader=reader) is None
+
+
+def test_build_workspace_summary_uses_base_dir(tmp_path: Path) -> None:
+    base_dir = tmp_path / "workspace"
+    (base_dir / "raw").mkdir(parents=True)
+    (base_dir / "book").mkdir()
+    (base_dir / "semantic").mkdir()
+    (base_dir / "raw" / "one.txt").write_text("x", encoding="utf-8")
+    (base_dir / "logs").mkdir()
+    log_file = base_dir / "logs" / "log0.txt"
+    log_file.write_text("log", encoding="utf-8")
+
+    summary = diag.build_workspace_summary(
+        "demo",
+        [log_file],
+        base_dir=base_dir,
+    )
+
+    assert summary is not None
+    assert summary["slug"] == "demo"
+    counts = summary["counts"] or {}
+    assert counts.get("raw") == (1, False)
+    assert summary["log_files"] == ["log0.txt"]
+
+
+def test_build_workspace_summary_returns_none_without_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
+    assert diag.build_workspace_summary("missing-slug", [], base_dir=None) is None

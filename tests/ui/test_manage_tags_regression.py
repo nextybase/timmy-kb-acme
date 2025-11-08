@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import ui.manage.tags as tags
+from pipeline.exceptions import ConfigError
 
 
 class _StreamlitStub:
@@ -100,3 +101,37 @@ def test_handle_tags_raw_enable_logs_when_service_missing(
     record = records[0]
     assert getattr(record, "slug", None) == "dummy"
     assert getattr(record, "mode", None) == "default"
+
+
+def test_validate_tags_yaml_payload_requires_version() -> None:
+    content = "keep_only_listed: true\ntags: []\n"
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content)
+
+
+def test_validate_tags_yaml_payload_accepts_schema() -> None:
+    content = "version: 2\nkeep_only_listed: true\ntags:\n  - name: demo\n"
+    parsed = tags._validate_tags_yaml_payload(content)
+    assert parsed["version"] == 2
+    assert parsed["keep_only_listed"] is True
+
+
+def test_enable_tags_service_fails_when_csv_missing(tmp_path: Path) -> None:
+    st_stub = _StreamlitStub()
+    semantic_dir = tmp_path / "semantic"
+    semantic_dir.mkdir()
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+
+    ok = tags.enable_tags_service(
+        "demo",
+        semantic_dir,
+        tmp_path / "missing.csv",
+        yaml_path,
+        st=st_stub,
+        logger=logging.getLogger("test.manage.tags"),
+        set_client_state=lambda _slug, _state: True,
+        reset_gating_cache=lambda _slug: None,
+    )
+
+    assert ok is False
+    assert st_stub.errors  # messaggio utente presente
