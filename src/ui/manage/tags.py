@@ -34,6 +34,8 @@ DEFAULT_TAGS_YAML = (
 
 DEFAULT_TAGS_CSV = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
 
+ALLOWED_TAG_ACTIONS = {"keep", "drop", "merge"}
+
 
 def _validate_tags_yaml_payload(content: str) -> dict[str, Any]:
     """Valida la struttura minima di `tags_reviewed.yaml` e ritorna il payload."""
@@ -43,11 +45,34 @@ def _validate_tags_yaml_payload(content: str) -> dict[str, Any]:
     version = str(parsed.get("version") or "").strip()
     if version not in {"2", "2.0"}:
         raise ConfigError("Campo 'version' mancante o non supportato (atteso '2').")
-    if "keep_only_listed" not in parsed:
-        raise ConfigError("Campo obbligatorio 'keep_only_listed' mancante.")
+    keep_only_listed = parsed.get("keep_only_listed")
+    if not isinstance(keep_only_listed, bool):
+        raise ConfigError("Campo 'keep_only_listed' deve essere booleano.")
     tags_payload = parsed.get("tags")
     if not isinstance(tags_payload, list):
         raise ConfigError("Campo 'tags' deve essere una lista.")
+    for idx, item in enumerate(tags_payload):
+        if not isinstance(item, dict):
+            raise ConfigError(f"Elemento tags[{idx}] deve essere un mapping.")
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ConfigError(f"Elemento tags[{idx}] privo di 'name' valido.")
+        action = item.get("action") or "keep"
+        if not isinstance(action, str):
+            raise ConfigError(f"Elemento tags[{idx}] ha 'action' non valido.")
+        normalized_action = action.strip().lower()
+        if normalized_action not in ALLOWED_TAG_ACTIONS:
+            allowed = ", ".join(sorted(ALLOWED_TAG_ACTIONS))
+            raise ConfigError(f"Elemento tags[{idx}] ha 'action' non supportato " f"(consentiti: {allowed}).")
+        item["action"] = normalized_action
+        synonyms = item.get("synonyms")
+        if synonyms is not None:
+            if not isinstance(synonyms, list) or any(not isinstance(s, str) for s in synonyms):
+                raise ConfigError(f"Elemento tags[{idx}] ha 'synonyms' non valido (lista di stringhe attesa).")
+        note = item.get("note") or ""
+        if not isinstance(note, str):
+            raise ConfigError(f"Elemento tags[{idx}] ha 'note' non valido (stringa attesa).")
+        item["note"] = note
     return parsed
 
 

@@ -110,10 +110,51 @@ def test_validate_tags_yaml_payload_requires_version() -> None:
 
 
 def test_validate_tags_yaml_payload_accepts_schema() -> None:
-    content = "version: 2\nkeep_only_listed: true\ntags:\n  - name: demo\n"
+    content = (
+        "version: 2\n"
+        "keep_only_listed: true\n"
+        "tags:\n"
+        "  - name: demo\n"
+        "    action: keep\n"
+        "    synonyms:\n"
+        "      - demo2\n"
+        "    note: ''\n"
+    )
     parsed = tags._validate_tags_yaml_payload(content)
-    assert parsed["version"] == 2
+    assert str(parsed["version"]) in {"2", "2.0"}
     assert parsed["keep_only_listed"] is True
+    assert parsed["tags"][0]["synonyms"] == ["demo2"]
+
+
+def test_validate_tags_yaml_payload_rejects_keep_only_listed_non_bool() -> None:
+    content = 'version: 2\nkeep_only_listed: "yes"\ntags: []\n'
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content)
+
+
+def test_validate_tags_yaml_payload_rejects_invalid_tag_entry() -> None:
+    content = "version: 2\n" "keep_only_listed: false\n" "tags:\n" "  - name: ''\n"
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content)
+
+    content_bad_synonyms = "version: 2\n" "keep_only_listed: false\n" "tags:\n" "  - name: demo\n" "    synonyms: bad\n"
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content_bad_synonyms)
+
+    content_bad_action = "version: 2\n" "keep_only_listed: true\n" "tags:\n" "  - name: demo\n" "    action: UNKNOWN\n"
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content_bad_action)
+
+    # note deve restare stringa
+    content_bad_note = "version: 2\n" "keep_only_listed: true\n" "tags:\n" "  - name: demo\n" "    note: 3\n"
+    with pytest.raises(ConfigError):
+        tags._validate_tags_yaml_payload(content_bad_note)
+
+    # fallback default
+    content_defaults = "version: 2\n" "keep_only_listed: false\n" "tags:\n" "  - name: demo\n"
+    parsed = tags._validate_tags_yaml_payload(content_defaults)
+    assert parsed["tags"][0]["action"] == "keep"
+    assert parsed["tags"][0]["note"] == ""
 
 
 def test_enable_tags_service_fails_when_csv_missing(tmp_path: Path) -> None:
