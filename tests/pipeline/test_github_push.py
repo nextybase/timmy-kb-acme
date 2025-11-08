@@ -135,6 +135,33 @@ def test_push_output_to_github_force_push_requires_ack(monkeypatch: pytest.Monke
     assert tmp_dir.exists() is False
 
 
+def test_push_output_to_github_force_push_rejects_branch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ctx = _make_context(tmp_path)
+    ctx.env["GIT_DEFAULT_BRANCH"] = "feature/docs"
+    ctx.env["GIT_FORCE_ALLOWED_BRANCHES"] = "release/*"
+
+    tmp_dir = ctx.base_dir / "tmp-force-branch"
+
+    def _fake_prepare(*_: Any, **__: Any) -> tuple[Any, Path, dict[str, Any]]:
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        repo = type("Repo", (), {"full_name": "demo/repo"})()
+        return repo, tmp_dir, {}
+
+    monkeypatch.setattr(github_utils, "_prepare_repo", _fake_prepare)
+    monkeypatch.setattr(github_utils, "_stage_changes_flow", lambda *a, **k: True)
+
+    with pytest.raises(ForcePushError) as excinfo:
+        github_utils.push_output_to_github(
+            ctx,
+            github_token="tok",  # noqa: S106 - token fittizio per test
+            force_push=True,
+            force_ack="ticket-123",
+        )
+
+    assert "Force push NON consentito" in str(excinfo.value)
+    assert tmp_dir.exists() is False
+
+
 def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     recorded: list[str] = []
 
@@ -265,11 +292,13 @@ def _run_git(args: list[str], *, cwd: Path | None = None) -> None:
     subprocess.run([GIT_BIN, *args], cwd=cwd, check=True)
 
 
-def test_push_output_to_github_end_to_end_smoke(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    remote_repo = tmp_path / "remote.git"
+def _seed_remote_repo(tmp_path: Path, *, branch: str = "main") -> Path:
+    """Crea un repo bare con un branch iniziale popolato."""
+    safe_branch = branch.replace("/", "-")
+    remote_repo = tmp_path / f"remote-{safe_branch}.git"
     _run_git(["init", "--bare", remote_repo.as_posix()])
 
-    seed_dir = tmp_path / "seed"
+    seed_dir = tmp_path / f"seed-{safe_branch}"
     seed_dir.mkdir(parents=True, exist_ok=True)
     _run_git(["init"], cwd=seed_dir)
     _run_git(["config", "user.name", "Smoke Tester"], cwd=seed_dir)
@@ -277,10 +306,18 @@ def test_push_output_to_github_end_to_end_smoke(monkeypatch: pytest.MonkeyPatch,
     (seed_dir / "README.md").write_text("seed", encoding="utf-8")
     _run_git(["add", "README.md"], cwd=seed_dir)
     _run_git(["commit", "-m", "seed"], cwd=seed_dir)
-    _run_git(["branch", "-M", "main"], cwd=seed_dir)
+    _run_git(["branch", "-M", branch], cwd=seed_dir)
     _run_git(["remote", "add", "origin", remote_repo.as_posix()], cwd=seed_dir)
-    _run_git(["push", "-u", "origin", "main"], cwd=seed_dir)
-    subprocess.run([GIT_BIN, "--git-dir", str(remote_repo), "symbolic-ref", "HEAD", "refs/heads/main"], check=True)
+    _run_git(["push", "-u", "origin", branch], cwd=seed_dir)
+    subprocess.run(
+        [GIT_BIN, "--git-dir", str(remote_repo), "symbolic-ref", "HEAD", f"refs/heads/{branch}"],
+        check=True,
+    )
+    return remote_repo
+
+
+def test_push_output_to_github_end_to_end_smoke(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    remote_repo = _seed_remote_repo(tmp_path, branch="main")
 
     ctx = _make_context(tmp_path)
     ctx.env["GIT_DEFAULT_BRANCH"] = "main"
@@ -385,4 +422,101 @@ def test_push_output_to_github_end_to_end_smoke(monkeypatch: pytest.MonkeyPatch,
         text=True,
     )
     assert show.returncode == 0, f"git show failed with code {show.returncode}: {show.stderr}\nstatus={status_snapshot}"
+    assert "# demo" in show.stdout
+
+
+def test_push_output_to_github_force_push_smoke(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    remote_repo = _seed_remote_repo(tmp_path, branch="feature/docs")
+
+    ctx = _make_context(tmp_path)
+    ctx.env["GIT_DEFAULT_BRANCH"] = "feature/docs"
+    ctx.env["GIT_FORCE_ALLOWED_BRANCHES"] = "feature/*"
+
+    captured_plan: dict[str, Any] = {}
+    original_build_plan = github_utils._build_push_plan
+
+    def _build_push_plan_with_trace(*args: Any, **kwargs: Any) -> Any:
+        plan = original_build_plan(*args, **kwargs)
+        captured_plan["plan"] = plan
+        return plan
+
+    monkeypatch.setattr(github_utils, "_build_push_plan", _build_push_plan_with_trace)
+
+    force_calls: list[tuple[str, str | None]] = []
+
+    def _force_push_with_trace(
+        tmp_dir: Path,
+        env: dict[str, Any] | None,
+        default_branch: str,
+        force_ack: str,
+        *,
+        logger: logging.Logger,
+        redact_logs: bool,
+    ) -> None:
+        force_calls.append((default_branch, force_ack))
+        github_flow._force_push_with_lease(
+            tmp_dir,
+            env,
+            default_branch,
+            force_ack,
+            logger=logger,
+            redact_logs=redact_logs,
+        )
+
+    monkeypatch.setattr(github_utils, "_force_push_with_lease_flow", _force_push_with_trace)
+    monkeypatch.setattr(
+        github_utils,
+        "_push_with_retry_flow",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("push_with_retry non atteso")),
+    )
+
+    copies: list[tuple[list[Path], Path, Path]] = []
+    original_copy_tree = github_flow._copy_md_tree
+
+    def _copy_md_tree_with_trace(md_files: Sequence[Path], book_dir: Path, dst_root: Path) -> None:
+        copies.append((list(md_files), book_dir, dst_root))
+        original_copy_tree(md_files, book_dir, dst_root)
+
+    monkeypatch.setattr(github_flow, "_copy_md_tree", _copy_md_tree_with_trace)
+
+    def _prepare_repo(
+        context: Any,
+        *,
+        github_token: str,
+        md_files: list[Path],
+        default_branch: str,
+        base_dir: Path,
+        book_dir: Path,
+        redact_logs: bool,
+        logger: logging.Logger,
+    ) -> tuple[Any, Path, dict[str, Any]]:
+        tmp_dir = github_flow._prepare_tmp_dir(base_dir)
+        _run_git(["clone", remote_repo.as_posix(), str(tmp_dir)])
+        _run_git(["checkout", "-B", default_branch], cwd=tmp_dir)
+        github_flow._copy_md_tree(md_files, book_dir, tmp_dir)
+        repo = type("Repo", (), {"full_name": "smoke/repo"})()
+        return repo, tmp_dir, {}
+
+    monkeypatch.setattr(github_utils, "_prepare_repo", _prepare_repo)
+
+    github_utils.push_output_to_github(
+        ctx,
+        github_token="force-token",  # noqa: S106 - token fittizio
+        do_push=True,
+        force_push=True,
+        force_ack="ticket-123",
+    )
+
+    plan = captured_plan.get("plan")
+    assert plan is not None
+    assert plan.default_branch == "feature/docs"
+    assert force_calls == [("feature/docs", "ticket-123")]
+    assert copies, "nessuna copia di markdown eseguita"
+
+    show = subprocess.run(
+        [GIT_BIN, "--git-dir", str(remote_repo), "show", "feature/docs:foo.md"],
+        capture_output=True,
+        text=True,
+    )
+    assert show.returncode == 0, show.stderr
     assert "# demo" in show.stdout

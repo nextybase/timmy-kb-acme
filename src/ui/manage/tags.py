@@ -83,10 +83,19 @@ def enable_tags_stub(
         except Exception:
             previous = None
         importer_counts: dict[str, int] | None = None
+        created_stub = False
+        if not yaml_path.exists():
+            writer(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
+            created_stub = True
         if yaml_path.exists():
             try:
                 importer_counts = importer(yaml_path, logger=logger)
                 logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
+                if created_stub:
+                    logger.info(
+                        "ui.manage.tags.stub_created",
+                        extra={"slug": slug, "path": str(yaml_path)},
+                    )
             except Exception as exc:
                 if previous is not None:
                     writer(yaml_path, previous, encoding="utf-8", atomic=True)
