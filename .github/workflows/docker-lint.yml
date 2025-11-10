@@ -1,0 +1,59 @@
+name: Docker Lint
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect Dockerfiles
+        id: detect
+        shell: bash
+        run: |
+          files=$(git ls-files '*Dockerfile*' '*.dockerfile')
+          if [[ -z "$files" ]]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfiles found; skipping hadolint."
+          else
+            printf '%s\n' "$files" > dockerfiles.list
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install hadolint
+        if: steps.detect.outputs.found == 'true'
+        shell: bash
+        run: |
+          curl -sSfL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o hadolint
+          install -m 0755 hadolint /usr/local/bin/hadolint
+
+      - name: Run hadolint
+        if: steps.detect.outputs.found == 'true'
+        shell: bash
+        run: |
+          while read -r file; do
+            echo "Linting $file"
+            hadolint "$file"
+          done < dockerfiles.list

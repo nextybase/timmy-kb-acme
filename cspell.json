@@ -87,7 +87,9 @@
     "keybert",
     "eagere",
     "monkeypatchare",
-    "promtail"
+    "promtail",
+    "SARIF",
+    "distroless"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

@@ -9,17 +9,16 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 - **OIDC (preferito)**: sostituisci le credenziali statiche con ruoli federati.
   Nel workflow `ci.yaml` trovi un blocco commentato che usa
   `aws-actions/configure-aws-credentials@<PIN_SHA>` con le variabili
-  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non è più necessario salvare
+  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non Ã¨ piÃ¹ necessario salvare
   access key nel repository.
-- **Fallback**: i secrets esistenti restano supportati; assicurati però di ruotarli periodicamente.
+- **Fallback**: i secrets esistenti restano supportati; assicurati perÃ² di ruotarli periodicamente.
 
 ## OIDC config (local & CI)
 
 - Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
 - Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
-- Lo script `scripts/ci/oidc_probe.py` gira in CI quando `OIDC_PROVIDER` è valorizzato (step "OIDC probe (conditional)" in `ci.yaml`).
+- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `scripts/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` è valorizzata.
 - Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
-
 
 ## Secret scanning
 
@@ -29,6 +28,18 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 - Per una scansione locale:
   ```bash
   gitleaks detect --source . --no-git
+  ```
+
+## Dependency scanning
+
+- Workflow `.github/workflows/dependency-scan.yml` esegue `pip-audit` su `requirements.txt` e `requirements-dev.txt`
+  ad ogni push/PR su `main`/`dev` e settimanalmente (`cron`).
+- Il risultato SARIF viene caricato su GitHub Code Scanning; il job fallisce se ci sono CVE non ignorate.
+- Per gestire falsi positivi, usa il file `.pip-audit-ignore` ed aggiorna questa sezione indicando la motivazione della deroga.
+- Esecuzione locale:
+  ```bash
+  pip install pip-audit
+  pip-audit -r requirements.txt -r requirements-dev.txt
   ```
 
 ## Pre-commit hooks
@@ -45,9 +56,24 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
   detect-secrets scan --baseline .secrets.baseline
   ```
 
+## Docker & container hardening
+
+- Workflow `.github/workflows/docker-lint.yml` esegue `hadolint` su ogni Dockerfile del repo (push/PR + weekly).
+  Attualmente il repository non contiene Dockerfile; il job riporta il salto ma resta attivo per future integrazioni.
+- Linee guida per i Dockerfile:
+  - usa immagini base minimali (`python:3.11-slim`, distroless dove possibile);
+  - aggiungi `USER app` o equivalente per evitare l'esecuzione come `root`;
+  - elimina tool di build al termine (`apt-get purge`, `rm -rf /var/lib/apt/lists/*`);
+  - leggi i secret esclusivamente da variabili a runtime (non `ENV`/`ARG` hardcoded).
+- Per i `docker-compose`/deployment assicurati che i secret provengano da GitHub Secrets o Secret Manager esterni.
+- Esecuzione locale di `hadolint`:
+  ```bash
+  hadolint path/to/Dockerfile
+  ```
+
 ## Protezione dei branch
 
-Configura la regola su `main` (GitHub → Settings → Branches):
+Configura la regola su `main` (GitHub â†’ Settings â†’ Branches):
 
 1. **Require a pull request before merging**
    - Minimum 1 approval
@@ -71,7 +97,7 @@ per applicare automaticamente la policy (non eseguire in CI).
 - Evita di serializzare payload completi o variabili di ambiente. In caso di dubbio,
   passa gli extra nel campo `extra={...}` dopo averli filtrati.
 - Per alert in tempo reale abilita un ricevitore (Slack/Sentry) o usa i campi `trace_id`/`span_id`
-  generati quando `TIMMY_OTEL_ENDPOINT` è impostato (vedi `docs/observability.md`).
+  generati quando `TIMMY_OTEL_ENDPOINT` Ã¨ impostato (vedi `docs/observability.md`).
 
 ## Query rapide (Loki / Grafana)
 
