@@ -23,7 +23,11 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilità.
-  - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.\n  - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
+  - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
+  - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
+  - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
+- **Observability**
+  - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
 - **Changelog**
   - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
 

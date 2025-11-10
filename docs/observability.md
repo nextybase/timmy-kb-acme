@@ -1,0 +1,71 @@
+# Observability Stack
+
+Questa guida completa la documentazione di logging già integrata nel progetto
+(`observability/docker-compose.yaml`, `observability/promtail-config.yaml`).
+
+## Stack base (Loki + Promtail + Grafana)
+
+1. Avvia gli stack locali:
+   ```bash
+   docker compose -f observability/docker-compose.yaml up -d
+   ```
+2. I log applicativi vengono raccolti da Promtail e inviati a Loki.
+3. Grafana espone la dashboard (default: <http://localhost:3000>).
+
+I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/logs/*.log`)
+sia i log globali (`/var/timmy/global-logs/*.log`). Le pipeline di Promtail
+promuovono come label principali:
+
+- `event`
+- `slug`
+- `run_id`
+
+> Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
+> header sensibili (`Authorization`, `x-access-token`).
+
+## Correlazione tracing (`trace_id` / `span_id`)
+
+`pipeline/logging_utils.py` integra opzionalmente OpenTelemetry. Se abiliti
+l'endpoint OTLP:
+
+```bash
+export TIMMY_OTEL_ENDPOINT="https://otel-collector.example.com/v1/traces"
+export TIMMY_SERVICE_NAME="timmy-kb"
+export TIMMY_ENV="production"
+```
+
+All'interno dei log compariranno i campi `trace_id` e `span_id`. Questi campi
+possono essere usati in Grafana o in altri back-end OTEL per risalire
+all'esecuzione correlata.
+
+## Query utili (Grafana / Loki)
+
+- Tutti gli errori di fase fallita:
+  ```logql
+  {job="timmy-kb", event="phase_failed"}
+  ```
+- Log per un determinato cliente con riferimento al retriever:
+  ```logql
+  {slug="acme"} |~ "semantic.index"
+  ```
+- Traccia con correlazione OTEL (se attiva):
+  ```logql
+  {trace_id="0123456789abcdef0123456789abcdef"}  # pragma: allowlist secret
+  ```
+
+## Alerting critico
+
+Per inviare alert in tempo reale (es. Slack, Sentry):
+
+- configura Promtail/Loki con alert rules oppure
+- imposta un ricevitore (es. Sentry) usando il bridge OpenTelemetry.
+
+Assicurati che eventuali token generati in GitHub Actions siano mascherati (`::add-mask::`)
+prima di venire stampati nei log.
+
+## Buone pratiche
+
+- Evita di loggare variabili di ambiente o payload contenenti segreti.
+- Usa `pipeline/logging_utils.get_structured_logger` per tutti i logger.
+- Mantieni attivi i filtri di redazione e aggiorna `promtail-config.yaml`
+  con pattern ulteriori qualora emergano nuovi tipi di credenziali.

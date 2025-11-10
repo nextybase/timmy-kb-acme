@@ -27,6 +27,8 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+  id-token: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
@@ -37,6 +39,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # - name: Configure AWS credentials (OIDC example)
+      #   uses: aws-actions/configure-aws-credentials@<PIN_SHA>
+      #   with:
+      #     role-to-assume: arn:aws:iam::123456789012:role/timmy-kb-oidc
+      #     aws-region: eu-west-1
+      #   env:
+      #     TIMMY_SERVICE_NAME: timmy-kb
+      #     TIMMY_ENV: production
       - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
@@ -112,12 +125,41 @@ jobs:
           else:
               print(summary)
           PY
+      - name: Mask Slack webhook
+        if: ${{ always() }}
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "::add-mask::${{ secrets.SLACK_WEBHOOK_URL }}"
+          fi
+      - name: Notify Slack on failure
+        if: ${{ failure() && secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_NAME: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(python - <<'PY'
+            import json, os
+            print(json.dumps({
+                "text": "[ALERT] GitHub Actions job `{job}` failed in workflow `{wf}`.\nSee details: {url}".format(
+                    job=os.environ["JOB_NAME"],
+                    wf=os.environ["WORKFLOW"],
+                    url=os.environ["RUN_URL"],
+                )
+            }))
+          PY
+          )
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
   contract:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
@@ -126,12 +168,41 @@ jobs:
           pip install --requirement requirements-dev.txt
       - name: Pytest contract (nav/gating)
         run: pytest -q -m "contract"
+      - name: Mask Slack webhook
+        if: ${{ always() }}
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "::add-mask::${{ secrets.SLACK_WEBHOOK_URL }}"
+          fi
+      - name: Notify Slack on failure
+        if: ${{ failure() && secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_NAME: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(python - <<'PY'
+            import json, os
+            print(json.dumps({
+                "text": "[ALERT] GitHub Actions job `{job}` failed in workflow `{wf}`.\nSee details: {url}".format(
+                    job=os.environ["JOB_NAME"],
+                    wf=os.environ["WORKFLOW"],
+                    url=os.environ["RUN_URL"],
+                )
+            }))
+          PY
+          )
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
   e2e:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
@@ -155,6 +226,32 @@ jobs:
             **/clients.yaml
             **/preview_logs/**/*.log
             **/streamlit.log
+      - name: Mask Slack webhook
+        if: ${{ always() }}
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "::add-mask::${{ secrets.SLACK_WEBHOOK_URL }}"
+          fi
+      - name: Notify Slack on failure
+        if: ${{ failure() && secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_NAME: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(python - <<'PY'
+            import json, os
+            print(json.dumps({
+                "text": "[ALERT] GitHub Actions job `{job}` failed in workflow `{wf}`.\nSee details: {url}".format(
+                    job=os.environ["JOB_NAME"],
+                    wf=os.environ["WORKFLOW"],
+                    url=os.environ["RUN_URL"],
+                )
+            }))
+          PY
+          )
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
   push-tests:
     needs: build
@@ -165,6 +262,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
@@ -173,3 +273,29 @@ jobs:
           pip install --requirement requirements-dev.txt
       - name: Pytest push markers
         run: pytest -q -m "push"
+      - name: Mask Slack webhook
+        if: ${{ always() }}
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "::add-mask::${{ secrets.SLACK_WEBHOOK_URL }}"
+          fi
+      - name: Notify Slack on failure
+        if: ${{ failure() && secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_NAME: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(python - <<'PY'
+            import json, os
+            print(json.dumps({
+                "text": "[ALERT] GitHub Actions job `{job}` failed in workflow `{wf}`.\nSee details: {url}".format(
+                    job=os.environ["JOB_NAME"],
+                    wf=os.environ["WORKFLOW"],
+                    url=os.environ["RUN_URL"],
+                )
+            }))
+          PY
+          )
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"

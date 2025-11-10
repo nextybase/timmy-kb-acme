@@ -18,15 +18,17 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     client_root = tmp_path / "timmy-kb-dummy"
     (client_root / "config").mkdir(parents=True, exist_ok=True)
     # Config minimale con drive_raw_folder_id richiesto dal ramo drive
-    (client_root / "config" / "config.yaml").write_text("drive_raw_folder_id: RAW_FOLDER_ID\n", encoding="utf-8")
+    (client_root / "config" / "config.yaml").write_text(
+        "drive_raw_folder_id: RAW_FOLDER_ID\n", encoding="utf-8"
+    )  # pragma: allowlist secret
     # Stub service account file richiesto dal contesto
     (client_root / "dummy.json").write_text(
         """
 {
   "type": "service_account",
   "project_id": "dummy",
-  "private_key_id": "abc",
-  "private_key": "-----BEGIN PRIVATE KEY-----\\nMII...\\n-----END PRIVATE KEY-----\\n",
+  "private_key_id": "abc",  # pragma: allowlist secret
+  "private_key": "-----BEGIN PRIVATE KEY-----\\nMII...\\n-----END PRIVATE KEY-----\\n",  # pragma: allowlist secret
   "client_email": "dummy@project.iam.gserviceaccount.com",
   "client_id": "1234567890",
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",

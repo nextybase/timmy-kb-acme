@@ -48,7 +48,7 @@ def test_settings_loads_config(sample_config: Path) -> None:
 
 
 def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("DUMMY_ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setenv("DUMMY_ASSISTANT_ID", "asst_dummy")  # pragma: allowlist secret
     envu._ENV_LOADED = False
     settings = Settings.load(sample_config.parent.parent, config_path=sample_config)
     resolved = settings.resolve_env_ref("vision.assistant_id_env", required=True)
@@ -56,11 +56,11 @@ def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.Monk
 
 
 def test_get_secret_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GITHUB_TOKEN", "ghp_dummy")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_dummy")  # pragma: allowlist secret
     envu._ENV_LOADED = False
     settings = Settings.load(sample_config.parent.parent, config_path=sample_config)
     secret = settings.get_secret("GITHUB_TOKEN", required=True)
-    assert secret == "ghp_dummy"  # noqa: S105
+    assert secret == "ghp_dummy"  # pragma: allowlist secret  # noqa: S105
 
 
 def test_get_secret_missing_required_raises(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:

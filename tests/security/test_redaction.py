@@ -11,7 +11,11 @@ from semantic.redaction import redact_sensitive_tokens
     ("text", "token", "placeholder"),
     [
         ("CF: RSSMRA85T10A562S", "RSSMRA85T10A562S", "[[REDACTED:CF]]"),
-        ("IBAN IT60X0542811101000000123456", "IT60X0542811101000000123456", "[[REDACTED:IBAN]]"),
+        (
+            "IBAN IT60X0542811101000000123456",
+            "IT60X0542811101000000123456",
+            "[[REDACTED:IBAN]]",
+        ),  # pragma: allowlist secret
         ("Scrivi a persona@example.com", "persona@example.com", "[[REDACTED:EMAIL]]"),
         ("Tel. +39 347 123 4567", "+39 347 123 4567", "[[REDACTED:PHONE]]"),
     ],
@@ -23,7 +27,7 @@ def test_redaction_masks_sensitive_tokens(text: str, token: str, placeholder: st
 
 
 def test_redaction_handles_generic_tax_id() -> None:
-    dummy_tax_id = "AB12CD34EF56"
+    dummy_tax_id = "AB12CD34EF56"  # pragma: allowlist secret
     redacted = redact_sensitive_tokens(f"Identificativo: {dummy_tax_id}")
     assert "[[REDACTED:TAXID]]" in redacted
     assert dummy_tax_id not in redacted

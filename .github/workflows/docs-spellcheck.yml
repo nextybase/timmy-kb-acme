@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: cspell-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
@@ -29,6 +30,9 @@ jobs:
     continue-on-error: true  # non-gating
     steps:
       - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@5ffc73acb949c4645f047a771485eb9722da0c83 # v4.0.3
         with:
@@ -55,3 +59,29 @@ jobs:
         shell: bash
         run: |
           echo "cSpell completed (non-gating). Review warnings above if present." >> "$GITHUB_STEP_SUMMARY"
+      - name: Mask Slack webhook
+        if: ${{ always() }}
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "::add-mask::${{ secrets.SLACK_WEBHOOK_URL }}"
+          fi
+      - name: Notify Slack on failure
+        if: ${{ failure() && secrets.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_NAME: ${{ github.job }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(python - <<'PY'
+            import json, os
+            print(json.dumps({
+                "text": "[ALERT] GitHub Actions job `{job}` failed in workflow `{wf}`.\nSee details: {url}".format(
+                    job=os.environ["JOB_NAME"],
+                    wf=os.environ["WORKFLOW"],
+                    url=os.environ["RUN_URL"],
+                )
+            }))
+          PY
+          )
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"

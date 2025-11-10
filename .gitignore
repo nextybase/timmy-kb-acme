@@ -45,7 +45,16 @@ data/
 # === Credenziali e segreti ===
 .env
 *.env
+*.env.*
+*.env.local
+*.env.production
+*.env.development
 service_account.json
+*.pem
+*.p12
+*.key
+*.keystore
+*.pfx
 
 # === Jupyter/Notebook/Streamlit ===
 .ipynb_checkpoints/

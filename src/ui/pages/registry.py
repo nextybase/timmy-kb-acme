@@ -23,7 +23,7 @@ class PagePaths:
 
     ADMIN = "src/ui/pages/admin.py"
     TUNING = "src/ui/pages/tools_check.py"
-    SECRETS = "src/ui/pages/secrets_healthcheck.py"
+    SECRETS = "src/ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
     DIAGNOSTICS = "src/ui/pages/diagnostics.py"
     LOGS_PANEL = "src/ui/pages/logs_panel.py"
 
@@ -41,7 +41,7 @@ _URL_BY_PATH: Dict[str, str | None] = {
     PagePaths.GUIDA: "guida",
     PagePaths.ADMIN: "admin",
     PagePaths.TUNING: "check",
-    PagePaths.SECRETS: "secrets",
+    PagePaths.SECRETS: "secrets",  # pragma: allowlist secret
     PagePaths.DIAGNOSTICS: "diagnostics",
     PagePaths.LOGS_PANEL: None,
 }

@@ -23,6 +23,12 @@ scrape_configs:
           expression: 'run_id=(?P<run_id>[^\s]+)'
       - regex:
           expression: 'event=(?P<event>[^\s]+)'
+      - replace:
+          expression: '(Authorization:\s+)(Bearer|Basic)\s+[^ ]+'
+          replace: '$1<REDACTED>'
+      - replace:
+          expression: 'x-access-token=[^&\s]+'
+          replace: 'x-access-token=<REDACTED>'
       - labels:
           slug:
           run_id:
@@ -39,6 +45,12 @@ scrape_configs:
           expression: 'slug=(?P<slug>[^\s]+)'
       - regex:
           expression: 'event=(?P<event>[^\s]+)'
+      - replace:
+          expression: '(Authorization:\s+)(Bearer|Basic)\s+[^ ]+'
+          replace: '$1<REDACTED>'
+      - replace:
+          expression: 'x-access-token=[^&\s]+'
+          replace: 'x-access-token=<REDACTED>'
       - labels:
           slug:
           event:

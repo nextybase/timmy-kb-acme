@@ -13,7 +13,7 @@
 **Tooling minimo**
 - Python **>= 3.11**, `pip`, `pip-tools`; (opz.) **Docker** per preview HonKit.
   Vedi anche README -> *Prerequisiti rapidi*.
-- Credenziali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`.
+- Credenziali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
 - Pre-commit: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 
 **Ambiente**
