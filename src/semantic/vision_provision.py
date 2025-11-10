@@ -16,40 +16,53 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var, get_int
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
+from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
-try:
-    from ai.client_factory import make_openai_client
-except ImportError:
-    try:
-        from timmykb.ai.client_factory import make_openai_client
-    except ImportError:  # pragma: no cover - fallback when package context
-        from ..ai.client_factory import make_openai_client
-
-try:
-    from security.masking import hash_identifier, mask_paths, sha256_path
-except ImportError:
-    try:
-        from timmykb.security.masking import hash_identifier, mask_paths, sha256_path
-    except ImportError:  # pragma: no cover
-        from ..security.masking import hash_identifier, mask_paths, sha256_path
-
-try:
-    from security.retention import purge_old_artifacts
-except ImportError:
-    try:
-        from timmykb.security.retention import purge_old_artifacts
-    except ImportError:  # pragma: no cover
-        from ..security.retention import purge_old_artifacts
-
-
 # Logger strutturato di modulo
 EVENT = "semantic.vision"
 LOG_FILE_NAME = "semantic.vision.log"
 LOGGER = get_structured_logger(EVENT)
+IMPORT_LOGGER = get_structured_logger(f"{EVENT}.imports")
+
+make_openai_client = import_from_candidates(
+    [
+        "ai.client_factory:make_openai_client",
+        "timmykb.ai.client_factory:make_openai_client",
+        "..ai.client_factory:make_openai_client",
+    ],
+    package=__package__,
+    description="make_openai_client",
+    logger=IMPORT_LOGGER,
+)
+
+_masking_module = import_from_candidates(
+    [
+        "security.masking",
+        "timmykb.security.masking",
+        "..security.masking",
+    ],
+    package=__package__,
+    description="security.masking",
+    logger=IMPORT_LOGGER,
+)
+hash_identifier = getattr(_masking_module, "hash_identifier")
+mask_paths = getattr(_masking_module, "mask_paths")
+sha256_path = getattr(_masking_module, "sha256_path")
+
+purge_old_artifacts = import_from_candidates(
+    [
+        "security.retention:purge_old_artifacts",
+        "timmykb.security.retention:purge_old_artifacts",
+        "..security.retention:purge_old_artifacts",
+    ],
+    package=__package__,
+    description="purge_old_artifacts",
+    logger=IMPORT_LOGGER,
+)
 
 
 # =========================

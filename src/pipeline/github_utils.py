@@ -59,7 +59,7 @@ from .github_push_flow import _stage_changes as _stage_changes_flow
 from .github_types import SupportsContext
 
 # Logger di modulo (fallback); nei flussi reali useremo quello contestualizzato
-logger: logging.Logger = get_structured_logger("pipeline.github_utils")
+MODULE_LOGGER: logging.Logger = get_structured_logger("pipeline.github_utils")
 
 
 @dataclass
@@ -244,9 +244,6 @@ def push_output_to_github(
 ) -> None:
     """Esegue il push dei file `.md` presenti nella cartella `book` del cliente su GitHub."""
     local_logger = get_structured_logger("pipeline.github_utils", context=context)
-
-    global logger
-    logger = local_logger
 
     plan = _build_push_plan(
         context,

@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Tuple, cast
 
 from pipeline.env_utils import get_env_var
+from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from ui.utils.stubs import get_streamlit
 
@@ -36,15 +37,27 @@ def _st_rerun() -> None:
 
 def _get_client() -> Any:
     """Restituisce un client OpenAI preferendo la factory del progetto."""
+    factory_candidates = [
+        "ai.client_factory:make_openai_client",
+        "timmykb.ai.client_factory:make_openai_client",
+        "..ai.client_factory:make_openai_client",
+    ]
     try:
-        from ai.client_factory import make_openai_client
-
-        return make_openai_client()
-    except Exception:
+        factory = import_from_candidates(
+            factory_candidates,
+            package=__package__,
+            description="make_openai_client",
+            logger=LOG,
+        )
+        return factory()
+    except ImportError:
         try:
-            from openai import OpenAI
-
-            return OpenAI()
+            openai_ctor = import_from_candidates(
+                ["openai:OpenAI"],
+                description="OpenAI",
+                logger=LOG,
+            )
+            return openai_ctor()
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Impossibile inizializzare il client OpenAI: {exc}") from exc
 
