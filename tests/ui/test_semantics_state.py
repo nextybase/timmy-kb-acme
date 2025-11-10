@@ -45,6 +45,58 @@ def test_semantics_page_uses_entry_states_for_allowed_states(monkeypatch):
     assert getattr(sem, "ALLOWED_STATES", None) == SEMANTIC_ENTRY_STATES
 
 
+def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+
+    state_log: list[str] = []
+    state = {"value": "pronto"}
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: state["value"])
+
+    def _set_state(slug: str, value: str) -> None:
+        state["value"] = value
+        state_log.append(value)
+
+    monkeypatch.setattr(sem, "set_state", _set_state)
+
+    reset_calls: list[str] = []
+    monkeypatch.setattr(sem, "_reset_gating_cache", lambda slug: reset_calls.append(slug))
+
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "convert_markdown", lambda ctx, logger, slug=None: ["a.md"])
+    monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
+    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"tag": True})
+    monkeypatch.setattr(
+        sem,
+        "enrich_frontmatter",
+        lambda ctx, logger, vocab, slug=None, **kwargs: ["a.md"],
+    )
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug=None: None)
+
+    def _ctx_logger(_slug: str):
+        logger = SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
+        return SimpleNamespace(base_dir=tmp_path), logger
+
+    monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
+
+    sem._client_state = "pronto"  # type: ignore[attr-defined]
+    sem._raw_ready = True  # type: ignore[attr-defined]
+
+    sem._run_convert("dummy")
+    assert state["value"] == "pronto"
+
+    sem._run_enrich("dummy")
+    assert state["value"] == "arricchito"
+
+    sem._run_summary("dummy")
+    assert state["value"] == "finito"
+
+    assert reset_calls == ["dummy", "dummy", "dummy"]
+    assert state_log == ["pronto", "arricchito", "finito"]
+
+
 def test_semantics_gating_uses_ssot_constants():
     """
     Il gating deve usare la costante SSoT `SEMANTIC_ENTRY_STATES`

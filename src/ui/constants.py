@@ -10,7 +10,8 @@ Costanti condivise per lo stato cliente (persistito) e note sulle fasi UI.
 - Le **fasi UI** (es. wizard "Nuovo cliente") sono stati effimeri di interfaccia,
   NON vengono persistiti e possono restare in inglese senza impattare la logica.
 
-Usare SEMANTIC_READY_STATES ovunque serva il gating della scheda "Semantica".
+Usa SEMANTIC_ENTRY_STATES per il gating della scheda "Semantica"
+e SEMANTIC_READY_STATES per le funzioni disponibili solo a stato arricchito/finito (es. preview).
 """
 
 # Nome del campo nel registry clienti (per chiarezza)
