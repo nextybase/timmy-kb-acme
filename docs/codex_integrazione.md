@@ -24,7 +24,7 @@ Nota OS: su Windows l'esperienza migliore è tramite WSL; l'estensione è pienam
 **3) Prompt minimi ma vincolanti** – Chiedi micro-PR idempotenti, diff esplicito e chiusura con `make qa-safe` (o equivalente).
 **4) Coerenza automatica** – Se tocchi un `AGENTS.md`, rigenera la Matrice dell’indice con `pre-commit run agents-matrix-check --all-files`. La CI (`job build` in `.github/workflows/ci.yaml`) riesegue `python scripts/gen_agents_matrix.py --check` e fallisce se la matrice non è aggiornata.
 **5) Sicurezza & qualità** – Path-safety/I-O atomico, niente side-effects a import-time; linting/typing e test deterministici **senza rete**.
-**6) Performance** – Cache RAW PDF auto-invalidata da `safe_write_*` (tuning via `TIMMY_SAFE_PDF_CACHE_TTL`); per l’NLP usa `--nlp-workers/--nlp-batch-size` e (se serve debug) `--nlp-no-parallel`.
+**6) Performance** – Cache RAW PDF auto-invalidata da `safe_write_*` (config in `raw_cache` di `config/config.yaml`, override `TIMMY_SAFE_PDF_CACHE_TTL` / `TIMMY_SAFE_PDF_CACHE_CAPACITY`); per l’NLP usa `--nlp-workers/--nlp-batch-size` e (se serve debug) `--nlp-no-parallel`.
 
 Obiettivo: accelerare il lavoro senza sorprese. L’agente propone, tu approvi: HiTL come regola, *repo-aware* come prassi.
 

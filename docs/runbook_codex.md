@@ -56,7 +56,7 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
 - **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
 - **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
 - **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` e' attivo.
-- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL configurabile via `TIMMY_SAFE_PDF_CACHE_TTL` (default 300s); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
+- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`, override via `TIMMY_SAFE_PDF_CACHE_TTL` e `TIMMY_SAFE_PDF_CACHE_CAPACITY`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 
 **Snippet tipici**

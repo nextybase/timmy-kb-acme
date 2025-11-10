@@ -41,10 +41,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import BinaryIO, Callable, Iterable, Iterator, List, Optional, Sequence, TextIO, Tuple
+from typing import Any, BinaryIO, Callable, Iterable, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
+from .yaml_utils import yaml_read
 
 # Logger di modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -61,7 +62,9 @@ _SANITIZE_DISALLOWED_RE = re.compile(r"[^\w.\-]+", flags=re.UNICODE)
 
 
 # Cache opportunistica per iter_safe_pdfs
-_SAFE_PDF_CACHE_CAPACITY = 8
+_DEFAULT_RAW_CACHE_TTL = 300.0
+_DEFAULT_RAW_CACHE_CAPACITY = 8
+_SAFE_PDF_CACHE_CAPACITY = _DEFAULT_RAW_CACHE_CAPACITY
 
 
 @dataclass(frozen=True)
@@ -72,20 +75,55 @@ class _SafePdfCacheEntry:
 
 
 _SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
+_SAFE_PDF_CACHE_DEFAULT_TTL = _DEFAULT_RAW_CACHE_TTL
 
 
-def _read_default_pdf_cache_ttl() -> float:
-    raw_value = os.environ.get("TIMMY_SAFE_PDF_CACHE_TTL")
-    if raw_value is None:
-        return 300.0
+def _parse_positive_float(value: Any, default: float) -> float:
     try:
-        ttl_value = float(str(raw_value).strip())
-    except (TypeError, ValueError):
-        return 300.0
-    return max(0.0, ttl_value)
+        parsed = float(str(value).strip())
+        return parsed if parsed >= 0 else default
+    except Exception:
+        return default
 
 
-_SAFE_PDF_CACHE_DEFAULT_TTL = _read_default_pdf_cache_ttl()
+def _parse_positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(float(str(value).strip()))
+        return parsed if parsed > 0 else default
+    except Exception:
+        return default
+
+
+def _load_raw_cache_defaults() -> None:
+    """Carica TTL/capacità della cache RAW da config/config.yaml (override ENV)."""
+    global _SAFE_PDF_CACHE_DEFAULT_TTL, _SAFE_PDF_CACHE_CAPACITY
+
+    ttl = _DEFAULT_RAW_CACHE_TTL
+    capacity = _DEFAULT_RAW_CACHE_CAPACITY
+
+    config_path = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+    try:
+        config = yaml_read(config_path.parent, config_path, use_cache=True) or {}
+        cfg = (config.get("raw_cache") or {}) if isinstance(config, dict) else {}
+        ttl = _parse_positive_float(cfg.get("ttl_seconds"), ttl)
+        capacity = _parse_positive_int(cfg.get("max_entries"), capacity)
+    except Exception:
+        # se il file manca o è invalido manteniamo i fallback
+        pass
+
+    env_ttl = os.environ.get("TIMMY_SAFE_PDF_CACHE_TTL")
+    if env_ttl is not None:
+        ttl = _parse_positive_float(env_ttl, ttl)
+
+    env_cap = os.environ.get("TIMMY_SAFE_PDF_CACHE_CAPACITY")
+    if env_cap is not None:
+        capacity = _parse_positive_int(env_cap, capacity)
+
+    _SAFE_PDF_CACHE_DEFAULT_TTL = ttl
+    _SAFE_PDF_CACHE_CAPACITY = capacity
+
+
+_load_raw_cache_defaults()
 
 
 def _dir_mtime(path: Path) -> float:

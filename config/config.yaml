@@ -23,3 +23,6 @@ vision:
   strict_output: true
 ui:
   skip_preflight: true
+raw_cache:
+  ttl_seconds: 300
+  max_entries: 8
