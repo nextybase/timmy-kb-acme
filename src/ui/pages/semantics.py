@@ -51,15 +51,6 @@ def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
     return ctx, logger
 
 
-def _safe_rerun() -> None:
-    rerun_fn = getattr(st, "rerun", None)
-    if callable(rerun_fn):
-        try:
-            rerun_fn()
-        except Exception:
-            pass
-
-
 def _display_user_error(exc: Exception) -> None:
     title, body, caption = to_user_message(exc)
     st.error(title)
@@ -67,7 +58,20 @@ def _display_user_error(exc: Exception) -> None:
         st.caption(caption or body)
 
 
-# usa helper centralizzato per compatibilità con stub e fallback width
+def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -> None:
+    """Aggiorna lo stato cliente loggando eventuali fallimenti e resettando il gating."""
+    try:
+        set_state(slug, target_state)
+    except Exception as exc:
+        try:
+            logger.warning(
+                "ui.semantics.state_update_failed",
+                extra={"slug": slug, "target_state": target_state, "error": str(exc)},
+            )
+        except Exception:
+            pass
+    finally:
+        _reset_gating_cache(slug)
 
 
 def _run_convert(slug: str) -> None:
@@ -80,6 +84,7 @@ def _run_convert(slug: str) -> None:
         files = convert_markdown(ctx, logger, slug=slug)
         if status is not None and hasattr(status, "update"):
             status.update(label=f"Conversione completata ({len(files)} file di contenuto).", state="complete")
+    _update_client_state(slug, "pronto", logger)
 
 
 def _run_enrich(slug: str) -> None:
@@ -91,12 +96,7 @@ def _run_enrich(slug: str) -> None:
             logger.warning("ui.semantics.vocab_missing", extra={"slug": slug})
         except Exception:
             pass
-        try:
-            set_state(slug, "pronto")
-        except Exception:
-            pass
-        else:
-            _reset_gating_cache(slug)
+        _update_client_state(slug, "pronto", logger)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
         st.caption("Vai su **Gestisci cliente** e completa l'estrazione tag, poi riprova.")
         return
@@ -108,14 +108,7 @@ def _run_enrich(slug: str) -> None:
         touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
         if status is not None and hasattr(status, "update"):
             status.update(label=f"Frontmatter aggiornato ({len(touched)} file).", state="complete")
-    try:
-        # Promozione stato: arricchito
-        set_state(slug, "arricchito")
-    except Exception:
-        # Lo stato non blocca l'uso della pagina; eventuale errore non è fatale per l'utente
-        pass
-    else:
-        _reset_gating_cache(slug)
+    _update_client_state(slug, "arricchito", logger)
 
 
 def _run_summary(slug: str) -> None:
@@ -128,13 +121,7 @@ def _run_summary(slug: str) -> None:
         write_summary_and_readme(ctx, logger, slug=slug)
         if status is not None and hasattr(status, "update"):
             status.update(label="SUMMARY.md e README.md generati.", state="complete")
-    try:
-        # Promozione stato: finito
-        set_state(slug, "finito")
-    except Exception:
-        pass
-    else:
-        _reset_gating_cache(slug)
+    _update_client_state(slug, "finito", logger)
 
 
 def _go_preview() -> None:
@@ -142,7 +129,12 @@ def _go_preview() -> None:
         set_tab("preview")
     except Exception:
         pass
-    _safe_rerun()
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
+            rerun_fn()
+        except Exception:
+            pass
 
 
 # ---------------- UI ----------------

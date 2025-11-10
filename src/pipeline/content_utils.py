@@ -189,6 +189,7 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
     readme = target / "README.md"
 
     sections: list[str] = []
+    logger = get_structured_logger("pipeline.content_utils")
     try:
         cfg = load_semantic_config(ctx.base_dir)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
@@ -206,15 +207,21 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
             ]
         else:
             iterable = []
-        for key, meta in iterable:
-            display = _titleize(str(key))
-            descr = str((meta or {}).get("descrizione") or "").strip()
-            section_body = f"## {display}\n"
-            if descr:
-                section_body += f"\n{descr}\n"
-            sections.append(section_body.strip())
-    except Exception:
-        pass
+            for key, meta in iterable:
+                display = _titleize(str(key))
+                descr = str((meta or {}).get("descrizione") or "").strip()
+                section_body = f"## {display}\n"
+                if descr:
+                    section_body += f"\n{descr}\n"
+                sections.append(section_body.strip())
+    except Exception as exc:  # pragma: no cover - fallback path
+        logger.warning(
+            "pipeline.content.mapping_failed",
+            extra={
+                "slug": getattr(ctx, "slug", None),
+                "error": str(exc),
+            },
+        )
 
     content = "\n\n".join(sections).strip() or "Contenuti generati/curati automaticamente."
     safe_write_text(
