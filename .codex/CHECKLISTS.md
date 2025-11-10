@@ -31,5 +31,6 @@
 - Controlla le impostazioni di throttling/cache (`NLP_THREADS`, `TIMMY_SAFE_PDF_CACHE_TTL`, cache clients_db) per evitare fork divergenti fra agent e orchestratori.
 
 ## Documentazione
-- Allinea **architecture.md / developer_guide.md / guida_ui.md** per ogni cambio funzionale.
-- Aggiorna `.codex/WORKFLOWS.md` se cambi pipeline.
+- **[BLOCKING]** Se cambi firme, flussi o UX: aggiorna **architecture.md / developer_guide.md / guida_ui.md** (o altri doc interessati). Nessun merge senza nota esplicita nella PR.
+- Documenta sempre le modifiche alla pipeline anche in `.codex/WORKFLOWS.md` / Runbook quando necessario.
+- Nel testo della PR inserisci la sezione `Docs:` elencando i file aggiornati (o `n/a` solo se davvero non servono update).

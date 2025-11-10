@@ -207,7 +207,7 @@ Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -
 - **Sicurezza & I/O:** `ensure_within*` ovunque; scritture atomiche; rollback definito.
 - **UI/Workflow:** Gating Semantica; Preview Docker sicura; SSoT `semantic/tags.db`.
 - **Drive/Git:** credenziali presenti; push: **solo** `.md` da `book/`.
-- **Documentazione:** allineare Architecture/Developer Guide/User Guide su ogni cambio funzionale; aggiornare `.codex/WORKFLOWS` se cambia pipeline.
+- **Documentazione (blocking):** per ogni cambio funzionale/firma/UX aggiornare Architecture/Developer Guide/User Guide (e `.codex/WORKFLOWS` se tocca pipeline) e indicare in PR `Docs: ...`; senza nota esplicita la review non passa.
 
 Riferimenti: [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
 
