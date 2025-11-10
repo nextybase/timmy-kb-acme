@@ -16,6 +16,7 @@ Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire 
 - Token GitHub se abiliti il push finale
 
 Variabili d'ambiente principali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
+Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`.
 
 ---
 
@@ -64,8 +65,22 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ## Telemetria & sicurezza
 - Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti.
+- I log globali della UI (Streamlit) sono salvati in `.timmykb/logs/` e visibili dalla pagina “Log dashboard”.
+- La rotazione file (`RotatingFileHandler`) si configura via `config/config.yaml` (`log_max_bytes`, `log_backup_count`) o ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default: 1 MiB, 3 backup).
+- L'esportazione tracing (OTel) si attiva impostando `TIMMY_OTEL_ENDPOINT` (OTLP/HTTP), `TIMMY_SERVICE_NAME` e `TIMMY_ENV`.
 - Path-safety e scritture atomiche per ogni operazione su workspace/Drive.
 - CSpell, gitleaks e controlli SPDX sono inclusi nella configurazione `pre-commit`.
 - Il push GitHub (`py src/onboarding_full.py`) usa `pipeline.github_utils.push_output_to_github`: prepara un clone temporaneo `.push_*`, copia solo i Markdown e gestisce retry/force push (`--force-with-lease`) secondo `TIMMY_NO_GITHUB`/`SKIP_GITHUB_PUSH`, `GIT_DEFAULT_BRANCH` e `GIT_FORCE_ALLOWED_BRANCHES` + `force_ack`.
+
+### Observability stack (Loki + Grafana + Promtail)
+- Compose file in `observability/docker-compose.yaml` con Loki, Promtail e Grafana; la configurazione Promtail (file `observability/promtail-config.yaml`) legge `output/timmy-kb-*/logs/*.log` e `.timmykb/logs/*.log`.
+- Le righe structured `slug=… run_id=… event=…` vengono esposte come label Loki (`slug`, `run_id`, `event`), pronte per dashboard e alert.
+- Avvio rapido:
+  ```bash
+  cd observability
+  docker compose up -d
+  ```
+  Grafana � disponibile su `http://localhost:3000` (utente `admin`, password default `admin`, cambiabile via `GF_SECURITY_ADMIN_PASSWORD`); Loki risponde su `http://localhost:3100`.
+- Personalizza i bind `./promtail-config.yaml`, `../output`, `../.timmykb/logs` in base al tuo filesystem locale. Spegni con `docker compose down`.
 
 Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user_guide.md) e della [Developer Guide](docs/developer_guide.md).

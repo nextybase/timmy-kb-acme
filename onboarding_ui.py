@@ -294,6 +294,19 @@ pages = {
     for group, specs in _pages_specs.items()
 }
 
+try:
+    LOGGER.info(
+        "ui.navigation.pages",
+        extra={
+            "pages": {
+                group: [getattr(spec, "path", "") for spec in specs]
+                for group, specs in _pages_specs.items()
+            }
+        },
+    )
+except Exception:
+    pass
+
 # --------------------------------------------------------------------------------------
 # Router nativo: requisito Beta 0
 # --------------------------------------------------------------------------------------

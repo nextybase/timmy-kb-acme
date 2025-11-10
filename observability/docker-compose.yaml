@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: timmy-loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.6
+    container_name: timmy-promtail
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - ../output:/var/timmy/output:ro
+      - ../.timmykb/logs:/var/timmy/global-logs:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: timmy-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

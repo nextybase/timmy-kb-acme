@@ -1,0 +1,44 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/promtail-positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: timmy-workspaces
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: timmy-workspaces
+          __path__: /var/timmy/output/timmy-kb-*/logs/*.log
+    pipeline_stages:
+      - regex:
+          expression: 'slug=(?P<slug>[^\s]+)'
+      - regex:
+          expression: 'run_id=(?P<run_id>[^\s]+)'
+      - regex:
+          expression: 'event=(?P<event>[^\s]+)'
+      - labels:
+          slug:
+          run_id:
+          event:
+  - job_name: timmy-ui-global
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: timmy-ui-global
+          __path__: /var/timmy/global-logs/*.log
+    pipeline_stages:
+      - regex:
+          expression: 'slug=(?P<slug>[^\s]+)'
+      - regex:
+          expression: 'event=(?P<event>[^\s]+)'
+      - labels:
+          slug:
+          event:

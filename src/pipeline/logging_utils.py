@@ -38,9 +38,24 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Literal, Mapping, Optional, Type, Union
+
+# --- OpenTelemetry (opzionale) -------------------------------------------------
+_OTEL_ENABLED = False
+_OTEL_TRACER = None
+try:
+    from opentelemetry import trace as _otel_trace
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    _OTEL_IMPORT_OK = True
+except Exception:
+    _OTEL_IMPORT_OK = False
 
 # ---------------------------------------------
 # Redazione (API semplice usata dai moduli)
@@ -203,6 +218,15 @@ class _KVFormatter(logging.Formatter):
             v = getattr(record, k, None)
             if v:
                 kv.append(f"{k}={v}")
+        if _OTEL_ENABLED:
+            try:
+                span = _otel_trace.get_current_span()
+                ctx = span.get_span_context()
+                if ctx is not None and ctx.is_valid:
+                    kv.append(f"trace_id={ctx.trace_id:032x}")
+                    kv.append(f"span_id={ctx.span_id:016x}")
+            except Exception:
+                pass
         if kv:
             return f"{base} | " + " ".join(kv)
         return base
@@ -215,11 +239,28 @@ def _make_console_handler(level: int, fmt: str) -> logging.Handler:
     return ch
 
 
-def _make_file_handler(path: Path, level: int, fmt: str) -> logging.Handler:
-    fh = logging.FileHandler(path, encoding="utf-8")
+def _make_file_handler(
+    path: Path, level: int, fmt: str, *, max_bytes: int | None = None, backup_count: int | None = None
+) -> logging.Handler:
+    max_b = max(1024 * 128, int(max_bytes or 0)) if (max_bytes or 0) > 0 else 1024 * 1024
+    bk_cnt = int(backup_count or 3)
+    fh = RotatingFileHandler(path, encoding="utf-8", maxBytes=max_b, backupCount=bk_cnt)
     fh.setLevel(level)
     fh.setFormatter(_KVFormatter(fmt))
     return fh
+
+
+def _coerce_positive_int(value: Any, *, default: int, minimum: int) -> int:
+    """Converte value in int positivo, oppure ritorna default."""
+    if value is None:
+        return default
+    try:
+        candidate = int(value)
+    except Exception:
+        return default
+    if candidate < minimum:
+        return default
+    return candidate
 
 
 def _ensure_no_duplicate_handlers(lg: logging.Logger, key: str) -> None:
@@ -290,7 +331,12 @@ def get_structured_logger(
         if env_override:
             propagate = env_override in {"1", "true", "yes", "on"}
         else:
-            propagate = True
+            propagate = False
+    # Nei test pytest intercettiamo i log via caplog (attaccato al root). Se la propagazione
+    # resta disabilitata i test non vedono i messaggi. Optiamo quindi per riabilitarla in
+    # questo scenario, lasciando invariato il comportamento runtime.
+    if not propagate and (os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules):
+        propagate = True
     lg.propagate = propagate
 
     ctx = _ctx_view_from(context, run_id)
@@ -318,16 +364,70 @@ def get_structured_logger(
 
     # file handler opzionale
     if log_file:
+        settings = getattr(context, "settings", None) if context is not None else None
+        max_b_setting: Any = None
+        bk_cnt_setting: Any = None
+        if settings is not None:
+            getter = getattr(settings, "get", None)
+            if callable(getter):
+                try:
+                    max_b_setting = getter("log_max_bytes", None)
+                    bk_cnt_setting = getter("log_backup_count", None)
+                except Exception:
+                    max_b_setting = None
+                    bk_cnt_setting = None
+            elif isinstance(settings, Mapping):
+                max_b_setting = settings.get("log_max_bytes")
+                bk_cnt_setting = settings.get("log_backup_count")
+        env_max = os.getenv("TIMMY_LOG_MAX_BYTES")
+        if env_max:
+            try:
+                max_b_setting = int(env_max)
+            except Exception:
+                max_b_setting = max_b_setting or None
+        env_bk = os.getenv("TIMMY_LOG_BACKUP_COUNT")
+        if env_bk:
+            try:
+                bk_cnt_setting = int(env_bk)
+            except Exception:
+                bk_cnt_setting = bk_cnt_setting or None
+        max_b = _coerce_positive_int(max_b_setting, default=1024 * 1024, minimum=1024 * 128)
+        bk_cnt = _coerce_positive_int(bk_cnt_setting, default=3, minimum=1)
         key_file = f"{name}::file::{str(log_file)}"
         _ensure_no_duplicate_handlers(lg, key_file)
-        fh = _make_file_handler(log_file, level, fmt)
+        fh = _make_file_handler(log_file, level, fmt, max_bytes=max_b, backup_count=bk_cnt)
         fh._logging_utils_key = key_file  # type: ignore[attr-defined]
         fh.addFilter(ctx_filter)
         fh.addFilter(redact_filter)
         fh.addFilter(event_filter)
         lg.addHandler(fh)
 
+    _maybe_setup_tracing(context=context)
     return lg
+
+
+def _maybe_setup_tracing(*, context: Optional[Mapping[str, Any]] = None) -> None:
+    global _OTEL_ENABLED, _OTEL_TRACER
+    if _OTEL_ENABLED or not _OTEL_IMPORT_OK:
+        return
+    endpoint = os.getenv("TIMMY_OTEL_ENDPOINT")
+    if not endpoint:
+        return
+    service = os.getenv("TIMMY_SERVICE_NAME", "timmy-kb")
+    env = os.getenv("TIMMY_ENV", "dev")
+    slug = None
+    if context:
+        try:
+            slug = getattr(context, "slug", None) or (context or {}).get("slug")
+        except Exception:
+            slug = None
+    resource = Resource.create({"service.name": service, "deployment.environment": env, "customer.slug": slug or ""})
+    provider = TracerProvider(resource=resource)
+    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
+    provider.add_span_processor(processor)
+    _otel_trace.set_tracer_provider(provider)
+    _OTEL_TRACER = _otel_trace.get_tracer(__name__)
+    _OTEL_ENABLED = True
 
 
 # ---------------------------------------------
@@ -347,6 +447,7 @@ class phase_scope:
         self.customer = customer
         self._t0: Optional[float] = None
         self._artifact_count: Optional[int] = None
+        self._span: Any | None = None
 
     def set_artifacts(self, count: Optional[int]) -> None:
         if count is None:
@@ -364,6 +465,12 @@ class phase_scope:
             self._t0 = _monotonic()
         except Exception:
             self._t0 = None
+        try:
+            if _OTEL_ENABLED and _OTEL_TRACER:
+                self._span = _OTEL_TRACER.start_as_current_span(f"phase:{self.stage}")
+                self._span.__enter__()
+        except Exception:
+            self._span = None
         self.logger.info(
             "phase_started",
             extra={
@@ -403,10 +510,25 @@ class phase_scope:
             extra["error"] = str(exc)
             extra["status"] = "failed"
             self.logger.error("phase_failed", extra={"event": "phase_failed", **extra})
-        else:
-            # Successo: 'status=success'
-            extra["status"] = "success"
-            self.logger.info("phase_completed", extra={"event": "phase_completed", **extra})
+            try:
+                if self._span is not None:
+                    self._span.record_exception(exc)
+            except Exception:
+                pass
+            if self._span is not None:
+                try:
+                    self._span.__exit__(exc_type, exc, tb)
+                except Exception:
+                    pass
+            return False
+        # Successo: 'status=success'
+        extra["status"] = "success"
+        self.logger.info("phase_completed", extra={"event": "phase_completed", **extra})
+        if self._span is not None:
+            try:
+                self._span.__exit__(None, None, None)
+            except Exception:
+                pass
         return False
 
 

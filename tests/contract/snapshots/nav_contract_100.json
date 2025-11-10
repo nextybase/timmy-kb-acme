@@ -17,9 +17,14 @@
         "url_path": "secrets"
       },
       {
-        "path": "src/ui/pages/diagnostics.py",
-        "title": "Diagnostica",
-        "url_path": "diagnostics"
+        "path": "src/ui/pages/logs_panel.py",
+        "title": "Log dashboard",
+        "url_path": null
+      },
+      {
+        "path": "src/ui/pages/guida_ui.py",
+        "title": "Guida UI",
+        "url_path": "guida"
       }
     ],
     "Onboarding": [
@@ -56,9 +61,9 @@
         "url_path": "cleanup"
       },
       {
-        "path": "src/ui/pages/guida_ui.py",
-        "title": "Guida UI",
-        "url_path": "guida"
+        "path": "src/ui/pages/diagnostics.py",
+        "title": "Diagnostica",
+        "url_path": "diagnostics"
       }
     ]
   }

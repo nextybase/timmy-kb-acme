@@ -86,7 +86,8 @@
     "yake",
     "keybert",
     "eagere",
-    "monkeypatchare"
+    "monkeypatchare",
+    "promtail"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

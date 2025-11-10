@@ -25,10 +25,11 @@ class PagePaths:
     TUNING = "src/ui/pages/tools_check.py"
     SECRETS = "src/ui/pages/secrets_healthcheck.py"
     DIAGNOSTICS = "src/ui/pages/diagnostics.py"
+    LOGS_PANEL = "src/ui/pages/logs_panel.py"
 
 
 # url_path per fallback < switch_page / query_param >
-_URL_BY_PATH: Dict[str, str] = {
+_URL_BY_PATH: Dict[str, str | None] = {
     PagePaths.HOME: "home",
     PagePaths.NEW_CLIENT: "new",
     PagePaths.MANAGE: "manage",
@@ -42,6 +43,7 @@ _URL_BY_PATH: Dict[str, str] = {
     PagePaths.TUNING: "check",
     PagePaths.SECRETS: "secrets",
     PagePaths.DIAGNOSTICS: "diagnostics",
+    PagePaths.LOGS_PANEL: None,
 }
 
 
@@ -74,13 +76,14 @@ _PAGE_GROUPS: Dict[str, Sequence[PageSpec]] = {
         PageSpec(PagePaths.SETTINGS, "Settings", url_path_for(PagePaths.SETTINGS)),
         PageSpec(PagePaths.CONFIG_EDITOR, "Config Editor", url_path_for(PagePaths.CONFIG_EDITOR)),
         PageSpec(PagePaths.CLEANUP, "Cleanup", url_path_for(PagePaths.CLEANUP)),
-        PageSpec(PagePaths.GUIDA, "Guida UI", url_path_for(PagePaths.GUIDA)),
+        PageSpec(PagePaths.DIAGNOSTICS, "Diagnostica", url_path_for(PagePaths.DIAGNOSTICS)),
     ),
     "Admin": (
         PageSpec(PagePaths.ADMIN, "Admin", url_path_for(PagePaths.ADMIN)),
         PageSpec(PagePaths.TUNING, "Tuning", url_path_for(PagePaths.TUNING)),
         PageSpec(PagePaths.SECRETS, "Secrets Healthcheck", url_path_for(PagePaths.SECRETS)),
-        PageSpec(PagePaths.DIAGNOSTICS, "Diagnostica", url_path_for(PagePaths.DIAGNOSTICS)),
+        PageSpec(PagePaths.LOGS_PANEL, "Log dashboard", url_path_for(PagePaths.LOGS_PANEL)),
+        PageSpec(PagePaths.GUIDA, "Guida UI", url_path_for(PagePaths.GUIDA)),
     ),
 }
 

@@ -56,6 +56,10 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
 - **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
 - **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
 - **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` e' attivo.
+  - Rotazione file configurabile da `config/config.yaml` (`log_max_bytes`, `log_backup_count`) o ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
+  - I log cliente vivono in `output/timmy-kb-<slug>/logs/`; i log UI globali in `.timmykb/logs/`. Entrambi sono consultabili dalla pagina Streamlit **Log dashboard**.
+  - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
+  - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
 - **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`, override via `TIMMY_SAFE_PDF_CACHE_TTL` e `TIMMY_SAFE_PDF_CACHE_CAPACITY`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 
@@ -72,6 +76,27 @@ log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ```
 
 Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> I/O sicuro & Path-safety](coding_rule.md).
+
+---
+
+### Stack osservabilità (Loki/Grafana/Promtail)
+
+- Config pronta in `observability/docker-compose.yaml` + `observability/promtail-config.yaml`.
+- Promtail monta `../output/` e `../.timmykb/logs/` (relative alla cartella `observability/`), legge `*.log`, estrae le label `slug`, `run_id`, `event` dalle tuple `key=value` dei log Timmy.
+- Avvio locale:
+  ```bash
+  cd observability
+  docker compose up -d
+  ```
+  Grafana: `http://localhost:3000` (`admin`/`admin` da cambiare via `GF_SECURITY_ADMIN_PASSWORD`), Loki: `http://localhost:3100`.
+- Spegnimento: `docker compose down`. Per ambienti Windows ricordarsi di condividere i percorsi `output` e `.timmykb` con Docker Desktop.
+
+---
+
+### Script legacy
+
+- Gli script non più supportati sono stati spostati in `scripts/archive/` ed esclusi dai flussi standard.
+- Milestone di stabilizzazione: vedi `docs/milestones/archive_cleanup.md`; al termine la cartella verrà rimossa.
 
 ---
 

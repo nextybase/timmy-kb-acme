@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # SPDX-License-Identifier: GPL-3.0-only
-# scripts/assistants_smoke.py
+# scripts/archive/assistants_smoke.py
 from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -16,9 +17,9 @@ def main() -> int:
     try:
         # carica .env se presente
         try:
-            from dotenv import load_dotenv, find_dotenv  # type: ignore
+            from dotenv import find_dotenv, load_dotenv  # type: ignore
 
-            path = find_dotenv(usecwd=True) or str(Path(__file__).resolve().parents[1] / ".env")
+            path = find_dotenv(usecwd=True) or str(Path(__file__).resolve().parents[2] / ".env")
             if path:
                 load_dotenv(path, override=False)
         except Exception:

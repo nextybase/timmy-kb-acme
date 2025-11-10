@@ -21,6 +21,7 @@
   - [Perché ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
   - [API consigliata: ](#api-consigliata-uiutils-route_state--uiutils-slug)[`ui.utils.route_state` + `ui.utils.slug`](#api-consigliata-uiutils-route_state--uiutils-slug)
   - [Esempi e anti-pattern](#esempi-e-anti-pattern)
+- [New pages](#new-pages)
 - [Path-safety (lettura/scrittura)](#path-safety-letturascrittura)
   - [Flusso consigliato](#flusso-consigliato)
   - [Esempi pratici](#esempi-pratici)
@@ -123,6 +124,29 @@ set_tab("manage")                  # se serve cambiare tab
 # ❌ Non leggere/scrivere direttamente dalla stringa dell’URL
 # ❌ Non conservare lo slug in variabili globali non sincronizzate con query params
 ```
+
+---
+
+## New pages
+
+Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
+
+- **Admin pages**
+  - Operano a livello globale: chiamare `header(None)` e `sidebar(None)` cosi l'interfaccia ignora lo slug.
+  - Non forzano la selezione del cliente; i testi devono ricordare che lavorano sull'intero workspace.
+  - Registrazione nel gruppo `Admin` in `registry.py` con `url_path` opzionale (`None` per pagine interne come `logs_panel`).
+- **Tools pages**
+  - Agiscono su un cliente: usare `render_chrome_then_require()` per ottenere/forzare lo slug.
+  - In assenza di slug mostrano la CTA guidata gia gestita da `render_chrome_then_require`.
+  - Registrazione nel gruppo `Tools`; mantenere messaging slug-centrico (es. 'Workspace: slug').
+
+Checklist minima per una pagina nuova:
+
+1. Copiare uno scheletro esistente (`home.py` per Admin, `diagnostics.py` per Tools) dentro `src/ui/pages/`.
+2. Richiamare header/sidebar coerenti con il tipo di pagina (Admin -> `None`, Tools -> slug richiesto).
+3. Aggiornare `PagePaths` e `_PAGE_GROUPS` in `registry.py`, poi rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
+4. Aggiungere/aggiornare i test UI (`tests/ui/...`) sfruttando gli stub Streamlit.
+5. Validare con `pytest -q` per riallineare la suite e i contratti di navigazione.
 
 ---
 
