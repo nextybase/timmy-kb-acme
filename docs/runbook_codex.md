@@ -31,7 +31,7 @@ Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](develo
 ## 2) Configurazione: `.env` (segreti) vs `config/config.yaml` (config)
 
 - **SSoT:** segreti **fuori** repo in `.env`; configurazione applicativa **versionata** in `config/config.yaml`.
-  Esempi e policy: [docs/configuration.md](configuration.md).
+  Esempi e policy: [docs/configurazione.md](configurazione.md).
 
 **Esempio corretto (`config/config.yaml`):**
 ```yaml
@@ -47,7 +47,7 @@ retriever:
 - Il flusso **Assistant** usa l'ID letto da `vision.assistant_id_env` (ENV).
 - La UI legge il modello tramite `get_vision_model()` (SSoT).
 
-Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configuration.md).
+Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configurazione.md).
 
 ---
 

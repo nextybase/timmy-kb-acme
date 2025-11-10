@@ -246,7 +246,7 @@ SKIP=ruff,black git commit -m "…"
 - Test mirati: `pytest -m "settings or pipeline or ui or semantic" --maxfail=1` verifica il caricamento `Settings`, l'esposizione in `ClientContext` e i consumer UI/Semantic che dipendono dal wrapper.
 - Hook anti-segreti: `pre-commit run no-secrets-in-yaml --all-files` (anche in CI) assicura che `config/*.ya?ml` contengano solo riferimenti `_env`.
 - Smoke pagina Streamlit: dopo un cambio alle configurazioni avvia `streamlit run onboarding_ui.py` e verifica la scheda **Tools -> Secrets Health Check** (nessun valore viene visualizzato).
-- Riferimenti: [Configurazione (.env vs config)](configuration.md) e ADR [0002-separation-secrets-config](adr/0002-separation-secrets-config.md).
+- Riferimenti: [Configurazione (.env vs config)](configurazione.md) e ADR [0002-separation-secrets-config](adr/0002-separation-secrets-config.md).
 
 ---
 

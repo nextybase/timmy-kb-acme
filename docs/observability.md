@@ -37,6 +37,7 @@ export TIMMY_ENV="production"
 All'interno dei log compariranno i campi `trace_id` e `span_id`. Questi campi
 possono essere usati in Grafana o in altri back-end OTEL per risalire
 all'esecuzione correlata.
+Quando usi `pipeline.logging_utils.phase_scope`, i log emettono automaticamente gli stessi ID se `TIMMY_OTEL_ENDPOINT` è impostato.
 
 ## Query utili (Grafana / Loki)
 

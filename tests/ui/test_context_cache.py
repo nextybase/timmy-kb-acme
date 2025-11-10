@@ -10,13 +10,18 @@ from ui.utils import context_cache as cache
 
 
 class _StubClientContext:
-    def __init__(self, slug: str, require_env: bool) -> None:
+    def __init__(self, slug: str, require_env: bool, run_id: str | None = None) -> None:
         self.slug = slug
         self.require_env = require_env
+        self.run_id = run_id
 
     @classmethod
     def load(cls, **kwargs: Any) -> "_StubClientContext":
-        return cls(str(kwargs["slug"]), bool(kwargs.get("require_env", False)))
+        return cls(
+            str(kwargs["slug"]),
+            bool(kwargs.get("require_env", False)),
+            kwargs.get("run_id"),
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -30,14 +35,25 @@ def test_get_client_context_reuses_session(monkeypatch: pytest.MonkeyPatch) -> N
     calls: list[tuple[str, bool]] = []
 
     class _CountingClientContext:
-        def __init__(self, slug: str, require_env: bool) -> None:
+        def __init__(self, slug: str, require_env: bool, run_id: str | None = None) -> None:
             self.slug = slug
             self.require_env = require_env
+            self.run_id = run_id
 
         @classmethod
         def load(cls, **kwargs: Any) -> "_CountingClientContext":
-            calls.append((str(kwargs["slug"]), bool(kwargs.get("require_env", False))))
-            return cls(kwargs["slug"], bool(kwargs.get("require_env", False)))
+            calls.append(
+                (
+                    str(kwargs["slug"]),
+                    bool(kwargs.get("require_env", False)),
+                    kwargs.get("run_id"),
+                )
+            )
+            return cls(
+                kwargs["slug"],
+                bool(kwargs.get("require_env", False)),
+                kwargs.get("run_id"),
+            )
 
     monkeypatch.setattr(cache, "ClientContext", _CountingClientContext)
     cache.st.session_state.clear()
@@ -45,10 +61,10 @@ def test_get_client_context_reuses_session(monkeypatch: pytest.MonkeyPatch) -> N
 
     cache.get_client_context("Demo-Slug", require_env=False)
     cache.get_client_context("demo-slug", require_env=False)
-    assert calls == [("Demo-Slug", False)]
+    assert calls == [("Demo-Slug", False, None)]
 
     cache.get_client_context("demo-slug", require_env=True)
-    assert calls[-1] == ("demo-slug", True)
+    assert calls[-1] == ("demo-slug", True, None)
 
     cache.invalidate_client_context("demo-slug")
     cache.get_client_context("demo-slug", require_env=False)
@@ -59,14 +75,15 @@ def test_get_client_context_force_reload(monkeypatch: pytest.MonkeyPatch) -> Non
     loads: list[str] = []
 
     class _CountingClientContext:
-        def __init__(self, slug: str, require_env: bool) -> None:
+        def __init__(self, slug: str, require_env: bool, run_id: str | None = None) -> None:
             self.slug = slug
             self.require_env = require_env
+            self.run_id = run_id
 
         @classmethod
         def load(cls, **kwargs: Any) -> "_CountingClientContext":
             loads.append(str(kwargs["slug"]))
-            return cls(kwargs["slug"], False)
+            return cls(kwargs["slug"], False, kwargs.get("run_id"))
 
     monkeypatch.setattr(cache, "ClientContext", _CountingClientContext)
     cache.st.session_state.clear()
@@ -78,3 +95,36 @@ def test_get_client_context_force_reload(monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(loads) == 2
     cache.get_client_context("tmp", require_env=False)
     assert len(loads) == 2
+
+
+def test_get_client_context_tracks_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    loads: list[str | None] = []
+
+    class _RunAwareClientContext:
+        def __init__(self, slug: str, require_env: bool, run_id: str | None = None) -> None:
+            self.slug = slug
+            self.require_env = require_env
+            self.run_id = run_id
+
+        @classmethod
+        def load(cls, **kwargs: Any) -> "_RunAwareClientContext":
+            loads.append(kwargs.get("run_id"))
+            return cls(kwargs["slug"], bool(kwargs.get("require_env", False)), kwargs.get("run_id"))
+
+    monkeypatch.setattr(cache, "ClientContext", _RunAwareClientContext)
+    cache.st.session_state.clear()
+    loads.clear()
+
+    first = cache.get_client_context("slug", require_env=False, run_id="run-a")
+    again = cache.get_client_context("slug", require_env=False, run_id="run-a")
+    second_run = cache.get_client_context("slug", require_env=False, run_id="run-b")
+
+    assert first is again
+    assert second_run is not first
+    assert second_run.run_id == "run-b"
+    assert loads == ["run-a", "run-b"]
+
+    default_ctx = cache.get_client_context("slug", require_env=False)
+    assert default_ctx.run_id is None
+    # Nessun load aggiuntivo per la chiamata precedente con run_id="run-b"
+    assert loads == ["run-a", "run-b", None]

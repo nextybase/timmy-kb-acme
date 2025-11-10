@@ -56,8 +56,19 @@ def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
     Raises:
         ConfigError: se il contesto non è disponibile o il file è illeggibile.
     """
+    ctx: Any | None = None  # type: ignore[assignment]
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        if hasattr(ClientContext, "load"):
+            try:
+                ctx = ClientContext.load(  # type: ignore[attr-defined]
+                    slug=slug,
+                    interactive=False,
+                    require_env=False,
+                )
+            except Exception:
+                ctx = None
+        if ctx is None:
+            ctx = get_client_context(slug, interactive=False, require_env=False)
     except Exception as exc:
         raise ConfigError(f"Impossibile caricare il contesto per {slug}: {exc}", slug=slug) from exc
 

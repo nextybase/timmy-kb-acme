@@ -13,6 +13,14 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
   access key nel repository.
 - **Fallback**: i secrets esistenti restano supportati; assicurati però di ruotarli periodicamente.
 
+## OIDC config (local & CI)
+
+- Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
+- Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
+- Lo script `scripts/ci/oidc_probe.py` gira in CI quando `OIDC_PROVIDER` è valorizzato (step "OIDC probe (conditional)" in `ci.yaml`).
+- Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
+
+
 ## Secret scanning
 
 - Workflow dedicato: `.github/workflows/secret-scan.yml`.

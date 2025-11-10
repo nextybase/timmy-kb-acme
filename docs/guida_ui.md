@@ -19,9 +19,9 @@ Usa la UI per:
 
 ## 2) Prerequisiti essenziali
 
+- **Configurazione**: consulta [docs/configurazione.md](configurazione.md) per `.env`, `config/config.yaml`, OIDC e segreti.
 - **Software**: Python >= 3.11, Streamlit >= 1.50.0. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
-- **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; variabili d'ambiente:
-  - \`SERVICE\_ACCOUNT\_FILE\` -> path al JSON delle credenziali.
+- **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; ricorda di installare gli extra `pip install .[drive]`.
   - \`DRIVE\_ID\` -> ID del Drive o cartella radice.
   - Installa gli extra Drive: \`pip install .[drive]\`.
 

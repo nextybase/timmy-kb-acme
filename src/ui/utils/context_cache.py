@@ -8,6 +8,13 @@ from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
 _CACHE_KEY = "_client_context_cache"
+_DEFAULT_RUN_KEY = "__default__"
+
+
+def _cache_key(normalized_slug: str, require_env: bool, run_id: str | None) -> str:
+    """Costruisce la chiave di cache includendo run_id per distinguere i contesti."""
+    run_marker = run_id or _DEFAULT_RUN_KEY
+    return f"{normalized_slug}|{int(require_env)}|{run_marker}"
 
 
 def _get_cache() -> Optional[Dict[str, ClientContext]]:
@@ -32,12 +39,16 @@ def get_client_context(
 ) -> ClientContext:
     """Ritorna il ClientContext per lo slug, cacheando in sessione Streamlit quando disponibile."""
     normalized = (slug or "").strip().lower()
-    cache = None if force_reload else _get_cache()
-    cache_key = f"{normalized}|{int(require_env)}"
-    if cache and cache_key in cache:
-        cached_ctx = cache[cache_key]
-        if isinstance(cached_ctx, ClientContext):
-            return cached_ctx
+    cache = _get_cache()
+    cache_key = _cache_key(normalized, require_env, run_id)
+
+    cached_ctx = cache.get(cache_key) if cache and not force_reload else None
+    if cached_ctx is not None:
+        return cached_ctx
+
+    # Se forziamo il reload o non esiste cache entry, rimuoviamo eventuali precedenti.
+    if cache is not None:
+        cache.pop(cache_key, None)
 
     ctx = ClientContext.load(
         slug=slug,
@@ -56,8 +67,10 @@ def invalidate_client_context(slug: str | None = None) -> None:
     if cache is None:
         return
     if slug:
-        cache.pop(f"{slug.strip().lower()}|0", None)
-        cache.pop(f"{slug.strip().lower()}|1", None)
+        normalized = slug.strip().lower()
+        keys = [key for key in list(cache.keys()) if key.startswith(f"{normalized}|")]
+        for key in keys:
+            cache.pop(key, None)
     else:
         cache.clear()
 

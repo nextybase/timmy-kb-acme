@@ -30,6 +30,9 @@ permissions:
   pull-requests: read
   id-token: write
 
+env:
+  OIDC_PROVIDER: ${{ vars.OIDC_PROVIDER }}
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -50,6 +53,9 @@ jobs:
       #   env:
       #     TIMMY_SERVICE_NAME: timmy-kb
       #     TIMMY_ENV: production
+      - name: OIDC probe (conditional)
+        if: ${{ env.OIDC_PROVIDER != '' }}
+        run: python scripts/ci/oidc_probe.py
       - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
         with: { python-version: "3.11" }
       - name: Install deps
