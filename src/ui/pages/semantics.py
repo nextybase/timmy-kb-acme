@@ -19,7 +19,7 @@ from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
-from ui.constants import SEMANTIC_READY_STATES
+from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
 from ui.errors import to_user_message
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
@@ -40,8 +40,8 @@ except Exception:  # pragma: no cover
         return
 
 
-# SSoT: stati ammessi per la pagina Semantica
-ALLOWED_STATES = SEMANTIC_READY_STATES
+# SSoT: stati ammessi per la pagina Semantica (entry: include 'pronto')
+ALLOWED_STATES = SEMANTIC_ENTRY_STATES
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger]:
@@ -148,16 +148,21 @@ except Exception:
 else:
     _HAS_STREAMLIT_CONTEXT = get_script_run_ctx() is not None
 
+_client_state: str | None = None
+_raw_ready: bool = False
+
 if _HAS_STREAMLIT_CONTEXT:
     state = (get_state(slug) or "").strip().lower()
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
-        st.info("La semantica sarà disponibile quando lo stato raggiunge 'arricchito' e `raw/` contiene PDF.")
+        st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.")
         st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
         try:
             st.stop()
         except Exception as exc:
             raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from exc
+    _client_state = state
+    _raw_ready = ready
 
 st.subheader("Onboarding semantico")
 _write = getattr(st, "write", None)
@@ -196,5 +201,11 @@ if _column_button(col_b, "Genera README/SUMMARY", key="btn_generate", width="str
     except Exception as e:  # pragma: no cover
         _display_user_error(e)
 
-if _column_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
+preview_enabled = _client_state in SEMANTIC_READY_STATES and _raw_ready
+if preview_enabled and _column_button(col_b, "Anteprima Docker (HonKit)", key="btn_preview", width="stretch"):
     _go_preview()
+elif not preview_enabled:
+    _col_caption = getattr(col_b, "caption", None)
+    caption_fn = _col_caption if callable(_col_caption) else getattr(st, "caption", None)
+    if callable(caption_fn):
+        caption_fn("Anteprima disponibile dopo l'arricchimento ('arricchito' o 'finito').")

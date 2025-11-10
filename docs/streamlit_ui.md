@@ -386,14 +386,14 @@ In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo 
 Per le pagine semantiche, oltre ai gate controlliamo lo stato del cliente:
 
 ```python
-from ui.constants import SEMANTIC_READY_STATES
+from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
 from ui.clients_store import get_state
 from ui.utils.workspace import has_raw_pdfs
 
 state = (get_state(slug) or '').strip().lower()
 ready, raw_dir = has_raw_pdfs(slug)
-if state not in SEMANTIC_READY_STATES or not ready:
-    st.info("La semantica sara disponibile quando lo stato raggiunge 'arricchito' e raw/ contiene PDF.")
+if state not in SEMANTIC_ENTRY_STATES or not ready:
+    st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF in raw/.")
     st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
     st.stop()
 ```

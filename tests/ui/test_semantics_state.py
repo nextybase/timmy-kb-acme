@@ -20,16 +20,41 @@ def _patch_streamlit_semantics(monkeypatch, sem) -> None:
     monkeypatch.setattr(sem.st, "button", lambda *a, **k: False, raising=False)
 
 
+def test_semantic_constants_allow_entry_from_pronto():
+    from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
+
+    assert "pronto" not in SEMANTIC_READY_STATES
+    assert "pronto" in SEMANTIC_ENTRY_STATES
+
+
+def test_semantic_constants_expected_membership():
+    from ui.constants import KNOWN_CLIENT_STATES, SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
+
+    assert SEMANTIC_READY_STATES == {"arricchito", "finito"}
+    assert SEMANTIC_ENTRY_STATES == {"pronto", "arricchito", "finito"}
+    assert SEMANTIC_ENTRY_STATES.issubset(KNOWN_CLIENT_STATES)
+    assert "nuovo" in KNOWN_CLIENT_STATES and "nuovo" not in SEMANTIC_ENTRY_STATES
+
+
+def test_semantics_page_uses_entry_states_for_allowed_states(monkeypatch):
+    import importlib
+
+    sem = importlib.import_module("ui.pages.semantics")
+    from ui.constants import SEMANTIC_ENTRY_STATES
+
+    assert getattr(sem, "ALLOWED_STATES", None) == SEMANTIC_ENTRY_STATES
+
+
 def test_semantics_gating_uses_ssot_constants():
     """
-    Il gating deve usare la costante SSoT `SEMANTIC_READY_STATES`
+    Il gating deve usare la costante SSoT `SEMANTIC_ENTRY_STATES`
     (non una whitelist hardcoded locale).
     """
     import ui.pages.semantics as sem
-    from ui.constants import SEMANTIC_READY_STATES
+    from ui.constants import SEMANTIC_ENTRY_STATES
 
-    # ALLOWED_STATES è valorizzata a livello modulo == SEMANTIC_READY_STATES
-    assert set(sem.ALLOWED_STATES) == set(SEMANTIC_READY_STATES)
+    # ALLOWED_STATES è valorizzata a livello modulo == SEMANTIC_ENTRY_STATES
+    assert set(sem.ALLOWED_STATES) == set(SEMANTIC_ENTRY_STATES)
 
 
 def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):

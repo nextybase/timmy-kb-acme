@@ -194,6 +194,9 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
 
+- La pagina “Semantica” è accessibile da stato **pronto** in poi (con PDF in `raw/`).
+- La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.
+
 ---
 
 ## 7) Pubblicazione su GitHub -> **CLI / automazioni**
