@@ -52,6 +52,11 @@ def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
     return str((data.get("vision") or {}).get("model") or default)
 ```
 
+### OIDC (opzionale)
+- Configurare `security.oidc.*` in `config/config.yaml` usando riferimenti `*_env`.
+- Impostare gli eventuali placeholder in `.env` (vedi `.env.example`).
+- In CI GitHub, valorizza `GITHUB_OIDC_AUDIENCE` come Repository Variable per abilitare il probe (`scripts/ci/oidc_probe.py`), che logga solo metadati (`has_token` non include il token).
+
 ---
 
 ## Logging centralizzato

@@ -144,7 +144,7 @@ Checklist minima per una pagina nuova:
 
 1. Copiare uno scheletro esistente (`home.py` per Admin, `diagnostics.py` per Tools) dentro `src/ui/pages/`.
 2. Richiamare header/sidebar coerenti con il tipo di pagina (Admin -> `None`, Tools -> slug richiesto).
-3. Aggiornare `PagePaths` e `_PAGE_GROUPS` in `registry.py`, poi rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
+3. Aggiornare `ui/navigation_spec.py` (coppia `PagePaths` + `NAVIGATION_GROUPS`) così da riflettere titolo/gruppo/url-path della nuova pagina; rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
 4. Aggiungere/aggiornare i test UI (`tests/ui/...`) sfruttando gli stub Streamlit.
 5. Validare con `pytest -q` per riallineare la suite e i contratti di navigazione.
 
@@ -482,7 +482,7 @@ Prima di aprire una PR:
 ---
 
 ### Registry dei path UI (SSoT)
-Per evitare divergenze tra `onboarding_ui.py` (router) e i link nelle pagine, i path delle pagine sono definiti una sola volta in `ui.pages.registry.PagePaths`.
+Per evitare divergenze tra `onboarding_ui.py` (router) e i link nelle pagine, i path sono definiti una sola volta in `ui/navigation_spec.PagePaths` (ri-esportato da `ui.pages.registry`).
 Usa:
 - `from ui.pages.registry import PagePaths` per link diretti (`st.page_link(PagePaths.NEW_CLIENT, ...)`).
 - `from ui.pages.registry import build_pages` nell’entrypoint per generare il `pages` dict per `st.navigation(...)`.

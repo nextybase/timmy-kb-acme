@@ -29,23 +29,8 @@ raw_cache:
 security:
   oidc:
     enabled: false
-    # Provider: uno tra "vault", "aws", "gcp", "azure", "generic"
-    provider: "vault"
-
-    # Nome delle variabili d'ambiente (pattern *_env)
-    audience_env: OIDC_AUDIENCE
-    issuer_url_env: OIDC_ISSUER_URL
-
-    # Per AWS/GCP/Azure (futuro)
-    role_arn_env: OIDC_ROLE_ARN           # AWS
-    gcp_provider_env: OIDC_GCP_PROVIDER   # GCP Workload Identity Provider
-    azure_fedcred_env: OIDC_AZURE_FEDCRED # Azure Federated Credential ID
-
-    # Integrazione Vault (scenari senza cloud)
-    vault:
-      addr_env: VAULT_ADDR
-      role_env: VAULT_ROLE
-      jwt_path_env: OIDC_JWT_PATH  # opzionale per test locali; in GH Actions si usa il request URL/token built-in
-
-    # Se true, fallisci esplicitamente le operazioni OIDC quando mancano prerequisiti/env
-    ci_required: false
+    provider: github  # github | generic | vault
+    audience_env: GITHUB_OIDC_AUDIENCE
+    role_env: GITHUB_OIDC_ROLE
+    token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
+    token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN

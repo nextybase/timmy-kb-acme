@@ -13,7 +13,8 @@ from pipeline.logging_utils import get_structured_logger
 __all__ = ["GateState", "compute_gates", "visible_page_specs", "reset_gating_cache"]
 from ui.clients_store import get_state
 from ui.constants import SEMANTIC_READY_STATES
-from ui.pages.registry import PagePaths, PageSpec, page_specs
+from ui.navigation_spec import PagePaths, requirements_for
+from ui.pages.registry import PageSpec, page_specs
 from ui.utils import get_active_slug
 from ui.utils.workspace import has_raw_pdfs
 
@@ -90,16 +91,8 @@ def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
     return GateState(drive=drive, vision=vision, tags=tags)
 
 
-_PAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
-    PagePaths.CLEANUP: ("drive",),
-    PagePaths.TUNING: ("vision",),
-    PagePaths.SEMANTICS: ("tags",),
-    PagePaths.PREVIEW: ("tags",),
-}
-
-
 def _requires(page: PageSpec) -> Sequence[str]:
-    return _PAGE_DEPENDENCIES.get(page.path, ())
+    return requirements_for(page.path)
 
 
 def _satisfied(requirements: Iterable[str], gates: GateState) -> bool:

@@ -1,174 +1,147 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# src/pipeline/oidc_utils.py
+"""
+Utilità minime per integrare OIDC in CI senza effetti collaterali.
+"""
 from __future__ import annotations
 
 import json
-import os
-import pathlib
-import typing
-import urllib.error
+import logging
 import urllib.parse
 import urllib.request
-from typing import Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Protocol
 
-from pipeline.env_utils import get_env_var
-from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import read_text_safe
+from .env_utils import ensure_dotenv_loaded, get_env_var
+from .logging_utils import get_structured_logger
 
-log = get_structured_logger("pipeline.oidc")
+if TYPE_CHECKING:  # pragma: no cover
+    from .settings import Settings as SettingsType
+else:
 
-
-class OIDCError(RuntimeError):
-    """Errore generico per il flusso OIDC."""
-
-
-class OIDCConfig(typing.TypedDict, total=False):
-    provider: str
-    audience_env: str
-    issuer_url_env: str
-    role_arn_env: str
-    gcp_provider_env: str
-    azure_fedcred_env: str
-    ci_required: bool
-    vault: Dict[str, str]
+    class SettingsType(Protocol):
+        def as_dict(self) -> Mapping[str, Any]: ...
 
 
-def _read_yaml_settings(settings: Mapping[str, typing.Any]) -> OIDCConfig:
-    """Estrae la sezione security.oidc dal settings YAML."""
-    if not isinstance(settings, Mapping):
-        return typing.cast(OIDCConfig, {})
-    security = typing.cast(Mapping[str, typing.Any], settings.get("security") or {})
-    oidc_cfg = typing.cast(OIDCConfig, security.get("oidc") or {})
-    return oidc_cfg
+__all__ = ["fetch_github_id_token", "ensure_oidc_context"]
+
+_LOG_NAME = "pipeline.oidc"
 
 
-def _github_actions_idtoken(audience: str) -> Optional[str]:
-    """Ottiene un ID token OIDC nativo da GitHub Actions usando le ENV built-in.
-    Ritorna None se non in ambiente Actions."""
-    url = os.getenv("ACTIONS_ID_TOKEN_REQUEST_URL")
-    req_token = os.getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    if not url or not req_token:
+def _read_env(name: str, *, required: bool = False) -> Optional[str]:
+    if not name:
         return None
     try:
-        url_with_aud = f"{url}{'&' if '?' in url else '?'}audience={urllib.parse.quote(audience)}"
-        request = urllib.request.Request(url_with_aud)  # noqa: S310
-        request.add_header("Authorization", f"Bearer {req_token}")
-        opener = urllib.request.build_opener()
-        with opener.open(request, timeout=10) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-            token = typing.cast(str, payload.get("value") or "")
-            return token or None
-    except Exception as exc:
-        log.error("oidc.github.token_error", extra={"event": "oidc_error", "error": str(exc)})
-        raise OIDCError("Impossibile ottenere ID token OIDC da GitHub Actions") from exc
+        value = get_env_var(name, default=None, required=required)
+    except Exception:
+        return None
+    if isinstance(value, str):
+        return value
+    return None
 
 
-def _read_local_jwt(path: str) -> str:
-    """Legge un file JWT locale (ad esempio per sviluppo)."""
-    p = pathlib.Path(path).expanduser()
-    return read_text_safe(pathlib.Path.cwd(), p, encoding="utf-8").strip()
+def fetch_github_id_token(
+    audience: str,
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[str]:
+    """
+    Best-effort: recupera il token OIDC messo a disposizione da GitHub Actions.
+    """
+    log = logger or get_structured_logger(_LOG_NAME)
+    if not audience:
+        log.debug("oidc.github.unavailable", extra={"reason": "missing_audience"})
+        return None
 
-
-def _vault_login_with_jwt(addr: str, role: str, jwt: str) -> str:
-    """Esegue login JWT standard su Vault: POST /v1/auth/jwt/login."""
-    payload = json.dumps({"role": role, "jwt": jwt}).encode("utf-8")
-    request = urllib.request.Request(  # noqa: S310
-        f"{addr.rstrip('/')}/v1/auth/jwt/login",
-        data=payload,
-        method="POST",
-        headers={"Content-Type": "application/json"},
+    req_url = _read_env("ACTIONS_ID_TOKEN_REQUEST_URL")
+    req_token = _read_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not req_url or not req_token:
+        log.debug("oidc.github.unavailable", extra={"reason": "env_missing"})
+        return None
+    try:
+        encoded = urllib.parse.quote_plus(audience)
+    except Exception:
+        encoded = audience
+    if not req_url.startswith("https://"):
+        log.warning(
+            "oidc.github.unavailable",
+            extra={"reason": "invalid_scheme"},
+        )
+        return None
+    sep = "&" if "?" in req_url else "?"
+    request = urllib.request.Request(  # noqa: S310 - endpoint GitHub OIDC è sempre HTTPS
+        f"{req_url}{sep}audience={encoded}",
+        headers={"Authorization": f"Bearer {req_token}"},
     )
     try:
-        opener = urllib.request.build_opener()
-        with opener.open(request, timeout=10) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            token = typing.cast(str, body.get("auth", {}).get("client_token") or "")
-            if not token:
-                raise OIDCError("Vault non ha restituito client_token")
-            return token
-    except urllib.error.HTTPError as exc:
-        msg = exc.read().decode("utf-8", errors="ignore")
-        log.error("oidc.vault.http_error", extra={"event": "oidc_error", "status": exc.code})
-        raise OIDCError(f"Vault login HTTP {exc.code}: {msg[:200]}") from exc
-    except Exception as exc:  # pragma: no cover - best effort logging
-        log.error("oidc.vault.error", extra={"event": "oidc_error", "error": str(exc)})
-        raise
+        with getattr(urllib.request, "urlopen")(request, timeout=10) as resp:  # noqa: S310 - chiamata HTTPS controllata
+            payload = json.loads(resp.read().decode("utf-8") or "{}")
+    except Exception as exc:  # pragma: no cover - rete non disponibile in locale
+        log.warning(
+            "oidc.github.token.error",
+            extra={"err": str(exc).splitlines()[:1]},
+        )
+        return None
+
+    token_raw = payload.get("value") or payload.get("id_token")
+    token = token_raw if isinstance(token_raw, str) else None
+    if token:
+        log.info("oidc.github.token.ok")
+        return token
+    log.debug("oidc.github.token.empty")
+    return None
 
 
-def ensure_oidc(settings: Mapping[str, typing.Any]) -> Dict[str, str]:
-    """Esegue il wiring OIDC basandosi su security.oidc.
-
-    Se `enabled` è True:
-      - recupera l'ID token (GitHub Actions o file locale),
-      - opzionalmente effettua il login Vault,
-      - ritorna un dizionario di ENV informative da propagare.
+def ensure_oidc_context(
+    settings: SettingsType | Mapping[str, Any],
+    *,
+    logger: Optional[logging.Logger] = None,
+) -> dict[str, Any]:
     """
-    cfg = _read_yaml_settings(settings)
-    if not cfg or not cfg.get("enabled"):
-        log.info("oidc.disabled", extra={"event": "oidc_disabled"})
-        return {}
+    Risolve i parametri OIDC dal config ed esegue un fetch best-effort del token GitHub.
+    Ritorna solo metadati (mai il token).
+    """
+    log = logger or get_structured_logger(_LOG_NAME)
+    ensure_dotenv_loaded()
 
-    provider = (cfg.get("provider") or os.getenv("OIDC_PROVIDER") or "").strip().lower()
-    if not provider:
-        raise OIDCError("OIDC provider non configurato")
+    data = settings.as_dict() if hasattr(settings, "as_dict") else dict(settings or {})
+    security = data.get("security") or {}
+    sec_oidc = security.get("oidc") or {}
 
-    audience_env = cfg.get("audience_env") or "OIDC_AUDIENCE"
-    issuer_env = cfg.get("issuer_url_env") or "OIDC_ISSUER_URL"
-    audience = get_env_var(audience_env, default="") or ""
-    issuer = get_env_var(issuer_env, default="") or ""
+    enabled = bool(sec_oidc.get("enabled"))
+    provider = str(sec_oidc.get("provider") or "github").strip().lower()
+    if not enabled:
+        log.debug("oidc.disabled")
+        return {"enabled": False, "provider": provider, "has_token": False}
 
-    id_token = ""
-    if audience:
-        id_token = _github_actions_idtoken(audience) or ""
-    if not id_token:
-        jwt_path_env = (cfg.get("vault") or {}).get("jwt_path_env") or "OIDC_JWT_PATH"
-        jwt_path = get_env_var(jwt_path_env, default="")
-        if jwt_path:
-            id_token = _read_local_jwt(jwt_path)
+    audience_name = str(sec_oidc.get("audience_env") or "")
+    role_name = str(sec_oidc.get("role_env") or "")
+    token_url_env = str(sec_oidc.get("token_request_url_env") or "")
+    token_token_env = str(sec_oidc.get("token_request_token_env") or "")
 
-    if not id_token:
-        if cfg.get("ci_required"):
-            raise OIDCError("OIDC richiesto ma ID token assente")
-        log.warning("oidc.no_token", extra={"event": "oidc_missing"})
-        return {}
+    # Pre-carica eventuali ENV personalizzate
+    audience = _read_env(audience_name)
+    role = _read_env(role_name)
+    if token_url_env:
+        _ = _read_env(token_url_env)  # warm up eventuale env custom
+    if token_token_env:
+        _ = _read_env(token_token_env)
 
-    out: Dict[str, str] = {
-        "OIDC_ID_TOKEN": id_token,
-        "OIDC_ISSUER_URL": issuer,
-        "OIDC_AUDIENCE": audience,
+    has_token = False
+    if provider == "github" and audience:
+        token = fetch_github_id_token(audience, logger=log)
+        has_token = bool(token)
+
+    log.info(
+        "oidc.context",
+        extra={
+            "enabled": True,
+            "provider": provider,
+            "has_token": has_token,
+            "role": role,
+        },
+    )
+    return {
+        "enabled": True,
+        "provider": provider,
+        "has_token": has_token,
+        "role": role,
     }
-
-    if provider == "vault":
-        vault_cfg = cfg.get("vault") or {}
-        addr_env = vault_cfg.get("addr_env") or "VAULT_ADDR"
-        role_env = vault_cfg.get("role_env") or "VAULT_ROLE"
-        try:
-            addr = get_env_var(addr_env, required=True) or ""
-            role = get_env_var(role_env, required=True) or ""
-        except KeyError as exc:
-            raise OIDCError(str(exc)) from exc
-        vault_token = _vault_login_with_jwt(addr, role, id_token)
-        os.environ["VAULT_TOKEN"] = vault_token
-        out["VAULT_TOKEN"] = "<set>"  # noqa: S105
-        log.info("oidc.vault.login_ok", extra={"event": "oidc_vault_ok"})
-    elif provider in {"aws", "gcp", "azure", "generic"}:
-        log.info("oidc.idtoken.ready", extra={"event": "oidc_idtoken_ready", "provider": provider})
-    else:
-        raise OIDCError(f"Provider OIDC non supportato: {provider}")
-
-    role_env = cfg.get("role_arn_env")
-    if role_env:
-        out["OIDC_ROLE_ARN_ENV"] = role_env
-    if cfg.get("gcp_provider_env"):
-        out["OIDC_GCP_PROVIDER_ENV"] = cfg["gcp_provider_env"]
-    if cfg.get("azure_fedcred_env"):
-        out["OIDC_AZURE_FEDCRED_ENV"] = cfg["azure_fedcred_env"]
-
-    return out
-
-
-__all__ = [
-    "OIDCConfig",
-    "OIDCError",
-    "ensure_oidc",
-]

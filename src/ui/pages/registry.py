@@ -5,56 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Sequence
 
+from ui.navigation_spec import NavGroup
+from ui.navigation_spec import PagePaths as _PagePaths
+from ui.navigation_spec import navigation_groups
+from ui.navigation_spec import url_path_for as spec_url_path_for
 from ui.utils.stubs import get_streamlit
 
-
-# ---- Costanti file-path (SSoT) ----
-class PagePaths:
-    HOME = "src/ui/pages/home.py"
-    NEW_CLIENT = "src/ui/pages/new_client.py"
-    MANAGE = "src/ui/pages/manage.py"
-    SEMANTICS = "src/ui/pages/semantics.py"
-    PREVIEW = "src/ui/pages/preview.py"
-
-    SETTINGS = "src/ui/pages/settings.py"
-    CONFIG_EDITOR = "src/ui/pages/config_editor.py"
-    CLEANUP = "src/ui/pages/cleanup.py"
-    GUIDA = "src/ui/pages/guida_ui.py"
-
-    ADMIN = "src/ui/pages/admin.py"
-    TUNING = "src/ui/pages/tools_check.py"
-    SECRETS = "src/ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
-    DIAGNOSTICS = "src/ui/pages/diagnostics.py"
-    LOGS_PANEL = "src/ui/pages/logs_panel.py"
-
-
-# url_path per fallback < switch_page / query_param >
-_URL_BY_PATH: Dict[str, str | None] = {
-    PagePaths.HOME: "home",
-    PagePaths.NEW_CLIENT: "new",
-    PagePaths.MANAGE: "manage",
-    PagePaths.SEMANTICS: "semantics",
-    PagePaths.PREVIEW: "preview",
-    PagePaths.SETTINGS: "settings",
-    PagePaths.CONFIG_EDITOR: "config",
-    PagePaths.CLEANUP: "cleanup",
-    PagePaths.GUIDA: "guida",
-    PagePaths.ADMIN: "admin",
-    PagePaths.TUNING: "check",
-    PagePaths.SECRETS: "secrets",  # pragma: allowlist secret
-    PagePaths.DIAGNOSTICS: "diagnostics",
-    PagePaths.LOGS_PANEL: None,
-}
+PagePaths = _PagePaths
 
 
 def url_path_for(page_path: str) -> str | None:
-    return _URL_BY_PATH.get(page_path)
-
-
-@dataclass(frozen=True)
-class PageGroup:
-    label: str
-    pages: List[Any]  # st.Page
+    return spec_url_path_for(page_path)
 
 
 @dataclass(frozen=True)
@@ -64,28 +25,11 @@ class PageSpec:
     url_path: str | None
 
 
-_PAGE_GROUPS: Dict[str, Sequence[PageSpec]] = {
-    "Onboarding": (
-        PageSpec(PagePaths.HOME, "Home", url_path_for(PagePaths.HOME)),
-        PageSpec(PagePaths.NEW_CLIENT, "Nuovo cliente", url_path_for(PagePaths.NEW_CLIENT)),
-        PageSpec(PagePaths.MANAGE, "Gestisci cliente", url_path_for(PagePaths.MANAGE)),
-        PageSpec(PagePaths.SEMANTICS, "Semantica", url_path_for(PagePaths.SEMANTICS)),
-        PageSpec(PagePaths.PREVIEW, "Docker Preview", url_path_for(PagePaths.PREVIEW)),
-    ),
-    "Tools": (
-        PageSpec(PagePaths.SETTINGS, "Settings", url_path_for(PagePaths.SETTINGS)),
-        PageSpec(PagePaths.CONFIG_EDITOR, "Config Editor", url_path_for(PagePaths.CONFIG_EDITOR)),
-        PageSpec(PagePaths.CLEANUP, "Cleanup", url_path_for(PagePaths.CLEANUP)),
-        PageSpec(PagePaths.DIAGNOSTICS, "Diagnostica", url_path_for(PagePaths.DIAGNOSTICS)),
-    ),
-    "Admin": (
-        PageSpec(PagePaths.ADMIN, "Admin", url_path_for(PagePaths.ADMIN)),
-        PageSpec(PagePaths.TUNING, "Tuning", url_path_for(PagePaths.TUNING)),
-        PageSpec(PagePaths.SECRETS, "Secrets Healthcheck", url_path_for(PagePaths.SECRETS)),
-        PageSpec(PagePaths.LOGS_PANEL, "Log dashboard", url_path_for(PagePaths.LOGS_PANEL)),
-        PageSpec(PagePaths.GUIDA, "Guida UI", url_path_for(PagePaths.GUIDA)),
-    ),
-}
+def _to_page_specs(group: NavGroup) -> Sequence[PageSpec]:
+    return tuple(PageSpec(page.path, page.title, page.url_path) for page in group.pages)
+
+
+_PAGE_GROUPS: Dict[str, Sequence[PageSpec]] = {group.name: _to_page_specs(group) for group in navigation_groups()}
 
 
 def page_specs() -> Mapping[str, Sequence[PageSpec]]:
