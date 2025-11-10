@@ -5,10 +5,9 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
 
 from pipeline.config_utils import get_client_config
-from pipeline.context import ClientContext  # Import pipeline (obbligatori in v1.8.0)
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
 from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
 
@@ -49,7 +48,13 @@ from ..components.mapping_editor import mapping_to_raw_structure  # usato solo s
 from ..components.mapping_editor import write_raw_structure_yaml  # usato solo se ensure_structure=True
 from ..components.mapping_editor import load_semantic_mapping
 from ..utils import to_kebab  # SSoT normalizzazione + path-safety
+from ..utils.context_cache import get_client_context
 from ..utils.workspace import workspace_root
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    ClientContext = Any  # type: ignore[misc]
 
 # ===== Logger =================================================================
 
@@ -176,7 +181,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     _require_drive_for_raw_only()
     if get_drive_service is None or create_drive_raw_children_from_yaml is None:
         raise RuntimeError("Funzioni Drive non disponibili (RAW da YAML).")
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    ctx = get_client_context(slug, interactive=False, require_env=require_env)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
@@ -375,7 +380,7 @@ def plan_raw_download(
             + ". Installa gli extra con: pip install .[drive]"
         )
 
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    ctx = get_client_context(slug, interactive=False, require_env=require_env)
     service = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
     if not parent_id:
@@ -566,7 +571,7 @@ def emit_readmes_for_raw(
         raise RuntimeError("Funzioni Drive non disponibili.")
 
     # Context & service
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    ctx = get_client_context(slug, interactive=False, require_env=require_env)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
@@ -698,7 +703,7 @@ def download_raw_from_drive_with_progress(
         )
 
     # Context & service
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=require_env, run_id=None)
+    ctx = get_client_context(slug, interactive=False, require_env=require_env)
     svc = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
     if not parent_id:

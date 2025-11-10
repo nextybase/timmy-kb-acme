@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Optional, cast
 
 from pipeline.logging_utils import get_structured_logger
+from ui.utils.context_cache import get_client_context
 
 try:
     import streamlit as st
@@ -11,10 +12,8 @@ except Exception:  # pragma: no cover
     st = None
 
 try:
-    from pipeline.context import ClientContext
     from pipeline.drive_utils import MIME_FOLDER, get_drive_service, list_drive_files
 except Exception:  # pragma: no cover
-    ClientContext = None
     MIME_FOLDER = "application/vnd.google-apps.folder"  # fallback literal
     get_drive_service = None
     list_drive_files = None
@@ -115,11 +114,11 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     index: Dict[str, Dict[str, Any]] = {}
     if st is None:
         return index
-    if ClientContext is None or not callable(get_drive_service):
+    if not callable(get_drive_service):
         st.info("Supporto Google Drive non disponibile nella UI.")
         return index
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=True, run_id=None)
+        ctx = get_client_context(slug, interactive=False, require_env=True)
     except Exception as exc:  # pragma: no cover
         st.error("Impossibile inizializzare il contesto Drive.")
         _LOGGER.warning("drive_tree.context_failed", extra={"slug": slug, "error": str(exc)})

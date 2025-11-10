@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, Dict, List, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -90,7 +90,7 @@ def _parse_args() -> argparse.Namespace:
 def _setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
     """Istanzia il logger strutturato con livello desiderato e contesto opzionale."""
     context = {"slug": slug} if slug else None
-    logger = get_structured_logger("semantic.headless", context=context)
+    logger = cast(logging.Logger, get_structured_logger("semantic.headless", context=context))
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     return logger
 

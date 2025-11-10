@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 from ui.pages.registry import PagePaths
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
@@ -23,7 +23,7 @@ ensure_local_workspace_for_ui = import_first(
     "pre_onboarding",
 ).ensure_local_workspace_for_ui
 
-from pipeline.context import ClientContext, validate_slug
+from pipeline.context import validate_slug
 from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -34,10 +34,16 @@ from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
 from ui.utils import set_slug
+from ui.utils.context_cache import get_client_context
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
 from ui.utils.status import status_guard
 from ui.utils.workspace import workspace_root
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    ClientContext = Any  # type: ignore[misc]
 
 _vision_module = import_first(
     "ui.services.vision_provision",
@@ -142,7 +148,7 @@ def _client_pdf_path(slug: str) -> Path:
 
 def _has_drive_ids(slug: str) -> bool:
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, interactive=False, require_env=False)
     except Exception:
         return False
     try:

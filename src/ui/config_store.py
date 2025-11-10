@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+# Remove TYPE_CHECKING import
 from typing import Any, cast
 
 import yaml
 
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.utils.context_cache import get_client_context
+
+try:
+    from pipeline.context import ClientContext
+except Exception:  # pragma: no cover
+    ClientContext = type("ClientContext", (), {})
 
 # Base sicura ancorata al repo
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
@@ -50,7 +57,7 @@ def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
         ConfigError: se il contesto non è disponibile o il file è illeggibile.
     """
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = get_client_context(slug, interactive=False, require_env=False)
     except Exception as exc:
         raise ConfigError(f"Impossibile caricare il contesto per {slug}: {exc}", slug=slug) from exc
 

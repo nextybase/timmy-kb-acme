@@ -7,18 +7,23 @@ import os
 import signal
 from pathlib import Path
 from types import TracebackType
-from typing import Any, ContextManager, Dict, Literal, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, ContextManager, Dict, Literal, Optional, Tuple, cast
 
-from pipeline.context import ClientContext
 from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from timmykb.pre_onboarding import ensure_local_workspace_for_ui
+from ui.utils.context_cache import get_client_context
 from ui.utils.workspace import workspace_root
 
 from .services import vision_provision as vision_services
 from .utils.branding import render_brand_header
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    ClientContext = Any
 
 st: Any | None
 try:  # preferisce runtime soft-fail per import opzionali
@@ -155,7 +160,7 @@ def _request_shutdown(logger: Optional[logging.Logger]) -> None:
 
 def _base_dir_for(slug: str) -> Path:
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = get_client_context(slug, interactive=False, require_env=False)
     except Exception as exc:
         raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
@@ -194,7 +199,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
         raise RuntimeError("Streamlit non disponibile per la landing UI.")
     client_name: str = fallback_name or slug
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = get_client_context(slug, interactive=False, require_env=False)
         from pipeline.config_utils import get_client_config
 
         cfg = get_client_config(ctx) or {}
@@ -382,7 +387,7 @@ def render_workspace_summary(
         else:
             try:
                 ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
-                ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                ctx = get_client_context(slug, interactive=False, require_env=False)
                 if ctx.base_dir is None:
                     raise ConfigError("Workspace creato ma base_dir non disponibile.")
                 base_dir = Path(ctx.base_dir)

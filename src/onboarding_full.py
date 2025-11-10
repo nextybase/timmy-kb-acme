@@ -61,6 +61,16 @@ def _prompt(msg: str) -> str:
     return input(msg).strip()
 
 
+def _count_content_markdown(context: ClientContext) -> int:
+    """Conta i markdown di contenuto (esclude README/SUMMARY) in book/."""
+    md_dir = getattr(context, "md_dir", None)
+    if not md_dir:
+        return 0
+    iterator = iter_safe_paths(md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
+    skip = {"readme.md", "summary.md"}
+    return sum(1 for p in iterator if p.name.lower() not in skip)
+
+
 # ---------- Preflight book/ (delegato al nuovo adapter) ----------
 
 
@@ -127,6 +137,7 @@ def onboarding_full_main(
 
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("cli.onboarding_full.started", extra={"slug": slug})
+    md_snapshot_count: Optional[int] = None
 
     # 1) README/SUMMARY in book/ (senza fallback)
     try:
@@ -134,14 +145,10 @@ def onboarding_full_main(
             _write_summary_and_readme(context, logger, slug=slug)
             # artifact_count: numero di file .md in book/
             try:
-                md_dir = getattr(context, "md_dir", None)
-                if md_dir:
-                    iterator = iter_safe_paths(md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
-                    count = sum(1 for p in iterator if p.name.lower() not in {"readme.md", "summary.md"})
-                else:
-                    count = 0
-                m.set_artifacts(count)
+                md_snapshot_count = _count_content_markdown(context)
+                m.set_artifacts(md_snapshot_count)
             except Exception:
+                md_snapshot_count = None
                 m.set_artifacts(None)
     except Exception as e:
         raise ConfigError(f"Impossibile generare/validare README/SUMMARY in book/: {e}") from e
@@ -150,13 +157,9 @@ def onboarding_full_main(
     with phase_scope(logger, stage="ensure_book_purity", customer=context.slug) as m:
         _ensure_book_purity(context, logger)
         try:
-            md_dir = getattr(context, "md_dir", None)
-            if md_dir:
-                iterator = iter_safe_paths(md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
-                count = sum(1 for p in iterator if p.name.lower() not in {"readme.md", "summary.md"})
-            else:
-                count = 0
-            m.set_artifacts(count)
+            if md_snapshot_count is None:
+                md_snapshot_count = _count_content_markdown(context)
+            m.set_artifacts(md_snapshot_count)
         except Exception:
             m.set_artifacts(None)
 

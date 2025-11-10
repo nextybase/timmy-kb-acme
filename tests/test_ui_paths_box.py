@@ -82,6 +82,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     # Stub provisioning e context
     monkeypatch.setattr(landing, "ensure_local_workspace_for_ui", lambda *a, **k: None, raising=True)
     monkeypatch.setattr(landing, "ClientContext", type("_C", (), {"load": staticmethod(lambda **k: _DummyCtx(base))}))
+    monkeypatch.setattr(landing, "get_client_context", lambda *_args, **_kwargs: _DummyCtx(base), raising=True)
 
     def _fake_provision(ctx, log, *, slug, pdf_path):
         return {"yaml_paths": {"mapping": str(mapping), "cartelle_raw": str(cartelle)}}

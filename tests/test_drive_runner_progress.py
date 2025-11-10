@@ -17,6 +17,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
         env = {"DRIVE_ID": "PARENT"}
 
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
 
     # Fake Drive service and helpers
     class Svc:
@@ -121,6 +122,7 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
         env = {"DRIVE_ID": "PARENT"}
 
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: "CFID")
 
@@ -166,6 +168,7 @@ def test_plan_raw_download_requires_existing_folder(monkeypatch, tmp_path):
         env = {"DRIVE_ID": "PARENT"}
 
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
 
     def _fake_list_folders(service, parent_id):
@@ -198,6 +201,7 @@ def test_plan_raw_download_errors_when_client_folder_missing(monkeypatch, tmp_pa
         env = {"DRIVE_ID": "PARENT"}
 
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
+    monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
     monkeypatch.setattr(dr, "_drive_list_folders", lambda service, parent_id: [])
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: None)

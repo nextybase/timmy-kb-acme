@@ -2,18 +2,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Tuple, cast
 
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from ui.services.vision_provision import provision_from_vision
+from ui.utils.context_cache import get_client_context
 from ui.utils.stubs import get_streamlit
 
 from .styles import apply_modal_css
 from .yaml_io import build_prompt_from_yaml, load_root_yaml, save_root_yaml
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover - fallback per runtime
+    ClientContext = Any  # type: ignore[misc]
 
 st = get_streamlit()
 
@@ -131,7 +136,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
 
         if col_run.button("Prosegui", key="ft_modal_vision_run", type="primary"):
             try:
-                ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+                ctx = get_client_context(slug, interactive=False, require_env=False)
                 pdf_path = _ensure_workspace_pdf(ctx)
                 tmp_data = dict(data)
                 tmp_data["sections"] = dict(state)

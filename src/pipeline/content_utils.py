@@ -207,13 +207,13 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
             ]
         else:
             iterable = []
-            for key, meta in iterable:
-                display = _titleize(str(key))
-                descr = str((meta or {}).get("descrizione") or "").strip()
-                section_body = f"## {display}\n"
-                if descr:
-                    section_body += f"\n{descr}\n"
-                sections.append(section_body.strip())
+        for key, meta in iterable:
+            display = _titleize(str(key))
+            descr = str((meta or {}).get("descrizione") or "").strip()
+            section_body = f"## {display}\n"
+            if descr:
+                section_body += f"\n{descr}\n"
+            sections.append(section_body.strip())
     except Exception as exc:  # pragma: no cover - fallback path
         logger.warning(
             "pipeline.content.mapping_failed",

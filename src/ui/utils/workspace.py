@@ -8,6 +8,7 @@ from typing import Any, Iterator, Optional, Tuple, cast
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs, validate_slug
+from ui.utils.context_cache import get_client_context, invalidate_client_context
 
 # Import opzionale di Streamlit senza type: ignore.
 # Se non disponibile, st è un Any con valore None.
@@ -27,12 +28,7 @@ def _load_context_base_dir(slug: str) -> Optional[Path]:
     if not default_candidate.exists():
         return None
     try:
-        from pipeline.context import ClientContext
-    except Exception:
-        return None
-
-    try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = get_client_context(slug, interactive=False, require_env=False)
     except Exception:
         return None
 
@@ -75,6 +71,7 @@ def clear_base_cache(*, slug: str | None = None) -> None:
     else:
         _BASE_CACHE.clear()
     clear_iter_safe_pdfs_cache()
+    invalidate_client_context(slug)
 
 
 def workspace_root(slug: str) -> Path:

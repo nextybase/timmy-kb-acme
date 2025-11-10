@@ -9,7 +9,7 @@ Pagina Streamlit per modificare la configurazione cliente senza gestire segreti.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -17,15 +17,20 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 
 from pipeline.config_utils import update_config_with_drive_ids
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from ui.chrome import render_chrome_then_require
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT
+from ui.utils.context_cache import get_client_context
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    ClientContext = Any  # type: ignore[misc]
 
 
 def _load_context_and_settings(slug: str) -> Tuple[ClientContext, Settings]:
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False)
+    ctx = get_client_context(slug, interactive=False, require_env=False)
     settings_obj = ctx.settings
     if isinstance(settings_obj, Settings):
         return ctx, settings_obj

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -21,10 +21,15 @@ st = get_streamlit()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
 from ui.chrome import render_chrome_then_require
+from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard
+
+if TYPE_CHECKING:
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    ClientContext = Any  # type: ignore[misc]
 
 _PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
 
@@ -92,7 +97,7 @@ st.subheader("Preview Docker (HonKit)")
 slug = render_chrome_then_require()
 
 try:
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+    ctx = get_client_context(slug, interactive=False, require_env=False)
     logger = get_structured_logger("ui.preview", context=ctx)
 except Exception as exc:
     title, body, caption = to_user_message(exc)

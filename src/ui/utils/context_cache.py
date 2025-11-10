@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-only
+from __future__ import annotations
+
+from typing import Dict, Optional, cast
+
+from pipeline.context import ClientContext
+from ui.utils.stubs import get_streamlit
+
+st = get_streamlit()
+_CACHE_KEY = "_client_context_cache"
+
+
+def _get_cache() -> Optional[Dict[str, ClientContext]]:
+    session_state = getattr(st, "session_state", None) if st is not None else None
+    if session_state is None:
+        return None
+    cache = cast(Optional[Dict[str, ClientContext]], session_state.get(_CACHE_KEY))
+    if isinstance(cache, dict):
+        return cache
+    cache = {}
+    session_state[_CACHE_KEY] = cache
+    return cache
+
+
+def get_client_context(
+    slug: str,
+    *,
+    interactive: bool = False,
+    require_env: bool = False,
+    run_id: str | None = None,
+    force_reload: bool = False,
+) -> ClientContext:
+    """Ritorna il ClientContext per lo slug, cacheando in sessione Streamlit quando disponibile."""
+    normalized = (slug or "").strip().lower()
+    cache = None if force_reload else _get_cache()
+    cache_key = f"{normalized}|{int(require_env)}"
+    if cache and cache_key in cache:
+        cached_ctx = cache[cache_key]
+        if isinstance(cached_ctx, ClientContext):
+            return cached_ctx
+
+    ctx = ClientContext.load(
+        slug=slug,
+        interactive=interactive,
+        require_env=require_env,
+        run_id=run_id,
+    )
+    if cache is not None:
+        cache[cache_key] = ctx
+    return ctx
+
+
+def invalidate_client_context(slug: str | None = None) -> None:
+    """Invalida la cache sessione del ClientContext (per uno slug o completamente)."""
+    cache = _get_cache()
+    if cache is None:
+        return
+    if slug:
+        cache.pop(f"{slug.strip().lower()}|0", None)
+        cache.pop(f"{slug.strip().lower()}|1", None)
+    else:
+        cache.clear()
+
+
+__all__ = ["get_client_context", "invalidate_client_context"]

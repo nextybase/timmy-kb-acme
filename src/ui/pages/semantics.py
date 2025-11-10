@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Optional, Tuple, cast
+from typing import Any, Optional, Tuple, cast
 
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -14,7 +14,6 @@ from ui.utils.ui_controls import column_button as _column_button
 st = get_streamlit()
 
 
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
@@ -22,6 +21,7 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.errors import to_user_message
+from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
 
 try:
@@ -44,10 +44,10 @@ except Exception:  # pragma: no cover
 ALLOWED_STATES = SEMANTIC_READY_STATES
 
 
-def _make_ctx_and_logger(slug: str) -> tuple[ClientContext, logging.Logger]:
+def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger]:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("ui.semantics", run_id=run_id)
-    ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=run_id)
+    ctx = get_client_context(slug, interactive=False, require_env=False, run_id=run_id)
     return ctx, logger
 
 

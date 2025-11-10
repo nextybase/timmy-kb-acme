@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
@@ -14,7 +13,15 @@ from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2
 from tag_onboarding import run_nlp_to_db, scan_raw_to_db
+from ui.utils.context_cache import get_client_context
 from ui.utils.workspace import workspace_root
+
+if TYPE_CHECKING:  # pragma: no cover
+    from pipeline.context import ClientContext
+else:  # pragma: no cover
+    from typing import Any
+
+    ClientContext = Any  # type: ignore[misc]
 
 try:
     import streamlit as st
@@ -53,7 +60,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
 
     try:
         with st.spinner("Preparazione contesto..."):
-            ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+            ctx = get_client_context(slug, interactive=False, require_env=False)
             base_dir, raw_dir, semantic_dir = _resolve_paths(ctx, slug)
 
         yaml_path = ensure_within_and_resolve(base_dir, semantic_dir / "tags_reviewed.yaml")
