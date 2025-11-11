@@ -18,6 +18,8 @@ class StreamlitLike(Protocol):
 
     def error(self, body: str) -> Any: ...
 
+    def warning(self, body: str) -> Any: ...
+
 
 class StatusGuard(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> ContextManager[Any]: ...
@@ -52,6 +54,17 @@ def render_download_plan(st: StreamlitLike, conflicts: Sequence[str], labels: Se
         st.markdown("\n".join(f"- `{x}`" for x in sorted(labels)))
 
 
+def resolve_overwrite_choice(conflicts: Sequence[str], user_requested: bool) -> bool:
+    """
+    Determina se abilitare davvero la sovrascrittura dei PDF gia presenti.
+
+    Manteniamo l'operazione opt-in e consentita solo quando esistono conflitti.
+    """
+    if not conflicts:
+        return False
+    return bool(user_requested)
+
+
 def execute_drive_download(
     slug: str,
     conflicts: Sequence[str],
@@ -62,10 +75,18 @@ def execute_drive_download(
     logger: object,
     st: StreamlitLike,
     status_guard: StatusGuard,
+    overwrite_requested: bool = False,
 ) -> bool:
     download_fn = download_with_progress or download_simple
     if download_fn is None:
         raise RuntimeError("Funzione di download non disponibile.")
+
+    overwrite_existing = resolve_overwrite_choice(conflicts, overwrite_requested)
+    if conflicts and not overwrite_existing:
+        st.warning(
+            "Sono stati rilevati conflitti con file locali. Verranno scaricati solo i PDF mancanti "
+            "finché non li rimuovi o abiliti la sovrascrittura.",
+        )
 
     try:
         with status_guard(
@@ -75,7 +96,7 @@ def execute_drive_download(
         ) as status_widget:
             call_args: dict[str, Any] = {
                 "slug": slug,
-                "overwrite": bool(conflicts),
+                "overwrite": overwrite_existing,
             }
             try:
                 signature = inspect.signature(download_fn)

@@ -76,6 +76,7 @@ class _SafePdfCacheEntry:
 
 _SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
 _SAFE_PDF_CACHE_DEFAULT_TTL = _DEFAULT_RAW_CACHE_TTL
+_CACHE_DEFAULTS_LOADED = False
 
 
 def _parse_positive_float(value: Any, default: float) -> float:
@@ -115,7 +116,12 @@ def _load_raw_cache_defaults() -> None:
     _SAFE_PDF_CACHE_CAPACITY = capacity
 
 
-_load_raw_cache_defaults()
+def _ensure_raw_cache_defaults_loaded() -> None:
+    global _CACHE_DEFAULTS_LOADED
+    if _CACHE_DEFAULTS_LOADED:
+        return
+    _load_raw_cache_defaults()
+    _CACHE_DEFAULTS_LOADED = True
 
 
 def _dir_mtime(path: Path) -> float:
@@ -127,6 +133,7 @@ def _dir_mtime(path: Path) -> float:
 
 def clear_iter_safe_pdfs_cache(*, root: Path | None = None) -> None:
     """Invalidates the cached PDF listings (entire cache or a specific root)."""
+    _ensure_raw_cache_defaults_loaded()
     if root is None:
         _SAFE_PDF_CACHE.clear()
         return
@@ -159,6 +166,7 @@ def preload_iter_safe_pdfs_cache(
 
     Se `root` non �� valido viene effettuata solo l'invalidazione.
     """
+    _ensure_raw_cache_defaults_loaded()
     try:
         resolved_root = Path(root).resolve()
     except Exception:
@@ -199,6 +207,7 @@ def refresh_iter_safe_pdfs_cache_for_path(
     """
     Invalida (ed opzionalmente pre-riscalda) la cache PDF se `path` ricade in un albero `raw/`.
     """
+    _ensure_raw_cache_defaults_loaded()
     raw_root = _resolve_raw_root_from_path(path)
     if raw_root is None:
         return
@@ -375,6 +384,7 @@ def iter_safe_pdfs(
         )
         return
 
+    _ensure_raw_cache_defaults_loaded()
     try:
         resolved_root = Path(root).resolve()
     except Exception as exc:

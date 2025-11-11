@@ -153,7 +153,7 @@ flowchart TD
 **Diff Drive <-> Locale** Confronta i PDF presenti in `<DRIVE_ID>/<slug>/raw/<categoria>/` con quelli in `output/timmy-kb-<slug>/raw/<categoria>/`:
 
 - **Scansione**: lato Drive considera solo `application/pdf`; lato locale considera `*.pdf`.
-- **Selezione e download**: scegli i file da copiare e clicca **Scarica PDF da Drive -> locale**. I file vengono salvati **nella stessa categoria**. I file **gia' presenti** non vengono sovrascritti; per aggiornarli rimuovi/rinomina la copia locale prima di rilanciare.
+- **Selezione e download**: scegli i file da copiare e clicca **Scarica PDF da Drive -> locale**. I file vengono salvati **nella stessa categoria**. I file **gia' presenti** non vengono sovrascritti finche' non abiliti il toggle *"Sovrascrivi i file locali in conflitto"* (visibile soltanto quando ci sono conflitti) oppure li rimuovi/rinomini manualmente.
 - **Avanzamento**: barra/progresso su **tutti i candidati** (anche quelli gia' presenti); al termine mostra i **nuovi file creati**.
 - **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale.
 - **Rileva PDF in raw/**: riesegue la **sola scansione locale** per aggiornare lo stato (utile se hai copiato manualmente dei file).
@@ -193,6 +193,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
+   - **Log stub:** puoi impostare `PREVIEW_LOG_DIR` con path relativi o assoluti; se il percorso non è raggiungibile la UI mostra un warning con il motivo e salva comunque i log in `logs/preview/` dentro al repository.
 
 - La pagina “Semantica” è accessibile da stato **pronto** in poi (con PDF in `raw/`).
 - La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.

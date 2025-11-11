@@ -5,11 +5,11 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from pipeline.config_utils import get_client_config
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
-from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
+from pipeline.path_utils import ensure_within_and_resolve
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
@@ -396,47 +396,34 @@ def plan_raw_download(
 
     workspace_dir = _resolve_workspace(base_root, slug)
     local_root = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
-    Path(local_root).mkdir(parents=True, exist_ok=True)
+    local_root_path = Path(local_root)
+    local_root_path.mkdir(parents=True, exist_ok=True)
 
-    conflicts: set[str] = set()
-    labels: list[str] = []
-    seen_labels: set[str] = set()
+    def _plan_safe_list_pdfs(service: Any, folder_id: str) -> Iterable[Dict[str, Any]]:
+        for entry in _drive_list_pdfs(service, folder_id):
+            if not entry:
+                continue
+            if entry.get("id"):
+                yield entry
+                continue
+            patched = dict(entry)
+            patched["id"] = f"plan-{patched.get('name') or 'unnamed'}"
+            yield patched
 
-    def _sanitize_pdf_name(raw_name: str) -> Optional[str]:
-        clean: str = sanitize_filename(raw_name or "")
-        if not clean:
-            return None
-        if not clean.lower().endswith(".pdf"):
-            clean = f"{clean}.pdf"
-        return clean
+    log = _get_logger(ctx)
+    candidates = discover_candidates(
+        service=service,
+        raw_folder_id=raw_id,
+        list_folders=_drive_list_folders,
+        list_pdfs=_plan_safe_list_pdfs,
+        ensure_dest=_ui_ensure_dest,
+        base_dir=workspace_dir,
+        local_root=local_root_path,
+        logger=log,
+    )
 
-    def _register_candidate(folder: Optional[str], name: str) -> None:
-        label = f"{folder}/{name}" if folder else name
-        if label not in seen_labels:
-            labels.append(label)
-            seen_labels.add(label)
-        target = local_root / name if not folder else local_root / folder / name
-        dest = ensure_within_and_resolve(local_root, target)
-        if dest.exists():
-            conflicts.add(label)
-
-    for file_info in _drive_list_pdfs(service, raw_id):
-        raw_name = (file_info.get("name") or "").strip()
-        clean_name = _sanitize_pdf_name(raw_name)
-        if clean_name:
-            _register_candidate(None, clean_name)
-
-    for folder in _drive_list_folders(service, raw_id):
-        raw_folder = (folder.get("name") or "").strip()
-        folder_id = (folder.get("id") or "").strip()
-        clean_folder = sanitize_filename(raw_folder)
-        if not clean_folder or not folder_id:
-            continue
-        for file_info in _drive_list_pdfs(service, folder_id):
-            raw_name = (file_info.get("name") or "").strip()
-            clean_name = _sanitize_pdf_name(raw_name)
-            if clean_name:
-                _register_candidate(clean_folder, clean_name)
+    labels = {cand.label for cand in candidates}
+    conflicts = [cand.label for cand in candidates if cand.destination.exists()]
 
     return sorted(conflicts), sorted(labels)
 
@@ -652,7 +639,7 @@ def download_raw_from_drive(
     *,
     base_root: Path | str = "output",
     require_env: bool = True,
-    overwrite: bool = False,
+    overwrite: bool | None = None,
     logger: Optional[logging.Logger] = None,
 ) -> List[Path]:
     """Scarica i PDF presenti nelle sottocartelle di 'raw/' su Drive nella struttura locale:
@@ -675,7 +662,7 @@ def download_raw_from_drive_with_progress(
     *,
     base_root: Path | str = "output",
     require_env: bool = True,
-    overwrite: bool = False,
+    overwrite: bool | None = None,
     logger: Optional[logging.Logger] = None,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[Path]:
@@ -743,6 +730,8 @@ def download_raw_from_drive_with_progress(
 
     # Download dei PDF (progress disabilitato, gestito a monte)
     downloader = cast(Callable[..., Any], download_drive_pdfs_to_local)
+    overwrite_flag = bool(overwrite)
+
     _ = downloader(
         svc,
         raw_id,
@@ -751,7 +740,7 @@ def download_raw_from_drive_with_progress(
         context=ctx,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
         chunk_size=8 * 1024 * 1024,
-        overwrite=overwrite,
+        overwrite=overwrite_flag,
     )
 
     return cast(list[Path], compute_created(candidates, before))

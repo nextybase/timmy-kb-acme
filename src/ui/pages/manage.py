@@ -514,7 +514,8 @@ if slug:
                     st.error(
                         f"{message}\\n"
                         "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
-                        "Riprovare tra qualche minuto e, se il problema persiste, scaricare i PDF manualmente da Drive "
+                        "Riprovare tra qualche minuto. "
+                        "il problema persiste, scaricare i PDF manualmente da Drive "
                         "e copiarli nella cartella `raw/`."
                     )
                 else:
@@ -523,6 +524,18 @@ if slug:
 
             drive_component.render_download_plan(st, conflicts, labels)
 
+            overwrite_label = "Sovrascrivi i file locali in conflitto"
+            overwrite_help = (
+                "Se attivato, i PDF già presenti verranno riscritti. "
+                "In caso contrario verranno importati solo i file mancanti."
+            )
+            overwrite_toggle = st.checkbox(
+                overwrite_label,
+                value=False,
+                help=overwrite_help,
+                key=f"drive_overwrite_{slug}",
+                disabled=not conflicts,
+            )
             cA, cB = st.columns(2)
             if _column_button(cA, "Annulla", key="dl_cancel"):
                 return
@@ -536,6 +549,7 @@ if slug:
                     logger=LOGGER,
                     st=st,
                     status_guard=status_guard,
+                    overwrite_requested=bool(overwrite_toggle),
                 ):
                     _safe_rerun()
 

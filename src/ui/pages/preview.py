@@ -20,6 +20,7 @@ from ui.utils.workspace import has_raw_pdfs
 st = get_streamlit()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_PREVIEW_LOG_DIR = REPO_ROOT / "logs" / "preview"
 
 from pipeline.logging_utils import get_structured_logger
 from ui.chrome import render_chrome_then_require
@@ -54,11 +55,62 @@ if _PREVIEW_MODE != "stub":  # pragma: no branch - definizioni reali solo se dis
 
 else:
 
+    def _preview_stub_warning(message: str, *, error: Exception | None = None, base: Path | None = None) -> None:
+        details: list[str] = []
+        if base is not None:
+            details.append(f"path={base}")
+        if error is not None:
+            details.append(f"reason={error}")
+        decorated = f"{message} ({'; '.join(details)})" if details else message
+        try:
+            st.warning(decorated)
+        except Exception:
+            pass
+        try:
+            logger = get_structured_logger("ui.preview.stub")
+            logger.warning(
+                "ui.preview.stub_log_dir_fallback",
+                extra={
+                    "message": message,
+                    "error": str(error) if error else "",
+                    "base": str(base) if base else "",
+                },
+            )
+        except Exception:
+            pass
+
+    def _resolve_preview_dir(base_setting: Path) -> Path:
+        if base_setting.is_absolute():
+            guard = base_setting
+            candidate = base_setting
+        else:
+            guard = REPO_ROOT
+            candidate = REPO_ROOT / base_setting
+        return Path(ensure_within_and_resolve(guard, candidate))
+
     def _preview_log_path(slug: str) -> Path:
         base_setting = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
-        target_dir = base_setting if base_setting.is_absolute() else REPO_ROOT / base_setting
-        safe_dir = Path(ensure_within_and_resolve(REPO_ROOT, target_dir))
-        safe_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            safe_dir = _resolve_preview_dir(base_setting)
+        except Exception as exc:
+            fallback_msg = (
+                "Percorso personalizzato per i log preview non valido. "
+                f"Uso il percorso predefinito {DEFAULT_PREVIEW_LOG_DIR}."
+            )
+            _preview_stub_warning(fallback_msg, error=exc, base=base_setting)
+            safe_dir = DEFAULT_PREVIEW_LOG_DIR
+        try:
+            safe_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            fallback_dir = DEFAULT_PREVIEW_LOG_DIR
+            if safe_dir != fallback_dir:
+                fallback_msg = (
+                    "Impossibile creare la directory personalizzata per i log preview. "
+                    f"Uso il percorso predefinito {fallback_dir}."
+                )
+                _preview_stub_warning(fallback_msg, error=exc, base=safe_dir)
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+            safe_dir = fallback_dir
         return Path(ensure_within_and_resolve(safe_dir, safe_dir / f"{slug}.log"))
 
     def _write_stub_log(slug: str, action: str) -> None:
