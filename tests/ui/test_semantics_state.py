@@ -62,24 +62,27 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "set_state", _set_state)
 
     reset_calls: list[str] = []
-    monkeypatch.setattr(sem, "_reset_gating_cache", lambda slug: reset_calls.append(slug))
 
     readiness = [True, False, True, True]
     ready_calls: list[bool] = []
+    reset_flag = {"pending": False}
 
     def _has_raw(slug: str):
+        if not reset_flag["pending"] and ready_calls:
+            raise AssertionError("has_raw_pdfs chiamato senza reset gating precedente")
+        reset_flag["pending"] = False
         value = readiness.pop(0)
         ready_calls.append(value)
         return value, tmp_path / "raw"
 
     monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
 
-    logger_calls = {"info": 0}
+    log_records: list[tuple[str, dict]] = []
 
-    def _logger_info(*a, **k):
-        logger_calls["info"] += 1
+    def _logger_info(msg: str, **kwargs: object) -> None:
+        log_records.append((msg, kwargs))
 
-    def _logger_warning(*a, **k):
+    def _logger_warning(*a: object, **k: object) -> None:
         pass
 
     def _convert(ctx, logger, slug=None):
@@ -107,43 +110,38 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
 
+    def _counting_reset(slug: str) -> None:
+        reset_calls.append(slug)
+        reset_flag["pending"] = True
+
+    monkeypatch.setattr(sem, "_reset_gating_cache", _counting_reset)
+
     sem._client_state = "pronto"  # type: ignore[attr-defined]
     sem._raw_ready = True  # type: ignore[attr-defined]
 
     sem.has_raw_pdfs("dummy")
 
-    sem._run_convert("dummy")
-    sem.has_raw_pdfs("dummy")
-    assert state["value"] == "pronto"
+    for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
+        reset_flag["pending"] = True
+        runner("dummy")
+        sem.has_raw_pdfs("dummy")
 
-    sem._run_enrich("dummy")
-    sem.has_raw_pdfs("dummy")
-    assert state["value"] == "arricchito"
-
-    sem._run_summary("dummy")
-    sem.has_raw_pdfs("dummy")
     assert state["value"] == "finito"
-
     assert reset_calls == ["dummy", "dummy", "dummy"]
     assert state_log == ["pronto", "arricchito", "finito"]
     assert ready_calls == [True, False, True, True]
-    assert logger_calls["info"] >= 3
+    assert {msg for msg, _ in log_records} == {"convert", "enrich", "summary"}
+    assert all(record[1].get("extra", {}).get("slug") == "dummy" for record in log_records)
 
 
 def test_semantics_message_string_matches_docs():
     from pathlib import Path
 
-    import ui.pages.semantics as sem
-
-    source = Path(sem.__file__).read_text(encoding="utf-8")
-    marker = 'st.info("'
-    start = source.index(marker) + len(marker)
-    end = source.index('")', start)
-    message = source[start:end]
+    from ui.constants import SEMANTIC_GATING_MESSAGE
 
     repo_root = Path(__file__).resolve().parents[2]
     docs_text = (repo_root / "docs/streamlit_ui.md").read_text(encoding="utf-8")
-    assert message in docs_text, message
+    assert SEMANTIC_GATING_MESSAGE in docs_text, SEMANTIC_GATING_MESSAGE
 
 
 def test_semantics_gating_uses_ssot_constants():

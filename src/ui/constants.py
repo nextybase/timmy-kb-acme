@@ -22,6 +22,7 @@ SEMANTIC_READY_STATES = {"arricchito", "finito"}
 
 # Stati che consentono l'accesso alla pagina "Semantica" (dopo la conversione)
 SEMANTIC_ENTRY_STATES = SEMANTIC_READY_STATES | {"pronto"}
+SEMANTIC_GATING_MESSAGE = "La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`."
 
 # Facoltativo: elenco di stati "conosciuti" (può servire per validazioni o UI)
 KNOWN_CLIENT_STATES = {"nuovo", "pronto", "arricchito", "finito"}

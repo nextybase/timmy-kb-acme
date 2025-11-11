@@ -19,7 +19,7 @@ from pipeline.logging_utils import get_structured_logger
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
-from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
+from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE, SEMANTIC_READY_STATES
 from ui.errors import to_user_message
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
@@ -155,7 +155,7 @@ if _HAS_STREAMLIT_CONTEXT:
     state = (get_state(slug) or "").strip().lower()
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
-        st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.")
+        st.info(SEMANTIC_GATING_MESSAGE)
         st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
         try:
             st.stop()
