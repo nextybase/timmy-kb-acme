@@ -5,12 +5,14 @@ Questa guida completa la documentazione di logging già integrata nel progetto
 
 ## Stack base (Loki + Promtail + Grafana)
 
-1. Avvia gli stack locali:
+1. Avvia gli stack locali (usando il `.env` in root):
    ```bash
-   docker compose -f observability/docker-compose.yaml up -d
+   docker compose --env-file ./.env -f observability/docker-compose.yaml up -d
    ```
 2. I log applicativi vengono raccolti da Promtail e inviati a Loki.
 3. Grafana espone la dashboard (default: <http://localhost:3000>).
+   La password admin è letta da `GRAFANA_ADMIN_PASSWORD` nel `.env` in root;
+   se assente, parte con `admin` (fallback del compose).
 
 I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/logs/*.log`)
 sia i log globali (`/var/timmy/global-logs/*.log`). Le pipeline di Promtail
@@ -32,12 +34,11 @@ promuovono come label principali:
 - Le dashboard JSON risiedono in `observability/grafana-dashboards/`
   e vengono montate in sola lettura; usa `grafana-toolkit export` o copia manuale
   per aggiornarle, poi committa il JSON.
-- Prima di avviare Grafana imposta le credenziali di amministratore con variabili d'ambiente:
-  ```bash
-  export GRAFANA_ADMIN_USER=observability-admin
-  export GRAFANA_ADMIN_PASSWORD='<strong-password-here>'  # pragma: allowlist secret
+- Puoi valorizzarle nel `.env` in root:
   ```
-  (`docker compose` rifiuta l'avvio se `GRAFANA_ADMIN_PASSWORD` manca).
+  GRAFANA_ADMIN_USER=observability-admin
+  GRAFANA_ADMIN_PASSWORD=<strong-password-here>
+  ```
 
 ## Correlazione tracing (`trace_id` / `span_id`)
 
