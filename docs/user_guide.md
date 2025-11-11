@@ -91,7 +91,7 @@ Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 
 ## Vision Statement (CLI)
 1. Copia `VisionStatement.pdf` in `output/timmy-kb-<slug>/config/` oppure in `raw/`.
-2. Assicurati che `.env` contenga `OPENAI_API_KEY_FOLDER` (o `OPENAI_API_KEY`).
+2. Assicurati che `.env` contenga `OPENAI_API_KEY` (token valido per il modello Vision).
 3. Esegui `py src/tools/gen_vision_yaml.py --slug <slug>`: il tool carica l'ambiente, risolve i path e genera
    `semantic/semantic_mapping.yaml`.
 4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.

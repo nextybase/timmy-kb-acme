@@ -16,7 +16,7 @@ Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire 
 - Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive
 - Token GitHub se abiliti il push finale
 
-Variabili d'ambiente principali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
+Variabili d'ambiente principali: `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
 Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`.
 
 ---
@@ -67,7 +67,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ## Telemetria & sicurezza
 - Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti.
 - I log globali della UI (Streamlit) sono salvati in `.timmykb/logs/` e visibili dalla pagina “Log dashboard”.
-- La rotazione file (`RotatingFileHandler`) si configura via `config/config.yaml` (`log_max_bytes`, `log_backup_count`) o ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default: 1 MiB, 3 backup).
+- La rotazione file (`RotatingFileHandler`) si regola tramite ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default: 1 MiB, 3 backup).
 - L'esportazione tracing (OTel) si attiva impostando `TIMMY_OTEL_ENDPOINT` (OTLP/HTTP), `TIMMY_SERVICE_NAME` e `TIMMY_ENV`.
 - Path-safety e scritture atomiche per ogni operazione su workspace/Drive.
 - CSpell, gitleaks e controlli SPDX sono inclusi nella configurazione `pre-commit`.

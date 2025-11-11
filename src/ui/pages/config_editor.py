@@ -114,50 +114,11 @@ def render_body(
         )
 
         st_mod.markdown("---")
-        st_mod.markdown("### Logging")
-        log_file_path = st_mod.text_input(
-            "Percorso file log",
-            value=str(data.get("log_file_path", "logs/onboarding.log")),
-            help="Percorso relativo al workspace cliente per il file di log.",
-        )
-        log_max_bytes = st_mod.number_input(
-            "Log max bytes",
-            min_value=1024,
-            max_value=50 * 1024 * 1024,
-            value=int(data.get("log_max_bytes", 1_048_576)),
-            step=1024,
-            help="Dimensione massima del file di log prima del rollover.",
-        )
-        log_backup_count = st_mod.number_input(
-            "Numero backup log",
-            min_value=0,
-            max_value=50,
-            value=int(data.get("log_backup_count", 3)),
-            step=1,
-            help="Numero di file di log di backup mantenuti.",
-        )
-
-        st_mod.markdown("---")
-        st_mod.markdown("### UI e Debug")
+        st_mod.markdown("### UI")
         skip_preflight = st_mod.toggle(
             "Salta preflight iniziale",
             value=bool(ui_cfg.get("skip_preflight", data.get("skip_preflight", False))),
             help="Persistente: memorizza ui.skip_preflight nel config del cliente.",
-        )
-        debug_mode = st_mod.toggle(
-            "Modalità debug",
-            value=bool(data.get("debug", False)),
-            help="Abilita flag di debug per i servizi client.",
-        )
-        gitbook_image = st_mod.text_input(
-            "Immagine Docker GitBook/HonKit",
-            value=str(data.get("gitbook_image", "")),
-            help="Repository immagine Docker utilizzata per la preview HonKit.",
-        )
-        gitbook_workspace = st_mod.text_input(
-            "Workspace GitBook",
-            value=str(data.get("gitbook_workspace", "")),
-            help="Nome workspace GitBook (se applicabile).",
         )
 
         submitted = st_mod.form_submit_button("Salva modifiche", type="primary")
@@ -169,13 +130,7 @@ def render_body(
         "candidate_limit": int(candidate_limit),
         "latency_budget": int(latency_budget),
         "auto_by_budget": bool(auto_by_budget),
-        "log_file_path": log_file_path,
-        "log_max_bytes": int(log_max_bytes),
-        "log_backup_count": int(log_backup_count),
         "skip_preflight": bool(skip_preflight),
-        "debug_mode": bool(debug_mode),
-        "gitbook_image": gitbook_image,
-        "gitbook_workspace": gitbook_workspace,
     }
 
 
@@ -214,17 +169,10 @@ def _build_updates(
     new_retriever["auto"] = auto_by_budget
     updates["retriever"] = new_retriever
 
-    updates["log_file_path"] = str(values["log_file_path"]).strip()
-    updates["log_max_bytes"] = int(values["log_max_bytes"])
-    updates["log_backup_count"] = int(values["log_backup_count"])
-    updates["debug"] = bool(values["debug_mode"])
-
     new_ui = _copy_section(ui_cfg)
     new_ui["skip_preflight"] = bool(values["skip_preflight"])
     updates["ui"] = new_ui
 
-    updates["gitbook_image"] = str(values["gitbook_image"]).strip()
-    updates["gitbook_workspace"] = str(values["gitbook_workspace"]).strip()
     updates.setdefault("skip_preflight", bool(data.get("skip_preflight", False)))
 
     return updates

@@ -28,25 +28,12 @@ def test_render_body_collects_form_values(monkeypatch: pytest.MonkeyPatch) -> No
             "Candidate limit": 1500,
             "Budget latenza (ms)": 250,
             "Auto per budget": True,
-            "Percorso file log": "logs/custom.log",
-            "Log max bytes": 20480,
-            "Numero backup log": 7,
             "Salta preflight iniziale": True,
-            "Modalità debug": True,
-            "Immagine Docker GitBook/HonKit": "repo/image:latest",
-            "Workspace GitBook": "ws-01",
         }
     )
     st_stub.register_button_sequence("Salva modifiche", [True])
 
-    data = {
-        "log_file_path": "logs/onboarding.log",
-        "log_max_bytes": 1048576,
-        "log_backup_count": 3,
-        "debug": False,
-        "gitbook_image": "",
-        "gitbook_workspace": "",
-    }
+    data = {}
     vision_cfg = {"engine": "assistant", "model": "gpt", "strict_output": True}
     retriever_cfg = {"candidate_limit": 1000, "latency_budget_ms": 200, "auto_by_budget": False}
     ui_cfg = {"skip_preflight": False}
@@ -67,13 +54,7 @@ def test_render_body_collects_form_values(monkeypatch: pytest.MonkeyPatch) -> No
     assert values["candidate_limit"] == 1500
     assert values["latency_budget"] == 250
     assert values["auto_by_budget"] is True
-    assert values["log_file_path"] == "logs/custom.log"
-    assert values["log_max_bytes"] == 20480
-    assert values["log_backup_count"] == 7
     assert values["skip_preflight"] is True
-    assert values["debug_mode"] is True
-    assert values["gitbook_image"] == "repo/image:latest"
-    assert values["gitbook_workspace"] == "ws-01"
 
 
 def test_handle_actions_reports_validation_errors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,13 +80,7 @@ def test_handle_actions_reports_validation_errors(monkeypatch: pytest.MonkeyPatc
             "candidate_limit": 1000,
             "latency_budget": 200,
             "auto_by_budget": False,
-            "log_file_path": "logs/onboarding.log",
-            "log_max_bytes": 1048576,
-            "log_backup_count": 3,
             "skip_preflight": False,
-            "debug_mode": False,
-            "gitbook_image": "",
-            "gitbook_workspace": "",
         },
     )
 
@@ -140,13 +115,7 @@ def test_handle_actions_updates_configuration(monkeypatch: pytest.MonkeyPatch) -
         "candidate_limit": 1500,
         "latency_budget": 250,
         "auto_by_budget": True,
-        "log_file_path": "logs/custom.log",
-        "log_max_bytes": 20480,
-        "log_backup_count": 5,
         "skip_preflight": True,
-        "debug_mode": True,
-        "gitbook_image": "repo/image:latest",
-        "gitbook_workspace": "ws-01",
     }
 
     result = module.handle_actions(

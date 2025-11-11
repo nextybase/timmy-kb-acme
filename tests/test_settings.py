@@ -30,7 +30,6 @@ retriever:
   auto_by_budget: true
 ui:
   skip_preflight: false
-gitbook_image: custom/honkit
 """,
         encoding="utf-8",
     )

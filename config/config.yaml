@@ -1,15 +1,4 @@
-github_org: nextybase
-repo_visibility: private
 cartelle_raw_yaml: config/cartelle_raw.yaml
-local_temp_config_path: config/config.yaml
-raw_dir_template: output/timmy-kb-{slug}/raw
-output_dir_template: output/timmy-kb-{slug}
-gitbook_image: honkit/honkit
-gitbook_workspace: next-2
-log_file_path: logs/onboarding.log
-log_max_bytes: 1048576
-log_backup_count: 3
-debug: false
 N_VER: 0
 DATA_VER: null
 retriever:

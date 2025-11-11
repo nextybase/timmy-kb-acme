@@ -137,7 +137,7 @@ make ci-safe
 
 ## 9) Sicurezza & Segreti
 - Mai loggare token o credenziali **in chiaro**; affidati alla redazione automatica.
-- Le chiavi si leggono da ENV o da cartelle sicure (`OPENAI_API_KEY` / `OPENAI_API_KEY_FOLDER`).
+- Le chiavi si leggono da ENV (`OPENAI_API_KEY`); altri meccanismi legacy non sono più supportati.
 - Evita di serializzare payload sensibili in file temporanei non necessari.
 
 ---

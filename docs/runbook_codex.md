@@ -13,7 +13,7 @@
 **Tooling minimo**
 - Python **>= 3.11**, `pip`, `pip-tools`; (opz.) **Docker** per preview HonKit.
   Vedi anche README -> *Prerequisiti rapidi*.
-- Credenziali: `OPENAI_API_KEY` (o `OPENAI_API_KEY_FOLDER`), `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
+- Credenziali: `OPENAI_API_KEY`, `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
 - Pre-commit: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 
 **Ambiente**
@@ -56,11 +56,11 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
 - **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
 - **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
 - **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` e' attivo.
-  - Rotazione file configurabile da `config/config.yaml` (`log_max_bytes`, `log_backup_count`) o ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
+  - Rotazione file configurabile via ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
   - I log cliente vivono in `output/timmy-kb-<slug>/logs/`; i log UI globali in `.timmykb/logs/`. Entrambi sono consultabili dalla pagina Streamlit **Log dashboard**.
   - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
   - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
-- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`, override via `TIMMY_SAFE_PDF_CACHE_TTL` e `TIMMY_SAFE_PDF_CACHE_CAPACITY`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
+- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 
 **Snippet tipici**

@@ -95,7 +95,7 @@ def _parse_positive_int(value: Any, default: int) -> int:
 
 
 def _load_raw_cache_defaults() -> None:
-    """Carica TTL/capacità della cache RAW da config/config.yaml (override ENV)."""
+    """Carica TTL/capacita della cache RAW da config/config.yaml."""
     global _SAFE_PDF_CACHE_DEFAULT_TTL, _SAFE_PDF_CACHE_CAPACITY
 
     ttl = _DEFAULT_RAW_CACHE_TTL
@@ -108,16 +108,8 @@ def _load_raw_cache_defaults() -> None:
         ttl = _parse_positive_float(cfg.get("ttl_seconds"), ttl)
         capacity = _parse_positive_int(cfg.get("max_entries"), capacity)
     except Exception:
-        # se il file manca o è invalido manteniamo i fallback
+        # se il file manca o e' invalido manteniamo i fallback
         pass
-
-    env_ttl = os.environ.get("TIMMY_SAFE_PDF_CACHE_TTL")
-    if env_ttl is not None:
-        ttl = _parse_positive_float(env_ttl, ttl)
-
-    env_cap = os.environ.get("TIMMY_SAFE_PDF_CACHE_CAPACITY")
-    if env_cap is not None:
-        capacity = _parse_positive_int(env_cap, capacity)
 
     _SAFE_PDF_CACHE_DEFAULT_TTL = ttl
     _SAFE_PDF_CACHE_CAPACITY = capacity
