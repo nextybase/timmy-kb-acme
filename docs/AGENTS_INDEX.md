@@ -57,6 +57,7 @@ In sintesi: policy **qui**, override **nei loro AGENTS**, e l’agente lavora *o
 - Pipeline Core: `src/pipeline/AGENTS.md`
 - Semantica: `src/semantic/AGENTS.md`
 - UI (Streamlit): `src/ui/AGENTS.md`
+- UI (Streamlit): `src/ui/pages/AGENTS.md`
 - Test: `tests/AGENTS.md`
 - Documentazione: `docs/AGENTS.md`
 - Radice progetto: `AGENTS.md`
