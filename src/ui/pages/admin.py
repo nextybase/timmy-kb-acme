@@ -6,9 +6,13 @@ import base64
 import hashlib
 import json
 import secrets
+import shutil
+import socket
+import subprocess
 import time
 from functools import lru_cache
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
@@ -19,17 +23,18 @@ st = get_streamlit()
 from google.auth.transport import requests as greq
 from google.oauth2 import id_token
 
-from pipeline.env_utils import get_env_var
+from pipeline.env_utils import get_bool, get_env_var
 from pipeline.exceptions import ConfigError
 
 # Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
-from ui.pages.registry import PagePaths
 
 # ---------- Chrome coerente ----------
 # L'entrypoint imposta page_config; qui solo header+sidebar come in home.py
 header(None)
 sidebar(None)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - endpoint pubblico OAuth2
@@ -154,6 +159,160 @@ def _enforce_session_ttl() -> Optional[Dict[str, Any]]:
     return cast(Dict[str, Any], user)
 
 
+# ---------- Osservabilita (Admin) ----------
+def _docker_ready() -> bool:
+    """True se Docker CLI  presente e l'engine risponde."""
+    docker_exe = shutil.which("docker")
+    if not docker_exe:
+        return False
+    try:
+        subprocess.run(  # noqa: S603
+            [docker_exe, "info"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=5,
+        )  # noqa: S603,S607
+        return True
+    except Exception:
+        return False
+
+
+def _port_in_use(port: int) -> bool:
+    """True se localhost:port  aperta."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            return sock.connect_ex(("127.0.0.1", port)) == 0
+    except Exception:
+        return False
+
+
+def _start_observability_stack() -> tuple[bool, str]:
+    """Avvia Loki+Promtail+Grafana via docker compose usando il .env in root."""
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        return False, f"File .env non trovato in {env_path}"
+    compose_cmd = [
+        "docker",
+        "compose",
+        "--env-file",
+        str(env_path),
+        "-f",
+        str(REPO_ROOT / "observability" / "docker-compose.yaml"),
+        "up",
+        "-d",
+    ]
+    try:
+        result = subprocess.run(  # noqa: S603
+            compose_cmd,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )  # noqa: S603,S607
+        if result.returncode == 0:
+            return True, "Stack osservabilitààààààà avviato."
+        return False, result.stderr.strip() or "Compose non riuscito."
+    except subprocess.TimeoutExpired:
+        return False, "Timeout avvio docker compose (120s)."
+    except Exception as exc:
+        return False, f"Errore avvio compose: {exc}"
+
+
+def _stop_observability_stack() -> tuple[bool, str]:
+    """Ferma lo stack osservabilitààààààà (docker compose down)."""
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        return False, f"File .env non trovato in {env_path}"
+    compose_cmd = [
+        "docker",
+        "compose",
+        "--env-file",
+        str(env_path),
+        "-f",
+        str(REPO_ROOT / "observability" / "docker-compose.yaml"),
+        "down",
+    ]
+    try:
+        result = subprocess.run(  # noqa: S603
+            compose_cmd,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )  # noqa: S603,S607
+        if result.returncode == 0:
+            return True, "Stack osservabilitààààààà arrestato."
+        return False, result.stderr.strip() or "Compose down non riuscito."
+    except subprocess.TimeoutExpired:
+        return False, "Timeout durante docker compose down (120s)."
+    except Exception as exc:
+        return False, f"Errore arresto compose: {exc}"
+
+
+def _render_admin_panel() -> None:
+    st.subheader("Amministrazione")
+    st.caption("Controlli stack osservabilità (Loki + Promtail + Grafana)")
+    divider = getattr(st, "divider", None)
+    if callable(divider):
+        divider()
+
+    docker_ok = _docker_ready()
+    if not docker_ok:
+        st.warning("Docker non risulta attivo. Avvialo per usare Grafana.")
+
+    grafana_live = _port_in_use(3000)
+    expected_running = bool(st.session_state.get("obs_expected_running", False))
+    display_running = expected_running or grafana_live
+
+    col_start, col_stop = st.columns(2)
+
+    with col_start:
+        if st.button(
+            "Avvia stack Grafana (Loki+Promtail)",
+            key="btn_obs_start",
+            disabled=not docker_ok,
+            help="Esegue: docker compose --env-file ./.env -f observability/docker-compose.yaml up -d",
+        ):
+            ok, msg = _start_observability_stack()
+            if ok:
+                st.success(msg)
+                st.session_state["obs_expected_running"] = True
+                expected_running = True
+                display_running = True
+            else:
+                st.error(msg)
+
+    with col_stop:
+        if st.button(
+            "Arresta stack Grafana (docker compose down)",
+            key="btn_obs_stop",
+            disabled=not display_running,
+            help="Esegue: docker compose --env-file ./.env -f observability/docker-compose.yaml down",
+        ):
+            ok, msg = _stop_observability_stack()
+            if ok:
+                st.success(msg)
+                st.session_state["obs_expected_running"] = False
+                expected_running = False
+                display_running = False
+                grafana_live = False
+            else:
+                st.error(msg)
+
+    st.link_button(
+        "Apri Grafana (localhost:3000)",
+        url="http://localhost:3000",
+        disabled=not grafana_live,
+        help="Si abilita quando Grafana risponde sulla porta 3000.",
+    )
+
+    if expected_running and not grafana_live:
+        st.info("Stack avviato: attendo risposta di Grafana su http://localhost:3000 ...")
+
+
 def _handle_oauth_callback(code: Optional[str], state: Optional[str]) -> None:
     if not code:
         return
@@ -183,7 +342,7 @@ def _handle_oauth_callback(code: Optional[str], state: Optional[str]) -> None:
         "exp": now + SESSION_TTL_SECONDS,
     }
     st.success(f"Accesso effettuato: {idinfo.get('email')}")
-    st.page_link(PagePaths.HOME, label="Vai alla Home", icon="\U0001F3E0")
+    _render_admin_panel()
     st.stop()
 
 
@@ -206,8 +365,8 @@ if not cfg["client_id"] or not cfg["redirect_uri"]:
 else:
     user = _enforce_session_ttl()
     if user:
-        st.success(f"Accesso gia' attivo: {user.get('email')}")
-        st.page_link(PagePaths.HOME, label="Vai alla Home", icon="\U0001F3E0")
+        st.success(f"Accesso gi attivo: {user.get('email')}")
+        _render_admin_panel()
         st.stop()
 
     _ensure_session()
@@ -220,6 +379,18 @@ else:
     # Schermata iniziale
     login_url = _build_auth_url(st.session_state["oauth_state"], st.session_state["oauth_nonce"])
     st.link_button("Accedi con Google", login_url, width="stretch")
+
+    # Modalit locale opzionale: espone il pannello anche senza login
+    try:
+        if get_bool("ADMIN_LOCAL_MODE", default=False):
+            st.info(
+                "Modalit locale attiva (ADMIN_LOCAL_MODE=1): pannello osservabilitààààààà disponibile senza login. "
+                "Ricorda di valorizzare le credenziali Grafana in `.env`."
+            )
+            _render_admin_panel()
+            st.stop()
+    except Exception:
+        pass
 
     with st.expander("Diagnostica (locale)"):
         st.code(

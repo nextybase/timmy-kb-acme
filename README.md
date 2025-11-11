@@ -75,13 +75,12 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ### Observability stack (Loki + Grafana + Promtail)
 - Compose file in `observability/docker-compose.yaml` con Loki, Promtail e Grafana; la configurazione Promtail (file `observability/promtail-config.yaml`) legge `output/timmy-kb-*/logs/*.log` e `.timmykb/logs/*.log`.
-- Le righe structured `slug=… run_id=… event=…` vengono esposte come label Loki (`slug`, `run_id`, `event`), pronte per dashboard e alert.
-- Avvio rapido:
+- Le righe structured `slug=... run_id=... event=...` vengono esposte come label Loki (`slug`, `run_id`, `event`), pronte per dashboard e alert.
+- Avvio rapido (usa il `.env` in **root**):
   ```bash
-  cd observability
-  docker compose up -d
+  docker compose --env-file ./.env -f observability/docker-compose.yaml up -d
   ```
-  Grafana � disponibile su `http://localhost:3000` (utente `admin`, password default `admin`, cambiabile via `GF_SECURITY_ADMIN_PASSWORD`); Loki risponde su `http://localhost:3100`.
-- Personalizza i bind `./promtail-config.yaml`, `../output`, `../.timmykb/logs` in base al tuo filesystem locale. Spegni con `docker compose down`.
+  Grafana è su `http://localhost:3000` (utente `admin`; password letta da `GRAFANA_ADMIN_PASSWORD` nel `.env` di root, con fallback `admin`); Loki risponde su `http://localhost:3100`.
+- Personalizza i bind `./promtail-config.yaml`, `output` e `.timmykb/logs` in base al tuo filesystem locale. Spegni con `docker compose down`.
 
 Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user_guide.md) e della [Developer Guide](docs/developer_guide.md).
