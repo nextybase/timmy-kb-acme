@@ -18,14 +18,24 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     settings = Settings.load(repo_root, logger=log, slug="ci")
     ctx = ensure_oidc_context(settings, logger=log)
+    cfg = settings.as_dict() if hasattr(settings, "as_dict") else {}
+    oidc_cfg = (cfg.get("security") or {}).get("oidc") or {}
+    ci_required = bool(oidc_cfg.get("ci_required"))
     log.info(
         "ci.oidc_probe.done",
         extra={
             "enabled": ctx["enabled"],
             "provider": ctx["provider"],
             "has_token": ctx["has_token"],
+            "ci_required": ci_required,
         },
     )
+    if ci_required and not ctx["has_token"]:
+        log.error(
+            "ci.oidc_probe.missing_token",
+            extra={"enabled": ctx["enabled"], "provider": ctx["provider"]},
+        )
+        return 1
     return 0
 
 

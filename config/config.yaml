@@ -34,3 +34,4 @@ security:
     role_env: GITHUB_OIDC_ROLE
     token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
     token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN
+    ci_required: false
