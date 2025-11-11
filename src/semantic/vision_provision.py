@@ -11,22 +11,29 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
-from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var, get_int
+from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.settings import Settings
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
 # Logger strutturato di modulo
 EVENT = "semantic.vision"
 LOG_FILE_NAME = "semantic.vision.log"
+
+
+def _evt(suffix: str) -> str:
+    return EVENT + "." + suffix
+
+
 LOGGER = get_structured_logger(EVENT)
-IMPORT_LOGGER = get_structured_logger(f"{EVENT}.imports")
+IMPORT_LOGGER = get_structured_logger(_evt("imports"))
 
 make_openai_client = import_from_candidates(
     [
@@ -131,9 +138,95 @@ _HEADER_RE = re.compile(rf"(?im)^(?P<h>({'|'.join(_all_variants)}))\s*:?\s*$")
 _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
 
 
-def _snapshot_retention_days() -> int:
-    value = cast(int, get_int("VISION_SNAPSHOT_RETENTION_DAYS", default=_SNAPSHOT_RETENTION_DAYS_DEFAULT))
-    return max(0, value)
+def _extract_context_settings(ctx: Any) -> tuple[Optional[Settings], Dict[str, Any]]:
+    raw = getattr(ctx, "settings", None)
+    if isinstance(raw, Settings):
+        try:
+            return raw, raw.as_dict()
+        except Exception:
+            return raw, {}
+    if isinstance(raw, Mapping):
+        try:
+            return None, dict(raw)
+        except Exception:
+            return None, {}
+    as_dict = getattr(raw, "as_dict", None)
+    if callable(as_dict):
+        try:
+            data = as_dict()
+            if isinstance(data, Mapping):
+                return None, dict(data)
+        except Exception:
+            pass
+    return None, {}
+
+
+def _resolve_vision_engine(ctx: Any) -> str:
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    if isinstance(settings_obj, Settings):
+        try:
+            value = settings_obj.vision_engine or "assistants"
+        except Exception:
+            value = "assistants"
+        return str(value)
+    vision_cfg = settings_payload.get("vision")
+    if isinstance(vision_cfg, Mapping):
+        raw = vision_cfg.get("engine")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return "assistants"
+
+
+def _resolve_assistant_env(ctx: Any) -> str:
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    default_env = "OBNEXT_ASSISTANT_ID"
+    if isinstance(settings_obj, Settings):
+        candidate = settings_obj.vision_assistant_env
+        return candidate.strip() if isinstance(candidate, str) and candidate.strip() else default_env
+    vision_cfg = settings_payload.get("vision")
+    if isinstance(vision_cfg, Mapping):
+        candidate = str(vision_cfg.get("assistant_id_env") or "").strip()
+        if candidate:
+            return str(candidate)
+    return default_env
+
+
+def _resolve_snapshot_retention_days(ctx: Any) -> int:
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    slug = getattr(ctx, "slug", None)
+    fallback = _SNAPSHOT_RETENTION_DAYS_DEFAULT
+
+    def _warn_and_default(reason: str, value: Any) -> int:
+        try:
+            LOGGER.warning(
+                _evt("retention.warning"),
+                extra={"slug": slug, "reason": reason, "value": value},
+            )
+        except Exception:
+            pass
+        return fallback
+
+    value: Optional[int] = None
+    if isinstance(settings_obj, Settings):
+        try:
+            value = int(settings_obj.vision_snapshot_retention_days)
+        except (TypeError, ValueError):
+            return _warn_and_default("invalid_type", getattr(settings_obj, "vision_snapshot_retention_days", None))
+    else:
+        vision_cfg = settings_payload.get("vision")
+        if isinstance(vision_cfg, Mapping):
+            raw_value = vision_cfg.get("snapshot_retention_days")
+            if raw_value is not None:
+                try:
+                    value = int(raw_value)
+                except (TypeError, ValueError):
+                    return _warn_and_default("invalid_type", raw_value)
+
+    if value is None:
+        return fallback
+    if value <= 0:
+        return _warn_and_default("non_positive", value)
+    return value
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -188,7 +281,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
         import fitz
     except Exception as exc:  # pragma: no cover
         logger.warning(
-            f"{EVENT}.extract_failed",
+            _evt("extract_failed"),
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "dependency-missing"},
         )
         raise ConfigError(
@@ -204,7 +297,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
                 texts.append(page.get_text("text"))
     except Exception as exc:
         logger.warning(
-            f"{EVENT}.extract_failed",
+            _evt("extract_failed"),
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
         )
         raise ConfigError(
@@ -216,7 +309,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
     snapshot = "\n".join(texts).strip()
     if not snapshot:
         logger.info(
-            f"{EVENT}.extract_failed",
+            _evt("extract_failed"),
             extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"},
         )
         raise ConfigError(
@@ -254,6 +347,7 @@ class _VisionPrepared:
     use_kb: bool
     client: Any
     paths: _Paths
+    engine: str
 
 
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
@@ -314,104 +408,31 @@ def _call_assistant_json(
     strict_output: bool = True,
     run_instructions: Optional[str] = None,
     use_kb: bool = True,
+    engine: str = "assistants",
 ) -> Dict[str, Any]:
-    """
-    Invoca l'Assistant preconfigurato usando Threads/Runs con Structured Outputs (JSON Schema).
-    - Usa File Search se abilitato (VISION_USE_KB=1, default) forzando tool_choice=file_search.
-    - Restituisce il payload JSON già parsato.
-    """
-    LOGGER.debug(f"{EVENT}.create_thread", extra={"assistant_id": assistant_id})
+    """Instrada l'esecuzione Vision verso l'engine richiesto (assistants o responses)."""
+    use_structured = _determine_structured_output(client, assistant_id, strict_output)
+    response_format = _build_response_format(use_structured)
+    normalized_engine = (engine or "assistants").strip().lower()
 
-    # Recupero modello assistant per capire se supporta response_format=json_schema
-    try:
-        asst = client.beta.assistants.retrieve(assistant_id)
-        asst_model = getattr(asst, "model", "") or ""
-    except Exception as exc:  # pragma: no cover - diagnostico best effort
-        LOGGER.warning(f"{EVENT}.assistant_retrieve_failed", extra={"assistant_id": assistant_id, "error": str(exc)})
-        asst_model = ""
+    if normalized_engine.startswith("responses"):
+        return _call_responses_json(
+            client=client,
+            assistant_id=assistant_id,
+            user_messages=user_messages,
+            run_instructions=run_instructions,
+            use_kb=use_kb,
+            response_format=response_format,
+        )
 
-    use_structured = bool(strict_output) and ("gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model)
-
-    thread = client.beta.threads.create()
-
-    for msg in user_messages:
-        client.beta.threads.messages.create(thread_id=thread.id, role="user", content=msg["content"])
-
-    tool_choice = {"type": "file_search"} if use_kb else "auto"
-
-    response_format = (
-        {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "VisionOutput",
-                "schema": _load_vision_schema(),
-                "strict": True,
-            },
-        }
-        if use_structured
-        else {"type": "json_object"}
-    )
-
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
+    return _call_assistants_api(
+        client=client,
         assistant_id=assistant_id,
+        user_messages=user_messages,
+        run_instructions=run_instructions,
+        use_kb=use_kb,
         response_format=response_format,
-        instructions=run_instructions or None,
-        tool_choice=tool_choice,
     )
-
-    status = getattr(run, "status", None)
-    if status != "completed":
-        extra = {
-            "assistant_id": assistant_id,
-            "run_id": getattr(run, "id", None),
-            "status": status,
-            "last_error": getattr(run, "last_error", None),
-            "incomplete_details": getattr(run, "incomplete_details", None),
-        }
-        LOGGER.error(f"{EVENT}.run_failed", extra=extra)
-        last_error = extra["last_error"] or {}
-        reason = (
-            getattr(last_error, "message", None)
-            or getattr(last_error, "code", None)
-            or str(last_error)
-            or "sconosciuto"
-        )
-        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}; reason={reason}).")
-
-    msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=10)
-
-    text = None
-    for msg in getattr(msgs, "data", []) or []:
-        if getattr(msg, "role", "") != "assistant":
-            continue
-        for part in getattr(msg, "content", None) or []:
-            t = getattr(part, "type", None)
-            if t == "output_text":
-                text = getattr(getattr(part, "text", None), "value", None)
-            elif t == "text":
-                text = getattr(getattr(part, "text", None), "value", None)
-            if text:
-                break
-        if text:
-            break
-
-    if not text:
-        LOGGER.error(f"{EVENT}.no_output_text", extra={"assistant_id": assistant_id})
-        raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
-
-    try:
-        return cast(Dict[str, Any], json.loads(text))
-    except json.JSONDecodeError as e:
-        LOGGER.error(
-            f"{EVENT}.invalid_json",
-            extra={
-                "assistant_id": assistant_id,
-                "error": str(e),
-                "sample": (text[:500] if isinstance(text, str) else None),
-            },
-        )
-        raise ConfigError(f"Assistant: risposta non JSON: {e}") from e
 
 
 def _validate_json_payload(data: Dict[str, Any], *, expected_slug: Optional[str] = None) -> None:
@@ -525,13 +546,9 @@ def _prepare_payload(
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     client = make_openai_client()
+    engine = _resolve_vision_engine(ctx)
 
-    vision_cfg: Dict[str, Any] = {}
-    try:
-        vision_cfg = (getattr(ctx, "settings", {}) or {}).get("vision", {}) or {}
-    except Exception:
-        vision_cfg = {}
-    env_name = str(vision_cfg.get("assistant_id_env") or "OBNEXT_ASSISTANT_ID").strip() or "OBNEXT_ASSISTANT_ID"
+    env_name = _resolve_assistant_env(ctx)
     assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
     if not assistant_id:
         raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
@@ -567,6 +584,7 @@ def _prepare_payload(
         use_kb=use_kb,
         client=client,
         paths=paths,
+        engine=engine,
     )
 
 
@@ -578,6 +596,7 @@ def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
         strict_output=True,
         run_instructions=prepared.run_instructions,
         use_kb=prepared.use_kb,
+        engine=prepared.engine,
     )
 
 
@@ -585,6 +604,9 @@ def _persist_outputs(
     prepared: _VisionPrepared,
     payload: Dict[str, Any],
     logger: "logging.Logger",
+    *,
+    retention_days: int,
+    engine: str,
 ) -> Dict[str, Any]:
     slug = prepared.slug
     _validate_json_payload(payload, expected_slug=slug)
@@ -599,7 +621,7 @@ def _persist_outputs(
 
     lint_warnings = _lint_vision_payload(payload)
     for warning in lint_warnings:
-        logger.warning(f"{EVENT}.lint", extra={"slug": slug, "warning": warning})
+        logger.warning(_evt("lint"), extra={"slug": slug, "warning": warning})
 
     mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
@@ -619,7 +641,7 @@ def _persist_outputs(
         "slug": slug,
         "client_hash": hash_identifier(prepared.display_name),
         "pdf_hash": sha256_path(prepared.safe_pdf),
-        "vision_engine": "assistant-inline",
+        "vision_engine": engine or "assistants",
         "input_mode": "inline-only",
         "strict_output": True,
         "yaml_paths": mask_paths(prepared.paths.mapping_yaml, prepared.paths.cartelle_yaml),
@@ -630,15 +652,14 @@ def _persist_outputs(
         "lint_warnings": lint_warnings,
     }
     _write_audit_line(prepared.paths.base_dir, record)
-    logger.info(f"{EVENT}.completed", extra=record)
+    logger.info(_evt("completed"), extra=record)
 
-    retention_days = _snapshot_retention_days()
     if retention_days > 0:
         try:
             purge_old_artifacts(prepared.paths.base_dir, retention_days)
         except Exception as exc:  # pragma: no cover
             logger.warning(
-                f"{EVENT}.retention.failed",
+                _evt("retention.failed"),
                 extra={"slug": slug, "error": str(exc), "days": retention_days},
             )
 
@@ -676,4 +697,183 @@ def provision_from_vision(
     if response.get("status") == "halt":
         raise HaltError(response.get("message_ui", "Vision insufficiente"), response.get("missing", {}))
 
-    return _persist_outputs(prepared, response, logger)
+    retention_days = _resolve_snapshot_retention_days(ctx)
+    return _persist_outputs(
+        prepared,
+        response,
+        logger,
+        retention_days=retention_days,
+        engine=prepared.engine,
+    )
+
+
+def _determine_structured_output(client: Any, assistant_id: str, strict_output: bool) -> bool:
+    """Stabilisce se usare JSON Schema in base al modello dell'assistente."""
+    if not strict_output:
+        return False
+    try:
+        asst = client.beta.assistants.retrieve(assistant_id)
+        asst_model = getattr(asst, "model", "") or ""
+    except Exception as exc:  # pragma: no cover - diagnostico best effort
+        LOGGER.warning(
+            _evt("assistant_retrieve_failed"),
+            extra={"assistant_id": assistant_id, "error": str(exc)},
+        )
+        return False
+    return "gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model
+
+
+def _build_response_format(use_structured: bool) -> Dict[str, Any]:
+    if not use_structured:
+        return {"type": "json_object"}
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "VisionOutput",
+            "schema": _load_vision_schema(),
+            "strict": True,
+        },
+    }
+
+
+def _call_assistants_api(
+    *,
+    client: Any,
+    assistant_id: str,
+    user_messages: List[Dict[str, str]],
+    run_instructions: Optional[str],
+    use_kb: bool,
+    response_format: Dict[str, Any],
+) -> Dict[str, Any]:
+    LOGGER.debug(_evt("create_thread"), extra={"assistant_id": assistant_id})
+    thread = client.beta.threads.create()
+
+    for msg in user_messages:
+        role = (msg.get("role") or "user").strip() or "user"
+        content = str(msg.get("content") or "")
+        client.beta.threads.messages.create(thread_id=thread.id, role=role, content=content)
+
+    tool_choice = {"type": "file_search"} if use_kb else "auto"
+
+    run = client.beta.threads.runs.create_and_poll(
+        thread_id=thread.id,
+        assistant_id=assistant_id,
+        response_format=response_format,
+        instructions=run_instructions or None,
+        tool_choice=tool_choice,
+    )
+
+    status = getattr(run, "status", None)
+    if status != "completed":
+        extra = {
+            "assistant_id": assistant_id,
+            "run_id": getattr(run, "id", None),
+            "status": status,
+            "last_error": getattr(run, "last_error", None),
+            "incomplete_details": getattr(run, "incomplete_details", None),
+        }
+        LOGGER.error(_evt("run_failed"), extra=extra)
+        last_error = extra["last_error"] or {}
+        reason = (
+            getattr(last_error, "message", None)
+            or getattr(last_error, "code", None)
+            or str(last_error)
+            or "sconosciuto"
+        )
+        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}; reason={reason}).")
+
+    msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=10)
+
+    text = None
+    for msg in getattr(msgs, "data", []) or []:
+        if getattr(msg, "role", "") != "assistant":
+            continue
+        for part in getattr(msg, "content", None) or []:
+            t = getattr(part, "type", None)
+            if t == "output_text":
+                text = getattr(getattr(part, "text", None), "value", None)
+            elif t == "text":
+                text = getattr(getattr(part, "text", None), "value", None)
+            if text:
+                break
+        if text:
+            break
+
+    return _parse_json_output(text, assistant_id, source="assistants")
+
+
+def _call_responses_json(
+    *,
+    client: Any,
+    assistant_id: str,
+    user_messages: List[Dict[str, str]],
+    run_instructions: Optional[str],
+    use_kb: bool,
+    response_format: Dict[str, Any],
+) -> Dict[str, Any]:
+    LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id})
+    tool_choice: Any = {"type": "file_search"} if use_kb else "auto"
+    input_payload = [
+        {
+            "role": (msg.get("role") or "user").strip() or "user",
+            "content": str(msg.get("content") or ""),
+        }
+        for msg in user_messages
+    ]
+
+    request_kwargs: Dict[str, Any] = {
+        "assistant_id": assistant_id,
+        "input": input_payload,
+        "response_format": response_format,
+        "instructions": run_instructions or None,
+        "tool_choice": tool_choice,
+    }
+    if use_kb:
+        request_kwargs["tools"] = [{"type": "file_search"}]
+
+    try:
+        resp = client.responses.create(**request_kwargs)
+    except AttributeError as exc:  # pragma: no cover - adapter mancante
+        raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
+    except Exception as exc:
+        raise ConfigError(f"Responses API fallita: {exc}") from exc
+
+    status = getattr(resp, "status", None)
+    if status and status != "completed":
+        extra = {
+            "assistant_id": assistant_id,
+            "status": status,
+            "id": getattr(resp, "id", None),
+        }
+        LOGGER.error(_evt("responses.failed"), extra=extra)
+        raise ConfigError(f"Responses run non completato (status={status}).")
+
+    text = None
+    for item in getattr(resp, "output", []) or []:
+        if getattr(item, "type", "") == "output_text":
+            text = getattr(getattr(item, "text", None), "value", None)
+            if text:
+                break
+    if not text:
+        text = getattr(resp, "output_text", None)
+
+    return _parse_json_output(text, assistant_id, source="responses")
+
+
+def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -> Dict[str, Any]:
+    if not text:
+        LOGGER.error(_evt("no_output_text"), extra={"assistant_id": assistant_id, "source": source})
+        raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
+    try:
+        return cast(Dict[str, Any], json.loads(text))
+    except json.JSONDecodeError as exc:
+        LOGGER.error(
+            _evt("invalid_json"),
+            extra={
+                "assistant_id": assistant_id,
+                "error": str(exc),
+                "source": source,
+                "sample": (text[:500] if isinstance(text, str) else None),
+            },
+        )
+        raise ConfigError(f"Assistant: risposta non JSON: {exc}") from exc

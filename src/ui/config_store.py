@@ -38,6 +38,8 @@ MIN_CANDIDATE_LIMIT: int = 500
 MAX_CANDIDATE_LIMIT: int = 20_000
 DEFAULT_CANDIDATE_LIMIT: int = 4_000
 DEFAULT_LATENCY_BUDGET_MS: int = 0
+DEFAULT_THROTTLE_PARALLELISM: int = 1
+DEFAULT_THROTTLE_SLEEP_MS: int = 0
 
 _logger = get_structured_logger("ui.config_store")
 
@@ -56,11 +58,11 @@ def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
     Raises:
         ConfigError: se il contesto non è disponibile o il file è illeggibile.
     """
-    ctx: Any | None = None  # type: ignore[assignment]
+    ctx: Any | None = None
     try:
         if hasattr(ClientContext, "load"):
             try:
-                ctx = ClientContext.load(  # type: ignore[attr-defined]
+                ctx = ClientContext.load(
                     slug=slug,
                     interactive=False,
                     require_env=False,
@@ -184,9 +186,18 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
     else:
         section = {}
 
-    limit = _coerce_int(section.get("candidate_limit"), DEFAULT_CANDIDATE_LIMIT)
+    throttle = section.get("throttle")
+    if isinstance(throttle, dict):
+        throttle_section: dict[str, Any] = cast(dict[str, Any], throttle)
+    else:
+        throttle_section = {}
+
+    limit = _coerce_int(
+        throttle_section.get("candidate_limit", section.get("candidate_limit")),
+        DEFAULT_CANDIDATE_LIMIT,
+    )
     budget_ms = _coerce_int(
-        section.get("latency_budget_ms", section.get("budget_ms")),
+        throttle_section.get("latency_budget_ms", section.get("latency_budget_ms", section.get("budget_ms"))),
         DEFAULT_LATENCY_BUDGET_MS,
     )
     auto = bool(section.get("auto_by_budget", section.get("auto", False)))
@@ -236,11 +247,17 @@ def set_retriever_settings(
     else:
         section = {}
 
-    section["candidate_limit"] = int(limit)
-    section["latency_budget_ms"] = int(budget)
-    section["budget_ms"] = int(budget)  # fallback legacy
+    throttle = section.get("throttle")
+    if isinstance(throttle, dict):
+        throttle_section: dict[str, Any] = cast(dict[str, Any], throttle)
+    else:
+        throttle_section = {}
+    throttle_section.setdefault("parallelism", DEFAULT_THROTTLE_PARALLELISM)
+    throttle_section.setdefault("sleep_ms_between_calls", DEFAULT_THROTTLE_SLEEP_MS)
+    throttle_section["candidate_limit"] = int(limit)
+    throttle_section["latency_budget_ms"] = int(budget)
+    section["throttle"] = throttle_section
     section["auto_by_budget"] = bool(auto)
-    section["auto"] = bool(auto)  # fallback legacy
     target_cfg["retriever"] = section
 
     if target_path is not None:

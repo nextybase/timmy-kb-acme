@@ -71,7 +71,7 @@ else:
             logger.warning(
                 "ui.preview.stub_log_dir_fallback",
                 extra={
-                    "message": message,
+                    "detail": message,
                     "error": str(error) if error else "",
                     "base": str(base) if base else "",
                 },

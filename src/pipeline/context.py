@@ -179,11 +179,15 @@ class ClientContext:
         # 5) Carica config cliente (yaml)
         settings = cls._load_yaml_config(repo_root, config_path, slug, _logger)
 
-        # 6) Livello log (default INFO; retro-compat da kwargs)
-        log_level = str(kwargs.get("log_level", "INFO")).upper()
+        # 6) Livello log (default dal config, override opzionale da kwargs)
+        log_level_name = _coerce_log_level_name(getattr(settings, "ops_log_level", "INFO"))
+        if "log_level" in kwargs:
+            log_level_name = _coerce_log_level_name(kwargs["log_level"])
+        log_level_value = _log_level_to_int(log_level_name)
+        cls._apply_logger_level(_logger, log_level_value)
 
         # 7) Calcola redazione log
-        redact = compute_redact_flag(env_vars, log_level)
+        redact = compute_redact_flag(env_vars, log_level_name)
 
         return cls(
             slug=slug,
@@ -204,7 +208,7 @@ class ClientContext:
             logger=_logger,
             run_id=run_id,
             stage=stage,
-            log_level=log_level,
+            log_level=log_level_name,
             redact_logs=redact,
         )
 
@@ -216,6 +220,19 @@ class ClientContext:
         if logger is not None:
             return logger
         return get_structured_logger(__name__, run_id=run_id)
+
+    @staticmethod
+    def _apply_logger_level(logger: logging.Logger, level: int) -> None:
+        """Aggiorna il livello del logger e degli handler esistenti."""
+        try:
+            logger.setLevel(level)
+        except Exception:
+            return
+        for handler in list(getattr(logger, "handlers", []) or []):
+            try:
+                handler.setLevel(level)
+            except Exception:
+                continue
 
     @staticmethod
     def _compute_repo_root_dir(slug: str, env_vars: Dict[str, Any], logger: logging.Logger) -> Path:
@@ -349,7 +366,12 @@ class ClientContext:
         """Ritorna il logger del contesto; se assente lo crea in modo lazy e coerente."""
         if self.logger:
             return self.logger
-        self.logger = get_structured_logger(__name__, context=self, run_id=self.run_id)
+        self.logger = get_structured_logger(
+            __name__,
+            context=self,
+            run_id=self.run_id,
+            level=_log_level_to_int(self.log_level),
+        )
         return self.logger
 
     def log_error(self, msg: str) -> None:
@@ -407,3 +429,35 @@ class ClientContext:
 
     def set_run_id(self, run_id: Optional[str]) -> "ClientContext":  # pragma: no cover
         return self.with_run_id(run_id)
+
+
+def _coerce_log_level(value: Any) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        level_name = value.strip().upper()
+        level = getattr(logging, level_name, None)
+        if isinstance(level, int):
+            return level
+    try:
+        return int(value)
+    except Exception:
+        return logging.INFO
+
+
+def _coerce_log_level_name(value: Any) -> str:
+    if isinstance(value, str):
+        name = value.strip().upper()
+        return name if name else "INFO"
+    try:
+        numeric = int(value)
+        return logging.getLevelName(numeric) if isinstance(logging.getLevelName(numeric), str) else "INFO"
+    except Exception:
+        return "INFO"
+
+
+def _log_level_to_int(value: str) -> int:
+    level = getattr(logging, value.upper(), None)
+    if isinstance(level, int):
+        return level
+    return logging.INFO

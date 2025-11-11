@@ -11,7 +11,7 @@ from timmykb.retriever import QueryParams, choose_limit_for_budget, with_config_
 def test_with_config_candidate_limit_precedence() -> None:
     # default params -> prende dal config
     p = QueryParams(db_path=None, project_slug="p", scope="s", query="q")
-    cfg = {"retriever": {"candidate_limit": 2000}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": 2000}}}
     out = with_config_candidate_limit(p, cfg)
     assert out.candidate_limit == 2000
     # valore esplicito diverso dal default -> non sovrascrivere
@@ -30,7 +30,12 @@ def test_choose_limit_for_budget_mapping() -> None:
 
 def test_with_config_or_budget_auto() -> None:
     p = QueryParams(db_path=None, project_slug="p", scope="s", query="q")
-    cfg = {"retriever": {"auto_by_budget": True, "latency_budget_ms": 250, "candidate_limit": 9999}}
+    cfg = {
+        "retriever": {
+            "auto_by_budget": True,
+            "throttle": {"latency_budget_ms": 250, "candidate_limit": 9999},
+        }
+    }
     out = with_config_or_budget(p, cfg)
     assert out.candidate_limit == 2000  # budget prioritario su candidate_limit
 
@@ -98,8 +103,7 @@ def test_with_config_or_budget_explicit_param_wins() -> None:
     cfg = {
         "retriever": {
             "auto_by_budget": True,
-            "latency_budget_ms": 250,
-            "candidate_limit": "6000",
+            "throttle": {"latency_budget_ms": 250, "candidate_limit": "6000"},
         }
     }
     out = with_config_or_budget(p, cfg)
@@ -109,7 +113,7 @@ def test_with_config_or_budget_explicit_param_wins() -> None:
 def test_with_config_or_budget_config_value() -> None:
     # default → prende il valore da config (anche se stringa)
     p = _typed_params()
-    cfg = {"retriever": {"candidate_limit": "6000"}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)
     assert out.candidate_limit == 6000
 

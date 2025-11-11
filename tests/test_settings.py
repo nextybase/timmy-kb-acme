@@ -20,16 +20,31 @@ def sample_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     config_path = config_dir / "config.yaml"
     config_path.write_text(
         """
+openai:
+  timeout: 60
+  max_retries: 4
+  http2_enabled: true
 vision:
-  engine: assistant
+  engine: responses
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: DUMMY_ASSISTANT_ID
+  snapshot_retention_days: 45
+  strict_output: true
 retriever:
-  candidate_limit: 2000
-  latency_budget_ms: 150
   auto_by_budget: true
+  throttle:
+    candidate_limit: 2000
+    latency_budget_ms: 150
+    parallelism: 2
+    sleep_ms_between_calls: 25
 ui:
   skip_preflight: false
+  allow_local_only: false
+  admin_local_mode: true
+ops:
+  log_level: DEBUG
+finance:
+  import_enabled: true
 """,
         encoding="utf-8",
     )
@@ -42,8 +57,18 @@ def test_settings_loads_config(sample_config: Path) -> None:
     data: Dict[str, object] = settings.as_dict()
     assert data["vision"]["model"] == "gpt-4o-mini-2024-07-18"
     assert settings.vision_model == "gpt-4o-mini-2024-07-18"
-    assert settings.vision_engine == "assistant"
+    assert settings.vision_engine == "responses"
+    assert settings.vision_snapshot_retention_days == 45
     assert settings.ui_skip_preflight is False
+    assert settings.ui_allow_local_only is False
+    assert settings.ui_admin_local_mode is True
+    assert settings.openai_settings.timeout == 60
+    assert settings.openai_settings.max_retries == 4
+    assert settings.openai_settings.http2_enabled is True
+    assert settings.retriever_throttle.candidate_limit == 2000
+    assert settings.retriever_throttle.parallelism == 2
+    assert settings.ops_log_level == "DEBUG"
+    assert settings.finance_import_enabled is True
 
 
 def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -117,10 +117,10 @@ def main() -> int:
             run_id=None,
         )
     except ConfigError as exc:
-        log.error("semantic.headless.context_load_failed", extra={"error": str(exc)}, exc_info=True)
+        log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})
         return 2
     except Exception as exc:
-        log.error("semantic.headless.context_unexpected", extra={"error": str(exc)}, exc_info=True)
+        log.exception("semantic.headless.context_unexpected", extra={"error": str(exc)})
         return 1
 
     try:
@@ -128,10 +128,10 @@ def main() -> int:
         conv = _safe_len_seq(res.get("converted"))
         enr = _safe_len_seq(res.get("enriched"))
     except ConfigError as exc:
-        log.error("semantic.headless.run_config_error", extra={"error": str(exc)}, exc_info=True)
+        log.exception("semantic.headless.run_config_error", extra={"error": str(exc)})
         return 2
     except Exception as exc:
-        log.error("semantic.headless.run_failed", extra={"error": str(exc)}, exc_info=True)
+        log.exception("semantic.headless.run_failed", extra={"error": str(exc)})
         return 1
 
     log.info("semantic.headless.completed", extra={"converted_count": conv, "enriched_count": enr})

@@ -50,7 +50,8 @@ def test_init_workspace_skips_drive_when_helper_missing(
     ) or orig_text_input(label, **kwargs)
     stub.file_uploader = lambda *_args, **_kwargs: _make_pdf_stub(b"%PDF-1.4")
 
-    monkeypatch.setenv("UI_ALLOW_LOCAL_ONLY", "true")
+    settings_stub = types.SimpleNamespace(ui_allow_local_only=True)
+    monkeypatch.setattr("pipeline.settings.Settings.load", lambda *_a, **_k: settings_stub)
     monkeypatch.setitem(sys.modules, "streamlit", stub)
     register_streamlit_runtime(monkeypatch, stub)
 

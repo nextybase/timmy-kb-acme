@@ -169,7 +169,7 @@ def _retry(
                         "attempts": attempts,
                         "retryable": retryable,
                         "exc_type": type(e).__name__,
-                        "message": str(e)[:300],
+                        "error_message": str(e)[:300],
                     },
                 )
                 raise

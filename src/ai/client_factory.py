@@ -2,10 +2,13 @@
 # src/ai/client_factory.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, Optional
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
+from pipeline.settings import Settings
 
 
 def _normalize_base_url(raw: str) -> str:
@@ -62,23 +65,19 @@ def make_openai_client():
 
     base_url_env = _optional_env("OPENAI_BASE_URL")
     project_env = _optional_env("OPENAI_PROJECT")
-    timeout_env = _optional_env("OPENAI_TIMEOUT")
-    max_retries_env = _optional_env("OPENAI_MAX_RETRIES")
+    settings_obj = _load_settings()
+    if settings_obj is not None:
+        openai_cfg = settings_obj.openai_settings
+        client_kwargs["timeout"] = float(openai_cfg.timeout)
+        client_kwargs["max_retries"] = int(openai_cfg.max_retries)
+        if openai_cfg.http2_enabled:
+            client_kwargs["http2"] = True
+        LOGGER.info("openai.client.config_from_yaml", extra={"source": "config"})
 
     if base_url_env:
         client_kwargs["base_url"] = _normalize_base_url(base_url_env)
     if project_env:
         client_kwargs["project"] = project_env
-    if timeout_env:
-        try:
-            client_kwargs["timeout"] = float(timeout_env)
-        except ValueError as exc:
-            raise ConfigError("OPENAI_TIMEOUT deve essere un numero (secondi).") from exc
-    if max_retries_env:
-        try:
-            client_kwargs["max_retries"] = int(max_retries_env)
-        except ValueError as exc:
-            raise ConfigError("OPENAI_MAX_RETRIES deve essere un intero.") from exc
 
     try:
         return OpenAI(**client_kwargs)  # type: ignore[arg-type]
@@ -86,3 +85,16 @@ def make_openai_client():
         raise ConfigError(
             "La versione del pacchetto 'openai' è troppo vecchia per questi parametri. Aggiorna a openai>=2.0."
         ) from exc
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load_settings() -> Optional[Settings]:
+    try:
+        return Settings.load(_REPO_ROOT)
+    except Exception:
+        return None
+
+
+LOGGER = get_structured_logger("ai.client_factory")

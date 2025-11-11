@@ -24,7 +24,36 @@ def _make_context(tmp_path: Path, slug: str):
     ):
         folder.mkdir(parents=True, exist_ok=True)
 
-    (base_dir / "config" / "config.yaml").write_text("client_name: Dummy", encoding="utf-8")
+    (base_dir / "config" / "config.yaml").write_text(
+        """
+client_name: Dummy
+openai:
+  timeout: 60
+  max_retries: 2
+  http2_enabled: false
+vision:
+  engine: assistants
+  model: gpt-4o-mini-2024-07-18
+  assistant_id_env: TEST_ASSISTANT_ID
+  snapshot_retention_days: 30
+retriever:
+  auto_by_budget: false
+  throttle:
+    candidate_limit: 4000
+    latency_budget_ms: 0
+    parallelism: 1
+    sleep_ms_between_calls: 0
+ui:
+  skip_preflight: true
+  allow_local_only: true
+  admin_local_mode: false
+ops:
+  log_level: INFO
+finance:
+  import_enabled: false
+""",
+        encoding="utf-8",
+    )
 
     from pipeline.context import ClientContext
 

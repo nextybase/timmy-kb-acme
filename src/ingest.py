@@ -16,14 +16,14 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 from __future__ import annotations
 
 from functools import lru_cache
-from glob import glob
+from glob import iglob
 from pathlib import Path
-from typing import Any, List, Optional, Sequence, cast
+from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError
-from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from pipeline.exceptions import ConfigError, PathTraversalError
+from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 
 # IMPORT alias: supporta sia import locale che pacchetto installato
@@ -36,6 +36,76 @@ except ImportError:
         from .kb_db import insert_chunks
 
 LOGGER = get_structured_logger("timmy_kb.ingest")
+
+_WILDCARD_CHARS = ("*", "?", "[")
+
+
+def _infer_base_dir(folder_glob: str | Path) -> Path:
+    """Ricava una directory base dal glob (prima dei wildcard)."""
+    pattern = str(folder_glob)
+    first_wildcard = len(pattern)
+    for char in _WILDCARD_CHARS:
+        idx = pattern.find(char)
+        if idx != -1:
+            first_wildcard = min(first_wildcard, idx)
+    prefix = pattern[:first_wildcard]
+    if not prefix:
+        return Path(".").resolve()
+    sep_idx = max(prefix.rfind("/"), prefix.rfind("\\"))
+    base_slice = prefix if sep_idx == -1 else prefix[: sep_idx + 1]
+    base_candidate = Path(base_slice or ".")
+    return base_candidate.resolve()
+
+
+def _iter_ingest_candidates(
+    folder_glob: str,
+    base: Path,
+    *,
+    customer: str | None,
+    scope: str,
+    on_count: Callable[[int], None] | None = None,
+) -> Iterable[Path]:
+    allowed_suffixes = {".md", ".txt"}
+    produced = 0
+    for raw in iglob(folder_glob, recursive=True):
+        p = Path(raw)
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in allowed_suffixes:
+            continue
+        try:
+            safe = ensure_within_and_resolve(base, p)
+        except PathTraversalError as exc:
+            LOGGER.warning(
+                "ingest.skip.traversal",
+                extra={
+                    "event": "ingest.skip.traversal",
+                    "file": str(p),
+                    "project": customer,
+                    "scope": scope,
+                    "error": str(exc),
+                },
+            )
+            continue
+        produced += 1
+        if on_count is not None:
+            on_count(produced)
+        yield safe
+
+
+def _batched_iterable(items: Iterable[Path], batch_size: int | None) -> Iterable[list[Path]]:
+    if batch_size is None or batch_size <= 0:
+        for item in items:
+            yield [item]
+        return
+    batch: list[Path] = []
+    for item in items:
+        batch.append(item)
+        if len(batch) >= batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
 
 
 def _read_text_file(base_dir: Path, p: Path) -> str:
@@ -52,19 +122,16 @@ def _read_text_file(base_dir: Path, p: Path) -> str:
         ) from exc
 
 
-def _is_binary(base_dir: Path, path: Path) -> bool:
+def _is_binary(path: Path) -> bool:
     try:
-        ensure_within(base_dir, path)
-        safe_p = cast(Path, ensure_within_and_resolve(base_dir, path))
-        with safe_p.open("rb") as f:
+        with path.open("rb") as f:
             chunk = f.read(1024)
-        if b"\0" in chunk:
-            return True
-        # Euristica: se troppi byte non testuali
-        text_bytes = sum(c in b"\n\r\t\f\v\b\x1b" or 32 <= c <= 126 for c in chunk)
-        return text_bytes / max(1, len(chunk)) < 0.9
     except Exception:
         return True
+    if b"\0" in chunk:
+        return True
+    text_bytes = sum(c in b"\n\r\t\f\v\b\x1b" or 32 <= c <= 126 for c in chunk)
+    return text_bytes / max(1, len(chunk)) < 0.9
 
 
 @lru_cache(maxsize=1)
@@ -138,45 +205,67 @@ def ingest_path(
 ) -> int:
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
     p = Path(path)
-    base = Path(base_dir) if base_dir is not None else p.parent
+    if base_dir is None:
+        raise ConfigError("Base directory obbligatoria per ingest_path.")
+    base = Path(base_dir).resolve()
     if not p.exists() or not p.is_file():
         LOGGER.error(
             "ingest.invalid_file",
             extra={"event": "ingest.invalid_file", "file": str(p)},
         )
         return 0
-    if _is_binary(base, p):
+    try:
+        safe_p = ensure_within_and_resolve(base, p)
+    except PathTraversalError as exc:
+        LOGGER.warning(
+            "ingest.skip.traversal",
+            extra={
+                "event": "ingest.skip.traversal",
+                "file": str(p),
+                "project": project_slug,
+                "scope": scope,
+                "error": str(exc),
+            },
+        )
+        return 0
+    if _is_binary(safe_p):
         LOGGER.info(
             "ingest.skip.binary",
             extra={"event": "ingest.skip.binary", "file": str(p)},
         )
         return 0
     text = _read_text_file(base, p)
-    chunks: List[str] = _chunk_text(text)
-    client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
-    vectors_seq = client.embed_texts(chunks)
+    slug = meta.get("slug") if isinstance(meta, dict) else None
+    with phase_scope(LOGGER, stage="ingest.embed", customer=slug) as phase_embed:
+        chunks: List[str] = _chunk_text(text)
+        phase_embed.set_artifacts(len(chunks))
+        client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
+        vectors_seq = client.embed_texts(chunks)
 
-    # Converte in List[List[float]] per compatibilità con insert_chunks
-    vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
+        # Converte in List[List[float]] per compatibilità con insert_chunks
+        vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
+        phase_embed.set_artifacts(len(vectors))
 
-    inserted = int(
-        insert_chunks(
-            project_slug=project_slug,
-            scope=scope,
-            path=str(p),
-            version=version,
-            meta_dict=meta,
-            chunks=chunks,
-            embeddings=vectors,
+    with phase_scope(LOGGER, stage="ingest.persist", customer=slug) as phase_persist:
+        inserted = int(
+            insert_chunks(
+                project_slug=project_slug,
+                scope=scope,
+                path=str(safe_p),
+                version=version,
+                meta_dict=meta,
+                chunks=chunks,
+                embeddings=vectors,
+            )
         )
-    )
+        phase_persist.set_artifacts(inserted)
     LOGGER.info(
         "ingest.file.saved",
         extra={
             "event": "ingest.file.saved",
             "project": project_slug,
             "scope": scope,
-            "file": str(p),
+            "file": str(safe_p),
             "chunks": inserted,
         },
     )
@@ -190,68 +279,117 @@ def ingest_folder(
     version: str,
     meta: dict[str, Any],
     embeddings_client: Optional[EmbeddingsClient] = None,
+    *,
+    base_dir: Optional[Path] = None,
+    max_files: Optional[int] = None,
+    batch_size: Optional[int] = None,
 ) -> dict[str, int]:
     """Ingest di tutti i file .md/.txt che corrispondono al glob indicato.
 
+    Args:
+        project_slug/scope/version/meta: parametri dominio.
+        embeddings_client: facoltativo, riuso di un client embedding.
+        base_dir: override del perimetro path-safety (default: inferito dal glob).
+        max_files: limita il numero massimo di file elaborati (None -> tutti).
+        batch_size: numero di file caricati per batch durante lo streaming (None -> 1).
+
     Restituisce un dizionario di riepilogo con i conteggi: {files, chunks}.
     """
-    files = [Path(p) for p in glob(folder_glob, recursive=True)]
-    files = [p for p in files if p.is_file() and p.suffix.lower() in {".md", ".txt"}]
-    # Short-circuit su input vuoto
-    if not files:
+    base = Path(base_dir).resolve() if base_dir is not None else _infer_base_dir(folder_glob)
+    client: EmbeddingsClient | None = embeddings_client
+
+    total_chunks = 0
+    count_files = 0
+    customer = meta.get("slug") if isinstance(meta, dict) else None
+    limit_reached = False
+
+    with phase_scope(LOGGER, stage="ingest.discover", customer=customer) as phase_discover:
+        discovered = 0
+
+        def _update(count: int) -> None:
+            nonlocal discovered
+            discovered = count
+            phase_discover.set_artifacts(count)
+
+        candidate_iter = _iter_ingest_candidates(
+            folder_glob,
+            base,
+            customer=customer,
+            scope=scope,
+            on_count=_update,
+        )
+
+        for batch in _batched_iterable(candidate_iter, batch_size):
+            for p in batch:
+                if max_files is not None and max_files >= 0 and count_files >= max_files:
+                    limit_reached = True
+                    break
+                try:
+                    with phase_scope(LOGGER, stage="ingest.process_file", customer=customer) as phase_file:
+                        if client is None:
+                            client = cast(EmbeddingsClient, OpenAIEmbeddings())
+                        n = ingest_path(
+                            project_slug=project_slug,
+                            scope=scope,
+                            path=str(p),
+                            version=version,
+                            meta=meta,
+                            embeddings_client=client,
+                            base_dir=base,
+                        )
+                        phase_file.set_artifacts(n)
+                    if n > 0:
+                        total_chunks += n
+                        count_files += 1
+                except ConfigError as exc:
+                    LOGGER.warning(
+                        "ingest.skip.config_error",
+                        extra={
+                            "event": "ingest.skip.config_error",
+                            "file": str(p),
+                            "scope": scope,
+                            "project": project_slug,
+                            "error": str(exc),
+                        },
+                    )
+                except Exception:
+                    LOGGER.exception(
+                        "ingest.error",
+                        extra={
+                            "event": "ingest.error",
+                            "file": str(p),
+                            "scope": scope,
+                            "project": project_slug,
+                        },
+                    )
+                    raise
+            if limit_reached:
+                break
+        if discovered == 0 and count_files == 0 and not limit_reached:
+            phase_discover.set_artifacts(0)
+
+    if limit_reached:
+        LOGGER.info(
+            "ingest.limit_reached",
+            extra={
+                "event": "ingest.limit_reached",
+                "project": project_slug,
+                "scope": scope,
+                "files_processed": count_files,
+                "max_files": max_files,
+            },
+        )
+    with phase_scope(LOGGER, stage="ingest.summary", customer=customer):
         LOGGER.info(
             "ingest.summary",
             extra={
                 "event": "ingest.summary",
                 "project": project_slug,
                 "scope": scope,
-                "files": 0,
-                "chunks": 0,
+                "files": count_files,
+                "chunks": total_chunks,
             },
         )
-        return {"files": 0, "chunks": 0}
-
-    # Riuso di un singolo client embeddings quando non fornito
-    client: EmbeddingsClient | None = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
-
-    total_chunks = 0
-    count_files = 0
-    for p in files:
-        try:
-            n = ingest_path(
-                project_slug=project_slug,
-                scope=scope,
-                path=str(p),
-                version=version,
-                meta=meta,
-                embeddings_client=client,
-                base_dir=p.parent,
-            )
-            if n > 0:
-                total_chunks += n
-                count_files += 1
-        except Exception as e:  # ingest robusto
-            LOGGER.exception(
-                "ingest.error",
-                extra={
-                    "event": "ingest.error",
-                    "file": str(p),
-                    "scope": scope,
-                    "project": project_slug,
-                    "error": str(e),
-                },
-            )
-            continue
-    LOGGER.info(
-        "ingest.summary",
-        extra={
-            "event": "ingest.summary",
-            "project": project_slug,
-            "scope": scope,
-            "files": count_files,
-            "chunks": total_chunks,
-        },
-    )
     return {"files": count_files, "chunks": total_chunks}
 
 

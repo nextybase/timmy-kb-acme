@@ -33,19 +33,35 @@ Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](develo
 - **SSoT:** segreti **fuori** repo in `.env`; configurazione applicativa **versionata** in `config/config.yaml`.
   Esempi e policy: [docs/configurazione.md](configurazione.md).
 
-**Esempio corretto (`config/config.yaml`):**
+**Esempio corretto (`config/config.yaml`, vedi anche `config/config.example.yaml`):**
 ```yaml
+openai:
+  timeout: 120
+  max_retries: 2
+  http2_enabled: false
 vision:
   model: gpt-4o-mini-2024-07-18
+  engine: assistants
   assistant_id_env: OBNEXT_ASSISTANT_ID
+  snapshot_retention_days: 30
 retriever:
-  candidate_limit: 3000
-  latency_budget_ms: 300
+  auto_by_budget: false
+  throttle:
+    candidate_limit: 3000
+    latency_budget_ms: 300
+    parallelism: 1
+    sleep_ms_between_calls: 0
+ui:
+  skip_preflight: true
+  allow_local_only: true
+  admin_local_mode: false
 ```
 **Regole operative**
 - Le chiamate **dirette** leggono `vision.model` (UI/CLI).
 - Il flusso **Assistant** usa l'ID letto da `vision.assistant_id_env` (ENV).
 - La UI legge il modello tramite `get_vision_model()` (SSoT).
+- Il retriever applica i limiti da `retriever.throttle.*` (candidate_limit, latency, parallelism).
+- I flag `ui.allow_local_only` e `ui.admin_local_mode` governano gating e accesso al pannello Admin.
 
 Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configurazione.md).
 
@@ -60,10 +76,13 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
   - I log cliente vivono in `output/timmy-kb-<slug>/logs/`; i log UI globali in `.timmykb/logs/`. Entrambi sono consultabili dalla pagina Streamlit **Log dashboard**.
   - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
   - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
+- **Hash & masking:** le funzioni `hash_identifier` / `sha256_path` producono digest a 32 caratteri e accettano `TIMMY_HASH_SALT` per rafforzare l'entropia dei log; `mask_id_map` resta la via raccomandata per extra sensibili.
 - **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 - **Download Drive safe-by-default:** la modale UI scarica solo i PDF mancanti; per sovrascrivere attiva il toggle *"Sovrascrivi i file locali in conflitto"* (abilitato solo se il piano rileva conflitti) oppure rimuovi/rinomina i file a mano.
 - **Preview stub log dir:** `PREVIEW_LOG_DIR` puo' indicare anche un path assoluto; se la directory non e' raggiungibile la UI avvisa e ripiega su `logs/preview` sotto il repository.
+- **Ingest telemetry:** `ingest_path` / `ingest_folder` emettono `phase_scope` (`ingest.embed`, `ingest.persist`, `ingest.process_file`, `ingest.summary`) con `artifact_count` impostato ai chunk/embedding salvati; usa questi eventi per dashboard e alerting sul flusso di ingestion.
+- **Ingest streaming:** `ingest_folder` processa i glob in streaming (`iglob`) e accetta i limiti opzionali `max_files` / `batch_size` per throttling su corpus molto grandi; sfruttali negli script di migrazione per evitare OOM.
 
 **Snippet tipici**
 ```python

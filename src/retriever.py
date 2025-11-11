@@ -21,13 +21,15 @@ Design:
 
 from __future__ import annotations
 
+import heapq
 import math
+import threading
 import time
+from contextlib import contextmanager, nullcontext
 from dataclasses import MISSING, dataclass, replace
-from heapq import nlargest
 from itertools import tee
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
@@ -59,6 +61,81 @@ class QueryParams:
     query: str
     k: int = 8
     candidate_limit: int = 4000
+
+
+@dataclass(frozen=True)
+class ThrottleSettings:
+    latency_budget_ms: int = 0
+    parallelism: int = 1
+    sleep_ms_between_calls: int = 0
+
+
+_MAX_PARALLELISM = 32
+
+
+class _ThrottleState:
+    def __init__(self, parallelism: int) -> None:
+        self.parallelism = max(1, parallelism)
+        self._semaphore = threading.BoundedSemaphore(self.parallelism)
+        self._lock = threading.Lock()
+        self._last_completed = 0.0
+
+    def acquire(self) -> None:
+        self._semaphore.acquire()
+
+    def release(self) -> None:
+        self._semaphore.release()
+
+    def wait_interval(self, sleep_ms: int) -> None:
+        if sleep_ms <= 0:
+            return
+        min_interval = sleep_ms / 1000.0
+        while True:
+            with self._lock:
+                last = self._last_completed
+            if last == 0.0:
+                return
+            elapsed = time.perf_counter() - last
+            if elapsed >= min_interval:
+                return
+            time.sleep(min(min_interval - elapsed, 0.05))
+
+    def mark_complete(self) -> None:
+        with self._lock:
+            self._last_completed = time.perf_counter()
+
+
+class _ThrottleRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._states: dict[str, _ThrottleState] = {}
+
+    def get_state(self, key: str, parallelism: int) -> _ThrottleState:
+        normalized = max(1, min(_MAX_PARALLELISM, parallelism))
+        with self._lock:
+            state = self._states.get(key)
+            if state is None or state.parallelism != normalized:
+                state = _ThrottleState(normalized)
+                self._states[key] = state
+        return state
+
+
+_THROTTLE_REGISTRY = _ThrottleRegistry()
+
+
+@contextmanager
+def _throttle_guard(key: str, settings: Optional[ThrottleSettings]):
+    if settings is None:
+        yield
+        return
+    state = _THROTTLE_REGISTRY.get_state(key, settings.parallelism)
+    state.acquire()
+    try:
+        state.wait_interval(settings.sleep_ms_between_calls)
+        yield
+    finally:
+        state.mark_complete()
+        state.release()
 
 
 # --------------------------- SSoT per il default limite ---------------------------
@@ -270,33 +347,6 @@ def _coerce_candidate_vector(
     return v
 
 
-def _score_candidates(
-    qv: Sequence[float],
-    cands: Sequence[dict[str, Any]],
-    *,
-    stats: dict[str, int] | None = None,
-) -> Iterable[tuple[dict[str, Any], int]]:
-    """Produce coppie (item_dict, idx) con score coseno e indice per tie-break.
-
-    L'item_dict ha le chiavi: content, meta, score (float). Il tie-break deterministico
-    usa l'indice di enumerazione (idx ascendente).
-    """
-    for idx, c in enumerate(cands):
-        v = _coerce_candidate_vector(c.get("embedding"), idx=idx, stats=stats)
-        if v is None:
-            continue
-        # v è [] o una lista di float valida
-        sim = cosine(qv, v)
-        yield (
-            {
-                "content": c["content"],
-                "meta": c.get("meta", {}),
-                "score": float(sim),
-            },
-            idx,
-        )
-
-
 def _materialize_query_vector(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
@@ -337,24 +387,55 @@ def _rank_candidates(
     query_vector: Sequence[float],
     candidates: Sequence[dict[str, Any]],
     k: int,
-) -> tuple[list[dict[str, Any]], int, dict[str, int], float]:
-    """Restituisce (risultati, numero_candidati, stats, ms)."""
+    *,
+    deadline: Optional[float] = None,
+) -> tuple[list[dict[str, Any]], int, dict[str, int], float, int, bool]:
+    """Restituisce (risultati, n_candidati_tot, stats, ms, valutati, budget_hit)."""
     stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
     total_candidates = len(candidates)
+    evaluated = 0
+    budget_hit = False
     t0 = time.time()
-    scored_iter = _score_candidates(query_vector, candidates, stats=stats)
     top_k = max(0, int(k))
-    if top_k == 0 or total_candidates == 0:
-        results: list[dict[str, Any]] = []
-    else:
+    results: list[dict[str, Any]] = []
+
+    if top_k > 0 and total_candidates > 0:
         if top_k >= total_candidates:
-            scored_sorted = sorted(scored_iter, key=lambda t: (-t[0]["score"], t[1]))
-            results = [item for item, _ in scored_sorted]
+            scored: list[tuple[float, int, dict[str, Any]]] = []
+            for idx, cand in enumerate(candidates):
+                if _deadline_exceeded(deadline):
+                    budget_hit = True
+                    break
+                vec = _coerce_candidate_vector(cand.get("embedding"), idx=idx, stats=stats)
+                if vec is None:
+                    continue
+                evaluated += 1
+                score = float(cosine(query_vector, vec))
+                scored.append((score, idx, {"content": cand["content"], "meta": cand.get("meta", {}), "score": score}))
+            scored.sort(key=lambda t: (-t[0], t[1]))
+            results = [item for _, _, item in scored[:top_k]]
         else:
-            topk = nlargest(top_k, scored_iter, key=lambda t: (t[0]["score"], -t[1]))
-            results = [item for item, _ in sorted(topk, key=lambda t: (-t[0]["score"], t[1]))]
+            heap: list[tuple[tuple[float, int], dict[str, Any]]] = []
+            for idx, cand in enumerate(candidates):
+                if _deadline_exceeded(deadline):
+                    budget_hit = True
+                    break
+                vec = _coerce_candidate_vector(cand.get("embedding"), idx=idx, stats=stats)
+                if vec is None:
+                    continue
+                evaluated += 1
+                score = float(cosine(query_vector, vec))
+                item = {"content": cand["content"], "meta": cand.get("meta", {}), "score": score}
+                key = (score, idx)
+                if len(heap) < top_k:
+                    heapq.heappush(heap, (key, item))
+                else:
+                    if key > heap[0][0]:
+                        heapq.heapreplace(heap, (key, item))
+            results = [item for _, item in sorted(heap, key=lambda t: (-t[0][0], t[0][1]))]
+
     elapsed_ms = (time.time() - t0) * 1000.0
-    return results, total_candidates, stats, elapsed_ms
+    return results, total_candidates, stats, elapsed_ms, evaluated, budget_hit
 
 
 # ---------------- Wrapper pubblico per calibrazione candidate_limit -------------
@@ -406,6 +487,8 @@ def search(
     *,
     authorizer: Callable[[QueryParams], None] | None = None,
     throttle_check: Callable[[QueryParams], None] | None = None,
+    throttle: Optional[ThrottleSettings] = None,
+    throttle_key: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
@@ -426,95 +509,232 @@ def search(
     - Distingue batch di vettori da vettore singolo, evitando doppi wrapping.
     - Se batch/vettore è vuoto: warning e `[]`.
     """
-    _validate_params(params)
-    if authorizer is not None:
-        authorizer(params)
-    if throttle_check is not None:
-        throttle_check(params)
-
-    # Soft-fail per input non utili
-    if params.k == 0:
-        return []
-    if not params.query.strip():
-        LOGGER.warning(
-            "retriever.query.invalid",
-            extra={
-                "project_slug": params.project_slug,
-                "scope": params.scope,
-                "reason": "empty_query",
-            },
-        )
-        return []
-    if params.candidate_limit == 0:
-        return []
-
-    t_total_start = time.time()
-
-    # 1) Embedding della query
-    query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
-    if query_vector is None:
-        return []
-
-    # 2) Caricamento candidati dal DB
-    candidates, t_fetch_ms = _load_candidates(params)
-
-    # 3) Scoring + ranking deterministico
-    scored_items, candidates_count, coerce_stats, t_score_sort_ms = _rank_candidates(
-        query_vector,
-        candidates,
-        params.k,
+    throttle_cfg = _normalize_throttle_settings(throttle)
+    throttle_ctx = (
+        _throttle_guard(throttle_key or params.project_slug or "retriever", throttle_cfg)
+        if throttle_cfg
+        else nullcontext()
     )
 
-    total_ms = (time.time() - t_total_start) * 1000.0
+    with throttle_ctx:
+        _validate_params(params)
+        if authorizer is not None:
+            authorizer(params)
+        if throttle_check is not None:
+            throttle_check(params)
 
-    # Logging metriche (campi chiave + timing + coerce)
-    try:
-        LOGGER.info(
-            "retriever.metrics",
-            extra={
-                "project_slug": params.project_slug,
-                "scope": params.scope,
-                "k": int(params.k),
-                "candidate_limit": int(params.candidate_limit),
-                "candidates": int(candidates_count),
-                "ms": {
-                    "total": float(total_ms),
-                    "embed": float(t_emb_ms),
-                    "fetch": float(t_fetch_ms),
-                    "score_sort": float(t_score_sort_ms),
+        # Soft-fail per input non utili
+        if params.k == 0:
+            return []
+        if not params.query.strip():
+            LOGGER.warning(
+                "retriever.query.invalid",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "reason": "empty_query",
                 },
-                "coerce": {
-                    "short": int(coerce_stats.get("short", 0)),
-                    "normalized": int(coerce_stats.get("normalized", 0)),
-                    "skipped": int(coerce_stats.get("skipped", 0)),
+            )
+            return []
+        if params.candidate_limit == 0:
+            return []
+
+        deadline = _deadline_from_settings(throttle_cfg)
+        budget_hit = False
+
+        t_total_start = time.time()
+
+        # 1) Embedding della query
+        query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
+        if query_vector is None:
+            return []
+        if _deadline_exceeded(deadline):
+            LOGGER.warning(
+                "retriever.latency_budget.hit",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "stage": "embedding",
                 },
-            },
-        )
-    except Exception:
-        # Fallback di logging compatibile (solo messaggio)
-        LOGGER.info(
-            ("search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms fetch=%.1fms score+sort=%.1fms"),
-            params.k,
+            )
+            return []
+
+        # 2) Caricamento candidati dal DB
+        candidates, t_fetch_ms = _load_candidates(params)
+        if _deadline_exceeded(deadline):
+            LOGGER.warning(
+                "retriever.latency_budget.hit",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "stage": "fetch_candidates",
+                },
+            )
+            return []
+
+        # 3) Scoring + ranking deterministico
+        (
+            scored_items,
             candidates_count,
-            params.candidate_limit,
-            total_ms,
-            t_emb_ms,
-            t_fetch_ms,
+            coerce_stats,
             t_score_sort_ms,
+            evaluated_count,
+            rank_budget_hit,
+        ) = _rank_candidates(
+            query_vector,
+            candidates,
+            params.k,
+            deadline=deadline,
         )
-    return scored_items
+        budget_hit = rank_budget_hit
+        total_ms = (time.time() - t_total_start) * 1000.0
+
+        # Logging metriche (campi chiave + timing + coerce)
+        try:
+            LOGGER.info(
+                "retriever.metrics",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "k": int(params.k),
+                    "candidate_limit": int(params.candidate_limit),
+                    "candidates": int(candidates_count),
+                    "evaluated": int(evaluated_count),
+                    "ms": {
+                        "total": float(total_ms),
+                        "embed": float(t_emb_ms),
+                        "fetch": float(t_fetch_ms),
+                        "score_sort": float(t_score_sort_ms),
+                    },
+                    "coerce": {
+                        "short": int(coerce_stats.get("short", 0)),
+                        "normalized": int(coerce_stats.get("normalized", 0)),
+                        "skipped": int(coerce_stats.get("skipped", 0)),
+                    },
+                },
+            )
+        except Exception:
+            LOGGER.info(
+                (
+                    "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms "
+                    "fetch=%.1fms score+sort=%.1fms evaluated=%s"
+                ),
+                params.k,
+                candidates_count,
+                params.candidate_limit,
+                total_ms,
+                t_emb_ms,
+                t_fetch_ms,
+                t_score_sort_ms,
+                evaluated_count,
+            )
+
+        if throttle_cfg:
+            try:
+                LOGGER.info(
+                    "retriever.throttle.metrics",
+                    extra={
+                        "project_slug": params.project_slug,
+                        "scope": params.scope,
+                        "throttle": {
+                            "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
+                            "parallelism": int(throttle_cfg.parallelism),
+                            "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
+                            "budget_hit": bool(budget_hit),
+                            "evaluated": int(evaluated_count),
+                        },
+                    },
+                )
+            except Exception:
+                pass
+            if budget_hit:
+                LOGGER.warning(
+                    "retriever.latency_budget.hit",
+                    extra={
+                        "project_slug": params.project_slug,
+                        "scope": params.scope,
+                        "stage": "ranking",
+                    },
+                )
+
+        return scored_items
+
+
+def _coerce_retriever_section(config: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
+    if not config:
+        return {}
+    retr = config.get("retriever")
+    if isinstance(retr, Mapping):
+        return retr
+    return {}
+
+
+def _coerce_throttle_section(retriever_section: Mapping[str, Any]) -> Mapping[str, Any]:
+    throttle = retriever_section.get("throttle")
+    if isinstance(throttle, Mapping):
+        return throttle
+    legacy: dict[str, Any] = {}
+    if "candidate_limit" in retriever_section:
+        legacy["candidate_limit"] = retriever_section["candidate_limit"]
+    if "latency_budget_ms" in retriever_section:
+        legacy["latency_budget_ms"] = retriever_section["latency_budget_ms"]
+    if "parallelism" in retriever_section:
+        legacy["parallelism"] = retriever_section["parallelism"]
+    if "sleep_ms_between_calls" in retriever_section:
+        legacy["sleep_ms_between_calls"] = retriever_section["sleep_ms_between_calls"]
+    return legacy
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _build_throttle_settings(config: Optional[Mapping[str, Any]]) -> ThrottleSettings:
+    retr = _coerce_retriever_section(config)
+    throttle = _coerce_throttle_section(retr)
+    return ThrottleSettings(
+        latency_budget_ms=_safe_int(throttle.get("latency_budget_ms"), _safe_int(retr.get("latency_budget_ms"), 0)),
+        parallelism=_safe_int(throttle.get("parallelism"), 1),
+        sleep_ms_between_calls=_safe_int(throttle.get("sleep_ms_between_calls"), 0),
+    )
+
+
+def _normalize_throttle_settings(settings: Optional[ThrottleSettings]) -> Optional[ThrottleSettings]:
+    if settings is None:
+        return None
+    normalized = ThrottleSettings(
+        latency_budget_ms=max(0, int(settings.latency_budget_ms)),
+        parallelism=max(1, min(_MAX_PARALLELISM, int(settings.parallelism))),
+        sleep_ms_between_calls=max(0, int(settings.sleep_ms_between_calls)),
+    )
+    if normalized.latency_budget_ms == 0 and normalized.parallelism == 1 and normalized.sleep_ms_between_calls == 0:
+        return None
+    return normalized
+
+
+def _deadline_from_settings(settings: Optional[ThrottleSettings]) -> Optional[float]:
+    if settings and settings.latency_budget_ms > 0:
+        return time.perf_counter() + settings.latency_budget_ms / 1000.0
+    return None
+
+
+def _deadline_exceeded(deadline: Optional[float]) -> bool:
+    return deadline is not None and time.perf_counter() >= deadline
 
 
 def with_config_candidate_limit(
     params: QueryParams,
-    config: Optional[dict[str, Any]],
+    config: Optional[Mapping[str, Any]],
 ) -> QueryParams:
     """Ritorna una copia applicando `candidate_limit` da config se opportuno.
 
     Precedenza:
       - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal
         default del dataclass), NON viene sovrascritto.
-      - Se è rimasto al default, e il config contiene `retriever.candidate_limit`
+      - Se è rimasto al default, e il config contiene `retriever.throttle.candidate_limit`
         valido (>0), viene applicato.
 
     Nota: se il chiamante imposta esplicitamente il valore uguale al default
@@ -532,10 +752,10 @@ def with_config_candidate_limit(
             pass
         return params
 
-    cfg = config or {}
+    retr = _coerce_retriever_section(config)
+    throttle = _coerce_throttle_section(retr)
+    cfg_lim_raw = throttle.get("candidate_limit")
     try:
-        retr = cfg.get("retriever") or {}
-        cfg_lim_raw = retr.get("candidate_limit")
         cfg_lim = int(cfg_lim_raw) if cfg_lim_raw is not None else None
     except Exception:
         cfg_lim = None
@@ -580,14 +800,14 @@ def choose_limit_for_budget(budget_ms: int) -> int:
     return 8000
 
 
-def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]]) -> QueryParams:
+def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any]]) -> QueryParams:
     """Applica candidate_limit da config, con supporto auto by budget se abilitato.
 
     Precedenza:
       - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
-      - Se `retriever.auto_by_budget` è true e `latency_budget_ms` > 0 ->
+      - Se `retriever.auto_by_budget` è true e `retriever.throttle.latency_budget_ms` > 0 ->
         usa choose_limit_for_budget.
-      - Altrimenti, se `retriever.candidate_limit` > 0 -> usa quello.
+      - Altrimenti, se `retriever.throttle.candidate_limit` > 0 -> usa quello.
       - Fallback: lascia il default del dataclass.
     """
     default_lim = _default_candidate_limit()
@@ -599,12 +819,11 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
             pass
         return params
 
-    cfg = config or {}
-    retr = dict(cfg.get("retriever") or {})
+    retr = _coerce_retriever_section(config)
     auto = bool(retr.get("auto_by_budget", False))
-    budget = 0
+    throttle = _coerce_throttle_section(retr)
     try:
-        budget = int(retr.get("latency_budget_ms", 0) or 0)
+        budget = int(throttle.get("latency_budget_ms", retr.get("latency_budget_ms", 0)) or 0)
     except Exception:
         budget = 0
     if auto and budget > 0:
@@ -619,7 +838,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
         return replace(params, candidate_limit=chosen)
 
     try:
-        raw = retr.get("candidate_limit")
+        raw = throttle.get("candidate_limit", retr.get("candidate_limit"))
         lim = int(raw) if raw is not None else None
     except Exception:
         lim = None
@@ -641,7 +860,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[dict[str, Any]])
 
 def search_with_config(
     params: QueryParams,
-    config: Optional[dict[str, Any]],
+    config: Optional[Mapping[str, Any]],
     embeddings_client: EmbeddingsClient,
     *,
     authorizer: Callable[[QueryParams], None] | None = None,
@@ -657,17 +876,21 @@ def search_with_config(
         results = search_with_config(params, cfg, embeddings)
     """
     effective = with_config_or_budget(params, config)
+    throttle_cfg = _normalize_throttle_settings(_build_throttle_settings(config))
+    throttle_key = f"{params.project_slug}:{params.scope}"
     return search(
         effective,
         embeddings_client,
         authorizer=authorizer,
         throttle_check=throttle_check,
+        throttle=throttle_cfg,
+        throttle_key=throttle_key,
     )
 
 
 def preview_effective_candidate_limit(
     params: QueryParams,
-    config: Optional[dict[str, Any]],
+    config: Optional[Mapping[str, Any]],
 ) -> tuple[int, str, int]:
     """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
 
@@ -681,20 +904,21 @@ def preview_effective_candidate_limit(
     if int(params.candidate_limit) != int(default_lim):
         return int(params.candidate_limit), "explicit", 0
 
-    cfg = config or {}
-    retr = dict(cfg.get("retriever") or {})
+    retr = _coerce_retriever_section(config)
     # 2) Auto by budget
     try:
         auto = bool(retr.get("auto_by_budget", False))
-        budget_ms = int(retr.get("latency_budget_ms", 0) or 0)
+        throttle = _coerce_throttle_section(retr)
+        budget_ms = int(throttle.get("latency_budget_ms", retr.get("latency_budget_ms", 0)) or 0)
     except Exception:
         auto = False
         budget_ms = 0
     if auto and budget_ms > 0:
         return choose_limit_for_budget(budget_ms), "auto_by_budget", int(budget_ms)
     # 3) Config
+    throttle = _coerce_throttle_section(retr)
     try:
-        raw = retr.get("candidate_limit")
+        raw = throttle.get("candidate_limit", retr.get("candidate_limit"))
         lim = int(raw) if raw is not None else None
     except Exception:
         lim = None

@@ -6,11 +6,13 @@
 #   (with_config_candidate_limit / with_config_or_budget / preview_effective_candidate_limit)
 
 import math
+import time
 from collections import deque
 from typing import Iterable
 
 import pytest
 
+import timmykb.retriever as retriever
 from tests.conftest import DUMMY_SLUG
 from timmykb.retriever import (
     QueryParams,
@@ -91,21 +93,21 @@ def test_with_config_candidate_limit_explicit_not_overridden():
     params = _default_params()
     # Esplicito diverso dal default => non va sovrascritto
     params = params.__class__(**{**params.__dict__, "candidate_limit": 777})
-    cfg = {"retriever": {"candidate_limit": 1234}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": 1234}}}
     out = with_config_candidate_limit(params, cfg)
     assert out.candidate_limit == 777
 
 
 def test_with_config_candidate_limit_uses_config_when_default():
     params = _default_params()  # candidate_limit rimane al default del dataclass
-    cfg = {"retriever": {"candidate_limit": 1234}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": 1234}}}
     out = with_config_candidate_limit(params, cfg)
     assert out.candidate_limit == 1234
 
 
 def test_with_config_candidate_limit_falls_back_to_default_when_cfg_missing():
     params = _default_params()
-    out = with_config_candidate_limit(params, {})  # nessun retriever.candidate_limit
+    out = with_config_candidate_limit(params, {})  # nessun retriever.throttle
     assert out.candidate_limit == 4000  # default del dataclass
 
 
@@ -115,8 +117,7 @@ def test_with_config_or_budget_explicit_wins_even_with_auto_budget():
     cfg = {
         "retriever": {
             "auto_by_budget": True,
-            "latency_budget_ms": 150,
-            "candidate_limit": 1111,
+            "throttle": {"latency_budget_ms": 150, "candidate_limit": 1111},
         }
     }
     out = with_config_or_budget(params, cfg)
@@ -134,14 +135,14 @@ def test_with_config_or_budget_explicit_wins_even_with_auto_budget():
 )
 def test_with_config_or_budget_auto_budget_thresholds(budget_ms, expected):
     params = _default_params()  # default -> eleggibile a override
-    cfg = {"retriever": {"auto_by_budget": True, "latency_budget_ms": budget_ms}}
+    cfg = {"retriever": {"auto_by_budget": True, "throttle": {"latency_budget_ms": budget_ms}}}
     out = with_config_or_budget(params, cfg)
     assert out.candidate_limit == expected
 
 
 def test_with_config_or_budget_uses_config_when_no_auto_budget():
     params = _default_params()  # default -> eleggibile a override
-    cfg = {"retriever": {"candidate_limit": 2222}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": 2222}}}
     out = with_config_or_budget(params, cfg)
     assert out.candidate_limit == 2222
 
@@ -162,13 +163,13 @@ def test_preview_effective_candidate_limit_reports_sources_correctly():
 
     # 2) auto_by_budget
     p_auto = _default_params()
-    cfg_auto = {"retriever": {"auto_by_budget": True, "latency_budget_ms": 260}}
+    cfg_auto = {"retriever": {"auto_by_budget": True, "throttle": {"latency_budget_ms": 260}}}
     lim, source, budget = preview_effective_candidate_limit(p_auto, cfg_auto)
     assert (lim, source, budget) == (2000, "auto_by_budget", 260)
 
     # 3) config
     p_cfg = _default_params()
-    cfg = {"retriever": {"candidate_limit": 3333}}
+    cfg = {"retriever": {"throttle": {"candidate_limit": 3333}}}
     lim, source, budget = preview_effective_candidate_limit(p_cfg, cfg)
     assert (lim, source, budget) == (3333, "config", 0)
 
@@ -176,3 +177,44 @@ def test_preview_effective_candidate_limit_reports_sources_correctly():
     p_def = _default_params()
     lim, source, budget = preview_effective_candidate_limit(p_def, {})
     assert (lim, source, budget) == (4000, "default", 0)
+
+
+class _DummyEmbeddingsClient:
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1, 0.2, 0.3]]
+
+
+def test_search_with_config_passes_throttle(monkeypatch: pytest.MonkeyPatch):
+    params = _default_params()
+    captured: dict[str, object] = {}
+
+    def _fake_search(*args, **kwargs):
+        captured["throttle"] = kwargs.get("throttle")
+        captured["throttle_key"] = kwargs.get("throttle_key")
+        return []
+
+    monkeypatch.setattr(retriever, "search", _fake_search)
+    cfg = {"retriever": {"throttle": {"parallelism": 3, "sleep_ms_between_calls": 25, "latency_budget_ms": 150}}}
+    retriever.search_with_config(params, cfg, _DummyEmbeddingsClient())
+
+    throttle = captured["throttle"]
+    assert throttle is not None
+    assert throttle.parallelism == 3
+    assert throttle.sleep_ms_between_calls == 25
+    assert throttle.latency_budget_ms == 150
+    assert captured["throttle_key"] == f"{params.project_slug}:{params.scope}"
+
+
+def test_rank_candidates_respects_deadline():
+    query = [1.0, 0.0]
+    candidates = [{"embedding": [1.0, 0.0], "content": f"doc-{idx}", "meta": {}} for idx in range(1000)]
+    deadline = time.perf_counter() + 0.001
+    _, total, _, _, evaluated, budget_hit = retriever._rank_candidates(  # type: ignore[attr-defined]
+        query,
+        candidates,
+        5,
+        deadline=deadline,
+    )
+    assert total == len(candidates)
+    assert budget_hit is True
+    assert evaluated <= len(candidates)

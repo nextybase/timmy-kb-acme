@@ -857,7 +857,8 @@ def build_payload(
 
 
 def emit_structure(payload: _DummyPayload | Dict[str, Any], *, stream: TextIO = sys.stdout) -> None:
-    print(json.dumps(payload, indent=2, ensure_ascii=False, default=str), file=stream)
+    stream.write(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    stream.write("\n")
 
 
 # ------------------------------------------------------------

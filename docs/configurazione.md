@@ -5,10 +5,22 @@ Si applica sia all’ambiente locale sia all’esecuzione CI (GitHub Actions).
 
 ## Single Source of Truth
 
-| Ambito | Contenuto | Esempi ammessi | Esempi vietati |
-|--------|-----------|----------------|----------------|
-| `.env` (non versionato) | **Segreti** e valori runtime sensibili. Il codice li legge tramite nomi variabile (`*_env`). `.env.example` è l’unico file versionato. | `OPENAI_API_KEY=sk-live...`<br>`SERVICE_ACCOUNT_FILE=/path/sa.json`<br>`OIDC_AUDIENCE=https://token.actions` | `vision_model=gpt-4o-mini`<br>`candidate_limit=4000` |
-| `config/config.yaml` (versionato) | **Configurazione applicativa**: modelli, limiti retriever, preferenze UI, mapping. Non contiene mai segreti. | `vision.model: gpt-4o-mini-2024-07-18`<br>`retriever.candidate_limit: 4000`<br>`ui.skip_preflight: true` | `openai_api_key: sk-...`<br>`drive_id: 1234567890`<br>`vault_token: ...` |
+| Ambito | `config/config.yaml` (SSoT non segreto) | `.env` (segreti/processo) |
+|--------|-----------------------------------------|---------------------------|
+| **OpenAI** | `openai.timeout: 120`<br>`openai.max_retries: 2`<br>`openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_API_KEY_CODEX`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
+| **Vision** | `vision.model: gpt-4o-mini-2024-07-18`<br>`vision.engine: assistants`<br>`vision.snapshot_retention_days: 30`<br>`vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID` |
+| **UI** | `ui.skip_preflight`, `ui.allow_local_only`, `ui.admin_local_mode` | — |
+| **Retriever** | `retriever.auto_by_budget`, `retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` | — |
+| **Ops / Logging** | `ops.log_level: INFO` | `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE` |
+| **Finance** | `finance.import_enabled: false` | — |
+| **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, …) | `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
+| **Runtime/Infra** | — | `PYTHONUTF8`, `PYTHONIOENCODING`, `GF_SECURITY_ADMIN_PASSWORD`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`, `LOG_REDACTION`, `LOG_PATH`, `CI`, ecc. |
+
+> **Nota:** una *deny-list* interna impedisce di spostare in YAML variabili che devono
+> rimanere nello `.env`. Se configuri per errore chiavi come `OPENAI_API_KEY` o
+> `SERVICE_ACCOUNT_FILE` nel file YAML, verranno ignorate (con warning
+> `settings.yaml.env_denied`) e l’app continuerà a leggere tali valori solo
+> da l’ambiente.
 
 Regola d’oro: se un campo richiede un segreto, il valore in YAML **termina con `_env`**
 e contiene solo il nome della variabile:
@@ -28,7 +40,16 @@ vision:
 ## Config YAML
 
 `config/config.yaml` è la SSoT applicativa. Oltre ai blocchi storici (retriever, vision,
-ui, raw_cache) ospita la sezione `security.oidc` appena introdotta:
+ui, raw_cache) ospita nuovi blocchi operativi:
+
+- `openai`: timeout (s), max_retries, `http2_enabled`.
+- `vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, riferimenti *_env ai segreti.
+- `ui`: `skip_preflight`, `allow_local_only`, `admin_local_mode`.
+- `retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`.
+- `ops`: `log_level` per i logger applicativi.
+- `finance`: `import_enabled` per attivare il flusso Finance.
+
+La sezione `security.oidc` resta invariata e segue qui sotto:
 
 ```yaml
 security:

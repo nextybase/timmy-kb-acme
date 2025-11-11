@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
+import logging
 import os
 import subprocess
 import sys
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 
 PY = sys.executable
+LOG = logging.getLogger("tests.tag_onboarding_cli_smoke")
 
 
 def _write_stub_nlp(stub_root: Path) -> None:
@@ -61,7 +63,7 @@ def cluster_synonyms(items: Sequence[Tuple[str, float]], model_name: str, sim_th
 
 
 def _run(cmd, *, env, cwd):
-    print("+", " ".join(str(c) for c in cmd))
+    LOG.info("tests.tag_onboarding_cli_smoke.run", extra={"cmd": " ".join(str(c) for c in cmd)})
     subprocess.check_call(cmd, env=env, cwd=cwd)
 
 

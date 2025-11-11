@@ -1,40 +1,51 @@
+# config/config.example.yaml
+# Copia questo file come config/config.yaml e personalizza i campi per il cliente.
+
 cartelle_raw_yaml: config/cartelle_raw.yaml
 N_VER: 0
 DATA_VER: null
+
 openai:
-  timeout: 120
+  timeout: 120              # secondi
   max_retries: 2
   http2_enabled: false
+
 vision:
-  engine: assistants
+  engine: assistants        # assistants | responses | ...
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
   snapshot_retention_days: 30
   strict_output: true
+
 ui:
   skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
+
 retriever:
   auto_by_budget: false
   throttle:
-    latency_budget_ms: 0
     candidate_limit: 4000
+    latency_budget_ms: 0
     parallelism: 1
     sleep_ms_between_calls: 0
+
 raw_cache:
   ttl_seconds: 300
   max_entries: 8
+
 security:
   oidc:
     enabled: false
-    provider: github  # github | generic | vault
+    provider: github   # github | generic | vault
     audience_env: GITHUB_OIDC_AUDIENCE
     role_env: GITHUB_OIDC_ROLE
     token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
     token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN
     ci_required: false
+
 ops:
   log_level: INFO
+
 finance:
   import_enabled: false

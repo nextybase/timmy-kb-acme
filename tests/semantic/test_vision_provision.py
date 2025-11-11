@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any, Dict
 
 import pytest
 
@@ -181,6 +182,60 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     # examples derivano da documents/include
     gov = next(f for f in r["folders"] if f["key"] == "governance")
     assert len(gov["examples"]) >= 1
+
+
+def test_provision_uses_engine_from_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-engine"
+    ctx = _Ctx(tmp_path)
+    ctx.settings["vision"]["engine"] = "responses"
+
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+
+    captured: Dict[str, Any] = {}
+
+    def _fake_call(**kwargs: Any) -> Dict[str, Any]:
+        captured["engine"] = kwargs.get("engine")
+        return _ok_payload(slug)
+
+    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
+
+    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+
+    assert captured.get("engine") == "responses"
+
+
+def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-retention"
+    ctx = _Ctx(tmp_path)
+    ctx.settings["vision"]["snapshot_retention_days"] = 0
+
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(vp, "_call_assistant_json", lambda **_k: _ok_payload(slug))
+
+    captured: Dict[str, Any] = {}
+
+    def _fake_persist(
+        prepared: Any, payload: Dict[str, Any], logger: Any, *, retention_days: int, engine: str
+    ) -> Dict[str, Any]:
+        captured["retention_days"] = retention_days
+        return {
+            "mapping": str(prepared.paths.mapping_yaml),
+            "cartelle_raw": str(prepared.paths.cartelle_yaml),
+        }
+
+    monkeypatch.setattr(vp, "_persist_outputs", _fake_persist)
+
+    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+
+    assert captured.get("retention_days") == 30
 
 
 def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

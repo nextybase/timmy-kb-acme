@@ -1118,4 +1118,8 @@ if __name__ == "__main__":  # pragma: no cover
         add_term_alias(conn, t, "identita' di marca")
         save_doc_terms(conn, d, [("brand identity", 0.86, "yake")])
         upsert_folder_term(conn, f, t, 1.23, "keep", None)
-        print(get_folder_terms(conn, f, "keep", 10))
+        terms = get_folder_terms(conn, f, "keep", 10)
+        LOG.info(
+            "storage.tags_store.sample_terms",
+            extra={"folder": "raw/marketing", "terms": str(terms)[:300]},
+        )

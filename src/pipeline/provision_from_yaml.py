@@ -103,7 +103,12 @@ def provision_directories_from_cartelle_raw(
         (created if did_create else skipped).append(str(dir_path))
 
     logger.info(
-        "provision_from_yaml: done",
-        extra={"slug": slug, "yaml": str(yaml_path), "created": len(created), "skipped": len(skipped)},
+        "pipeline.provision_from_yaml.completed",
+        extra={
+            "slug": slug,
+            "yaml_path": str(yaml_path),
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+        },
     )
     return {"created": created, "skipped": skipped}

@@ -23,8 +23,9 @@ st = get_streamlit()
 from google.auth.transport import requests as greq
 from google.oauth2 import id_token
 
-from pipeline.env_utils import get_bool, get_env_var
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
+from pipeline.settings import Settings
 
 # Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
@@ -40,6 +41,14 @@ AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - endpoint pubblico OAuth2
 ISS_ALLOWED = {"accounts.google.com", "https://accounts.google.com"}
 SESSION_TTL_SECONDS = 3600
+
+
+@lru_cache(maxsize=1)
+def _load_settings() -> Optional[Settings]:
+    try:
+        return Settings.load(REPO_ROOT)
+    except Exception:
+        return None
 
 
 @lru_cache(maxsize=1)
@@ -381,16 +390,14 @@ else:
     st.link_button("Accedi con Google", login_url, width="stretch")
 
     # Modalit locale opzionale: espone il pannello anche senza login
-    try:
-        if get_bool("ADMIN_LOCAL_MODE", default=False):
-            st.info(
-                "Modalit locale attiva (ADMIN_LOCAL_MODE=1): pannello osservabilitààààààà disponibile senza login. "
-                "Ricorda di valorizzare le credenziali Grafana in `.env`."
-            )
-            _render_admin_panel()
-            st.stop()
-    except Exception:
-        pass
+    settings_obj = _load_settings()
+    if settings_obj and settings_obj.ui_admin_local_mode:
+        st.info(
+            "Modalit locale attiva: pannello osservabilita disponibile senza login. "
+            "Ricorda di valorizzare le credenziali Grafana in `.env`."
+        )
+        _render_admin_panel()
+        st.stop()
 
     with st.expander("Diagnostica (locale)"):
         st.code(

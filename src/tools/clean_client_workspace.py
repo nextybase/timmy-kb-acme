@@ -500,7 +500,6 @@ def run_cleanup(slug: str, assume_yes: bool = False) -> int:
 
     if not _confirm_irreversible(slug, assume_yes):
         LOGGER.info("tools.clean_client_workspace.cancelled", extra={"slug": slug})
-        print("Operazione annullata.")
         return 0
 
     entry_name: Optional[str] = None
@@ -515,11 +514,17 @@ def run_cleanup(slug: str, assume_yes: bool = False) -> int:
         info = results.get(key) or {}
         message = info.get("message")
         if message:
-            print(message)
+            LOGGER.info(
+                "tools.clean_client_workspace.report",
+                extra={"slug": slug, "stage": key, "detail": message},
+            )
 
     exit_code = int(results.get("exit_code", 1))
     if exit_code == 4:
-        print("Errore: rimozione locale incompleta.")
+        LOGGER.error(
+            "tools.clean_client_workspace.local_incomplete",
+            extra={"slug": slug, "exit_code": exit_code},
+        )
     LOGGER.info("tools.clean_client_workspace.done", extra={"slug": slug, "exit_code": exit_code})
     return exit_code
 
@@ -540,15 +545,16 @@ def main(argv: Iterable[str] | None = None) -> int:
         slug = _resolve_slug(ns.slug)
         return run_cleanup(slug=slug, assume_yes=bool(ns.yes))
     except ConfigError as e:
-        LOGGER.info("tools.clean_client_workspace.invalid_args", extra={"detail": str(e)[:200]})
-        print(f"Argomenti non validi: {e}")
+        LOGGER.info(
+            "tools.clean_client_workspace.invalid_args",
+            extra={"detail": str(e)[:200]},
+        )
         return 2
     except KeyboardInterrupt:
-        print("\nInterrotto dall'utente.")
+        LOGGER.warning("tools.clean_client_workspace.interrupted")
         return 1
     except Exception as e:  # pragma: no cover
         LOGGER.error("tools.clean_client_workspace.unexpected", extra={"detail": str(e)[:200]})
-        print(f"Errore inatteso: {e}")
         return 1
 
 

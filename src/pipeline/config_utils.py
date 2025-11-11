@@ -140,10 +140,13 @@ class Settings(_BaseSettings):
 
         for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"):
             if not getattr(self, key, None):
-                logger.error(f"Parametro critico '{key}' mancante!")
+                logger.error(
+                    "pipeline.config_utils.missing_required_env",
+                    extra={"missing_key": key},
+                )
                 raise ConfigError(f"Parametro critico '{key}' mancante!", key=key)
         if not self.slug:
-            logger.error("Parametro 'slug' mancante! Usare ClientContext.load(slug).")
+            logger.error("pipeline.config_utils.missing_slug")
             raise ConfigError("Parametro 'slug' mancante!", param="slug")
 
 
@@ -231,7 +234,10 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         )
 
     if not context.config_path.exists():
-        logger.error(f"❗ Config cliente non trovato: {context.config_path}")
+        logger.error(
+            "pipeline.config_utils.config_missing",
+            extra={"config_path": str(context.config_path)},
+        )
         raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
 
     _, cfg_payload, available = _extract_context_settings(context)
@@ -246,7 +252,10 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
             safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
             raw_cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
         except Exception as e:
-            logger.error(f"❗ Errore lettura/parsing YAML in {context.config_path}: {e}")
+            logger.error(
+                "pipeline.config_utils.config_read_error",
+                extra={"config_path": str(context.config_path), "error": str(e)[:200]},
+            )
             raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
 
         if not isinstance(raw_cfg, dict):
@@ -258,16 +267,25 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
     required_keys = ["cartelle_raw_yaml"]
     missing = [k for k in required_keys if k not in cfg]
     if missing:
-        logger.error(f"❗ Chiavi obbligatorie mancanti in config: {missing}")
+        logger.error(
+            "pipeline.config_utils.missing_required_keys",
+            extra={"missing_keys": missing},
+        )
         raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
     logs_dir = (base_dir / "logs").resolve()
     if not logs_dir.exists():
-        logger.warning(f"⚠️ Directory mancante: {logs_dir}, creazione automatica...")
+        logger.warning(
+            "pipeline.config_utils.logs_dir_missing",
+            extra={"path": str(logs_dir)},
+        )
         logs_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"✅ Ambiente pre-onboarding valido per cliente {context.slug}")
+    logger.info(
+        "pipeline.config_utils.preonboarding_ok",
+        extra={"slug": context.slug},
+    )
 
 
 # ----------------------------------------------------------
@@ -395,7 +413,10 @@ def update_config_with_drive_ids(
     backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
     shutil.copy(config_path, backup_path)
     if logger:
-        logger.info(f"💾 Backup config creato: {backup_path}")
+        logger.info(
+            "pipeline.config_utils.backup_created",
+            extra={"backup_path": str(backup_path)},
+        )
 
     # Carica config esistente (preferendo il contesto)
     _, settings_payload, available = _extract_context_settings(context)
@@ -420,7 +441,10 @@ def update_config_with_drive_ids(
         yaml_dump = yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
         if logger:
-            logger.info(f"✅ Config aggiornato in {config_path}")
+            logger.info(
+                "pipeline.config_utils.config_written",
+                extra={"config_path": str(config_path)},
+            )
     except Exception as e:
         raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
     _refresh_context_settings(context)

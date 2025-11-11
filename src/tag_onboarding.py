@@ -228,8 +228,8 @@ def scan_raw_to_db(
                     clear_doc_terms(conn, prev_id)
 
                     log.info(
-                        "doc_terms invalidated due to hash change",
-                        extra={"filename": path.name, "folder_id": folder_id},
+                        "tag_onboarding.doc_terms.invalidated",
+                        extra={"file_name": path.name, "folder_id": folder_id},
                     )
 
                 upsert_document(conn, folder_id, path.name, sha256_new, pages)

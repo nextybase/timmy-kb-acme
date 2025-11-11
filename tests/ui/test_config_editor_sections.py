@@ -35,7 +35,10 @@ def test_render_body_collects_form_values(monkeypatch: pytest.MonkeyPatch) -> No
 
     data = {}
     vision_cfg = {"engine": "assistant", "model": "gpt", "strict_output": True}
-    retriever_cfg = {"candidate_limit": 1000, "latency_budget_ms": 200, "auto_by_budget": False}
+    retriever_cfg = {
+        "auto_by_budget": False,
+        "throttle": {"candidate_limit": 1000, "latency_budget_ms": 200},
+    }
     ui_cfg = {"skip_preflight": False}
 
     submitted, values = module.render_body(
@@ -105,7 +108,10 @@ def test_handle_actions_updates_configuration(monkeypatch: pytest.MonkeyPatch) -
     ctx = types.SimpleNamespace(logger=None)
     data = {"skip_preflight": False}
     vision_cfg = {"engine": "assistant", "model": "gpt", "strict_output": True}
-    retriever_cfg = {"candidate_limit": 1000, "latency_budget_ms": 200, "auto": False}
+    retriever_cfg = {
+        "auto": False,
+        "throttle": {"candidate_limit": 1000, "latency_budget_ms": 200},
+    }
     ui_cfg = {"skip_preflight": False}
 
     form_values = {
@@ -130,7 +136,7 @@ def test_handle_actions_updates_configuration(monkeypatch: pytest.MonkeyPatch) -
 
     assert result is True
     assert captured["updates"]["vision"]["engine"] == "assistant-beta"
-    assert captured["updates"]["retriever"]["candidate_limit"] == 1500
+    assert captured["updates"]["retriever"]["throttle"]["candidate_limit"] == 1500
     assert captured["updates"]["ui"]["skip_preflight"] is True
     assert st_stub.session_state["config_editor_saved"] is True
     assert st_stub._rerun_called is True  # type: ignore[attr-defined]

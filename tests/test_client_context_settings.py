@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -25,16 +26,30 @@ def repo_with_config(tmp_path: Path) -> Path:
     semantic_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text(
         """
+openai:
+  timeout: 90
+  max_retries: 3
+  http2_enabled: false
 vision:
   engine: assistant
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: TEST_ASSISTANT_ID
+  snapshot_retention_days: 30
 retriever:
-  candidate_limit: 3000
-  latency_budget_ms: 120
   auto_by_budget: false
+  throttle:
+    candidate_limit: 3000
+    latency_budget_ms: 120
+    parallelism: 1
+    sleep_ms_between_calls: 0
 ui:
   skip_preflight: true
+  allow_local_only: true
+  admin_local_mode: false
+ops:
+  log_level: DEBUG
+finance:
+  import_enabled: false
 """,
         encoding="utf-8",
     )
@@ -51,4 +66,16 @@ def test_client_context_exposes_settings(
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
     assert ctx.settings.ui_skip_preflight is True
-    assert ctx.settings.get_value("retriever.candidate_limit") == 3000
+    assert ctx.settings.retriever_throttle.candidate_limit == 3000
+
+
+def test_client_context_logger_respects_ops_level(
+    repo_with_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False, interactive=False)
+    logger = ctx.logger or ctx._get_logger()
+    assert logger.level == logging.DEBUG
+    handler_levels = {h.level for h in logger.handlers}
+    assert handler_levels == {logging.DEBUG}

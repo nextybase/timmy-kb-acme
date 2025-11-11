@@ -5,14 +5,350 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional
 
 from .env_utils import ensure_dotenv_loaded, get_env_var
 from .exceptions import ConfigError
+from .logging_utils import get_structured_logger
 from .yaml_utils import yaml_read
 
 _MISSING = object()
+_ENV_DENY_LIST = {
+    "PYTHONUTF8",
+    "PYTHONIOENCODING",
+    "GF_SECURITY_ADMIN_PASSWORD",
+    "OPENAI_API_KEY",
+    "GITHUB_TOKEN",
+    "SERVICE_ACCOUNT_FILE",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    "TIMMY_OTEL_ENDPOINT",
+    "TIMMY_SERVICE_NAME",
+    "TIMMY_ENV",
+}
+_LOGGER = get_structured_logger("pipeline.settings")
+
+
+def _mapping_or_empty(value: Any, dotted_key: str, *, config_path: Path) -> Mapping[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, Mapping):
+        return value
+    raise ConfigError(
+        f"{dotted_key} deve essere un oggetto YAML (mapping).",
+        file_path=str(config_path),
+    )
+
+
+def _extract_bool(value: Any, dotted_key: str, *, config_path: Path, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(f"{dotted_key} deve essere booleano.", file_path=str(config_path))
+
+
+def _extract_int(
+    value: Any,
+    dotted_key: str,
+    *,
+    config_path: Path,
+    default: int,
+    minimum: Optional[int] = None,
+) -> int:
+    if value is None:
+        result = default
+    elif isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"{dotted_key} deve essere un intero.", file_path=str(config_path))
+    else:
+        result = value
+    if minimum is not None and result < minimum:
+        raise ConfigError(
+            f"{dotted_key} deve essere >= {minimum}.",
+            file_path=str(config_path),
+        )
+    return result
+
+
+def _require_str(
+    value: Any,
+    dotted_key: str,
+    *,
+    config_path: Path,
+) -> str:
+    if value is None:
+        raise ConfigError(
+            f"Chiave obbligatoria mancante: {dotted_key}",
+            file_path=str(config_path),
+        )
+    if not isinstance(value, str):
+        raise ConfigError(
+            f"{dotted_key} deve essere una stringa.",
+            file_path=str(config_path),
+        )
+    candidate = value.strip()
+    if not candidate:
+        raise ConfigError(
+            f"{dotted_key} non può essere vuoto.",
+            file_path=str(config_path),
+        )
+    return candidate
+
+
+def _extract_optional_str(
+    value: Any,
+    dotted_key: str,
+    *,
+    config_path: Path,
+    default: Optional[str] = None,
+    allow_empty: bool = True,
+) -> Optional[str]:
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ConfigError(f"{dotted_key} deve essere una stringa.", file_path=str(config_path))
+    candidate = value.strip()
+    if not candidate and not allow_empty:
+        raise ConfigError(f"{dotted_key} non può essere vuoto.", file_path=str(config_path))
+    return candidate if candidate or allow_empty else default
+
+
+def _extract_enum(
+    value: Any,
+    dotted_key: str,
+    *,
+    config_path: Path,
+    default: str,
+    alias_map: Mapping[str, str],
+) -> str:
+    if value is None:
+        candidate = default
+    elif isinstance(value, str):
+        candidate = value.strip().lower()
+    else:
+        raise ConfigError(f"{dotted_key} deve essere una stringa.", file_path=str(config_path))
+    normalized = alias_map.get(candidate)
+    if not normalized:
+        allowed = ", ".join(sorted(set(alias_map.values())))
+        raise ConfigError(
+            f"{dotted_key} deve essere uno tra: {allowed}. Valore fornito: {value!r}",
+            file_path=str(config_path),
+        )
+    return normalized
+
+
+_VISION_ENGINE_ALIASES: dict[str, str] = {
+    "assistant": "assistants",
+    "assistant-beta": "assistants",
+    "assistant-inline": "assistants",
+    "assistants": "assistants",
+    "assistants-v2": "assistants",
+    "assistants-stream": "assistants-stream",
+    "responses": "responses",
+    "responses-stream": "responses-stream",
+}
+
+
+@dataclass(frozen=True)
+class OpenAISection:
+    timeout: int = 120
+    max_retries: int = 2
+    http2_enabled: bool = False
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "OpenAISection":
+        return cls(
+            timeout=_extract_int(
+                data.get("timeout"),
+                "openai.timeout",
+                config_path=config_path,
+                default=cls.timeout,
+                minimum=1,
+            ),
+            max_retries=_extract_int(
+                data.get("max_retries"),
+                "openai.max_retries",
+                config_path=config_path,
+                default=cls.max_retries,
+                minimum=0,
+            ),
+            http2_enabled=_extract_bool(
+                data.get("http2_enabled"),
+                "openai.http2_enabled",
+                config_path=config_path,
+                default=cls.http2_enabled,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class VisionSection:
+    model: Optional[str]
+    engine: str
+    assistant_id_env: Optional[str]
+    snapshot_retention_days: int
+    strict_output: bool
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "VisionSection":
+        return cls(
+            model=_require_str(
+                data.get("model"),
+                "vision.model",
+                config_path=config_path,
+            ),
+            engine=_extract_enum(
+                data.get("engine"),
+                "vision.engine",
+                config_path=config_path,
+                default="assistants",
+                alias_map=_VISION_ENGINE_ALIASES,
+            ),
+            assistant_id_env=_extract_optional_str(
+                data.get("assistant_id_env"),
+                "vision.assistant_id_env",
+                config_path=config_path,
+                default=None,
+                allow_empty=False,
+            ),
+            snapshot_retention_days=_extract_int(
+                data.get("snapshot_retention_days"),
+                "vision.snapshot_retention_days",
+                config_path=config_path,
+                default=30,
+                minimum=0,
+            ),
+            strict_output=_extract_bool(
+                data.get("strict_output"),
+                "vision.strict_output",
+                config_path=config_path,
+                default=True,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class UISection:
+    skip_preflight: bool = False
+    allow_local_only: bool = True
+    admin_local_mode: bool = False
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "UISection":
+        return cls(
+            skip_preflight=_extract_bool(
+                data.get("skip_preflight"),
+                "ui.skip_preflight",
+                config_path=config_path,
+                default=cls.skip_preflight,
+            ),
+            allow_local_only=_extract_bool(
+                data.get("allow_local_only"),
+                "ui.allow_local_only",
+                config_path=config_path,
+                default=cls.allow_local_only,
+            ),
+            admin_local_mode=_extract_bool(
+                data.get("admin_local_mode"),
+                "ui.admin_local_mode",
+                config_path=config_path,
+                default=cls.admin_local_mode,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class RetrieverThrottleSection:
+    latency_budget_ms: int = 0
+    candidate_limit: int = 4000
+    parallelism: int = 1
+    sleep_ms_between_calls: int = 0
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "RetrieverThrottleSection":
+        return cls(
+            latency_budget_ms=_extract_int(
+                data.get("latency_budget_ms"),
+                "retriever.throttle.latency_budget_ms",
+                config_path=config_path,
+                default=cls.latency_budget_ms,
+                minimum=0,
+            ),
+            candidate_limit=_extract_int(
+                data.get("candidate_limit"),
+                "retriever.throttle.candidate_limit",
+                config_path=config_path,
+                default=cls.candidate_limit,
+                minimum=0,
+            ),
+            parallelism=_extract_int(
+                data.get("parallelism"),
+                "retriever.throttle.parallelism",
+                config_path=config_path,
+                default=cls.parallelism,
+                minimum=1,
+            ),
+            sleep_ms_between_calls=_extract_int(
+                data.get("sleep_ms_between_calls"),
+                "retriever.throttle.sleep_ms_between_calls",
+                config_path=config_path,
+                default=cls.sleep_ms_between_calls,
+                minimum=0,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class RetrieverSection:
+    auto_by_budget: bool = False
+    throttle: RetrieverThrottleSection = field(default_factory=RetrieverThrottleSection)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "RetrieverSection":
+        throttle_mapping = _mapping_or_empty(data.get("throttle"), "retriever.throttle", config_path=config_path)
+        return cls(
+            auto_by_budget=_extract_bool(
+                data.get("auto_by_budget"),
+                "retriever.auto_by_budget",
+                config_path=config_path,
+                default=cls.auto_by_budget,
+            ),
+            throttle=RetrieverThrottleSection.from_mapping(throttle_mapping, config_path=config_path),
+        )
+
+
+@dataclass(frozen=True)
+class OpsSection:
+    log_level: str = "INFO"
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "OpsSection":
+        value = _extract_optional_str(
+            data.get("log_level"),
+            "ops.log_level",
+            config_path=config_path,
+            default=cls.log_level,
+            allow_empty=False,
+        )
+        return cls(log_level=value or cls.log_level)
+
+
+@dataclass(frozen=True)
+class FinanceSection:
+    import_enabled: bool = False
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "FinanceSection":
+        return cls(
+            import_enabled=_extract_bool(
+                data.get("import_enabled"),
+                "finance.import_enabled",
+                config_path=config_path,
+                default=cls.import_enabled,
+            )
+        )
 
 
 @dataclass
@@ -71,24 +407,121 @@ class Settings:
 
     # ----------------------------- Typed accessors -----------------------------
 
+    def _section_mapping(self, dotted_key: str, *, required: bool = False) -> Mapping[str, Any]:
+        try:
+            raw = self.get_value(dotted_key, default=None)
+        except KeyError:
+            raw = None
+        if raw is None:
+            if required:
+                raise ConfigError(
+                    f"Sezione mancante in config: {dotted_key}",
+                    file_path=str(self.config_path),
+                )
+            return {}
+        mapping = _mapping_or_empty(raw, dotted_key, config_path=self.config_path)
+        for env_name in mapping.keys():
+            if isinstance(env_name, str) and env_name.upper() in _ENV_DENY_LIST:
+                try:
+                    _LOGGER.warning(
+                        "settings.yaml.env_denied",
+                        extra={
+                            "file_path": str(self.config_path),
+                            "key": env_name,
+                            "section": dotted_key,
+                        },
+                    )
+                except Exception:
+                    pass
+        return mapping
+
+    @cached_property
+    def openai_settings(self) -> OpenAISection:
+        return OpenAISection.from_mapping(
+            self._section_mapping("openai", required=True),
+            config_path=self.config_path,
+        )
+
+    @cached_property
+    def vision_settings(self) -> VisionSection:
+        return VisionSection.from_mapping(
+            self._section_mapping("vision", required=True),
+            config_path=self.config_path,
+        )
+
+    @cached_property
+    def ui_settings(self) -> UISection:
+        return UISection.from_mapping(
+            self._section_mapping("ui", required=True),
+            config_path=self.config_path,
+        )
+
+    @cached_property
+    def retriever_settings(self) -> RetrieverSection:
+        return RetrieverSection.from_mapping(
+            self._section_mapping("retriever", required=True),
+            config_path=self.config_path,
+        )
+
+    @cached_property
+    def ops_settings(self) -> OpsSection:
+        return OpsSection.from_mapping(
+            self._section_mapping("ops", required=True),
+            config_path=self.config_path,
+        )
+
+    @cached_property
+    def finance_settings(self) -> FinanceSection:
+        return FinanceSection.from_mapping(
+            self._section_mapping("finance", required=True),
+            config_path=self.config_path,
+        )
+
+    # ----------------------------- Typed accessors -----------------------------
+
     @property
     def vision_model(self) -> Optional[str]:
-        value = self.get_value("vision.model", default=None)
-        return str(value) if value is not None else None
+        return self.vision_settings.model
 
     @property
     def vision_engine(self) -> Optional[str]:
-        value = self.get_value("vision.engine", default=None)
-        return str(value) if value is not None else None
+        return self.vision_settings.engine
+
+    @property
+    def vision_snapshot_retention_days(self) -> int:
+        return self.vision_settings.snapshot_retention_days
 
     @property
     def vision_assistant_env(self) -> Optional[str]:
-        value = self.get_value("vision.assistant_id_env", default=None)
-        return str(value) if value is not None else None
+        return self.vision_settings.assistant_id_env
 
     @property
     def ui_skip_preflight(self) -> bool:
-        return bool(self.get_value("ui.skip_preflight", default=False))
+        return self.ui_settings.skip_preflight
+
+    @property
+    def ui_allow_local_only(self) -> bool:
+        return self.ui_settings.allow_local_only
+
+    @property
+    def ui_admin_local_mode(self) -> bool:
+        return self.ui_settings.admin_local_mode
+
+    @property
+    def retriever_auto_by_budget(self) -> bool:
+        return self.retriever_settings.auto_by_budget
+
+    @property
+    def retriever_throttle(self) -> RetrieverThrottleSection:
+        return self.retriever_settings.throttle
+
+    @property
+    def ops_log_level(self) -> str:
+        return self.ops_settings.log_level
+
+    @property
+    def finance_import_enabled(self) -> bool:
+        return self.finance_settings.import_enabled
 
     # ----------------------------- Helper metodi ------------------------------
 

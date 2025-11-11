@@ -58,7 +58,7 @@ def discover_candidates(
             if logger is not None:
                 logger.warning(
                     "drive.candidate.ensure_failed",
-                    extra={"category": category, "filename": name, "error": str(exc)},
+                    extra={"category": category, "file_name": name, "error": str(exc)},
                 )
             return
         candidates.append(

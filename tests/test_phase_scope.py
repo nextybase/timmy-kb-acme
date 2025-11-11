@@ -58,3 +58,6 @@ def test_phase_scope_failure_emits_failed(monkeypatch):
     msgs = [r.msg for r in handler.records]
     assert "phase_started" in msgs
     assert "phase_failed" in msgs
+    failed = next(r for r in handler.records if r.msg == "phase_failed")
+    assert getattr(failed, "run_id", None) == "run-test"
+    assert isinstance(getattr(failed, "duration_ms", None), int)

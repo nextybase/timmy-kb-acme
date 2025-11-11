@@ -15,7 +15,8 @@ PagePaths = _PagePaths
 
 
 def url_path_for(page_path: str) -> str | None:
-    return spec_url_path_for(page_path)
+    result = spec_url_path_for(page_path)
+    return result if isinstance(result, str) or result is None else None
 
 
 @dataclass(frozen=True)

@@ -92,7 +92,7 @@ def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
 
 
 def _requires(page: PageSpec) -> Sequence[str]:
-    return requirements_for(page.path)
+    return tuple(requirements_for(page.path))
 
 
 def _satisfied(requirements: Iterable[str], gates: GateState) -> bool:

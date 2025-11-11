@@ -17,6 +17,7 @@ def test_make_openai_client_requires_modern_sdk(monkeypatch):
     monkeypatch.setattr(client_factory, "get_bool", lambda *a, **k: False)
     assert client_factory.get_bool("OPENAI_FORCE_HTTPX", default=True) is False
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")  # pragma: allowlist secret
+    monkeypatch.setattr(client_factory, "_load_settings", lambda: None)
 
     class LegacyOpenAI:
         def __init__(self, **_kwargs: Any) -> None:
@@ -38,9 +39,11 @@ def test_make_openai_client_success(monkeypatch):
     monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "secret")  # pragma: allowlist secret
     monkeypatch.setenv("OPENAI_BASE_URL", "api.nexty.ai")
-    monkeypatch.setenv("OPENAI_TIMEOUT", "30")
-    monkeypatch.setenv("OPENAI_MAX_RETRIES", "5")
     monkeypatch.setenv("OPENAI_PROJECT", "alpha")
+    settings_stub = types.SimpleNamespace(
+        openai_settings=types.SimpleNamespace(timeout=30, max_retries=5, http2_enabled=True)
+    )
+    monkeypatch.setattr(client_factory, "_load_settings", lambda: settings_stub)
 
     captured_kwargs: Dict[str, Any] = {}
 
@@ -60,3 +63,4 @@ def test_make_openai_client_success(monkeypatch):
     assert captured_kwargs["project"] == "alpha"
     assert captured_kwargs["timeout"] == 30.0
     assert captured_kwargs["max_retries"] == 5
+    assert captured_kwargs["http2"] is True

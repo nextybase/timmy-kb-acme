@@ -249,7 +249,7 @@ def upload_config_to_drive_folder(
             extra={
                 "parent": _maybe_redact(parent_id, redact_logs),
                 "local": str(local_config),
-                "message": str(e)[:300],
+                "error_message": str(e)[:300],
             },
         )
         raise DriveUploadError(f"Upload config.yaml fallito: {e}") from e
@@ -299,7 +299,7 @@ def create_drive_folder(
             extra={
                 "parent": _maybe_redact(parent_id or "root", redact_logs),
                 "folder_name": name,
-                "message": str(e)[:300],
+                "error_message": str(e)[:300],
             },
         )
         raise DriveUploadError(f"Creazione cartella fallita: {name}") from e

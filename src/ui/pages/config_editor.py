@@ -44,11 +44,12 @@ def _copy_section(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_sections(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-    return (
-        _copy_section(data.get("vision", {})),
-        _copy_section(data.get("retriever", {})),
-        _copy_section(data.get("ui", {})),
-    )
+    vision = _copy_section(data.get("vision", {}))
+    retriever = _copy_section(data.get("retriever", {}))
+    throttle = _copy_section(retriever.get("throttle", {}))
+    retriever["throttle"] = throttle
+    ui = _copy_section(data.get("ui", {}))
+    return vision, retriever, ui
 
 
 def render_sidebar(slug: str, assistant_env: str, *, st_module: Any | None = None) -> None:
@@ -91,11 +92,12 @@ def render_body(
 
         st_mod.markdown("---")
         st_mod.markdown("### Retriever")
+        throttle_cfg = retriever_cfg.get("throttle", {})
         candidate_limit = st_mod.number_input(
             "Candidate limit",
             min_value=MIN_CANDIDATE_LIMIT,
             max_value=MAX_CANDIDATE_LIMIT,
-            value=int(retriever_cfg.get("candidate_limit", MIN_CANDIDATE_LIMIT)),
+            value=int(throttle_cfg.get("candidate_limit", MIN_CANDIDATE_LIMIT)),
             step=500,
             help="Numero massimo di candidati restituiti dal retriever.",
         )
@@ -103,7 +105,7 @@ def render_body(
             "Budget latenza (ms)",
             min_value=0,
             max_value=2000,
-            value=int(retriever_cfg.get("latency_budget_ms", 0)),
+            value=int(throttle_cfg.get("latency_budget_ms", 0)),
             step=50,
             help="Tempo massimo (in millisecondi) consentito per una ricerca.",
         )
@@ -160,13 +162,13 @@ def _build_updates(
     updates["vision"] = new_vision
 
     new_retriever = _copy_section(retriever_cfg)
-    new_retriever["candidate_limit"] = int(values["candidate_limit"])
+    throttle_cfg = _copy_section(new_retriever.get("throttle", {}))
+    throttle_cfg["candidate_limit"] = int(values["candidate_limit"])
     latency_budget = int(values["latency_budget"])
-    new_retriever["latency_budget_ms"] = latency_budget
-    new_retriever["budget_ms"] = latency_budget
+    throttle_cfg["latency_budget_ms"] = latency_budget
+    new_retriever["throttle"] = throttle_cfg
     auto_by_budget = bool(values["auto_by_budget"])
     new_retriever["auto_by_budget"] = auto_by_budget
-    new_retriever["auto"] = auto_by_budget
     updates["retriever"] = new_retriever
 
     new_ui = _copy_section(ui_cfg)

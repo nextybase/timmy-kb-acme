@@ -121,9 +121,12 @@ La sidebar della UI consente di configurare il retriever, salvando i parametri i
 
 ```yaml
 retriever:
-  candidate_limit: 4000
-  latency_budget_ms: 300
   auto_by_budget: false
+  throttle:
+    candidate_limit: 4000
+    latency_budget_ms: 300
+    parallelism: 1
+    sleep_ms_between_calls: 0
 ```
 
 La UI applica immediatamente le modifiche e i test di regressione coprono il pass-through verso gli helper di `semantic.embedding_service`.

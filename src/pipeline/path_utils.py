@@ -590,8 +590,8 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         return s or "file"
     except Exception as e:
         _logger.error(
-            "Errore nella sanitizzazione nome file",
-            extra={"error": str(e), "name": name},
+            "path_utils.sanitize_filename.error",
+            extra={"error": str(e), "raw_name": name},
         )
         return "file"
 

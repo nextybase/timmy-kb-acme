@@ -24,11 +24,11 @@ ensure_local_workspace_for_ui = import_first(
 ).ensure_local_workspace_for_ui
 
 from pipeline.context import validate_slug
-from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.settings import Settings
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
@@ -81,7 +81,25 @@ else:
     _ensure_drive_minimal = None
 from pipeline.config_utils import get_client_config
 
-UI_ALLOW_LOCAL_ONLY = get_bool("UI_ALLOW_LOCAL_ONLY", default=True)
+
+def _load_repo_settings() -> Optional[Settings]:
+    try:
+        return Settings.load(_repo_root())
+    except Exception:
+        return None
+
+
+def _resolve_ui_allow_local_only() -> bool:
+    settings_obj = _load_repo_settings()
+    if settings_obj is None:
+        return True
+    try:
+        return bool(settings_obj.ui_allow_local_only)
+    except Exception:
+        return True
+
+
+UI_ALLOW_LOCAL_ONLY = _resolve_ui_allow_local_only()
 LOGGER = get_structured_logger("ui.new_client")
 
 

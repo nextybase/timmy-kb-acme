@@ -73,7 +73,10 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
             try:
                 host_port = int(env_val)
             except ValueError:
-                logger.warning(f"PREVIEW_PORT non valida: {env_val!r} (ignoro)")
+                logger.warning(
+                    "pipeline.gitbook_preview.invalid_port",
+                    extra={"key": "PREVIEW_PORT", "value": env_val},
+                )
     cfg = _context_settings_map(context)
     if host_port is None:
         cfg_val = cfg.get("preview_port")
@@ -81,7 +84,10 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
             try:
                 host_port = int(cfg_val)
             except Exception:
-                logger.warning(f"config.preview_port non valido: {cfg_val!r} (ignoro)")
+                logger.warning(
+                    "pipeline.gitbook_preview.invalid_port",
+                    extra={"key": "config.preview_port", "value": cfg_val},
+                )
     if host_port is None:
         host_port = _DEFAULT_HOST_PREVIEW_PORT
 
@@ -92,14 +98,20 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
         try:
             container_port = int(env_c)
         except ValueError:
-            logger.warning(f"HONKIT_PORT non valida: {env_c!r} (ignoro)")
+            logger.warning(
+                "pipeline.gitbook_preview.invalid_port",
+                extra={"key": "HONKIT_PORT", "value": env_c},
+            )
     if container_port is None:
         cfg_val = cfg.get("honkit_port")
         if cfg_val is not None:
             try:
                 container_port = int(cfg_val)
             except Exception:
-                logger.warning(f"config.honkit_port non valido: {cfg_val!r} (ignoro)")
+                logger.warning(
+                    "pipeline.gitbook_preview.invalid_port",
+                    extra={"key": "config.honkit_port", "value": cfg_val},
+                )
     if container_port is None:
         container_port = _DEFAULT_HONKIT_INTERNAL_PORT
 

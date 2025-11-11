@@ -352,6 +352,12 @@ def get_structured_logger(
     _set_logger_filter(lg, redact_filter, f"{name}::redact_filter")
     _set_logger_filter(lg, event_filter, f"{name}::event_filter")
 
+    # esponi il contesto sul logger per i consumer (es. phase_scope)
+    try:
+        setattr(lg, "_logging_ctx_view", ctx)
+    except Exception:
+        pass
+
     # console handler (idempotente per chiave)
     key_console = f"{name}::console"
     _ensure_no_duplicate_handlers(lg, key_console)
@@ -444,7 +450,14 @@ class phase_scope:
     def __init__(self, logger: logging.Logger, *, stage: str, customer: Optional[str] = None):
         self.logger = logger
         self.stage = stage
-        self.customer = customer
+        ctx_view = getattr(logger, "_logging_ctx_view", None)
+        inferred_slug = None
+        inferred_run = None
+        if ctx_view is not None:
+            inferred_slug = getattr(ctx_view, "slug", None)
+            inferred_run = getattr(ctx_view, "run_id", None)
+        self.customer = customer or inferred_slug
+        self._run_id = inferred_run
         self._t0: Optional[float] = None
         self._artifact_count: Optional[int] = None
         self._span: Any | None = None
@@ -471,15 +484,9 @@ class phase_scope:
                 self._span.__enter__()
         except Exception:
             self._span = None
-        self.logger.info(
-            "phase_started",
-            extra={
-                "event": "phase_started",
-                "phase": self.stage,
-                "slug": self.customer,
-                "status": "start",
-            },
-        )
+        extra = self._base_extra()
+        extra.update({"event": "phase_started", "status": "start"})
+        self.logger.info("phase_started", extra=extra)
         return self
 
     def __exit__(
@@ -497,7 +504,7 @@ class phase_scope:
             except Exception:
                 duration_ms = None
 
-        extra: dict[str, Any] = {"phase": self.stage, "slug": self.customer}
+        extra: dict[str, Any] = self._base_extra()
         if duration_ms is not None:
             extra["duration_ms"] = duration_ms
         if self._artifact_count is not None:
@@ -530,6 +537,13 @@ class phase_scope:
             except Exception:
                 pass
         return False
+
+    def _base_extra(self) -> dict[str, Any]:
+        return {
+            "phase": self.stage,
+            "slug": self.customer or "-",
+            "run_id": self._run_id or "-",
+        }
 
 
 def metrics_scope(logger: logging.Logger, *, stage: str, customer: Optional[str] = None) -> phase_scope:
