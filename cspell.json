@@ -89,7 +89,8 @@
     "monkeypatchare",
     "promtail",
     "SARIF",
-    "distroless"
+    "distroless",
+    "committa"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

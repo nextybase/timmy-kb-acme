@@ -1,0 +1,39 @@
+{
+  "title": "TimmyKB - Ops",
+  "uid": "timmykb-ops",
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Phase failed rate (5m)",
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "Loki" },
+          "expr": "sum(rate({job=\"timmy-workspaces\", event=\"phase_failed\"}[5m]))",
+          "refId": "A" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Ultimi errori per slug",
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "Loki" },
+          "expr": "{job=\"timmy-workspaces\", event=\"phase_failed\"} | logfmt",
+          "refId": "A" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "options": { "showHeader": true }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errori UI globali (5m)",
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "Loki" },
+          "expr": "sum(rate({job=\"timmy-ui-global\", level=\"ERROR\"}[5m]))",
+          "refId": "A" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 }
+    }
+  ]
+}

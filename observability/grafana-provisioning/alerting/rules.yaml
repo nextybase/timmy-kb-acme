@@ -1,0 +1,23 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: TimmyKB Alerts
+    folder: TimmyKB
+    interval: 1m
+    rules:
+      - uid: phase_failed_rate
+        title: Phase failed spikes
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Loki
+            relativeTimeRange: { from: 300, to: 0 }  # ultimi 5m
+            model:
+              datasource: { type: loki, uid: Loki }
+              expr: sum(rate({job="timmy-workspaces", event="phase_failed"}[5m]))
+              refId: A
+        annotations:
+          summary: "Errori di fase negli ultimi 5 minuti"
+        labels:
+          severity: critical
+        for: 2m

@@ -16,12 +16,28 @@ I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/
 sia i log globali (`/var/timmy/global-logs/*.log`). Le pipeline di Promtail
 promuovono come label principali:
 
-- `event`
-- `slug`
-- `run_id`
+ - `event`
+  - `slug`
+  - `run_id`
 
 > Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
 > header sensibili (`Authorization`, `x-access-token`).
+
+### Provisioning Grafana
+
+- Le configurazioni vengono caricate da `observability/grafana-provisioning/`:
+  - `datasources/` definisce la sorgente Loki (UID `Loki`).
+  - `alerting/` contiene le regole (`TimmyKB Alerts`).
+  - `dashboards/` punta alla directory montata `/var/lib/grafana/dashboards`.
+- Le dashboard JSON risiedono in `observability/grafana-dashboards/`
+  e vengono montate in sola lettura; usa `grafana-toolkit export` o copia manuale
+  per aggiornarle, poi committa il JSON.
+- Prima di avviare Grafana imposta le credenziali di amministratore con variabili d'ambiente:
+  ```bash
+  export GRAFANA_ADMIN_USER=observability-admin
+  export GRAFANA_ADMIN_PASSWORD='<strong-password-here>'  # pragma: allowlist secret
+  ```
+  (`docker compose` rifiuta l'avvio se `GRAFANA_ADMIN_PASSWORD` manca).
 
 ## Correlazione tracing (`trace_id` / `span_id`)
 
