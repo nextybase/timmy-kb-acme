@@ -64,19 +64,45 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     reset_calls: list[str] = []
     monkeypatch.setattr(sem, "_reset_gating_cache", lambda slug: reset_calls.append(slug))
 
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
-    monkeypatch.setattr(sem, "convert_markdown", lambda ctx, logger, slug=None: ["a.md"])
+    readiness = [True, False, True, True]
+    ready_calls: list[bool] = []
+
+    def _has_raw(slug: str):
+        value = readiness.pop(0)
+        ready_calls.append(value)
+        return value, tmp_path / "raw"
+
+    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+
+    logger_calls = {"info": 0}
+
+    def _logger_info(*a, **k):
+        logger_calls["info"] += 1
+
+    def _logger_warning(*a, **k):
+        pass
+
+    def _convert(ctx, logger, slug=None):
+        logger.info("convert", extra={"slug": slug})
+        return ["a.md"]
+
+    monkeypatch.setattr(sem, "convert_markdown", _convert)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"tag": True})
-    monkeypatch.setattr(
-        sem,
-        "enrich_frontmatter",
-        lambda ctx, logger, vocab, slug=None, **kwargs: ["a.md"],
-    )
-    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug=None: None)
+
+    def _enrich(ctx, logger, vocab, slug=None, **kwargs):
+        logger.info("enrich", extra={"slug": slug})
+        return ["a.md"]
+
+    monkeypatch.setattr(sem, "enrich_frontmatter", _enrich)
+
+    def _write_summary(ctx, logger, slug=None):
+        logger.info("summary", extra={"slug": slug})
+
+    monkeypatch.setattr(sem, "write_summary_and_readme", _write_summary)
 
     def _ctx_logger(_slug: str):
-        logger = SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
+        logger = SimpleNamespace(info=_logger_info, warning=_logger_warning)
         return SimpleNamespace(base_dir=tmp_path), logger
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
@@ -84,17 +110,40 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     sem._client_state = "pronto"  # type: ignore[attr-defined]
     sem._raw_ready = True  # type: ignore[attr-defined]
 
+    sem.has_raw_pdfs("dummy")
+
     sem._run_convert("dummy")
+    sem.has_raw_pdfs("dummy")
     assert state["value"] == "pronto"
 
     sem._run_enrich("dummy")
+    sem.has_raw_pdfs("dummy")
     assert state["value"] == "arricchito"
 
     sem._run_summary("dummy")
+    sem.has_raw_pdfs("dummy")
     assert state["value"] == "finito"
 
     assert reset_calls == ["dummy", "dummy", "dummy"]
     assert state_log == ["pronto", "arricchito", "finito"]
+    assert ready_calls == [True, False, True, True]
+    assert logger_calls["info"] >= 3
+
+
+def test_semantics_message_string_matches_docs():
+    from pathlib import Path
+
+    import ui.pages.semantics as sem
+
+    source = Path(sem.__file__).read_text(encoding="utf-8")
+    marker = 'st.info("'
+    start = source.index(marker) + len(marker)
+    end = source.index('")', start)
+    message = source[start:end]
+
+    repo_root = Path(__file__).resolve().parents[2]
+    docs_text = (repo_root / "docs/streamlit_ui.md").read_text(encoding="utf-8")
+    assert message in docs_text, message
 
 
 def test_semantics_gating_uses_ssot_constants():

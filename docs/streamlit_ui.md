@@ -393,7 +393,7 @@ from ui.utils.workspace import has_raw_pdfs
 state = (get_state(slug) or '').strip().lower()
 ready, raw_dir = has_raw_pdfs(slug)
 if state not in SEMANTIC_ENTRY_STATES or not ready:
-    st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF in raw/.")
+    st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.")
     st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
     st.stop()
 ```
