@@ -41,6 +41,16 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Logging strutturato:** usa sempre `get_structured_logger(...)`; gli `extra` devono includere i campi utili (es. `slug`, `file_path`, `scope`).
 - **Path-safety & I/O atomico:** ogni accesso passa da helper della pipeline (`ensure_within_and_resolve`, `safe_write_text/bytes`).
 
+#### Marker → variabili richieste
+
+| Marker     | Requisiti principali                         | Note                                   |
+|------------|----------------------------------------------|----------------------------------------|
+| `push`     | `GITHUB_TOKEN`                               | Abilitare esplicitamente - `-m "push"` |
+| `drive`    | `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`           | Richiede deps Google                   |
+| `e2e`      | Playwright + Chromium                        | `playwright install chromium`          |
+| `slow`     | —                                            | Test lenti/smoke                       |
+| `contract` | —                                            | Snapshot/contratti UI                  |
+
 ---
 
 ## Categorie e file principali
