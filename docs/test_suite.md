@@ -1,4 +1,4 @@
-# Test Suite — v1.0 Beta
+# Test Suite — v1.1 Beta
 
 > **TL;DR:** panoramica su marker Pytest, dipendenze opzionali e comandi rapidi: usala per scegliere quali test eseguire (drive/push/e2e) e per mantenere la suite verde in CI.
 
@@ -238,6 +238,28 @@ SKIP=ruff,black git commit -m "…"
 
 > Riferimenti: `.pre-commit-config.yaml` (stadi, scope, hook e argomenti), README/Developer Guide (installazione rapida), User Guide (fixer/guard Unicode).
 
+### Secret scanning (detect-secrets + gitleaks)
+
+Gli hook di secret scanning sono due e complementari:
+- **detect-secrets** con baseline `.secrets.baseline` (blocca keyword/entropia a livello di sorgente)
+- **gitleaks** (analisi ampia + report SARIF in CI)
+
+**Comandi utili**
+```bash
+# esegui tutti gli hook di commit (inclusi i secret scan)
+pre-commit run --all-files
+
+# solo detect-secrets (utile per debug locale)
+pre-commit run detect-secrets --all-files -v
+
+# solo gitleaks
+pre-commit run gitleaks --all-files -v
+
+# (avanzato) rigenera/aggiorna la baseline dei segreti
+detect-secrets scan --baseline .secrets.baseline
+```
+
+> Nota: mantieni la baseline versionata e aggiornata. In presenza di falsi positivi inevitabili, usa un `# pragma: allowlist secret` puntuale e motivato in review. Vedi anche `docs/security.md` per policy e flussi CI.
 
 ---
 
@@ -247,6 +269,34 @@ SKIP=ruff,black git commit -m "…"
 - Hook anti-segreti: `pre-commit run no-secrets-in-yaml --all-files` (anche in CI) assicura che `config/*.ya?ml` contengano solo riferimenti `_env`.
 - Smoke pagina Streamlit: dopo un cambio alle configurazioni avvia `streamlit run onboarding_ui.py` e verifica la scheda **Tools -> Secrets Health Check** (nessun valore viene visualizzato).
 - Riferimenti: [Configurazione (.env vs config)](configurazione.md) e ADR [0002-separation-secrets-config](adr/0002-separation-secrets-config.md).
+
+### Scrivere test che maneggiano pattern di segreti (linee guida)
+
+- **Placeholder innocui** nel messaggio: usa valori come `demo`/`abc` che matchano le regex ma non sono “odorosi”.
+- **Evita keyword sensibili** nel codice test (`token`, `secret`, `api_key`, prefissi `sk-`, `ghp_`, `ghs_`). Se indispensabile, valuta `# pragma: allowlist secret`.
+- **Extra supportati**: quando serve verificare la redazione degli `extra`, usa chiavi coperte dal filtro (`Authorization`, `GIT_HTTP_EXTRAHEADER`) e non altre arbitrarie.
+- **Case-insensitive**: normalizza le asserzioni sul testo dei log (`out.lower()`) per evitare fragilità su maiuscole/minuscole.
+- **Verifica selettiva**: controlla sia il `message` che gli `extra` quando `redact_logs=True`, e la controprova quando `False`.
+
+Esempio minimale (sicuro):
+```python
+buf = StringIO()
+handler = logging.StreamHandler(buf)
+handler.setFormatter(logging.Formatter("%(message)s | Authorization=%(Authorization)s"))
+ctx = SimpleNamespace(redact_logs=True, slug="dummy")
+lg = get_structured_logger("tests.redaction", context=ctx, level=logging.INFO)
+lg.handlers.clear(); lg.addHandler(handler)
+
+lg.info("Authorization: Bearer demo", extra={"Authorization": "any-value"})
+text = buf.getvalue().lower()
+assert "authorization: bearer ***" in text
+assert "authorization=***" in text
+```
+
+**Debug locale**
+```bash
+pre-commit run detect-secrets --files tests/test_logging_redaction.py -v
+```
 
 ---
 

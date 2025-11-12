@@ -90,7 +90,8 @@
     "promtail",
     "SARIF",
     "distroless",
-    "committa"
+    "committa",
+    "matchano"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",
