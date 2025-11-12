@@ -233,7 +233,7 @@ Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [docs/AGENTS.md](AGENTS.md), [src/
 - Messaggi utente brevi; dettagli a log.
 - I/O solo tramite util SSoT; nessuna write manuale.
 
-Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [User Guide -> Guida UI](user_guide.md).
+Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide -> Guida UI](user_guide.md).
 
 ---
 

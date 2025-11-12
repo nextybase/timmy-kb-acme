@@ -168,9 +168,9 @@ def _enforce_session_ttl() -> Optional[Dict[str, Any]]:
     return cast(Dict[str, Any], user)
 
 
-# ---------- Osservabilita (Admin) ----------
+# ---------- Osservabilità (Admin) ----------
 def _docker_ready() -> bool:
-    """True se Docker CLI  presente e l'engine risponde."""
+    """True se Docker CLI è presente e l'engine risponde."""
     docker_exe = shutil.which("docker")
     if not docker_exe:
         return False
@@ -188,7 +188,7 @@ def _docker_ready() -> bool:
 
 
 def _port_in_use(port: int) -> bool:
-    """True se localhost:port  aperta."""
+    """True se localhost:port è aperta."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             return sock.connect_ex(("127.0.0.1", port)) == 0
@@ -221,7 +221,7 @@ def _start_observability_stack() -> tuple[bool, str]:
             timeout=120,
         )  # noqa: S603,S607
         if result.returncode == 0:
-            return True, "Stack osservabilitààààààà avviato."
+            return True, "Stack osservabilità avviato."
         return False, result.stderr.strip() or "Compose non riuscito."
     except subprocess.TimeoutExpired:
         return False, "Timeout avvio docker compose (120s)."
@@ -230,7 +230,7 @@ def _start_observability_stack() -> tuple[bool, str]:
 
 
 def _stop_observability_stack() -> tuple[bool, str]:
-    """Ferma lo stack osservabilitààààààà (docker compose down)."""
+    """Ferma lo stack osservabilità (docker compose down)."""
     env_path = REPO_ROOT / ".env"
     if not env_path.exists():
         return False, f"File .env non trovato in {env_path}"
@@ -253,7 +253,7 @@ def _stop_observability_stack() -> tuple[bool, str]:
             timeout=120,
         )  # noqa: S603,S607
         if result.returncode == 0:
-            return True, "Stack osservabilitààààààà arrestato."
+            return True, "Stack osservabilità arrestato."
         return False, result.stderr.strip() or "Compose down non riuscito."
     except subprocess.TimeoutExpired:
         return False, "Timeout durante docker compose down (120s)."
@@ -374,7 +374,7 @@ if not cfg["client_id"] or not cfg["redirect_uri"]:
 else:
     user = _enforce_session_ttl()
     if user:
-        st.success(f"Accesso gi attivo: {user.get('email')}")
+        st.success(f"Accesso già attivo: {user.get('email')}")
         _render_admin_panel()
         st.stop()
 
@@ -389,11 +389,11 @@ else:
     login_url = _build_auth_url(st.session_state["oauth_state"], st.session_state["oauth_nonce"])
     st.link_button("Accedi con Google", login_url, width="stretch")
 
-    # Modalit locale opzionale: espone il pannello anche senza login
+    # Modalità locale opzionale: espone il pannello anche senza login
     settings_obj = _load_settings()
     if settings_obj and settings_obj.ui_admin_local_mode:
         st.info(
-            "Modalit locale attiva: pannello osservabilita disponibile senza login. "
+            "Modalità locale attiva: pannello osservabilità disponibile senza login. "
             "Ricorda di valorizzare le credenziali Grafana in `.env`."
         )
         _render_admin_panel()

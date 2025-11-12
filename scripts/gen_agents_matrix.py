@@ -16,6 +16,7 @@ CANDIDATES = [
     ("Pipeline Core", REPO / "src" / "pipeline" / "AGENTS.md"),
     ("Semantica", REPO / "src" / "semantic" / "AGENTS.md"),
     ("UI (Streamlit)", REPO / "src" / "ui" / "AGENTS.md"),
+    ("UI (Streamlit)", REPO / "src" / "ui" / "pages" / "AGENTS.md"),
     ("Test", REPO / "tests" / "AGENTS.md"),
     ("Documentazione", REPO / "docs" / "AGENTS.md"),
     ("Codex (repo)", REPO / ".codex" / "AGENTS.md"),
