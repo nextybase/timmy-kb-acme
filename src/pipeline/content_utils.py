@@ -10,6 +10,7 @@ from urllib.parse import quote
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
+from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths  # SSoT path-safety forte
 from semantic.auto_tagger import extract_semantic_candidates
@@ -104,16 +105,26 @@ def _write_markdown_for_pdf(
 
     candidate_meta = candidates.get(rel_pdf.as_posix(), {}) if candidates else {}
     tags_raw = candidate_meta.get("tags") or []
+    tags_sorted = sorted({str(t).strip() for t in tags_raw if str(t).strip()})
+    body = f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*\n"
+
+    existing_created_at: str | None = None
+    if md_path.exists():
+        try:
+            meta_prev, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
+            existing_created_at = str(meta_prev.get("created_at") or "").strip() or None
+            if body_prev.strip() == body.strip() and meta_prev.get("tags_raw") == tags_sorted:
+                return md_path
+        except Exception:
+            existing_created_at = None
 
     meta: dict[str, Any] = {
         "title": _titleize(pdf_path.stem),
         "source_category": rel_pdf.parent.as_posix() or None,
         "source_file": rel_pdf.name,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds"),
-        "tags_raw": sorted({str(t).strip() for t in tags_raw if str(t).strip()}),
+        "created_at": existing_created_at or datetime.utcnow().isoformat(timespec="seconds"),
+        "tags_raw": tags_sorted,
     }
-
-    body = f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*\n"
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
     return md_path
 

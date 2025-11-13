@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils.py  (aggiunta di due test mirati)
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from pipeline import content_utils as cu
 from pipeline.exceptions import PipelineError
+from pipeline.frontmatter_utils import read_frontmatter
+from semantic.config import SemanticConfig
 
 
 class _Ctx:
@@ -50,3 +53,35 @@ def test_validate_markdown_dir_traversal_includes_slug_in_message(tmp_path: Path
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"
     assert "slug=dummy" in str(err)
+
+
+def test_write_markdown_for_pdf_preserves_created_at(tmp_path: Path, monkeypatch: Any):
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    pdf_path = raw_root / "documento.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    target_root = tmp_path / "book"
+    cfg = SemanticConfig(
+        base_dir=tmp_path,
+        semantic_dir=tmp_path / "semantic",
+        raw_dir=raw_root,
+    )
+
+    rel_pdf = pdf_path.relative_to(raw_root).as_posix()
+    candidates = {rel_pdf: {"tags": ["inaugurazione", "vision"]}}
+
+    first_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg)
+    meta_before, body_before = read_frontmatter(target_root, first_md)
+    created_before = meta_before["created_at"]
+
+    def _fail_write(*_args, **_kwargs) -> None:
+        raise AssertionError("safe_write_text should not be called for idempotent Markdown")
+
+    monkeypatch.setattr(cu, "safe_write_text", _fail_write)
+    second_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg)
+
+    assert second_md == first_md
+    meta_after, body_after = read_frontmatter(target_root, second_md, use_cache=False)
+    assert meta_after["created_at"] == created_before
+    assert body_after == body_before

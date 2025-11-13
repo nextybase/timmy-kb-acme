@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import ui.manage.tags as tags
 from pipeline.exceptions import ConfigError
+from ui.manage.tags import DEFAULT_TAGS_YAML
 
 
 class _StreamlitStub:
@@ -176,3 +178,62 @@ def test_enable_tags_service_fails_when_csv_missing(tmp_path: Path) -> None:
 
     assert ok is False
     assert st_stub.errors  # messaggio utente presente
+
+
+def test_enable_tags_stub_returns_false_when_state_update_fails(tmp_path: Path) -> None:
+    st_stub = _StreamlitStub()
+    semantic_dir = tmp_path / "semantic"
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+
+    ok = tags.enable_tags_stub(
+        "demo",
+        semantic_dir,
+        yaml_path,
+        st=st_stub,
+        logger=logging.getLogger("test.manage.tags"),
+        set_client_state=lambda _slug, _state: False,
+        reset_gating_cache=lambda _slug: None,
+        import_yaml_fn=lambda *args, **kwargs: {"terms": 1},
+    )
+
+    assert ok is False
+    assert any("Aggiornamento stato cliente" in message for message in st_stub.errors)
+
+
+def test_enable_tags_service_returns_false_when_state_update_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    st_stub = _StreamlitStub()
+    semantic_dir = tmp_path / "semantic"
+    semantic_dir.mkdir()
+    csv_path = tmp_path / "tags_raw.csv"
+    csv_path.write_text("relative_path,suggested_tags,entities,keyphrases,score,sources\n", encoding="utf-8")
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+    db_path = semantic_dir / "tags.db"
+
+    def fake_write_stub(_semantic_dir: Path, _csv: Path, _logger: Any) -> None:
+        yaml_path.write_text(DEFAULT_TAGS_YAML, encoding="utf-8")
+
+    def fake_export(_semantic_dir: Path, _db_path: Path, _logger: Any) -> None:
+        pass
+
+    monkeypatch.setattr("semantic.tags_io.write_tags_review_stub_from_csv", fake_write_stub)
+    monkeypatch.setattr("semantic.api.export_tags_yaml_from_db", fake_export)
+    monkeypatch.setattr("storage.tags_store.derive_db_path_from_yaml_path", lambda _path: str(db_path))
+
+    ok = tags.enable_tags_service(
+        "demo",
+        semantic_dir,
+        csv_path,
+        yaml_path,
+        st=st_stub,
+        logger=logging.getLogger("test.manage.tags"),
+        set_client_state=lambda _slug, _state: False,
+        reset_gating_cache=lambda _slug: None,
+    )
+
+    assert ok is False
+    assert any(
+        "Abilitazione semantica riuscita ma aggiornamento stato fallito" in message for message in st_stub.errors
+    )

@@ -173,7 +173,9 @@ def enable_tags_stub(
                 )
             reset_gating_cache(slug)
         else:
-            st.warning("Impossibile aggiornare lo stato cliente (stub): verifica clients_db/clients.yaml.")
+            st.error("Aggiornamento stato cliente non riuscito: verifica clients_db/clients.yaml.")
+            logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": target_state})
+            return False
         logger.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:
@@ -218,7 +220,9 @@ def enable_tags_service(
             st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
             reset_gating_cache(slug)
         else:
-            st.warning("Impossibile aggiornare lo stato cliente: verifica clients_db/clients.yaml.")
+            st.error("Abilitazione semantica riuscita ma aggiornamento stato fallito.")
+            logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": "arricchito"})
+            return False
         logger.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:

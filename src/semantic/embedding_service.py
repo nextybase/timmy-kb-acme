@@ -246,6 +246,7 @@ def _persist_markdown_embeddings(
 
     inserted_total = 0
     version = _dt.utcnow().strftime("%Y%m%d")
+    batch_chunks: list[tuple[str, dict[str, object], str, list[float]]] = []
     for rel_name, vector, body, meta in zip(
         embeddings_result.rel_paths,
         embeddings_result.embeddings,
@@ -257,6 +258,16 @@ def _persist_markdown_embeddings(
         if isinstance(meta, dict):
             filtered = {k: v for k, v in meta.items() if v not in (None, "", [], {})}
             payload_meta.update(filtered)
+        batch_chunks.append(
+            (
+                rel_name,
+                payload_meta,
+                body,
+                list(vector),
+            )
+        )
+
+    for rel_name, payload_meta, body, vector in batch_chunks:
         inserted_total += _insert_chunks(
             project_slug=slug,
             scope=scope,
@@ -264,7 +275,7 @@ def _persist_markdown_embeddings(
             version=version,
             meta_dict=payload_meta,
             chunks=[body],
-            embeddings=[list(vector)],
+            embeddings=[vector],
             db_path=db_path,
             ensure_schema=False,
         )
