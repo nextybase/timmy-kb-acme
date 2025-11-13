@@ -30,6 +30,11 @@ def _logo_for_theme(repo_root: Path) -> Path:
     return resolve_theme_logo_path(repo_root)
 
 
+def get_main_logo_path(repo_root: Path) -> Path:
+    """Logo principale usato in header/sidebar (non la favicon)."""
+    return _logo_for_theme(repo_root)
+
+
 def get_favicon_path(repo_root: Path) -> Path:
     img_dir = _theme_img_dir(repo_root)
     for name in ("favicon.ico", "favicon.png", "ico-next.png"):
@@ -112,4 +117,4 @@ def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
             pass
 
 
-__all__ = ["get_favicon_path", "render_brand_header", "render_sidebar_brand"]
+__all__ = ["get_favicon_path", "get_main_logo_path", "render_brand_header", "render_sidebar_brand"]

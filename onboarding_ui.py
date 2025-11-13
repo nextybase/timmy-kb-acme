@@ -59,7 +59,7 @@ from ui.utils.status import status_guard  # noqa: E402
 from ui.gating import compute_gates, visible_page_specs  # noqa: E402
 from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
 from ui.theme_enhancements import inject_theme_css  # noqa: E402
-from ui.utils.branding import get_favicon_path  # noqa: E402
+from ui.utils.branding import get_favicon_path, get_main_logo_path  # noqa: E402
 
 # Router/state helper (fallback soft se non presente)
 try:  # noqa: E402
@@ -128,7 +128,7 @@ def _render_preflight_header() -> None:
     """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
     logo_path = None
     try:
-        logo_path = get_favicon_path(REPO_ROOT)
+        logo_path = get_main_logo_path(REPO_ROOT)
     except Exception:
         pass
 
