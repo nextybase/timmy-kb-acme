@@ -6,13 +6,13 @@ openai:
   max_retries: 2
   http2_enabled: false
 vision:
-  engine: assistants
+  engine: responses
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
   snapshot_retention_days: 30
   strict_output: true
 ui:
-  skip_preflight: false
+  skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
 retriever:
@@ -28,7 +28,7 @@ raw_cache:
 security:
   oidc:
     enabled: false
-    provider: github  # github | generic | vault
+    provider: github
     audience_env: GITHUB_OIDC_AUDIENCE
     role_env: GITHUB_OIDC_ROLE
     token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
