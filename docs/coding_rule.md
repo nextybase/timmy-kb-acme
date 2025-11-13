@@ -189,6 +189,8 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True)
 log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ```
 
+> Quando esporti `tags_reviewed.yaml` da database (`export_tags_yaml_from_db`) oppure quando la UI genera il file YAML, la piattaforma valida tutti i path: workspace -> `semantic/` -> `tags_reviewed.yaml` -> `tags.db`. Se il DB vive fuori dal workspace o non corrisponde al YAML il flusso si blocca con `ConfigError`, così nessun export può scavalcare la sicurezza di path.
+
 ---
 
 ## 13) Checklist PR (minima)

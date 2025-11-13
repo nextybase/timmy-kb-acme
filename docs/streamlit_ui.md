@@ -400,6 +400,8 @@ if state not in SEMANTIC_ENTRY_STATES or not ready:
 
 **Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.
 
+> Per mantenere lo stesso gating anche nelle esecuzioni *headless* (stub di Streamlit, runner CLI, test unitari) la UI centralizza il controllo in `_require_semantic_gating(slug)`. La funzione chiama `has_raw_pdfs`/`get_state`, solleva `RuntimeError` se RAW non è presente o lo stato non è in `SEMANTIC_ENTRY_STATES`, e viene invocata sia appena la pagina viene caricata sia prima dell'avvio di `_run_convert/_run_enrich/_run_summary`. In questo modo anche gli automation test falliscono immediatamente con lo stesso messaggio visibile alla UI e nessun branch può bypassare il gate.
+
 ### Env preview stub e logging
 
 Il percorso "Preview Docker" supporta una modalita stub pensata per CI ed e2e:

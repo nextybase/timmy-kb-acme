@@ -137,6 +137,8 @@ flowchart TD
 
 > Pseudocode ingestion: vedi `storage.tags_store.import_tags_yaml_to_db`.
 
+> **SSoT runtime:** `tags.db` (SQLite) è la fonte di verità per i tag canonicali. La pipeline interrompe l’esecuzione con `ConfigError` se `semantic/tags.db` risulta mancante o vuoto e la UI lo segnala invitando a rigenerare il vocabolario (`semantic_onboarding`). `tags_reviewed.yaml` rimane esclusivamente un artefatto di authoring (per review umana), mentre tutti i consumatori runtime leggono da `semantic/tags.db`.
+
 ## 5) Gestione contenuti -> **Gestisci cliente**
 
 **Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.
@@ -168,6 +170,7 @@ Prima di usare i pulsanti controlla il riquadro **Prerequisiti**:
 - **Avvia arricchimento semantico** viene abilitato solo se il servizio `ui.services.tags_adapter` e' disponibile oppure se hai impostato `TAGS_MODE=stub`. In modalita' stub l'azione apre direttamente l'editor YAML senza tentare la pipeline AI.
 - **Abilita** (pubblicazione `tags_reviewed.yaml`) resta disattivato se il servizio non e' attivo e non stai usando lo stub; in questo caso la UI mostra l'help per installare l'adapter o abilitare la modalita' stub.
 - In modalita' stub lo YAML viene generato da zero (`DEFAULT_TAGS_YAML`) prima dell'import nel DB. Se il DB resta vuoto lo stato cliente torna a **pronto**; se vengono caricati termini passa ad **arricchito** e viene svuotata la cache di gating.
+- L'esportazione `tags_reviewed.yaml` richiede che `semantic/tags.db` esista sotto il workspace cliente; il percorso (workspace -> semantic -> YAML/DB) è validato con `ensure_within_and_resolve` prima di scrivere. Eventuali mismatch (DB fuori workspace o `tags.db` diverso) provocano errori di configurazione e impediscono la pubblicazione.
 
 Esegui nell'ordine (ripetibile per nuovi PDF):
 
