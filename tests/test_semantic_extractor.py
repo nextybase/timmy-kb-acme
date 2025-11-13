@@ -174,3 +174,22 @@ def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
     assert {d["file"] for d in out["conceptA"]} == {"concept.md"}
     assert all(d["keyword"] == "foo" for d in out["conceptA"])
     assert out["canonicalOnly"] == [{"file": "concept.md", "keyword": "canonicalOnly"}]
+
+
+def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) -> None:
+    base = tmp_path / "kb_alias"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "dup.md").write_text("foo, latest", encoding="utf-8")
+
+    build_vocab_db(
+        base,
+        [
+            {"name": "conceptA", "action": "keep", "synonyms": ["foo", "foo", "Bar"]},
+        ],
+    )
+
+    ctx = DummyCtx(slug="dup", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    out = extract_semantic_concepts(cast(Any, ctx))
+
+    assert out["conceptA"] == [{"file": "dup.md", "keyword": "foo"}]

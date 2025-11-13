@@ -164,13 +164,16 @@ def main() -> None:
             2,
         )
 
+    strict_output = True
+    if settings:
+        strict_output = bool(settings.vision_settings.strict_output)
     text_cfg: Dict[str, Any] = {
         "format": {
             "type": "json_schema",
             "json_schema": {
                 "name": "VisionOutput",
                 "schema": schema,
-                "strict": True,
+                "strict": strict_output,
             },
         }
     }
