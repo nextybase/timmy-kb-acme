@@ -124,6 +124,39 @@ inject_theme_css()
 LOGGER = get_structured_logger("ui.preflight")
 
 
+def _render_preflight_header() -> None:
+    """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
+    logo_path = None
+    try:
+        logo_path = get_favicon_path(REPO_ROOT)
+    except Exception:
+        pass
+
+    try:
+        cols = st.columns([1, 2, 1])
+    except Exception:
+        cols = None
+
+    target = cols[1] if cols and len(cols) >= 3 else st
+
+    def _render(target_st):
+        if logo_path:
+            try:
+                target_st.image(str(logo_path))
+            except Exception:
+                pass
+        try:
+            target_st.markdown("### Controllo di sistema")
+        except Exception:
+            pass
+
+    try:
+        with target:
+            _render(target)
+    except Exception:
+        _render(st)
+
+
 def _load_dotenv_best_effort() -> None:
     """Carica .env solo a runtime, preservando l'import-safe della UI."""
     if load_dotenv is None:
@@ -216,6 +249,7 @@ if not st.session_state.get("preflight_ok", False):
     if skip_preflight:
         st.session_state["preflight_ok"] = True
     else:
+        _render_preflight_header()
         box = st.container()
         with box:
             with st.expander("Prerequisiti", expanded=True):
