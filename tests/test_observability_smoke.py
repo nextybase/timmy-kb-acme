@@ -89,8 +89,12 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(
         front, "_gen_readme", lambda ctx: (ctx.md_dir / "README.md").write_text("# R\n", encoding="utf-8")
     )
-    # Evita enrich_frontmatter post build
-    monkeypatch.setattr(sapi, "_load_reviewed_vocab", lambda base_dir, logger: {}, raising=True)
+    monkeypatch.setattr(
+        sapi,
+        "_require_reviewed_vocab",
+        lambda base_dir, logger, slug: {"dummy": {"aliases": {"dummy"}}},
+        raising=True,
+    )
 
     ctx = _Ctx(base_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
     logger = _logger("test.obs.build")
