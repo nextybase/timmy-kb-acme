@@ -230,7 +230,8 @@ def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None
 
     mapping: Dict[str, List[str]] = {}
     for canon, payload in vocab.items():
-        aliases = payload.get("aliases") or []
+        aliases = set(payload.get("aliases") or [])
+        aliases.add(str(canon))
         mapping[canon] = sorted(aliases)
     return _sanitize_and_dedup_mapping(mapping)
 

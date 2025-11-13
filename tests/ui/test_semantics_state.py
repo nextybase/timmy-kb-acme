@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -177,6 +178,29 @@ def test_semantics_gating_uses_ssot_constants():
 
     # ALLOWED_STATES è valorizzata a livello modulo == SEMANTIC_ENTRY_STATES
     assert set(sem.ALLOWED_STATES) == set(SEMANTIC_ENTRY_STATES)
+    # cache invalidata dopo il test per evitare side effect
+    sem._GATE_CACHE.clear()
+
+
+def test_gate_cache_reuses_result(monkeypatch):
+    import ui.pages.semantics as sem
+
+    calls = {"count": 0}
+
+    def _has_raw(slug: str):
+        calls["count"] += 1
+        return True, Path("raw")
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    sem._GATE_CACHE.clear()
+
+    # First call should populate cache (calls==1)
+    sem._require_semantic_gating("dummy")
+    sem._require_semantic_gating("dummy", reuse_last=True)
+
+    assert calls["count"] == 1
+    sem._GATE_CACHE.clear()
 
 
 def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):

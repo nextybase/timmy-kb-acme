@@ -387,15 +387,16 @@ Per le pagine semantiche, oltre ai gate controlliamo lo stato del cliente:
 
 ```python
 from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_READY_STATES
-from ui.clients_store import get_state
-from ui.utils.workspace import has_raw_pdfs
+from ui.pages import semantics as sem
 
-state = (get_state(slug) or '').strip().lower()
-ready, raw_dir = has_raw_pdfs(slug)
-if state not in SEMANTIC_ENTRY_STATES or not ready:
-    st.info("La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.")
-    st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
+try:
+    sem._require_semantic_gating(slug)
+except RuntimeError as exc:
+    st.info(SEMANTIC_GATING_MESSAGE)
+    st.caption(str(exc))
     st.stop()
+
+> Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: “La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.” Così lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
 ```
 
 **Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.

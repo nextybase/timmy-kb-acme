@@ -71,21 +71,30 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         except Exception:
             pass
     finally:
+        cache_key = (slug or "<none>").strip()
+        _GATE_CACHE.pop(cache_key, None)
         _reset_gating_cache(slug)
 
 
-def _require_semantic_gating(slug: str) -> tuple[str, bool, Path | None]:
+def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
+    cache_key = (slug or "<none>").strip()
+    if reuse_last and cache_key in _GATE_CACHE:
+        cached = _GATE_CACHE[cache_key]
+        if cached[0] in ALLOWED_STATES and cached[1]:
+            return cached
     state = (get_state(slug) or "").strip().lower()
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
         raw_display = raw_dir or "n/d"
         raise RuntimeError(f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})")
-    return state, ready, raw_dir
+    result = (state, ready, raw_dir)
+    _GATE_CACHE[cache_key] = result
+    return result
 
 
 def _run_convert(slug: str) -> None:
-    _require_semantic_gating(slug)
+    _require_semantic_gating(slug, reuse_last=True)
     ctx, logger = _make_ctx_and_logger(slug)
     with status_guard(
         "Converto PDF in Markdown...",
@@ -99,7 +108,7 @@ def _run_convert(slug: str) -> None:
 
 
 def _run_enrich(slug: str) -> None:
-    _require_semantic_gating(slug)
+    _require_semantic_gating(slug, reuse_last=True)
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base_dir, logger)
@@ -124,7 +133,7 @@ def _run_enrich(slug: str) -> None:
 
 
 def _run_summary(slug: str) -> None:
-    _require_semantic_gating(slug)
+    _require_semantic_gating(slug, reuse_last=True)
     ctx, logger = _make_ctx_and_logger(slug)
     with status_guard(
         "Genero SUMMARY.md e README.md...",
@@ -163,6 +172,7 @@ else:
 
 _client_state: str | None = None
 _raw_ready: bool = False
+_GATE_CACHE: dict[str, tuple[str, bool, Path | None]] = {}
 
 if _HAS_STREAMLIT_CONTEXT:
     try:

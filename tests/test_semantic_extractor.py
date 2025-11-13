@@ -10,6 +10,7 @@ import pytest
 
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
+from storage.tags_store import import_tags_yaml_to_db
 
 
 @dataclass
@@ -62,6 +63,13 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
         _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
 
 
+def _publish_tags(semantic_dir: Path, yaml_content: str) -> None:
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    yaml_path = semantic_dir / "tags_reviewed.yaml"
+    yaml_path.write_text(yaml_content, encoding="utf-8")
+    import_tags_yaml_to_db(yaml_path)
+
+
 def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
@@ -73,8 +81,8 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
 
     # Tags reviewed (Fase 2): due concetti con keywords (ordine rilevante per first-hit)
     semantic_dir = base / "semantic"
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    (semantic_dir / "tags_reviewed.yaml").write_text(
+    _publish_tags(
+        semantic_dir,
         "\n".join(
             [
                 'version: "1.0-beta"',
@@ -83,7 +91,6 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
                 '  conceptB: ["qux"]',
             ]
         ),
-        encoding="utf-8",
     )
 
     ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
@@ -111,8 +118,8 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     big.write_text("alpha\n" * 10_000, encoding="utf-8")
 
     semantic_dir = base / "semantic"
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    (semantic_dir / "tags_reviewed.yaml").write_text(
+    _publish_tags(
+        semantic_dir,
         "\n".join(
             [
                 'version: "1.0-beta"',
@@ -120,7 +127,6 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
                 '  concept: ["alpha"]',
             ]
         ),
-        encoding="utf-8",
     )
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
 
@@ -144,3 +150,24 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     ctx = DummyCtx(slug="s3", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out == {}
+
+
+def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: Path) -> None:
+    base = tmp_path / "kb2"
+    md = base / "book"
+    md.mkdir(parents=True)
+    (md / "solo.md").write_text("Cloud services overview", encoding="utf-8")
+    semantic_dir = base / "semantic"
+    _publish_tags(
+        semantic_dir,
+        "\n".join(
+            [
+                'version: "2"',
+                "tags:",
+                '  Cloud: ["cloud"]',
+            ]
+        ),
+    )
+    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
+    out = extract_semantic_concepts(cast(Any, ctx))
+    assert out["Cloud"] == [{"file": "solo.md", "keyword": "Cloud"}]
