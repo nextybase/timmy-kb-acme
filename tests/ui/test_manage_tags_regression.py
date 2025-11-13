@@ -215,7 +215,14 @@ def test_enable_tags_service_returns_false_when_state_update_fails(
     def fake_write_stub(_semantic_dir: Path, _csv: Path, _logger: Any) -> None:
         yaml_path.write_text(DEFAULT_TAGS_YAML, encoding="utf-8")
 
-    def fake_export(_semantic_dir: Path, _db_path: Path, _logger: Any) -> None:
+    def fake_export(
+        _semantic_dir: Path,
+        _db_path: Path,
+        _logger: Any,
+        *,
+        workspace_base: Path | None = None,
+        **kwargs: Any,
+    ) -> None:
         pass
 
     monkeypatch.setattr("semantic.tags_io.write_tags_review_stub_from_csv", fake_write_stub)

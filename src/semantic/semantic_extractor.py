@@ -4,11 +4,9 @@
 --------------------------------
 I 'keywords' (sinonimi/trigger di tagging) NON provengono piu da
 semantic_mapping.yaml / cartelle_raw.yaml (Fase 1).
-Si leggono da: base_dir/semantic/tags_reviewed.yaml
+Si leggono da: base_dir/semantic/tags.db
 
-Compatibilita test: riesponiamo `load_semantic_mapping(...)` come shim
-in modo che i test possano monkeypatcharlo. Di default legge da
-`tags_reviewed.yaml`.
+Compatibilita test: rispondiamo `load_semantic_mapping(...)` come shim.
 """
 
 from __future__ import annotations
@@ -19,11 +17,10 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
-import yaml
-
-from pipeline.exceptions import ConfigError, InputDirectoryMissing, PipelineError
+from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, is_safe_subpath, iter_safe_paths, read_text_safe
+from pipeline.path_utils import is_safe_subpath, iter_safe_paths, read_text_safe
+from semantic.vocab_loader import load_reviewed_vocab
 
 
 class _Ctx(Protocol):
@@ -216,38 +213,6 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
     logger.info("✅ Arricchimento semantico completato.", extra={"slug": context.slug})
 
 
-def load_tags_reviewed(base_dir: Path) -> Dict[str, List[str]]:
-    """
-    Carica semantic/tags_reviewed.yaml e restituisce {concept: [keywords...]} sanificati.
-    """
-    base_path = Path(base_dir)
-    sem_dir = ensure_within_and_resolve(base_path, base_path / "semantic")
-    yaml_path = ensure_within_and_resolve(sem_dir, sem_dir / "tags_reviewed.yaml")
-    if not yaml_path.is_file():
-        raise FileNotFoundError(f"tags_reviewed.yaml non trovato: {yaml_path}")
-
-    raw = read_text_safe(sem_dir, yaml_path, encoding="utf-8")
-    data = yaml.safe_load(raw) or {}
-    if not isinstance(data, dict):
-        raise ConfigError("Formato tags_reviewed.yaml non valido: atteso dict.")
-
-    raw_tags = data.get("tags") or {}
-    if not isinstance(raw_tags, dict):
-        raise ConfigError("Formato tags_reviewed.yaml non valido: campo 'tags' mancante o non mappa.")
-
-    normalized: Dict[str, List[str]] = {}
-    for concept, values in raw_tags.items():
-        if isinstance(values, str):
-            seq = [values]
-        elif isinstance(values, list):
-            seq = [str(v) for v in values]
-        else:
-            seq = [str(values)]
-        normalized[str(concept)] = seq
-
-    return _sanitize_and_dedup_mapping(normalized)
-
-
 def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
     """
     Shim compatibile con i test legacy: restituisce i keywords di Fase 2.
@@ -255,19 +220,19 @@ def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None
     base_dir = getattr(context, "base_dir", None)
     if base_dir is None:
         raise PipelineError("Context privo di base_dir per estrazione semantica.", slug=getattr(context, "slug", None))
-    try:
-        return load_tags_reviewed(Path(base_dir))
-    except FileNotFoundError as exc:
+    logger = _logger or get_structured_logger("semantic.extraction", context=context)
+    vocab = load_reviewed_vocab(Path(base_dir), logger)
+    if not vocab:
         raise PipelineError(
-            "tags_reviewed.yaml non trovato (esegui la revisione semantica Fase 2).",
+            "Vocabolario canonico assente: esegui l'estrazione tag per popolare semantic/tags.db.",
             slug=getattr(context, "slug", None),
-            file_path=str(exc),
-        ) from exc
-    except Exception as exc:
-        raise PipelineError(
-            f"tags_reviewed.yaml non valido: {exc}",
-            slug=getattr(context, "slug", None),
-        ) from exc
+        )
+
+    mapping: Dict[str, List[str]] = {}
+    for canon, payload in vocab.items():
+        aliases = payload.get("aliases") or []
+        mapping[canon] = sorted(aliases)
+    return _sanitize_and_dedup_mapping(mapping)
 
 
 _ZERO_WIDTH = {"\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"}
@@ -298,4 +263,4 @@ def _sanitize_and_dedup_mapping(mapping: Dict[str, List[str]]) -> Dict[str, List
     return out
 
 
-__all__ = ["extract_semantic_concepts", "enrich_markdown_folder", "load_tags_reviewed", "load_semantic_mapping"]
+__all__ = ["extract_semantic_concepts", "enrich_markdown_folder", "load_semantic_mapping"]

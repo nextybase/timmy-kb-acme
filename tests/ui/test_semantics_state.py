@@ -6,6 +6,8 @@ from __future__ import annotations
 import contextlib
 from types import SimpleNamespace
 
+import pytest
+
 
 def _patch_streamlit_semantics(monkeypatch, sem) -> None:
     """Rende innocui gli side-effect UI in test."""
@@ -63,7 +65,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     reset_calls: list[str] = []
 
-    readiness = [True, False, True, True]
+    readiness = [True, True, False, True, True, True, True]
     ready_calls: list[bool] = []
     reset_flag = {"pending": False}
 
@@ -129,7 +131,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     assert state["value"] == "finito"
     assert reset_calls == ["dummy", "dummy", "dummy"]
     assert state_log == ["pronto", "arricchito", "finito"]
-    assert ready_calls == [True, False, True, True]
+    assert ready_calls == [True, True, False, True, True, True, True]
     assert {msg for msg, _ in log_records} == {"convert", "enrich", "summary"}
     assert all(record[1].get("extra", {}).get("slug") == "dummy" for record in log_records)
 
@@ -142,6 +144,16 @@ def test_semantics_message_string_matches_docs():
     repo_root = Path(__file__).resolve().parents[2]
     docs_text = (repo_root / "docs/streamlit_ui.md").read_text(encoding="utf-8")
     assert SEMANTIC_GATING_MESSAGE in docs_text, SEMANTIC_GATING_MESSAGE
+
+
+def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
+    import ui.pages.semantics as sem
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
+
+    with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+        sem._require_semantic_gating("dummy")
 
 
 def test_semantics_gating_uses_ssot_constants():
@@ -167,6 +179,10 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
     # cattura delle promozioni di stato
     state_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+
+    # gating helper
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
@@ -227,6 +243,8 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
 
     sem._run_enrich("dummy-srl")
@@ -253,6 +271,9 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
         return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger")
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
 
     # writer simulato
     monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)

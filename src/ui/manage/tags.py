@@ -210,7 +210,12 @@ def enable_tags_service(
 
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
         db_path = Path(derive_db_path_from_yaml_path(yaml_path))
-        export_tags_yaml_from_db(semantic_dir, db_path, logger)
+        export_tags_yaml_from_db(
+            semantic_dir,
+            db_path,
+            logger,
+            workspace_base=semantic_dir.parent,
+        )
         try:
             updated = set_client_state(slug, "arricchito")
         except Exception as exc:

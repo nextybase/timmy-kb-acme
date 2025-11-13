@@ -74,7 +74,18 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         _reset_gating_cache(slug)
 
 
+def _require_semantic_gating(slug: str) -> tuple[str, bool, Path | None]:
+    """Verifica gating indipendente dal contesto Streamlit."""
+    state = (get_state(slug) or "").strip().lower()
+    ready, raw_dir = has_raw_pdfs(slug)
+    if state not in ALLOWED_STATES or not ready:
+        raw_display = raw_dir or "n/d"
+        raise RuntimeError(f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})")
+    return state, ready, raw_dir
+
+
 def _run_convert(slug: str) -> None:
+    _require_semantic_gating(slug)
     ctx, logger = _make_ctx_and_logger(slug)
     with status_guard(
         "Converto PDF in Markdown...",
@@ -88,6 +99,7 @@ def _run_convert(slug: str) -> None:
 
 
 def _run_enrich(slug: str) -> None:
+    _require_semantic_gating(slug)
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
     vocab = load_reviewed_vocab(base_dir, logger)
@@ -112,6 +124,7 @@ def _run_enrich(slug: str) -> None:
 
 
 def _run_summary(slug: str) -> None:
+    _require_semantic_gating(slug)
     ctx, logger = _make_ctx_and_logger(slug)
     with status_guard(
         "Genero SUMMARY.md e README.md...",
@@ -152,17 +165,15 @@ _client_state: str | None = None
 _raw_ready: bool = False
 
 if _HAS_STREAMLIT_CONTEXT:
-    state = (get_state(slug) or "").strip().lower()
-    ready, raw_dir = has_raw_pdfs(slug)
-    if state not in ALLOWED_STATES or not ready:
+    try:
+        _client_state, _raw_ready, _ = _require_semantic_gating(slug)
+    except RuntimeError as exc:
         st.info(SEMANTIC_GATING_MESSAGE)
-        st.caption(f"Stato: {state or 'n/d'} - RAW: {raw_dir or 'n/d'}")
+        st.caption(str(exc))
         try:
             st.stop()
-        except Exception as exc:
-            raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from exc
-    _client_state = state
-    _raw_ready = ready
+        except Exception as stop_exc:
+            raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
 st.subheader("Onboarding semantico")
 _write = getattr(st, "write", None)

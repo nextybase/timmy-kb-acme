@@ -188,17 +188,22 @@ def export_tags_yaml_from_db(
     db_path: Path,
     logger: Any,
     *,
+    workspace_base: Path | None = None,
     limit: int = 200,
     min_weight: float = 0.0,
     keep_only_listed: bool = True,
     version: str = "2",
 ) -> Path:
-    """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only)."""
-    semantic_dir_path = ensure_within_and_resolve(Path(semantic_dir).parent, Path(semantic_dir))
+    """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only).
+    Il parametro `workspace_base` filtra il perimetro root (default = semantic_dir.parent.parent)."""
+    base_root_path = Path(workspace_base or Path(semantic_dir).parent.parent).resolve()
+    semantic_dir_path = ensure_within_and_resolve(base_root_path, Path(semantic_dir))
+    yaml_path = ensure_within_and_resolve(semantic_dir_path, semantic_dir_path / "tags_reviewed.yaml")
     expected_db_path = ensure_within_and_resolve(
-        semantic_dir_path.parent, Path(_derive_tags_db_path(semantic_dir_path / "tags_reviewed.yaml"))
+        semantic_dir_path,
+        Path(_derive_tags_db_path(yaml_path)),
     )
-    actual_db_path = Path(db_path).resolve()
+    actual_db_path = ensure_within_and_resolve(base_root_path, Path(db_path))
     if actual_db_path != expected_db_path:
         raise ConfigError(
             "Percorso DB non coerente con la directory semantic specificata.",
@@ -230,24 +235,9 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
         mds = cast(List[Path], convert_markdown(context, logger, slug=slug))
+        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
+        enrich_frontmatter(context, logger, vocab, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
-        vocab_missing = False
-        vocab: Dict[str, Dict[str, Set[str]]] | None
-        try:
-            vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
-        except ConfigError as exc:
-            vocab_missing = True
-            logger.warning(
-                "semantic.book.vocab_missing",
-                extra={
-                    "slug": slug,
-                    "error": str(exc),
-                    "file_path": getattr(exc, "file_path", None),
-                },
-            )
-            vocab = {}
-        if not vocab_missing and (vocab or not _LAST_VOCAB_STUBBED):
-            enrich_frontmatter(context, logger, vocab, slug=slug)
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))
