@@ -156,6 +156,17 @@ def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
         sem._require_semantic_gating("dummy")
 
 
+def test_run_actions_honor_headless_gating(monkeypatch):
+    import ui.pages.semantics as sem
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "nuovo")
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
+
+    for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
+        with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+            runner("dummy")
+
+
 def test_semantics_gating_uses_ssot_constants():
     """
     Il gating deve usare la costante SSoT `SEMANTIC_ENTRY_STATES`
