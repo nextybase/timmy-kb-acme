@@ -21,9 +21,9 @@ except Exception:  # pragma: no cover
     _load_tags_reviewed = None
 
 
-def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
+def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     """
-    Normalizza data in: { canonical: { "aliases": set[str] } }.
+    Normalizza data in: { canonical: { "aliases": [str,...] } } mantenendo l'ordine di inserimento.
 
     Formati accettati:
     - già normalizzato: Dict[str, Dict[str, Iterable[str]]]
@@ -34,17 +34,36 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
     - lista di liste:  [[canonical, alias], ...]
     - altro/non riconosciuto -> {}
     """
-    out: Dict[str, Set[str]] = defaultdict(set)
+    out: Dict[str, list[str]] = defaultdict(list)
+    seen_aliases: Dict[str, Set[str]] = defaultdict(set)
+
+    def _append_alias(canon_value: Any, alias_value: Any) -> None:
+        canon = str(canon_value)
+        alias = str(alias_value)
+        if not canon or not alias:
+            return
+        if alias in seen_aliases[canon]:
+            return
+        seen_aliases[canon].add(alias)
+        out[canon].append(alias)
 
     # 1) già normalizzato o dizionario con chiave speciale 'tags'
     if isinstance(data, Mapping):
         sample_val = next(iter(data.values()), None)
         # già normalizzato
         if isinstance(sample_val, Mapping) and "aliases" in sample_val:
-            result: Dict[str, Dict[str, Set[str]]] = {}
+            result: Dict[str, Dict[str, list[str]]] = {}
             for canon, payload in cast(Mapping[str, Mapping[str, Iterable[str]]], data).items():
                 aliases = payload.get("aliases", [])
-                result[str(canon)] = {"aliases": set(map(str, aliases))}
+                ordered: list[str] = []
+                seen: set[str] = set()
+                for alias in aliases or []:
+                    alias_str = str(alias)
+                    if not alias_str or alias_str in seen:
+                        continue
+                    seen.add(alias_str)
+                    ordered.append(alias_str)
+                result[str(canon)] = {"aliases": ordered}
             return result
         # formato storage: {"tags": [ {name, action, synonyms?}, ... ]}
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
@@ -65,21 +84,19 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
                     if canon:
                         if isinstance(syns, (list, tuple, set)):
                             for s in syns:
-                                if str(s):
-                                    out[canon].add(str(s))
+                                _append_alias(canon, s)
                         elif isinstance(syns, (str, bytes)) and str(syns).strip():
-                            out[canon].add(str(syns))
+                            _append_alias(canon, syns)
                 elif target:
                     canon = str(target)
                     alias = str(name)
                     if canon and alias:
-                        out[canon].add(alias)
+                        _append_alias(canon, alias)
                         if isinstance(syns, (list, tuple, set)):
                             for s in syns:
-                                if str(s):
-                                    out[canon].add(str(s))
+                                _append_alias(canon, s)
                         elif isinstance(syns, (str, bytes)) and str(syns).strip():
-                            out[canon].add(str(syns))
+                            _append_alias(canon, syns)
             if out:
                 return {k: {"aliases": v} for k, v in out.items()}
 
@@ -87,10 +104,10 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
         try:
             for canon, aliases in cast(Mapping[str, Iterable[Any]], data).items():
                 if isinstance(aliases, (str, bytes)):
-                    out[str(canon)].add(str(aliases))
+                    _append_alias(canon, aliases)
                 else:
                     for a in aliases:
-                        out[str(canon)].add(str(a))
+                        _append_alias(canon, a)
             return {k: {"aliases": v} for k, v in out.items()}
         except Exception:
             pass  # tenteremo i casi successivi
@@ -102,11 +119,11 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
                 canon = str(row.get("canonical") or row.get("canon") or row.get("c") or "")
                 alias = str(row.get("alias") or row.get("a") or "")
                 if isinstance(canon, (str, bytes)) and isinstance(alias, (str, bytes)):
-                    out[str(canon)].add(str(alias))
+                    _append_alias(canon, alias)
             elif isinstance(row, (tuple, list)) and len(row) >= 2:
                 canon, alias = row[0], row[1]
                 if isinstance(canon, (str, bytes)) and isinstance(alias, (str, bytes)):
-                    out[str(canon)].add(str(alias))
+                    _append_alias(canon, alias)
         if out:
             return {k: {"aliases": v} for k, v in out.items()}
 
@@ -114,7 +131,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, Set[str]]]:
     return {}
 
 
-def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, Set[str]]]:
+def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     """
     Wrapper patchabile che carica i 'canonici' da tags.db e li adatta alla shape attesa.
 
@@ -170,14 +187,14 @@ def _log_vocab_event(
         pass
 
 
-def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
+def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, list[str]]]:
     """
     Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
 
     Regole:
     - Se `tags.db` non esiste: restituisce `{}` e registra un log informativo (enrichment disabilitato).
     - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
-    - Dati letti adattati a: {canonical: {"aliases": set[str]}}.
+    - Dati letti adattati a: {canonical: {"aliases": [str,...]}}.
     """
     base_dir = Path(base_dir)
     # Path-safety forte con risoluzione reale

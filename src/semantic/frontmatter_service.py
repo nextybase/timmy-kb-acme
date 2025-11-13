@@ -8,7 +8,7 @@ import re
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, cast
 
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
@@ -47,7 +47,7 @@ def _get_paths(slug: str) -> Dict[str, Path]:
 def enrich_frontmatter(
     context: ClientContextProtocol,
     logger: logging.Logger,
-    vocab: Dict[str, Dict[str, Set[str]]],
+    vocab: Dict[str, Dict[str, Sequence[str]]],
     *,
     slug: str,
     allow_empty_vocab: bool = False,
@@ -191,10 +191,10 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
 # ---------------------------------------------------------------------------
 
 
-def _build_inverse_index(vocab: Dict[str, Dict[str, Set[str]]]) -> Dict[str, Set[str]]:
+def _build_inverse_index(vocab: Dict[str, Dict[str, Sequence[str]]]) -> Dict[str, Set[str]]:
     inverse: Dict[str, Set[str]] = {}
     for canon, meta in (vocab or {}).items():
-        aliases = set(meta.get("aliases") or set())
+        aliases = meta.get("aliases") or []
         for term in {canon, *aliases}:
             normalized = str(term).strip().lower()
             if normalized:

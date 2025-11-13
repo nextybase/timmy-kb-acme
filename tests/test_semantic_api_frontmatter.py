@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-from typing import Dict, Set
+from typing import Dict, Sequence
 
 from semantic.frontmatter_service import (
     _build_inverse_index,
@@ -36,9 +36,9 @@ def test_merge_frontmatter_preserves_existing_title_and_merges_tags() -> None:
 
 
 def test_build_inverse_and_guess_tags() -> None:
-    vocab: Dict[str, Dict[str, Set[str]]] = {
-        "analytics": {"aliases": {"analysis", "analitica"}},
-        "governance": {"aliases": {"policy", "governance"}},
+    vocab: Dict[str, Dict[str, Sequence[str]]] = {
+        "analytics": {"aliases": ["analysis", "analitica"]},
+        "governance": {"aliases": ["policy", "governance"]},
     }
     inv = _build_inverse_index(vocab)
     # Inverse contains lowercased canon and aliases

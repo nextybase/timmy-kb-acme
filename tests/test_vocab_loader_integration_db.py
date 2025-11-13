@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Sequence
 
 import timmykb.semantic.vocab_loader as vl
 
@@ -29,9 +29,9 @@ def test_loads_canonicals_from_db_when_loader_available(tmp_path: Path, monkeypa
     # Inietta un modulo 'storage.tags_store' con la funzione 'load_tags_reviewed'
     class _TagsStoreModule:
         @staticmethod
-        def load_tags_reviewed(db_path: str) -> Dict[str, Dict[str, Set[str]]]:  # noqa: ARG001
+        def load_tags_reviewed(db_path: str) -> Dict[str, Dict[str, Sequence[str]]]:  # noqa: ARG001
             # Ignora il contenuto, ma rispetta la firma e ritorna una struttura valida.
-            return {"canon": {"aliases": {"alias1", "alias2"}}}
+            return {"canon": {"aliases": ["alias1", "alias2"]}}
 
     monkeypatch.setitem(sys.modules, "storage.tags_store", _TagsStoreModule)
 
@@ -41,4 +41,4 @@ def test_loads_canonicals_from_db_when_loader_available(tmp_path: Path, monkeypa
     vocab = vl.load_reviewed_vocab(base, _NoopLogger())
     assert "canon" in vocab
     assert "aliases" in vocab["canon"]
-    assert vocab["canon"]["aliases"] == {"alias1", "alias2"}
+    assert vocab["canon"]["aliases"] == ["alias1", "alias2"]

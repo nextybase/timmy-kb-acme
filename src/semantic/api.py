@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Set, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Sequence, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError
@@ -59,8 +59,8 @@ def get_paths(slug: str) -> Dict[str, Path]:
     }
 
 
-def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Set[str]]]:
-    return cast(Dict[str, Dict[str, Set[str]]], _load_reviewed_vocab(base_dir, logger))
+def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
+    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(base_dir, logger))
 
 
 def _require_reviewed_vocab(
@@ -68,7 +68,7 @@ def _require_reviewed_vocab(
     logger: logging.Logger,
     *,
     slug: str,
-) -> Dict[str, Dict[str, Set[str]]]:
+) -> Dict[str, Dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError se assente."""
     global _LAST_VOCAB_STUBBED
     vocab = load_reviewed_vocab(base_dir, logger)

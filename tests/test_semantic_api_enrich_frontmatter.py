@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Set, cast
+from typing import Any, Dict, Sequence, cast
 
 import semantic.api as sapi
 from semantic import frontmatter_service as front
@@ -53,9 +53,9 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     )
 
     # Minimal vocab with aliases; both canon and alias should map back to canon
-    vocab: Dict[str, Dict[str, Set[str]]] = {
-        "governance": {"aliases": {"policy", "governance"}},
-        "analytics": {"aliases": {"analytics", "analysis"}},
+    vocab: Dict[str, Dict[str, Sequence[str]]] = {
+        "governance": {"aliases": ["policy", "governance"]},
+        "analytics": {"aliases": ["analytics", "analysis"]},
     }
 
     touched = front.enrich_frontmatter(

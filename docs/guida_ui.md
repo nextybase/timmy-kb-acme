@@ -180,7 +180,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
    - **Idempotenza:** genera/aggiorna solo i file nuovi o modificati; non tocca gli altri.
    - **Note/Errore tipico:** PDF protetti o corrotti vengono segnalati nei log e saltati; gli altri proseguono.
 2. **Arricchisci frontmatter**
-   - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** usando `semantic_mapping.yaml` (areas + system\_folders), sinonimi e regole di normalizzazione.
+   - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` è ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB è lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
    - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
 3. **Genera README/SUMMARY**
