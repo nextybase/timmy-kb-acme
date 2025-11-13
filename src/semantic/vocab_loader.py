@@ -87,6 +87,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                                 _append_alias(canon, s)
                         elif isinstance(syns, (str, bytes)) and str(syns).strip():
                             _append_alias(canon, syns)
+                        out.setdefault(canon, out.get(canon, []))
                 elif target:
                     canon = str(target)
                     alias = str(name)
@@ -97,6 +98,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                                 _append_alias(canon, s)
                         elif isinstance(syns, (str, bytes)) and str(syns).strip():
                             _append_alias(canon, syns)
+                        out.setdefault(canon, out.get(canon, []))
             if out:
                 return {k: {"aliases": v} for k, v in out.items()}
 

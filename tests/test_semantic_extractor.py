@@ -2,6 +2,7 @@
 # tests/test_semantic_extractor.py
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -11,6 +12,7 @@ import pytest
 import semantic.semantic_extractor as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
+from storage.tags_store import ensure_schema_v2
 
 
 @dataclass
@@ -168,3 +170,36 @@ def test_extract_semantic_concepts_matches_canonical_without_aliases(
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "solo.md", "keyword": "Cloud"}]
+
+
+def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
+    base = tmp_path / "kb_db"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "concept.md").write_text("Foo canonicalOnly and BAR example", encoding="utf-8")
+
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    db_path = semantic_dir / "tags.db"
+    ensure_schema_v2(str(db_path))
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT INTO tags(name, action) VALUES(?, ?)", ("conceptA", "keep"))
+        term_id = conn.execute("SELECT id FROM tags WHERE name=?", ("conceptA",)).fetchone()[0]
+        conn.execute(
+            "INSERT INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
+            (term_id, "foo", 0),
+        )
+        conn.execute(
+            "INSERT INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
+            (term_id, "Bar", 1),
+        )
+        conn.execute("INSERT INTO tags(name, action) VALUES(?, ?)", ("canonicalOnly", "keep"))
+        conn.commit()
+
+    ctx = DummyCtx(slug="db", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    out = extract_semantic_concepts(cast(Any, ctx))
+
+    assert {d["file"] for d in out["conceptA"]} == {"concept.md"}
+    assert all(d["keyword"] == "foo" for d in out["conceptA"])
+    assert out["canonicalOnly"] == [{"file": "concept.md", "keyword": "canonicalOnly"}]
