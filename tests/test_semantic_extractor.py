@@ -8,9 +8,9 @@ from typing import Any, Optional, cast
 
 import pytest
 
+import semantic.semantic_extractor as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
-from storage.tags_store import import_tags_yaml_to_db
 
 
 @dataclass
@@ -63,14 +63,21 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
         _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
 
 
-def _publish_tags(semantic_dir: Path, yaml_content: str) -> None:
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    yaml_path = semantic_dir / "tags_reviewed.yaml"
-    yaml_path.write_text(yaml_content, encoding="utf-8")
-    import_tags_yaml_to_db(yaml_path)
+def _publish_tags(tags: list[dict[str, Any]]) -> dict[str, dict[str, set[str]]]:
+    mapping: dict[str, dict[str, set[str]]] = {}
+    for tag in tags:
+        name = tag["name"]
+        aliases = set(tag.get("synonyms") or [])
+        mapping[name] = {"aliases": aliases}
+    return mapping
 
 
-def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
+def _apply_vocab(monkeypatch: pytest.MonkeyPatch, tags: list[dict[str, Any]]) -> None:
+    mapping = _publish_tags(tags)
+    monkeypatch.setattr(se, "load_reviewed_vocab", lambda base_dir, logger: mapping)
+
+
+def test_extract_semantic_concepts_happy_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     md.mkdir(parents=True)
@@ -80,21 +87,17 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     (md / "three.md").write_text("FOO only", encoding="utf-8")
 
     # Tags reviewed (Fase 2): due concetti con keywords (ordine rilevante per first-hit)
-    semantic_dir = base / "semantic"
-    _publish_tags(
-        semantic_dir,
-        "\n".join(
-            [
-                'version: "1.0-beta"',
-                "tags:",
-                '  conceptA: ["foo", "Bar", "Foo"]  # duplicate Foo -> dedupe case-insensitive',
-                '  conceptB: ["qux"]',
-            ]
-        ),
+    _apply_vocab(
+        monkeypatch,
+        [
+            {"name": "conceptA", "action": "keep", "synonyms": ["foo", "Bar", "Foo"]},
+            {"name": "conceptB", "action": "keep", "synonyms": ["qux"]},
+        ],
     )
 
     ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
+    print(out)
 
     # For conceptA: first-hit policy per file ->
     # - one.md contains both 'foo' and 'bar' -> first in mapping order is 'foo'
@@ -106,7 +109,7 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     assert out["conceptB"] == [{"file": "two.md", "keyword": "qux"}]
 
 
-def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> None:
+def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     md.mkdir(parents=True)
@@ -117,16 +120,11 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     big = md / "big.md"
     big.write_text("alpha\n" * 10_000, encoding="utf-8")
 
-    semantic_dir = base / "semantic"
-    _publish_tags(
-        semantic_dir,
-        "\n".join(
-            [
-                'version: "1.0-beta"',
-                "tags:",
-                '  concept: ["alpha"]',
-            ]
-        ),
+    _apply_vocab(
+        monkeypatch,
+        [
+            {"name": "concept", "action": "keep", "synonyms": ["alpha"]},
+        ],
     )
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
 
@@ -152,22 +150,21 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     assert out == {}
 
 
-def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: Path) -> None:
+def test_extract_semantic_concepts_matches_canonical_without_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     base = tmp_path / "kb2"
     md = base / "book"
     md.mkdir(parents=True)
     (md / "solo.md").write_text("Cloud services overview", encoding="utf-8")
-    semantic_dir = base / "semantic"
-    _publish_tags(
-        semantic_dir,
-        "\n".join(
-            [
-                'version: "2"',
-                "tags:",
-                '  Cloud: ["cloud"]',
-            ]
-        ),
+
+    _apply_vocab(
+        monkeypatch,
+        [
+            {"name": "Cloud", "action": "keep", "synonyms": []},
+        ],
     )
+
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "solo.md", "keyword": "Cloud"}]
