@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any, Iterable, Sequence
 
 import pytest
 
@@ -14,6 +15,10 @@ SRC_ROOT = REPO_ROOT / "src"
 for candidate in (REPO_ROOT, SRC_ROOT):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
+
+import sqlite3
+
+from storage.tags_store import ensure_schema_v2
 
 # Reindirizza di default il registry clienti verso una copia interna usata solo dai test
 _DEFAULT_TEST_CLIENTS_DB_DIR = Path(".pytest_clients_db")
@@ -248,3 +253,38 @@ def _stable_env(monkeypatch, dummy_workspace):
     except Exception:
         pass
     yield
+
+
+def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
+    """
+    Crea semantic/tags.db nel workspace popolando tag/tag_synonyms (old schema).
+    Questo permette a `load_tags_reviewed` di ritornare i canonical attesi.
+    """
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    db_path = semantic_dir / "tags.db"
+    ensure_schema_v2(str(db_path))
+    with sqlite3.connect(db_path) as conn:
+        for tag in tags:
+            name = str(tag.get("name") or "")
+            if not name:
+                continue
+            action = str(tag.get("action") or "keep")
+            cur = conn.execute(
+                "INSERT INTO tags(name, action) VALUES(?, ?) ON CONFLICT(name) DO UPDATE SET action=excluded.action",
+                (name, action),
+            )
+            term_id = cur.lastrowid or conn.execute("SELECT id FROM tags WHERE name=?", (name,)).fetchone()[0]
+            synonyms = tag.get("synonyms") or []
+            if not isinstance(synonyms, Sequence):
+                synonyms = [synonyms]
+            for pos, alias in enumerate(synonyms):
+                alias_str = str(alias)
+                if not alias_str:
+                    continue
+                conn.execute(
+                    "INSERT OR IGNORE INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
+                    (term_id, alias_str, pos),
+                )
+        conn.commit()
+    return base

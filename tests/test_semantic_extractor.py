@@ -2,7 +2,6 @@
 # tests/test_semantic_extractor.py
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -12,7 +11,7 @@ import pytest
 import semantic.semantic_extractor as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
-from storage.tags_store import ensure_schema_v2
+from tests.conftest import build_vocab_db
 
 
 @dataclass
@@ -65,21 +64,7 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
         _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
 
 
-def _publish_tags(tags: list[dict[str, Any]]) -> dict[str, dict[str, list[str]]]:
-    mapping: dict[str, dict[str, list[str]]] = {}
-    for tag in tags:
-        name = tag["name"]
-        aliases = list(tag.get("synonyms") or [])
-        mapping[name] = {"aliases": aliases}
-    return mapping
-
-
-def _apply_vocab(monkeypatch: pytest.MonkeyPatch, tags: list[dict[str, Any]]) -> None:
-    mapping = _publish_tags(tags)
-    monkeypatch.setattr(se, "load_reviewed_vocab", lambda base_dir, logger: mapping)
-
-
-def test_extract_semantic_concepts_happy_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     md.mkdir(parents=True)
@@ -89,8 +74,8 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path, monkeypatch: pytes
     (md / "three.md").write_text("FOO only", encoding="utf-8")
 
     # Tags reviewed (Fase 2): due concetti con keywords (ordine rilevante per first-hit)
-    _apply_vocab(
-        monkeypatch,
+    build_vocab_db(
+        base,
         [
             {"name": "conceptA", "action": "keep", "synonyms": ["foo", "Bar", "Foo"]},
             {"name": "conceptB", "action": "keep", "synonyms": ["qux"]},
@@ -111,7 +96,7 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path, monkeypatch: pytes
     assert out["conceptB"] == [{"file": "two.md", "keyword": "qux"}]
 
 
-def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     md.mkdir(parents=True)
@@ -122,8 +107,8 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path, monke
     big = md / "big.md"
     big.write_text("alpha\n" * 10_000, encoding="utf-8")
 
-    _apply_vocab(
-        monkeypatch,
+    build_vocab_db(
+        base,
         [
             {"name": "concept", "action": "keep", "synonyms": ["alpha"]},
         ],
@@ -143,7 +128,6 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     (md / "x.md").write_text("irrelevant", encoding="utf-8")
 
     # Force load_semantic_mapping to return empty mapping to test short-circuit
-    import semantic.semantic_extractor as se
 
     monkeypatch.setattr(se, "load_semantic_mapping", lambda context, logger=None: {})
 
@@ -152,16 +136,14 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     assert out == {}
 
 
-def test_extract_semantic_concepts_matches_canonical_without_aliases(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: Path) -> None:
     base = tmp_path / "kb2"
     md = base / "book"
     md.mkdir(parents=True)
     (md / "solo.md").write_text("Cloud services overview", encoding="utf-8")
 
-    _apply_vocab(
-        monkeypatch,
+    build_vocab_db(
+        base,
         [
             {"name": "Cloud", "action": "keep", "synonyms": []},
         ],
@@ -178,24 +160,13 @@ def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
     book.mkdir(parents=True)
     (book / "concept.md").write_text("Foo canonicalOnly and BAR example", encoding="utf-8")
 
-    semantic_dir = base / "semantic"
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    db_path = semantic_dir / "tags.db"
-    ensure_schema_v2(str(db_path))
-
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("INSERT INTO tags(name, action) VALUES(?, ?)", ("conceptA", "keep"))
-        term_id = conn.execute("SELECT id FROM tags WHERE name=?", ("conceptA",)).fetchone()[0]
-        conn.execute(
-            "INSERT INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
-            (term_id, "foo", 0),
-        )
-        conn.execute(
-            "INSERT INTO tag_synonyms(tag_id, alias, pos) VALUES(?, ?, ?)",
-            (term_id, "Bar", 1),
-        )
-        conn.execute("INSERT INTO tags(name, action) VALUES(?, ?)", ("canonicalOnly", "keep"))
-        conn.commit()
+    build_vocab_db(
+        base,
+        [
+            {"name": "conceptA", "action": "keep", "synonyms": ["foo", "Bar"]},
+            {"name": "canonicalOnly", "action": "keep", "synonyms": []},
+        ],
+    )
 
     ctx = DummyCtx(slug="db", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))

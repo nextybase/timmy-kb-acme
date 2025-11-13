@@ -46,6 +46,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline.env_utils import get_env_var  # noqa: E402
+from pipeline.settings import Settings as PipelineSettings
 
 
 def _print_json(payload: Dict[str, Any], exit_code: Optional[int] = None) -> None:
@@ -92,10 +93,22 @@ def main() -> None:
 
     # Nota: con Responses non è strettamente necessario l'assistant_id,
     # ma lo manteniamo per continuità / tracciabilità.
-    assistant_id = _env("OBNEXT_ASSISTANT_ID", "ASSISTANT_ID")
+    settings = None
+    try:
+        settings = PipelineSettings.load(ROOT)
+    except Exception:
+        settings = None
+
+    vision_assistant_env = (
+        settings.vision_assistant_env if settings and settings.vision_assistant_env else "OBNEXT_ASSISTANT_ID"
+    )
+    assistant_id = _env(vision_assistant_env, "ASSISTANT_ID")
 
     # Modello da usare per Vision. Se non specificato, fallback ragionevole.
-    model = _env("VISION_MODEL", "OPENAI_MODEL") or "gpt-4o-mini-2024-07-18"
+    model = _env("VISION_MODEL", "OPENAI_MODEL")
+    if not model and settings and settings.vision_model:
+        model = settings.vision_model
+    model = model or "gpt-4o-mini-2024-07-18"
 
     use_kb = (_env("VISION_USE_KB") or "1").strip().lower() not in {"0", "false", "no", "off"}
 
@@ -113,7 +126,14 @@ def main() -> None:
             2,
         )
 
-    client = OpenAI()
+    client_kwargs: Dict[str, Any] = {"api_key": api_key}
+    if settings:
+        openai_cfg = settings.openai_settings
+        client_kwargs["timeout"] = float(openai_cfg.timeout)
+        client_kwargs["max_retries"] = int(openai_cfg.max_retries)
+        if openai_cfg.http2_enabled:
+            client_kwargs["http2"] = True
+    client = OpenAI(**client_kwargs)
 
     # 2) Blocchetto Vision minimo (come UI)
     TEST_BLOCK = (
