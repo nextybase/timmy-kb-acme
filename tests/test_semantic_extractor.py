@@ -63,11 +63,11 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
         _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
 
 
-def _publish_tags(tags: list[dict[str, Any]]) -> dict[str, dict[str, set[str]]]:
-    mapping: dict[str, dict[str, set[str]]] = {}
+def _publish_tags(tags: list[dict[str, Any]]) -> dict[str, dict[str, list[str]]]:
+    mapping: dict[str, dict[str, list[str]]] = {}
     for tag in tags:
         name = tag["name"]
-        aliases = set(tag.get("synonyms") or [])
+        aliases = list(tag.get("synonyms") or [])
         mapping[name] = {"aliases": aliases}
     return mapping
 
