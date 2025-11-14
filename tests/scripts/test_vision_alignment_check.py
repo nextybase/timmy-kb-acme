@@ -194,6 +194,11 @@ def test_assistant_missing_reports_missing(
     )
     monkeypatch.setattr(vac, "PipelineSettings", SimpleNamespace(load=lambda root: stub_settings))
 
+    def _openai_factory(**kwargs: Any) -> _DummyOpenAI:
+        return _DummyOpenAI(**kwargs)
+
+    monkeypatch.setattr("openai.OpenAI", _openai_factory)
+
     with pytest.raises(SystemExit) as excinfo:
         vac.main()
     assert excinfo.value.code == 0
