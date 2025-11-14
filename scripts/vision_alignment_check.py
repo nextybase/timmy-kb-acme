@@ -177,16 +177,18 @@ def main() -> None:
     strict_output = True
     if settings:
         strict_output = bool(settings.vision_settings.strict_output)
-    text_cfg: Dict[str, Any] = {
-        "format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "VisionOutput",
-                "schema": schema,
-                "strict": strict_output,
-            },
+    text_cfg: Dict[str, Any] | None = None
+    if strict_output:
+        text_cfg = {
+            "format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "VisionOutput",
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
         }
-    }
 
     # 4) Tools / File Search (se abilitato)
     tools: Optional[List[Dict[str, Any]]] = None
@@ -221,7 +223,7 @@ def main() -> None:
             model=model,
             input=TEST_BLOCK,
             instructions=run_instructions,
-            text=text_cfg,
+        **({"text": text_cfg} if text_cfg is not None else {}),
             tools=tools,
             tool_choice=tool_choice,
             metadata={
