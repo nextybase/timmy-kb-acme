@@ -108,12 +108,13 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     big = md / "big.md"
     big.write_text("alpha\n" * 10_000, encoding="utf-8")
 
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "concept", "action": "keep", "synonyms": ["alpha"]},
         ],
     )
+    assert Path(db_path).exists()
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
 
     # Set threshold lower than big file size but higher than small
@@ -153,12 +154,13 @@ def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: P
     md.mkdir(parents=True)
     (md / "solo.md").write_text("Cloud services overview", encoding="utf-8")
 
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "Cloud", "action": "keep", "synonyms": []},
         ],
     )
+    assert Path(db_path).exists()
 
     ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
@@ -171,13 +173,14 @@ def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
     book.mkdir(parents=True)
     (book / "concept.md").write_text("Foo canonicalOnly and BAR example", encoding="utf-8")
 
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "conceptA", "action": "keep", "synonyms": ["foo", "Bar"]},
             {"name": "canonicalOnly", "action": "keep", "synonyms": []},
         ],
     )
+    assert Path(db_path).exists()
 
     ctx = DummyCtx(slug="db", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
@@ -193,12 +196,13 @@ def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) ->
     book.mkdir(parents=True)
     (book / "dup.md").write_text("foo, latest", encoding="utf-8")
 
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "conceptA", "action": "keep", "synonyms": ["foo", "foo", "Bar"]},
         ],
     )
+    assert Path(db_path).exists()
 
     ctx = DummyCtx(slug="dup", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
@@ -211,13 +215,14 @@ def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
     book = base / "book"
     book.mkdir(parents=True)
     (book / "legacy.md").write_text("Legacy Cloud stack", encoding="utf-8")
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "Cloud", "action": "keep", "synonyms": ["cloud"]},
             {"name": "Legacy Cloud", "action": "merge_into:Cloud", "synonyms": ["legacy cloud"]},
         ],
     )
+    assert Path(db_path).exists()
     ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "legacy.md", "keyword": "cloud"}]
@@ -228,7 +233,7 @@ def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
     book = base / "book"
     book.mkdir(parents=True)
     (book / "core.md").write_text("Legacy Cloud Platform", encoding="utf-8")
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "Cloud", "action": "keep", "synonyms": ["cloud"]},
@@ -236,6 +241,7 @@ def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
             {"name": "Legacy Cloud Platform", "action": "merge_into:Cloud Platform", "synonyms": ["legacy platform"]},
         ],
     )
+    assert Path(db_path).exists()
     ctx = DummyCtx(slug="nested", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     combined = out.get("Cloud", []) + out.get("Cloud Platform", [])
