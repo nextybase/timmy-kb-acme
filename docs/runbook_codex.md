@@ -242,6 +242,7 @@ Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](.
 - Generazione mapping: `tools/gen_vision_yaml.py` produce `semantic/semantic_mapping.yaml` a partire da `config/VisionStatement.pdf`.
 - La UI legge sempre il modello da `config/config.yaml` via `get_vision_model()` (SSoT).
 - Preferire scenario **Agent**; *Full Access* solo con motivazione esplicita e branch dedicato.
+- Health-check Vision (`scripts/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id` e `assistant_id_source` nell’output JSON (oltre ai log) per agevolare diagnosi end-to-end.
 
 Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -> Configurazione](developer_guide.md).
 
