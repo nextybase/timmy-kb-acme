@@ -303,4 +303,4 @@ def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
                     (term_id, alias_str, pos),
                 )
         conn.commit()
-    return base
+    return db_path

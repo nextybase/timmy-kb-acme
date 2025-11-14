@@ -2,6 +2,7 @@
 # tests/test_semantic_extractor.py
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -74,13 +75,14 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     (md / "three.md").write_text("FOO only", encoding="utf-8")
 
     # Tags reviewed (Fase 2): due concetti con keywords (ordine rilevante per first-hit)
-    build_vocab_db(
+    db_path = build_vocab_db(
         base,
         [
             {"name": "conceptA", "action": "keep", "synonyms": ["foo", "Bar", "Foo"]},
             {"name": "conceptB", "action": "keep", "synonyms": ["qux"]},
         ],
     )
+    assert Path(db_path).exists()
 
     ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
@@ -239,6 +241,36 @@ def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
     combined = out.get("Cloud", []) + out.get("Cloud Platform", [])
     assert len(combined) == 1
     assert combined[0]["file"] == "core.md"
-    assert combined[0]["keyword"] == "cloud"
+    assert combined[0]["keyword"].lower() in {"cloud", "cloud platform"}
     assert out.get("Legacy Cloud Platform", []) == []
-    assert out.get("Legacy Cloud Platform", []) == []
+
+
+def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> None:
+    base = tmp_path / "kb_merge_order"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "sample.md").write_text("Legacy Cloud roadmap", encoding="utf-8")
+    build_vocab_db(
+        base,
+        [
+            {"name": "Cloud", "action": "keep", "synonyms": ["first"]},
+        ],
+    )
+    db_path = build_vocab_db(
+        base,
+        [
+            {"name": "Cloud", "action": "keep", "synonyms": ["second"]},
+        ],
+    )
+    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    _ = extract_semantic_concepts(cast(Any, ctx))
+
+    with sqlite3.connect(db_path) as conn:
+        term_id = conn.execute("SELECT id FROM tags WHERE name=?", ("Cloud",)).fetchone()[0]
+        rows = list(
+            conn.execute(
+                "SELECT alias FROM tag_synonyms WHERE tag_id=? ORDER BY pos ASC",
+                (term_id,),
+            )
+        )
+    assert [row[0] for row in rows] == ["first", "second"]

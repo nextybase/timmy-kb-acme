@@ -119,8 +119,8 @@ def main() -> None:
 
     use_kb_defaults_to = settings.vision_settings.use_kb if settings else True
     use_kb = use_kb_from_env if use_kb_from_env is not None else use_kb_defaults_to
-    source = "env" if use_kb_from_env is not None else ("config" if settings else "default")
-    LOGGER.info("vision_alignment_check.use_kb", extra={"value": use_kb, "source": source})
+    use_kb_source = "env" if use_kb_from_env is not None else ("config" if settings else "default")
+    LOGGER.info("vision_alignment_check.use_kb", extra={"value": use_kb, "source": use_kb_source})
 
     # 1) Import schema reale dal modulo Vision
     try:
@@ -300,9 +300,11 @@ def main() -> None:
         "status": status,
         "assistant_model": getattr(response, "model", None) or model,
         "used_kb": use_kb,
-        "used_file_search": used_file_search or bool(citations),
-        "response_format": "json_schema" if strict_output else "text",
-        "strict_output": strict_output,
+      "used_file_search": used_file_search or bool(citations),
+      "response_format": "json_schema" if strict_output else "text",
+      "strict_output": strict_output,
+        "use_kb_source": use_kb_source,
+        "strict_output_source": strict_output_source,
         "citations": citations,
         "text_excerpt": (text or "")[:400] if text else None,
         # compat con vecchia struttura (thread/run) anche se qui usiamo Responses:

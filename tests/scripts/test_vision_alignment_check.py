@@ -92,6 +92,8 @@ def test_response_format_matches_strict_flag(
     assert log_entry["extra"]["source"] == "config"
     assert result["response_format"] == expected_format
     assert result["strict_output"] is strict_output
+    assert result["strict_output_source"] == "config"
+    assert result["use_kb_source"] == "config"
     request = created[0].last_request
     assert request is not None
     assert ("text" in request) is strict_output
@@ -145,3 +147,5 @@ def test_strict_output_logged_default_source_when_settings_missing(
     assert log_entry["extra"]["source"] == "default"
     result = json.loads(captured.out.strip())
     assert result["strict_output"] is True
+    assert result["strict_output_source"] == "default"
+    assert result["use_kb_source"] == "env"
