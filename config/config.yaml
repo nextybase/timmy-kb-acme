@@ -9,6 +9,7 @@ vision:
   engine: responses
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
+  use_kb: true
   snapshot_retention_days: 30
   strict_output: true
 ui:

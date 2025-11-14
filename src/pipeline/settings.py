@@ -190,6 +190,7 @@ class VisionSection:
     assistant_id_env: Optional[str]
     snapshot_retention_days: int
     strict_output: bool
+    use_kb: bool = True
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "VisionSection":
@@ -223,6 +224,12 @@ class VisionSection:
             strict_output=_extract_bool(
                 data.get("strict_output"),
                 "vision.strict_output",
+                config_path=config_path,
+                default=True,
+            ),
+            use_kb=_extract_bool(
+                data.get("use_kb"),
+                "vision.use_kb",
                 config_path=config_path,
                 default=True,
             ),

@@ -46,7 +46,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline.env_utils import get_env_var  # noqa: E402
+from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.settings import Settings as PipelineSettings
+LOGGER = get_structured_logger("vision.alignment_check")
 
 
 def _print_json(payload: Dict[str, Any], exit_code: Optional[int] = None) -> None:
@@ -110,7 +112,15 @@ def main() -> None:
         model = settings.vision_model
     model = model or "gpt-4o-mini-2024-07-18"
 
-    use_kb = (_env("VISION_USE_KB") or "1").strip().lower() not in {"0", "false", "no", "off"}
+    use_kb_env = _env("VISION_USE_KB")
+    use_kb_from_env: Optional[bool] = None
+    if use_kb_env is not None:
+        use_kb_from_env = use_kb_env.strip().lower() not in {"0", "false", "no", "off"}
+
+    use_kb_defaults_to = settings.vision_settings.use_kb if settings else True
+    use_kb = use_kb_from_env if use_kb_from_env is not None else use_kb_defaults_to
+    source = "env" if use_kb_from_env is not None else ("config" if settings else "default")
+    LOGGER.info("vision_alignment_check.use_kb", extra={"value": use_kb, "source": source})
 
     # 1) Import schema reale dal modulo Vision
     try:
