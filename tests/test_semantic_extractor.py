@@ -202,3 +202,20 @@ def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) ->
     out = extract_semantic_concepts(cast(Any, ctx))
 
     assert out["conceptA"] == [{"file": "dup.md", "keyword": "foo"}]
+
+
+def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
+    base = tmp_path / "kb_merge"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "legacy.md").write_text("Legacy Cloud stack", encoding="utf-8")
+    build_vocab_db(
+        base,
+        [
+            {"name": "Cloud", "action": "keep", "synonyms": ["cloud"]},
+            {"name": "Legacy Cloud", "action": "merge_into:Cloud", "synonyms": ["legacy cloud"]},
+        ],
+    )
+    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    out = extract_semantic_concepts(cast(Any, ctx))
+    assert out["Cloud"] == [{"file": "legacy.md", "keyword": "Legacy Cloud"}]
