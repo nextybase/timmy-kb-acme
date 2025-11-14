@@ -36,6 +36,7 @@ def test_response_format_matches_strict_flag(
     expected_format: str,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("vision-assistant-env", "assistant-id")
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "assistant-id")
     monkeypatch.setattr(vac, "_load_env_and_sanitize", lambda: None)
     monkeypatch.setattr(
@@ -47,7 +48,7 @@ def test_response_format_matches_strict_flag(
     stub_settings = SimpleNamespace(
         vision_settings=vision_settings,
         vision_model="gpt-test",
-        vision_assistant_env="OBNEXT_ASSISTANT_ID",
+        vision_assistant_env="vision-assistant-env",
         openai_settings=SimpleNamespace(timeout=1, max_retries=1, http2_enabled=False),
     )
 
@@ -104,6 +105,8 @@ def test_response_format_matches_strict_flag(
     assert result["use_kb_source"] == "config"
     assert result["assistant_id"] == "assistant-id"
     assert result["assistant_id_source"] == "config"
+    assert result["assistant_env"] == "vision-assistant-env"
+    assert result["assistant_env_source"] == "config"
     request = created[0].last_request
     assert request is not None
     assert ("text" in request) is strict_output
@@ -167,3 +170,36 @@ def test_strict_output_logged_default_source_when_settings_missing(
     assert result["use_kb_source"] == "env"
     assert result["assistant_id"] == "assistant-id"
     assert result["assistant_id_source"] == "env"
+    assert result["assistant_env"] == "OBNEXT_ASSISTANT_ID"
+    assert result["assistant_env_source"] == "env"
+
+
+def test_assistant_missing_reports_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("vision-assistant-env", raising=False)
+    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(vac, "_load_env_and_sanitize", lambda: None)
+    monkeypatch.setattr(
+        "semantic.vision_provision._load_vision_schema",
+        lambda: {"type": "object", "properties": {}},
+    )
+    stub_settings = SimpleNamespace(
+        vision_settings=SimpleNamespace(strict_output=True, use_kb=False),
+        vision_model="gpt-test",
+        vision_assistant_env="vision-assistant-env",
+        openai_settings=SimpleNamespace(timeout=1, max_retries=1, http2_enabled=False),
+    )
+    monkeypatch.setattr(vac, "PipelineSettings", SimpleNamespace(load=lambda root: stub_settings))
+
+    with pytest.raises(SystemExit) as excinfo:
+        vac.main()
+    assert excinfo.value.code == 0
+
+    output = json.loads(capsys.readouterr().out.strip())
+    assert output["assistant_id"] is None
+    assert output["assistant_id_source"] == "missing"
+    assert output["assistant_env"] == "missing"
+    assert output["assistant_env_source"] == "missing"

@@ -110,6 +110,9 @@ def main() -> None:
 
     assistant_id = None
     assistant_id_source = "missing"
+    assistant_env = "missing"
+    assistant_env_source = "missing"
+    selected_env: str | None = None
     for candidate in (assistant_env_name, "ASSISTANT_ID"):
         value = get_env_var(candidate, default=None)
         if value:
@@ -122,9 +125,23 @@ def main() -> None:
                 assistant_id_source = "env"
             break
 
+    if assistant_id:
+        selected_env = candidate
+        assistant_env = selected_env
+        assistant_env_source = assistant_id_source
+
+    if assistant_id:
+        assistant_env = candidate
+        assistant_env_source = assistant_id_source
+
     LOGGER.info(
         "vision_alignment_check.assistant_id",
-        extra={"value": assistant_id, "source": assistant_id_source},
+        extra={
+            "value": assistant_id,
+            "source": assistant_id_source,
+            "assistant_env": assistant_env,
+            "assistant_env_source": assistant_env_source,
+        },
     )
 
     # Modello da usare per Vision. Se non specificato, fallback ragionevole.
@@ -324,6 +341,8 @@ def main() -> None:
         "used_file_search": used_file_search or bool(citations),
         "assistant_id": assistant_id,
         "assistant_id_source": assistant_id_source,
+        "assistant_env": assistant_env,
+        "assistant_env_source": assistant_env_source,
         "response_format": "json_schema" if strict_output else "text",
         "strict_output": strict_output,
         "use_kb_source": use_kb_source,
