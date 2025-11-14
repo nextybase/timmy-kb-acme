@@ -79,11 +79,18 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
 def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
     cache_key = (slug or "<none>").strip()
-    if reuse_last and cache_key in _GATE_CACHE:
-        cached = _GATE_CACHE[cache_key]
-        if cached[0] in ALLOWED_STATES and cached[1]:
-            return cached
     state = (get_state(slug) or "").strip().lower()
+    if reuse_last and cache_key in _GATE_CACHE:
+        cached_state, _, _ = _GATE_CACHE[cache_key]
+        if cached_state in ALLOWED_STATES:
+            ready_now, raw_dir_now = has_raw_pdfs(slug)
+            if ready_now:
+                result = (cached_state, ready_now, raw_dir_now)
+                _GATE_CACHE[cache_key] = result
+                return result
+            _GATE_CACHE.pop(cache_key, None)
+            raw_display = raw_dir_now or "n/d"
+            raise RuntimeError(f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})")
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
         raw_display = raw_dir or "n/d"

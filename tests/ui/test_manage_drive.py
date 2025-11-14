@@ -212,3 +212,39 @@ def test_plan_raw_download_uses_discover_candidates(monkeypatch: pytest.MonkeyPa
     assert conflicts == ["existing.pdf"]
     assert labels == ["existing.pdf", "sub/new.pdf"]
     assert recorded_kwargs.get("local_root") == raw_dir
+
+
+def test_execute_drive_download_logs_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    log_records: list[tuple[str, dict[str, object]]] = []
+
+    class FailureLogger:
+        def exception(self, message: str, *, extra: dict[str, object]) -> None:
+            log_records.append((message, extra))
+
+    def status_guard(*_args: Any, **_kwargs: Any) -> _StatusStub:
+        return _StatusStub()
+
+    st_stub = _StreamlitStub()
+
+    def download_with_progress(*, slug: str, overwrite: bool, require_env: bool = True) -> List[str]:
+        raise RuntimeError("boom")
+
+    ok = drive.execute_drive_download(
+        slug="demo",
+        conflicts=["raw/x.pdf"],
+        download_with_progress=download_with_progress,
+        download_simple=None,
+        invalidate_index=None,
+        logger=FailureLogger(),
+        st=st_stub,
+        status_guard=status_guard,
+        overwrite_requested=True,
+    )
+
+    assert not ok
+    assert log_records == [
+        (
+            "ui.manage.drive.download_failed",
+            {"slug": "demo", "overwrite": True, "error": "boom"},
+        )
+    ]

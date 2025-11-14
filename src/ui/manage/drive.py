@@ -120,6 +120,17 @@ def execute_drive_download(
         except Exception:
             return True
     except Exception as exc:
+        try:
+            logger.exception(
+                "ui.manage.drive.download_failed",
+                extra={
+                    "slug": slug,
+                    "overwrite": overwrite_existing,
+                    "error": str(exc),
+                },
+            )
+        except Exception:
+            pass
         st.error(f"Errore durante il download: {exc}")
         return False
 

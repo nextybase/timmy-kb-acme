@@ -329,6 +329,7 @@ if slug:
         try:
             _render_drive_diff(slug)  # usa indice cachato, degrada a vuoto
         except Exception as e:  # pragma: no cover
+            LOGGER.exception("ui.manage.drive.diff_failed", extra={"slug": slug, "error": str(e)})
             st.error(f"Errore nella vista Diff: {e}")
     else:
         st.info("Vista Diff non disponibile.")
@@ -399,6 +400,7 @@ if slug:
                 except Exception:
                     pass
             except Exception as e:  # pragma: no cover
+                LOGGER.exception("ui.manage.drive.readme_failed", extra={"slug": slug, "error": str(e)})
                 st.error(f"Impossibile generare i README: {e}")
 
     # Colonna 2  -  Arricchimento semantico (estrazione tag)
@@ -468,12 +470,18 @@ if slug:
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
 
     # Colonna 3 – Scarica da Drive → locale
-    download_disabled = _plan_raw_download is None or not (os.getenv("SERVICE_ACCOUNT_FILE") and os.getenv("DRIVE_ID"))
-    drive_component.render_drive_status_message(
-        st,
-        download_disabled,
-        "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive.",
+    service_account_file = os.getenv("SERVICE_ACCOUNT_FILE")
+    service_account_ok = bool(service_account_file and Path(service_account_file).expanduser().exists())
+    download_disabled = _plan_raw_download is None or not (service_account_ok and os.getenv("DRIVE_ID"))
+    default_msg = (
+        "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive."
     )
+    status_msg = (
+        f"Percorso SERVICE_ACCOUNT_FILE non valido: {service_account_file!r}."
+        if service_account_file and not service_account_ok
+        else default_msg
+    )
+    drive_component.render_drive_status_message(st, download_disabled, status_msg)
     if _column_button(
         c3,
         "Scarica PDF da Drive → locale",
@@ -496,6 +504,10 @@ if slug:
                     logger=LOGGER,
                 )
             except Exception as e:
+                LOGGER.exception(
+                    "ui.manage.drive.plan_failed",
+                    extra={"slug": slug, "error": str(e)},
+                )
                 message = f"Impossibile preparare il piano di download: {e}"
                 HttpErrorType: type[BaseException] | None
                 try:

@@ -112,7 +112,6 @@ def main() -> None:
     assistant_id_source = "missing"
     assistant_env = "missing"
     assistant_env_source = "missing"
-    selected_env: str | None = None
     for candidate in (assistant_env_name, "ASSISTANT_ID"):
         value = get_env_var(candidate, default=None)
         if value:
@@ -124,11 +123,6 @@ def main() -> None:
             else:
                 assistant_id_source = "env"
             break
-
-    if assistant_id:
-        selected_env = candidate
-        assistant_env = selected_env
-        assistant_env_source = assistant_id_source
 
     if assistant_id:
         assistant_env = candidate

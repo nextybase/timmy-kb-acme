@@ -199,7 +199,49 @@ def test_gate_cache_reuses_result(monkeypatch):
     sem._require_semantic_gating("dummy")
     sem._require_semantic_gating("dummy", reuse_last=True)
 
-    assert calls["count"] == 1
+    assert calls["count"] == 2
+    sem._GATE_CACHE.clear()
+
+
+def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    states: list[tuple[bool, Path | None]] = [(True, tmp_path / "raw"), (False, None)]
+
+    def _has_raw(slug: str):
+        return states.pop(0)
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    sem._GATE_CACHE.clear()
+
+    sem._require_semantic_gating("dummy")
+    with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+        sem._require_semantic_gating("dummy", reuse_last=True)
+    sem._GATE_CACHE.clear()
+
+
+def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    responses: list[tuple[bool, Path | None]] = [
+        (True, Path("raw")),
+        (True, tmp_path / "raw-v2"),
+    ]
+
+    def _has_raw(slug: str):
+        return responses.pop(0)
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    sem._GATE_CACHE.clear()
+
+    sem._require_semantic_gating("dummy")
+    sem._require_semantic_gating("dummy", reuse_last=True)
+
+    cache_key = "dummy"
+    assert cache_key in sem._GATE_CACHE
+    assert sem._GATE_CACHE[cache_key][2] == tmp_path / "raw-v2"
     sem._GATE_CACHE.clear()
 
 
