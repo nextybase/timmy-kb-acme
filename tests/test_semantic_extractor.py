@@ -255,7 +255,7 @@ def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> N
     base = tmp_path / "kb_merge_order"
     book = base / "book"
     book.mkdir(parents=True)
-    (book / "sample.md").write_text("Legacy Cloud roadmap", encoding="utf-8")
+    (book / "sample.md").write_text("first Cloud legacy roadmap", encoding="utf-8")
     build_vocab_db(
         base,
         [
