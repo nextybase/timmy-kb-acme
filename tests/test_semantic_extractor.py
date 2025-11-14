@@ -84,7 +84,6 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
 
     ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
-    print(out)
 
     # For conceptA: first-hit policy per file ->
     # - one.md contains both 'foo' and 'bar' -> first in mapping order is 'foo'
