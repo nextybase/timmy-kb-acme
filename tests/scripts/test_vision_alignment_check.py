@@ -90,10 +90,20 @@ def test_response_format_matches_strict_flag(
     assert log_entry is not None
     assert log_entry["extra"]["value"] is strict_output
     assert log_entry["extra"]["source"] == "config"
+
+    assistant_log = next(
+        (kwargs for msg, kwargs in captured_logs if msg == "vision_alignment_check.assistant_id"),
+        None,
+    )
+    assert assistant_log is not None
+    assert assistant_log["extra"]["value"] == "assistant-id"
+    assert assistant_log["extra"]["source"] == "config"
     assert result["response_format"] == expected_format
     assert result["strict_output"] is strict_output
     assert result["strict_output_source"] == "config"
     assert result["use_kb_source"] == "config"
+    assert result["assistant_id"] == "assistant-id"
+    assert result["assistant_id_source"] == "config"
     request = created[0].last_request
     assert request is not None
     assert ("text" in request) is strict_output
@@ -145,7 +155,15 @@ def test_strict_output_logged_default_source_when_settings_missing(
     assert log_entry is not None
     assert log_entry["extra"]["value"] is True
     assert log_entry["extra"]["source"] == "default"
+    assistant_log = next(
+        (kwargs for msg, kwargs in captured_logs if msg == "vision_alignment_check.assistant_id"),
+        None,
+    )
+    assert assistant_log is not None
+    assert assistant_log["extra"]["source"] == "env"
     result = json.loads(captured.out.strip())
     assert result["strict_output"] is True
     assert result["strict_output_source"] == "default"
     assert result["use_kb_source"] == "env"
+    assert result["assistant_id"] == "assistant-id"
+    assert result["assistant_id_source"] == "env"

@@ -101,10 +101,31 @@ def main() -> None:
     except Exception:
         settings = None
 
-    vision_assistant_env = (
-        settings.vision_assistant_env if settings and settings.vision_assistant_env else "OBNEXT_ASSISTANT_ID"
+    if settings and settings.vision_assistant_env:
+        assistant_env_name = settings.vision_assistant_env
+        assistant_configured = True
+    else:
+        assistant_env_name = "OBNEXT_ASSISTANT_ID"
+        assistant_configured = False
+
+    assistant_id = None
+    assistant_id_source = "missing"
+    for candidate in (assistant_env_name, "ASSISTANT_ID"):
+        value = get_env_var(candidate, default=None)
+        if value:
+            assistant_id = value
+            if candidate == "ASSISTANT_ID":
+                assistant_id_source = "default"
+            elif assistant_configured and settings and candidate == assistant_env_name:
+                assistant_id_source = "config"
+            else:
+                assistant_id_source = "env"
+            break
+
+    LOGGER.info(
+        "vision_alignment_check.assistant_id",
+        extra={"value": assistant_id, "source": assistant_id_source},
     )
-    assistant_id = _env(vision_assistant_env, "ASSISTANT_ID")
 
     # Modello da usare per Vision. Se non specificato, fallback ragionevole.
     model = _env("VISION_MODEL", "OPENAI_MODEL")
@@ -300,9 +321,11 @@ def main() -> None:
         "status": status,
         "assistant_model": getattr(response, "model", None) or model,
         "used_kb": use_kb,
-      "used_file_search": used_file_search or bool(citations),
-      "response_format": "json_schema" if strict_output else "text",
-      "strict_output": strict_output,
+        "used_file_search": used_file_search or bool(citations),
+        "assistant_id": assistant_id,
+        "assistant_id_source": assistant_id_source,
+        "response_format": "json_schema" if strict_output else "text",
+        "strict_output": strict_output,
         "use_kb_source": use_kb_source,
         "strict_output_source": strict_output_source,
         "citations": citations,
