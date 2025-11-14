@@ -268,6 +268,7 @@ def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> N
             {"name": "Cloud", "action": "keep", "synonyms": ["second"]},
         ],
     )
+    assert Path(db_path).exists()
     ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"][0]["keyword"] == "first"
