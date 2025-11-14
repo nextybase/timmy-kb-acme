@@ -269,7 +269,8 @@ def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> N
         ],
     )
     ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
-    _ = extract_semantic_concepts(cast(Any, ctx))
+    out = extract_semantic_concepts(cast(Any, ctx))
+    assert out["Cloud"][0]["keyword"] == "first"
 
     with sqlite3.connect(db_path) as conn:
         term_id = conn.execute("SELECT id FROM tags WHERE name=?", ("Cloud",)).fetchone()[0]
