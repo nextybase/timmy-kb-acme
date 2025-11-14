@@ -47,6 +47,95 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         seen_aliases[canon].add(alias)
         out[canon].append(alias)
 
+    def _build_from_tag_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[str]]]:
+        synonym_map: dict[str, list[str]] = defaultdict(list)
+        synonym_seen: dict[str, set[str]] = defaultdict(set)
+        merge_map: dict[str, str] = {}
+
+        def _normalize_synonyms(raw: Any) -> list[str]:
+            if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+                return [str(item).strip() for item in raw if str(item).strip()]
+            if isinstance(raw, (str, bytes)):
+                value = str(raw).strip()
+                return [value] if value else []
+            return []
+
+        def _record_synonym(target: str, alias_value: str) -> None:
+            alias_str = alias_value.strip()
+            if not alias_str:
+                return
+            key = alias_str.casefold()
+            if key in synonym_seen[target]:
+                return
+            synonym_seen[target].add(key)
+            synonym_map[target].append(alias_str)
+
+        def _resolve_target(name: str) -> str:
+            visited: set[str] = set()
+            current = name
+            while True:
+                next_target = merge_map.get(current)
+                if not next_target or next_target in visited:
+                    break
+                visited.add(current)
+                current = next_target
+            return current
+
+        final_aliases: dict[str, list[str]] = defaultdict(list)
+        final_seen: dict[str, set[str]] = defaultdict(set)
+
+        def _ensure_target(target: str) -> None:
+            final_aliases.setdefault(target, [])
+            final_seen.setdefault(target, set())
+
+        def _add_final_alias(target: str, alias_value: str) -> None:
+            alias_str = alias_value.strip()
+            if not alias_str:
+                return
+            lower = alias_str.casefold()
+            if lower in final_seen[target]:
+                return
+            final_seen[target].add(lower)
+            final_aliases[target].append(alias_str)
+
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            name = str(row.get("name") or row.get("canonical") or "").strip()
+            if not name:
+                continue
+            raw_action = str(row.get("action", "")).strip()
+            action = raw_action.lower()
+            synonym_map.setdefault(name, [])
+            synonym_seen.setdefault(name, set())
+            raw_syns = row.get("synonyms") or row.get("aliases") or []
+            for alias in _normalize_synonyms(raw_syns):
+                _record_synonym(name, alias)
+            if action.startswith("merge_into:"):
+                parts = raw_action.split(":", 1)
+                target = parts[1].strip() if len(parts) > 1 else ""
+                if target:
+                    merge_map[name] = target
+
+        # Deduce merge relationships for canonical entries that appear as aliases elsewhere.
+        for canon, aliases in list(synonym_map.items()):
+            for alias in aliases:
+                if alias in synonym_map and alias != canon and alias not in merge_map:
+                    merge_map[alias] = canon
+
+        all_names = set(synonym_map.keys()) | set(merge_map.keys()) | set(merge_map.values())
+        for name in all_names:
+            target = _resolve_target(name)
+            if not target:
+                continue
+            _ensure_target(target)
+            if name != target:
+                _add_final_alias(target, name)
+            for alias in synonym_map.get(name, []):
+                _add_final_alias(target, alias)
+
+        return {canon: {"aliases": aliases} for canon, aliases in final_aliases.items()}
+
     # 1) già normalizzato o dizionario con chiave speciale 'tags'
     if isinstance(data, Mapping):
         sample_val = next(iter(data.values()), None)
@@ -68,39 +157,9 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         # formato storage: {"tags": [ {name, action, synonyms?}, ... ]}
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
         if isinstance(items, Sequence) and not isinstance(items, (str, bytes)):
-            for row in items:
-                if not isinstance(row, Mapping):
-                    continue
-                name = row.get("name")
-                action = str(row.get("action", "")).strip().lower()
-                syns = row.get("synonyms") or []
-
-                target = None
-                if action.startswith("merge_into:"):
-                    target = action.split(":", 1)[1].strip()
-
-                if action == "keep":
-                    canon = str(name)
-                    if canon:
-                        if isinstance(syns, (list, tuple, set)):
-                            for s in syns:
-                                _append_alias(canon, s)
-                        elif isinstance(syns, (str, bytes)) and str(syns).strip():
-                            _append_alias(canon, syns)
-                        out.setdefault(canon, out.get(canon, []))
-                elif target:
-                    canon = str(target)
-                    alias = str(name)
-                    if canon and alias:
-                        _append_alias(canon, alias)
-                        if isinstance(syns, (list, tuple, set)):
-                            for s in syns:
-                                _append_alias(canon, s)
-                        elif isinstance(syns, (str, bytes)) and str(syns).strip():
-                            _append_alias(canon, syns)
-                        out.setdefault(canon, out.get(canon, []))
-            if out:
-                return {k: {"aliases": v} for k, v in out.items()}
+            processed = _build_from_tag_rows(items)
+            if processed:
+                return processed
 
         # mapping semplice: canon -> Iterable[alias]
         try:

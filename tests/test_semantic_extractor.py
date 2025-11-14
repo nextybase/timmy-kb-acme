@@ -219,3 +219,26 @@ def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
     ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "legacy.md", "keyword": "cloud"}]
+
+
+def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
+    base = tmp_path / "kb_nested"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "core.md").write_text("Legacy Cloud Platform", encoding="utf-8")
+    build_vocab_db(
+        base,
+        [
+            {"name": "Cloud", "action": "keep", "synonyms": ["cloud"]},
+            {"name": "Cloud Platform", "action": "merge_into:Cloud", "synonyms": ["platform"]},
+            {"name": "Legacy Cloud Platform", "action": "merge_into:Cloud Platform", "synonyms": ["legacy platform"]},
+        ],
+    )
+    ctx = DummyCtx(slug="nested", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    out = extract_semantic_concepts(cast(Any, ctx))
+    combined = out.get("Cloud", []) + out.get("Cloud Platform", [])
+    assert len(combined) == 1
+    assert combined[0]["file"] == "core.md"
+    assert combined[0]["keyword"] == "cloud"
+    assert out.get("Legacy Cloud Platform", []) == []
+    assert out.get("Legacy Cloud Platform", []) == []
