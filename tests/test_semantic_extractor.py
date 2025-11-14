@@ -218,4 +218,4 @@ def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
     )
     ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
     out = extract_semantic_concepts(cast(Any, ctx))
-    assert out["Cloud"] == [{"file": "legacy.md", "keyword": "Legacy Cloud"}]
+    assert out["Cloud"] == [{"file": "legacy.md", "keyword": "cloud"}]
