@@ -270,15 +270,26 @@ def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
             if not name:
                 continue
             action = str(tag.get("action") or "keep")
+            target = name
+            if action.startswith("merge_into:"):
+                target = action.split(":", 1)[1].strip() or name
+                action = "keep"
+
+            synonyms_raw = tag.get("synonyms") or []
+            synonyms_list = []
+            if target != name:
+                synonyms_list.append(name)
+            if isinstance(synonyms_raw, Sequence) and not isinstance(synonyms_raw, (str, bytes)):
+                synonyms_list.extend(str(alias) for alias in synonyms_raw if str(alias))
+            elif isinstance(synonyms_raw, (str, bytes)) and str(synonyms_raw).strip():
+                synonyms_list.append(str(synonyms_raw))
+
             cur = conn.execute(
                 "INSERT INTO tags(name, action) VALUES(?, ?) ON CONFLICT(name) DO UPDATE SET action=excluded.action",
-                (name, action),
+                (target, action),
             )
-            term_id = cur.lastrowid or conn.execute("SELECT id FROM tags WHERE name=?", (name,)).fetchone()[0]
-            synonyms = tag.get("synonyms") or []
-            if not isinstance(synonyms, Sequence):
-                synonyms = [synonyms]
-            for pos, alias in enumerate(synonyms):
+            term_id = cur.lastrowid or conn.execute("SELECT id FROM tags WHERE name=?", (target,)).fetchone()[0]
+            for pos, alias in enumerate(synonyms_list):
                 alias_str = str(alias)
                 if not alias_str:
                     continue
