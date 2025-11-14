@@ -174,9 +174,12 @@ def main() -> None:
             2,
         )
 
-    strict_output = True
-    if settings:
-        strict_output = bool(settings.vision_settings.strict_output)
+    strict_output_source = "config" if settings else "default"
+    strict_output = bool(settings.vision_settings.strict_output) if settings else True
+    LOGGER.info(
+        "vision_alignment_check.strict_output",
+        extra={"value": strict_output, "source": strict_output_source},
+    )
     text_cfg: Dict[str, Any] | None = None
     if strict_output:
         text_cfg = {
@@ -217,22 +220,24 @@ def main() -> None:
         "Produci SOLO il JSON richiesto, niente testo extra."
     )
 
+    metadata = {"source": "vision_alignment_check"}
+    if assistant_id:
+        metadata["assistant_id"] = assistant_id
+
+    request_kwargs: Dict[str, Any] = {
+        "model": model,
+        "input": TEST_BLOCK,
+        "instructions": run_instructions,
+        "tools": tools,
+        "tool_choice": tool_choice,
+        "metadata": metadata,
+    }
+    if text_cfg:
+        request_kwargs["text"] = text_cfg
+
     # 5) Chiamata Responses API
     try:
-        response = client.responses.create(
-            model=model,
-            input=TEST_BLOCK,
-            instructions=run_instructions,
-        **({"text": text_cfg} if text_cfg is not None else {}),
-            tools=tools,
-            tool_choice=tool_choice,
-            metadata={
-                "source": "vision_alignment_check",
-                "assistant_id": assistant_id,
-            }
-            if assistant_id
-            else {"source": "vision_alignment_check"},
-        )
+        response = client.responses.create(**request_kwargs)
     except Exception as e:
         _print_json(
             {
@@ -296,7 +301,8 @@ def main() -> None:
         "assistant_model": getattr(response, "model", None) or model,
         "used_kb": use_kb,
         "used_file_search": used_file_search or bool(citations),
-        "response_format": "json_schema",
+        "response_format": "json_schema" if strict_output else "text",
+        "strict_output": strict_output,
         "citations": citations,
         "text_excerpt": (text or "")[:400] if text else None,
         # compat con vecchia struttura (thread/run) anche se qui usiamo Responses:

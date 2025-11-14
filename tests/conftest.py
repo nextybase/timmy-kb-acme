@@ -289,7 +289,12 @@ def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
                 (target, action),
             )
             term_id = cur.lastrowid or conn.execute("SELECT id FROM tags WHERE name=?", (target,)).fetchone()[0]
-            for pos, alias in enumerate(synonyms_list):
+            start_pos = conn.execute(
+                "SELECT COALESCE(MAX(pos) + 1, 0) FROM tag_synonyms WHERE tag_id=?",
+                (term_id,),
+            ).fetchone()[0]
+            for offset, alias in enumerate(synonyms_list):
+                pos = int(start_pos) + offset
                 alias_str = str(alias)
                 if not alias_str:
                     continue
