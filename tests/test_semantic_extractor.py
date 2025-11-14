@@ -136,6 +136,16 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     assert out == {}
 
 
+def test_load_semantic_mapping_requires_tags_db(tmp_path: Path) -> None:
+    base = tmp_path / "kb_missing"
+    book = base / "book"
+    book.mkdir(parents=True)
+    (book / "noop.md").write_text("stub", encoding="utf-8")
+    ctx = DummyCtx(slug="missing", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    with pytest.raises(PipelineError):
+        se.load_semantic_mapping(cast(Any, ctx))
+
+
 def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: Path) -> None:
     base = tmp_path / "kb2"
     md = base / "book"
