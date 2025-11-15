@@ -41,7 +41,7 @@ def set_tab(tab: str) -> None:
     try:
         qp = getattr(st, "query_params", None)
         if qp is not None:
-            qp["tab"] = tab or _DEF_TAB
+            qp["tab"] = _normalize(tab) or _DEF_TAB
     except Exception:
         pass
 

@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from pipeline.exceptions import ConfigError
+
 
 def _patch_streamlit_semantics(monkeypatch, sem) -> None:
     """Rende innocui gli side-effect UI in test."""
@@ -153,7 +155,7 @@ def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
     monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
 
-    with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+    with pytest.raises(ConfigError, match="Semantica non disponibile"):
         sem._require_semantic_gating("dummy")
 
 
@@ -164,7 +166,7 @@ def test_run_actions_honor_headless_gating(monkeypatch):
     monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
-        with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+        with pytest.raises(ConfigError, match="Semantica non disponibile"):
             runner("dummy")
 
 
@@ -216,7 +218,7 @@ def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
     sem._GATE_CACHE.clear()
 
     sem._require_semantic_gating("dummy")
-    with pytest.raises(RuntimeError, match="Semantica non disponibile"):
+    with pytest.raises(ConfigError, match="Semantica non disponibile"):
         sem._require_semantic_gating("dummy", reuse_last=True)
     sem._GATE_CACHE.clear()
 

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple, cast
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs, validate_slug
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 
@@ -147,7 +147,10 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     except Exception as e:
         # Non scrivere cache negative su errore: segnala e rientra
         try:
-            _log.warning("Errore durante la scansione di raw/", extra={"error": str(e), "raw_dir": str(raw_dir)})
+            _log.warning(
+                "Errore durante la scansione di raw/",
+                extra={"error": str(e), "raw_dir": tail_path(raw_dir)},
+            )
         except Exception:
             pass
         return False, raw_dir

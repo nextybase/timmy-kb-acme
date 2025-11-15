@@ -22,7 +22,7 @@ st = get_streamlit()
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PREVIEW_LOG_DIR = REPO_ROOT / "logs" / "preview"
 
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, tail_path
 from ui.chrome import render_chrome_then_require
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard
@@ -174,9 +174,10 @@ else:
         semantic_ready = False
     if not raw_ready or not semantic_ready:
         st.info("Anteprima disponibile dopo l'arricchimento semantico e con PDF presenti in raw/.")
+        raw_tail = tail_path(raw_dir) if raw_dir else ""
         st.caption(
             f"Stato cliente: {state_norm or 'n/d'} · RAW pronto: {'sì' if raw_ready else 'no'}"
-            + (f" (path: {raw_dir})" if raw_dir else "")
+            + (f" (cartella: {raw_tail})" if raw_tail else "")
         )
         try:
             logger.info(
@@ -186,6 +187,7 @@ else:
                     "raw_ready": raw_ready,
                     "semantic_ready": semantic_ready,
                     "state": state_norm,
+                    "raw_path": raw_tail,
                 },
             )
         except Exception:  # pragma: no cover - logging best effort

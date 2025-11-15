@@ -15,7 +15,7 @@ st = get_streamlit()
 
 
 from pipeline.exceptions import ConfigError, ConversionError
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, tail_path
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
@@ -71,14 +71,14 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         except Exception:
             pass
     finally:
-        cache_key = (slug or "<none>").strip()
+        cache_key = (slug or "<none>").strip().lower()
         _GATE_CACHE.pop(cache_key, None)
         _reset_gating_cache(slug)
 
 
 def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
-    cache_key = (slug or "<none>").strip()
+    cache_key = (slug or "<none>").strip().lower()
     state = (get_state(slug) or "").strip().lower()
     if reuse_last and cache_key in _GATE_CACHE:
         cached_state, _, _ = _GATE_CACHE[cache_key]
@@ -89,12 +89,10 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
                 _GATE_CACHE[cache_key] = result
                 return result
             _GATE_CACHE.pop(cache_key, None)
-            raw_display = raw_dir_now or "n/d"
-            raise RuntimeError(f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})")
+            _raise_semantic_unavailable(slug, state, ready_now, raw_dir_now)
     ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
-        raw_display = raw_dir or "n/d"
-        raise RuntimeError(f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})")
+        _raise_semantic_unavailable(slug, state, ready, raw_dir)
     result = (state, ready, raw_dir)
     _GATE_CACHE[cache_key] = result
     return result
@@ -180,16 +178,43 @@ else:
 _client_state: str | None = None
 _raw_ready: bool = False
 _GATE_CACHE: dict[str, tuple[str, bool, Path | None]] = {}
+_GATING_LOG = get_structured_logger("ui.semantics.gating")
+
+
+def _log_gating_block(slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None) -> None:
+    try:
+        _GATING_LOG.info(
+            "ui.semantics.gating_blocked",
+            extra={
+                "slug": slug or "",
+                "state": state or "n/d",
+                "raw_ready": bool(raw_ready),
+                "raw_path": tail_path(raw_dir) if raw_dir else "",
+            },
+        )
+    except Exception:
+        pass
+
+
+def _raise_semantic_unavailable(slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None) -> None:
+    _log_gating_block(slug, state, raw_ready, raw_dir)
+    raw_display = tail_path(raw_dir) if raw_dir else "n/d"
+    raise ConfigError(
+        f"Semantica non disponibile (state={state or 'n/d'}, raw={raw_display})",
+        slug=slug,
+        file_path=raw_dir,
+    )
+
 
 if _HAS_STREAMLIT_CONTEXT:
     try:
         _client_state, _raw_ready, _ = _require_semantic_gating(slug)
-    except RuntimeError as exc:
+    except ConfigError as exc:
         st.info(SEMANTIC_GATING_MESSAGE)
         st.caption(str(exc))
         try:
             st.stop()
-        except Exception as stop_exc:
+        except Exception as stop_exc:  # pragma: no cover - Streamlit specific
             raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
 st.subheader("Onboarding semantico")
