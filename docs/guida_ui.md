@@ -93,6 +93,41 @@ Provisioning struttura su **Drive**:
 
 ---
 
+> ## Pagina Admin – **Configurazione** (`config/config.yaml`)
+>
+> La pagina **Configurazione** (menu: **Admin → Configurazione**) permette di leggere e modificare in modo guidato il file globale `config/config.yaml`, senza passare da editor esterni.
+>
+> - **Scope**
+>   Le modifiche agiscono sulla configurazione *globale* di Timmy KB (istanza/progetto), non sul singolo workspace cliente.
+>   I segreti (token, password, ecc.) restano fuori da questa pagina e continuano a essere gestiti tramite variabili d’ambiente / Secret Manager.
+>
+> - **Struttura della pagina**
+>   Ogni chiave di primo livello del file (`openai`, `vision`, `ui`, `retriever`, `security`, ecc.) viene mostrata come un **box apri/chiudi** con:
+>   - un **titolo descrittivo** (es. “OpenAI e LLM”, “Sicurezza e OIDC”…);
+>   - una **breve descrizione** che spiega il significato operativo di quella sezione.
+>
+> - **Modifica dei campi**
+>   All’interno di ogni box:
+>   - le **sottovoci scalari** (boolean, numeri, stringhe) sono visualizzate come **righe etichetta + input** sulla stessa linea, per facilitare la scansione visiva;
+>   - le **sottosezioni annidate** (es. `retriever.throttle`, `security.oidc`) vengono mostrate come piccoli blocchi logici, con le singole opzioni modificate tramite input dedicati;
+>   - strutture più complesse (liste o dict profondi) sono editabili tramite una **textarea YAML**: il contenuto viene ri-parsato in automatico quando si salva.
+>
+> - **Salvataggio e validazione**
+>   Il pulsante **“💾 Salva configurazione”**:
+>   - serializza lo stato corrente della form in YAML;
+>   - sovrascrive `config/config.yaml` usando la scrittura sicura della pipeline (file temporaneo + rename);
+>   - in caso di errore di parsing o scrittura mostra un messaggio esplicito a schermo e logga il problema.
+>   Non è necessario riavviare l’app Streamlit, ma alcune modifiche potrebbero richiedere un nuovo preflight o un nuovo run del client per avere effetto completo.
+>
+> - **Quando usare questa pagina**
+>   Usa **Configurazione** per:
+>   - attivare/disattivare funzionalità globali (es. preflight UI, retriever, logging);
+>   - regolare parametri operativi (latenza, parallelismo, timeout, cache);
+>   - allineare la configurazione ai diversi ambienti (dev/stage/prod) prima di passare a test o onboarding reali.
+>   Per modifiche avanzate o interventi strutturali sul formato del file resta consigliato l’uso di editor dedicati o della pagina **Config Editor**.
+
+---
+
 ## Preflight: preferenza persistente vs. bypass "solo questa run"
 
 Nella sezione **Prerequisiti** trovi due controlli distinti:

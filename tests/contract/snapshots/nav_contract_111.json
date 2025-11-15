@@ -12,6 +12,11 @@
         "url_path": "admin"
       },
       {
+        "path": "src/ui/pages/configurazione.py",
+        "title": "Configurazione",
+        "url_path": "configurazione"
+      },
+      {
         "path": "src/ui/pages/tools_check.py",
         "title": "Tuning",
         "url_path": "check"

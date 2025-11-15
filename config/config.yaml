@@ -1,6 +1,6 @@
 cartelle_raw_yaml: config/cartelle_raw.yaml
 N_VER: 0
-DATA_VER: null
+DATA_VER: ''
 openai:
   timeout: 120
   max_retries: 2

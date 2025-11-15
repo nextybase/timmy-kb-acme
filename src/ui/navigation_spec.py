@@ -15,6 +15,7 @@ class PagePaths:
 
     SETTINGS = "src/ui/pages/settings.py"
     CONFIG_EDITOR = "src/ui/pages/config_editor.py"
+    CONFIGURAZIONE = "src/ui/pages/configurazione.py"
     CLEANUP = "src/ui/pages/cleanup.py"
     GUIDA = "src/ui/pages/guida_ui.py"
 
@@ -63,6 +64,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         "Admin",
         (
             NavPage(PagePaths.ADMIN, "Admin", "admin"),
+            NavPage(PagePaths.CONFIGURAZIONE, "Configurazione", "configurazione"),
             NavPage(PagePaths.TUNING, "Tuning", "check", requires=("vision",)),
             NavPage(PagePaths.SECRETS, "Secrets Healthcheck", "secrets"),
             NavPage(PagePaths.LOGS_PANEL, "Log dashboard", None),
