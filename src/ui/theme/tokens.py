@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# src/ui/theme/tokens.py
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -15,6 +16,7 @@ _LIGHT = dict(
     H1_SIZE_PX=36,
     RADIUS_M=10,
     INSET_HIGHLIGHT="#ffffff66",
+    # Percorso relativo al repo root per il logo in tema chiaro
     LOGO_IMAGE="src/ui/theme/img/next-logo.png",
 )
 
@@ -30,11 +32,18 @@ _DARK = dict(
     H1_SIZE_PX=36,
     RADIUS_M=10,
     INSET_HIGHLIGHT="#00000055",
+    # Percorso relativo al repo root per il logo in tema scuro
     LOGO_IMAGE="src/ui/theme/img/next-logo-bianco.png",
 )
 
 
 def resolve_tokens(base: str | None) -> SimpleNamespace:
-    """Restituisce palette light/dark come SimpleNamespace."""
+    """
+    Restituisce palette light/dark come SimpleNamespace.
+
+    Args:
+        base: "light" o "dark" (case-insensitive). Qualsiasi altro valore
+              viene normalizzato a "light".
+    """
     base_normalized = (base or "light").strip().lower()
     return SimpleNamespace(**(_DARK if base_normalized == "dark" else _LIGHT))

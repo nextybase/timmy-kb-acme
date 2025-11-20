@@ -240,19 +240,36 @@ def _ui_logger() -> logging.Logger:
     return log
 
 
-def _open_error_modal(title: str, body: str, *, caption: str | None = None) -> None:
+def _open_error_modal(
+    title: str,
+    body: str,
+    *,
+    caption: str | None = None,
+    on_force: Optional[Callable[[], bool]] = None,
+    force_label: str = "Forza e prosegui",
+) -> None:
     """
     Mostra un modal di errore con bottone 'Annulla'.
     - Usa st.dialog se disponibile (Streamlit >= 1.50), altrimenti degrada a messaggio inline.
-    - Alla pressione di 'Annulla' il modal si chiude (ritorno semplice).
+    - Se `on_force` è fornito, mostra anche il bottone per forzare l'azione.
     """
 
     def _modal() -> None:
         st.error(body)
         if caption:
             st.caption(caption)
-        if st.button("Annulla", type="secondary", width="stretch"):
-            return
+        col_force, col_cancel = st.columns(2)
+        with col_force:
+            if on_force is not None and st.button(force_label, type="primary"):
+                try:
+                    forced = on_force()
+                    if forced:
+                        st.rerun()
+                except Exception as force_exc:
+                    st.error(f"Impossibile forzare l'operazione: {force_exc}")
+        with col_cancel:
+            if st.button("Annulla", type="secondary"):
+                return
 
     dialog_builder = getattr(st, "dialog", None)
     if callable(dialog_builder):
@@ -364,6 +381,7 @@ effective_slug = (current_slug or candidate_slug) or ""
 if current_phase == UI_PHASE_INIT:
     if st.button("Inizializza Workspace", type="primary", key="btn_init_ws", width="stretch"):
         s = candidate_slug
+        progress = st.progress(0, text="Avvio inizializzazione...")
 
         # 1) Validazione slug (SSoT)
         try:
@@ -401,6 +419,7 @@ if current_phase == UI_PHASE_INIT:
                 _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
+                progress.progress(30, text="Workspace locale pronto.")
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
             local_only_mode = ui_allow_local_only_enabled()
@@ -416,6 +435,7 @@ if current_phase == UI_PHASE_INIT:
                         "ui.drive.not_configured_local_only",
                         extra={"slug": s, "phase": "init"},
                     )
+                    progress.progress(60, text="Drive in modalità locale (skip provisioning).")
                 else:
                     st.error("Provisioning Drive non disponibile. Installa gli extra `pip install .[drive]` e riprova.")
                     st.stop()
@@ -429,9 +449,11 @@ if current_phase == UI_PHASE_INIT:
                         _ensure_drive_minimal(slug=s, client_name=(name or None))
                         if status is not None and hasattr(status, "update"):
                             status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
+                        progress.progress(60, text="Drive pronto (cartelle + config aggiornato).")
                     except Exception as exc:
                         if status is not None and hasattr(status, "update"):
                             status.update(label="Errore durante il provisioning Drive.", state="error")
+                        progress.progress(0, text="Errore durante il provisioning Drive.")
                         st.error(
                             "Errore durante il provisioning Drive: "
                             f"{exc}\n\n"
@@ -450,6 +472,8 @@ if current_phase == UI_PHASE_INIT:
             ) as status:
                 try:
                     _sanitize_openai_env()
+                    step_progress = st.progress(0, text="Preparazione Vision...")
+                    progress.progress(80, text="Eseguo Vision...")
                     run_vision(
                         ctx,
                         slug=s,
@@ -459,8 +483,14 @@ if current_phase == UI_PHASE_INIT:
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
+                    step_progress.progress(100, text="Vision completata.")
+                    progress.progress(100, text="Vision completata.")
                 except Exception as exc:
                     # Mapping unico degli errori (PR-C)
+                    try:
+                        step_progress.progress(0, text="Errore durante Vision.")
+                    except Exception:
+                        pass
                     title, body, caption = to_user_message(exc)
                     _log_diagnostics(
                         s,
@@ -470,8 +500,52 @@ if current_phase == UI_PHASE_INIT:
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label=body, state="error")
-                    _open_error_modal(title, body, caption=caption)
-                    st.stop()
+                    # Se è un gate "forza rigenerazione", offri il pulsante per proseguire
+                    if isinstance(exc, ConfigError) and "Forza rigenerazione" in str(exc):
+
+                        def _force_and_retry() -> bool:
+                            try:
+                                if status is not None and hasattr(status, "update"):
+                                    status.update(label="Forzo rigenerazione Vision...", state="running")
+                                step_progress.progress(10, text="Forzo rigenerazione Vision...")
+                                progress.progress(80, text="Eseguo Vision (forzata)...")
+                                run_vision(
+                                    ctx,
+                                    slug=s,
+                                    pdf_path=_client_pdf_path(s),
+                                    logger=ui_logger,
+                                    preview_prompt=preview_prompt,
+                                    force=True,
+                                )
+                                if status is not None and hasattr(status, "update"):
+                                    status.update(label="Vision completata (forzata).", state="complete")
+                                step_progress.progress(100, text="Vision completata (forzata).")
+                                progress.progress(100, text="Vision completata.")
+                                if _exists_semantic_files(s):
+                                    set_slug(s)
+                                    st.session_state[slug_state_key] = s
+                                    st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
+                                    st.session_state["client_name"] = name or ""
+                                return True
+                            except Exception as inner:
+                                try:
+                                    step_progress.progress(0, text="Errore durante Vision (forzata).")
+                                except Exception:
+                                    pass
+                                st.error(f"Forza rigenerazione fallita: {inner}")
+                            return False
+
+                        _open_error_modal(
+                            title,
+                            body,
+                            caption=caption,
+                            on_force=_force_and_retry,
+                            force_label="Forza rigenerazione e prosegui",
+                        )
+                        st.stop()
+                    else:
+                        _open_error_modal(title, body, caption=caption)
+                        st.stop()
 
             # 6) Controllo file semantici e avanzamento fase
             if _exists_semantic_files(s):
@@ -511,62 +585,55 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
             "Ripeti 'Inizializza Workspace' dopo aver configurato le variabili .env e i permessi Drive."
         )
 
-    if st.button(
-        "Apri workspace",
-        key="btn_open_ws",
-        type="primary",
-        width="stretch",
-        disabled=(not has_drive_ids and not local_only_mode),
-    ):
-        display_name = st.session_state.get("client_name") or (name or eff)
+    display_name = st.session_state.get("client_name") or (name or eff)
 
-        if build_drive_from_mapping is None:
-            if local_only_mode:
-                LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
-                _log_diagnostics(
-                    eff,
-                    "warning",
-                    "ui.drive.not_configured_local_only",
-                    extra={"slug": eff},
-                )
-                _upsert_client_registry(eff, display_name)
-                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
-                st.session_state["client_name"] = display_name
-                st.success("Drive non configurato, continuo in locale.")
-            else:
-                st.warning(
-                    "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
-                    "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
-                )
+    if build_drive_from_mapping is None:
+        if local_only_mode:
+            LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+            _log_diagnostics(
+                eff,
+                "warning",
+                "ui.drive.not_configured_local_only",
+                extra={"slug": eff},
+            )
+            _upsert_client_registry(eff, display_name)
+            st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+            st.session_state["client_name"] = display_name
+            st.success("Drive non configurato, continuo in locale.")
         else:
-            try:
-                if not _has_drive_ids(eff) and not local_only_mode:
-                    st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
-                    st.stop()
+            st.warning(
+                "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
+                "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
+            )
+    else:
+        try:
+            if not _has_drive_ids(eff) and not local_only_mode:
+                st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
+                st.stop()
 
-                with status_guard(
-                    "Provisiono la struttura Drive...",
-                    expanded=True,
-                    error_label="Errore durante il provisioning Drive",
-                ) as status:
+            with status_guard(
+                "Provisiono la struttura Drive...",
+                expanded=True,
+                error_label="Errore durante il provisioning Drive",
+            ) as status:
 
-                    def _cb(step: int, total: int, label: str) -> None:
-                        pct = int(step * 100 / max(total, 1))
-                        if status is not None and hasattr(status, "update"):
-                            status.update(
-                                label=f"Provisiono la struttura Drive... {pct}% - {label}",
-                                state="running",
-                            )
-
-                    _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
+                def _cb(step: int, total: int, label: str) -> None:
+                    pct = int(step * 100 / max(total, 1))
                     if status is not None and hasattr(status, "update"):
-                        status.update(label="Struttura Drive creata correttamente.", state="complete")
+                        status.update(
+                            label=f"Provisiono la struttura Drive... {pct}% - {label}",
+                            state="running",
+                        )
 
-                _upsert_client_registry(eff, display_name)
-                st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
-                st.success("Struttura Drive creata correttamente.")
-            except Exception as e:
-                st.error(f"Errore durante la creazione struttura Drive: {e}")
+                _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
+                if status is not None and hasattr(status, "update"):
+                    status.update(label="Struttura Drive creata correttamente.", state="complete")
+
+            _upsert_client_registry(eff, display_name)
+            st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+            st.success("Struttura Drive creata correttamente.")
+        except Exception as e:
+            st.error(f"Errore durante la creazione struttura Drive: {e}")
 
 # ------------------------------------------------------------------
 # STEP 3 - Link finale
@@ -579,6 +646,6 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
     eff_q = esc_url_component(eff)
     # Navigazione nativa (preferita) con fallback
     if hasattr(st, "page_link"):
-        st.page_link(PagePaths.MANAGE, label="➡️ Vai a Gestisci cliente")
+        st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente")
     else:
-        st.link_button("➡️ Vai a Gestisci cliente", url=f"/manage?slug={eff_q}")
+        st.link_button("Vai a Gestisci cliente", url=f"/manage?slug={eff_q}")

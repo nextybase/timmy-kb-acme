@@ -19,18 +19,60 @@ def _theme_img_dir(repo_root: Path) -> Path:
     return Path(repo_root) / "src" / "ui" / "theme" / "img"
 
 
-def _logo_for_theme(repo_root: Path) -> Path:
-    base = "light"
-    try:
-        opt_base = getattr(st, "get_option", lambda *_: None)("theme.base") if st else None
-        normalized = opt_base.strip().lower() if isinstance(opt_base, str) else None
-        base = normalized if normalized in {"light", "dark"} else get_theme_base()
-    except Exception:
-        base = get_theme_base()
+def _resolve_theme_base() -> str:
+    """
+    Seleziona in modo centralizzato il tema di base ("light" / "dark").
 
-    token_logo = getattr(resolve_tokens(base), "LOGO_IMAGE", None)
-    token_path = (Path(repo_root) / str(token_logo)).resolve() if token_logo else None
-    return token_path if isinstance(token_path, Path) else Path()
+    Ordine di precedenza:
+    1. Valore di Streamlit (st.get_option("theme.base")) se disponibile e valido.
+    2. Fallback applicativo tramite get_theme_base().
+    3. "light" come ultima ancora di salvataggio.
+    """
+    # Default prudenziale
+    base = "light"
+
+    # 1) Tentativo: opzioni Streamlit
+    try:
+        opt_base = None
+        if st is not None:
+            get_opt = getattr(st, "get_option", None)
+            if callable(get_opt):
+                opt_base = get_opt("theme.base")
+        if isinstance(opt_base, str):
+            normalized = opt_base.strip().lower()
+            if normalized in {"light", "dark"}:
+                return normalized
+    except Exception:
+        # Ignora errori di Streamlit e passa al fallback applicativo
+        pass
+
+    # 2) Fallback: configurazione applicativa
+    try:
+        cfg_base = get_theme_base()
+        if isinstance(cfg_base, str):
+            normalized = cfg_base.strip().lower()
+            if normalized in {"light", "dark"}:
+                base = normalized
+    except Exception:
+        # 3) Se anche qui fallisce, restiamo su "light"
+        base = "light"
+
+    return base
+
+
+def _logo_for_theme(repo_root: Path) -> Path:
+    """
+    Determina il logo corretto per il tema corrente (light/dark) usando i tokens.
+    """
+    base = _resolve_theme_base()
+    tokens = resolve_tokens(base)
+    token_logo = getattr(tokens, "LOGO_IMAGE", None)
+
+    if not isinstance(token_logo, str) or not token_logo:
+        return Path()
+
+    logo_path = (Path(repo_root) / token_logo).resolve()
+    return logo_path
 
 
 def get_main_logo_path(repo_root: Path) -> Path:
@@ -39,6 +81,13 @@ def get_main_logo_path(repo_root: Path) -> Path:
 
 
 def get_favicon_path(repo_root: Path) -> Path:
+    """
+    Restituisce il percorso della favicon.
+
+    Ordine:
+    1. favicon.ico / favicon.png / ico-next.png nella cartella theme/img.
+    2. Fallback sul logo del tema corrente.
+    """
     img_dir = _theme_img_dir(repo_root)
     for name in ("favicon.ico", "favicon.png", "ico-next.png"):
         candidate = img_dir / name
@@ -66,6 +115,7 @@ def render_brand_header(
             try:
                 fn(*args, **kwargs)
             except Exception:
+                # Non blocchiamo il rendering dell'header per errori cosmetici
                 pass
 
     if include_anchor:
@@ -80,18 +130,21 @@ def render_brand_header(
                 columns = None
         else:
             columns = None
+
         if not columns or len(columns) < 2:
             _call(st_module, "image", str(logo_path))
             _call(st_module, "title", "Onboarding NeXT - Clienti")
             if subtitle:
                 _call(st_module, "caption", subtitle)
             return
+
         col_logo, col_title = columns[0], columns[1]
         try:
             with col_logo:
                 _call(col_logo, "image", str(logo_path))
         except Exception:
             _call(col_logo, "image", str(logo_path))
+
         try:
             with col_title:
                 _call(col_title, "title", "Onboarding NeXT - Clienti")
@@ -108,6 +161,9 @@ def render_brand_header(
 
 
 def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:
+    """
+    Logo nella sidebar, coerente con lo stesso logo dell'header.
+    """
     if st_module is None:
         return
     logo_path = _logo_for_theme(repo_root)
