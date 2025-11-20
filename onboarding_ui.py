@@ -55,6 +55,7 @@ from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
 from ui.gating import compute_gates, visible_page_specs  # noqa: E402
 from ui.preflight import run_preflight  # noqa: E402
 from ui.theme_enhancements import inject_theme_css  # noqa: E402
+from ui.utils import get_active_slug  # noqa: E402
 from ui.utils.branding import get_favicon_path, get_main_logo_path  # noqa: E402
 from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
 from ui.utils.slug import clear_active_slug  # noqa: E402
@@ -306,22 +307,19 @@ def main() -> None:
         skip_preflight = get_skip_preflight()
 
     try:
-        gates = compute_gates()
-    except Exception as exc:
-        st.error(f"Errore di gating: {exc}")
-        st.stop()
+        slug = get_active_slug()
+    except Exception:
+        slug = None
 
-    if not gates.slug:
+    if not slug:
         clear_active_slug()
-
-    if not gates.slug_available:
         st.info("Benvenuto! Inizia creando un nuovo cliente con il wizard 'Nuovo cliente'.")
 
     if skip_preflight:
         st.caption("Preflight saltato: ui.skip_preflight=True (config/config.yaml).")
 
-    if gates.slug:
-        st.caption(f"Cliente attivo: **{gates.slug}**")
+    if slug:
+        st.caption(f"Cliente attivo: **{slug}**")
 
     cl1, cl2 = st.columns([4, 1])
     with cl1:
@@ -335,9 +333,9 @@ def main() -> None:
     with st.sidebar:
         st.caption("Seleziona la scheda dall'intestazione per iniziare.")
 
-    if gates.slug:
+    if slug:
         try:
-            raw_ready, _raw_path = has_raw_pdfs(gates.slug)
+            raw_ready, _raw_path = has_raw_pdfs(slug)
         except Exception:
             raw_ready = False
         if not raw_ready:
