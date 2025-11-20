@@ -82,10 +82,11 @@ def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     _load_manage_module(monkeypatch, st_stub, slug="dummy", has_raw_result=(True, raw_path))
 
     assert "Avvia arricchimento semantico" in st_stub.button_calls
-    assert any("Arricchimento semantico" in msg for msg in st_stub.info_messages)
+    # Placeholder informativi disabilitati: nessun messaggio info/warning aggiuntivo
+    assert not any("Arricchimento semantico" in msg for msg in st_stub.info_messages)
     assert not any("PDF rilevati" in msg for msg in st_stub.success_messages)
-    expected_warn = "`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico."
-    assert expected_warn in st_stub.warning_messages
+    unexpected_warn = "`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico."
+    assert unexpected_warn not in st_stub.warning_messages
 
 
 def test_iter_pdfs_safe_returns_resolved(tmp_path: Path) -> None:

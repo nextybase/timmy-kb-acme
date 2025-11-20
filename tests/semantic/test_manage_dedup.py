@@ -19,5 +19,6 @@ def test_manage_shows_single_caption(monkeypatch):
     # setup dir & flags
     semantic_dir = Path(".")  # senza tags.db
     manage._render_status_block(pdf_count=0, service_ok=True, semantic_dir=semantic_dir)
-    assert calls["caption"] == 1
-    assert calls["warning"] == 1
+    # Status block disabilitato: nessuna caption/warning deve essere mostrata
+    assert calls["caption"] == 0
+    assert calls["warning"] == 0

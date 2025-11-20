@@ -52,6 +52,11 @@
         "path": "src/ui/pages/manage.py",
         "title": "Gestisci cliente",
         "url_path": "manage"
+      },
+      {
+        "path": "src/ui/pages/semantics.py",
+        "title": "Semantica",
+        "url_path": "semantics"
       }
     ],
     "Tools": [

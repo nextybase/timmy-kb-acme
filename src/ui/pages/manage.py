@@ -301,24 +301,8 @@ def _render_status_block(
     service_ok: bool,
     semantic_dir: Path,
 ) -> None:
-    info_fn = getattr(st, "info", None)
-    if callable(info_fn):
-        info_fn("Arricchimento semantico: usa la pagina **Semantica** per i workflow dedicati avanzati.")
-    db_path = semantic_dir / "tags.db"
-    db_exists = db_path.exists()
-    info_msg = (
-        f"PDF in raw/: **{pdf_count}** - Servizio estrazione: **{'OK' if service_ok else 'mancante'}** "
-        f"- tags.db: **{'presente' if db_exists else 'assente'}**"
-    )
-    caption_fn = getattr(st, "caption", None)
-    if callable(caption_fn):
-        caption_fn(info_msg)
-    elif callable(info_fn):
-        info_fn(info_msg)
-    if not db_exists:
-        warn_fn = getattr(st, "warning", None)
-        if callable(warn_fn):
-            warn_fn("`semantic/tags.db` non trovato: estrai e valida i tag prima dell'arricchimento semantico.")
+    # status block disabilitato su richiesta: nessuna info/warning aggiuntiva
+    return
 
 
 if slug:

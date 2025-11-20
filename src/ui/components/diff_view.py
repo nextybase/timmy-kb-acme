@@ -275,9 +275,17 @@ def build_diff_dataset(
     )
 
 
-def render_file_actions(dataset: DiffDataset, st_module: Any) -> None:
-    """Rende le sezioni \"Solo su Drive\" e \"Solo su locale\"."""
-    with st_module.expander("Solo su Drive", expanded=False):
+def render_file_actions(dataset: DiffDataset, st_module: Any, *, columns: Optional[tuple[Any, Any]] = None) -> None:
+    """Rende le sezioni "Solo su Drive" e "Solo su locale" su due colonne (fallback: singola)."""
+    col_drive, col_local = columns or (st_module, st_module)
+
+    def _expander(target: Any):
+        expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+        if not callable(expander_fn):
+            raise AttributeError("expander API non disponibile")
+        return expander_fn
+
+    with _expander(col_drive)("Solo su Drive", expanded=False):
         if dataset.only_drive:
             grouped_pairs = _group_keys_by_category(dataset.only_drive)
             for category in sorted(grouped_pairs):
@@ -299,7 +307,7 @@ def render_file_actions(dataset: DiffDataset, st_module: Any) -> None:
         else:
             st_module.caption("Nessun elemento solo su Drive.")
 
-    with st_module.expander("Solo su locale", expanded=False):
+    with _expander(col_local)("Solo su locale", expanded=False):
         if dataset.only_local:
             grouped_pairs = _group_keys_by_category(dataset.only_local)
             for category in sorted(grouped_pairs):
@@ -309,9 +317,13 @@ def render_file_actions(dataset: DiffDataset, st_module: Any) -> None:
             st_module.caption("Nessun elemento solo locale.")
 
 
-def render_diff_table(dataset: DiffDataset, st_module: Any) -> None:
+def render_diff_table(dataset: DiffDataset, st_module: Any, *, column: Optional[Any] = None) -> None:
     """Rende la sezione delle differenze dimensione/mtime con eventuali link Drive."""
-    with st_module.expander("Differenze dimensione/mtime", expanded=False):
+    target = column or st_module
+    expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+    if not callable(expander_fn):
+        raise AttributeError("expander API non disponibile")
+    with expander_fn("Differenze dimensione/mtime", expanded=False):
         if dataset.differences:
             diff_groups = _group_differences_by_category(dataset.differences)
             for category in sorted(diff_groups):
@@ -375,5 +387,17 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
         else:  # fallback minimale per gli stub
             st.write(f"{label}: {value}")
 
-    render_file_actions(dataset, st)
-    render_diff_table(dataset, st)
+    try:
+        col_drive, col_local, col_diff = columns
+    except Exception:
+        col_drive = col_local = col_diff = st
+
+    render_file_actions(dataset, st, columns=(col_drive, col_local))
+    render_diff_table(dataset, st, column=col_diff)
+
+    divider_fn = getattr(st, "divider", None)
+    if callable(divider_fn):
+        divider_fn()
+    else:
+        st.markdown("---")
+    st.subheader("Azioni sul workspace")
