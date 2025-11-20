@@ -13,10 +13,8 @@ class PagePaths:
     SEMANTICS = "src/ui/pages/semantics.py"
     PREVIEW = "src/ui/pages/preview.py"
 
-    SETTINGS = "src/ui/pages/settings.py"
     CONFIG_EDITOR = "src/ui/pages/config_editor.py"
     CONFIGURAZIONE = "src/ui/pages/configurazione.py"
-    CLEANUP = "src/ui/pages/cleanup.py"
     GUIDA = "src/ui/pages/guida_ui.py"
     GUIDA_DEV = "src/ui/pages/guida_dev.py"
 
@@ -56,7 +54,6 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         "Tools",
         (
             NavPage(PagePaths.CONFIG_EDITOR, "Config Editor", "config"),
-            NavPage(PagePaths.CLEANUP, "Cleanup", "cleanup", requires=("drive",)),
             NavPage(PagePaths.DIAGNOSTICS, "Diagnostica", "diagnostics"),
             NavPage(PagePaths.GUIDA, "Guida UI", "guida"),
         ),

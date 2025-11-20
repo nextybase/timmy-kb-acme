@@ -56,11 +56,6 @@
         "url_path": "config"
       },
       {
-        "path": "src/ui/pages/cleanup.py",
-        "title": "Cleanup",
-        "url_path": "cleanup"
-      },
-      {
         "path": "src/ui/pages/diagnostics.py",
         "title": "Diagnostica",
         "url_path": "diagnostics"
