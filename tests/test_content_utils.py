@@ -85,3 +85,47 @@ def test_write_markdown_for_pdf_preserves_created_at(tmp_path: Path, monkeypatch
     meta_after, body_after = read_frontmatter(target_root, second_md, use_cache=False)
     assert meta_after["created_at"] == created_before
     assert body_after == body_before
+
+
+def test_write_markdown_for_pdf_uses_cache_when_unchanged(tmp_path: Path, monkeypatch: Any) -> None:
+    cu.clear_frontmatter_cache()
+
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    pdf_path = raw_root / "documento.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    target_root = tmp_path / "book"
+    cfg = SemanticConfig(
+        base_dir=tmp_path,
+        semantic_dir=tmp_path / "semantic",
+        raw_dir=raw_root,
+    )
+
+    rel_pdf = pdf_path.relative_to(raw_root).as_posix()
+    candidates = {rel_pdf: {"tags": ["inaugurazione", "vision"]}}
+
+    first_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg)
+    meta_before, body_before = read_frontmatter(target_root, first_md, use_cache=False)
+
+    stat = first_md.stat()
+    cache_key = (first_md, stat.st_mtime_ns, stat.st_size)
+    cu._FRONTMATTER_CACHE[cache_key] = (meta_before, body_before)
+
+    def _fail_read(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("read_frontmatter dovrebbe essere bypassata con cache")
+
+    def _fail_write(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("safe_write_text non deve essere richiamata se il contenuto non cambia")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _fail_read)
+    monkeypatch.setattr(cu, "safe_write_text", _fail_write)
+
+    second_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg)
+
+    cached_meta, cached_body = cu._FRONTMATTER_CACHE.get(cache_key, (meta_before, body_before))
+    assert second_md == first_md
+    assert cached_meta["created_at"] == meta_before["created_at"]
+    assert cached_body == body_before
+
+    cu.clear_frontmatter_cache()

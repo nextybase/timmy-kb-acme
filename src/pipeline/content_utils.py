@@ -37,6 +37,12 @@ CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
 _FRONTMATTER_CACHE: dict[tuple[Path, int, int], tuple[dict[str, Any], str]] = {}
 
 
+def clear_frontmatter_cache() -> None:
+    """Svuota la cache del frontmatter (uso test/debug)."""
+
+    _FRONTMATTER_CACHE.clear()
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
