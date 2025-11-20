@@ -311,10 +311,6 @@ def main() -> None:
         st.error(f"Errore di gating: {exc}")
         st.stop()
 
-    if not gates.can_enter:
-        st.error(gates.reason or "Impossibile accedere all'interfaccia.")
-        st.stop()
-
     if not gates.slug:
         clear_active_slug()
 
