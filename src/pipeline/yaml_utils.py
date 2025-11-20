@@ -14,9 +14,15 @@ replica qui la sola guardia di lettura necessaria.
 from __future__ import annotations
 
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, Tuple
 
-import yaml
+try:
+    import yaml as _yaml
+
+    yaml: ModuleType | None = _yaml
+except ModuleNotFoundError:  # pragma: no cover - dipendenza opzionale per ambienti limitati
+    yaml = None
 
 from .exceptions import ConfigError
 
@@ -57,6 +63,12 @@ def yaml_read(
     - Path-safety su `base` (fail-closed).
     - Cache opzionale invalidata da mtime/size.
     """
+    if yaml is None:
+        raise ConfigError(
+            "PyYAML non disponibile: installa le dipendenze (requirements.txt) o salta i test YAML",
+            file_path=str(path),
+        )
+
     safe_p = _ensure_within_and_resolve(base, path)
     if not safe_p.exists():
         raise ConfigError("File YAML non trovato", file_path=str(safe_p))
