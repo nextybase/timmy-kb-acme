@@ -311,9 +311,6 @@ def main() -> None:
     except Exception:
         slug = None
 
-    if skip_preflight:
-        st.caption("Preflight saltato: ui.skip_preflight=True (config/config.yaml).")
-
     cl1, cl2 = st.columns([4, 1])
 
     if slug:

@@ -1,18 +1,26 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
-# src/ui/theme_enhancements.py
-from __future__ import annotations
+# SPDX-License-Identifier: GPL-3.0-only
+from ui.utils.stubs import get_streamlit
 
-import streamlit as st
+_st = get_streamlit()
+_INJECTED = False
 
 
 def inject_theme_css() -> None:
-    """
-    Mantiene compatibilità con le chiamate esistenti senza applicare override CSS.
+    global _INJECTED
+    if _INJECTED:
+        return
 
-    L'interfaccia utilizzerà esclusivamente lo styling nativo di Streamlit,
-    basandosi sui valori definiti in `.streamlit/config.toml`.
-    """
-    st.session_state.setdefault("_theme_css_injected", True)
-
-
-__all__ = ["inject_theme_css"]
+    _st.html(
+        """
+<style>
+/* Override robusto del layout principale */
+[data-testid="stAppViewContainer"] .block-container {
+    width: 100%;
+    padding: 3rem 1rem 8rem;
+    max-width: initial;
+    min-width: auto;
+}
+</style>
+"""
+    )
+    _INJECTED = True

@@ -116,12 +116,16 @@ def get_theme_base(default: str = "light") -> str:
             runtime_base = _normalize_theme_value(nested.get("base"))
         if runtime_base is None:
             runtime_base = _normalize_theme_value(getattr(theme_obj, "_user_theme", None))
+        browser_theme = getattr(client, "_browser_theme", None) if client is not None else None
+        if runtime_base is None and isinstance(browser_theme, dict):
+            runtime_base = _normalize_theme_value(browser_theme.get("base"))
 
     # Se la configurazione è "system", preferiamo session/runtime
     if option_base == "system":
         option_base = None
 
-    base = option_base or session_base or runtime_base or _normalize_theme_value(default) or "light"
+    # Preferisci il tema scelto dal client (session/runtime); option_base è il default da config.toml
+    base = session_base or runtime_base or option_base or _normalize_theme_value(default) or "light"
 
     if state is not None:
         state["brand_theme"] = base

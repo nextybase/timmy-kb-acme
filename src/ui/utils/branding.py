@@ -10,7 +10,9 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
-from .core import get_theme_base, resolve_theme_logo_path
+from ui.theme.tokens import resolve_tokens
+
+from .core import get_theme_base
 
 
 def _theme_img_dir(repo_root: Path) -> Path:
@@ -18,16 +20,17 @@ def _theme_img_dir(repo_root: Path) -> Path:
 
 
 def _logo_for_theme(repo_root: Path) -> Path:
-    base = get_theme_base()
-    img_dir = _theme_img_dir(repo_root)
-    if base == "dark":
-        dark_logo = img_dir / "next-logo-bianco.png"
-        if dark_logo.is_file():
-            return dark_logo
-    light_logo = img_dir / "next-logo.png"
-    if light_logo.is_file():
-        return light_logo
-    return resolve_theme_logo_path(repo_root)
+    base = "light"
+    try:
+        opt_base = getattr(st, "get_option", lambda *_: None)("theme.base") if st else None
+        normalized = opt_base.strip().lower() if isinstance(opt_base, str) else None
+        base = normalized if normalized in {"light", "dark"} else get_theme_base()
+    except Exception:
+        base = get_theme_base()
+
+    token_logo = getattr(resolve_tokens(base), "LOGO_IMAGE", None)
+    token_path = (Path(repo_root) / str(token_logo)).resolve() if token_logo else None
+    return token_path if isinstance(token_path, Path) else Path()
 
 
 def get_main_logo_path(repo_root: Path) -> Path:
