@@ -153,6 +153,9 @@ class StreamlitStub:
     def spinner(self, *args: Any, **kwargs: Any) -> "_StatusContext":
         return _StatusContext()
 
+    def progress(self, _value: int = 0, *, text: str | None = None) -> "_Progress":
+        return _Progress(_value, text=text)
+
     # ---- Feedback ----
     def success(self, msg: str, **_kwargs: Any) -> None:
         self._last_toast = msg
@@ -246,3 +249,15 @@ class _StatusContext:
 
     def update(self, *args: Any, **kwargs: Any) -> None:
         return None
+
+
+class _Progress:
+    def __init__(self, value: int = 0, *, text: str | None = None) -> None:
+        self.value = value
+        self.text = text
+
+    def progress(self, value: int, *, text: str | None = None) -> int:
+        self.value = value
+        if text is not None:
+            self.text = text
+        return self.value

@@ -187,12 +187,43 @@ def _group_safe_pdfs_by_category(
 
 
 def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
-    """Restituisce le categorie immediate e la lista dei PDF (ricorsiva) per ciascuna (percorso legacy)."""
-    categories = sorted((d for d in raw_root.iterdir() if d.is_dir()), key=lambda d: d.name.lower())
+    """Restituisce le categorie immediate e la lista dei PDF (ricorsiva) per ciascuna applicando path-safety."""
+    logger = get_structured_logger("pipeline.content_utils")
+
+    def _on_skip(path: Path, reason: str) -> None:
+        logger.warning("pipeline.content.skip_unsafe", extra={"file_path": str(path), "reason": reason})
+
     out: list[tuple[Path, list[Path]]] = []
-    for cat_dir in categories:
+    for cat_dir in iter_safe_paths(raw_root, include_dirs=True, include_files=False, on_skip=_on_skip):
         out.append((cat_dir, _sorted_pdfs(cat_dir)))
     return out
+
+
+def _discover_safe_pdfs(
+    raw_root: Path, *, base_dir: Path, slug: str | None = None
+) -> tuple[list[Path], CategoryGroups]:
+    """Discovery centralizzata dei PDF in RAW con path-safety e logging skip symlink/traversal."""
+    logger = get_structured_logger("pipeline.content_utils")
+
+    def _on_skip(path: Path, reason: str) -> None:
+        event = "pipeline.content.skip_symlink" if reason == "symlink" else "pipeline.content.skip_unsafe"
+        logger.warning(event, extra={"slug": slug, "file_path": str(path), "reason": reason})
+
+    root_candidates = iter_safe_paths(
+        raw_root,
+        include_dirs=False,
+        include_files=True,
+        suffixes=(".pdf",),
+        on_skip=_on_skip,
+    )
+    root_pdfs = _filter_safe_pdfs(
+        base_dir,
+        raw_root,
+        sorted(root_candidates, key=lambda p: p.name.lower()),
+        slug=slug,
+    )
+    cat_items = _iter_category_pdfs(raw_root)
+    return root_pdfs, cat_items
 
 
 # -----------------------------
@@ -350,13 +381,7 @@ def convert_files_to_structured_markdown(
     if safe_pdfs is not None:
         root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
     else:
-        root_pdfs = _filter_safe_pdfs(
-            base,
-            raw_root,
-            sorted(raw_root.glob("*.pdf"), key=lambda p: p.name.lower()),
-            slug=getattr(ctx, "slug", None),
-        )
-        cat_items = _iter_category_pdfs(raw_root)
+        root_pdfs, cat_items = _discover_safe_pdfs(raw_root, base_dir=base, slug=getattr(ctx, "slug", None))
 
     for pdf in root_pdfs:
         written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))

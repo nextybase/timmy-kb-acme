@@ -597,7 +597,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                 extra={"slug": eff},
             )
             _upsert_client_registry(eff, display_name)
-            st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
             st.session_state["client_name"] = display_name
             st.success("Drive non configurato, continuo in locale.")
         else:

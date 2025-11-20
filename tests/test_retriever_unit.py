@@ -179,6 +179,22 @@ def test_preview_effective_candidate_limit_reports_sources_correctly():
     assert (lim, source, budget) == (4000, "default", 0)
 
 
+def test_preview_effective_candidate_limit_auto_mode_without_budget_uses_config():
+    params = _default_params()
+    cfg = {
+        "retriever": {
+            "auto_by_budget": True,
+            "throttle": {
+                # budget mancante/0 -> fallback sulla candidate_limit del config
+                "latency_budget_ms": 0,
+                "candidate_limit": 1500,
+            },
+        }
+    }
+    lim, source, budget = preview_effective_candidate_limit(params, cfg)
+    assert (lim, source, budget) == (1500, "config", 0)
+
+
 class _DummyEmbeddingsClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[0.1, 0.2, 0.3]]

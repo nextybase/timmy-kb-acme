@@ -251,6 +251,24 @@ def _validate_params(params: QueryParams) -> None:
         raise RetrieverError("k negativo")
 
 
+def _validate_params_logged(params: QueryParams) -> None:
+    """Wrapper che logga contesto su validazioni fallite."""
+    try:
+        _validate_params(params)
+    except RetrieverError as exc:
+        LOGGER.error(
+            "retriever.params.invalid",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "candidate_limit": params.candidate_limit,
+                "k": params.k,
+                "error": str(exc),
+            },
+        )
+        raise
+
+
 # -------- Helper embedding: short-circuit + validazioni estratte (riduce ciclomatica) --------
 
 
@@ -454,7 +472,7 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     raw provenienti da `fetch_candidates`, permettendo agli strumenti di
     calibrazione di ispezionare i chunk senza dipendere dal client embedding.
     """
-    _validate_params(params)
+    _validate_params_logged(params)
     if params.candidate_limit == 0:
         return []
     t0 = time.time()
@@ -523,7 +541,7 @@ def search(
     )
 
     with throttle_ctx:
-        _validate_params(params)
+        _validate_params_logged(params)
         if authorizer is not None:
             authorizer(params)
         if throttle_check is not None:
