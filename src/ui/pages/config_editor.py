@@ -1,15 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Pagina Streamlit per modificare la configurazione cliente senza gestire segreti.
-- Mostra solo campi mutabili del config YAML (nessun valore *_env).
+Pagina Streamlit per configurare un workspace cliente.
+
+- Modifica i campi mutabili del config YAML (nessun valore *_env).
 - Le scritture avvengono tramite helper atomici della pipeline (backup + safe_write_text).
 - I riferimenti ai segreti restano in .env: la pagina mostra soltanto il nome della variabile.
+- Espone in più:
+  - il tuning runtime del retriever (ui.config_store),
+  - gli editor YAML semantici (semantic_mapping/cartelle_raw).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
 
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -20,8 +24,21 @@ from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from ui.chrome import render_chrome_then_require
-from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT
+from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
 from ui.utils.context_cache import get_client_context
+
+# Editor YAML (mapping/cartelle) con fallback sicuro
+YamlEditor = Callable[[str], None]
+
+try:
+    from ui.components.yaml_editors import edit_cartelle_raw as _edit_cartelle_raw
+    from ui.components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
+
+    edit_semantic_mapping: Optional[YamlEditor] = _edit_semantic_mapping
+    edit_cartelle_raw: Optional[YamlEditor] = _edit_cartelle_raw
+except Exception:  # pragma: no cover - editor opzionali
+    edit_semantic_mapping = None
+    edit_cartelle_raw = None
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -29,6 +46,7 @@ else:  # pragma: no cover
     ClientContext = Any  # type: ignore[misc]
 
 
+# ---------- helpers config ----------
 def _load_context_and_settings(slug: str) -> Tuple[ClientContext, Settings]:
     ctx = get_client_context(slug, interactive=False, require_env=False)
     settings_obj = ctx.settings
@@ -91,28 +109,31 @@ def render_body(
         st_mod.caption(f"Assistant ID referenziato via ENV: `{assistant_env}` (non modificabile qui).")
 
         st_mod.markdown("---")
-        st_mod.markdown("### Retriever")
+        st_mod.markdown("### Retriever (config YAML)")
         throttle_cfg = retriever_cfg.get("throttle", {})
         candidate_limit = st_mod.number_input(
-            "Candidate limit",
+            "Candidate limit (config)",
             min_value=MIN_CANDIDATE_LIMIT,
             max_value=MAX_CANDIDATE_LIMIT,
             value=int(throttle_cfg.get("candidate_limit", MIN_CANDIDATE_LIMIT)),
             step=500,
-            help="Numero massimo di candidati restituiti dal retriever.",
+            key="Candidate limit",
+            help="Valore base nel config per il numero massimo di candidati restituiti dal retriever.",
         )
         latency_budget = st_mod.number_input(
-            "Budget latenza (ms)",
+            "Budget latenza (ms, config)",
             min_value=0,
             max_value=2000,
             value=int(throttle_cfg.get("latency_budget_ms", 0)),
             step=50,
-            help="Tempo massimo (in millisecondi) consentito per una ricerca.",
+            key="Budget latenza (ms)",
+            help="Tempo massimo (in millisecondi) nel config per una ricerca.",
         )
         auto_by_budget = st_mod.toggle(
-            "Auto per budget",
+            "Auto per budget (config)",
             value=bool(retriever_cfg.get("auto_by_budget", retriever_cfg.get("auto", False))),
-            help="Se attivo, riduce automaticamente il numero di candidati in base al budget di latenza.",
+            key="Auto per budget",
+            help="Se attivo, riduce automaticamente i candidati in base al budget di latenza (config).",
         )
 
         st_mod.markdown("---")
@@ -223,15 +244,77 @@ def handle_actions(
     return True
 
 
+# ---------- helpers runtime / semantica ----------
+def _render_runtime_retriever(slug: str, *, st_module: Any | None = None) -> None:
+    st_mod = st_module or get_streamlit()
+    st_mod.markdown("### Retriever (runtime)")
+
+    curr_limit, curr_budget_ms, curr_auto = get_retriever_settings(slug)
+
+    new_limit = st_mod.number_input(
+        "Candidate limit (runtime)",
+        min_value=MIN_CANDIDATE_LIMIT,
+        max_value=MAX_CANDIDATE_LIMIT,
+        value=curr_limit,
+        step=500,
+        key="retr_limit_runtime",
+        help="Numero massimo di candidati usati dal retriever per questo workspace (overlay runtime).",
+    )
+    new_budget_ms = st_mod.number_input(
+        "Budget latenza (ms, runtime)",
+        min_value=0,
+        max_value=2000,
+        value=curr_budget_ms,
+        step=50,
+        key="retr_budget_runtime",
+        help="Tempo massimo di ricerca (ms) per questo workspace.",
+    )
+    new_auto = st_mod.toggle(
+        "Auto per budget (runtime)",
+        value=curr_auto,
+        key="retr_auto_runtime",
+        help="Se attivo, riduce automaticamente i candidati in base al budget di latenza runtime.",
+    )
+
+    if (int(new_limit), int(new_budget_ms), bool(new_auto)) != (
+        int(curr_limit),
+        int(curr_budget_ms),
+        bool(curr_auto),
+    ):
+        set_retriever_settings(int(new_limit), int(new_budget_ms), bool(new_auto), slug=slug)
+        try:
+            st_mod.toast("Impostazioni retriever runtime salvate.")
+        except Exception:
+            pass
+
+
+def _render_semantic_editors(slug: str, *, st_module: Any | None = None) -> None:
+    st_mod = st_module or get_streamlit()
+    st_mod.markdown("### Semantica (YAML)")
+
+    col_map, col_cart = st_mod.columns(2)
+    with col_map:
+        if callable(edit_semantic_mapping):
+            edit_semantic_mapping(slug)  # semantic/semantic_mapping.yaml
+        else:
+            st_mod.info("Editor mapping non disponibile.")
+    with col_cart:
+        if callable(edit_cartelle_raw):
+            edit_cartelle_raw(slug)  # semantic/cartelle_raw.yaml
+        else:
+            st_mod.info("Editor cartelle non disponibile.")
+
+
+# ---------- entrypoint pagina ----------
 def main() -> None:
     slug = render_chrome_then_require()
     ctx, settings = _load_context_and_settings(slug)
     data = settings.as_dict()
 
-    st.subheader(f"Config Editor �� {slug}")
+    st.subheader(f"Config & Settings – {slug}")
     st.info(
-        "Questa pagina gestisce solo impostazioni applicative. "
-        "Eventuali segreti restano in .env e sono referenziati da chiavi *_env.",
+        "Questa pagina gestisce le impostazioni applicative del workspace. "
+        "I segreti restano in .env e sono referenziati da chiavi *_env.",
         icon="ℹ️",
     )
 
@@ -244,6 +327,7 @@ def main() -> None:
     if saved_flag:
         st.success("Configurazione aggiornata.")
 
+    # Sezione: config YAML
     submitted, form_values = render_body(
         st_module=st,
         data=data,
@@ -252,6 +336,12 @@ def main() -> None:
         ui_cfg=ui_cfg,
         assistant_env=assistant_env,
     )
+
+    st.markdown("---")
+    _render_runtime_retriever(slug, st_module=st)
+
+    st.markdown("---")
+    _render_semantic_editors(slug, st_module=st)
 
     if not submitted:
         return

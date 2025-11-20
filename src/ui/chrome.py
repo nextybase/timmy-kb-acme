@@ -109,8 +109,9 @@ def _on_dummy_kb() -> None:
                         state="complete",
                     )
                     st.warning(
-                        "Vision non è stata eseguita perché ha superato il timeout: puoi rigenerarla manualmente "
-                        "con `gen_dummy_kb.py --slug <slug>` o dalla pagina Vision."
+                        "Vision non è stata eseguita perché ha superato il timeout: "
+                        "puoi rigenerarla manualmente con `gen_dummy_kb.py --slug <slug>` "
+                        "o dalla pagina Vision."
                     )
                 else:
                     status_widget.update(label="Dummy generato correttamente.", state="complete")
@@ -299,18 +300,6 @@ def sidebar(slug: str | None) -> None:
                 st.stop()
             except Exception:
                 pass
-
-        _call("divider")
-        btn_help = _call(
-            "button",
-            "Guida UI",
-            key="btn_help_ui",
-            type="secondary",
-            width="stretch",
-            help="Apri la guida dell'interfaccia nella stessa scheda.",
-        )
-        if btn_help:
-            nav_to(PagePaths.GUIDA)
 
 
 def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:

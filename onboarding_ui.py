@@ -311,37 +311,16 @@ def main() -> None:
     except Exception:
         slug = None
 
-    if not slug:
-        clear_active_slug()
-        st.info("Benvenuto! Inizia creando un nuovo cliente con il wizard 'Nuovo cliente'.")
-
     if skip_preflight:
         st.caption("Preflight saltato: ui.skip_preflight=True (config/config.yaml).")
 
-    if slug:
-        st.caption(f"Cliente attivo: **{slug}**")
-
     cl1, cl2 = st.columns([4, 1])
-    with cl1:
-        st.caption("Suggerimento: usa la navbar in alto per navigare tra le sezioni.")
-    with cl2:
-        if st.button("Reset sessione"):
-            st.session_state.clear()
-            clear_active_slug()
-            st.rerun()
-
-    with st.sidebar:
-        st.caption("Seleziona la scheda dall'intestazione per iniziare.")
 
     if slug:
         try:
             raw_ready, _raw_path = has_raw_pdfs(slug)
         except Exception:
             raw_ready = False
-        if not raw_ready:
-            st.warning(
-                "Cartella RAW non trovata o vuota per lo slug attivo. Carica i PDF prima di procedere alla Semantica."
-            )
 
     _st = _get_streamlit()
     _pages_specs = visible_page_specs(compute_gates())

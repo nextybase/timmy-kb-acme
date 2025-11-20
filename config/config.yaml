@@ -13,7 +13,7 @@ vision:
   snapshot_retention_days: 30
   strict_output: true
 ui:
-  skip_preflight: false
+  skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
 retriever:
