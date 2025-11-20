@@ -29,7 +29,7 @@ def prepare_download_plan(
     plan_fn: Optional[Callable[..., Sequence[Sequence[str]]]],
     *,
     slug: str,
-    logger: object,
+    logger: Any,
 ) -> tuple[list[str], list[str]]:
     if plan_fn is None:
         raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
@@ -72,7 +72,7 @@ def execute_drive_download(
     download_with_progress: Optional[Callable[..., Sequence[str]]],
     download_simple: Optional[Callable[..., Sequence[str]]],
     invalidate_index: Optional[Callable[[str], None]],
-    logger: object,
+    logger: Any,
     st: StreamlitLike,
     status_guard: StatusGuard,
     overwrite_requested: bool = False,

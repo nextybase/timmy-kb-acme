@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 import yaml
 
@@ -98,9 +98,12 @@ def _get_config_path() -> Path:
     Restituisce il path safe di config/config.yaml usando le utilità
     path-safe della pipeline.
     """
-    return ensure_within_and_resolve(
-        REPO_ROOT,
-        REPO_ROOT / "config" / "config.yaml",
+    return cast(
+        Path,
+        ensure_within_and_resolve(
+            REPO_ROOT,
+            REPO_ROOT / "config" / "config.yaml",
+        ),
     )
 
 

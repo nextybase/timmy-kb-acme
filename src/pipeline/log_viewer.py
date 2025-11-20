@@ -29,7 +29,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.path_utils import ensure_within_and_resolve
@@ -92,7 +92,7 @@ def get_global_logs_dir() -> Path:
     """
     candidate = REPO_ROOT / _DOT_TIMMY_DIRNAME / LOGS_DIR_NAME
     # Path-safety: i log globali devono sempre stare sotto il repo.
-    return ensure_within_and_resolve(REPO_ROOT, candidate)
+    return cast(Path, ensure_within_and_resolve(REPO_ROOT, candidate))
 
 
 def _iter_log_files_from_dir(log_dir: Path) -> Iterable[LogFileInfo]:

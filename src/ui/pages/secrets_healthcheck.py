@@ -122,7 +122,7 @@ def main() -> None:
     dialog_factory = getattr(st, "dialog", None)
     if dialog_factory is not None:
 
-        @dialog_factory("Guida variabile d'ambiente")
+        @dialog_factory("Guida variabile d'ambiente")  # type: ignore[misc]
         def _show_secret_dialog() -> None:
             name = st.session_state.get("secret_info_name")
             if not name:

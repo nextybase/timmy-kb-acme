@@ -241,7 +241,7 @@ def _term_to_pattern(term: str) -> re.Pattern[str]:
 
 def _guess_tags_for_name(
     name_like_path: str,
-    vocab: Dict[str, Dict[str, Set[str]]],
+    vocab: Dict[str, Dict[str, Sequence[str]]],
     *,
     inv: Optional[Dict[str, Set[str]]] = None,
 ) -> List[str]:
