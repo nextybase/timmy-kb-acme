@@ -45,7 +45,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from pipeline.drive.download_steps import discover_candidates
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
-from pipeline.path_utils import ensure_within, sanitize_filename
+from pipeline.path_utils import ensure_within, refresh_iter_safe_pdfs_cache_for_path, sanitize_filename
 
 # MIME costanti basilari (allineate alla facciata)
 MIME_FOLDER = "application/vnd.google-apps.folder"
@@ -155,29 +155,39 @@ def _download_one_pdf_atomic(
 
     # Temp nello stesso folder (così os.replace è atomico sullo stesso FS)
     dest_dir = dest_path.parent
-    with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=str(dest_dir)) as tmp:
-        tmp_name = tmp.name
-        downloader = MediaIoBaseDownload(tmp, request, chunksize=int(chunk_size))
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=str(dest_dir)) as tmp:
+            tmp_name = tmp.name
+            downloader = MediaIoBaseDownload(tmp, request, chunksize=int(chunk_size))
 
-        last_pct = -1
-        while True:
-            status, done = downloader.next_chunk()
-            if status and progress:
-                pct = int((status.progress() or 0.0) * 100)
-                # Logga a soglie intere (evita flood)
-                if pct != last_pct and pct % 10 == 0:
-                    logger.info(
-                        "download.progress",
-                        extra={"file_path": str(dest_path), "progress_pct": pct},
-                    )
-                    last_pct = pct
-            if done:
-                break
+            last_pct = -1
+            while True:
+                status, done = downloader.next_chunk()
+                if status and progress:
+                    pct = int((status.progress() or 0.0) * 100)
+                    # Logga a soglie intere (evita flood)
+                    if pct != last_pct and pct % 10 == 0:
+                        logger.info(
+                            "download.progress",
+                            extra={"file_path": str(dest_path), "progress_pct": pct},
+                        )
+                        last_pct = pct
+                if done:
+                    break
 
-        # Commit atomico
-        tmp.flush()
-        os.fsync(tmp.fileno())
-    os.replace(tmp_name, dest_path)
+            # Commit atomico
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        if tmp_name is None:
+            raise RuntimeError("Temporary file name missing during download.")
+        os.replace(tmp_name, dest_path)
+    finally:
+        if tmp_name:
+            try:
+                Path(tmp_name).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def download_drive_pdfs_to_local(
@@ -280,6 +290,7 @@ def download_drive_pdfs_to_local(
             )
             downloaded += 1
             logger.info("download.ok", extra={"file_path": str(dest_path), "size": remote_size})
+            refresh_iter_safe_pdfs_cache_for_path(dest_path, prewarm=True)
         except Exception as e:
             fid = redact_secrets(file_id) if redact_logs else file_id
             errors.append((fid, str(e)))

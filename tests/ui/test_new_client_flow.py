@@ -108,3 +108,19 @@ def test_init_workspace_skips_drive_when_helper_missing(
     finally:
         if client_root.exists():
             shutil.rmtree(client_root)
+
+
+def test_ui_allow_local_only_reloads_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    values = [True, False]
+    last_flag = {"value": False}
+
+    def _fake_load(*_a: Any, **_k: Any) -> types.SimpleNamespace:
+        if values:
+            last_flag["value"] = values.pop(0)
+        return types.SimpleNamespace(ui_allow_local_only=last_flag["value"])
+
+    monkeypatch.setattr("pipeline.settings.Settings.load", _fake_load, raising=True)
+    import timmykb.ui.pages.new_client as new_client
+
+    assert new_client.ui_allow_local_only_enabled() is True
+    assert new_client.ui_allow_local_only_enabled() is False

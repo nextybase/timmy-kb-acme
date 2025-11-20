@@ -178,3 +178,74 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
 
     assert "Download completato con errori" in str(exc.value)
     assert any(event == "download.fail" for event, _extra in logger.warnings), "Manca il warning di failure."
+
+
+def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = types.SimpleNamespace(base_dir=tmp_path, slug="acme")
+    local_root = tmp_path / "raw"
+    dest = local_root / "Reports" / "report.pdf"
+    candidates = [
+        DriveCandidate(
+            category="Reports",
+            filename="report.pdf",
+            destination=dest,
+            remote_id="pdf-new",
+            remote_size=11,
+            metadata={"mimeType": MIME_PDF},
+        )
+    ]
+    monkeypatch.setattr(drv, "discover_candidates", lambda **_k: candidates)
+    monkeypatch.setattr(drv, "get_structured_logger", lambda *_a, **_k: _LoggerStub())
+
+    def _fake_download(service: Any, file_id: str, dest_path: Path, **_kwargs: Any) -> None:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(b"ok")
+
+    monkeypatch.setattr(drv, "_download_one_pdf_atomic", _fake_download)
+
+    refreshed: list[Path] = []
+    monkeypatch.setattr(
+        drv,
+        "refresh_iter_safe_pdfs_cache_for_path",
+        lambda path, *, prewarm: refreshed.append(Path(path)),
+    )
+
+    count = download_drive_pdfs_to_local(
+        service=object(),
+        remote_root_folder_id="root",
+        local_root_dir=local_root,
+        context=ctx,
+    )
+
+    assert count == 1
+    assert refreshed == [dest]
+
+
+def test_download_one_pdf_atomic_cleans_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dest = tmp_path / "raw" / "file.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    class _Files:
+        def get_media(self, **_kwargs: Any) -> object:
+            return object()
+
+    class _Service:
+        def files(self) -> _Files:
+            return _Files()
+
+    class _FailingDownloader:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def next_chunk(self) -> tuple[None, bool]:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(drv, "MediaIoBaseDownload", _FailingDownloader, raising=True)
+    logger = _LoggerStub()
+
+    with pytest.raises(RuntimeError):
+        drv._download_one_pdf_atomic(_Service(), "file-id", dest, logger=logger, progress=False)
+
+    tmp_leftovers = list(dest.parent.glob("tmp*")) + list(dest.parent.glob(".tmp*"))
+    assert not tmp_leftovers, "File temporanei non puliti dopo il failure"
+    assert not dest.exists()

@@ -99,7 +99,11 @@ def _resolve_ui_allow_local_only() -> bool:
         return True
 
 
-UI_ALLOW_LOCAL_ONLY = _resolve_ui_allow_local_only()
+def ui_allow_local_only_enabled() -> bool:
+    """Legge (o rilegge) il flag ui_allow_local_only dal settings runtime."""
+    return _resolve_ui_allow_local_only()
+
+
 LOGGER = get_structured_logger("ui.new_client")
 
 
@@ -399,8 +403,9 @@ if current_phase == UI_PHASE_INIT:
                     status.update(label="Workspace locale pronto.", state="complete")
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
+            local_only_mode = ui_allow_local_only_enabled()
             if _ensure_drive_minimal is None:
-                if UI_ALLOW_LOCAL_ONLY:
+                if local_only_mode:
                     LOGGER.info(
                         "ui.drive.provisioning_skipped",
                         extra={"slug": s, "reason": "helper_unavailable", "local_only": True},
@@ -499,7 +504,8 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.stop()
 
     has_drive_ids = _has_drive_ids(eff)
-    if not has_drive_ids and not UI_ALLOW_LOCAL_ONLY:
+    local_only_mode = ui_allow_local_only_enabled()
+    if not has_drive_ids and not local_only_mode:
         st.warning(
             "Config privo degli ID Drive (drive_folder_id/drive_raw_folder_id). "
             "Ripeti 'Inizializza Workspace' dopo aver configurato le variabili .env e i permessi Drive."
@@ -510,12 +516,12 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         key="btn_open_ws",
         type="primary",
         width="stretch",
-        disabled=(not has_drive_ids and not UI_ALLOW_LOCAL_ONLY),
+        disabled=(not has_drive_ids and not local_only_mode),
     ):
         display_name = st.session_state.get("client_name") or (name or eff)
 
         if build_drive_from_mapping is None:
-            if UI_ALLOW_LOCAL_ONLY:
+            if local_only_mode:
                 LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
                 _log_diagnostics(
                     eff,
@@ -534,7 +540,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
                 )
         else:
             try:
-                if not _has_drive_ids(eff) and not UI_ALLOW_LOCAL_ONLY:
+                if not _has_drive_ids(eff) and not local_only_mode:
                     st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
                     st.stop()
 

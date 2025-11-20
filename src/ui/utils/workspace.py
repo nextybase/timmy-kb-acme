@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
 _BASE_CACHE: dict[str, Path] = {}
+_UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
 
 
 def _load_context_base_dir(slug: str) -> Optional[Path]:
@@ -83,17 +84,17 @@ def workspace_root(slug: str) -> Path:
     return raw_dir.parent
 
 
-def iter_pdfs_safe(root: Path, *, use_cache: bool = False) -> Iterator[Path]:
+def iter_pdfs_safe(root: Path, *, use_cache: bool = False, cache_ttl_s: float | None = None) -> Iterator[Path]:
     """
     Itera i PDF sotto `root` senza seguire symlink.
     Applica ensure_within_and_resolve a ogni candidato.
     """
-    yield from iter_safe_pdfs(root, use_cache=use_cache)
+    yield from iter_safe_pdfs(root, use_cache=use_cache, cache_ttl_s=cache_ttl_s)
 
 
-def count_pdfs_safe(root: Path, *, use_cache: bool = False) -> int:
+def count_pdfs_safe(root: Path, *, use_cache: bool = False, cache_ttl_s: float | None = None) -> int:
     """Conta i PDF in modo sicuro usando iter_pdfs_safe."""
-    return sum(1 for _ in iter_pdfs_safe(root, use_cache=use_cache))
+    return sum(1 for _ in iter_pdfs_safe(root, use_cache=use_cache, cache_ttl_s=cache_ttl_s))
 
 
 def _dir_mtime(p: Path) -> float:
@@ -142,7 +143,7 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     # Scansione robusta utilizzando l'helper condiviso
     try:
         # basta verificare l'esistenza del primo elemento
-        first = next(iter_pdfs_safe(raw_dir, use_cache=True), None)
+        first = next(iter_pdfs_safe(raw_dir, use_cache=True, cache_ttl_s=_UI_RAW_CACHE_TTL), None)
         has_pdf = first is not None
     except Exception as e:
         # Non scrivere cache negative su errore: segnala e rientra
