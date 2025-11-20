@@ -55,7 +55,6 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
     NavGroup(
         "Tools",
         (
-            NavPage(PagePaths.SETTINGS, "Settings", "settings"),
             NavPage(PagePaths.CONFIG_EDITOR, "Config Editor", "config"),
             NavPage(PagePaths.CLEANUP, "Cleanup", "cleanup", requires=("drive",)),
             NavPage(PagePaths.DIAGNOSTICS, "Diagnostica", "diagnostics"),

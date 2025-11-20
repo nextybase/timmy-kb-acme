@@ -51,11 +51,6 @@
     ],
     "Tools": [
       {
-        "path": "src/ui/pages/settings.py",
-        "title": "Settings",
-        "url_path": "settings"
-      },
-      {
         "path": "src/ui/pages/config_editor.py",
         "title": "Config Editor",
         "url_path": "config"
