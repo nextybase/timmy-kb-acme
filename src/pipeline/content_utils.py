@@ -109,14 +109,16 @@ def _write_markdown_for_pdf(
     body = f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*\n"
 
     existing_created_at: str | None = None
+    existing_meta: dict[str, Any] = {}
     if md_path.exists():
         try:
-            meta_prev, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
-            existing_created_at = str(meta_prev.get("created_at") or "").strip() or None
-            if body_prev.strip() == body.strip() and meta_prev.get("tags_raw") == tags_sorted:
+            existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
+            existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
+            if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
         except Exception:
             existing_created_at = None
+            existing_meta = {}
 
     meta: dict[str, Any] = {
         "title": _titleize(pdf_path.stem),
@@ -125,6 +127,9 @@ def _write_markdown_for_pdf(
         "created_at": existing_created_at or datetime.utcnow().isoformat(timespec="seconds"),
         "tags_raw": tags_sorted,
     }
+    for key, value in existing_meta.items():
+        if key not in meta:
+            meta[key] = value
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
     return md_path
 

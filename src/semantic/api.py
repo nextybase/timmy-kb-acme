@@ -78,11 +78,11 @@ def _require_reviewed_vocab(
     loader_module = getattr(_load_reviewed_vocab, "__module__", "")
     if loader_module != "semantic.vocab_loader":
         _LAST_VOCAB_STUBBED = True
-        logger.info(
-            "semantic.vocab.stubbed",
-            extra={"slug": slug, "loader_module": loader_module},
+        raise ConfigError(
+            "Vocabolario stub: rigenera semantic/tags.db prima di procedere.",
+            slug=slug,
+            file_path=base_dir / "semantic" / "tags.db",
         )
-        return {}
     _LAST_VOCAB_STUBBED = False
     tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
     raise ConfigError(
@@ -106,8 +106,8 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
     ensure_within(base_dir, semantic_dir)
     ensure_within(semantic_dir, csv_path)
 
-    semantic_dir.mkdir(parents=True, exist_ok=True)
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
+        semantic_dir.mkdir(parents=True, exist_ok=True)
         cfg = _load_semantic_config(base_dir)
         candidates = _extract_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
