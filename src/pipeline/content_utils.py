@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping, TypeAlias, cast
+from typing import Any, Iterable, Mapping, Protocol, TypeAlias, cast
 from urllib.parse import quote
 
 from pipeline.exceptions import PathTraversalError, PipelineError
@@ -24,8 +24,17 @@ __all__ = [
     "convert_files_to_structured_markdown",
 ]
 
+
+class _ReadmeCtx(Protocol):
+    base_dir: Path
+    md_dir: Path
+    slug: str | None
+
+
 # Alias per annotazioni lunghe (evita E501)
 CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
+
+_FRONTMATTER_CACHE: dict[tuple[Path, int, int], tuple[dict[str, Any], str]] = {}
 
 
 # -----------------------------
@@ -112,7 +121,17 @@ def _write_markdown_for_pdf(
     existing_meta: dict[str, Any] = {}
     if md_path.exists():
         try:
-            existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
+            try:
+                stat = md_path.stat()
+                cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
+            except OSError:
+                cache_key = None
+            if cache_key and cache_key in _FRONTMATTER_CACHE:
+                existing_meta, body_prev = _FRONTMATTER_CACHE[cache_key]
+            else:
+                existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
+                if cache_key:
+                    _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
@@ -195,7 +214,7 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     return target
 
 
-def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
+def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
     """Crea (o sovrascrive) README.md nella cartella markdown target."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
     target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
@@ -249,7 +268,7 @@ def generate_readme_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Pat
     return readme
 
 
-def generate_summary_markdown(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
+def generate_summary_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
     """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e SUMMARY.md)."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
     target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))

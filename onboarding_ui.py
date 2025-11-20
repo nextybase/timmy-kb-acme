@@ -60,6 +60,7 @@ from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
 from ui.utils.slug import clear_active_slug  # noqa: E402
 from ui.utils.status import status_guard  # noqa: E402
 from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
+from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 
 # Router/state helper (fallback soft se non presente)
 try:  # noqa: E402
@@ -337,6 +338,16 @@ def main() -> None:
 
     with st.sidebar:
         st.caption("Seleziona la scheda dall'intestazione per iniziare.")
+
+    if gates.slug:
+        try:
+            raw_ready, _raw_path = has_raw_pdfs(gates.slug)
+        except Exception:
+            raw_ready = False
+        if not raw_ready:
+            st.warning(
+                "Cartella RAW non trovata o vuota per lo slug attivo. Carica i PDF prima di procedere alla Semantica."
+            )
 
     _st = _get_streamlit()
     _pages_specs = visible_page_specs(compute_gates())

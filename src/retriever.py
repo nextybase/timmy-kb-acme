@@ -29,7 +29,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import MISSING, dataclass, replace
 from itertools import tee
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Generator, Iterable, Mapping, Optional, Sequence
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
@@ -123,8 +123,14 @@ class _ThrottleRegistry:
 _THROTTLE_REGISTRY = _ThrottleRegistry()
 
 
+def reset_throttle_registry() -> None:
+    """Svuota lo stato di throttling (uso test/benchmark)."""
+    with _THROTTLE_REGISTRY._lock:  # pragma: no cover - helper test
+        _THROTTLE_REGISTRY._states.clear()
+
+
 @contextmanager
-def _throttle_guard(key: str, settings: Optional[ThrottleSettings]):
+def _throttle_guard(key: str, settings: Optional[ThrottleSettings]) -> Generator[None, None, None]:
     if settings is None:
         yield
         return
@@ -274,7 +280,7 @@ def _coerce_candidate_vector(
     # Short-circuit: già list/seq di numerici
     if is_numeric_vector(raw_vec):
         try:
-            v = [float(v) for v in raw_vec]  # type: ignore[return-value]
+            v = [float(v) for v in raw_vec]
             if stats is not None:
                 stats["short"] = stats.get("short", 0) + 1
             return v
