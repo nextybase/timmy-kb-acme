@@ -18,6 +18,7 @@ class PagePaths:
     CONFIGURAZIONE = "src/ui/pages/configurazione.py"
     CLEANUP = "src/ui/pages/cleanup.py"
     GUIDA = "src/ui/pages/guida_ui.py"
+    GUIDA_DEV = "src/ui/pages/guida_dev.py"
 
     ADMIN = "src/ui/pages/admin.py"
     TUNING = "src/ui/pages/tools_check.py"
@@ -58,6 +59,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
             NavPage(PagePaths.CONFIG_EDITOR, "Config Editor", "config"),
             NavPage(PagePaths.CLEANUP, "Cleanup", "cleanup", requires=("drive",)),
             NavPage(PagePaths.DIAGNOSTICS, "Diagnostica", "diagnostics"),
+            NavPage(PagePaths.GUIDA, "Guida UI", "guida"),
         ),
     ),
     NavGroup(
@@ -68,7 +70,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
             NavPage(PagePaths.TUNING, "Tuning", "check", requires=("vision",)),
             NavPage(PagePaths.SECRETS, "Secrets Healthcheck", "secrets"),
             NavPage(PagePaths.LOGS_PANEL, "Log dashboard", None),
-            NavPage(PagePaths.GUIDA, "Guida UI", "guida"),
+            NavPage(PagePaths.GUIDA_DEV, "Guida Dev", "guida-dev"),
         ),
     ),
 )
