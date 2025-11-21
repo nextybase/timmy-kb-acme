@@ -159,7 +159,6 @@ def _on_dummy_kb() -> None:
                         if callable(perform_cleanup):
                             results = perform_cleanup(slug, client_name=f"Dummy {slug}")
                             code = int(results.get("exit_code", 1)) if isinstance(results, dict) else 1
-                            st.json(results)
                         elif callable(run_cleanup):
                             code = int(run_cleanup(slug, True))
                     except Exception as exc:  # noqa: BLE001
