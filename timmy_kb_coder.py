@@ -165,7 +165,7 @@ def main() -> None:
     # Actions
     c1, c2 = st.columns([1, 1])
     if c1.button("Compila & Invia a VS Code", key="coder_send_to_vscode", width="stretch"):
-        retrieved: list[dict] = []
+        retrieved: list[dict[str, Any]] = []
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
             try:
