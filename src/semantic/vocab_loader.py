@@ -244,8 +244,11 @@ def _log_vocab_event(
                 "canon_count": int(canon_count),
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(
+            "semantic.vocab.log_failed",
+            extra={"event": event, "error": str(exc), "slug": slug},
+        )
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, list[str]]]:

@@ -108,9 +108,9 @@ def _load_raw_cache_defaults() -> None:
         cfg = (config.get("raw_cache") or {}) if isinstance(config, dict) else {}
         ttl = _parse_positive_float(cfg.get("ttl_seconds"), ttl)
         capacity = _parse_positive_int(cfg.get("max_entries"), capacity)
-    except Exception:
+    except Exception as exc:
         # se il file manca o e' invalido manteniamo i fallback
-        pass
+        _logger.debug("pipeline.raw_cache.defaults_fallback", extra={"error": str(exc)})
 
     _SAFE_PDF_CACHE_DEFAULT_TTL = ttl
     _SAFE_PDF_CACHE_CAPACITY = capacity
@@ -120,8 +120,8 @@ def _ensure_raw_cache_defaults_loaded() -> None:
     global _CACHE_DEFAULTS_LOADED
     if _CACHE_DEFAULTS_LOADED:
         return
-    _load_raw_cache_defaults()
     _CACHE_DEFAULTS_LOADED = True
+    _load_raw_cache_defaults()
 
 
 def _dir_mtime(path: Path) -> float:

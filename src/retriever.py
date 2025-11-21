@@ -29,7 +29,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import MISSING, dataclass, replace
 from itertools import tee
 from pathlib import Path
-from typing import Any, Callable, Generator, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Generator, Iterable, Mapping, Optional, Sequence, TypedDict
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
@@ -63,11 +63,30 @@ class QueryParams:
     candidate_limit: int = 4000
 
 
+class ThrottleConfig(TypedDict, total=False):
+    candidate_limit: int
+    latency_budget_ms: int
+    parallelism: int
+    sleep_ms_between_calls: int
+    acquire_timeout_ms: int
+
+
+class RetrieverConfig(TypedDict, total=False):
+    retriever: ThrottleConfig
+    throttle: ThrottleConfig
+    candidate_limit: int
+    latency_budget_ms: int
+    parallelism: int
+    sleep_ms_between_calls: int
+    acquire_timeout_ms: int
+
+
 @dataclass(frozen=True)
 class ThrottleSettings:
     latency_budget_ms: int = 0
     parallelism: int = 1
     sleep_ms_between_calls: int = 0
+    acquire_timeout_ms: int | None = None
 
 
 _MAX_PARALLELISM = 32
@@ -80,8 +99,11 @@ class _ThrottleState:
         self._lock = threading.Lock()
         self._last_completed = 0.0
 
-    def acquire(self) -> None:
-        self._semaphore.acquire()
+    def acquire(self, *, timeout_s: float | None = None) -> bool:
+        if timeout_s is None:
+            self._semaphore.acquire()
+            return True
+        return bool(self._semaphore.acquire(timeout=timeout_s))
 
     def release(self) -> None:
         self._semaphore.release()
@@ -135,7 +157,17 @@ def _throttle_guard(key: str, settings: Optional[ThrottleSettings]) -> Generator
         yield
         return
     state = _THROTTLE_REGISTRY.get_state(key, settings.parallelism)
-    state.acquire()
+    acquired = False
+    timeout_s: float | None = None
+    if settings.acquire_timeout_ms and settings.acquire_timeout_ms > 0:
+        timeout_s = settings.acquire_timeout_ms / 1000.0
+    acquired = state.acquire(timeout_s=timeout_s)
+    if not acquired:
+        LOGGER.warning(
+            "retriever.throttle.timeout",
+            extra={"key": key, "timeout_ms": settings.acquire_timeout_ms},
+        )
+        return
     try:
         state.wait_interval(settings.sleep_ms_between_calls)
         yield
@@ -684,7 +716,7 @@ def search(
         return scored_items
 
 
-def _coerce_retriever_section(config: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
+def _coerce_retriever_section(config: Optional[Mapping[str, Any] | RetrieverConfig]) -> Mapping[str, Any]:
     if not config:
         return {}
     retr = config.get("retriever")
@@ -693,7 +725,7 @@ def _coerce_retriever_section(config: Optional[Mapping[str, Any]]) -> Mapping[st
     return {}
 
 
-def _coerce_throttle_section(retriever_section: Mapping[str, Any]) -> Mapping[str, Any]:
+def _coerce_throttle_section(retriever_section: Mapping[str, Any] | RetrieverConfig) -> Mapping[str, Any]:
     throttle = retriever_section.get("throttle")
     if isinstance(throttle, Mapping):
         return throttle
@@ -716,13 +748,21 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
-def _build_throttle_settings(config: Optional[Mapping[str, Any]]) -> ThrottleSettings:
+def _build_throttle_settings(config: Optional[Mapping[str, Any] | RetrieverConfig]) -> ThrottleSettings:
     retr = _coerce_retriever_section(config)
     throttle = _coerce_throttle_section(retr)
+    timeout_raw = throttle.get("acquire_timeout_ms")
+    timeout_val = None
+    try:
+        parsed = int(timeout_raw)
+        timeout_val = parsed if parsed > 0 else None
+    except Exception:
+        timeout_val = None
     return ThrottleSettings(
         latency_budget_ms=_safe_int(throttle.get("latency_budget_ms"), _safe_int(retr.get("latency_budget_ms"), 0)),
         parallelism=_safe_int(throttle.get("parallelism"), 1),
         sleep_ms_between_calls=_safe_int(throttle.get("sleep_ms_between_calls"), 0),
+        acquire_timeout_ms=timeout_val,
     )
 
 
@@ -733,8 +773,14 @@ def _normalize_throttle_settings(settings: Optional[ThrottleSettings]) -> Option
         latency_budget_ms=max(0, int(settings.latency_budget_ms)),
         parallelism=max(1, min(_MAX_PARALLELISM, int(settings.parallelism))),
         sleep_ms_between_calls=max(0, int(settings.sleep_ms_between_calls)),
+        acquire_timeout_ms=(None if settings.acquire_timeout_ms is None else max(0, int(settings.acquire_timeout_ms))),
     )
-    if normalized.latency_budget_ms == 0 and normalized.parallelism == 1 and normalized.sleep_ms_between_calls == 0:
+    if (
+        normalized.latency_budget_ms == 0
+        and normalized.parallelism == 1
+        and normalized.sleep_ms_between_calls == 0
+        and normalized.acquire_timeout_ms is None
+    ):
         return None
     return normalized
 
@@ -751,7 +797,7 @@ def _deadline_exceeded(deadline: Optional[float]) -> bool:
 
 def with_config_candidate_limit(
     params: QueryParams,
-    config: Optional[Mapping[str, Any]],
+    config: Optional[Mapping[str, Any] | RetrieverConfig],
 ) -> QueryParams:
     """Ritorna una copia applicando `candidate_limit` da config se opportuno.
 

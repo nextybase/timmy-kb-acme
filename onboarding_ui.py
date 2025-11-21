@@ -67,44 +67,11 @@ from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 try:  # noqa: E402
     from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
 except Exception:  # pragma: no cover
-
-    def get_tab(default: str = "home") -> str:
-        try:
-            qp = st.query_params
-            val = qp.get("tab")
-            if isinstance(val, str) and val.strip():
-                return val.strip().lower()
-            if isinstance(val, list) and val:
-                v = str(val[0]).strip().lower()
-                return v or default
-        except Exception:
-            pass
-        return default
-
-    def set_tab(tab: str) -> None:
-        try:
-            st.query_params["tab"] = tab or "home"
-        except Exception:
-            pass
-
-    def clear_tab() -> None:
-        try:
-            if "tab" in st.query_params:
-                del st.query_params["tab"]
-        except Exception:
-            pass
-
-    def get_slug_from_qp() -> str | None:
-        try:
-            val = st.query_params.get("slug")
-            if isinstance(val, str) and val.strip():
-                return val.strip().lower()
-            if isinstance(val, list) and val:
-                v = str(val[0]).strip().lower()
-                return v or None
-        except Exception:
-            pass
-        return None
+    # Fallback no-op con la stessa firma per preservare la parità di interfaccia
+    clear_tab = lambda: None  # type: ignore[assignment]
+    get_slug_from_qp = lambda: None  # type: ignore[assignment]
+    get_tab = lambda default="home": default  # type: ignore[assignment]
+    set_tab = lambda tab: None  # type: ignore[assignment]
 
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -149,6 +116,10 @@ def _render_preflight_header() -> None:
 def _load_dotenv_best_effort() -> None:
     """Carica .env solo a runtime, preservando l'import-safe della UI."""
     if load_dotenv is None:
+        return
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        LOGGER.info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
         return
     try:
         load_dotenv(override=False)

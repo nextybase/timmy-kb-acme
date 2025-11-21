@@ -73,7 +73,7 @@ def main() -> int:
     except Exception as exc:
         # Fallback deterministico per errori inattesi non mappati
         logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
-        return 1
+        return 99
 
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
     summary_extra: dict[str, object] = {}
