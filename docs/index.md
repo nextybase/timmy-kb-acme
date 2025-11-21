@@ -14,21 +14,33 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
 - **Guide**
   - [User Guide](user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, test suggeriti.
-  - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicità, versioning.
+  - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
   - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
+  - [Configuration (EN)](configuration.md) - overview di configurazione in inglese.
   - [Interfaccia Streamlit ](streamlit_ui.md) - Regole di coding per Streamlit 1.50.0.
   - [Test suite](test_suite.md) - test smoke e suite PyTest.
   - [Guida UI (Streamlit)](guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
-  - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
-  - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilità.
+  - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilita'.
   - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
   - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
   - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
+    - [ADR 0001 - SQLite SSOT dei tag](adr/0001-sqlite-ssot-tags.md)
+    - [ADR 0002 - Separation secrets/config](adr/0002-separation-secrets-config.md)
+    - [ADR 0003 - Playwright E2E UI](adr/0003-playwright-e2e-ui.md)
+    - [ADR 0004 - NLP performance tuning](adr/0004-nlp-performance-tuning.md)
 - **Observability**
   - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
+  - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
+- **Agente Codex**
+  - [AGENTS Index](AGENTS_INDEX.md) - indice delle policy per agent e preferenze.
+  - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
+  - [Runbook Codex](runbook_codex.md) - flussi operativi per l'uso di Codex.
+  - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
 - **Changelog**
-  - [CHANGELOG](../CHANGELOG.md) - novità e fix per ogni release.
+  - [CHANGELOG](../CHANGELOG.md) - novita' e fix per ogni release.
+- **Milestones**
+  - [Archive cleanup](milestones/archive_cleanup.md) - milestone archiviate e cleanup pianificati.
 
-> La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* è in `output/timmy-kb-<slug>/config/config.yaml`.
+> La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* e' in `output/timmy-kb-<slug>/config/config.yaml`.
