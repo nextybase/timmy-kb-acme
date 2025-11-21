@@ -110,11 +110,6 @@ def main() -> None:
             "prima di aggiornare il tuo `.env`."
         ),
     )
-    st.caption(
-        "Controlla lo stato delle variabili d'ambiente richieste. "
-        "I valori non vengono mai mostrati; puoi leggere la guida e testare il formato "
-        "prima di aggiornare il tuo `.env`."
-    )
 
     try:
         ensure_dotenv_loaded()

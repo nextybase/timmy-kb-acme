@@ -19,6 +19,11 @@ from ui.pages.registry import PagePaths
 from ui.theme_enhancements import inject_theme_css
 from ui.utils.compat import nav_to
 
+try:  # cleanup opzionale
+    from tools.clean_client_workspace import perform_cleanup as _perform_cleanup
+except Exception:  # pragma: no cover
+    _perform_cleanup = None
+
 from .landing_slug import _request_shutdown as _shutdown  # deterministico
 from .utils import clear_active_slug, get_slug, require_active_slug
 from .utils.branding import render_brand_header, render_sidebar_brand
@@ -132,8 +137,26 @@ def _on_dummy_kb() -> None:
             value=False,
             help="Crea semantic_mapping.yaml e cartelle_raw.yaml senza chiamare Vision",
         )
+        cleanup = st.button("Cancella dummy (locale + Drive)", type="secondary")
         proceed = st.button("Prosegui", type="primary")
         st.divider()
+        if cleanup:
+            with st.status("Pulizia dummy in corso…", expanded=True) as status_widget:
+                if callable(_perform_cleanup):
+                    try:
+                        results = _perform_cleanup(slug, client_name=f"Dummy {slug}")
+                        status_widget.update(label="Pulizia completata", state="complete")
+                        st.success(f"Workspace dummy '{slug}' eliminato (locale + Drive).")
+                        st.json(results)
+                    except Exception as exc:  # noqa: BLE001
+                        status_widget.update(label="Pulizia fallita", state="error")
+                        st.error(f"Errore durante il cleanup: {exc}")
+                else:
+                    status_widget.update(label="Funzione di cleanup non disponibile", state="error")
+                    st.warning(
+                        "Funzioni di cleanup non disponibili. Installa `tools.clean_client_workspace` "
+                        "oppure esegui il cleanup manuale su Drive e in output/timmy-kb-<slug>."
+                    )
         if proceed:
             cmd = [sys.executable, str(script), "--slug", slug]
             if no_drive:
