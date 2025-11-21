@@ -267,7 +267,7 @@ def main() -> None:
 
                     try:
                         with status_guard(
-                            "Controllo prerequisiti�",
+                            "Controllo prerequisiti...",
                             expanded=True,
                             error_label="Errore nel preflight",
                         ) as s:
