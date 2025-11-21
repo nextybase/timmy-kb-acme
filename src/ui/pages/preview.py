@@ -33,115 +33,137 @@ else:  # pragma: no cover
     ClientContext = Any  # type: ignore[misc]
 
 _PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
+_START_PREVIEW: Any | None = None
+_STOP_PREVIEW: Any | None = None
 
-if _PREVIEW_MODE != "stub":  # pragma: no branch - import reale solo se serve
+
+def _load_preview_impl() -> bool:
+    """Import lazy degli adapter preview per evitare side-effect a import-time."""
+    global _START_PREVIEW, _STOP_PREVIEW, _PREVIEW_MODE
+    if _PREVIEW_MODE == "stub":
+        return False
+    if _START_PREVIEW and _STOP_PREVIEW:
+        return True
     try:
-        from adapters.preview import start_preview, stop_preview
+        from adapters.preview import start_preview as _sp
+        from adapters.preview import stop_preview as _xp
     except Exception:
         _PREVIEW_MODE = "stub"
+        return False
+    _START_PREVIEW, _STOP_PREVIEW = _sp, _xp
+    return True
 
-if _PREVIEW_MODE != "stub":  # pragma: no branch - definizioni reali solo se disponibili
 
-    def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
-        name = cast(str, start_preview(ctx, logger))
+def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
+    if _load_preview_impl():
+        name = cast(str, _START_PREVIEW(ctx, logger))
         if status_widget is not None and hasattr(status_widget, "update"):
             status_widget.update(label=f"Preview avviata ({name}).", state="complete")
         return name
+    return _start_preview_stub(ctx, logger, status_widget)
 
-    def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
-        stop_preview(logger, container_name=container_name)
+
+def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
+    if _load_preview_impl():
+        _STOP_PREVIEW(logger, container_name=container_name)
         if status_widget is not None and hasattr(status_widget, "update"):
             status_widget.update(label="Preview arrestata.", state="complete")
+        return
+    _stop_preview_stub(logger, container_name, status_widget)
 
-else:
 
-    def _preview_stub_warning(message: str, *, error: Exception | None = None, base: Path | None = None) -> None:
-        details: list[str] = []
-        if base is not None:
-            details.append(f"path={base}")
-        if error is not None:
-            details.append(f"reason={error}")
-        decorated = f"{message} ({'; '.join(details)})" if details else message
-        try:
-            st.warning(decorated)
-        except Exception:
-            pass
-        try:
-            logger = get_structured_logger("ui.preview.stub")
-            logger.warning(
-                "ui.preview.stub_log_dir_fallback",
-                extra={
-                    "detail": message,
-                    "error": str(error) if error else "",
-                    "base": str(base) if base else "",
-                },
-            )
-        except Exception:
-            pass
+def _preview_stub_warning(message: str, *, error: Exception | None = None, base: Path | None = None) -> None:
+    details: list[str] = []
+    if base is not None:
+        details.append(f"path={base}")
+    if error is not None:
+        details.append(f"reason={error}")
+    decorated = f"{message} ({'; '.join(details)})" if details else message
+    try:
+        st.warning(decorated)
+    except Exception:
+        pass
+    try:
+        logger = get_structured_logger("ui.preview.stub")
+        logger.warning(
+            "ui.preview.stub_log_dir_fallback",
+            extra={
+                "detail": message,
+                "error": str(error) if error else "",
+                "base": str(base) if base else "",
+            },
+        )
+    except Exception:
+        pass
 
-    def _resolve_preview_dir(base_setting: Path) -> Path:
-        if base_setting.is_absolute():
-            guard = base_setting
-            candidate = base_setting
-        else:
-            guard = REPO_ROOT
-            candidate = REPO_ROOT / base_setting
-        return Path(ensure_within_and_resolve(guard, candidate))
 
-    def _preview_log_path(slug: str) -> Path:
-        base_setting = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
-        try:
-            safe_dir = _resolve_preview_dir(base_setting)
-        except Exception as exc:
+def _resolve_preview_dir(base_setting: Path) -> Path:
+    if base_setting.is_absolute():
+        guard = base_setting
+        candidate = base_setting
+    else:
+        guard = REPO_ROOT
+        candidate = REPO_ROOT / base_setting
+    return Path(ensure_within_and_resolve(guard, candidate))
+
+
+def _preview_log_path(slug: str) -> Path:
+    base_setting = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
+    try:
+        safe_dir = _resolve_preview_dir(base_setting)
+    except Exception as exc:
+        fallback_msg = (
+            "Percorso personalizzato per i log preview non valido. "
+            f"Uso il percorso predefinito {DEFAULT_PREVIEW_LOG_DIR}."
+        )
+        _preview_stub_warning(fallback_msg, error=exc, base=base_setting)
+        safe_dir = DEFAULT_PREVIEW_LOG_DIR
+    try:
+        safe_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        fallback_dir = DEFAULT_PREVIEW_LOG_DIR
+        if safe_dir != fallback_dir:
             fallback_msg = (
-                "Percorso personalizzato per i log preview non valido. "
-                f"Uso il percorso predefinito {DEFAULT_PREVIEW_LOG_DIR}."
+                "Impossibile creare la directory personalizzata per i log preview. "
+                f"Uso il percorso predefinito {fallback_dir}."
             )
-            _preview_stub_warning(fallback_msg, error=exc, base=base_setting)
-            safe_dir = DEFAULT_PREVIEW_LOG_DIR
-        try:
-            safe_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            fallback_dir = DEFAULT_PREVIEW_LOG_DIR
-            if safe_dir != fallback_dir:
-                fallback_msg = (
-                    "Impossibile creare la directory personalizzata per i log preview. "
-                    f"Uso il percorso predefinito {fallback_dir}."
-                )
-                _preview_stub_warning(fallback_msg, error=exc, base=safe_dir)
-            fallback_dir.mkdir(parents=True, exist_ok=True)
-            safe_dir = fallback_dir
-        return Path(ensure_within_and_resolve(safe_dir, safe_dir / f"{slug}.log"))
+            _preview_stub_warning(fallback_msg, error=exc, base=safe_dir)
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        safe_dir = fallback_dir
+    return Path(ensure_within_and_resolve(safe_dir, safe_dir / f"{slug}.log"))
 
-    def _write_stub_log(slug: str, action: str) -> None:
-        log_path = _preview_log_path(slug)
-        try:
-            existing = read_text_safe(log_path.parent, log_path, encoding="utf-8")
-        except FileNotFoundError:
-            existing = ""
-        payload = existing + f"PREVIEW_STUB_{action.upper()}\n"
-        safe_write_text(log_path, payload, encoding="utf-8", atomic=True)
 
-    def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
-        slug = getattr(ctx, "slug", "unknown")
-        _write_stub_log(slug, "start")
-        if status_widget is not None and hasattr(status_widget, "update"):
-            status_widget.update(label="Preview avviata (stub).", state="complete")
-        try:
-            logger.info("ui.preview.stub_started", extra={"slug": slug})
-        except Exception:
-            pass
-        return f"stub-{slug}"
+def _write_stub_log(slug: str, action: str) -> None:
+    log_path = _preview_log_path(slug)
+    try:
+        existing = read_text_safe(log_path.parent, log_path, encoding="utf-8")
+    except FileNotFoundError:
+        existing = ""
+    payload = existing + f"PREVIEW_STUB_{action.upper()}\n"
+    safe_write_text(log_path, payload, encoding="utf-8", atomic=True)
 
-    def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
-        slug = (container_name or "unknown").split("stub-")[-1].strip()
-        _write_stub_log(slug, "stop")
-        if status_widget is not None and hasattr(status_widget, "update"):
-            status_widget.update(label="Preview arrestata (stub).", state="complete")
-        try:
-            logger.info("ui.preview.stub_stopped", extra={"slug": slug})
-        except Exception:
-            pass
+
+def _start_preview_stub(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
+    slug = getattr(ctx, "slug", "unknown")
+    _write_stub_log(slug, "start")
+    if status_widget is not None and hasattr(status_widget, "update"):
+        status_widget.update(label="Preview avviata (stub).", state="complete")
+    try:
+        logger.info("ui.preview.stub_started", extra={"slug": slug})
+    except Exception:
+        pass
+    return f"stub-{slug}"
+
+
+def _stop_preview_stub(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
+    slug = (container_name or "unknown").split("stub-")[-1].strip()
+    _write_stub_log(slug, "stop")
+    if status_widget is not None and hasattr(status_widget, "update"):
+        status_widget.update(label="Preview arrestata (stub).", state="complete")
+    try:
+        logger.info("ui.preview.stub_stopped", extra={"slug": slug})
+    except Exception:
+        pass
 
 
 st.subheader("Preview Docker (HonKit)")

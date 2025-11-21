@@ -124,7 +124,8 @@ def _run_enrich(slug: str) -> None:
             pass
         _update_client_state(slug, "pronto", logger)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
-        st.caption("Vai su **Gestisci cliente** e completa l'estrazione tag, poi riprova.")
+        st.caption("Apri **Gestisci cliente -> Estrai tag** per rigenerare il DB e riprova l'arricchimento.")
+        st.page_link("manage", label="Vai a Gestisci cliente", icon=">")
         return
     with status_guard(
         "Arricchisco il frontmatter...",
@@ -179,6 +180,11 @@ _client_state: str | None = None
 _raw_ready: bool = False
 _GATE_CACHE: dict[str, tuple[str, bool, Path | None]] = {}
 _GATING_LOG = get_structured_logger("ui.semantics.gating")
+_PROGRESS = {
+    "pronto": "[1/3] Conversione completata. Procedi con arricchimento e README/SUMMARY.",
+    "arricchito": "[2/3] Conversione + arricchimento completati. Genera README/SUMMARY.",
+    "finito": "[3/3] Tutti gli step completati: pronta per preview/push.",
+}
 
 
 def _log_gating_block(slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None) -> None:
@@ -220,15 +226,22 @@ if _HAS_STREAMLIT_CONTEXT:
 st.subheader("Onboarding semantico")
 _write = getattr(st, "write", None)
 if callable(_write):
-    _write("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
+    _write("Conversione PDF -> Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
 else:
     _cap = getattr(st, "caption", None)
     if callable(_cap):
-        _cap("Conversione PDF → Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
+        _cap("Conversione PDF -> Markdown, arricchimento del frontmatter e generazione di README/SUMMARY.")
 
 col_a, col_b = st.columns(2)
 
 # Colonna A
+if _column_button(col_a, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
+    cache_key = (slug or "<none>").strip().lower()
+    _GATE_CACHE.pop(cache_key, None)
+    _reset_gating_cache(slug)
+    has_raw_pdfs(slug)
+    st.toast("Stato raw aggiornato.")
+
 if _column_button(col_a, "Converti PDF in Markdown", key="btn_convert", width="stretch"):
     try:
         _run_convert(slug)
@@ -262,3 +275,7 @@ elif not preview_enabled:
     caption_fn = _col_caption if callable(_col_caption) else getattr(st, "caption", None)
     if callable(caption_fn):
         caption_fn("Anteprima disponibile dopo l'arricchimento ('arricchito' o 'finito').")
+
+progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
+if progress_msg:
+    st.caption(progress_msg)
