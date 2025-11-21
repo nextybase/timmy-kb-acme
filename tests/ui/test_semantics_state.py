@@ -301,6 +301,13 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     )
     captions: list[str] = []
     monkeypatch.setattr(sem.st, "caption", lambda msg, **_: captions.append(msg), raising=False)
+    links: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        sem.st,
+        "page_link",
+        lambda page, **kwargs: links.append((page, kwargs)),
+        raising=False,
+    )
 
     state_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
@@ -331,6 +338,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     assert errors and "vocabolario canonico assente" in errors[0].lower()
     assert captions and "estrazione tag" in captions[0].lower()
     assert state_calls == [("dummy-srl", "pronto")]
+    assert links and links[-1][0] == "manage"
 
 
 def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
