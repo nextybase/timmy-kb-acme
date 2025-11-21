@@ -41,7 +41,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ---
 
 ## Dipendenze & QA
-- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configuration.md](docs/configuration.md).
+- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configurazione.md](docs/configurazione.md).
 - L'import del vocabolario (`tags_reviewed.yaml`) funziona anche senza PyYAML grazie a un parser fallback minimale, ma per YAML complessi raccomandiamo di installare PyYAML: in fallback viene emesso il log `storage.tags_store.import_yaml.fallback`.
 - Hook consigliati:
   ```bash
@@ -57,7 +57,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - [User Guide](docs/user_guide.md) - flussi UI/CLI, Vision, workspace.
 - [Developer Guide](docs/developer_guide.md) - SSoT, pipeline, logging, get_vision_model().
 - [Coding Rules](docs/coding_rule.md) e [Architecture Overview](docs/architecture.md).
-- [Configuration split](docs/configuration.md) e [Runbook Codex](docs/runbook_codex.md).
+- [Configuration split](docs/configurazione.md) e [Runbook Codex](docs/runbook_codex.md).
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.
 - [LICENSE](LICENSE) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).

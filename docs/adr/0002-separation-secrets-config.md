@@ -28,7 +28,7 @@ Accepted – 25/10/2025
 - ⚠️ **Compatibilità**: i consumer legacy devono passare dal wrapper (`ClientContext.settings`), pena failure dei nuovi test.
 
 ## Conseguenze
-- Nuova documentazione: [docs/configurazione.md](../configuration.md) e sezione “Settings & guard segreti” nella test suite.
+- Nuova documentazione: [docs/configurazione.md](../configurazione.md) e sezione "Settings & guard segreti" nella test suite.
 - Test mirati (`pytest -m "settings or pipeline or ui or semantic"`) garantiscono che pipeline/semantic/UI usino `Settings`.
 - Il comando `pre-commit run no-secrets-in-yaml --all-files` diventa parte del flusso locale; la CI fallisce se trova valori inline.
 - Miglior DX Streamlit: gli operatori possono diagnosticare le ENV mancanti senza vedere i segreti.

@@ -200,8 +200,8 @@ def main() -> None:
         try:
             clear_active_slug(persist=True, update_query=True)
             clear_tab()
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning("ui.slug.reset_failed", extra={"error": str(exc)})
         st.stop()
 
     skip_preflight = get_skip_preflight()

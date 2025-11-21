@@ -33,6 +33,7 @@ from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.logging_utils import get_structured_logger
+import pipeline.path_utils as ppath
 
 from semantic.types import EmbeddingsClient
 from timmykb.ingest import OpenAIEmbeddings
@@ -70,9 +71,13 @@ def _configure_logging() -> None:
 
 def _ensure_startup() -> None:
     """Ensure required folders and DB exist."""
-    Path("data").mkdir(parents=True, exist_ok=True)
-    Path(".timmykb").mkdir(parents=True, exist_ok=True)
-    Path(".timmykb/history").mkdir(parents=True, exist_ok=True)
+    base = Path.cwd().resolve()
+    data_dir = ppath.ensure_within_and_resolve(base, base / "data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    tm_dir = ppath.ensure_within_and_resolve(base, base / ".timmykb")
+    tm_dir.mkdir(parents=True, exist_ok=True)
+    history_dir = ppath.ensure_within_and_resolve(tm_dir, tm_dir / "history")
+    history_dir.mkdir(parents=True, exist_ok=True)
     init_db(get_db_path())
 
 

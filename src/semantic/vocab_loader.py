@@ -277,6 +277,13 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
         )
         return {}
 
+    if _load_tags_reviewed is None:
+        logger.warning(
+            "semantic.vocab.tags_store_missing",
+            extra={"slug": slug, "file_path": str(db_path)},
+        )
+        return {}
+
     try:
         con = sqlite3.connect(str(db_path))
         con.close()

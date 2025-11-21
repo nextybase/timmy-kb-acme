@@ -15,7 +15,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, test suggeriti.
   - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
   - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
-  - [Configuration (EN)](configuration.md) - overview di configurazione in inglese.
+  - [Configuration (EN)](configurazione.md) - overview di configurazione in inglese.
   - [Interfaccia Streamlit ](streamlit_ui.md) - Regole di coding per Streamlit 1.50.0.
   - [Test suite](test_suite.md) - test smoke e suite PyTest.
   - [Guida UI (Streamlit)](guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
