@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import csv
+import io
+import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Callable, Optional
@@ -430,6 +433,42 @@ def open_tags_raw_modal(
             key="tags_csv_editor",
             label_visibility="collapsed",
         )
+
+        def _render_tags_preview(csv_text: str) -> None:
+            try:
+                stream = io.StringIO(csv_text)
+                rows = list(csv.DictReader(stream))
+            except Exception:
+                rows = []
+            if not rows:
+                st.info("Nessuna anteprima disponibile: CSV vuoto o non parsabile.")
+                return
+            st.markdown("**Anteprima keyword per percorso**")
+            max_rows = 30
+            for idx, row in enumerate(rows[:max_rows]):
+                rel_path = (row.get("relative_path") or "").strip()
+                tags_raw = row.get("suggested_tags") or ""
+                try:
+                    parsed = json.loads(tags_raw)
+                    if isinstance(parsed, list):
+                        tags_list = [str(t).strip() for t in parsed if str(t).strip()]
+                    else:
+                        tags_list = []
+                except Exception:
+                    tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                label = rel_path or f"riga {idx + 2}"
+                st.markdown(f"- **{label}**")
+                if tags_list:
+                    st.markdown("  - " + "\n  - ".join(tags_list))
+                else:
+                    st.caption("  Nessuna suggested_tag in questa riga.")
+
+            if len(rows) > max_rows:
+                st.caption(f"Mostrate {max_rows} righe su {len(rows)} totali.")
+
+        with st.expander("Anteprima ad albero delle keyword", expanded=False):
+            _render_tags_preview(content)
+
         col_a, col_b = st.columns(2)
 
         if column_button(col_a, "Salva raw", type="secondary"):
