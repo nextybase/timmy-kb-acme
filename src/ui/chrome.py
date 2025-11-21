@@ -166,7 +166,7 @@ def header(slug: str | None, *, title: str | None = None, subtitle: str | None =
     """
     inject_theme_css()  # CSS enhancement opzionale (idempotente)
 
-    subtitle = subtitle or (f"Cliente: {slug}" if slug else "Nuovo cliente")
+    subtitle = subtitle or (f"Cliente: {slug}" if slug else None)
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,

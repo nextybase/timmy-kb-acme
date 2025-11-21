@@ -108,7 +108,7 @@ def render_brand_header(
     if st_module is None:
         return
 
-    page_title = title or "Onboarding NeXT - Clienti"
+    page_title = title or None
     logo_path = _logo_for_theme(repo_root)
 
     def _call(obj: Any, method: str, *args: Any, **kwargs: Any) -> None:
@@ -135,9 +135,10 @@ def render_brand_header(
 
         if not columns or len(columns) < 2:
             _call(st_module, "image", str(logo_path))
-            _call(st_module, "title", page_title)
-            if subtitle:
-                _call(st_module, "caption", subtitle)
+            if page_title:
+                _call(st_module, "title", page_title)
+                if subtitle:
+                    _call(st_module, "caption", subtitle)
             return
 
         col_logo, col_title = columns[0], columns[1]
@@ -149,17 +150,20 @@ def render_brand_header(
 
         try:
             with col_title:
+                if page_title:
+                    _call(col_title, "title", page_title)
+                    if subtitle:
+                        _call(col_title, "caption", subtitle)
+        except Exception:
+            if page_title:
                 _call(col_title, "title", page_title)
                 if subtitle:
                     _call(col_title, "caption", subtitle)
-        except Exception:
-            _call(col_title, "title", page_title)
-            if subtitle:
-                _call(col_title, "caption", subtitle)
     else:
-        _call(st_module, "title", page_title)
-        if subtitle:
-            _call(st_module, "caption", subtitle)
+        if page_title:
+            _call(st_module, "title", page_title)
+            if subtitle:
+                _call(st_module, "caption", subtitle)
 
 
 def render_sidebar_brand(*, st_module: Any | None, repo_root: Path) -> None:

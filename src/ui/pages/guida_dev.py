@@ -21,15 +21,12 @@ def _repo_root() -> Path:
 
 
 DOC_OPTIONS: list[tuple[str, str]] = [
-    ("Timmy-KB - Documentazione (v1.0 Beta)", "docs/index.md"),
+    ("NeXT Onboarding - Documentazione (v1.0 Beta)", "docs/index.md"),
+    ("Guide - Architettura del sistema", "docs/architecture.md"),
     ("Guide - Developer Guide", "docs/developer_guide.md"),
     ("Guide - Coding Rules", "docs/coding_rule.md"),
-    ("Guide - Architettura del sistema", "docs/architecture.md"),
-    ("Guide - Configurazione (YAML, .env, OIDC)", "docs/configurazione.md"),
-    ("Guide - Configuration (EN)", "docs/configuration.md"),
     ("Guide - Interfaccia Streamlit", "docs/streamlit_ui.md"),
     ("Guide - Test suite", "docs/test_suite.md"),
-    ("Guide - Guida UI (Streamlit)", "docs/guida_ui.md"),
     ("Policy - Policy di Versioning", "docs/versioning_policy.md"),
     ("Policy - Policy di Push", "docs/policy_push.md"),
     ("Policy - Security & Compliance", "docs/security.md"),
