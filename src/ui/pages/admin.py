@@ -32,7 +32,7 @@ from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
 
 # ---------- Chrome coerente ----------
 # L'entrypoint imposta page_config; qui solo header+sidebar come in home.py
-header(None)
+header(None, title="Admin", subtitle="Gestione autenticazione e configurazioni amministrative.")
 sidebar(None)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

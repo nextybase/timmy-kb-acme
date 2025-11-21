@@ -37,12 +37,10 @@ def _matches_text(row: Dict[str, Any], query: str) -> bool:
 
 def main() -> None:
     # Chrome Admin: slug non richiesto
-    render_chrome_then_require(allow_without_slug=True)
-
-    st.subheader("Log dashboard")
-    st.caption(
-        "Esplora i log globali della UI Streamlit salvati in `.timmykb/logs/`. "
-        "La pagina non richiede uno slug attivo."
+    render_chrome_then_require(
+        allow_without_slug=True,
+        title="Log dashboard",
+        subtitle="Esplora i log globali della UI Streamlit salvati in `.timmykb/logs/`.",
     )
 
     log_dir = get_global_logs_dir()

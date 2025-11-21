@@ -35,9 +35,9 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
 - **Agente Codex**
   - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
-  - [AGENTS Index](AGENTS_INDEX.md) - indice delle policy per agent e preferenze.
-  - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
   - [Runbook Codex](runbook_codex.md) - flussi operativi per l'uso di Codex.
+  - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
+  - [AGENTS Index](AGENTS_INDEX.md) - indice delle policy per agent e preferenze.
 - **Changelog**
   - [CHANGELOG](../CHANGELOG.md) - novita' e fix per ogni release.
 - **Milestones**

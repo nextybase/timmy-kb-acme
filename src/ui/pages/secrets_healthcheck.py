@@ -101,9 +101,16 @@ def _render_test_result(result: SecretTestResult) -> None:
 
 
 def main() -> None:
-    render_chrome_then_require(allow_without_slug=True)
-    st.subheader("Secrets Healthcheck")
-    st.write(
+    render_chrome_then_require(
+        allow_without_slug=True,
+        title="Secrets Healthcheck",
+        subtitle=(
+            "Controlla lo stato delle variabili d'ambiente richieste. "
+            "I valori non vengono mai mostrati; puoi leggere la guida e testare il formato "
+            "prima di aggiornare il tuo `.env`."
+        ),
+    )
+    st.caption(
         "Controlla lo stato delle variabili d'ambiente richieste. "
         "I valori non vengono mai mostrati; puoi leggere la guida e testare il formato "
         "prima di aggiornare il tuo `.env`."

@@ -100,6 +100,7 @@ def render_brand_header(
     *,
     st_module: Any | None,
     repo_root: Path,
+    title: Optional[str] = None,
     subtitle: Optional[str] = None,
     include_anchor: bool = False,
     show_logo: bool = True,
@@ -107,6 +108,7 @@ def render_brand_header(
     if st_module is None:
         return
 
+    page_title = title or "Onboarding NeXT - Clienti"
     logo_path = _logo_for_theme(repo_root)
 
     def _call(obj: Any, method: str, *args: Any, **kwargs: Any) -> None:
@@ -133,7 +135,7 @@ def render_brand_header(
 
         if not columns or len(columns) < 2:
             _call(st_module, "image", str(logo_path))
-            _call(st_module, "title", "Onboarding NeXT - Clienti")
+            _call(st_module, "title", page_title)
             if subtitle:
                 _call(st_module, "caption", subtitle)
             return
@@ -147,15 +149,15 @@ def render_brand_header(
 
         try:
             with col_title:
-                _call(col_title, "title", "Onboarding NeXT - Clienti")
+                _call(col_title, "title", page_title)
                 if subtitle:
                     _call(col_title, "caption", subtitle)
         except Exception:
-            _call(col_title, "title", "Onboarding NeXT - Clienti")
+            _call(col_title, "title", page_title)
             if subtitle:
                 _call(col_title, "caption", subtitle)
     else:
-        _call(st_module, "title", "Onboarding NeXT - Clienti")
+        _call(st_module, "title", page_title)
         if subtitle:
             _call(st_module, "caption", subtitle)
 

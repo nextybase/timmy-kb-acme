@@ -14,11 +14,12 @@ st = get_streamlit()
 
 
 def main() -> None:
-    render_chrome_then_require(allow_without_slug=True)
+    render_chrome_then_require(
+        allow_without_slug=True,
+        title="Tools > Tuning",
+        subtitle="Interfaccia rapida per modali Vision/System Prompt e conversione PDF -> YAML.",
+    )
     slug: Optional[str] = st.session_state.get("active_slug") or "dummy"
-
-    st.header("Tools > Tuning")
-    st.caption("Interfaccia rapida per modali Vision/System Prompt e conversione PDF -> YAML.")
 
     render_controls(slug=slug or "dummy", st_module=st)
     render_advanced_options(st_module=st)

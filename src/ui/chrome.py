@@ -158,7 +158,7 @@ def _on_exit() -> None:
 
 
 # ---------- layout ----------
-def header(slug: str | None) -> None:
+def header(slug: str | None, *, title: str | None = None, subtitle: str | None = None) -> None:
     """
     Header della UI.
     Nota: l'unica chiamata a `st.set_page_config(...)` sta nell'entrypoint.
@@ -166,10 +166,11 @@ def header(slug: str | None) -> None:
     """
     inject_theme_css()  # CSS enhancement opzionale (idempotente)
 
-    subtitle = f"Cliente: {slug}" if slug else "Nuovo cliente"
+    subtitle = subtitle or (f"Cliente: {slug}" if slug else "Nuovo cliente")
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
+        title=title,
         subtitle=subtitle,
         include_anchor=True,
         show_logo=False,
@@ -302,7 +303,9 @@ def sidebar(slug: str | None) -> None:
                 pass
 
 
-def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | None:
+def render_chrome_then_require(
+    *, allow_without_slug: bool = False, title: str | None = None, subtitle: str | None = None
+) -> str | None:
     """
     Renderizza header + sidebar e ritorna lo slug attivo.
 
@@ -311,7 +314,7 @@ def render_chrome_then_require(*, allow_without_slug: bool = False) -> str | Non
             come require_active_slug). Se True, non blocca e ritorna lo slug (o None).
     """
     slug = cast(Optional[str], get_slug())
-    header(slug)
+    header(slug, title=title, subtitle=subtitle)
     sidebar(slug)
     if allow_without_slug:
         return slug
