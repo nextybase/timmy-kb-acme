@@ -43,6 +43,12 @@ def main() -> None:
         subtitle="Esplora i log globali della UI Streamlit salvati in `.timmykb/logs/`.",
     )
 
+    st.subheader("Log dashboard")
+    st.caption(
+        "Esplora i log globali della UI Streamlit salvati in `.timmykb/logs/`. "
+        "La pagina non richiede uno slug attivo."
+    )
+
     log_dir = get_global_logs_dir()
     files: List[LogFileInfo] = list_global_log_files(max_files=20)
 
