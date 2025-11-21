@@ -199,6 +199,11 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     Se il modulo reale non è disponibile → {} (enrichment opzionale).
     """
     if _load_tags_reviewed is None:
+        logger = logging.getLogger("semantic.vocab_loader")
+        logger.warning(
+            "semantic.vocab.loader_missing",
+            extra={"event": "semantic.vocab.loader_missing", "file_path": str(db_path)},
+        )
         return {}
     try:
         raw = _load_tags_reviewed(str(db_path))  # accetta str/Path

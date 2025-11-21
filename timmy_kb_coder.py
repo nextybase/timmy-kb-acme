@@ -169,16 +169,23 @@ def main() -> None:
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
             try:
+                cfg = _load_client_cfg(project_slug)
+                retr_cfg = cfg.get("retriever") if isinstance(cfg, dict) else {}
+                if not isinstance(retr_cfg, dict):
+                    retr_cfg = {}
+                limit_cfg = retr_cfg.get("candidate_limit")
+                try:
+                    candidate_limit = int(limit_cfg) if limit_cfg is not None else 2000
+                except Exception:
+                    candidate_limit = 2000
                 params = QueryParams(
                     db_path=get_db_path(),
                     project_slug=project_slug,
                     scope=scope,
                     query=f"{task}\n\n{chat_context}" if chat_context else task,
                     k=8,
-                    candidate_limit=4000,
+                    candidate_limit=candidate_limit,
                 )
-                # carica (se c'è) il config del cliente per allineare candidate_limit/budget
-                cfg = _load_client_cfg(project_slug)
                 retrieved = search_with_config(
                     params,
                     cfg,

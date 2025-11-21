@@ -67,11 +67,17 @@ from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 try:  # noqa: E402
     from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
 except Exception:  # pragma: no cover
-    # Fallback no-op con la stessa firma per preservare la parità di interfaccia
-    clear_tab = lambda: None  # type: ignore[assignment]
-    get_slug_from_qp = lambda: None  # type: ignore[assignment]
-    get_tab = lambda default="home": default  # type: ignore[assignment]
-    set_tab = lambda tab: None  # type: ignore[assignment]
+    def clear_tab() -> None:  # type: ignore[assignment]
+        return None
+
+    def get_slug_from_qp() -> str | None:  # type: ignore[assignment]
+        return None
+
+    def get_tab(default: str = "home") -> str:  # type: ignore[assignment]
+        return default
+
+    def set_tab(tab: str) -> None:  # type: ignore[assignment]
+        return None
 
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -286,9 +292,12 @@ def main() -> None:
 
     if slug:
         try:
-            raw_ready, _raw_path = has_raw_pdfs(slug)
-        except Exception:
-            raw_ready = False
+            has_raw_pdfs(slug)
+        except Exception as exc:
+            LOGGER.warning(
+                "ui.workspace.raw_check_failed",
+                extra={"event": "ui.workspace.raw_check_failed", "slug": slug, "error": str(exc)},
+            )
 
     _st = _get_streamlit()
     _pages_specs = visible_page_specs(compute_gates())
