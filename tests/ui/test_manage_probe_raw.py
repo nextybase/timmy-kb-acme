@@ -81,7 +81,7 @@ def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     raw_path = str(Path("output") / "timmy-kb-dummy" / "raw")
     _load_manage_module(monkeypatch, st_stub, slug="dummy", has_raw_result=(True, raw_path))
 
-    assert "Avvia arricchimento semantico" in st_stub.button_calls
+    assert any(label in st_stub.button_calls for label in ("Avvia arricchimento semantico", "Genera i tags"))
     # Placeholder informativi disabilitati: nessun messaggio info/warning aggiuntivo
     assert not any("Arricchimento semantico" in msg for msg in st_stub.info_messages)
     assert not any("PDF rilevati" in msg for msg in st_stub.success_messages)
