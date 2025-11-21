@@ -124,7 +124,7 @@ def _run_enrich(slug: str) -> None:
             pass
         _update_client_state(slug, "pronto", logger)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
-        st.caption("Apri **Gestisci cliente -> Estrai tag** per rigenerare il DB e riprova l'arricchimento.")
+        st.caption("Apri **Gestisci cliente -> Estrai tag** e completa l'estrazione tag per rigenerare il DB.")
         st.page_link("manage", label="Vai a Gestisci cliente", icon=">")
         return
     with status_guard(
