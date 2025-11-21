@@ -9,10 +9,9 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
 
 ## Indice
 
-- **Panoramica & Architettura**
-  - [Architettura del sistema](architecture.md) - componenti, flussi end-to-end, API interne.
 - **Guide**
   - [User Guide](user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
+  - [Architettura del sistema](architecture.md) - componenti, flussi end-to-end, API interne.
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, test suggeriti.
   - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
   - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
@@ -25,6 +24,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilita'.
   - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
   - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
+- **ADR - scelte tecniche**
   - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
     - [ADR 0001 - SQLite SSOT dei tag](adr/0001-sqlite-ssot-tags.md)
     - [ADR 0002 - Separation secrets/config](adr/0002-separation-secrets-config.md)
@@ -34,10 +34,10 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
   - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
 - **Agente Codex**
+  - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
   - [AGENTS Index](AGENTS_INDEX.md) - indice delle policy per agent e preferenze.
   - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
   - [Runbook Codex](runbook_codex.md) - flussi operativi per l'uso di Codex.
-  - [Codex Integrazione](codex_integrazione.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
 - **Changelog**
   - [CHANGELOG](../CHANGELOG.md) - novita' e fix per ogni release.
 - **Milestones**

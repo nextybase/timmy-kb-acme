@@ -20,9 +20,27 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-DOCS_DIR = Path("docs")
-_DOCS_DEFAULT = DOCS_DIR / "index.md"
-_DOCS_EXCLUDE = {"index.md", "guida_ui.md"}
+DOC_OPTIONS: list[tuple[str, str]] = [
+    ("Timmy-KB - Documentazione (v1.0 Beta)", "docs/index.md"),
+    ("Guide - Developer Guide", "docs/developer_guide.md"),
+    ("Guide - Coding Rules", "docs/coding_rule.md"),
+    ("Guide - Architettura del sistema", "docs/architecture.md"),
+    ("Guide - Configurazione (YAML, .env, OIDC)", "docs/configurazione.md"),
+    ("Guide - Configuration (EN)", "docs/configuration.md"),
+    ("Guide - Interfaccia Streamlit", "docs/streamlit_ui.md"),
+    ("Guide - Test suite", "docs/test_suite.md"),
+    ("Guide - Guida UI (Streamlit)", "docs/guida_ui.md"),
+    ("Policy - Policy di Versioning", "docs/versioning_policy.md"),
+    ("Policy - Policy di Push", "docs/policy_push.md"),
+    ("Policy - Security & Compliance", "docs/security.md"),
+    ("ADR - Registro decisioni (ADR)", "docs/adr/README.md"),
+    ("ADR - ADR 0001 - SQLite SSOT dei tag", "docs/adr/0001-sqlite-ssot-tags.md"),
+    ("ADR - ADR 0002 - Separation secrets/config", "docs/adr/0002-separation-secrets-config.md"),
+    ("ADR - ADR 0003 - Playwright E2E UI", "docs/adr/0003-playwright-e2e-ui.md"),
+    ("ADR - ADR 0004 - NLP performance tuning", "docs/adr/0004-nlp-performance-tuning.md"),
+    ("Observability - Observability Stack", "docs/observability.md"),
+    ("Observability - Logging Events", "docs/logging_events.md"),
+]
 
 
 CacheDecorator = Callable[[Callable[[str], str]], Callable[[str], str]]
@@ -38,7 +56,7 @@ def _read_markdown(rel_path: str) -> str:
     try:
         return cast(str, read_text_safe(_repo_root(), Path(rel_path)))
     except Exception as e:
-        return f"> ⚠️ Impossibile leggere `{rel_path}`: {e}"
+        return f"> Attenzione: impossibile leggere `{rel_path}`: {e}"
 
 
 def _strip_links(markdown: str) -> str:
@@ -61,33 +79,6 @@ def _extract_title(markdown: str) -> str:
             # Rimuove i cancelletto iniziali e spazi.
             return stripped.lstrip("#").strip()
     return ""
-
-
-def _list_docs_for_menu() -> list[tuple[str, str]]:
-    """
-    Restituisce l'elenco dei file Markdown disponibili nella cartella docs/,
-    esclusi index.md e guida_ui.md.
-
-    Ogni elemento è una tupla (title, rel_path) dove:
-    - title: titolo estratto dal contenuto Markdown
-    - rel_path: path relativo usato da _read_markdown (es. "docs/developer_guide.md")
-    """
-    try:
-        docs_dir = _repo_root() / DOCS_DIR
-        md_files = sorted(docs_dir.glob("*.md"))
-    except Exception:
-        return []
-
-    items: list[tuple[str, str]] = []
-    for p in md_files:
-        if p.name in _DOCS_EXCLUDE:
-            continue
-        rel_path = str(DOCS_DIR / p.name)
-        md = _read_markdown(rel_path)
-        title = _extract_title(md) or p.stem
-        items.append((title, rel_path))
-
-    return items
 
 
 # ---------- UI ----------
@@ -113,32 +104,16 @@ div[data-testid="stMarkdownContainer"] pre code { font-size: .90rem; }
 """
 )
 
-docs_menu = _list_docs_for_menu()
-
-# Titolo per l'indice (docs/index.md)
-index_md = _read_markdown(str(_DOCS_DEFAULT))
-index_title = _extract_title(index_md) or "Indice"
-
-menu_labels = [index_title] + [title for title, _ in docs_menu]
-
 selected_label = st.selectbox(
     "Seleziona un file di documentazione",
-    options=menu_labels,
+    options=[label for label, _ in DOC_OPTIONS],
     index=0,
 )
 
-selected_index = menu_labels.index(selected_label)
-
-# Di default mostriamo sempre docs/index.md.
-if selected_index == 0:
-    rel_path = str(_DOCS_DEFAULT)
-else:
-    _, rel_path = docs_menu[selected_index - 1]
-
+rel_path = dict(DOC_OPTIONS).get(selected_label, "docs/index.md")
 md = _read_markdown(rel_path)
 
-# Sull'indice vogliamo link non cliccabili.
-if rel_path == str(_DOCS_DEFAULT):
+if rel_path == "docs/index.md":
     md = _strip_links(md)
 
 st.markdown(md)
