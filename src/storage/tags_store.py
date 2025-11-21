@@ -20,6 +20,9 @@ __all__ = [
     "derive_db_path_from_yaml_path",
     "ensure_schema_v2",
     "migrate_to_v2",
+    "DocEntityRecord",
+    "save_doc_entities",
+    "list_doc_entities",
     # v2 helpers
     "get_conn",
     "upsert_folder",
@@ -494,6 +497,23 @@ def _create_v2_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_docs_folder ON documents(folder_id);
         CREATE INDEX IF NOT EXISTS idx_ft_folder ON folder_terms(folder_id, term_id);
         CREATE INDEX IF NOT EXISTS idx_terms_canon ON terms(canonical);
+
+        CREATE TABLE IF NOT EXISTS doc_entities(
+          id INTEGER PRIMARY KEY,
+          doc_uid TEXT NOT NULL,
+          area_key TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          confidence REAL NOT NULL,
+          origin TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'suggested' CHECK (status IN ('suggested','approved','rejected')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(doc_uid, area_key, entity_id, origin)
+        );
+        CREATE INDEX IF NOT EXISTS idx_doc_entities_doc ON doc_entities(doc_uid);
+        CREATE INDEX IF NOT EXISTS idx_doc_entities_area ON doc_entities(area_key);
+        CREATE INDEX IF NOT EXISTS idx_doc_entities_entity ON doc_entities(entity_id);
+        CREATE INDEX IF NOT EXISTS idx_doc_entities_status ON doc_entities(status);
         """
     )
 
@@ -506,6 +526,7 @@ _V2_TABLES = [
     "doc_terms",
     "folder_terms",
     "edit_log",
+    "doc_entities",
 ]
 
 
@@ -567,10 +588,22 @@ def migrate_to_v2(db_path: str) -> None:
                     ),
                     (version, reviewed_at, keep_only_listed),
                 )
-            conn.commit()
+                conn.commit()
         except Exception:
             conn.rollback()
             raise
+
+
+@dataclass(frozen=True)
+class DocEntityRecord:
+    doc_uid: str
+    area_key: str
+    entity_id: str
+    confidence: float
+    origin: str
+    status: str = "suggested"
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 @contextmanager
@@ -729,6 +762,91 @@ def save_doc_terms(conn: sqlite3.Connection, document_id: int, items: list[tuple
     except Exception:
         conn.rollback()
         raise
+
+
+def save_doc_entities(db_path: str | Path, records: list[DocEntityRecord]) -> None:
+    """Inserisce/aggiorna record doc_entities a livello documento."""
+    dbp = Path(db_path)
+    dbp.parent.mkdir(parents=True, exist_ok=True)
+    ensure_schema_v2(str(dbp))
+
+    now = _now_iso()
+    with closing(sqlite3.connect(dbp)) as conn:
+        conn.execute("BEGIN")
+        try:
+            for rec in records or []:
+                created = rec.created_at or now
+                updated = rec.updated_at or now
+                conn.execute(
+                    (
+                        "INSERT INTO doc_entities("
+                        "doc_uid, area_key, entity_id, confidence, origin, status, created_at, updated_at"
+                        ") VALUES(?, ?, ?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(doc_uid, area_key, entity_id, origin) DO UPDATE SET "
+                        "confidence=excluded.confidence, "
+                        "status=excluded.status, "
+                        "updated_at=excluded.updated_at"
+                    ),
+                    (
+                        rec.doc_uid,
+                        rec.area_key,
+                        rec.entity_id,
+                        float(rec.confidence),
+                        rec.origin,
+                        rec.status,
+                        created,
+                        updated,
+                    ),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
+def list_doc_entities(
+    db_path: str | Path,
+    *,
+    doc_uid: str | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    """Ritorna i record doc_entities filtrati per doc_uid/status (se forniti)."""
+    dbp = Path(db_path)
+    if not dbp.exists():
+        return []
+    ensure_schema_v2(str(dbp))
+
+    with closing(sqlite3.connect(dbp)) as conn:
+        conn.execute("PRAGMA foreign_keys = ON;")
+        query = (
+            "SELECT doc_uid, area_key, entity_id, confidence, origin, status, created_at, updated_at FROM doc_entities"
+        )
+        params: list[Any] = []
+        clauses: list[str] = []
+        if doc_uid:
+            clauses.append("doc_uid=?")
+            params.append(doc_uid)
+        if status:
+            clauses.append("status=?")
+            params.append(status)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY doc_uid, area_key, entity_id"
+        cur = conn.execute(query, params)
+        rows = cur.fetchall()
+        return [
+            {
+                "doc_uid": str(r[0]),
+                "area_key": str(r[1]),
+                "entity_id": str(r[2]),
+                "confidence": float(r[3]),
+                "origin": str(r[4]),
+                "status": str(r[5]),
+                "created_at": str(r[6]),
+                "updated_at": str(r[7]),
+            }
+            for r in rows
+        ]
 
 
 # ----- folder_terms (aggregazione/HiTL) -----

@@ -31,6 +31,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -136,21 +137,8 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
 # ------------------------------ API principali ------------------------------- #
 
 
-def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
-    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename.
-
-    Ritorna:
-      {
-        "relative/path/to.pdf": {
-          "tags": [...],
-          "entities": [],     # MVP
-          "keyphrases": [],   # MVP
-          "score": {"tag": float, ...},   # pesi grezzi
-          "sources": {"path":[...], "filename":[...]},
-        },
-        ...
-      }
-    """
+def _extract_semantic_candidates_heuristic(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
+    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename."""
     raw_dir = Path(raw_dir).resolve()
     base_dir = Path(cfg.base_dir).resolve()
 
@@ -187,6 +175,85 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str,
             "sources": {"path": path_tags, "filename": file_tags},
         }
 
+    return candidates
+
+
+def _merge_spacy_candidates(
+    base_candidates: dict[str, dict[str, Any]],
+    spacy_candidates: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Unisce i risultati SpaCy con le euristiche (union + somma pesi)."""
+    if not spacy_candidates:
+        return base_candidates
+
+    merged = dict(base_candidates)
+    for rel_path, spacy_meta in spacy_candidates.items():
+        target = merged.setdefault(
+            rel_path,
+            {"tags": [], "entities": [], "keyphrases": [], "score": {}, "sources": {}},
+        )
+
+        existing_tags = [str(t).strip() for t in target.get("tags") or [] if str(t).strip()]
+        spacy_tags = [str(t).strip() for t in spacy_meta.get("tags") or [] if str(t).strip()]
+        tags_seen = {t.lower() for t in existing_tags}
+        for tag in spacy_tags:
+            if tag.lower() not in tags_seen:
+                existing_tags.append(tag)
+                tags_seen.add(tag.lower())
+        target["tags"] = existing_tags
+
+        existing_entities = list(target.get("entities") or [])
+        existing_entities.extend(spacy_meta.get("entities") or [])
+        target["entities"] = existing_entities
+
+        keyphrases = list(target.get("keyphrases") or [])
+        for kp in spacy_meta.get("keyphrases") or []:
+            if kp not in keyphrases:
+                keyphrases.append(kp)
+        target["keyphrases"] = keyphrases
+
+        score = dict(target.get("score") or {})
+        for tag, val in (spacy_meta.get("score") or {}).items():
+            try:
+                score[tag] = float(score.get(tag, 0.0)) + float(val)
+            except Exception:
+                continue
+        target["score"] = score
+
+        sources = dict(target.get("sources") or {})
+        spacy_source = spacy_meta.get("sources") or {}
+        if spacy_source:
+            sources["spacy"] = spacy_source.get("spacy", spacy_source)
+        target["sources"] = sources
+    return merged
+
+
+def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
+    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename e opzionalmente SpaCy."""
+    candidates = _extract_semantic_candidates_heuristic(raw_dir, cfg)
+
+    backend_env = os.getenv("TAGS_NLP_BACKEND", cfg.nlp_backend).strip().lower()
+    if backend_env == "spacy":
+        try:
+            from semantic.spacy_extractor import extract_spacy_tags
+
+            spacy_candidates = extract_spacy_tags(
+                raw_dir,
+                cfg,
+                model_name=os.getenv("SPACY_MODEL", cfg.spacy_model),
+                logger=LOGGER,
+            )
+            candidates = _merge_spacy_candidates(candidates, spacy_candidates)
+            if spacy_candidates:
+                LOGGER.info(
+                    "semantic.auto_tagger.spacy_used",
+                    extra={"count": len(spacy_candidates)},
+                )
+        except Exception as exc:
+            LOGGER.warning(
+                "semantic.auto_tagger.spacy_failed",
+                extra={"error": str(exc)},
+            )
     return candidates
 
 

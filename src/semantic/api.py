@@ -24,9 +24,11 @@ from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
+from storage.tags_store import DocEntityRecord
 from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 from storage.tags_store import get_conn as _get_tags_conn
+from storage.tags_store import save_doc_entities as _save_doc_entities
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
@@ -111,6 +113,32 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         cfg = _load_semantic_config(base_dir)
         candidates = _extract_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
+        doc_entities: List[DocEntityRecord] = []
+        for rel_path, meta in candidates.items():
+            sources = meta.get("sources") or {}
+            spacy_src = sources.get("spacy") or {}
+            areas = spacy_src.get("areas") or {}
+            score_map = meta.get("score") or {}
+            rel_uid = Path(rel_path).as_posix()
+            for area_key, ent_list in areas.items():
+                for entity_id in ent_list or []:
+                    key = f"{area_key}:{entity_id}"
+                    try:
+                        confidence = float(score_map.get(key, 0.0))
+                    except Exception:
+                        confidence = 0.0
+                    if confidence <= 0.0:
+                        continue
+                    doc_entities.append(
+                        DocEntityRecord(
+                            doc_uid=rel_uid,
+                            area_key=str(area_key),
+                            entity_id=str(entity_id),
+                            confidence=confidence,
+                            origin="spacy",
+                            status="suggested",
+                        )
+                    )
 
         # Arricchimento con top-terms NLP (se disponibili in tags.db)
         try:
@@ -161,6 +189,8 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
                             break
                     if enriched:
                         meta["tags"] = enriched
+            if doc_entities:
+                _save_doc_entities(tags_db_path, doc_entities)
         except Exception as exc:
             logger.warning(
                 "semantic.tags_csv.enrichment_failed",

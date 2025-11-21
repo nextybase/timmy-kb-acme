@@ -91,7 +91,10 @@
     "SARIF",
     "distroless",
     "committa",
-    "matchano"
+    "matchano",
+    "stoplist",
+    "dedup",
+    "keyphrase"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

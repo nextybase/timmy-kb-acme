@@ -261,6 +261,7 @@ def run_nlp_to_db(
     only_missing: bool = False,
     max_workers: int | None = None,
     worker_batch_size: int = 4,
+    enable_entities: bool = True,
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
@@ -309,6 +310,21 @@ def run_nlp_to_db(
             worker_batch_size=worker_batch_size,
             logger=log,
         )
+
+    if enable_entities:
+        try:
+            from semantic.entities_runner import run_doc_entities_pipeline
+
+            ent_stats = run_doc_entities_pipeline(
+                base_dir=base_dir_path,
+                raw_dir=raw_dir_path,
+                semantic_dir=base_dir_path / "semantic",
+                db_path=db_path_path,
+                logger=log,
+            )
+            stats = {**stats, **ent_stats}
+        except Exception as exc:  # pragma: no cover
+            log.warning("tag_onboarding.entities.failed", extra={"error": str(exc)})
 
     enriched_stats = {
         **stats,

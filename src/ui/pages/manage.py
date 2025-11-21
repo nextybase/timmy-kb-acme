@@ -411,7 +411,7 @@ if slug:
 
     open_semantic = _column_button(
         c2,
-        "Avvia arricchimento semantico",
+        "Genera i tags",
         key="btn_semantic_start",
         type="primary",
         width="stretch",
@@ -436,6 +436,7 @@ if slug:
             st.stop()
         else:
             try:
+                st.info("Esecuzione NLP (SpaCy/euristica) in corso, attendi...")
                 run_tags_fn(slug)
                 _open_tags_raw_modal(slug)
             except Exception as exc:  # pragma: no cover

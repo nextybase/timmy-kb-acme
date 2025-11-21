@@ -48,6 +48,8 @@ _DEFAULTS: dict[str, Any] = {
     "keyphrases": True,  # estrazione keyphrase
     "embeddings": False,  # fase 2 (clustering sinonimi)
     "stop_tags": ["bozza", "varie"],  # blacklist locale
+    "nlp_backend": "spacy",  # default SpaCy, fallback heuristic se assente
+    "spacy_model": "it_core_news_sm",
 }
 
 # Chiavi accettate nella sezione semantic_tagger / semantic_defaults
@@ -65,6 +67,8 @@ class SemanticConfig:
     keyphrases: bool = True
     embeddings: bool = False
     stop_tags: set[str] = field(default_factory=set)
+    nlp_backend: str = "heuristic"
+    spacy_model: str = "it_core_news_sm"
 
     # Riferimenti utili per l'orchestrazione
     base_dir: Path = Path(".")  # output/timmy-kb-<slug> (resolve in load)
@@ -236,6 +240,8 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] 
     ner = _coerce_bool(acc.get("ner"), cast(bool, _DEFAULTS["ner"]))
     keyphrases = _coerce_bool(acc.get("keyphrases"), cast(bool, _DEFAULTS["keyphrases"]))
     embeddings = _coerce_bool(acc.get("embeddings"), cast(bool, _DEFAULTS["embeddings"]))
+    nlp_backend = _coerce_str(acc.get("nlp_backend"), cast(str, _DEFAULTS["nlp_backend"]))
+    spacy_model = _coerce_str(acc.get("spacy_model"), cast(str, _DEFAULTS["spacy_model"]))
 
     cfg = SemanticConfig(
         lang=lang,
@@ -246,6 +252,8 @@ def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] 
         keyphrases=keyphrases,
         embeddings=embeddings,
         stop_tags=stop_tags,
+        nlp_backend=nlp_backend,
+        spacy_model=spacy_model,
         base_dir=base_dir,
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,

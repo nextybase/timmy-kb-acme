@@ -21,8 +21,10 @@ from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within
 from semantic.context_paths import resolve_context_paths
 from semantic.embedding_service import list_content_markdown
+from semantic.entities_frontmatter import enrich_frontmatter_with_entities
 from semantic.types import ClientContextProtocol
 from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
+from storage.tags_store import get_conn as _get_tags_conn
 
 __all__ = [
     "enrich_frontmatter",
@@ -93,6 +95,19 @@ def enrich_frontmatter(
             canonical_from_raw = _canonicalize_tags(raw_list, inv)
             tags = canonical_from_raw or _guess_tags_for_name(name, vocab, inv=inv)
             new_meta = _merge_frontmatter(meta, title=title, tags=tags)
+            # Arricchimento additivo da doc_entities (se presenti e approvate)
+            try:
+                tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+                if tags_db.exists():
+                    with _get_tags_conn(str(tags_db)) as conn:
+                        new_meta = enrich_frontmatter_with_entities(
+                            new_meta,
+                            conn,
+                            getattr(paths, "semantic_mapping", {}),
+                        )
+            except Exception:
+                # fail-soft: non bloccare l'arricchimento standard
+                pass
             if meta == new_meta:
                 continue
 
