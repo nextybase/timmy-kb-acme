@@ -22,8 +22,11 @@ from ui.utils.compat import nav_to
 try:  # cleanup opzionale
     from tools.clean_client_workspace import perform_cleanup as _perform_cleanup
 except Exception:  # pragma: no cover
-    _perform_cleanup = None
-
+    try:
+        sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "src")))
+        from tools.clean_client_workspace import perform_cleanup as _perform_cleanup
+    except Exception:
+        _perform_cleanup = None
 from .landing_slug import _request_shutdown as _shutdown  # deterministico
 from .utils import clear_active_slug, get_slug, require_active_slug
 from .utils.branding import render_brand_header, render_sidebar_brand
