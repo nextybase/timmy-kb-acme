@@ -217,6 +217,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 2. **Arricchisci frontmatter**
    - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` è ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB è lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
+   - **Entità e relazioni:** se in `semantic/tags.db` sono presenti entità con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entità definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entità e le relazioni del mapping Vision-only.
    - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
 3. **Genera README/SUMMARY**
    - **SUMMARY.md:** ricostruisce l'indice navigabile di `book/` in base a cartelle e file presenti.
