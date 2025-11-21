@@ -15,6 +15,7 @@ import streamlit as st
 
 from pipeline.context import validate_slug
 from ui.clients_store import get_all as get_clients
+from ui.manage import cleanup as cleanup_component
 from ui.pages.registry import PagePaths
 from ui.theme_enhancements import inject_theme_css
 from ui.utils.compat import nav_to
@@ -142,24 +143,49 @@ def _on_dummy_kb() -> None:
         )
         cleanup = st.button("Cancella dummy (locale + Drive)", type="secondary")
         proceed = st.button("Prosegui", type="primary")
-        st.divider()
         if cleanup:
-            with st.status("Pulizia dummy in corso…", expanded=True) as status_widget:
-                if callable(_perform_cleanup):
+            run_cleanup = cleanup_component.resolve_run_cleanup()
+            perform_cleanup = _perform_cleanup or cleanup_component.resolve_perform_cleanup()
+            if run_cleanup is None and perform_cleanup is None:
+                st.warning(
+                    "Funzioni di cleanup non disponibili. Installa `tools.clean_client_workspace` "
+                    "oppure esegui il cleanup manuale su Drive e in output/timmy-kb-<slug>."
+                )
+            else:
+                with st.status("Pulizia dummy in corso.", expanded=True) as status_widget:
+                    code: int | None = None
+                    runner_error: Exception | None = None
                     try:
-                        results = _perform_cleanup(slug, client_name=f"Dummy {slug}")
+                        if callable(perform_cleanup):
+                            results = perform_cleanup(slug, client_name=f"Dummy {slug}")
+                            code = int(results.get("exit_code", 1)) if isinstance(results, dict) else 1
+                            st.json(results)
+                        elif callable(run_cleanup):
+                            code = int(run_cleanup(slug, True))
+                    except Exception as exc:  # noqa: BLE001
+                        runner_error = exc
+
+                    if runner_error is not None:
+                        status_widget.update(label="Pulizia fallita", state="error")
+                        st.error(f"Errore durante il cleanup: {runner_error}")
+                    elif code is None:
+                        status_widget.update(label="Risultato non disponibile", state="error")
+                        st.error("Risultato della cancellazione non disponibile.")
+                    elif code == 0:
                         status_widget.update(label="Pulizia completata", state="complete")
                         st.success(f"Workspace dummy '{slug}' eliminato (locale + Drive).")
-                        st.json(results)
-                    except Exception as exc:  # noqa: BLE001
-                        status_widget.update(label="Pulizia fallita", state="error")
-                        st.error(f"Errore durante il cleanup: {exc}")
-                else:
-                    status_widget.update(label="Funzione di cleanup non disponibile", state="error")
-                    st.warning(
-                        "Funzioni di cleanup non disponibili. Installa `tools.clean_client_workspace` "
-                        "oppure esegui il cleanup manuale su Drive e in output/timmy-kb-<slug>."
-                    )
+                    elif code == 3:
+                        status_widget.update(label="Pulizia parziale (Drive non eliminato)", state="error")
+                        st.error(
+                            "Workspace locale e DB rimossi. Cartella Drive non eliminata "
+                            "per permessi/driver: verifica manuale."
+                        )
+                    elif code == 4:
+                        status_widget.update(label="Rimozione locale incompleta", state="error")
+                        st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
+                    else:
+                        status_widget.update(label="Completato con avvisi", state="error")
+                        st.error("Operazione completata con avvisi o errori parziali.")
         if proceed:
             cmd = [sys.executable, str(script), "--slug", slug]
             if no_drive:
