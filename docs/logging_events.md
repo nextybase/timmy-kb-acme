@@ -32,6 +32,10 @@ Questi eventi sono emessi con `logger.info/warning` e includono campi `extra` st
   - Checkpoint di avanzamento batch ogni N elementi.
 - `openai.api_calls` – extra: `model`, `count`, `latency_ms`
   - Conteggio/latency delle chiamate embedding OpenAI.
+- `ui.observability.settings_updated` – extra: `stack_enabled`, `tracing_enabled`, `redact_logs`, `log_level`
+  - Preferenze globali di osservabilità aggiornate dal pannello Log/Osservabilità (persistite in `observability.yaml`).
+- Eventi CLI `cli.pre_onboarding.*`, `cli.tag_onboarding.*`, `cli.semantic_onboarding.*`
+  - Gli orchestratori applicano automaticamente le preferenze di `observability.yaml` (livello/log redaction/tracing OTEL) come default nei logger; override ancora possibile via parametri espliciti.
 
 Note:
 - Gli orchestratori e le API usano `phase_scope(logger, stage=..., customer=...)` per tracciare `phase_started/phase_completed/phase_failed` con `artifacts` numerici.
