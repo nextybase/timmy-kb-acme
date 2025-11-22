@@ -532,6 +532,10 @@ def tag_onboarding_main(
     # Fase 2: stub in semantic/
 
     emit_stub_phase(semantic_dir, csv_path, logger, context=context)
+    logger.info(
+        "cli.tag_onboarding.completed",
+        extra={"slug": slug, "source": source, "proceed_after_csv": bool(proceed_after_csv)},
+    )
 
 
 # ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
