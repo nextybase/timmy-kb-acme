@@ -9,6 +9,7 @@ Onboarding UI entrypoint (beta 0).
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -197,6 +198,19 @@ def main() -> None:
     except Exception as exc:
         st.error(str(exc))
         st.stop()
+
+    if not st.session_state.get("_startup_logged", False):
+        port = os.getenv("PORT") or os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("SERVER_PORT")
+        st.session_state["_startup_logged"] = True
+        LOGGER.info(
+            "ui.startup",
+            extra={
+                "version": "v1.0-beta",
+                "streamlit_version": getattr(st, "__version__", "unknown"),
+                "port": port,
+                "mode": "streamlit",
+            },
+        )
 
     _hydrate_query_defaults()
 

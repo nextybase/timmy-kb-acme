@@ -15,6 +15,7 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 from glob import iglob
 from pathlib import Path
@@ -189,7 +190,17 @@ class OpenAIEmbeddings:
         if not texts:
             return cast(Sequence[Sequence[float]], [])
         mdl = model or self._model
+        t0 = time.perf_counter()
         resp = self._client.embeddings.create(model=mdl, input=list(texts))
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        LOGGER.info(
+            "openai.api_calls",
+            extra={
+                "model": mdl,
+                "count": len(texts),
+                "latency_ms": float(latency_ms),
+            },
+        )
         return [d.embedding for d in resp.data]
 
 
@@ -341,6 +352,16 @@ def ingest_folder(
                     if n > 0:
                         total_chunks += n
                         count_files += 1
+                        if count_files % 50 == 0:
+                            LOGGER.info(
+                                "pipeline.processing.progress",
+                                extra={
+                                    "project": project_slug,
+                                    "scope": scope,
+                                    "processed": count_files,
+                                    "chunks": total_chunks,
+                                },
+                            )
                 except ConfigError as exc:
                     LOGGER.warning(
                         "ingest.skip.config_error",

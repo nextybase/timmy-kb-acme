@@ -26,6 +26,12 @@ Questi eventi sono emessi con `logger.info/warning` e includono campi `extra` st
   - Executor NLP configurato per run parallela.
 - `cli.tag_onboarding.nlp_completed` – extra: stats NLP (`terms`, `doc_terms`, `workers`, ...)
   - Pipeline NLP completata.
+- `ui.startup` – extra: `version`, `streamlit_version`, `port`, `mode`
+  - Avvio dell’app Streamlit, utile per distinguere i run UI.
+- `pipeline.processing.progress` – extra: `project`, `scope`, `processed`, `chunks`
+  - Checkpoint di avanzamento batch ogni N elementi.
+- `openai.api_calls` – extra: `model`, `count`, `latency_ms`
+  - Conteggio/latency delle chiamate embedding OpenAI.
 
 Note:
 - Gli orchestratori e le API usano `phase_scope(logger, stage=..., customer=...)` per tracciare `phase_started/phase_completed/phase_failed` con `artifacts` numerici.
