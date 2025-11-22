@@ -424,10 +424,12 @@ def _materialize_query_vector(
             extra={
                 "project_slug": params.project_slug,
                 "scope": params.scope,
-                "error": str(exc),
+                "error": repr(exc),
+                "ms": float(t_ms),
+                "event": "retriever.query.embed_failed",
             },
         )
-        return None, t_ms
+        raise RetrieverError("embedding fallita") from exc
     t_ms = (time.time() - t0) * 1000.0
     q_vecs = normalize_embeddings(q_raw)
     if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
@@ -639,7 +641,10 @@ def search(
                 },
             )
             return []
-        query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
+        try:
+            query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
+        except RetrieverError:
+            return []
         if query_vector is None:
             return []
         if _deadline_exceeded(deadline):
