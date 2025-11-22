@@ -108,6 +108,7 @@ def _render_observability_controls() -> None:
 
     toggle = getattr(st, "toggle", None) or getattr(st, "checkbox", None) or _fallback_toggle
     success = getattr(st, "success", None) or (lambda *_args, **_kwargs: None)
+    action_button = getattr(st, "button", None) or (lambda *_args, **_kwargs: False)
 
     docker_available = _is_docker_available()
     docker_cmd = "docker compose --env-file ./.env -f observability/docker-compose.yaml"
@@ -159,11 +160,11 @@ def _render_observability_controls() -> None:
     else:
         stack_ready = stack_enabled and reachable
         if stack_ready:
-            if st.button("Stop Stack"):
+            if action_button("Stop Stack"):
                 st.info(f"Esegui `{docker_cmd} down` per arrestare Grafana/Loki.")
             st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
         else:
-            if st.button("Start Stack"):
+            if action_button("Start Stack"):
                 st.info(f"Esegui `{docker_cmd} up -d` per far ripartire Grafana/Loki.")
             st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
 
