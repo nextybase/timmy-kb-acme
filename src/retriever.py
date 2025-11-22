@@ -5,11 +5,11 @@
 Funzioni esposte:
 - cosine(a, b) -> float
 - retrieve_candidates(params) -> list[dict]
-- search(params, embeddings_client) -> list[dict]
+- search(params, embeddings_client) -> list[SearchResult]
 - with_config_candidate_limit(params, config) -> params
 - choose_limit_for_budget(budget_ms) -> int
 - with_config_or_budget(params, config) -> params
-- search_with_config(params, config, embeddings_client) -> list[dict]
+- search_with_config(params, config, embeddings_client) -> list[SearchResult]
 - preview_effective_candidate_limit(params, config)
   -> (limit:int, source:str, budget_ms:int)
 
@@ -61,6 +61,12 @@ class QueryParams:
     query: str
     k: int = 8
     candidate_limit: int = 4000
+
+
+class SearchResult(TypedDict):
+    content: str
+    meta: Mapping[str, Any]
+    score: float
 
 
 class ThrottleConfig(TypedDict, total=False):
@@ -409,7 +415,19 @@ def _materialize_query_vector(
 ) -> tuple[Sequence[float] | None, float]:
     """Calcola l'embedding della query e restituisce (vettore, ms)."""
     t0 = time.time()
-    q_raw = embeddings_client.embed_texts([params.query])
+    try:
+        q_raw = embeddings_client.embed_texts([params.query])
+    except Exception as exc:
+        t_ms = (time.time() - t0) * 1000.0
+        LOGGER.warning(
+            "retriever.query.embed_failed",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "error": str(exc),
+            },
+        )
+        return None, t_ms
     t_ms = (time.time() - t0) * 1000.0
     q_vecs = normalize_embeddings(q_raw)
     if len(q_vecs) == 0 or len(q_vecs[0]) == 0:
@@ -445,7 +463,7 @@ def _rank_candidates(
     k: int,
     *,
     deadline: Optional[float] = None,
-) -> tuple[list[dict[str, Any]], int, dict[str, int], float, int, bool]:
+) -> tuple[list[SearchResult], int, dict[str, int], float, int, bool]:
     """Restituisce (risultati, n_candidati_tot, stats, ms, valutati, budget_hit)."""
     stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
     total_candidates = len(candidates)
@@ -453,7 +471,7 @@ def _rank_candidates(
     budget_hit = False
     t0 = time.time()
     top_k = max(0, int(k))
-    results: list[dict[str, Any]] = []
+    results: list[SearchResult] = []
 
     if top_k > 0 and total_candidates > 0:
         if top_k >= total_candidates:
@@ -467,7 +485,17 @@ def _rank_candidates(
                     continue
                 evaluated += 1
                 score = float(cosine(query_vector, vec))
-                scored.append((score, idx, {"content": cand["content"], "meta": cand.get("meta", {}), "score": score}))
+                scored.append(
+                    (
+                        score,
+                        idx,
+                        {
+                            "content": cand["content"],
+                            "meta": cand.get("meta", {}),
+                            "score": score,
+                        },
+                    )
+                )
             scored.sort(key=lambda t: (-t[0], t[1]))
             results = [item for _, _, item in scored[:top_k]]
         else:
@@ -481,7 +509,7 @@ def _rank_candidates(
                     continue
                 evaluated += 1
                 score = float(cosine(query_vector, vec))
-                item = {"content": cand["content"], "meta": cand.get("meta", {}), "score": score}
+                item: SearchResult = {"content": cand["content"], "meta": cand.get("meta", {}), "score": score}
                 key = (score, idx)
                 if len(heap) < top_k:
                     heapq.heappush(heap, (key, item))
@@ -545,7 +573,7 @@ def search(
     throttle_check: Callable[[QueryParams], None] | None = None,
     throttle: Optional[ThrottleSettings] = None,
     throttle_key: Optional[str] = None,
-) -> list[dict[str, Any]]:
+) -> list[SearchResult]:
     """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
 
     Flusso:
@@ -601,6 +629,16 @@ def search(
         t_total_start = time.time()
 
         # 1) Embedding della query
+        if _deadline_exceeded(deadline):
+            LOGGER.warning(
+                "retriever.latency_budget.hit",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "stage": "embedding",
+                },
+            )
+            return []
         query_vector, t_emb_ms = _materialize_query_vector(params, embeddings_client)
         if query_vector is None:
             return []
@@ -616,6 +654,16 @@ def search(
             return []
 
         # 2) Caricamento candidati dal DB
+        if _deadline_exceeded(deadline):
+            LOGGER.warning(
+                "retriever.latency_budget.hit",
+                extra={
+                    "project_slug": params.project_slug,
+                    "scope": params.scope,
+                    "stage": "fetch_candidates",
+                },
+            )
+            return []
         candidates, t_fetch_ms = _load_candidates(params)
         if _deadline_exceeded(deadline):
             LOGGER.warning(
@@ -935,7 +983,7 @@ def search_with_config(
     *,
     authorizer: Callable[[QueryParams], None] | None = None,
     throttle_check: Callable[[QueryParams], None] | None = None,
-) -> list[dict[str, Any]]:
+) -> list[SearchResult]:
     """Esegue `with_config_or_budget(...)` e poi `search(...)`.
 
     Uso consigliato nei call-site reali per garantire che il limite effettivo
@@ -1001,6 +1049,7 @@ def preview_effective_candidate_limit(
 __all__ = [
     "RetrieverError",  # re-export
     "QueryParams",
+    "SearchResult",
     "cosine",
     "retrieve_candidates",
     "search",

@@ -2,6 +2,7 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol, TypeAlias, cast
@@ -34,7 +35,8 @@ class _ReadmeCtx(Protocol):
 # Alias per annotazioni lunghe (evita E501)
 CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
 
-_FRONTMATTER_CACHE: dict[tuple[Path, int, int], tuple[dict[str, Any], str]] = {}
+_FRONTMATTER_CACHE: OrderedDict[tuple[Path, int, int], tuple[dict[str, Any], str]] = OrderedDict()
+_FRONTMATTER_CACHE_MAX = 256
 
 
 def clear_frontmatter_cache() -> None:
@@ -133,11 +135,14 @@ def _write_markdown_for_pdf(
             except OSError:
                 cache_key = None
             if cache_key and cache_key in _FRONTMATTER_CACHE:
-                existing_meta, body_prev = _FRONTMATTER_CACHE[cache_key]
+                existing_meta, body_prev = _FRONTMATTER_CACHE.pop(cache_key)
+                _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
             else:
                 existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
                 if cache_key:
                     _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
+                    if len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
+                        _FRONTMATTER_CACHE.popitem(last=False)
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path

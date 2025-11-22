@@ -42,7 +42,7 @@ def yaml_dump(data: Dict[str, Any]) -> str:
 
 
 def safe_write_text(
-    path: Path | str,
+    path: Path,
     data: str,
     *,
     encoding: str = "utf-8",
