@@ -469,7 +469,7 @@ def _drive_phase(
         client_folder_id = cdf(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
         m.set_artifacts(1)
     logger.info(
-        "Cartella cliente creata su Drive",
+        "cli.pre_onboarding.drive.folder_created",
         extra={"client_folder_id": mask_partial(client_folder_id)},
     )
 
@@ -481,7 +481,7 @@ def _drive_phase(
         except Exception:
             m.set_artifacts(None)
     logger.info(
-        "Struttura Drive minima creata",
+        "cli.pre_onboarding.drive.structure_created",
         extra={
             "config_tail": tail_path(config_path),
             "created_map_masked": mask_id_map(created_map),
