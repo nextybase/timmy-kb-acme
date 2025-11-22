@@ -238,7 +238,7 @@ def scan_raw_to_db(
 
     stats: dict[str, int] = {"folders": folders_count, "documents": docs_count}
 
-    log.info("Indicizzazione RAW completata", extra=stats)
+    log.info("cli.tag_onboarding.scan_completed", extra=stats)
 
     return stats
 
@@ -290,7 +290,7 @@ def run_nlp_to_db(
     if worker_count > 1:
 
         log.info(
-            "NLP executor configurato",
+            "cli.tag_onboarding.nlp_executor_configured",
             extra={"workers": worker_count, "batch_size": worker_batch_size},
         )
 
@@ -332,7 +332,7 @@ def run_nlp_to_db(
         "batch_size": worker_batch_size,
     }
 
-    log.info("NLP completato", extra=enriched_stats)
+    log.info("cli.tag_onboarding.nlp_completed", extra=enriched_stats)
 
     return enriched_stats
 
