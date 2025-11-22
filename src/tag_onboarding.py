@@ -841,7 +841,7 @@ if __name__ == "__main__":
 
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
 
-        logger.exception(
+        logger.error(
             "cli.tag_onboarding.failed",
             extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(exc)},
         )
@@ -852,7 +852,7 @@ if __name__ == "__main__":
 
         logger = get_structured_logger("tag_onboarding", run_id=run_id)
 
-        logger.exception(
+        logger.error(
             "cli.tag_onboarding.failed",
             extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(PipelineError(str(exc)))},
         )
