@@ -50,6 +50,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.observability_config import load_observability_settings
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
@@ -73,6 +74,15 @@ def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
 
     return input(msg).strip()
+
+
+def _obs_kwargs() -> dict[str, Any]:
+    settings = load_observability_settings()
+    return {
+        "level": settings.log_level,
+        "redact_logs": settings.redact_logs,
+        "enable_tracing": settings.tracing_enabled,
+    }
 
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────────────
@@ -188,7 +198,7 @@ def scan_raw_to_db(
 
     docs_count = 0
 
-    log = get_structured_logger("tag_onboarding")
+    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
 
     with get_conn(str(db_path_path)) as conn:
 
@@ -273,7 +283,7 @@ def run_nlp_to_db(
 
     ensure_schema_v2(str(db_path_path))
 
-    log = get_structured_logger("tag_onboarding")
+    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
 
     worker_batch_size = max(1, int(worker_batch_size))
 
@@ -387,6 +397,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         log_file=log_file,
         context=context,
         run_id=run_id,
+        **_obs_kwargs(),
     )
 
     if not db_path.exists():
@@ -474,7 +485,7 @@ def tag_onboarding_main(
 ) -> None:
     """Orchestratore della fase di *Tag Onboarding*."""
 
-    early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
+    early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
 
@@ -719,7 +730,7 @@ if __name__ == "__main__":
 
     run_id = uuid.uuid4().hex
 
-    early_logger = get_structured_logger("tag_onboarding", run_id=run_id)
+    early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
     unresolved_slug = args.slug_pos or args.slug
 
@@ -770,7 +781,7 @@ if __name__ == "__main__":
 
         stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
 
-        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
+        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
 
         log.info("cli.tag_onboarding.scan_completed", extra=stats)
 
@@ -814,7 +825,7 @@ if __name__ == "__main__":
             worker_batch_size=int(args.nlp_batch_size),
         )
 
-        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx)
+        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
 
         log.info("cli.tag_onboarding.nlp_completed", extra=stats)
 
@@ -839,7 +850,7 @@ if __name__ == "__main__":
 
     except PipelineError as exc:
 
-        logger = get_structured_logger("tag_onboarding", run_id=run_id)
+        logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
         logger.error(
             "cli.tag_onboarding.failed",
@@ -850,7 +861,7 @@ if __name__ == "__main__":
 
     except Exception as exc:  # noqa: BLE001
 
-        logger = get_structured_logger("tag_onboarding", run_id=run_id)
+        logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
         logger.error(
             "cli.tag_onboarding.failed",

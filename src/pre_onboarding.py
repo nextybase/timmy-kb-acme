@@ -53,6 +53,7 @@ from pipeline.logging_utils import (
     phase_scope,
     tail_path,
 )
+from pipeline.observability_config import load_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
 
 create_drive_folder = None
@@ -257,7 +258,14 @@ def _prepare_context_and_logger(
         Tuple[ClientContext, logging.Logger, str]: contesto caricato, logger configurato,
         e `client_name` risolto (mai vuoto).
     """
-    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
+    obs_settings = load_observability_settings()
+    obs_kwargs = {
+        "level": obs_settings.log_level,
+        "redact_logs": obs_settings.redact_logs,
+        "enable_tracing": obs_settings.tracing_enabled,
+    }
+
+    early_logger = get_structured_logger("pre_onboarding", run_id=run_id, **obs_kwargs)
     slug = ensure_valid_slug(slug, interactive=interactive, prompt=_prompt, logger=early_logger)
 
     if client_name is None and interactive:
@@ -275,7 +283,13 @@ def _prepare_context_and_logger(
     ensure_within(context.base_dir, log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = get_structured_logger("pre_onboarding", log_file=log_file, context=context, run_id=run_id)
+    logger = get_structured_logger(
+        "pre_onboarding",
+        log_file=log_file,
+        context=context,
+        run_id=run_id,
+        **obs_kwargs,
+    )
     if not require_env:
         logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
     logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(context.config_path)})

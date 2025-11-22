@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal, Mapping, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Type, Union
 
 # --- OpenTelemetry (opzionale) -------------------------------------------------
 _OTEL_ENABLED = False
@@ -61,6 +61,31 @@ except Exception:
 # Redazione (API semplice usata dai moduli)
 # ---------------------------------------------
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
+
+if TYPE_CHECKING:
+    from pipeline.observability_config import ObservabilitySettings
+
+_OBS_SETTINGS: "ObservabilitySettings | None" = None
+
+
+def _get_observability_settings() -> ObservabilitySettings:
+    """Carica e cache le preferenze globali di osservabilita'."""
+    global _OBS_SETTINGS
+    if _OBS_SETTINGS is None:
+        try:
+            from pipeline.observability_config import load_observability_settings
+
+            _OBS_SETTINGS = load_observability_settings()
+        except Exception:
+
+            class _FallbackSettings:
+                stack_enabled = False
+                tracing_enabled = False
+                redact_logs = True
+                log_level = "INFO"
+
+            _OBS_SETTINGS = _FallbackSettings()  # type: ignore[assignment]
+    return _OBS_SETTINGS
 
 
 def redact_secrets(msg: str) -> str:
@@ -288,7 +313,9 @@ def get_structured_logger(
     context: Any = None,
     log_file: Optional[Path] = None,
     run_id: Optional[str] = None,
-    level: int = logging.INFO,
+    level: int | str | None = None,
+    redact_logs: Optional[bool] = None,
+    enable_tracing: Optional[bool] = None,
     propagate: Optional[bool] = None,
 ) -> logging.Logger:
     """Restituisce un logger configurato e idempotente.
@@ -298,12 +325,14 @@ def get_structured_logger(
         context:  oggetto con attributi opzionali `.slug`, `.redact_logs`, `.run_id`.
         log_file: path file log; se presente, aggiunge file handler (dir gia' creata a monte).
         run_id:   identificativo run usato se `context.run_id` assente.
-        level:    livello logging (default: INFO).
+        level:    livello logging (default: dalle preferenze osservabilita', fallback INFO).
+        redact_logs: abilita/disabilita redazione (default: preferenze o context.redact_logs).
+        enable_tracing: abilita OTEL (default: preferenze globali).
 
     Comportamento:
       - `propagation=False`, handler console sempre presente,
       - file handler opzionale se `log_file` e' fornito (si assume path gia' validato/creato),
-      - filtri: contesto + redazione (se `context.redact_logs` True),
+      - filtri: contesto + redazione (se attiva),
       - formatter coerente console/file.
 
     Nota:
@@ -313,6 +342,24 @@ def get_structured_logger(
     Ritorna:
         logging.Logger pronto all'uso.
     """
+    settings = _get_observability_settings()
+
+    # 1) Livello
+    if level is None:
+        level_name = (settings.log_level or "INFO").upper()
+        level = getattr(logging, level_name, logging.INFO)
+    elif isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
+
+    # 2) Redazione
+    if redact_logs is None:
+        ctx_redact = bool(getattr(context, "redact_logs", False)) if context is not None else False
+        redact_logs = ctx_redact if ctx_redact is not None else settings.redact_logs
+
+    # 3) Tracing OTEL
+    if enable_tracing is None:
+        enable_tracing = settings.tracing_enabled
+
     lg = logging.getLogger(name)
     lg.setLevel(level)
     if propagate is None:
@@ -340,13 +387,17 @@ def get_structured_logger(
     lg.propagate = propagate
 
     ctx = _ctx_view_from(context, run_id)
+    try:
+        ctx.redact_logs = bool(redact_logs)
+    except Exception:
+        ctx.redact_logs = False
 
     # formatter base
     fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
     # filtri
     ctx_filter = _ContextFilter(ctx)
-    redact_filter = _RedactFilter(ctx.redact_logs)
+    redact_filter = _RedactFilter(bool(redact_logs))
     event_filter = _EventDefaultFilter()
     _set_logger_filter(lg, ctx_filter, f"{name}::ctx_filter")
     _set_logger_filter(lg, redact_filter, f"{name}::redact_filter")
@@ -408,12 +459,14 @@ def get_structured_logger(
         fh.addFilter(event_filter)
         lg.addHandler(fh)
 
-    _maybe_setup_tracing(context=context)
+    _maybe_setup_tracing(context=context, enable_tracing=bool(enable_tracing))
     return lg
 
 
-def _maybe_setup_tracing(*, context: Optional[Mapping[str, Any]] = None) -> None:
+def _maybe_setup_tracing(*, context: Optional[Mapping[str, Any]] = None, enable_tracing: bool = True) -> None:
     global _OTEL_ENABLED, _OTEL_TRACER
+    if not enable_tracing:
+        return
     if _OTEL_ENABLED or not _OTEL_IMPORT_OK:
         return
     endpoint = os.getenv("TIMMY_OTEL_ENDPOINT")

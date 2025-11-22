@@ -11,6 +11,7 @@ from pathlib import Path
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.observability_config import load_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
@@ -28,7 +29,14 @@ def main() -> int:
     args = _parse_args()
     slug: str = args.slug
     run_id = uuid.uuid4().hex
-    logger = get_structured_logger("semantic.onboarding", run_id=run_id)
+    settings = load_observability_settings()
+    logger = get_structured_logger(
+        "semantic.onboarding",
+        run_id=run_id,
+        level=settings.log_level,
+        redact_logs=settings.redact_logs,
+        enable_tracing=settings.tracing_enabled,
+    )
 
     # Inizializza per sicurezza (evita UnboundLocalError nel riepilogo)
     touched: list[Path] = []
