@@ -18,6 +18,7 @@ Questa pagina NON richiede slug attivo: opera a livello globale.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
@@ -59,6 +60,18 @@ def _divider() -> None:  # pragma: no cover - UI sugar
         write_fn("---")
 
 
+def _is_docker_available() -> bool:
+    """Semplice check per capire se il daemon Docker è attivo."""
+    override = os.getenv("TIMMY_DOCKER_AVAILABLE")
+    if override is not None:
+        return override.lower() in {"1", "true", "yes", "on"}
+    unix_sock = Path("/var/run/docker.sock")
+    if unix_sock.exists():
+        return True
+    pipe = Path(r"\\.\pipe\docker_engine")
+    return pipe.exists()
+
+
 def _check_grafana_reachable(url: str, timeout: float = 2.0) -> tuple[bool, str]:
     """HEAD rapido su Grafana per mostrare uno stato online/offline."""
     parsed = requests.utils.urlparse(url)
@@ -96,6 +109,8 @@ def _render_observability_controls() -> None:
     toggle = getattr(st, "toggle", None) or getattr(st, "checkbox", None) or _fallback_toggle
     success = getattr(st, "success", None) or (lambda *_args, **_kwargs: None)
 
+    docker_available = _is_docker_available()
+    docker_cmd = "docker compose --env-file ./.env -f observability/docker-compose.yaml"
     with col1:
         stack_enabled = toggle(
             "Osservabilità esterna (Grafana/Loki)",
@@ -108,7 +123,11 @@ def _render_observability_controls() -> None:
         )
         grafana_url = get_grafana_url()
         st.caption(f"URL Grafana configurato (env `TIMMY_GRAFANA_URL` o default): `{grafana_url}`")
-        reachable, reach_msg = _check_grafana_reachable(grafana_url)
+        reachable, reach_msg = (
+            _check_grafana_reachable(grafana_url)
+            if docker_available
+            else (False, "Docker non attivo, abilita Docker prima di controllare Grafana.")
+        )
         if stack_enabled:
             st.link_button("Apri Grafana", grafana_url, type="secondary")
             status_icon = "🟢" if reachable else "🔴"
@@ -131,6 +150,22 @@ def _render_observability_controls() -> None:
         else:
             st.caption("Configura `TIMMY_GRAFANA_ERRORS_UID` per mostrare il dashboard alert/errori.")
     st.caption(f"Slug attivo: {slug or 'nessuno'}")
+    st.caption("")
+    if not docker_available:
+        st.info(
+            "Docker non attivo: avvia il daemon prima di usare i pulsanti Grafana."
+            f" Esempio: `{docker_cmd} up -d` nella root del progetto."
+        )
+    else:
+        stack_ready = stack_enabled and reachable
+        if stack_ready:
+            if st.button("Stop Stack"):
+                st.info(f"Esegui `{docker_cmd} down` per arrestare Grafana/Loki.")
+            st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
+        else:
+            if st.button("Start Stack"):
+                st.info(f"Esegui `{docker_cmd} up -d` per far ripartire Grafana/Loki.")
+            st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
 
     with col2:
         tracing_enabled = toggle(

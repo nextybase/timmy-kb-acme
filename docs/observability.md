@@ -78,6 +78,12 @@ Quando usi `pipeline.logging_utils.phase_scope`, i log emettono automaticamente 
 - `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana con errori/alert Timmy.
   Anche questa dashboard viene collegata direttamente dal pannello Log quando la variabile è presente; se è definito anche lo `slug`, il link contiene `?var-slug=<slug>` per filtrare per cliente.
 
+### Indicatori di stack
+
+- La UI mostra un badge `Grafana 🟢/🔴` nella sezione osservabilità e lo aggiorna solo se Docker è attivo, così distingui subito se lo stack è raggiungibile o meno.
+- Se Docker non è attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop rimangono nascosti fino a quel momento.
+- Quando Docker è disponibile, appaiono due pulsanti: `Start Stack` (quando Grafana non risponde) e `Stop Stack` (quando è online); premendoli l’interfaccia mostra il comando da eseguire (`up -d` o `down`) ma l’azione resta manuale.
+
 I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l’interfaccia.
 
 ## Alerting critico
