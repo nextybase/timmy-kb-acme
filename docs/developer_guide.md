@@ -84,6 +84,7 @@ Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
 - `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l’SSoT.
 - `read_frontmatter(base, path, use_cache=True)` effettua path‑safety e caching (invalidazione su mtime/size).
 - Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat già presenti.
+- La cache del frontmatter `_FRONTMATTER_CACHE` è ora LRU bounded (256 entry): non affidarti a cache “infinite” e, nei run lunghi/Streamlit, usa `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
 
 Esempio rapido:
 ```python
@@ -106,6 +107,13 @@ from pipeline.file_utils import safe_write_text
 yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
 safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
 ```
+
+---
+
+## Retriever (ricerca)
+- `search(...)` restituisce `list[SearchResult]` tipizzata (`content`, `meta`, `score`).
+- Hardening errori: le eccezioni di embedding vengono intercettate e loggate come `retriever.query.embed_failed`, con ritorno `[]` per evitare crash negli orchestratori UI/CLI.
+- Il budget di latenza (`throttle.latency_budget_ms`) ora viene verificato prima di embedding e fetch dal DB: i call-site devono considerare `[]` anche come “timeout/errore gestito” e loggare l’evento utente se necessario.
 
 ---
 

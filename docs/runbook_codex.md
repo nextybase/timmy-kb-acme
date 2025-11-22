@@ -61,6 +61,7 @@ ui:
 - Il flusso **Assistant** usa l'ID letto da `vision.assistant_id_env` (ENV).
 - La UI legge il modello tramite `get_vision_model()` (SSoT).
 - Il retriever applica i limiti da `retriever.throttle.*` (candidate_limit, latency, parallelism).
+- Il retriever logga `retriever.query.embed_failed` e short-circuita a `[]` su errori embedding; se `latency_budget_ms` è già esaurito interrompe prima di embedding/fetch.
 - I flag `ui.allow_local_only` e `ui.admin_local_mode` governano gating e accesso al pannello Admin.
 
 Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configurazione.md).
@@ -78,6 +79,7 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
   - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
 - **Hash & masking:** le funzioni `hash_identifier` / `sha256_path` producono digest a 32 caratteri e accettano `TIMMY_HASH_SALT` per rafforzare l'entropia dei log; `mask_id_map` resta la via raccomandata per extra sensibili.
 - **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
+- **Cache frontmatter Markdown:** `_FRONTMATTER_CACHE` è LRU bounded (256 entry) con promotion: nei run lunghi (UI/CLI) puoi chiamare `clear_frontmatter_cache()` per rilasciare memoria tra batch.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 - **Download Drive safe-by-default:** la modale UI scarica solo i PDF mancanti; per sovrascrivere attiva il toggle *"Sovrascrivi i file locali in conflitto"* (abilitato solo se il piano rileva conflitti) oppure rimuovi/rinomina i file a mano.
 - **Preview stub log dir:** `PREVIEW_LOG_DIR` puo' indicare anche un path assoluto; se la directory non e' raggiungibile la UI avvisa e ripiega su `logs/preview` sotto il repository.
