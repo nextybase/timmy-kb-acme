@@ -548,31 +548,44 @@ def pre_onboarding_main(
         client_name=client_name,
     )
 
-    config_path = _create_local_structure(context, logger, client_name=client_name)
+    current_stage = "local_structure"
+    try:
+        config_path = _create_local_structure(context, logger, client_name=client_name)
 
-    if dry_run:
-        logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
-        logger.info(
-            "cli.pre_onboarding.completed",
+        if dry_run:
+            logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
+            logger.info(
+                "cli.pre_onboarding.completed",
+                extra={
+                    "slug": context.slug,
+                    "mode": "dry-run",
+                    "artifacts": 1,
+                    "config": str(config_path),
+                },
+            )
+            return
+
+        current_stage = "drive_phase"
+        # Verifica disponibilita funzioni Drive prima della fase remota
+        _require_drive_utils()
+        _drive_phase(
+            context,
+            logger,
+            config_path=config_path,
+            client_name=client_name,
+            require_env=require_env,
+        )
+        logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
+    except Exception as exc:
+        logger.exception(
+            "cli.pre_onboarding.failed",
             extra={
                 "slug": context.slug,
-                "mode": "dry-run",
-                "artifacts": 1,
-                "config": str(config_path),
+                "stage": current_stage,
+                "error": str(exc).splitlines()[:1],
             },
         )
-        return
-
-    # Verifica disponibilitÃ  funzioni Drive prima della fase remota
-    _require_drive_utils()
-    _drive_phase(
-        context,
-        logger,
-        config_path=config_path,
-        client_name=client_name,
-        require_env=require_env,
-    )
-    logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
+        raise
 
 
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
