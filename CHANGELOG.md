@@ -13,7 +13,7 @@
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune) con telemetria aggiornata (`semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned`, `semantic.index.skips`).
 - Telemetria phase_scope: i rami "no files" e "no contents" ora emettono sempre `artifact_count=0` e chiusura `semantic.index.done`.
 - File I/O: `safe_append_text` passa ad append diretto O(1) per record, mantenendo lock e fsync opzionale.
-- Retriever: logging armonizzato e short-circuit su embedding piatti `list[float]` con metriche `{total, embed, fetch, score_sort}` e contatori `coerce`.
+- Retriever: logging armonizzato e short-circuit su embedding piatti `list[float]` con metriche `{total, embed, fetch, score_sort}` e contatori `coerce`; hardening su errori embedding (log `retriever.query.embed_failed` + ritorno `[]`) e check del budget di latenza prima di embedding/fetch.
 - CLI pre-onboarding: dry-run e gestione errori loggano eventi strutturati (`cli.pre_onboarding.*`) con extra coerenti.
 - Timmy KB Coder: gestione RAG piu tollerante (nessun hard fail senza streamlit) con eventi `coder.rag.disabled` e `coder.embeddings.ui_error`.
 - Semantic index: eventi `semantic.index.embedding_pruned` arricchiti (cause mismatch/empty e contatori completi) e rimossi i messaggi testuali duplicati.
@@ -24,6 +24,8 @@
 - Test di integrazione su indexing (mismatch parziale, invariance ranking, metriche coerce, casi artifacts=0).
 - Test per il retriever su vettori lunghi/estremi e ranking deterministico con candidati numerosi.
 - Test per il vocabolario semantico con CapLog sui nuovi eventi e scenario `streamlit` assente in Timmy KB Coder.
+- Test UI di parità firma wrapper `safe_write_text` UI vs backend; TypedDict `SearchResult` per l’output di `retriever.search`.
+- Documentazione aggiornata su cache frontmatter LRU bounded e hardening retriever (developer guide + runbook).
 
 ### Compatibility
 - Nessun breaking change; API pubbliche invariate, schema DB stabile.
@@ -31,6 +33,7 @@
 ### Fixed
 - `src/tools/gen_dummy_kb.py`: import lazy e path workspace allineato a `output/timmy-kb-<slug>`.
 - PDF discovery case-insensitive (.pdf/.PDF) in API, content_utils e tags_extractor.
+- Cache frontmatter Markdown ora LRU bounded (evita crescita infinita su run lunghi).
 
 ## [1.9.7] - 2025-09-28
 
