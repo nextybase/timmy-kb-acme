@@ -71,6 +71,15 @@ Quando usi `pipeline.logging_utils.phase_scope`, i log emettono automaticamente 
   {trace_id="0123456789abcdef0123456789abcdef"}  # pragma: allowlist secret
   ```
 
+## Dashboard predefinito Timmy
+
+- `TIMMY_GRAFANA_LOGS_UID`: UID della dashboard Grafana dedicata ai log Timmy.
+  Se la variabile è valorizzata, il pannello *Log dashboard* (UI) aggiunge un pulsante per aprire la dashboard log filtrata sullo `slug` attivo (`var-slug`).
+- `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana con errori/alert Timmy.
+  Anche questa dashboard viene collegata direttamente dal pannello Log quando la variabile è presente; se è definito anche lo `slug`, il link contiene `?var-slug=<slug>` per filtrare per cliente.
+
+I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l’interfaccia.
+
 ## Alerting critico
 
 Per inviare alert in tempo reale (es. Slack, Sentry):

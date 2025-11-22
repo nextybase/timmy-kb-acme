@@ -22,7 +22,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode, urljoin
 
 import yaml
 
@@ -32,6 +33,8 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 _OBS_CONFIG_ENV = "TIMMY_OBSERVABILITY_CONFIG"
 _DEFAULT_RELATIVE_CONFIG = ".timmykb/observability.yaml"
 _GRAFANA_URL_ENV = "TIMMY_GRAFANA_URL"
+_GRAFANA_LOGS_UID_ENV = "TIMMY_GRAFANA_LOGS_UID"
+_GRAFANA_ERRORS_UID_ENV = "TIMMY_GRAFANA_ERRORS_UID"
 
 
 @dataclass(frozen=True)
@@ -143,3 +146,26 @@ def get_grafana_url(default: str = "http://localhost:3000/") -> str:
     if not base.endswith("/"):
         base = base + "/"
     return base
+
+
+def _build_grafana_dashboard_url(uid_env: str, *, slug: Optional[str] = None) -> Optional[str]:
+    uid = os.getenv(uid_env)
+    if not uid:
+        return None
+    base = get_grafana_url()
+    dashboard = urljoin(base, f"d/{uid}")
+    if slug:
+        query = urlencode({"var-slug": slug})
+        separator = "&" if "?" in dashboard else "?"
+        dashboard = f"{dashboard}{separator}{query}"
+    return dashboard
+
+
+def get_grafana_logs_dashboard_url(slug: Optional[str] = None) -> Optional[str]:
+    """Restituisce l'URL della dashboard log Grafana (se configurata)."""
+    return _build_grafana_dashboard_url(_GRAFANA_LOGS_UID_ENV, slug=slug)
+
+
+def get_grafana_errors_dashboard_url(slug: Optional[str] = None) -> Optional[str]:
+    """Restituisce l'URL della dashboard alert/errori Grafana (se configurata)."""
+    return _build_grafana_dashboard_url(_GRAFANA_ERRORS_UID_ENV, slug=slug)

@@ -21,8 +21,15 @@ from typing import Any, Dict, List
 
 from pipeline.log_viewer import LogFileInfo, get_global_logs_dir, list_global_log_files, load_log_sample
 from pipeline.logging_utils import get_structured_logger
-from pipeline.observability_config import get_grafana_url, load_observability_settings, update_observability_settings
+from pipeline.observability_config import (
+    get_grafana_errors_dashboard_url,
+    get_grafana_logs_dashboard_url,
+    get_grafana_url,
+    load_observability_settings,
+    update_observability_settings,
+)
 from ui.chrome import render_chrome_then_require
+from ui.utils.slug import get_active_slug
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
@@ -70,6 +77,7 @@ def _render_observability_controls() -> None:
 
     toggle = getattr(st, "toggle", None) or getattr(st, "checkbox", None) or _fallback_toggle
     success = getattr(st, "success", None) or (lambda *_args, **_kwargs: None)
+
     with col1:
         stack_enabled = toggle(
             "Osservabilità esterna (Grafana/Loki)",
@@ -84,6 +92,24 @@ def _render_observability_controls() -> None:
         st.caption(f"URL Grafana configurato (env `TIMMY_GRAFANA_URL` o default): `{grafana_url}`")
         if stack_enabled:
             st.link_button("Apri Grafana", grafana_url, type="secondary")
+        else:
+            st.caption("Abilita 'Osservabilità esterna' per aprire Grafana e le dashboard collegate.")
+
+    slug = get_active_slug()
+    logs_dashboard_url = get_grafana_logs_dashboard_url(slug=slug)
+    errors_dashboard_url = get_grafana_errors_dashboard_url(slug=slug)
+    col_logs, col_errors = st.columns([1, 1])
+    with col_logs:
+        if logs_dashboard_url:
+            st.link_button("Apri dashboard log", logs_dashboard_url, type="secondary")
+        else:
+            st.caption("Configura `TIMMY_GRAFANA_LOGS_UID` per mostrare il dashboard log.")
+    with col_errors:
+        if errors_dashboard_url:
+            st.link_button("Apri dashboard errori", errors_dashboard_url, type="secondary")
+        else:
+            st.caption("Configura `TIMMY_GRAFANA_ERRORS_UID` per mostrare il dashboard alert/errori.")
+    st.caption(f"Slug attivo: {slug or 'nessuno'}")
 
     with col2:
         tracing_enabled = toggle(
@@ -128,6 +154,22 @@ def _render_observability_controls() -> None:
                 "Livello di default per i logger strutturati degli orchestratori. "
                 "DEBUG è molto verboso, ERROR mostra solo errori."
             ),
+        )
+
+    with st.expander("Come usare Grafana/OTEL da qui", expanded=False):
+        st.markdown(
+            """
+1. **Avvia lo stack di osservabilità** (Grafana/Loki/Promtail, e Tempo se presente) da shell
+   oppure dalla pagina *Admin* se sono disponibili i bottoni Docker.
+2. Imposta `TIMMY_GRAFANA_URL` e, se vuoi tracing, `TIMMY_OTEL_ENDPOINT` nell'ambiente
+   in cui giri CLI e UI.
+3. Usa i toggle qui sopra per:
+   - indicare che lo stack è atteso (*Osservabilità esterna*),
+   - attivare il tracing OTEL,
+   - controllare redazione e livello di log.
+4. Da qui puoi aprire Grafana con **Apri Grafana** e usare le dashboard
+   per filtrare log ed errori per cliente (`slug`) e fase.
+"""
         )
 
     # Se qualcosa è cambiato, persisti le nuove impostazioni
