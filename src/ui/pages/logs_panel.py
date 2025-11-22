@@ -14,10 +14,13 @@ Dashboard dei log globali della UI + pannello osservabilità.
 Questa pagina NON richiede slug attivo: opera a livello globale.
 """
 
+
 from __future__ import annotations
 
 import os
 from typing import Any, Dict, List
+
+import requests
 
 from pipeline.log_viewer import LogFileInfo, get_global_logs_dir, list_global_log_files, load_log_sample
 from pipeline.logging_utils import get_structured_logger
@@ -56,6 +59,21 @@ def _divider() -> None:  # pragma: no cover - UI sugar
         write_fn("---")
 
 
+def _check_grafana_reachable(url: str, timeout: float = 2.0) -> tuple[bool, str]:
+    """HEAD rapido su Grafana per mostrare uno stato online/offline."""
+    parsed = requests.utils.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False, f"schema non supportato '{parsed.scheme}'"
+    try:
+        resp = requests.head(url, timeout=timeout, allow_redirects=True)
+        status = f"{resp.status_code} {resp.reason}"
+        if resp.ok or resp.status_code == 405:
+            return True, status
+        return False, status
+    except requests.RequestException as exc:
+        return False, str(exc)
+
+
 def _render_observability_controls() -> None:
     """
     Pannello di controllo per gli strumenti di osservabilità.
@@ -90,8 +108,11 @@ def _render_observability_controls() -> None:
         )
         grafana_url = get_grafana_url()
         st.caption(f"URL Grafana configurato (env `TIMMY_GRAFANA_URL` o default): `{grafana_url}`")
+        reachable, reach_msg = _check_grafana_reachable(grafana_url)
         if stack_enabled:
             st.link_button("Apri Grafana", grafana_url, type="secondary")
+            status_icon = "🟢" if reachable else "🔴"
+            st.caption(f"Grafana {status_icon} ({reach_msg}).")
         else:
             st.caption("Abilita 'Osservabilità esterna' per aprire Grafana e le dashboard collegate.")
 
