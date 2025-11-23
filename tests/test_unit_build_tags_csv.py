@@ -5,6 +5,9 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+from pipeline.exceptions import PathTraversalError
 from timmykb.semantic.api import build_tags_csv
 
 
@@ -53,3 +56,33 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     rel_paths = {r["relative_path"] for r in rows}
     assert "raw/HR/Policies/Welcome Packet 2024.pdf" in rel_paths
     assert "raw/Security-Guide_v2.pdf" in rel_paths
+
+
+def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    slug = "acme"
+    base_root = tmp_path / "output"
+    base_dir = base_root / f"timmy-kb-{slug}"
+    raw = base_dir / "raw"
+    sem = base_dir / "semantic"
+    book = base_dir / "book"
+    config_dir = base_dir / "config"
+
+    raw.mkdir(parents=True, exist_ok=True)
+    sem.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (sem / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+
+    (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
+
+    context = SimpleNamespace(base_dir=base_dir, raw_dir=raw, md_dir=book)
+
+    monkeypatch.setattr(
+        "timmykb.semantic.api._derive_tags_db_path",
+        lambda yaml_path: base_dir.parent / "escape" / "tags.db",
+    )
+
+    with pytest.raises(PathTraversalError):
+        build_tags_csv(context, logging.getLogger("test"), slug=slug)

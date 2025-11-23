@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Sequence, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 from semantic import embedding_service
@@ -198,6 +198,8 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
                         meta["tags"] = enriched
             if doc_entities:
                 _save_doc_entities(tags_db_path, doc_entities)
+        except PathTraversalError:
+            raise
         except Exception as exc:
             logger.warning(
                 "semantic.tags_csv.enrichment_failed",
