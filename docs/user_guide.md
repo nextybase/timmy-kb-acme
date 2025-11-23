@@ -74,6 +74,8 @@ write_summary_and_readme(ctx, log, slug=slug)
 PY
 ```
 
+> **Nota**: `semantic_onboarding.py` e `semantic_headless.py` falliscono con `ConfigError` quando `semantic/tags.db` è mancante o vuoto; rigenera il vocabolario eseguendo `py src/tag_onboarding.py --slug <slug> --proceed`.
+
 (Puoi continuare a usare `py src/semantic_onboarding.py` come orchestratore
 della sequenza se preferisci una CLI dedicata.)
 

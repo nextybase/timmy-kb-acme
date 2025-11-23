@@ -1,49 +1,30 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from types import SimpleNamespace
 
+import pytest
+
 import timmykb.semantic_headless as sh
+from pipeline.exceptions import ConfigError
 from semantic import api as sapi
-from semantic import frontmatter_service as front
 
 
-def test_headless_enriches_titles_even_when_vocab_empty(tmp_path, monkeypatch):
+def test_headless_fails_without_vocab(tmp_path, monkeypatch):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     raw = base / "raw"
     for d in (book, raw):
         d.mkdir(parents=True, exist_ok=True)
 
-    # Crea un markdown di contenuto senza frontmatter
     md = book / "my_first_doc.md"
     md.write_text("Body only\n", encoding="utf-8")
 
-    # Context minimale compatibile
     ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
 
-    # Evita conversione reale: ritorna il file già presente
     monkeypatch.setattr(sapi, "convert_markdown", lambda *a, **k: [md.relative_to(book)])
-    # Forza vocab vuoto
     monkeypatch.setattr(sapi, "load_reviewed_vocab", lambda *a, **k: {})
 
-    # Generatori SUMMARY/README no-op minimi
-    monkeypatch.setattr(
-        front,
-        "_gen_summary",
-        lambda shim: (shim.md_dir / "SUMMARY.md").write_text("* [x](x.md)", "utf-8"),
-        raising=True,
-    )
-    monkeypatch.setattr(
-        front, "_gen_readme", lambda shim: (shim.md_dir / "README.md").write_text("# Book", "utf-8"), raising=True
-    )
-    monkeypatch.setattr(front, "_validate_md", lambda shim: None, raising=True)
-
-    # Esegue headless
-    out = sh.build_markdown_headless(ctx, sapi.logging.getLogger("test.headless"), slug="dummy")
-    assert md in [book / p.name for p in out["converted"]]  # type: ignore[index]
-
-    # Il frontmatter deve avere un titolo derivato dal nome file
-    text = md.read_text(encoding="utf-8")
-    assert "title:" in text or text.startswith("---\n")
+    with pytest.raises(ConfigError):
+        sh.build_markdown_headless(ctx, sapi.logging.getLogger("test.headless"), slug="dummy")
 
 
 def test_main_logs_namespaced_events(monkeypatch, caplog):

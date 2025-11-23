@@ -14,7 +14,13 @@ from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.observability_config import load_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
-from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
+from semantic.api import (
+    _require_reviewed_vocab,
+    convert_markdown,
+    enrich_frontmatter,
+    get_paths,
+    write_summary_and_readme,
+)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -61,7 +67,7 @@ def main() -> int:
         # 2) Arricchisci il frontmatter usando il vocabolario consolidato
         paths = get_paths(slug)
         base_dir: Path = ctx.base_dir or paths["base"]
-        vocab = load_reviewed_vocab(base_dir, logger)
+        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
         with phase_scope(logger, stage="cli.enrich_frontmatter", customer=slug) as m:
             touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
             try:
