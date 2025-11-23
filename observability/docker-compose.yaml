@@ -19,6 +19,20 @@ services:
       - loki
     restart: unless-stopped
 
+  tempo:
+    image: grafana/tempo:2.4.0
+    container_name: timmy-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo/tempo.yaml:ro
+      - ./tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    depends_on:
+      - loki
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:10.4.3
     container_name: timmy-grafana
@@ -39,6 +53,18 @@ services:
       - ./grafana-dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - loki
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    container_name: timmy-otel-collector
+    command: ["--config=/etc/otelcol/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/otel-collector-config.yaml:ro
+    ports:
+      - "4318:4318"
+    depends_on:
+      - tempo
     restart: unless-stopped
 
 volumes:

@@ -39,6 +39,7 @@ from typing import Any, Iterable, Mapping
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
+from pipeline.tracing import start_decision_span
 
 from .config import SemanticConfig
 
@@ -245,10 +246,23 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str,
             )
             candidates = _merge_spacy_candidates(candidates, spacy_candidates)
             if spacy_candidates:
-                LOGGER.info(
-                    "semantic.auto_tagger.spacy_used",
-                    extra={"count": len(spacy_candidates)},
-                )
+                with start_decision_span(
+                    "semantic_classification",
+                    slug=None,
+                    run_id=None,
+                    trace_kind="onboarding",
+                    phase="semantic.auto_tagger",
+                    attributes={
+                        "decision_type": "semantic_classification",
+                        "dataset_area": cfg.mapping.name if getattr(cfg.mapping, "name", None) else None,
+                        "model_version": os.getenv("SPACY_MODEL", cfg.spacy_model),
+                        "status": "success",
+                    },
+                ):
+                    LOGGER.info(
+                        "semantic.auto_tagger.spacy_used",
+                        extra={"count": len(spacy_candidates)},
+                    )
         except Exception as exc:
             LOGGER.warning(
                 "semantic.auto_tagger.spacy_failed",

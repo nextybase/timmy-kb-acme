@@ -73,7 +73,7 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
     monkeypatch.setattr(mod, "get_paths", _fake_get_paths, raising=True)
 
     # vocab + enrich ok
-    monkeypatch.setattr(mod, "_require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
+    monkeypatch.setattr(mod, "require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
     monkeypatch.setattr(mod, "enrich_frontmatter", lambda *_a, **_k: ["A.md"], raising=True)
 
     # write_summary_and_readme alza PipelineError
@@ -108,7 +108,7 @@ def test_cli_missing_vocab_db_returns_config_error(tmp_path: Path, monkeypatch: 
     def _raise_missing(*_a: Any, **_k: Any) -> None:
         raise ConfigError("vocabolario mancante")
 
-    monkeypatch.setattr(mod, "_require_reviewed_vocab", _raise_missing, raising=True)
+    monkeypatch.setattr(mod, "require_reviewed_vocab", _raise_missing, raising=True)
 
     code = mod.main()
     assert code == exit_code_for(ConfigError("vocabolario mancante"))
@@ -139,7 +139,7 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
         return {"base": ctx.base_dir, "book": ctx.md_dir}
 
     monkeypatch.setattr(mod, "get_paths", _fake_get_paths, raising=True)
-    monkeypatch.setattr(mod, "_require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
+    monkeypatch.setattr(mod, "require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
     monkeypatch.setattr(mod, "enrich_frontmatter", lambda *_a, **_k: ["cat.md"], raising=True)
     monkeypatch.setattr(mod, "write_summary_and_readme", lambda *_a, **_k: None, raising=True)
 

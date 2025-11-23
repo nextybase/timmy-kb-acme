@@ -2,6 +2,7 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmat
 from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths  # SSoT path-safety forte
+from pipeline.tracing import start_decision_span
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig, load_semantic_config
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
@@ -76,6 +78,20 @@ def _sorted_pdfs(cat_dir: Path) -> list[Path]:
     )
 
 
+def _relative_to(base: Path, candidate: Path) -> str:
+    try:
+        return str(candidate.relative_to(base))
+    except Exception:
+        return str(candidate)
+
+
+def _run_id_from_logger(logger: logging.Logger) -> str | None:
+    ctx = getattr(logger, "_logging_ctx_view", None)
+    if ctx is None:
+        return None
+    return getattr(ctx, "run_id", None)
+
+
 def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, slug: str | None = None) -> list[Path]:
     """Applica path-safety per-file e scarta symlink o path fuori perimetro.
 
@@ -83,20 +99,48 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
     """
     log = get_structured_logger("pipeline.content_utils")
     out: list[Path] = []
+    run_id = _run_id_from_logger(log)
     for p in pdfs:
         try:
             if p.is_symlink():
-                log.warning(
-                    "pipeline.content.skip_symlink",
-                    extra={"slug": slug, "file_path": str(p)},
-                )
+                with start_decision_span(
+                    "filter",
+                    slug=slug,
+                    run_id=run_id,
+                    trace_kind="onboarding",
+                    phase="semantic.discover_raw",
+                    attributes={
+                        "decision_type": "filter",
+                        "file_path_relative": _relative_to(raw_root, p),
+                        "reason": "symlink",
+                        "status": "blocked",
+                    },
+                ):
+                    log.warning(
+                        "pipeline.content.skip_symlink",
+                        extra={"slug": slug, "file_path": str(p)},
+                    )
                 continue
             safe_p = ensure_within_and_resolve(raw_root, p)
         except Exception as e:  # pragma: no cover (error path)
-            log.warning(
-                "pipeline.content.skip_unsafe",
-                extra={"slug": slug, "file_path": str(p), "error": str(e)},
-            )
+            with start_decision_span(
+                "filter",
+                slug=slug,
+                run_id=run_id,
+                trace_kind="onboarding",
+                phase="semantic.discover_raw",
+                attributes={
+                    "decision_type": "filter",
+                    "file_path_relative": _relative_to(raw_root, p),
+                    "reason": "unsafe_path",
+                    "status": "blocked",
+                    "error": str(e),
+                },
+            ):
+                log.warning(
+                    "pipeline.content.skip_unsafe",
+                    extra={"slug": slug, "file_path": str(p), "error": str(e)},
+                )
             continue
         out.append(safe_p)
     return out
@@ -196,7 +240,20 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
     logger = get_structured_logger("pipeline.content_utils")
 
     def _on_skip(path: Path, reason: str) -> None:
-        logger.warning("pipeline.content.skip_unsafe", extra={"file_path": str(path), "reason": reason})
+        with start_decision_span(
+            "filter",
+            slug=None,
+            run_id=_run_id_from_logger(logger),
+            trace_kind="onboarding",
+            phase="semantic.auto_tagger",
+            attributes={
+                "decision_type": "filter",
+                "file_path_relative": _relative_to(raw_root, path),
+                "reason": reason,
+                "status": "blocked",
+            },
+        ):
+            logger.warning("pipeline.content.skip_unsafe", extra={"file_path": str(path), "reason": reason})
 
     out: list[tuple[Path, list[Path]]] = []
     for cat_dir in iter_safe_paths(raw_root, include_dirs=True, include_files=False, on_skip=_on_skip):

@@ -113,6 +113,7 @@ Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> 
   ```
   Grafana: `http://localhost:3000` (`admin`/`admin` da cambiare via `GF_SECURITY_ADMIN_PASSWORD`), Loki: `http://localhost:3100`.
 - Spegnimento: `docker compose down`. Per ambienti Windows ricordarsi di condividere i percorsi `output` e `.timmykb` con Docker Desktop.
+- Il docker compose ora include anche `tempo` (porta 3200/4317) e `otel-collector` (porta 4318) per esporre il tracing; il collector riceve OTLP HTTP dal TIMMY_OTEL_ENDPOINT del host e invia OTLP gRPC a Tempo, che a sua volta viene collegato da Grafana tramite il datasource `Tempo`.
 - Le stesse operazioni possono essere eseguite anche dalla UI *Log dashboard* (Start/Stop Stack) o dallo script `scripts/observability_stack.py` che chiama `docker compose` con gli stessi file `.env`/compose della UI. Lancia `python scripts/observability_stack.py start|stop` e, se hai bisogno di percorsi alternativi, usa `--env-file` e `--compose-file` (o imposta `TIMMY_OBSERVABILITY_ENV_FILE` / `TIMMY_OBSERVABILITY_COMPOSE_FILE`).
 
 ---

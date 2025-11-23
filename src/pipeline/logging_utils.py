@@ -41,25 +41,15 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, ContextManager, Literal, Mapping, Optional, Type, Union
 
-# --- OpenTelemetry (opzionale) -------------------------------------------------
-_OTEL_ENABLED = False
-_OTEL_TRACER = None
+from pipeline.tracing import ensure_tracer, infer_trace_kind, start_phase_span
+
 try:
     from opentelemetry import trace as _otel_trace
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
-    _OTEL_IMPORT_OK = True
 except Exception:
-    _OTEL_IMPORT_OK = False
+    _otel_trace = None
 
-# ---------------------------------------------
-# Redazione (API semplice usata dai moduli)
-# ---------------------------------------------
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
 
 if TYPE_CHECKING:
@@ -68,7 +58,7 @@ if TYPE_CHECKING:
 _OBS_SETTINGS: "ObservabilitySettings | None" = None
 
 
-def _get_observability_settings() -> ObservabilitySettings:
+def _get_observability_settings() -> "ObservabilitySettings":
     """Carica e cache le preferenze globali di osservabilita'."""
     global _OBS_SETTINGS
     if _OBS_SETTINGS is None:
@@ -243,7 +233,7 @@ class _KVFormatter(logging.Formatter):
             v = getattr(record, k, None)
             if v:
                 kv.append(f"{k}={v}")
-        if _OTEL_ENABLED:
+        if _otel_trace is not None:
             try:
                 span = _otel_trace.get_current_span()
                 ctx = span.get_span_context()
@@ -459,34 +449,8 @@ def get_structured_logger(
         fh.addFilter(event_filter)
         lg.addHandler(fh)
 
-    _maybe_setup_tracing(context=context, enable_tracing=bool(enable_tracing))
+    ensure_tracer(context=context, enable_tracing=bool(enable_tracing))
     return lg
-
-
-def _maybe_setup_tracing(*, context: Optional[Mapping[str, Any]] = None, enable_tracing: bool = True) -> None:
-    global _OTEL_ENABLED, _OTEL_TRACER
-    if not enable_tracing:
-        return
-    if _OTEL_ENABLED or not _OTEL_IMPORT_OK:
-        return
-    endpoint = os.getenv("TIMMY_OTEL_ENDPOINT")
-    if not endpoint:
-        return
-    service = os.getenv("TIMMY_SERVICE_NAME", "timmy-kb")
-    env = os.getenv("TIMMY_ENV", "dev")
-    slug = None
-    if context:
-        try:
-            slug = getattr(context, "slug", None) or (context or {}).get("slug")
-        except Exception:
-            slug = None
-    resource = Resource.create({"service.name": service, "deployment.environment": env, "customer.slug": slug or ""})
-    provider = TracerProvider(resource=resource)
-    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
-    provider.add_span_processor(processor)
-    _otel_trace.set_tracer_provider(provider)
-    _OTEL_TRACER = _otel_trace.get_tracer(__name__)
-    _OTEL_ENABLED = True
 
 
 # ---------------------------------------------
@@ -514,6 +478,8 @@ class phase_scope:
         self._t0: Optional[float] = None
         self._artifact_count: Optional[int] = None
         self._span: Any | None = None
+        self._span_ctx: ContextManager[Any] | None = None
+        self._trace_kind = infer_trace_kind(self.stage)
 
     def set_artifacts(self, count: Optional[int]) -> None:
         if count is None:
@@ -532,11 +498,16 @@ class phase_scope:
         except Exception:
             self._t0 = None
         try:
-            if _OTEL_ENABLED and _OTEL_TRACER:
-                self._span = _OTEL_TRACER.start_as_current_span(f"phase:{self.stage}")
-                self._span.__enter__()
+            self._span_ctx = start_phase_span(
+                self.stage,
+                slug=self.customer,
+                run_id=self._run_id,
+                trace_kind=self._trace_kind,
+            )
+            self._span = self._span_ctx.__enter__()
         except Exception:
             self._span = None
+            self._span_ctx = None
         extra = self._base_extra()
         extra.update({"event": "phase_started", "status": "start"})
         self.logger.info("phase_started", extra=extra)
@@ -577,7 +548,16 @@ class phase_scope:
                 pass
             if self._span is not None:
                 try:
-                    self._span.__exit__(exc_type, exc, tb)
+                    self._span.set_attribute("status", "failed")
+                    if duration_ms is not None:
+                        self._span.set_attribute("duration_ms", duration_ms)
+                    if self._artifact_count is not None:
+                        self._span.set_attribute("artifact_count", self._artifact_count)
+                except Exception:
+                    pass
+            if self._span_ctx is not None:
+                try:
+                    self._span_ctx.__exit__(exc_type, exc, tb)  # type: ignore[union-attr]
                 except Exception:
                     pass
             return False
@@ -586,7 +566,16 @@ class phase_scope:
         self.logger.info("phase_completed", extra={"event": "phase_completed", **extra})
         if self._span is not None:
             try:
-                self._span.__exit__(None, None, None)
+                self._span.set_attribute("status", "success")
+                if duration_ms is not None:
+                    self._span.set_attribute("duration_ms", duration_ms)
+                if self._artifact_count is not None:
+                    self._span.set_attribute("artifact_count", self._artifact_count)
+            except Exception:
+                pass
+        if self._span_ctx is not None:
+            try:
+                self._span_ctx.__exit__(None, None, None)  # type: ignore[union-attr]
             except Exception:
                 pass
         return False
@@ -596,6 +585,7 @@ class phase_scope:
             "phase": self.stage,
             "slug": self.customer or "-",
             "run_id": self._run_id or "-",
+            "trace_kind": self._trace_kind,
         }
 
 

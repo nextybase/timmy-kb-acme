@@ -15,6 +15,7 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 
 from __future__ import annotations
 
+import os
 import time
 from functools import lru_cache
 from glob import iglob
@@ -25,6 +26,7 @@ from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.tracing import start_decision_span, start_root_trace
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 
 # IMPORT alias: supporta sia import locale che pacchetto installato
@@ -58,12 +60,20 @@ def _infer_base_dir(folder_glob: str | Path) -> Path:
     return base_candidate.resolve()
 
 
+def _relative_to(base: Path, candidate: Path) -> str:
+    try:
+        return str(candidate.relative_to(base))
+    except Exception:
+        return str(candidate)
+
+
 def _iter_ingest_candidates(
     folder_glob: str,
     base: Path,
     *,
     customer: str | None,
     scope: str,
+    project_slug: str,
     on_count: Callable[[int], None] | None = None,
 ) -> Iterable[Path]:
     allowed_suffixes = {".md", ".txt"}
@@ -77,16 +87,30 @@ def _iter_ingest_candidates(
         try:
             safe = ensure_within_and_resolve(base, p)
         except PathTraversalError as exc:
-            LOGGER.warning(
-                "ingest.skip.traversal",
-                extra={
-                    "event": "ingest.skip.traversal",
-                    "file": str(p),
-                    "project": customer,
-                    "scope": scope,
+            with start_decision_span(
+                "filter",
+                slug=customer or project_slug,
+                run_id=None,
+                trace_kind="ingest",
+                phase="ingest.discover",
+                attributes={
+                    "decision_type": "filter",
+                    "file_path_relative": _relative_to(base, p),
+                    "reason": "traversal",
+                    "status": "blocked",
                     "error": str(exc),
                 },
-            )
+            ):
+                LOGGER.warning(
+                    "ingest.skip.traversal",
+                    extra={
+                        "event": "ingest.skip.traversal",
+                        "file": str(p),
+                        "project": customer,
+                        "scope": scope,
+                        "error": str(exc),
+                    },
+                )
             continue
         produced += 1
         if on_count is not None:
@@ -228,22 +252,49 @@ def ingest_path(
     try:
         safe_p = ensure_within_and_resolve(base, p)
     except PathTraversalError as exc:
-        LOGGER.warning(
-            "ingest.skip.traversal",
-            extra={
-                "event": "ingest.skip.traversal",
-                "file": str(p),
-                "project": project_slug,
-                "scope": scope,
+        with start_decision_span(
+            "filter",
+            slug=project_slug,
+            run_id=None,
+            trace_kind="ingest",
+            phase="ingest.process_file",
+            attributes={
+                "decision_type": "filter",
+                "file_path_relative": _relative_to(base, p),
+                "reason": "traversal",
+                "status": "blocked",
                 "error": str(exc),
             },
-        )
+        ):
+            LOGGER.warning(
+                "ingest.skip.traversal",
+                extra={
+                    "event": "ingest.skip.traversal",
+                    "file": str(p),
+                    "project": project_slug,
+                    "scope": scope,
+                    "error": str(exc),
+                },
+            )
         return 0
     if _is_binary(safe_p):
-        LOGGER.info(
-            "ingest.skip.binary",
-            extra={"event": "ingest.skip.binary", "file": str(p)},
-        )
+        with start_decision_span(
+            "filter",
+            slug=project_slug,
+            run_id=None,
+            trace_kind="ingest",
+            phase="ingest.process_file",
+            attributes={
+                "decision_type": "filter",
+                "file_path_relative": _relative_to(base, p),
+                "reason": "binary",
+                "status": "blocked",
+            },
+        ):
+            LOGGER.info(
+                "ingest.skip.binary",
+                extra={"event": "ingest.skip.binary", "file": str(p)},
+            )
         return 0
     text = _read_text_file(base, p)
     slug = meta.get("slug") if isinstance(meta, dict) else None
@@ -313,81 +364,94 @@ def ingest_folder(
     count_files = 0
     customer = meta.get("slug") if isinstance(meta, dict) else None
     limit_reached = False
+    env = os.getenv("TIMMY_ENV", "dev")
+    root_slug = customer or project_slug
+    run_id = meta.get("run_id") if isinstance(meta, dict) else None
 
-    with phase_scope(LOGGER, stage="ingest.discover", customer=customer) as phase_discover:
-        discovered = 0
+    with start_root_trace(
+        "ingest",
+        slug=root_slug,
+        run_id=run_id,
+        entry_point="cli",
+        env=env,
+        trace_kind="ingest",
+    ):
+        with phase_scope(LOGGER, stage="ingest.discover", customer=customer) as phase_discover:
+            discovered = 0
 
-        def _update(count: int) -> None:
-            nonlocal discovered
-            discovered = count
-            phase_discover.set_artifacts(count)
+            def _update(count: int) -> None:
+                nonlocal discovered
+                discovered = count
+                phase_discover.set_artifacts(count)
 
-        candidate_iter = _iter_ingest_candidates(
-            folder_glob,
-            base,
-            customer=customer,
-            scope=scope,
-            on_count=_update,
-        )
+            candidate_iter = _iter_ingest_candidates(
+                folder_glob,
+                base,
+                customer=customer,
+                scope=scope,
+                project_slug=project_slug,
+                on_count=_update,
+            )
 
-        for batch in _batched_iterable(candidate_iter, batch_size):
-            for p in batch:
-                if max_files is not None and max_files >= 0 and count_files >= max_files:
-                    limit_reached = True
-                    break
-                try:
-                    with phase_scope(LOGGER, stage="ingest.process_file", customer=customer) as phase_file:
-                        if client is None:
-                            client = cast(EmbeddingsClient, OpenAIEmbeddings())
-                        n = ingest_path(
-                            project_slug=project_slug,
-                            scope=scope,
-                            path=str(p),
-                            version=version,
-                            meta=meta,
-                            embeddings_client=client,
-                            base_dir=base,
-                        )
-                        phase_file.set_artifacts(n)
-                    if n > 0:
-                        total_chunks += n
-                        count_files += 1
-                        if count_files % 50 == 0:
-                            LOGGER.info(
-                                "pipeline.processing.progress",
-                                extra={
-                                    "project": project_slug,
-                                    "scope": scope,
-                                    "processed": count_files,
-                                    "chunks": total_chunks,
-                                },
+            for batch in _batched_iterable(candidate_iter, batch_size):
+                for p in batch:
+                    if max_files is not None and max_files >= 0 and count_files >= max_files:
+                        limit_reached = True
+                        break
+                    try:
+                        with phase_scope(LOGGER, stage="ingest.process_file", customer=customer) as phase_file:
+                            if client is None:
+                                client = cast(EmbeddingsClient, OpenAIEmbeddings())
+                            n = ingest_path(
+                                project_slug=project_slug,
+                                scope=scope,
+                                path=str(p),
+                                version=version,
+                                meta=meta,
+                                embeddings_client=client,
+                                base_dir=base,
                             )
-                except ConfigError as exc:
-                    LOGGER.warning(
-                        "ingest.skip.config_error",
-                        extra={
-                            "event": "ingest.skip.config_error",
-                            "file": str(p),
-                            "scope": scope,
-                            "project": project_slug,
-                            "error": str(exc),
-                        },
-                    )
-                except Exception:
-                    LOGGER.exception(
-                        "ingest.error",
-                        extra={
-                            "event": "ingest.error",
-                            "file": str(p),
-                            "scope": scope,
-                            "project": project_slug,
-                        },
-                    )
-                    raise
-            if limit_reached:
-                break
-        if discovered == 0 and count_files == 0 and not limit_reached:
-            phase_discover.set_artifacts(0)
+                            phase_file.set_artifacts(n)
+                        if n > 0:
+                            total_chunks += n
+                            count_files += 1
+                            if count_files % 50 == 0:
+                                LOGGER.info(
+                                    "pipeline.processing.progress",
+                                    extra={
+                                        "event": "pipeline.processing.progress",
+                                        "project": project_slug,
+                                        "scope": scope,
+                                        "processed": count_files,
+                                        "chunks": total_chunks,
+                                    },
+                                )
+                    except ConfigError as exc:
+                        LOGGER.warning(
+                            "ingest.skip.config_error",
+                            extra={
+                                "event": "ingest.skip.config_error",
+                                "file": str(p),
+                                "scope": scope,
+                                "project": project_slug,
+                                "error": str(exc),
+                            },
+                        )
+                    except Exception:
+                        LOGGER.exception(
+                            "ingest.error",
+                            extra={
+                                "event": "ingest.error",
+                                "file": str(p),
+                                "scope": scope,
+                                "project": project_slug,
+                            },
+                        )
+                        raise
+                if limit_reached:
+                    break
+            if discovered == 0 and count_files == 0 and not limit_reached:
+                phase_discover.set_artifacts(0)
 
     if limit_reached:
         LOGGER.info(

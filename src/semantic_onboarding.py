@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import uuid
 from pathlib import Path
 
@@ -13,12 +14,13 @@ from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.observability_config import load_observability_settings
 from pipeline.path_utils import iter_safe_paths
+from pipeline.tracing import start_root_trace
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import (
-    _require_reviewed_vocab,
     convert_markdown,
     enrich_frontmatter,
     get_paths,
+    require_reviewed_vocab,
     write_summary_and_readme,
 )
 
@@ -58,36 +60,45 @@ def main() -> int:
         # Il contesto potrebbe non supportare questi attributi in alcune implementazioni.
         pass
 
+    env = os.getenv("TIMMY_ENV", "dev")
+    overall_slug = slug
     logger.info("cli.semantic_onboarding.started", extra={"slug": slug})
-    try:
-        # 1) Converti i PDF in Markdown
-        with phase_scope(logger, stage="cli.convert_markdown", customer=slug):
-            convert_markdown(ctx, logger, slug=slug)
+    with start_root_trace(
+        "onboarding",
+        slug=overall_slug,
+        run_id=run_id,
+        entry_point="cli",
+        env=env,
+        trace_kind="onboarding",
+    ):
+        try:
+            # 1) Converti i PDF in Markdown
+            with phase_scope(logger, stage="cli.convert_markdown", customer=slug):
+                convert_markdown(ctx, logger, slug=slug)
 
-        # 2) Arricchisci il frontmatter usando il vocabolario consolidato
-        paths = get_paths(slug)
-        base_dir: Path = ctx.base_dir or paths["base"]
-        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
-        with phase_scope(logger, stage="cli.enrich_frontmatter", customer=slug) as m:
-            touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
-            try:
-                m.set_artifacts(len(touched))
-            except Exception:
-                m.set_artifacts(None)
+            # 2) Arricchisci il frontmatter usando il vocabolario consolidato
+            paths = get_paths(slug)
+            base_dir: Path = ctx.base_dir or paths["base"]
+            vocab = require_reviewed_vocab(base_dir, logger, slug=slug)
+            with phase_scope(logger, stage="cli.enrich_frontmatter", customer=slug) as m:
+                touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
+                try:
+                    m.set_artifacts(len(touched))
+                except Exception:
+                    m.set_artifacts(None)
 
-        # 3) Genera SUMMARY.md e README.md e valida la cartella book/
-        with phase_scope(logger, stage="cli.write_summary_and_readme", customer=slug):
-            write_summary_and_readme(ctx, logger, slug=slug)
-
-    except (ConfigError, PipelineError) as exc:
-        # Mappa verso exit code deterministici (no traceback non gestiti)
-        logger.exception("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
-        code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
-        return code
-    except Exception as exc:
-        # Fallback deterministico per errori inattesi non mappati
-        logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
-        return 99
+            # 3) Genera SUMMARY.md e README.md e valida la cartella book/
+            with phase_scope(logger, stage="cli.write_summary_and_readme", customer=slug):
+                write_summary_and_readme(ctx, logger, slug=slug)
+        except (ConfigError, PipelineError) as exc:
+            # Mappa verso exit code deterministici (no traceback non gestiti)
+            logger.exception("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
+            code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
+            return code
+        except Exception as exc:
+            # Fallback deterministico per errori inattesi non mappati
+            logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
+            return 99
 
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
     summary_extra: dict[str, object] = {}

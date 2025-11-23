@@ -46,15 +46,23 @@ promuovono come label principali:
 l'endpoint OTLP:
 
 ```bash
-export TIMMY_OTEL_ENDPOINT="https://otel-collector.example.com/v1/traces"
+export TIMMY_OTEL_ENDPOINT="http://localhost:4318/v1/traces"
 export TIMMY_SERVICE_NAME="timmy-kb"
 export TIMMY_ENV="production"
 ```
 
-All'interno dei log compariranno i campi `trace_id` e `span_id`. Questi campi
-possono essere usati in Grafana o in altri back-end OTEL per risalire
-all'esecuzione correlata.
-Quando usi `pipeline.logging_utils.phase_scope`, i log emettono automaticamente gli stessi ID se `TIMMY_OTEL_ENDPOINT` è impostato.
+L'applicazione manda gli span all'OTEL Collector locale (`TIMMY_OTEL_ENDPOINT`)
+che inoltra i dati a Tempo via OTLP gRPC. Nei log compariranno i campi
+`trace_id` e `span_id`; Grafana sfrutta il datasource Tempo e la feature
+`tracesToLogs` per seguire la catena trace ↔ log (grazie ai label `slug`,
+`run_id`, `phase`, `event`). Quando usi `pipeline.logging_utils.phase_scope`, i
+log emettono automaticamente gli stessi ID se `TIMMY_OTEL_ENDPOINT` è impostato.
+
+Puoi verificare il collegamento aprendo una trace view in Grafana (top right
+“View logs / View trace”), scegliere il trace e cliccare la lente “View logs”
+per aprire Loki con i filtri `trace_id`, `slug`, `run_id`. Se tutto è configurato
+correttamente vedrai la sezione log associata e potrai scorrere sia lo span che
+le righe log correlate (anche da un altro pannello se usi la dashboard dedicata).
 
 ## Query utili (Grafana / Loki)
 
@@ -103,6 +111,30 @@ python scripts/observability_stack.py stop
 per fermarlo; lo script stampa l’output del `docker compose` e restituisce exit code `0` solo in caso di successo.
 
 Le opzioni `--env-file` / `--compose-file` permettono di sovrascrivere rispettivamente `TIMMY_OBSERVABILITY_ENV_FILE` e `TIMMY_OBSERVABILITY_COMPOSE_FILE` (default `.env` e `observability/docker-compose.yaml`), quindi la UI e lo script condividono la stessa configurazione runtime.
+
+### Span OTEL e attributi
+
+La nuova telemetria OTEL è composta da:
+
+- **Trace root** (`timmykb.<journey>`, es. `timmykb.onboarding`, `timmykb.ingest`, `timmykb.reindex`)
+  - Attributi: `slug`, `run_id`, `trace_kind`, `env`, `entry_point`, `journey`
+- **Phase span** (`phase:<phase>`, aperto da `phase_scope`)
+  - Attributi: `phase`, `slug`, `run_id`, `trace_kind`, `status`, `artifact_count`, `dataset_area`, `source_type`, `policy_id`, `petrov_action`, `rosetta_quality_score`, `risk_level`, `error_kind`, `error_code`
+- **Decision span** (`decision:<decision_type>` per filtri/semantica/override umano)
+  - Attributi: `decision_type`, `slug`, `run_id`, `trace_kind`, `phase`, `reason`, `policy_id`, `dataset_area`, `er_entity_type`, `er_relation_type`, `model_version`, `ambiguity_score`, `hilt_involved`, `user_role`, `override_reason`, `previous_value`, `new_value`, `status`
+
+Grafana sfrutta `trace_id`, `span_id`, `slug`, `run_id`, `phase` e `decision_type` per incatenare trace e log nelle dashboard dedicate.
+
+### Human override spans
+
+Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml` (sia in modalità stub che con il servizio `tags_adapter`), il codice chiama `start_decision_span` con `decision_type=human_override` e `phase=ui.manage.tags_yaml`. Gli span portano sempre:
+
+- `slug`, `run_id`, `trace_kind=onboarding` per trovare la trace primaria.
+- `override_reason` (`manual_publish`, `state_override`, `manual_tags_csv`, `stub_publish`) e l'indicazione di `hilt_involved=true` / `user_role` per ricostruire chi ha preso la decisione.
+- `previous_value` / `new_value` per mostrare il cambio di stato (`pronto` → `arricchito`).
+- `status` (`success` / `failed`) e `reason` per capire se la modifica ha avuto effetto.
+
+Per ogni cambio di stato (nell'helper `set_client_state`) tracciamo anche un micro-span dedicato con `attributes={"previous_value": ..., "new_value": ...}`: ciò rende possibile, in Grafana, seguire la catena `trace_root → phase_span → decision_span → log (ui.manage.state.update_failed)` e ricostruire ogni decisione umana sul dataset.
 
 ## Alerting critico
 

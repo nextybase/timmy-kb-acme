@@ -38,6 +38,7 @@ else:
 __all__ = [
     "get_paths",
     "load_reviewed_vocab",
+    "require_reviewed_vocab",
     "convert_markdown",
     "enrich_frontmatter",
     "write_summary_and_readme",
@@ -63,6 +64,11 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
     return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(base_dir, logger))
+
+
+def require_reviewed_vocab(base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]:
+    """Facade pubblica che fallisce se il vocabolario canonico non è disponibile."""
+    return _require_reviewed_vocab(base_dir, logger, slug=slug)
 
 
 def _require_reviewed_vocab(

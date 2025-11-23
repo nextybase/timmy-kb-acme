@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from pipeline.tracing import start_root_trace
 from semantic.api import (
     _require_reviewed_vocab,
     convert_markdown,
@@ -111,34 +113,43 @@ def _safe_len_seq(obj: object) -> int:
 def main() -> int:
     args = _parse_args()
     log = _setup_logger(args.log_level, slug=args.slug)
+    env = os.getenv("TIMMY_ENV", "dev")
 
-    try:
-        # Carichiamo il contesto concreto quando disponibile a runtime
-        from pipeline.context import ClientContext
+    with start_root_trace(
+        "reindex",
+        slug=args.slug,
+        run_id=None,
+        entry_point="cli",
+        env=env,
+        trace_kind="reindex",
+    ):
+        try:
+            # Carichiamo il contesto concreto quando disponibile a runtime
+            from pipeline.context import ClientContext
 
-        ctx = ClientContext.load(
-            slug=args.slug,
-            interactive=not bool(args.non_interactive),
-            require_env=False,
-            run_id=None,
-        )
-    except ConfigError as exc:
-        log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})
-        return 2
-    except Exception as exc:
-        log.exception("semantic.headless.context_unexpected", extra={"error": str(exc)})
-        return 1
+            ctx = ClientContext.load(
+                slug=args.slug,
+                interactive=not bool(args.non_interactive),
+                require_env=False,
+                run_id=None,
+            )
+        except ConfigError as exc:
+            log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})
+            return 2
+        except Exception as exc:
+            log.exception("semantic.headless.context_unexpected", extra={"error": str(exc)})
+            return 1
 
-    try:
-        res = build_markdown_headless(ctx, log, slug=args.slug)
-        conv = _safe_len_seq(res.get("converted"))
-        enr = _safe_len_seq(res.get("enriched"))
-    except ConfigError as exc:
-        log.exception("semantic.headless.run_config_error", extra={"error": str(exc)})
-        return 2
-    except Exception as exc:
-        log.exception("semantic.headless.run_failed", extra={"error": str(exc)})
-        return 1
+        try:
+            res = build_markdown_headless(ctx, log, slug=args.slug)
+            conv = _safe_len_seq(res.get("converted"))
+            enr = _safe_len_seq(res.get("enriched"))
+        except ConfigError as exc:
+            log.exception("semantic.headless.run_config_error", extra={"error": str(exc)})
+            return 2
+        except Exception as exc:
+            log.exception("semantic.headless.run_failed", extra={"error": str(exc)})
+            return 1
 
     log.info("semantic.headless.completed", extra={"converted_count": conv, "enriched_count": enr})
     return 0

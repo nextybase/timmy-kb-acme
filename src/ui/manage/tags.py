@@ -6,13 +6,15 @@ import io
 import json
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import yaml
 
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.tracing import start_decision_span
 from storage.tags_store import import_tags_yaml_to_db
+from ui.clients_store import get_state as _get_client_state
 from ui.utils.core import safe_write_text
 
 __all__ = [
@@ -38,6 +40,56 @@ DEFAULT_TAGS_YAML = (
 DEFAULT_TAGS_CSV = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
 
 ALLOWED_TAG_ACTIONS = {"keep", "drop", "merge"}
+
+
+def _resolve_user_role(st: Any | None) -> str:
+    state = getattr(st, "session_state", None)
+    if state is None:
+        return "knowledge_manager"
+    role = None
+    if hasattr(state, "get"):
+        role = state.get("user_role") or state.get("active_role")
+    else:
+        role = getattr(state, "user_role", None) or getattr(state, "active_role", None)
+    return role or "knowledge_manager"
+
+
+def _human_override_span(
+    logger: Any,
+    slug: str,
+    st: Any,
+    *,
+    phase: str,
+    reason: str,
+    status: str = "applied",
+    attributes: Mapping[str, Any] | None = None,
+):
+    run_id = getattr(getattr(logger, "_logging_ctx_view", None), "run_id", None)
+    base_attrs = {
+        "hilt_involved": True,
+        "user_role": _resolve_user_role(st),
+        "override_reason": reason,
+        "status": status,
+    }
+    if attributes:
+        for key, value in attributes.items():
+            if value is not None:
+                base_attrs[key] = value
+    return start_decision_span(
+        "human_override",
+        slug=slug,
+        run_id=run_id,
+        trace_kind="onboarding",
+        phase=phase,
+        attributes=base_attrs,
+    )
+
+
+def _lookup_client_state(slug: str) -> str | None:
+    try:
+        return _get_client_state(slug)
+    except Exception:
+        return None
 
 
 def _validate_tags_yaml_payload(content: str) -> dict[str, Any]:
@@ -100,7 +152,21 @@ def handle_tags_raw_save(
     writer = write_fn or safe_write_text
     writer(csv_path, content, encoding="utf-8", atomic=True)
     st.toast("`tags_raw.csv` salvato.")
-    logger.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
+    run_id = getattr(getattr(logger, "_logging_ctx_view", None), "run_id", None)
+    with start_decision_span(
+        "human_override",
+        slug=slug,
+        run_id=run_id,
+        trace_kind="onboarding",
+        phase="ui.manage.tags_raw",
+        attributes={
+            "hilt_involved": True,
+            "user_role": _resolve_user_role(st),
+            "override_reason": "manual_tags_csv",
+            "status": "applied",
+        },
+    ):
+        logger.info("ui.manage.tags_raw.saved", extra={"slug": slug, "path": str(csv_path)})
     return True
 
 
@@ -122,6 +188,7 @@ def enable_tags_stub(
         reader = read_fn or read_text_safe
         writer = write_fn or safe_write_text
         importer = import_yaml_fn or import_tags_yaml_to_db
+        previous: str | None = None
         try:
             previous = reader(semantic_dir, yaml_path, encoding="utf-8")
         except Exception:
@@ -131,15 +198,17 @@ def enable_tags_stub(
         if not yaml_path.exists():
             writer(yaml_path, DEFAULT_TAGS_YAML, encoding="utf-8", atomic=True)
             created_stub = True
+
         if yaml_path.exists():
             try:
                 importer_counts = importer(yaml_path, logger=logger)
                 logger.info("ui.manage.tags.db_synced", extra={"slug": slug, "path": str(yaml_path)})
                 if created_stub:
-                    logger.info(
-                        "ui.manage.tags.stub_created",
-                        extra={"slug": slug, "path": str(yaml_path)},
-                    )
+                    with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="stub_created"):
+                        logger.info(
+                            "ui.manage.tags.stub_created",
+                            extra={"slug": slug, "path": str(yaml_path)},
+                        )
             except Exception as exc:
                 if previous is not None:
                     writer(yaml_path, previous, encoding="utf-8", atomic=True)
@@ -161,9 +230,28 @@ def enable_tags_stub(
 
         has_terms = bool(importer_counts and importer_counts.get("terms"))
         target_state = "arricchito" if has_terms else "pronto"
+        previous_state = _lookup_client_state(slug)
+        decision_attrs = {
+            "previous_value": previous_state,
+            "new_value": target_state,
+        }
+        updated = False
+        decision_span_value: Any | None = None
         try:
-            updated = set_client_state(slug, target_state)
+            with _human_override_span(
+                logger,
+                slug,
+                st,
+                phase="ui.manage.tags_yaml",
+                reason="state_override",
+                attributes=decision_attrs,
+            ) as decision_span_value:
+                updated = set_client_state(slug, target_state)
+                if decision_span_value is not None:
+                    decision_span_value.set_attribute("status", "success" if updated else "failed")
         except Exception as exc:
+            if decision_span_value is not None:
+                decision_span_value.set_attribute("status", "failed")
             logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
             updated = False
 
@@ -179,7 +267,9 @@ def enable_tags_stub(
             st.error("Aggiornamento stato cliente non riuscito: verifica clients_db/clients.yaml.")
             logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": target_state})
             return False
-        logger.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
+
+        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="stub_publish"):
+            logger.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:
         st.error(f"Abilitazione (stub) non riuscita: {exc}")
@@ -219,9 +309,28 @@ def enable_tags_service(
             logger,
             workspace_base=semantic_dir.parent,
         )
+        previous_state = _lookup_client_state(slug)
+        decision_attrs = {
+            "previous_value": previous_state,
+            "new_value": "arricchito",
+        }
+        updated = False
+        decision_span_value: Any | None = None
         try:
-            updated = set_client_state(slug, "arricchito")
+            with _human_override_span(
+                logger,
+                slug,
+                st,
+                phase="ui.manage.tags_yaml",
+                reason="manual_publish",
+                attributes=decision_attrs,
+            ) as decision_span_value:
+                updated = set_client_state(slug, "arricchito")
+                if decision_span_value is not None:
+                    decision_span_value.set_attribute("status", "success" if updated else "failed")
         except Exception as exc:
+            if decision_span_value is not None:
+                decision_span_value.set_attribute("status", "failed")
             logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
             updated = False
         if updated:
@@ -231,7 +340,8 @@ def enable_tags_service(
             st.error("Abilitazione semantica riuscita ma aggiornamento stato fallito.")
             logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": "arricchito"})
             return False
-        logger.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="manual_publish"):
+            logger.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:
         st.error(f"Abilitazione non riuscita: {exc}")

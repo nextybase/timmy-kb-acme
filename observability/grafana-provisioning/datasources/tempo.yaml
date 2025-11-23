@@ -1,0 +1,22 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    uid: "Tempo"
+    jsonData:
+      httpMethod: GET
+      tracesToLogs:
+        datasourceUid: "Loki"
+        tags: ["slug", "run_id", "phase", "event"]
+        mappedTags: []
+        mapTagNamesEnabled: true
+      serviceMap:
+        datasourceUid: "Tempo"
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
