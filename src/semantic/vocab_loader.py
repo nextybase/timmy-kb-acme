@@ -17,8 +17,12 @@ __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 # Import lazy del loader reale; se assente, enrichment resta opzionale.
 try:  # pragma: no cover - dipende dall'ambiente
     from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
-except Exception:  # pragma: no cover
+except Exception as exc:  # pragma: no cover
     _load_tags_reviewed = None
+    logging.getLogger(__name__).warning(
+        "semantic.vocab_loader.stubbed",
+        extra={"error": str(exc)},
+    )
 
 
 def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:

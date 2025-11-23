@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Sequence, cast
+from typing import TYPE_CHECKING, Dict, List, Sequence, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError
@@ -149,6 +149,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         # Arricchimento con top-terms NLP (se disponibili in tags.db)
         try:
             tags_db_path = Path(_derive_tags_db_path(semantic_dir / "tags_reviewed.yaml"))
+            tags_db_path = ensure_within_and_resolve(semantic_dir, tags_db_path)
             folder_terms: Dict[str, List[str]] = {}
             if tags_db_path.exists():
                 _ensure_tags_schema_v2(str(tags_db_path))
@@ -222,7 +223,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
 def export_tags_yaml_from_db(
     semantic_dir: Path,
     db_path: Path,
-    logger: Any,
+    logger: logging.Logger,
     *,
     workspace_base: Path | None = None,
     limit: int = 200,

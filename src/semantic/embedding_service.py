@@ -118,7 +118,7 @@ def _compute_embeddings_for_markdown(
             "semantic.index.embedding_error",
             extra={"slug": slug, "error": str(exc), "count": len(collected.contents)},
         )
-        raise
+        return None, 0
 
     vectors = normalize_embeddings(vectors_raw)
     vectors_empty = 0

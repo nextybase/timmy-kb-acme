@@ -81,6 +81,8 @@ def _human_override_span(
         run_id=run_id,
         trace_kind="onboarding",
         phase=phase,
+        decision_channel="human",
+        policy_id="HUMAN.OVERRIDE",
         attributes=base_attrs,
     )
 

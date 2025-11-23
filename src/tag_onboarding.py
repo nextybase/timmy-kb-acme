@@ -50,7 +50,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
-from pipeline.observability_config import load_observability_settings
+from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
     ensure_within,
@@ -77,7 +77,7 @@ def _prompt(msg: str) -> str:
 
 
 def _obs_kwargs() -> dict[str, Any]:
-    settings = load_observability_settings()
+    settings = get_observability_settings()
     return {
         "level": settings.log_level,
         "redact_logs": settings.redact_logs,

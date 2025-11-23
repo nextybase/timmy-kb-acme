@@ -12,7 +12,7 @@ from pathlib import Path
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
-from pipeline.observability_config import load_observability_settings
+from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
@@ -37,7 +37,7 @@ def main() -> int:
     args = _parse_args()
     slug: str = args.slug
     run_id = uuid.uuid4().hex
-    settings = load_observability_settings()
+    settings = get_observability_settings()
     logger = get_structured_logger(
         "semantic.onboarding",
         run_id=run_id,

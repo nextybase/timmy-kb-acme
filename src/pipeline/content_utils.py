@@ -92,12 +92,19 @@ def _run_id_from_logger(logger: logging.Logger) -> str | None:
     return getattr(ctx, "run_id", None)
 
 
-def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, slug: str | None = None) -> list[Path]:
+def _filter_safe_pdfs(
+    base_dir: Path,
+    raw_root: Path,
+    pdfs: Iterable[Path],
+    *,
+    slug: str | None = None,
+    logger: logging.Logger | None = None,
+) -> list[Path]:
     """Applica path-safety per-file e scarta symlink o path fuori perimetro.
 
     Mantiene l'ordinamento ricevuto.
     """
-    log = get_structured_logger("pipeline.content_utils")
+    log = logger or get_structured_logger("pipeline.content_utils")
     out: list[Path] = []
     run_id = _run_id_from_logger(log)
     for p in pdfs:
@@ -109,11 +116,14 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
                     run_id=run_id,
                     trace_kind="onboarding",
                     phase="semantic.discover_raw",
+                    file_path_relative=_relative_to(raw_root, p),
+                    decision_channel="auto",
+                    risk_level="high",
+                    petrov_action="block",
                     attributes={
-                        "decision_type": "filter",
-                        "file_path_relative": _relative_to(raw_root, p),
                         "reason": "symlink",
                         "status": "blocked",
+                        "policy_id": "INGEST.SAFE_PATH",
                     },
                 ):
                     log.warning(
@@ -129,12 +139,15 @@ def _filter_safe_pdfs(base_dir: Path, raw_root: Path, pdfs: Iterable[Path], *, s
                 run_id=run_id,
                 trace_kind="onboarding",
                 phase="semantic.discover_raw",
+                file_path_relative=_relative_to(raw_root, p),
+                decision_channel="auto",
+                risk_level="high",
+                petrov_action="block",
                 attributes={
-                    "decision_type": "filter",
-                    "file_path_relative": _relative_to(raw_root, p),
                     "reason": "unsafe_path",
                     "status": "blocked",
                     "error": str(e),
+                    "policy_id": "INGEST.SAFE_PATH",
                 },
             ):
                 log.warning(
@@ -262,10 +275,14 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
 
 
 def _discover_safe_pdfs(
-    raw_root: Path, *, base_dir: Path, slug: str | None = None
+    raw_root: Path,
+    *,
+    base_dir: Path,
+    slug: str | None = None,
+    logger: logging.Logger | None = None,
 ) -> tuple[list[Path], CategoryGroups]:
     """Discovery centralizzata dei PDF in RAW con path-safety e logging skip symlink/traversal."""
-    logger = get_structured_logger("pipeline.content_utils")
+    logger = logger or get_structured_logger("pipeline.content_utils")
 
     def _on_skip(path: Path, reason: str) -> None:
         event = "pipeline.content.skip_symlink" if reason == "symlink" else "pipeline.content.skip_unsafe"
@@ -283,6 +300,7 @@ def _discover_safe_pdfs(
         raw_root,
         sorted(root_candidates, key=lambda p: p.name.lower()),
         slug=slug,
+        logger=logger,
     )
     cat_items = _iter_category_pdfs(raw_root)
     return root_pdfs, cat_items
@@ -440,17 +458,29 @@ def convert_files_to_structured_markdown(
 
     written: set[Path] = set()
 
+    logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
+
     if safe_pdfs is not None:
         root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
     else:
-        root_pdfs, cat_items = _discover_safe_pdfs(raw_root, base_dir=base, slug=getattr(ctx, "slug", None))
+        root_pdfs, cat_items = _discover_safe_pdfs(
+            raw_root, base_dir=base, slug=getattr(ctx, "slug", None), logger=logger
+        )
 
     for pdf in root_pdfs:
         written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
 
     for _cat_dir, pdfs in cat_items:
         safe_list = (
-            pdfs if safe_pdfs is not None else _filter_safe_pdfs(base, raw_root, pdfs, slug=getattr(ctx, "slug", None))
+            pdfs
+            if safe_pdfs is not None
+            else _filter_safe_pdfs(
+                base,
+                raw_root,
+                pdfs,
+                slug=getattr(ctx, "slug", None),
+                logger=logger,
+            )
         )
         for pdf in safe_list:
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))

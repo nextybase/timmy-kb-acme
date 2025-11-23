@@ -19,16 +19,15 @@ devono essere lette dagli orchestratori / logging_utils in fase di init.
 
 from __future__ import annotations
 
+import importlib
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urljoin
 
 import yaml
-
-from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 _OBS_CONFIG_ENV = "TIMMY_OBSERVABILITY_CONFIG"
 _DEFAULT_RELATIVE_CONFIG = ".timmykb/observability.yaml"
@@ -37,12 +36,40 @@ _GRAFANA_LOGS_UID_ENV = "TIMMY_GRAFANA_LOGS_UID"
 _GRAFANA_ERRORS_UID_ENV = "TIMMY_GRAFANA_ERRORS_UID"
 
 
+def _ensure_within_and_resolve(parent: Path, candidate: Path) -> Path:
+    from pipeline.exceptions import ConfigError
+
+    resolved_parent = parent.resolve()
+    resolved_candidate = candidate.resolve()
+    try:
+        resolved_candidate.relative_to(resolved_parent)
+    except ValueError as exc:
+        raise ConfigError(f"Percorso osservabilita' non valido: {candidate}", file_path=str(candidate)) from exc
+    return resolved_candidate
+
+
+def _read_text(path: Path) -> str:
+    with path.open("r", encoding="utf-8") as handle:
+        return handle.read()
+
+
 @dataclass(frozen=True)
 class ObservabilitySettings:
     stack_enabled: bool = False
     tracing_enabled: bool = False
     redact_logs: bool = True
     log_level: str = "INFO"
+
+
+@dataclass(frozen=True)
+class TracingState:
+    enabled_in_prefs: bool
+    endpoint_present: bool
+    otel_installed: bool
+
+    @property
+    def effective_enabled(self) -> bool:
+        return self.enabled_in_prefs and self.endpoint_present and self.otel_installed
 
 
 def get_observability_config_path() -> Path:
@@ -76,12 +103,15 @@ def load_observability_settings() -> ObservabilitySettings:
     In caso di assenza o errore di parsing, ritorna i default safe.
     """
     path = get_observability_config_path()
-    path_safe = ensure_within_and_resolve(path.parent, path)
+    try:
+        path_safe = _ensure_within_and_resolve(path.parent, path)
+    except ValueError:
+        path_safe = path.resolve()
     if not path_safe.exists():
         return ObservabilitySettings()
 
     try:
-        raw: Dict[str, Any] = yaml.safe_load(read_text_safe(path_safe)) or {}
+        raw: Dict[str, Any] = yaml.safe_load(_read_text(path_safe)) or {}
     except Exception:
         # In caso di file corrotto, fallback ai default
         return ObservabilitySettings()
@@ -91,6 +121,29 @@ def load_observability_settings() -> ObservabilitySettings:
         tracing_enabled=bool(raw.get("tracing_enabled", False)),
         redact_logs=bool(raw.get("redact_logs", True)),
         log_level=_normalize_level(str(raw.get("log_level", "INFO"))),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_observability_settings() -> ObservabilitySettings:
+    """
+    Cached helper that reads the settings once per process.
+    """
+    return load_observability_settings()
+
+
+def get_tracing_state() -> TracingState:
+    settings = get_observability_settings()
+    endpoint_present = bool(os.getenv("TIMMY_OTEL_ENDPOINT"))
+    try:
+        importlib.import_module("opentelemetry.sdk.trace")
+        otel_installed = True
+    except ImportError:
+        otel_installed = False
+    return TracingState(
+        enabled_in_prefs=settings.tracing_enabled,
+        endpoint_present=endpoint_present,
+        otel_installed=otel_installed,
     )
 
 
@@ -115,8 +168,13 @@ def update_observability_settings(
         log_level=_normalize_level(log_level or current.log_level),
     )
 
+    from pipeline.file_utils import safe_write_text
+
     path = get_observability_config_path()
-    path_safe = ensure_within_and_resolve(path.parent, path)
+    try:
+        path_safe = _ensure_within_and_resolve(path.parent, path)
+    except ValueError:
+        path_safe = path.resolve()
     path_safe.parent.mkdir(parents=True, exist_ok=True)
 
     data: Dict[str, Any] = {

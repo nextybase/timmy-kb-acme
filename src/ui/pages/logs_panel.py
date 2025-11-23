@@ -29,9 +29,11 @@ from pipeline.observability_config import (
     get_grafana_errors_dashboard_url,
     get_grafana_logs_dashboard_url,
     get_grafana_url,
-    load_observability_settings,
+    get_observability_settings,
+    get_tracing_state,
     update_observability_settings,
 )
+from pipeline.tracing import start_phase_span, start_root_trace
 from scripts.observability_stack import start_observability_stack, stop_observability_stack
 from ui.chrome import render_chrome_then_require
 from ui.utils.slug import get_active_slug
@@ -99,7 +101,7 @@ def _render_observability_controls() -> None:
     """
     st.markdown("### Strumenti di osservabilità")
 
-    settings = load_observability_settings()
+    settings = get_observability_settings()
     logger = get_structured_logger("ui.logs_panel")
 
     col1, col2 = st.columns([1, 1])
@@ -194,6 +196,41 @@ def _render_observability_controls() -> None:
             st.info(
                 "Nessun endpoint OTEL configurato: il tracing è solo una preferenza "
                 "finché non imposti TIMMY_OTEL_ENDPOINT."
+            )
+        state = get_tracing_state()
+        st.caption(
+            f"Tracing – preferenze: {'ON' if state.enabled_in_prefs else 'OFF'}, "
+            f"endpoint: {'OK' if state.endpoint_present else 'MANCANTE'}, "
+            f"librerie OTEL: {'OK' if state.otel_installed else 'NON INSTALLATE'}."
+        )
+        if state.enabled_in_prefs and not state.effective_enabled:
+            st.warning(
+                "Tracing attivato nelle preferenze ma non operativo: "
+                "configura TIMMY_OTEL_ENDPOINT e installa le librerie OpenTelemetry."
+            )
+        if action_button("Verifica tracing"):
+            env = os.getenv("TIMMY_ENV", "dev")
+            with start_root_trace(
+                "diagnostic",
+                slug=None,
+                run_id=None,
+                entry_point="ui",
+                env=env,
+                trace_kind="diagnostic",
+            ):
+                with start_phase_span(
+                    "observability.tracing.doctor",
+                    slug=None,
+                    run_id=None,
+                    trace_kind="diagnostic",
+                ):
+                    logger.info(
+                        "observability.tracing.test_span_emitted",
+                        extra={"trace_kind": "diagnostic"},
+                    )
+            st.info(
+                "Span diagnostico emesso. Se Grafana/Tempo sono configurati, "
+                "dovresti vederlo in Tempo filtrando per trace_kind=diagnostic negli ultimi minuti."
             )
 
     col3, col4 = st.columns([1, 1])

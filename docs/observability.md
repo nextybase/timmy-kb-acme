@@ -136,6 +136,22 @@ Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml` (sia in m
 
 Per ogni cambio di stato (nell'helper `set_client_state`) tracciamo anche un micro-span dedicato con `attributes={"previous_value": ..., "new_value": ...}`: ciò rende possibile, in Grafana, seguire la catena `trace_root → phase_span → decision_span → log (ui.manage.state.update_failed)` e ricostruire ogni decisione umana sul dataset.
 
+### Fallback e resilienza semantica
+
+- `semantic.api.build_tags_csv` valida ora che `tags.db` derivato risieda sotto `semantic/` prima di arricchire il vocabolario e scrivere su SQLite, mantenendo il requisito path-safety descritto nelle regole.
+- Se `storage.tags_store.load_tags_reviewed` non è disponibile (es. ambienti di test minimal), l’evento `semantic.vocab_loader.stubbed` viene loggato immediatamente con l’errore, rendendo visibile il downgrade e permettendo la correzione prima di una fail-fast.
+- `_compute_embeddings_for_markdown` ora cattura gli errori dal provider embedding, logga `semantic.index.embedding_error` e restituisce `(None, 0)` invece di propagare un’eccezione: la trace `index_markdown_to_db` rimane leggibile (phase span completo) e la pipeline può continuare gestendo il fallback nei log successivi.
+
+### Decision span sampling
+
+- La variabile d’ambiente `TIMMY_DECISION_SPAN_SAMPLING` (default `1.0`) controlla quanti micro-span vengono davvero emessi per gli eventi decisionali. Impostando valori più bassi (es. `0.1`) limitiamo la quantità di span in Tempo mantenendo comunque i log completi in Loki. Il sampling avviene solo sui span decisionali; se un trace è attivo ma il campionamento scarta lo span, i log contenenti `trace_id`/`span_id` rimangono intatti per la correlazione.
+
+### Tracing doctor
+
+- Il pannello Log UI aggiunge ora un pulsante “Verifica tracing” che emette un `trace_kind=diagnostic` / `phase=observability.tracing.doctor` con un log `observability.tracing.test_span_emitted`. Dopo aver premuto il pulsante puoi aprire Tempo, filtrare per `trace_kind=diagnostic` e controllare che il Collector riceva davvero gli span generati da l’interfaccia.
+
+## Alerting critico
+
 ## Alerting critico
 
 Per inviare alert in tempo reale (es. Slack, Sentry):

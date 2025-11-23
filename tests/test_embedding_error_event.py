@@ -15,7 +15,7 @@ class _BoomEmb:
         raise RuntimeError("boom")
 
 
-def test_embedding_error_is_logged_and_raised(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     db_path = base / "kb.sqlite"
@@ -27,10 +27,10 @@ def test_embedding_error_is_logged_and_raised(tmp_path: Path, caplog: pytest.Log
 
     caplog.set_level(logging.INFO, logger="tests.index.emb_error")
 
-    with pytest.raises(RuntimeError):
-        sapi.index_markdown_to_db(
-            ctx, logger, slug="dummy", scope="book", embeddings_client=_BoomEmb(), db_path=db_path
-        )
+    result = sapi.index_markdown_to_db(
+        ctx, logger, slug="dummy", scope="book", embeddings_client=_BoomEmb(), db_path=db_path
+    )
+    assert result == 0
 
     # Deve essere presente l'evento strutturato con dettaglio dell'errore
     events = [r for r in caplog.records if getattr(r, "event", r.getMessage()) == "semantic.index.embedding_error"]

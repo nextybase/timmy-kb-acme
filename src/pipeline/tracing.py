@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import contextlib
 import os
-from typing import TYPE_CHECKING, Any, ContextManager, Mapping
+import random
+from typing import Any, ContextManager, Mapping
 
-if TYPE_CHECKING:
-    from pipeline.observability_config import ObservabilitySettings
+from pipeline.observability_config import get_tracing_state
 
 try:
     from opentelemetry import trace as _otel_trace
@@ -23,26 +23,14 @@ except Exception:  # pragma: no cover
 
 _TRACING_READY = False
 _TRACER_NAME = "timmykb"
-
-
-def _load_settings() -> "ObservabilitySettings":
-    try:
-        from pipeline.observability_config import load_observability_settings
-
-        return load_observability_settings()
-    except Exception:
-
-        class _FallbackSettings:
-            stack_enabled = False
-            tracing_enabled = False
-            redact_logs = True
-            log_level = "INFO"
-
-        return _FallbackSettings()  # type: ignore[return-value]
+_DECISION_SPAN_SAMPLING = float(os.getenv("TIMMY_DECISION_SPAN_SAMPLING", "1.0"))
 
 
 def _is_enabled() -> bool:
-    return _OTEL_IMPORT_OK and bool(os.getenv("TIMMY_OTEL_ENDPOINT")) and _load_settings().tracing_enabled
+    if not _OTEL_IMPORT_OK:
+        return False
+    state = get_tracing_state()
+    return state.effective_enabled
 
 
 def ensure_tracer(*, context: Mapping[str, Any] | None = None, enable_tracing: bool = True) -> None:
@@ -55,16 +43,7 @@ def ensure_tracer(*, context: Mapping[str, Any] | None = None, enable_tracing: b
         return
     service = os.getenv("TIMMY_SERVICE_NAME", "timmy-kb")
     env = os.getenv("TIMMY_ENV", "dev")
-    slug = ""
-    if context:
-        try:
-            slug_val = getattr(context, "slug", None)
-        except Exception:
-            slug_val = None
-        if slug_val is None and isinstance(context, Mapping):
-            slug_val = context.get("slug")
-        slug = str(slug_val or "")
-    resource = Resource.create({"service.name": service, "deployment.environment": env, "customer.slug": slug})
+    resource = Resource.create({"service.name": service, "deployment.environment": env})
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     _otel_trace.set_tracer_provider(provider)
@@ -163,9 +142,23 @@ def start_decision_span(
     slug: str | None,
     run_id: str | None,
     trace_kind: str,
-    phase: str | None,
+    phase: str | None = None,
+    file_path_relative: str | None = None,
+    dataset_area: str | None = None,
+    er_entity_type: str | None = None,
+    er_relation_type: str | None = None,
+    policy_id: str | None = None,
+    risk_level: str | None = None,
+    hilt_involved: bool | None = None,
+    decision_channel: str | None = None,
+    petrov_action: str | None = None,
+    rosetta_quality_score: float | None = None,
+    model_version: str | None = None,
     attributes: Mapping[str, Any] | None = None,
+    extra_attributes: Mapping[str, Any] | None = None,
 ) -> ContextManager[_otel_trace.Span | _NoopSpan]:
+    if _DECISION_SPAN_SAMPLING < 1.0 and random.random() > _DECISION_SPAN_SAMPLING:
+        return contextlib.nullcontext(_NoopSpan())
     base_attrs = {
         "decision_type": decision_type,
         "slug": slug,
@@ -174,7 +167,30 @@ def start_decision_span(
     }
     if phase:
         base_attrs["phase"] = phase
-    base_attrs.update(_normalize_attrs(attributes))
+    if file_path_relative:
+        base_attrs["file_path_relative"] = file_path_relative
+    if dataset_area:
+        base_attrs["dataset_area"] = dataset_area
+    if er_entity_type:
+        base_attrs["er_entity_type"] = er_entity_type
+    if er_relation_type:
+        base_attrs["er_relation_type"] = er_relation_type
+    if policy_id:
+        base_attrs["policy_id"] = policy_id
+    if risk_level:
+        base_attrs["risk_level"] = risk_level
+    if hilt_involved is not None:
+        base_attrs["hilt_involved"] = hilt_involved
+    if decision_channel:
+        base_attrs["decision_channel"] = decision_channel
+    if petrov_action:
+        base_attrs["petrov_action"] = petrov_action
+    if rosetta_quality_score is not None:
+        base_attrs["rosetta_quality_score"] = rosetta_quality_score
+    if model_version:
+        base_attrs["model_version"] = model_version
+    for extra in (attributes, extra_attributes):
+        base_attrs.update(_normalize_attrs(extra))
     return _span_context(f"decision:{decision_type}", attributes=base_attrs)
 
 

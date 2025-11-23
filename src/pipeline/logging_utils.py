@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, ContextManager, Literal, Mapping, Optional, Type, Union
+from typing import Any, ContextManager, Literal, Mapping, Optional, Type, Union
 
 from pipeline.tracing import ensure_tracer, infer_trace_kind, start_phase_span
 
@@ -51,31 +51,6 @@ except Exception:
     _otel_trace = None
 
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
-
-if TYPE_CHECKING:
-    from pipeline.observability_config import ObservabilitySettings
-
-_OBS_SETTINGS: "ObservabilitySettings | None" = None
-
-
-def _get_observability_settings() -> "ObservabilitySettings":
-    """Carica e cache le preferenze globali di osservabilita'."""
-    global _OBS_SETTINGS
-    if _OBS_SETTINGS is None:
-        try:
-            from pipeline.observability_config import load_observability_settings
-
-            _OBS_SETTINGS = load_observability_settings()
-        except Exception:
-
-            class _FallbackSettings:
-                stack_enabled = False
-                tracing_enabled = False
-                redact_logs = True
-                log_level = "INFO"
-
-            _OBS_SETTINGS = _FallbackSettings()  # type: ignore[assignment]
-    return _OBS_SETTINGS
 
 
 def redact_secrets(msg: str) -> str:
@@ -332,7 +307,9 @@ def get_structured_logger(
     Ritorna:
         logging.Logger pronto all'uso.
     """
-    settings = _get_observability_settings()
+    from pipeline.observability_config import get_observability_settings
+
+    settings = get_observability_settings()
 
     # 1) Livello
     if level is None:

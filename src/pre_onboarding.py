@@ -53,7 +53,7 @@ from pipeline.logging_utils import (
     phase_scope,
     tail_path,
 )
-from pipeline.observability_config import load_observability_settings
+from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
 
 create_drive_folder = None
@@ -258,7 +258,7 @@ def _prepare_context_and_logger(
         Tuple[ClientContext, logging.Logger, str]: contesto caricato, logger configurato,
         e `client_name` risolto (mai vuoto).
     """
-    obs_settings = load_observability_settings()
+    obs_settings = get_observability_settings()
     obs_kwargs = {
         "level": obs_settings.log_level,
         "redact_logs": obs_settings.redact_logs,
