@@ -59,6 +59,39 @@ def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
     return False
 
 
+def _safe_success(message: str, **kwargs: Any) -> bool:
+    """Mostra messaggio di successo anche con stub limitato."""
+    succ = getattr(st, "success", None)
+    if callable(succ):
+        try:
+            succ(message, **kwargs)
+            return True
+        except Exception:
+            pass
+    write_fn = getattr(st, "write", None)
+    if callable(write_fn):
+        write_fn(message)
+        return True
+    return False
+
+
+def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
+    """Fallback compatto quando l'API `link_button` non è disponibile."""
+    link_btn = getattr(st, "link_button", None)
+    if callable(link_btn):
+        try:
+            return bool(link_btn(label, url, **kwargs))
+        except Exception:
+            pass
+    button = getattr(st, "button", None)
+    if callable(button):
+        try:
+            return bool(button(label, **kwargs))
+        except Exception:
+            pass
+    return False
+
+
 def _matches_text(row: Dict[str, Any], query: str) -> bool:
     """Match case-insensitive su message/event/slug/file_path."""
     if not query:
@@ -183,7 +216,7 @@ def _render_observability_controls() -> None:
             if action_button("Stop Stack"):
                 ok, msg = stop_observability_stack()
                 if ok:
-                    st.success(f"Stack fermato: {msg}")
+                    _safe_success(f"Stack fermato: {msg}")
                 else:
                     st.warning(f"Errore Stop Stack: {msg}")
             st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
@@ -191,7 +224,7 @@ def _render_observability_controls() -> None:
             if action_button("Start Stack"):
                 ok, msg = start_observability_stack()
                 if ok:
-                    st.success(f"Stack avviato: {msg}")
+                    _safe_success(f"Stack avviato: {msg}")
                 else:
                     st.warning(f"Errore Start Stack: {msg}")
             st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
@@ -208,7 +241,7 @@ def _render_observability_controls() -> None:
         )
         otel_env_present = bool(os.getenv("TIMMY_OTEL_ENDPOINT"))
         if otel_env_present:
-            st.success("Endpoint OTEL configurato (TIMMY_OTEL_ENDPOINT è impostata).")
+            _safe_success("Endpoint OTEL configurato (TIMMY_OTEL_ENDPOINT è impostata).")
         else:
             st.info(
                 "Nessun endpoint OTEL configurato: il tracing è solo una preferenza "

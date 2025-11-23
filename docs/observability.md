@@ -81,10 +81,8 @@ le righe log correlate (anche da un altro pannello se usi la dashboard dedicata)
 
 ## Dashboard predefinito Timmy
 
-- `TIMMY_GRAFANA_LOGS_UID`: UID della dashboard Grafana dedicata ai log Timmy.
-  Se la variabile è valorizzata, il pannello *Log dashboard* (UI) aggiunge un pulsante per aprire la dashboard log filtrata sullo `slug` attivo (`var-slug`).
-- `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana con errori/alert Timmy.
-  Anche questa dashboard viene collegata direttamente dal pannello Log quando la variabile è presente; se è definito anche lo `slug`, il link contiene `?var-slug=<slug>` per filtrare per cliente.
+- `TIMMY_GRAFANA_LOGS_UID`: UID della dashboard Grafana dedicata ai log di run (`observability/grafana-dashboards/logs-dashboard.json`). Il pannello *Log dashboard* (UI) aggiunge un pulsante per aprire la dashboard log filtrata sullo `slug` attivo (`var-slug`) e il datasource della dashboard punta a Loki (`Loki`).
+- `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana focalizzata su errori per fase (`observability/grafana-dashboards/errors-dashboard.json`). Il pulsante “Apri dashboard errori” apre questa dashboard con filtro `slug`/`phase` e la query Loki `level="ERROR"` per fase.
 
 ### Indicatori di stack
 
