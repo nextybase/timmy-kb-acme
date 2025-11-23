@@ -7,6 +7,7 @@ Helpers per avviare e fermare lo stack Grafana/Loki quando Docker è disponibile
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 from pathlib import Path
@@ -56,3 +57,38 @@ def start_observability_stack() -> Tuple[bool, str]:
 def stop_observability_stack() -> Tuple[bool, str]:
     """Ferma lo stack (docker compose down)."""
     return _run_docker_compose(["down"])
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Avvia o ferma lo stack Grafana/Loki configurato in observability/docker-compose.yaml."
+    )
+    parser.add_argument("action", choices=["start", "stop"], help="Azione da eseguire.")
+    parser.add_argument(
+        "--env-file",
+        default=os.getenv("TIMMY_OBSERVABILITY_ENV_FILE") or str(_DEFAULT_ENV),
+        help="File .env passato a docker compose (default TIMMY_OBSERVABILITY_ENV_FILE o .env).",
+    )
+    parser.add_argument(
+        "--compose-file",
+        default=os.getenv("TIMMY_OBSERVABILITY_COMPOSE_FILE") or str(_DEFAULT_COMPOSE),
+        help=(
+            "Docker compose file da usare "
+            "(default TIMMY_OBSERVABILITY_COMPOSE_FILE o observability/docker-compose.yaml)."
+        ),
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = _parse_args()
+    os.environ.setdefault("TIMMY_OBSERVABILITY_ENV_FILE", args.env_file)
+    os.environ.setdefault("TIMMY_OBSERVABILITY_COMPOSE_FILE", args.compose_file)
+    runner = start_observability_stack if args.action == "start" else stop_observability_stack
+    ok, msg = runner()
+    print(msg)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

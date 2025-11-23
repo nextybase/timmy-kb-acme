@@ -81,10 +81,28 @@ Quando usi `pipeline.logging_utils.phase_scope`, i log emettono automaticamente 
 ### Indicatori di stack
 
 - La UI mostra un badge `Grafana 🟢/🔴` nella sezione osservabilità e lo aggiorna solo se Docker è attivo, così distingui subito se lo stack è raggiungibile o meno.
-- Se Docker non è attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop rimangono nascosti fino a quel momento.
-- Quando Docker è disponibile, appaiono due pulsanti: `Start Stack` (quando Grafana non risponde) e `Stop Stack` (quando è online); premendoli l’interfaccia mostra il comando da eseguire (`up -d` o `down`) ma l’azione resta manuale.
+- Se Docker non è attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop restano disabilitati fino a quel momento.
+- Quando Docker è disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano internamente le funzioni esposte in `scripts/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`. Se tutto va a buon fine la UI mostra un messaggio di conferma (`Stack avviato: …` / `Stack fermato: …`), altrimenti riporta un warning con l’errore.
 
 I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l’interfaccia.
+
+### Helper CLI (scripts/observability_stack)
+
+Lo stesso helper `scripts/observability_stack.py` è disponibile anche come script stand-alone per chi preferisce avviare/fermare lo stack da shell. Esegui il comando
+
+```bash
+python scripts/observability_stack.py start
+```
+
+per avviare l’intero stack e
+
+```bash
+python scripts/observability_stack.py stop
+```
+
+per fermarlo; lo script stampa l’output del `docker compose` e restituisce exit code `0` solo in caso di successo.
+
+Le opzioni `--env-file` / `--compose-file` permettono di sovrascrivere rispettivamente `TIMMY_OBSERVABILITY_ENV_FILE` e `TIMMY_OBSERVABILITY_COMPOSE_FILE` (default `.env` e `observability/docker-compose.yaml`), quindi la UI e lo script condividono la stessa configurazione runtime.
 
 ## Alerting critico
 
