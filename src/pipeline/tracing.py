@@ -23,7 +23,11 @@ except Exception:  # pragma: no cover
 
 _TRACING_READY = False
 _TRACER_NAME = "timmykb"
-_DECISION_SPAN_SAMPLING = float(os.getenv("TIMMY_DECISION_SPAN_SAMPLING", "1.0"))
+_raw_sampling = os.getenv("TIMMY_DECISION_SPAN_SAMPLING", "1.0")
+try:
+    _DECISION_SPAN_SAMPLING = float(_raw_sampling)
+except ValueError:
+    _DECISION_SPAN_SAMPLING = 1.0
 
 
 def _is_enabled() -> bool:

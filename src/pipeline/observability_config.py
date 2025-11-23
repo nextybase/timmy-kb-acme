@@ -103,10 +103,7 @@ def load_observability_settings() -> ObservabilitySettings:
     In caso di assenza o errore di parsing, ritorna i default safe.
     """
     path = get_observability_config_path()
-    try:
-        path_safe = _ensure_within_and_resolve(path.parent, path)
-    except ValueError:
-        path_safe = path.resolve()
+    path_safe = _ensure_within_and_resolve(path.parent, path)
     if not path_safe.exists():
         return ObservabilitySettings()
 
@@ -186,6 +183,11 @@ def update_observability_settings(
 
     text = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
     safe_write_text(path_safe, text, encoding="utf-8", atomic=True)
+
+    try:
+        get_observability_settings.cache_clear()
+    except AttributeError:
+        pass
 
     return new_settings
 
