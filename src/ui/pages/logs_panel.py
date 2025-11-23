@@ -42,6 +42,23 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 
 
+def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
+    """Fallback compatto quando l'API `link_button` non è disponibile."""
+    link_btn = getattr(st, "link_button", None)
+    if callable(link_btn):
+        try:
+            return bool(link_btn(label, url, **kwargs))
+        except Exception:
+            pass
+    button = getattr(st, "button", None)
+    if callable(button):
+        try:
+            return bool(button(label, **kwargs))
+        except Exception:
+            pass
+    return False
+
+
 def _matches_text(row: Dict[str, Any], query: str) -> bool:
     """Match case-insensitive su message/event/slug/file_path."""
     if not query:
@@ -133,7 +150,7 @@ def _render_observability_controls() -> None:
             else (False, "Docker non attivo, abilita Docker prima di controllare Grafana.")
         )
         if stack_enabled:
-            st.link_button("Apri Grafana", grafana_url, type="secondary")
+            _safe_link_button("Apri Grafana", grafana_url, type="secondary")
             status_icon = "🟢" if reachable else "🔴"
             st.caption(f"Grafana {status_icon} ({reach_msg}).")
         else:
@@ -145,12 +162,12 @@ def _render_observability_controls() -> None:
     col_logs, col_errors = st.columns([1, 1])
     with col_logs:
         if logs_dashboard_url:
-            st.link_button("Apri dashboard log", logs_dashboard_url, type="secondary")
+            _safe_link_button("Apri dashboard log", logs_dashboard_url, type="secondary")
         else:
             st.caption("Configura `TIMMY_GRAFANA_LOGS_UID` per mostrare il dashboard log.")
     with col_errors:
         if errors_dashboard_url:
-            st.link_button("Apri dashboard errori", errors_dashboard_url, type="secondary")
+            _safe_link_button("Apri dashboard errori", errors_dashboard_url, type="secondary")
         else:
             st.caption("Configura `TIMMY_GRAFANA_ERRORS_UID` per mostrare il dashboard alert/errori.")
     st.caption(f"Slug attivo: {slug or 'nessuno'}")

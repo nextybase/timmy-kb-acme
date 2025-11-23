@@ -176,6 +176,11 @@ flowchart TD
 
 ## 5) Gestione contenuti -> **Gestisci cliente**
 
+**Nota operativa**: prima di lanciare gli arricchimenti assicurati che `raw/<categoria>` contenga i PDF (li puoi scaricare da Drive o copiarli manualmente). Se modifichi le cartelle locali oppure `tags_reviewed.yaml`, premi il pulsante **Ricarica vista Gestisci cliente** (in alto) per rinfrescare i controlli ed evitare stati incoerenti.
+
+Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Drive → locale`, `Arricchimento semantico + revisione tags`, `Genera README in raw (Drive)`. Nella sezione centrale viene anche mostrato quale backend NLP è attivo (`TAGS_NLP_BACKEND`, SpaCy di default) e viene ricordato che l'euristica viene sempre eseguita in aggiunta.
+
+
 **Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.
 
 **Genera README in raw (Drive)** Crea/aggiorna in **ogni sottocartella di ****\`\`**** su Drive** un file guida:
@@ -192,7 +197,7 @@ flowchart TD
 - **Scansione**: lato Drive considera solo `application/pdf`; lato locale considera `*.pdf`.
 - **Selezione e download**: scegli i file da copiare e clicca **Scarica PDF da Drive -> locale**. I file vengono salvati **nella stessa categoria**. I file **gia' presenti** non vengono sovrascritti finche' non abiliti il toggle *"Sovrascrivi i file locali in conflitto"* (visibile soltanto quando ci sono conflitti) oppure li rimuovi/rinomini manualmente.
 - **Avanzamento**: barra/progresso su **tutti i candidati** (anche quelli gia' presenti); al termine mostra i **nuovi file creati**.
-- **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale.
+- **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale. La sincronizzazione locale (espander "Scarica PDF da Drive -> locale") scarica **solo i PDF** e lascia i README su Drive.
 - **Rileva PDF in raw/**: riesegue la **sola scansione locale** per aggiornare lo stato (utile se hai copiato manualmente dei file).
 - **Cancella cliente**: rimuove l'intero workspace locale e prova a eliminare le cartelle su Drive. Operazione **irreversibile** con conferma.
 

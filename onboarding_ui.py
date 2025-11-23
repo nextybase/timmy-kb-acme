@@ -64,27 +64,20 @@ from ui.utils.status import status_guard  # noqa: E402
 from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
 from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 
-# Router/state helper (fallback soft se non presente)
-try:  # noqa: E402
-    from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
-except Exception:  # pragma: no cover
-    def clear_tab() -> None:  # type: ignore[assignment]
-        return None
-
-    def get_slug_from_qp() -> str | None:  # type: ignore[assignment]
-        return None
-
-    def get_tab(default: str = "home") -> str:  # type: ignore[assignment]
-        return default
-
-    def set_tab(tab: str) -> None:  # type: ignore[assignment]
-        return None
-
-
 REPO_ROOT = Path(__file__).resolve().parent
 
 # Logger strutturato per eventi di preflight
 LOGGER = get_structured_logger("ui.preflight")
+
+# Router/state helper (fail-fast se non presente)
+try:  # noqa: E402
+    from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
+except Exception as exc:  # pragma: no cover
+    LOGGER.error(
+        "ui.preflight.route_state_missing",
+        extra={"error": repr(exc)},
+    )
+    raise RuntimeError("Router UI non disponibile: reinstalla Streamlit/UI") from exc
 
 
 def _render_preflight_header() -> None:
@@ -130,8 +123,11 @@ def _load_dotenv_best_effort() -> None:
         return
     try:
         load_dotenv(override=False)
-    except Exception:
-        LOGGER.debug("ui.preflight.dotenv_skip", exc_info=True)
+    except Exception as exc:
+        LOGGER.warning(
+            "ui.preflight.dotenv_error",
+            extra={"path": str(env_path), "error": repr(exc)},
+        )
 
 
 _MIN_STREAMLIT_VERSION = (1, 50, 0)

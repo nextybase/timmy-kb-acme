@@ -173,6 +173,7 @@ def _throttle_guard(key: str, settings: Optional[ThrottleSettings]) -> Generator
             "retriever.throttle.timeout",
             extra={"key": key, "timeout_ms": settings.acquire_timeout_ms},
         )
+        yield
         return
     try:
         state.wait_interval(settings.sleep_ms_between_calls)
