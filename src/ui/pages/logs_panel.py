@@ -32,6 +32,7 @@ from pipeline.observability_config import (
     load_observability_settings,
     update_observability_settings,
 )
+from scripts.observability_stack import start_observability_stack, stop_observability_stack
 from ui.chrome import render_chrome_then_require
 from ui.utils.slug import get_active_slug
 from ui.utils.stubs import get_streamlit
@@ -161,11 +162,19 @@ def _render_observability_controls() -> None:
         stack_ready = stack_enabled and reachable
         if stack_ready:
             if action_button("Stop Stack"):
-                st.info(f"Esegui `{docker_cmd} down` per arrestare Grafana/Loki.")
+                ok, msg = stop_observability_stack()
+                if ok:
+                    st.success(f"Stack fermato: {msg}")
+                else:
+                    st.warning(f"Errore Stop Stack: {msg}")
             st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
         else:
             if action_button("Start Stack"):
-                st.info(f"Esegui `{docker_cmd} up -d` per far ripartire Grafana/Loki.")
+                ok, msg = start_observability_stack()
+                if ok:
+                    st.success(f"Stack avviato: {msg}")
+                else:
+                    st.warning(f"Errore Start Stack: {msg}")
             st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
 
     with col2:
