@@ -275,7 +275,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
 
         mds = cast(List[Path], convert_markdown(context, logger, slug=slug))
         vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
-        enrich_frontmatter(context, logger, vocab, slug=slug)
+        touched = enrich_frontmatter(context, logger, vocab, slug=slug)
         write_summary_and_readme(context, logger, slug=slug)
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
@@ -285,7 +285,12 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
         "semantic.book.done",
-        extra={"slug": slug, "ms": ms, "artifacts": {"content_files": len(mds)}},
+        extra={
+            "slug": slug,
+            "ms": ms,
+            "artifacts": {"content_files": len(mds)},
+            "enriched_files": len(cast(list, touched)),
+        },
     )
     return mds
 

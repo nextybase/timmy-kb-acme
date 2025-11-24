@@ -967,11 +967,17 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
     except Exception:
         lim = None
     if lim and lim > 0:
+        safe_lim = max(1, min(int(lim), 5000))
         try:
             LOGGER.info("limit.source=config", extra={"limit": int(lim)})
         except Exception:
             pass
-        return replace(params, candidate_limit=int(lim))
+        if safe_lim != int(lim):
+            LOGGER.warning(
+                "limit.clamped",
+                extra={"provided": int(lim), "effective": safe_lim},
+            )
+        return replace(params, candidate_limit=safe_lim)
     try:
         LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
     except Exception:

@@ -92,7 +92,7 @@ def main() -> int:
                 write_summary_and_readme(ctx, logger, slug=slug)
         except (ConfigError, PipelineError) as exc:
             # Mappa verso exit code deterministici (no traceback non gestiti)
-            logger.exception("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
+            logger.error("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
             code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
             return code
         except Exception as exc:

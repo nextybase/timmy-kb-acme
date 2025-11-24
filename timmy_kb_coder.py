@@ -119,10 +119,12 @@ def _load_client_cfg(slug: str) -> Dict[str, Any]:
     """Carica il config cliente (output/timmy-kb-<slug>/config/config.yaml) se esiste, altrimenti {}."""
     try:
         ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
-        cfg = get_client_config(ctx) or {}
-        return cfg if isinstance(cfg, dict) else {}
+        cfg = get_client_config(ctx)
+        if not isinstance(cfg, dict):
+            return {}
+        return cast(Dict[str, Any], cfg)
     except Exception as e:
-        LOGGER.info(
+        LOGGER.warning(
             "coder.config.unavailable",
             extra={
                 "event": "coder.config.unavailable",
