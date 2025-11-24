@@ -17,8 +17,9 @@
         "refresh": 2,
         "query": "label_values(slug)",
         "hide": 0,
-        "includeAll": false,
-        "multi": false
+        "includeAll": true,
+        "multi": false,
+        "allValue": ".+"
       },
       {
         "name": "run_id",
@@ -30,8 +31,9 @@
         "refresh": 2,
         "query": "label_values({slug=\"$slug\"}, run_id)",
         "hide": 0,
-        "includeAll": false,
-        "multi": false
+        "includeAll": true,
+        "multi": false,
+        "allValue": ".+"
       }
     ]
   },
@@ -47,7 +49,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{slug=\"$slug\", run_id=\"$run_id\"}"
+          "expr": "{slug=~\"${slug:regex}\", run_id=~\"${run_id:regex}\"}"
         }
       ],
       "gridPos": {

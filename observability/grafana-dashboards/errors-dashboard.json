@@ -17,8 +17,9 @@
         "refresh": 2,
         "query": "label_values(slug)",
         "hide": 0,
-        "includeAll": false,
-        "multi": false
+        "includeAll": true,
+        "multi": false,
+        "allValue": ".+"
       },
       {
         "name": "phase",
@@ -30,8 +31,9 @@
         "refresh": 2,
         "query": "label_values({slug=\"$slug\"}, phase)",
         "hide": 0,
-        "includeAll": false,
-        "multi": false
+        "includeAll": true,
+        "multi": false,
+        "allValue": ".+"
       }
     ]
   },
@@ -47,7 +49,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate({slug=\"$slug\", level=\"ERROR\", phase=\"$phase\"}[5m]))"
+          "expr": "sum(rate({slug=~\"${slug:regex}\", level=\"ERROR\", phase=~\"${phase:regex}\"}[5m]))"
         }
       ],
       "gridPos": {
@@ -68,7 +70,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{slug=\"$slug\", level=\"ERROR\", phase=\"$phase\"}"
+          "expr": "{slug=~\"${slug:regex}\", level=\"ERROR\", phase=~\"${phase:regex}\"}"
         }
       ],
       "gridPos": {
