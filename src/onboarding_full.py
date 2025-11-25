@@ -50,6 +50,13 @@ try:
 except Exception:
     push_output_to_github = None  # verra' gestito in _git_push
 
+try:
+    from pipeline.exceptions import GitBookPublishError
+    from pipeline.gitbook_publish import publish_book_to_gitbook
+except Exception:
+    publish_book_to_gitbook = None  # type: ignore[attr-defined]
+    GitBookPublishError = PipelineError  # type: ignore[assignment]
+
 # Solo per type-checking: Protocol del contesto richiesto da github_utils
 if TYPE_CHECKING:  # pragma: no cover - solo analisi statica
     from pipeline.github_utils import _SupportsContext  # noqa: F401
@@ -75,6 +82,22 @@ def _count_content_markdown(context: ClientContext) -> int:
 
 
 # ---------- Push GitHub (util repo, no fallback) ----------
+def _maybe_publish_gitbook(context: ClientContext, logger: logging.Logger) -> None:
+    settings = getattr(context, "settings", None)
+    token = getattr(settings, "GITBOOK_TOKEN", None) if settings else None
+    space_id = getattr(settings, "GITBOOK_SPACE_ID", None) if settings else None
+    if not (token and space_id):
+        logger.info("GitBook push saltato: token/spazio non configurato", extra={"slug": context.slug})
+        return
+    if not context.md_dir:
+        logger.warning("GitBook push saltato: md_dir non disponibile", extra={"slug": context.slug})
+        return
+    try:
+        publish_book_to_gitbook(context.md_dir, space_id=space_id, token=token, slug=context.slug)
+    except GitBookPublishError as exc:
+        logger.warning("GitBook publish fallito", extra={"slug": context.slug, "error": str(exc)})
+
+
 def _git_push(context: ClientContext, logger: logging.Logger) -> None:
     """Esegue il push su GitHub usando pipeline.github_utils.push_output_to_github."""
     if push_output_to_github is None:
@@ -174,6 +197,7 @@ def onboarding_full_main(
         with phase_scope(logger, stage="git_push", customer=context.slug) as m:
             _git_push(context, logger)
             m.set_artifacts(1)
+        _maybe_publish_gitbook(context, logger)
 
     logger.info(
         "cli.onboarding_full.completed",

@@ -67,7 +67,8 @@ Opzioni comuni:
 ## 9) Roadmap integrazione GitBook
 
 - Pubblicazione automatica su GitBook a valle del push (`onboarding_full.py`).
-- Gestione token GitBook con redazione log.
-- Allineamento contenuti `book/` -> spazio GitBook.
+- Gestione token GitBook (`GITBOOK_TOKEN`) con redazione log e spazio di destinazione (`GITBOOK_SPACE_ID`).
+- Allineamento contenuti `book/` -> spazio GitBook, usando `layout_summary.md` per guidare la struttura.
+- Smoke GitBook: `scripts/gitbook_publish_smoke.py` verifica `layout_summary.md` e può lanciare un upload controllato (`--dry-run` evita la chiamata reale).
 
 Nota: fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.

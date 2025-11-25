@@ -172,6 +172,12 @@ class SemanticMappingError(PipelineError):
     pass
 
 
+class GitBookPublishError(PipelineError):
+    """Errore durante la pubblicazione GitBook automatica."""
+
+    pass
+
+
 class PreOnboardingValidationError(PipelineError):
     """Errore di validazione nella fase di pre-onboarding (config, env, file)."""
 

@@ -26,6 +26,7 @@ from pipeline.constants import BOOK_JSON_NAME, HONKIT_DOCKER_IMAGE, PACKAGE_JSON
 from pipeline.env_utils import get_env_var, get_int
 from pipeline.exceptions import PipelineError, PreviewError
 from pipeline.file_utils import safe_write_text  # ✅ scritture atomiche (SSoT)
+from pipeline.layout_summary import read_layout_summary_entries
 from pipeline.logging_utils import get_structured_logger, redact_secrets
 from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
 from pipeline.proc_utils import CmdError, run_cmd, wait_for_port
@@ -239,6 +240,26 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
 
 
+def _log_layout_summary(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
+    entries = read_layout_summary_entries(Path(md_dir))
+    summary_path = Path(md_dir) / "layout_summary.md"
+    if not summary_path.exists():
+        logger.info(
+            _maybe_redact("layout_summary.md non è presente per la preview", redact_logs),
+            extra={"slug": slug, "file_path": str(summary_path), "status": "missing"},
+        )
+        return
+    logger.info(
+        _maybe_redact("Layout summary disponibile per GitBook", redact_logs),
+        extra={
+            "slug": slug,
+            "file_path": str(summary_path),
+            "entries": entries,
+            "count": len(entries),
+        },
+    )
+
+
 def run_container_detached(
     md_dir: Path,
     *,
@@ -399,6 +420,7 @@ def run_gitbook_docker_preview(
     # File necessari (idempotente)
     ensure_book_json(md_output_path, slug=context.slug, redact_logs=redact_logs)
     ensure_package_json(md_output_path, slug=context.slug, redact_logs=redact_logs)
+    _log_layout_summary(md_output_path, slug=context.slug, redact_logs=redact_logs)
 
     # 1) Build statica
     build_static_site(md_output_path, slug=context.slug, redact_logs=redact_logs)

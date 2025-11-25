@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,7 @@ CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
 
 _FRONTMATTER_CACHE: OrderedDict[tuple[Path, int, int], tuple[dict[str, Any], str]] = OrderedDict()
 _FRONTMATTER_CACHE_MAX = 256
+_PDF_EXCERPT_MAX_CHARS = 2048
 
 
 def clear_frontmatter_cache() -> None:
@@ -164,12 +166,54 @@ def _dump_frontmatter(meta: dict[str, Any]) -> str:  # compat wrapper
     return cast(str, _shared_dump_frontmatter(meta_dict))
 
 
+def _normalize_excerpt(text: str) -> str:
+    """Riduce whitespace e newline del testo estratto."""
+    cleaned = re.sub(r"\s+", " ", text or "")
+    return cleaned.strip()
+
+
+def _extract_pdf_excerpt(
+    pdf_path: Path,
+    *,
+    slug: str | None,
+    logger: logging.Logger,
+    max_chars: int = _PDF_EXCERPT_MAX_CHARS,
+) -> str | None:
+    """Restituisce il testo pulito (max_chars) estratto da un PDF (fallback None)."""
+    try:
+        from nlp.nlp_keywords import extract_text_from_pdf
+    except Exception as exc:  # pragma: no cover - import fallback
+        logger.debug(
+            "pipeline.content.extract_text_missing",
+            extra={"slug": slug, "file_path": str(pdf_path), "error": str(exc)},
+        )
+        return None
+
+    try:
+        raw_text = extract_text_from_pdf(str(pdf_path))
+    except Exception as exc:
+        logger.debug(
+            "pipeline.content.extract_text_failed",
+            extra={"slug": slug, "file_path": str(pdf_path), "error": str(exc)},
+        )
+        return None
+
+    excerpt = _normalize_excerpt(raw_text)
+    if not excerpt:
+        return None
+    if len(excerpt) > max_chars:
+        excerpt = excerpt[:max_chars].rstrip() + "..."
+    return excerpt
+
+
 def _write_markdown_for_pdf(
     pdf_path: Path,
     raw_root: Path,
     target_root: Path,
     candidates: Mapping[str, Mapping[str, Any]],
     cfg: SemanticConfig,
+    *,
+    slug: str | None = None,
 ) -> Path:
     """Genera un file Markdown 1:1 per il PDF indicato, includendo frontmatter completo."""
     rel_pdf = pdf_path.relative_to(raw_root)
@@ -180,7 +224,14 @@ def _write_markdown_for_pdf(
     candidate_meta = candidates.get(rel_pdf.as_posix(), {}) if candidates else {}
     tags_raw = candidate_meta.get("tags") or []
     tags_sorted = sorted({str(t).strip() for t in tags_raw if str(t).strip()})
-    body = f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*\n"
+    logger = get_structured_logger("pipeline.content_utils", context={"slug": slug})
+    excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger)
+    body_parts: list[str] = []
+    if excerpt:
+        body_parts.append(excerpt)
+    body_parts.append(f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*")
+    body = "\n\n".join(body_parts).rstrip()
+    body += "\n"
 
     existing_created_at: str | None = None
     existing_meta: dict[str, Any] = {}
@@ -217,6 +268,10 @@ def _write_markdown_for_pdf(
     for key, value in existing_meta.items():
         if key not in meta:
             meta[key] = value
+    if excerpt:
+        meta["excerpt"] = excerpt
+    elif existing_meta.get("excerpt"):
+        meta["excerpt"] = existing_meta["excerpt"]
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
     return md_path
 
@@ -467,8 +522,9 @@ def convert_files_to_structured_markdown(
             raw_root, base_dir=base, slug=getattr(ctx, "slug", None), logger=logger
         )
 
+    slug = getattr(ctx, "slug", None)
     for pdf in root_pdfs:
-        written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
+        written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
     for _cat_dir, pdfs in cat_items:
         safe_list = (
@@ -483,7 +539,7 @@ def convert_files_to_structured_markdown(
             )
         )
         for pdf in safe_list:
-            written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg))
+            written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
     for candidate in iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",)):
         low = candidate.name.lower()

@@ -18,10 +18,12 @@ from pipeline.file_utils import safe_write_text
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
 from pipeline.logging_utils import phase_scope
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from semantic.config import load_semantic_config
 from semantic.context_paths import resolve_context_paths
 from semantic.embedding_service import list_content_markdown
 from semantic.entities_frontmatter import enrich_frontmatter_with_entities
+from semantic.layout_enricher import merge_non_distruttivo, suggest_layout
 from semantic.types import ClientContextProtocol
 from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
 from storage.tags_store import get_conn as _get_tags_conn
@@ -46,6 +48,191 @@ def _get_paths(slug: str) -> Dict[str, Path]:
     return cast(Dict[str, Path], get_paths(slug))
 
 
+def _get_vision_statement_path(base_dir: Path) -> Path:
+    return base_dir / "config" / "vision_statement.yaml"
+
+
+def _load_vision_text(base_dir: Path) -> str:
+    path = _get_vision_statement_path(base_dir)
+    if not path.exists():
+        return ""
+    try:
+        safe = ensure_within_and_resolve(base_dir, path)
+        return read_text_safe(safe.parent, safe, encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _build_layout_constraints(base_yaml: Dict[str, Any]) -> Dict[str, Any]:
+    tops = [k for k in base_yaml.keys() if isinstance(k, str) and k]
+    if not tops:
+        tops = ["strategy", "operations", "data"]
+    max_nodes = max(12, len(tops) * 4)
+    allowed = sorted({str(top).strip().lower() for top in tops})
+    semantic_mapping: Dict[str, Tuple[str, ...]] = {}
+    for key in allowed:
+        semantic_mapping[key] = tuple()
+    return {
+        "max_depth": 3,
+        "max_nodes": max_nodes,
+        "allowed_prefixes": allowed,
+        "semantic_mapping": semantic_mapping,
+    }
+
+
+def _read_layout_top_levels(layout_path: Path) -> list[str]:
+    try:
+        import yaml
+    except Exception:
+        return []
+
+    if not layout_path.exists():
+        return []
+    try:
+        safe = ensure_within_and_resolve(layout_path.parent, layout_path)
+        text = read_text_safe(safe.parent, safe, encoding="utf-8")
+        data = yaml.safe_load(text)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    return sorted(str(key).strip() for key in data.keys() if key)
+
+
+def _layout_note_text(top_levels: list[str]) -> str:
+    if not top_levels:
+        return ""
+    bullets = "\n".join(f"- {entry}" for entry in top_levels)
+    return (
+        "\n\n## Struttura semantica proposta (layout_proposal)\n"
+        "La proposta ER generata da `layout_enricher` è stata salvata in `semantic/layout_proposal.yaml`. "
+        "Includiamo qui i top level suggeriti per riferimento:\n\n"
+        f"{bullets}\n"
+    )
+
+
+def _append_layout_note_to_readme(base_dir: Path, md_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+    layout_path = base_dir / "semantic" / "layout_proposal.yaml"
+    top_levels = _read_layout_top_levels(layout_path)
+    if not top_levels:
+        return
+    ensure_within(base_dir, layout_path)
+    readme_path = md_dir / "README.md"
+    ensure_within(base_dir, readme_path)
+    if not readme_path.exists():
+        return
+    try:
+        content = read_text_safe(md_dir, readme_path, encoding="utf-8")
+    except Exception:
+        return
+    note = _layout_note_text(top_levels)
+    if not note or "## Struttura semantica proposta" in content:
+        return
+    updated = content.rstrip() + "\n" + note
+    safe_write_text(readme_path, updated, encoding="utf-8", atomic=True)
+    logger.info(
+        "semantic.readme.layout_note_added",
+        extra={"slug": slug, "file_path": str(readme_path)},
+    )
+
+
+def _layout_summary_text(top_levels: list[str]) -> str:
+    bullets = "\n".join(f"- **{entry}**: sezione proposta nel layout canonico" for entry in top_levels)
+    return (
+        "# Layout della knowledge base\n\n"
+        "La struttura suggerita da `layout_enricher` viene di seguito elencata per facilitare "
+        "l'allineamento con GitBook e Drive.\n\n"
+        f"{bullets}\n"
+    )
+
+
+def _write_layout_summary(base_dir: Path, md_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+    layout_path = base_dir / "semantic" / "layout_proposal.yaml"
+    top_levels = _read_layout_top_levels(layout_path)
+    if not top_levels:
+        return
+    summary_path = md_dir / "layout_summary.md"
+    try:
+        ensure_within(base_dir, summary_path)
+    except Exception:
+        return
+    content = _layout_summary_text(top_levels)
+    safe_write_text(summary_path, content, encoding="utf-8", atomic=True)
+    logger.info(
+        "semantic.layout_summary.written",
+        extra={"slug": slug, "file_path": str(summary_path)},
+    )
+
+
+def _layout_section_from_md(md: Path, md_dir: Path, layout_keys: list[str]) -> str | None:
+    """Determina la sezione di layout (top level) in base al path relativo."""
+    if not layout_keys:
+        return None
+    try:
+        relative = md.relative_to(md_dir)
+    except Exception:
+        return None
+    parts = [part.strip().lower() for part in relative.parts if part.strip()]
+    if not parts:
+        return None
+    cand = parts[0]
+    for key in layout_keys:
+        if cand == str(key).strip().lower():
+            return key
+    return None
+
+
+def _dump_layout_yaml(data: Dict[str, Any]) -> str | None:
+    try:
+        import yaml
+    except Exception:
+        return None
+    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+
+
+def _persist_layout_proposal(base_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+    try:
+        cfg = load_semantic_config(base_dir)
+    except Exception as exc:
+        logger.debug(
+            "semantic.layout_proposal.config_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+        return
+
+    base_yaml = cfg.mapping if isinstance(cfg.mapping, dict) else {}
+    if not base_yaml:
+        return
+
+    constraints = _build_layout_constraints(base_yaml)
+    vision_text = _load_vision_text(base_dir)
+    try:
+        proposal = suggest_layout(base_yaml, vision_text, constraints)
+    except Exception as exc:
+        logger.warning(
+            "semantic.layout_proposal.failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+        return
+
+    if not proposal:
+        return
+
+    merged = merge_non_distruttivo(base_yaml, proposal)
+    layout_yaml = _dump_layout_yaml(merged)
+    if not layout_yaml:
+        return
+
+    semantic_dir = base_dir / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    layout_path = semantic_dir / "layout_proposal.yaml"
+    safe_write_text(layout_path, layout_yaml, encoding="utf-8", atomic=True)
+    logger.info(
+        "semantic.layout_proposal.written",
+        extra={"slug": slug, "file_path": str(layout_path)},
+    )
+
+
 def enrich_frontmatter(
     context: ClientContextProtocol,
     logger: logging.Logger,
@@ -60,6 +247,7 @@ def enrich_frontmatter(
     paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
     base_dir, md_dir = paths.base_dir, paths.md_dir
     ensure_within(base_dir, md_dir)
+    layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
 
     if not vocab:
         tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
@@ -95,6 +283,9 @@ def enrich_frontmatter(
             canonical_from_raw = _canonicalize_tags(raw_list, inv)
             tags = canonical_from_raw or _guess_tags_for_name(name, vocab, inv=inv)
             new_meta = _merge_frontmatter(meta, title=title, tags=tags)
+            section = _layout_section_from_md(md, md_dir, layout_keys)
+            if section and not new_meta.get("layout_section"):
+                new_meta["layout_section"] = section
             # Arricchimento additivo da doc_entities (se presenti e approvate)
             try:
                 tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
@@ -147,6 +338,7 @@ def enrich_frontmatter(
 def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Logger, *, slug: str) -> None:
     start_ts = time.perf_counter()
     paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
+    base_dir = paths.base_dir
     md_dir = paths.md_dir
     shim = paths
     summary_func = _gen_summary
@@ -175,6 +367,8 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
                 "semantic.readme.written",
                 extra={"slug": slug, "file_path": str(md_dir / "README.md")},
             )
+            _append_layout_note_to_readme(base_dir, md_dir, logger, slug=slug)
+            _write_layout_summary(base_dir, md_dir, logger, slug=slug)
         except Exception as exc:  # pragma: no cover
             readme_path = md_dir / "README.md"
             logger.error(
@@ -192,6 +386,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
 
         validate_func(shim)
         logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(md_dir)})
+        _persist_layout_proposal(base_dir, logger, slug=slug)
         scope.set_artifacts(2)
 
     ms = int((time.perf_counter() - start_ts) * 1000)

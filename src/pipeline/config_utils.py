@@ -120,6 +120,11 @@ class Settings(_BaseSettings):
     )
     GITHUB_TOKEN: str = Field(validation_alias=AliasChoices("GITHUB_TOKEN"))
     GITBOOK_TOKEN: Optional[str] = Field(default=None, validation_alias=AliasChoices("GITBOOK_TOKEN"))
+    GITBOOK_SPACE_ID: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("GITBOOK_SPACE_ID"),
+        description="ID dello spazio GitBook dove pubblicare (opzionale).",
+    )
     LOG_LEVEL: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL"))
     DEBUG: bool = Field(default=False, validation_alias=AliasChoices("DEBUG"))
     slug: Optional[str] = None
