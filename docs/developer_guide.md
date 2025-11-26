@@ -57,6 +57,11 @@ def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
 - Impostare gli eventuali placeholder in `.env` (vedi `.env.example`).
 - In CI GitHub, valorizza `GITHUB_OIDC_AUDIENCE` come Repository Variable per abilitare il probe (`scripts/ci/oidc_probe.py`), che logga solo metadati (`has_token` non include il token).
 
+### GitBook API
+
+- `GITBOOK_TOKEN` e `GITBOOK_SPACE_ID` servono per pubblicare automaticamente il contenuto `book/` su GitBook. Esporta questi valori in `.env` o nelle secret variables dei runner CI (do not commit them). Il token deve avere permessi di scrittura sullo spazio indicato.
+- Use `scripts/gitbook_publish_smoke.py --slug <slug> --dry-run` per validare localmente la summary e i secrets prima di eseguire `py src/onboarding_full.py --slug <slug> --non-interactive`, che ora invia lo ZIP con metadata `layout_summary`.
+
 ---
 
 ## Logging centralizzato
