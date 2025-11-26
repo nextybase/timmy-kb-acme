@@ -1,16 +1,23 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# tests/conftest.py
 from __future__ import annotations
 
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/conftest.py
 import logging
 import os
+import shutil
+import socket
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+OBSERVABILITY_COMPOSE = REPO_ROOT / "observability" / "docker-compose.yaml"
+DOCKER_BIN = shutil.which("docker")
 SRC_ROOT = REPO_ROOT / "src"
 for candidate in (REPO_ROOT, SRC_ROOT):
     if str(candidate) not in sys.path:
@@ -28,6 +35,91 @@ if "CLIENTS_DB_DIR" not in os.environ:
     os.environ["CLIENTS_DB_DIR"] = str(_DEFAULT_TEST_CLIENTS_DB_DIR)
 if "CLIENTS_DB_FILE" not in os.environ:
     os.environ["CLIENTS_DB_FILE"] = _DEFAULT_TEST_CLIENTS_DB_FILE.name
+
+
+# Helpers per avviare lo stack osservabilità (docker compose ...)
+def _compose_command(action: Sequence[str]) -> list[str]:
+    assert DOCKER_BIN is not None  # guard dell'uso: verifichiamo prima di chiamare
+    return [DOCKER_BIN, "compose", "-f", str(OBSERVABILITY_COMPOSE), *action]
+
+
+def _run_compose_command(action: Sequence[str], *, logger: logging.Logger, check: bool = True) -> bool:
+    try:
+        cmd = _compose_command(action)
+    except AssertionError:
+        logger.warning("docker non disponibile per lo stack osservabilità", extra={"action": action})
+        return False
+
+    try:
+        subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            check=check,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        logger.warning("docker non trovato durante l'esecuzione dello stack osservabilità", extra={"cmd": cmd})
+        return False
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode("utf-8", "ignore").strip()
+        logger.warning(
+            "docker compose fallito",
+            extra={"cmd": cmd, "stderr": stderr},
+        )
+        return False
+    return True
+
+
+def _wait_for_port(host: str, port: int, timeout: float = 60.0) -> bool:
+    stop = time.monotonic() + timeout
+    while time.monotonic() < stop:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.2)
+    return False
+
+
+def _delayed_down(delay: float, *, logger: logging.Logger) -> None:
+    time.sleep(delay)
+    _run_compose_command(("down",), logger=logger, check=False)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def observability_stack_fixture():
+    logger = logging.getLogger("tests.observability.stack")
+    if not OBSERVABILITY_COMPOSE.exists():
+        logger.debug("docker compose per osservabilità mancante; salto stack")
+        yield
+        return
+    if DOCKER_BIN is None:
+        logger.warning("docker non trovato; non avvio lo stack OTLP")
+        yield
+        return
+
+    started = _run_compose_command(("up", "-d", "otel-collector"), logger=logger, check=True)
+    if started:
+        ready = _wait_for_port("localhost", 4318, timeout=60.0)
+        if not ready:
+            logger.warning(
+                "porta 4318 non pronta dopo l'avvio dello stack osservabilità",
+                extra={"timeout_s": 60.0},
+            )
+        else:
+            logger.info(
+                "porta_otlp_pronta",
+                extra={"port": 4318, "timeout_s": 60.0},
+            )
+    yield
+    if started:
+        t = threading.Thread(target=_delayed_down, args=(5.0,), kwargs={"logger": logger}, daemon=True)
+        t.start()
+        t.join(timeout=15.0)
+        if t.is_alive():
+            logger.warning("osservability.down.timeout", extra={"timeout_s": 15.0})
+
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
 try:

@@ -14,7 +14,9 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict
 
-__path__ = [str(Path(__file__).resolve().parents[1])]
+_PKG_DIR = Path(__file__).resolve().parent
+_SRC_ROOT = _PKG_DIR.parent
+__path__ = [str(_PKG_DIR), str(_SRC_ROOT)]
 
 _ALIASES: Dict[str, str] = {
     # Moduli top-level

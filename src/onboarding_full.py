@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
+from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
 from pipeline.logging_utils import get_structured_logger, phase_scope
@@ -161,6 +162,13 @@ def onboarding_full_main(
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("cli.onboarding_full.started", extra={"slug": slug})
     md_snapshot_count: Optional[int] = None
+
+    docker_ok, docker_hint = check_docker_status()
+    if not docker_ok:
+        logger.warning(
+            "cli.onboarding_full.docker_unavailable",
+            extra={"slug": slug, "hint": docker_hint},
+        )
 
     # 1) README/SUMMARY in book/ (senza fallback)
     try:

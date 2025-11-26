@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import importlib
-import shutil
 import socket
-import subprocess
 from typing import List, Tuple
 
 try:
@@ -17,6 +15,7 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
+from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.logging_utils import get_structured_logger
 
@@ -46,27 +45,7 @@ def _is_importable(mod: str) -> bool:
 
 
 def _docker_ok() -> tuple[bool, str]:
-    docker_exe = shutil.which("docker")
-    if docker_exe is None:
-        return False, "Docker CLI non trovato (installa Docker Desktop/Engine)"
-    try:
-        subprocess.run(  # noqa: S603 - comando statico su eseguibile verificato
-            [docker_exe, "info"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-            shell=False,
-            timeout=5,
-        )
-        return True, ""
-    except subprocess.TimeoutExpired as exc:
-        try:
-            LOGGER.warning("ui.preflight.docker_timeout", exc_info=exc)
-        except Exception:
-            pass
-        return False, "Docker non risponde (timeout 5s)"
-    except Exception:
-        return False, "Docker non in esecuzione (avvialo e riprova)"
+    return check_docker_status()
 
 
 def _port_in_use(port: int) -> bool:

@@ -112,6 +112,8 @@ _download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_ra
 
 # Arricchimento semantico (estrazione tag ? stub + YAML)
 _run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update")
+# Tag KG Builder (Knowledge Graph dei tag)
+_run_tag_kg_builder = manage_helpers.safe_get("ui.services.tag_kg_builder:run_tag_kg_builder")
 
 
 # ---------------- Action handlers ----------------
@@ -524,6 +526,66 @@ if slug:
                             extra={"slug": slug, "error": str(exc)},
                         )
                         st.error(f"Estrazione tag non riuscita: {exc}")
+
+    def _render_tag_kg_section() -> None:
+        service_available = _run_tag_kg_builder is not None
+        tags_raw_path = semantic_dir / "tags_raw.json"
+        has_tags_raw = tags_raw_path.exists()
+        kg_json_path = semantic_dir / "kg.tags.json"
+        default_namespace = slug
+        namespace_value = st.session_state.get(f"tag_kg_namespace_{slug}", default_namespace)
+
+        with st.expander("Knowledge Graph dei tag (Tag KG Builder)", expanded=False):
+            st.caption(
+                "Costruisce il grafo probabilistico dei tag e salva `kg.tags.json` / `kg.tags.md` "
+                "a partire da `semantic/tags_raw.json`."
+            )
+            if kg_json_path.exists():
+                st.caption(f"Ultimo KG salvato: `{kg_json_path.name}`.")
+            if not has_tags_raw:
+                st.warning("Genera prima i tag raw (`tags_raw.json`).")
+            namespace_value = st.text_input(
+                "Namespace (facoltativo)",
+                value=namespace_value or default_namespace,
+                key=f"tag_kg_namespace_{slug}",
+            )
+            run_enabled = service_available and has_tags_raw
+            if _column_button(
+                st,
+                "Genera Knowledge Graph dei tag",
+                key="btn_tag_kg_build",
+                type="primary",
+                width="stretch",
+                disabled=not run_enabled,
+            ):
+                if not service_available:
+                    st.error("Servizio Tag KG Builder non disponibile.")
+                    return
+                try:
+                    with status_guard(
+                        "Costruisco il Knowledge Graph dei tag...",
+                        expanded=True,
+                        error_label="Errore durante il Tag KG Builder",
+                    ) as status_widget:
+                        result = _run_tag_kg_builder(
+                            slug,
+                            namespace=namespace_value or None,
+                            logger=LOGGER,
+                        )
+                        if status_widget is not None and hasattr(status_widget, "update"):
+                            status_widget.update(
+                                label=f"Tag KG pronto ({result['tags']} tag, {result['relations']} relazioni).",
+                                state="complete",
+                            )
+                    st.success(f"Tag KG generato: {result['tags']} tag, {result['relations']} relazioni.")
+                    if result.get("json_path"):
+                        st.caption(f"JSON: `{Path(result['json_path']).name}`")
+                    if result.get("md_path"):
+                        st.caption(f"Markdown: `{Path(result['md_path']).name}`")
+                    _safe_rerun()
+                except Exception as exc:
+                    LOGGER.exception("ui.manage.tag_kg.build_failed", extra={"slug": slug, "error": str(exc)})
+                    st.error(f"Tag KG Builder fallito: {exc}")
 
     def _render_readme_section() -> None:
         emit_disabled = _emit_readmes_for_raw is None

@@ -7,7 +7,8 @@
 ## Flusso end-to-end
 1) **pre_onboarding** → crea sandbox locale (`output/timmy-kb-<slug>/...`), risolve YAML struttura, opzionale **provisioning Drive** + upload `config.yaml`.
 2) **tag_onboarding** → genera `semantic/tags_raw.csv` (euristiche filename/path) + checkpoint HiTL → `tags_reviewed.yaml` (stub revisione).
-3) **semantic_onboarding** (UI via `semantic.api`) → **PDF→Markdown** in `book/` + **frontmatter enrichment** usando **vocabolario canonico su SQLite (`tags.db`)**, quindi **README/SUMMARY** (util repo → fallback idempotenti) e **preview Docker**.
+3) **Tag KG Builder** (`kg_build.py` / UI "Knowledge Graph dei tag") → legge `semantic/tags_raw.json`, invoca l’assistant OpenAI `build_tag_kg`, salva `semantic/kg.tags.json` + `semantic/kg.tags.md` e mantiene la vista human-first per revisioni (occhio ai namespace).
+4) **semantic_onboarding** (UI via `semantic.api` / CLI) → **PDF→Markdown** in `book/`, arricchimento frontmatter usando **vocabolario canonico su SQLite (`tags.db`)**, rigenera il frontmatter, costruisce `README/SUMMARY` e prepara la preview Docker.
 4) **onboarding_full** → preflight (solo `.md` in `book/`) → **push GitHub**.
 
 ### Gating in UI
@@ -17,6 +18,7 @@ Preview Docker: start/stop con nome container sicuro e validazione porta.
 ### SSoT dei tag
 - Authoring umano: `semantic/tags_reviewed.yaml` (revisione).
 - **Runtime**: `semantic/tags.db` (SQLite) consumato da orchestratori/UI per l’arricchimento.
+- **Knowledge Graph**: `semantic/kg.tags.json` (machine-first) e `semantic/kg.tags.md` (human-friendly) costruiti da `kg_build.py`/UI `Knowledge Graph dei tag` e consumati dai futuri ingest/embedding.
 
 ### Invarianti
 - **Idempotenza** (rilanci sicuri), **path‑safety** (tutte le write passano da util dedicate),

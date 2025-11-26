@@ -14,6 +14,7 @@ flowchart LR
     subgraph Orchestrators
       PRE[pre_onboarding.py]
       TAG[tag_onboarding.py]
+      KG[kg_build.py (Tag KG Builder)]
       SEMCLI[semantic_onboarding.py (wrapper dei service semantic.*)]
       FULL[onboarding_full.py]
       VISIONCLI[tools/gen_vision_yaml.py]
@@ -50,11 +51,13 @@ flowchart LR
 
     UI -->|actions| PRE
     UI -->|actions| TAG
+    UI -->|actions| KG
     UI -->|actions| SEMCLI
     UI -->|preview| HONKIT
 
     CLI --> PRE
     CLI --> TAG
+    CLI --> KG
     CLI --> SEMCLI
     CLI --> FULL
     CLI --> VISIONCLI
@@ -63,7 +66,8 @@ flowchart LR
     PRE --> PDRIVE
     PRE --> FILES
 
-    TAG --> SEMANTIC
+    TAG --> KG
+    KG --> SEMANTIC
     TAG --> FILES
     TAG --> DB
 
@@ -77,6 +81,8 @@ flowchart LR
     PGIT --> GITHUB
 
     SVISION --> OPENAI
+
+- **Tag KG Builder:** `kg_build.py` (CLI) e il pannello UI “Knowledge Graph dei tag” invocano `build_kg_for_workspace`, leggono `semantic/tags_raw.json` e scrivono `semantic/kg.tags.json`/`semantic/kg.tags.md` prima che `semantic_onboarding` rigeneri i README.
 
     PDRIVE --> DRIVE
 ```
@@ -95,6 +101,7 @@ sequenceDiagram
     participant DB as SQLite (tags.db)
     participant GH as GitHub
     participant DRV as Google Drive
+    participant KG as Tag KG Builder
 
     User->>UI: choose slug / start
     UI->>PRE: create local workspace
@@ -105,6 +112,8 @@ sequenceDiagram
     TAG-->>DRV: (optional) download RAW PDFs
     TAG->>FS: copy CSV / README_TAGGING
     TAG->>DB: write semantic/tags.db
+    TAG->>KG: build_tag_kg (namespace slug)
+    KG->>FS: write semantic/kg.tags.json + semantic/kg.tags.md
 
     UI->>SEM: convert_markdown(slug)
     SEM->>FS: write book/*.md

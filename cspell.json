@@ -94,7 +94,9 @@
     "matchano",
     "stoplist",
     "dedup",
-    "keyphrase"
+    "keyphrase",
+    "revisionabile",
+    "versionati"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

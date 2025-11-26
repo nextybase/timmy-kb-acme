@@ -29,6 +29,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 2. Inserisci **Slug cliente** e **Nome cliente** (UI si sblocca).
 3. Tab **Drive**: crea struttura, genera README, poi **Scarica PDF** su `raw/`.
 4. Tab **Semantica**: **Converti**  **Arricchisci**  **README & SUMMARY**.
+5. Tab **Gestisci cliente** → sezione *Knowledge Graph dei tag (Tag KG Builder)*: costruisce `semantic/kg.tags.json` + `semantic/kg.tags.md` a partire da `semantic/tags_raw.json` e ti mostra valori di tag/relazioni e i path generati.
 5. (Opz.) Avvia **Preview Docker**.
 
 Note Drive nella UI:
@@ -50,7 +51,15 @@ py src/pre_onboarding.py --slug acme --name "Cliente ACME"
 # 2) Tagging semantico (default: Drive)
 py src/tag_onboarding.py --slug acme --proceed
 
-# 3) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
+# 3) Costruzione Knowledge Graph dei tag
+py src/kg_build.py --slug acme
+
+> Nota: `semantic_onboarding.py` invoca internamente `build_kg_for_workspace`,
+> quindi l’intero flusso semantic costruisce automaticamente il Tag KG prima di
+> generare README/SUMMARY. La CLI `kg_build.py` serve per ricostruire o isolare
+> questo step quando necessario.
+
+# 4) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
 Esegui la pipeline semantica con gli helper modulari:
 
 ```bash

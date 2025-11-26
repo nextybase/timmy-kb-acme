@@ -223,8 +223,13 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
    - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` è ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB è lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
    - **Entità e relazioni:** se in `semantic/tags.db` sono presenti entità con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entità definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entità e le relazioni del mapping Vision-only.
-   - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
-3. **Genera README/SUMMARY**
+    - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
+3. **Costruisci il Knowledge Graph dei tag (Tag KG Builder)**
+    - **Cosa fa:** legge `semantic/tags_raw.json`, invoca la tool call `build_tag_kg` con namespace (puoi scegliere di usare lo slug o un valore custom), e pubblica `semantic/kg.tags.json` + `semantic/kg.tags.md`.
+    - **Output:** `kg.tags.json` (machine-first) più `kg.tags.md` (human-friendly) utilizzati dal team per revisioni e prossimi ingest/embedding.
+    - **Quando rilanciarlo:** dopo aver generato/aggiornato i tag raw (o quando serve una nuova versione del grafo).
+    - **Dove:** usa il pannello *Knowledge Graph dei tag* nella pagina **Gestisci cliente** oppure il CLI dedicato `py src/kg_build.py --slug <slug>` (lo step è idempotente finché `tags_raw.json` non cambia).
+4. **Genera README/SUMMARY**
    - **SUMMARY.md:** ricostruisce l'indice navigabile di `book/` in base a cartelle e file presenti.
    - **README.md:** crea/aggiorna il README radice e, ove previsto, i README di categoria usando **ambito**/**descrizione** dal mapping.
    - **Idempotenza:** sicuro da rilanciare; modifica solo cio' che e' cambiato.
@@ -306,8 +311,10 @@ Al momento il push GitHub viene orchestrato dalla CLI (`py src/onboarding_full.p
 2. (Se onboarding): Step 1 **Inizializza** -> Step 2 **Apri workspace**.
 3. **Genera README in raw (Drive)** (opzionale ma consigliato).
 4. Carica PDF su Drive -> **Scarica** in locale (o **Rileva** se copiati a mano).
-5. **Converti** -> **Arricchisci** -> **Genera README/SUMMARY**.
-6. (Facoltativo) **Anteprima Docker** -> pubblica.
+5. **Converti** -> **Arricchisci**.
+6. **Costruisci il Knowledge Graph dei tag** (UI o `kg_build.py`).
+7. **Genera README/SUMMARY**.
+8. (Facoltativo) **Anteprima Docker** -> pubblica.
 
 ---
 

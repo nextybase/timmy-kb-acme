@@ -6,8 +6,13 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import uuid
 from pathlib import Path
+
+_SRC_ROOT = Path(__file__).resolve().parent
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
@@ -23,6 +28,7 @@ from semantic.api import (
     require_reviewed_vocab,
     write_summary_and_readme,
 )
+from timmykb.kg_builder import build_kg_for_workspace
 
 
 def _parse_args() -> argparse.Namespace:
@@ -87,7 +93,19 @@ def main() -> int:
                 except Exception:
                     m.set_artifacts(None)
 
-            # 3) Genera SUMMARY.md e README.md e valida la cartella book/
+            # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
+            semantic_dir = Path(base_dir) / "semantic"
+            tags_raw_path = semantic_dir / "tags_raw.json"
+            if tags_raw_path.exists():
+                with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
+                    build_kg_for_workspace(base_dir, namespace=slug)
+            else:
+                logger.info(
+                    "cli.tag_kg_builder.skipped",
+                    extra={"slug": slug, "reason": "semantic/tags_raw.json assente"},
+                )
+
+            # 4) Genera SUMMARY.md e README.md e valida la cartella book/
             with phase_scope(logger, stage="cli.write_summary_and_readme", customer=slug):
                 write_summary_and_readme(ctx, logger, slug=slug)
         except (ConfigError, PipelineError) as exc:
