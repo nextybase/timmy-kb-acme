@@ -172,14 +172,13 @@ def _normalize_excerpt(text: str) -> str:
     return cleaned.strip()
 
 
-def _extract_pdf_excerpt(
+def _extract_pdf_text(
     pdf_path: Path,
     *,
     slug: str | None,
     logger: logging.Logger,
-    max_chars: int = _PDF_EXCERPT_MAX_CHARS,
 ) -> str | None:
-    """Restituisce il testo pulito (max_chars) estratto da un PDF (fallback None)."""
+    """Legge tutto il testo dal PDF (normalized) oppure None su failure."""
     try:
         from nlp.nlp_keywords import extract_text_from_pdf
     except Exception as exc:  # pragma: no cover - import fallback
@@ -198,11 +197,53 @@ def _extract_pdf_excerpt(
         )
         return None
 
-    excerpt = _normalize_excerpt(raw_text)
-    if not excerpt:
+    normalized = _normalize_excerpt(raw_text)
+    return normalized if normalized else None
+
+
+def _chunk_pdf_text(text: str, *, chunk_chars: int = 1200, max_chunks: int = 4) -> list[str]:
+    """Divide un testo in chunk di lunghezza massima `chunk_chars`."""
+    if not text:
+        return []
+    out: list[str] = []
+    total = len(text)
+    for idx in range(0, total, chunk_chars):
+        if len(out) >= max_chunks:
+            break
+        chunk = text[idx : idx + chunk_chars].strip()
+        if chunk:
+            out.append(chunk)
+    return out
+
+
+def _build_chunk_summaries(chunks: list[str], *, max_chars: int = _PDF_EXCERPT_MAX_CHARS) -> list[str]:
+    summaries: list[str] = []
+    for chunk in chunks:
+        if len(summaries) >= 4:
+            break
+        snippet = chunk[:max_chars]
+        if len(chunk) > max_chars:
+            snippet = snippet.rstrip() + "..."
+        summaries.append(snippet)
+    return summaries
+
+
+def _extract_pdf_excerpt(
+    pdf_path: Path,
+    *,
+    slug: str | None,
+    logger: logging.Logger,
+    text: str | None = None,
+    max_chars: int = _PDF_EXCERPT_MAX_CHARS,
+) -> str | None:
+    """Restituisce il testo pulito (max_chars) estratto da un PDF (fallback None)."""
+    if not text:
+        text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
+    if not text:
         return None
-    if len(excerpt) > max_chars:
-        excerpt = excerpt[:max_chars].rstrip() + "..."
+    excerpt = text[:max_chars].rstrip()
+    if len(text) > max_chars:
+        excerpt += "..."
     return excerpt
 
 
@@ -225,10 +266,15 @@ def _write_markdown_for_pdf(
     tags_raw = candidate_meta.get("tags") or []
     tags_sorted = sorted({str(t).strip() for t in tags_raw if str(t).strip()})
     logger = get_structured_logger("pipeline.content_utils", context={"slug": slug})
-    excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger)
+    text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
+    excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger, text=text)
+    chunks = _chunk_pdf_text(text, chunk_chars=900, max_chunks=4)
+    chunk_summaries = _build_chunk_summaries(chunks)
     body_parts: list[str] = []
     if excerpt:
         body_parts.append(excerpt)
+    for idx, chunk in enumerate(chunks):
+        body_parts.append(f"### Chunk {idx + 1}\n{chunk}")
     body_parts.append(f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*")
     body = "\n\n".join(body_parts).rstrip()
     body += "\n"
@@ -272,6 +318,10 @@ def _write_markdown_for_pdf(
         meta["excerpt"] = excerpt
     elif existing_meta.get("excerpt"):
         meta["excerpt"] = existing_meta["excerpt"]
+    if chunk_summaries:
+        meta["content_chunks"] = chunk_summaries
+    elif existing_meta.get("content_chunks"):
+        meta["content_chunks"] = existing_meta["content_chunks"]
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
     return md_path
 

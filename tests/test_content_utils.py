@@ -162,3 +162,34 @@ def test_write_markdown_for_pdf_adds_excerpt_when_available(tmp_path: Path, monk
 
     meta, body = read_frontmatter(target_root, md, use_cache=False)
     assert excerpt_text in body
+
+
+def test_write_markdown_for_pdf_inserts_chunk_sections(tmp_path: Path, monkeypatch: Any) -> None:
+    ctx = _Ctx(tmp_path, slug="dummy")
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    pdf_path = raw_root / "documento.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    target_root = tmp_path / "book"
+    cfg = SemanticConfig(
+        base_dir=tmp_path,
+        semantic_dir=tmp_path / "semantic",
+        raw_dir=raw_root,
+    )
+    long_text = "chunk " * 500
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: long_text)
+
+    md = cu._write_markdown_for_pdf(
+        pdf_path,
+        raw_root,
+        target_root,
+        {pdf_path.name: {}},
+        cfg,
+        slug=ctx.slug,
+    )
+
+    meta, body = read_frontmatter(target_root, md, use_cache=False)
+    assert "### Chunk 1" in body
+    assert meta.get("content_chunks")
+    assert meta["content_chunks"][0].startswith("chunk")
