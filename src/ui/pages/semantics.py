@@ -358,9 +358,10 @@ clicked_preview = _column_button(
 )
 if clicked_preview and preview_enabled:
     _go_preview()
-    if not preview_enabled:
-        _caption_in_column(action_col, book_caption)
-    _caption_in_column(action_col, book_status)
+
+if not preview_enabled:
+    _caption_in_column(action_col, book_caption)
+_caption_in_column(action_col, book_status)
 
 progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
 if progress_msg:
