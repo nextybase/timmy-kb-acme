@@ -305,7 +305,7 @@ pyparsing==3.2.5
     # via
     #   httplib2
     #   pip-requirements-parser
-pypdf==6.1.3
+pypdf==6.4.0
     # via -r requirements.in
 pytest==8.3.2
     # via

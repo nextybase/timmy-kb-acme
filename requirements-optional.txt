@@ -156,7 +156,7 @@ pydantic-core==2.18.2
     # via
     #   -c constraints.txt
     #   pydantic
-pypdf==6.1.3
+pypdf==6.4.0
     # via
     #   -c constraints.txt
     #   -r requirements-optional.in
