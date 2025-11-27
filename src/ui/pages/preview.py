@@ -7,15 +7,17 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, cast
 
+from pipeline.env_utils import get_int
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from semantic.api import get_paths
+from semantic.book_readiness import is_book_ready
 from ui.clients_store import get_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import has_raw_pdfs
 
 st = get_streamlit()
 
@@ -179,14 +181,17 @@ except Exception as exc:
     if caption or body:
         st.caption(caption or body)
 else:
-    raw_ready = False
-    raw_dir: Path | None = None
+    book_dir: Path | None = None
+    book_ready = False
     try:
-        ready, raw_path = has_raw_pdfs(slug)
-        raw_ready = bool(ready)
-        raw_dir = raw_path if isinstance(raw_path, Path) else None
+        candidate_dir = getattr(ctx, "md_dir", None)
+        if candidate_dir is None:
+            candidate_dir = get_paths(slug)["book"]
+        book_dir = candidate_dir
+        if isinstance(book_dir, Path):
+            book_ready = is_book_ready(book_dir)
     except Exception:
-        raw_ready = False
+        book_ready = False
     try:
         state_value = get_state(slug) or ""
         state_norm = state_value.strip().lower()
@@ -194,27 +199,31 @@ else:
     except Exception:
         state_norm = ""
         semantic_ready = False
-    if not raw_ready or not semantic_ready:
-        st.info("Anteprima disponibile dopo l'arricchimento semantico e con PDF presenti in raw/.")
-        raw_tail = tail_path(raw_dir) if raw_dir else ""
+    if not semantic_ready or not book_ready:
+        st.info(
+            "Anteprima disponibile dopo l'arricchimento semantico e con la cartella "
+            "book/ completa (README, SUMMARY e file Markdown di contenuto)."
+        )
+        book_tail = tail_path(book_dir) if book_dir else ""
         st.caption(
-            f"Stato cliente: {state_norm or 'n/d'} · RAW pronto: {'sì' if raw_ready else 'no'}"
-            + (f" (cartella: {raw_tail})" if raw_tail else "")
+            f"Stato cliente: {state_norm or 'n/d'} · Book pronta: {'sì' if book_ready else 'no'}"
+            + (f" (cartella: {book_tail})" if book_tail else "")
         )
         try:
             logger.info(
                 "ui.preview.not_ready",
                 extra={
                     "slug": slug,
-                    "raw_ready": raw_ready,
+                    "book_ready": book_ready,
                     "semantic_ready": semantic_ready,
                     "state": state_norm,
-                    "raw_path": raw_tail,
+                    "book_path": book_tail,
                 },
             )
         except Exception:  # pragma: no cover - logging best effort
             pass
         st.session_state.pop("preview_container", None)
+
     else:
         col_start, col_stop = st.columns(2)
         if _column_button(col_start, "Avvia preview", key="btn_preview_start"):
@@ -259,3 +268,16 @@ else:
                     )
                 except Exception:
                     pass
+        host_port = get_int("PREVIEW_PORT", 4000) or 4000
+        preview_url = f"http://localhost:{host_port}"
+        st.caption("Quando la preview è attiva, aprila in un'altra scheda:")
+        try:
+            st.code(preview_url, language="bash")
+        except Exception:
+            st.write(preview_url)
+        link_fn = getattr(st, "link_button", None)
+        if callable(link_fn):
+            try:
+                link_fn("Apri anteprima HonKit", preview_url, type="primary")
+            except Exception:
+                pass

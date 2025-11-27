@@ -224,6 +224,8 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
    - **Entità e relazioni:** se in `semantic/tags.db` sono presenti entità con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entità definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entità e le relazioni del mapping Vision-only.
     - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
+> **DIKW in azione:** i PDF in `raw/` più i tag grezzi rappresentano i **Data**, la conversione PDF→Markdown più l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker è la vista finale sulla Knowledge disponibile.
+
 3. **Costruisci il Knowledge Graph dei tag (Tag KG Builder)**
     - **Cosa fa:** legge `semantic/tags_raw.json`, invoca la tool call `build_tag_kg` con namespace (puoi scegliere di usare lo slug o un valore custom), e pubblica `semantic/kg.tags.json` + `semantic/kg.tags.md`.
     - **Output:** `kg.tags.json` (machine-first) più `kg.tags.md` (human-friendly) utilizzati dal team per revisioni e prossimi ingest/embedding.
@@ -239,6 +241,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
      della sessione UI. Il vocabolario arriva da `semantic.vocab_loader.load_reviewed_vocab`.
      Se vuoi replicare il comportamento da terminale trovi un esempio completo nella
      [User Guide](user_guide.md#quick-start----terminale-orchestratori).
+   - **Gating preview:** la UI invoca `semantic.book_readiness.check_book_dir` per assicurarsi che `book/` contenga `README.md`, `SUMMARY.md` e almeno un file Markdown di contenuto prima di abilitare la preview Docker; ora la disponibilità della preview riflette la **Knowledge** pronta anziché la sola presenza di PDF in `raw/`.
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
