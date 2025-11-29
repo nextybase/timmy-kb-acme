@@ -13,7 +13,7 @@ Pagina Streamlit per configurare un workspace cliente.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -24,21 +24,12 @@ from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from ui.chrome import render_chrome_then_require
+from ui.clients_store import get_all as get_clients
 from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retriever_settings, set_retriever_settings
+from ui.manage import cleanup as cleanup_component
+from ui.utils import set_slug
 from ui.utils.context_cache import get_client_context
-
-# Editor YAML (mapping/cartelle) con fallback sicuro
-YamlEditor = Callable[[str], None]
-
-try:
-    from ui.components.yaml_editors import edit_cartelle_raw as _edit_cartelle_raw
-    from ui.components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
-
-    edit_semantic_mapping: Optional[YamlEditor] = _edit_semantic_mapping
-    edit_cartelle_raw: Optional[YamlEditor] = _edit_cartelle_raw
-except Exception:  # pragma: no cover - editor opzionali
-    edit_semantic_mapping = None
-    edit_cartelle_raw = None
+from ui.utils.workspace import resolve_raw_dir
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -288,23 +279,6 @@ def _render_runtime_retriever(slug: str, *, st_module: Any | None = None) -> Non
             pass
 
 
-def _render_semantic_editors(slug: str, *, st_module: Any | None = None) -> None:
-    st_mod = st_module or get_streamlit()
-    st_mod.markdown("### Semantica (YAML)")
-
-    col_map, col_cart = st_mod.columns(2)
-    with col_map:
-        if callable(edit_semantic_mapping):
-            edit_semantic_mapping(slug)  # semantic/semantic_mapping.yaml
-        else:
-            st_mod.info("Editor mapping non disponibile.")
-    with col_cart:
-        if callable(edit_cartelle_raw):
-            edit_cartelle_raw(slug)  # semantic/cartelle_raw.yaml
-        else:
-            st_mod.info("Editor cartelle non disponibile.")
-
-
 # ---------- entrypoint pagina ----------
 def main() -> None:
     slug = render_chrome_then_require()
@@ -340,8 +314,40 @@ def main() -> None:
     st.markdown("---")
     _render_runtime_retriever(slug, st_module=st)
 
+    # Danger zone - Cleanup
+    cleanup_client_name = cleanup_component.client_display_name(slug, get_clients)
+    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir)
     st.markdown("---")
-    _render_semantic_editors(slug, st_module=st)
+    with st.expander("Danger zone · Cleanup cliente", expanded=False):
+        st.markdown(f"**Cliente:** {cleanup_client_name}  \\\n**Google Drive:** `{slug}`")
+        if cleanup_raw_folders:
+            folders = ", ".join(f"`{name}`" for name in cleanup_raw_folders)
+            st.markdown(f"**Cartelle RAW:** {folders}")
+        else:
+            st.markdown("**Cartelle RAW:** *(nessuna cartella trovata o RAW non presente)*")
+        st.caption("Elimina workspace locale, registro clienti e (se configurato) la cartella Drive.")
+
+        run_cleanup_fn = cleanup_component.resolve_run_cleanup()
+        perform_cleanup_fn = cleanup_component.resolve_perform_cleanup()
+        if run_cleanup_fn is None and perform_cleanup_fn is None:
+            st.info(
+                "Funzioni di cleanup non disponibili. Installa il modulo `tools.clean_client_workspace` "
+                "per abilitare la cancellazione guidata."
+            )
+        if st.button(
+            "Cancella cliente…",
+            key="config_cleanup_open_confirm",
+            type="secondary",
+            help="Rimozione completa: locale, DB e Drive",
+        ):
+            cleanup_component.open_cleanup_modal(
+                st=st,
+                slug=slug,
+                client_name=cleanup_client_name,
+                set_slug=set_slug,
+                run_cleanup=run_cleanup_fn,
+                perform_cleanup=perform_cleanup_fn,
+            )
 
     if not submitted:
         return

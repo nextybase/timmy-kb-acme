@@ -400,4 +400,3 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
         divider_fn()
     else:
         st.markdown("---")
-    st.subheader("Azioni sul workspace")

@@ -300,7 +300,7 @@ Riferimenti: [docs/adr/README.md](adr/README.md).
 
 ```bash
 # UI
-streamlit run onboarding_ui.py
+streamlit run onboarding_ui.py   # la UI imposta REPO_ROOT_DIR e lancia Streamlit dallo stesso repo
 
 # Orchestrazione CLI
 py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive

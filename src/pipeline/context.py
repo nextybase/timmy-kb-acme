@@ -246,11 +246,17 @@ class ClientContext:
         if env_root:
             try:
                 root = Path(str(env_root)).expanduser().resolve()
-                logger.info(
-                    "context.repo_root_dir_env",
-                    extra={"slug": slug, "repo_root_dir": str(root)},
-                )
-                return root
+                repo_root = Path(__file__).resolve().parents[2]
+                if root == repo_root:
+                    # Ignoriamo l'override se punta alla radice repo, per evitare workspace
+                    # creati direttamente nella repo stessa (fallimento UI).
+                    env_root = None
+                else:
+                    logger.info(
+                        "context.repo_root_dir_env",
+                        extra={"slug": slug, "repo_root_dir": str(root)},
+                    )
+                    return root
             except Exception as e:
                 raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug) from e
 

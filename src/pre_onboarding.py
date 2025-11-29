@@ -404,7 +404,15 @@ def ensure_local_workspace_for_ui(
         cfg_dir.mkdir(parents=True, exist_ok=True)
         ensure_within(context.base_dir, target)
         safe_write_bytes(target, vision_statement_pdf, atomic=True)
-        logger.info({"event": "vision_statement_saved", "slug": context.slug, "file_path": str(target)})
+        logger.info(
+            "vision_statement_saved",
+            extra={
+                "slug": context.slug,
+                "file_path": str(target),
+                "context_base_dir": str(context.base_dir or "<none>"),
+                "repo_root_dir": str(context.repo_root_dir or "<none>"),
+            },
+        )
 
         # Aggiorna config con percorso PDF e nome cliente
         updates: Dict[str, Any] = {"vision_statement_pdf": "config/VisionStatement.pdf"}

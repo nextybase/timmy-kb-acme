@@ -27,9 +27,11 @@ Usa la UI per:
 
 **Avvio UI**:
 
-```bash
+```powershell
 streamlit run onboarding_ui.py
 ```
+
+Il file `onboarding_ui.py` setta automaticamente `REPO_ROOT_DIR` sulla directory del repository prima di importare la UI, quindi non serve più un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
 ### Accesso rapido alla Guida (sidebar)
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
@@ -199,7 +201,7 @@ Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Driv
 - **Avanzamento**: barra/progresso su **tutti i candidati** (anche quelli gia' presenti); al termine mostra i **nuovi file creati**.
 - **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale. La sincronizzazione locale (espander "Scarica PDF da Drive -> locale") scarica **solo i PDF** e lascia i README su Drive.
 - **Rileva PDF in raw/**: riesegue la **sola scansione locale** per aggiornare lo stato (utile se hai copiato manualmente dei file).
-- **Cancella cliente**: rimuove l'intero workspace locale e prova a eliminare le cartelle su Drive. Operazione **irreversibile** con conferma.
+- **Cancella cliente**: il cleanup (rimozione workspace locale/Drive/DB) è ora controllato nella pagina **Config Editor** (Tools → Configurazione); si apre un wizard con conferma prima di applicare la cancellazione.
 
 ---
 
@@ -271,6 +273,8 @@ Al momento il push GitHub viene orchestrato dalla CLI (`py src/onboarding_full.p
   Dopo modifiche, rigenera README (Drive) e, se serve, rifai **Arricchisci**.
 - **cartelle\_raw\.yaml**: riflette la struttura di **raw/** + **contrattualistica/**.\
   In scenari standard non toccarlo a mano; se cambi le aree, mantieni coerenza.
+
+> **Cleanup:** la cancellazione guidata del workspace (locale + Drive) si trova ora nella pagina **Config Editor** (Tools → Configurazione); usa il pulsante “Cancella cliente…” in fondo per avviare il wizard irreversibile con conferma.
 
 **Retriever** (opzionale)
 

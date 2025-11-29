@@ -46,6 +46,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.data-files]
+"config" = ["config/config.yaml"]
+
 # ---------- Formatter / Lint allineati (isort→black→ruff) ----------
 
 [tool.black]

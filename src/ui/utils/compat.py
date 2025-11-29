@@ -54,3 +54,28 @@ def open_dialog(title: str, render_body: Callable[[], None], *, width: str = "la
             runner()
         return
     render_body()  # fallback inline
+
+
+def set_tab(tab: str) -> None:
+    """
+    Imposta il query param `tab=<url_path>` come fallback per la navigazione.
+    """
+    st = get_streamlit()
+    qp = getattr(st, "query_params", None)
+    if qp is None:
+        return
+
+    target = url_path_for(tab) or tab
+
+    if isinstance(qp, MutableMapping):
+        mapping = cast(MutableMapping[str, Any], qp)
+        mapping["tab"] = target
+    elif hasattr(qp, "__setitem__"):
+        try:
+            qp["tab"] = target  # type: ignore[index]
+        except Exception:
+            return
+    try:
+        getattr(st, "rerun", lambda: None)()
+    except Exception:
+        return

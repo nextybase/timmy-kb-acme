@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional, Tuple, cast
 
-from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
 
@@ -20,35 +20,13 @@ from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_r
 from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
+from ui.components.semantic_wizard import render_semantic_wizard
 from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE, SEMANTIC_READY_STATES
 from ui.errors import to_user_message
 from ui.pages.registry import PagePaths
-from ui.utils.compat import nav_to
+from ui.utils.compat import nav_to, set_tab
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
-
-
-def _markdown_in_column(container: Any, text: str) -> None:
-    fn = getattr(container, "markdown", None)
-    if callable(fn):
-        try:
-            fn(text)
-            return
-        except Exception:
-            pass
-    st.markdown(text)
-
-
-def _caption_in_column(container: Any, text: str) -> None:
-    fn = getattr(container, "caption", None)
-    if callable(fn):
-        try:
-            fn(text)
-            return
-        except Exception:
-            pass
-    st.caption(text)
-
 
 try:
     from ui.utils.workspace import has_raw_pdfs
@@ -186,11 +164,9 @@ def _go_preview() -> None:
     sia con il fallback via ?tab=preview.
     """
     try:
-        # Navigazione ufficiale verso la pagina Preview
         nav_to(PagePaths.PREVIEW)
         return
     except Exception:
-        # Fallback super conservativo: vecchio comportamento basato su tab
         try:
             set_tab("preview")  # type: ignore[arg-type]
             getattr(st, "rerun", lambda: None)()
@@ -258,9 +234,6 @@ if _HAS_STREAMLIT_CONTEXT:
         except Exception as stop_exc:  # pragma: no cover - Streamlit specific
             raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
-        # Note: se semantica indisponibile stoppa il flusso, non proseguiamo.
-        # Altrimenti continuiamo a inizializzare `_book_ready`.
-
     try:
         _book_dir = get_paths(slug).get("book")
         if _book_dir is not None:
@@ -276,12 +249,6 @@ if _HAS_STREAMLIT_CONTEXT:
             )
         except Exception:
             pass
-
-st.subheader("Onboarding semantico")
-st.caption(
-    "DIKW: da Data (PDF/raw e tags grezzi) a Information (Markdown chunkizzati con frontmatter); "
-    "Knowledge si ottiene arricchendo i frontmatter e generando README/SUMMARY, quindi la preview è la vista finale."
-)
 
 if _column_button(st, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
     cache_key = (slug or "<none>").strip().lower()
@@ -300,68 +267,21 @@ def _handle_semantic_action(action: Callable[[str], None]) -> None:
         _display_user_error(exc)
 
 
-semantic_steps = [
-    (
-        "**Passo 1 – Converti PDF in Markdown**\n"
-        "Trasforma tutti i PDF in `raw/` nei corrispondenti file Markdown chunkizzati, "
-        "con frontmatter base (titolo, categoria, file sorgente, timestamp, tags_raw).",
-        "Converti PDF in Markdown",
-        "btn_convert",
-        _run_convert,
-    ),
-    (
-        "**Passo 2 – Arricchisci frontmatter**\n"
-        "Usa il vocabolario canonico e le entità approvate per aggiornare i frontmatter con "
-        "tag normalizzati, entities e relations_hint.",
-        "Arricchisci frontmatter",
-        "btn_enrich",
-        _run_enrich,
-    ),
-    (
-        "**Passo 3 – Genera README/SUMMARY**\n"
-        "Rigenera README.md e SUMMARY.md in base ai Markdown aggiornati e al mapping, "
-        "così la KB è navigabile e coerente.",
-        "Genera README/SUMMARY",
-        "btn_generate",
-        _run_summary,
-    ),
-]
+client_state_ok = _client_state in SEMANTIC_READY_STATES
 
-for desc, label, key, action in semantic_steps:
-    desc_col, action_col = st.columns([3, 1])
-    _markdown_in_column(desc_col, desc)
-    if _column_button(action_col, label, key=key, width="stretch"):
-        _handle_semantic_action(action)
+actions = {
+    "convert": lambda: _handle_semantic_action(_run_convert),
+    "enrich": lambda: _handle_semantic_action(_run_enrich),
+    "summary": lambda: _handle_semantic_action(_run_summary),
+    "preview": _go_preview,
+}
 
-preview_enabled = _client_state in SEMANTIC_READY_STATES and _book_ready
-step_4_desc = (
-    "**Passo 4 – Anteprima Docker (HonKit)**\n"
-    "Avvia l’anteprima della knowledge base generata in un container Docker HonKit per "
-    "controllare il risultato come lo vedranno gli utenti."
+render_semantic_wizard(
+    slug=slug or "",
+    client_state_ok=client_state_ok,
+    book_ready=_book_ready,
+    actions=actions,
 )
-book_caption = (
-    "Anteprima disponibile dopo l'arricchimento semantico e con la cartella book/ completa "
-    "(README, SUMMARY e file Markdown di contenuto)."
-)
-book_status = f"Book pronta: {'sì' if _book_ready else 'no'}"
-if _book_dir:
-    book_status += f" (cartella: {tail_path(_book_dir)})"
-
-desc_col, action_col = st.columns([3, 1])
-_markdown_in_column(desc_col, step_4_desc)
-clicked_preview = _column_button(
-    action_col,
-    "Anteprima Docker (HonKit)",
-    key="btn_preview",
-    width="stretch",
-    disabled=not preview_enabled,
-)
-if clicked_preview and preview_enabled:
-    _go_preview()
-
-if not preview_enabled:
-    _caption_in_column(action_col, book_caption)
-_caption_in_column(action_col, book_status)
 
 progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
 if progress_msg:

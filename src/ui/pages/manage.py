@@ -12,7 +12,6 @@ from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
 from ui.manage import _helpers as manage_helpers
-from ui.manage import cleanup as cleanup_component
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
 from ui.manage.compat import import_tags_yaml_to_db, read_text_safe, safe_write_text
@@ -31,7 +30,7 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
 
 from ui.utils import set_slug
 from ui.utils.status import status_guard
-from ui.utils.workspace import count_pdfs_safe, resolve_raw_dir
+from ui.utils.workspace import count_pdfs_safe
 
 try:
     from ui.gating import reset_gating_cache as _reset_gating_cache
@@ -345,26 +344,67 @@ if slug:
     )
     service_ok = can_stub or can_run_service
 
-    st.info("Carica i PDF in `raw/<categoria>` (o scaricali da Drive) prima di avviare l'arricchimento semantico.")
-    if not has_pdfs:
-        st.warning(
-            "Raw vuoto: copia manualmente PDF in `output/timmy-kb-<slug>/raw/` "
-            "o usa il pulsante di download per allineare i file."
-        )
+    st.subheader("Azioni sul workspace")
+    emit_disabled = _emit_readmes_for_raw is None
+    download_disabled = _plan_raw_download is None or not (
+        bool(os.getenv("SERVICE_ACCOUNT_FILE")) and os.getenv("DRIVE_ID")
+    )
+    semantic_disabled = not prerequisites_ok
 
-    if _column_button(
-        st,
-        "Ricarica vista Gestisci cliente",
-        key="btn_manage_reload",
-        type="secondary",
-    ):
-        LOGGER.info("ui.manage.reload_requested", extra={"slug": slug})
-        _safe_rerun()
+    col_emit, col_download, col_semantic = st.columns(3)
 
-    def _render_download_section() -> None:
+    with col_emit:
+        if _column_button(
+            st,
+            "Genera Readme",
+            key="btn_emit_readmes",
+            type="primary",
+            width="stretch",
+            disabled=emit_disabled,
+        ):
+            emit_fn = _emit_readmes_for_raw
+            if emit_fn is None:
+                st.error(
+                    "Funzione non disponibile. Abilita gli extra Drive: `pip install .[drive]` "
+                    "e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+                )
+            else:
+                try:
+                    with status_guard(
+                        "Genero i README nelle sottocartelle di raw/ su Drive…",
+                        expanded=True,
+                        error_label="Errore durante la generazione dei README",
+                    ) as status_widget:
+                        try:
+                            result = manage_helpers.call_best_effort(
+                                emit_fn,
+                                logger=LOGGER,
+                                slug=slug,
+                                ensure_structure=False,
+                                require_env=True,
+                            )
+                        except TypeError:
+                            result = manage_helpers.call_best_effort(
+                                emit_fn,
+                                logger=LOGGER,
+                                slug=slug,
+                                ensure_structure=False,
+                            )
+                        count = len(result or {})
+                        if status_widget is not None and hasattr(status_widget, "update"):
+                            status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
+
+                    if _invalidate_drive_index is not None:
+                        _invalidate_drive_index(slug)
+                    st.toast("README generati su Drive.")
+                    _safe_rerun()
+                except Exception as e:  # pragma: no cover
+                    LOGGER.exception("ui.manage.drive.readme_failed", extra={"slug": slug, "error": str(e)})
+                    st.error(f"Impossibile generare i README: {e}")
+
+    with col_download:
         service_account_file = os.getenv("SERVICE_ACCOUNT_FILE")
         service_account_ok = bool(service_account_file and Path(service_account_file).expanduser().exists())
-        download_disabled = _plan_raw_download is None or not (service_account_ok and os.getenv("DRIVE_ID"))
         default_msg = (
             "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive."
         )
@@ -373,283 +413,134 @@ if slug:
             if service_account_file and not service_account_ok
             else default_msg
         )
+        drive_component.render_drive_status_message(st, download_disabled, status_msg)
+        if _column_button(
+            st,
+            "Scarica PDF da Drive",
+            key="btn_drive_download",
+            type="secondary",
+            width="stretch",
+            disabled=download_disabled,
+        ):
 
-        with st.expander("Scarica PDF da Drive → locale", expanded=False):
-            drive_component.render_drive_status_message(st, download_disabled, status_msg)
-            st.caption("Sincronizza solo i PDF; i README rimangono su Drive.")
-            if _column_button(
-                st,
-                "Scarica PDF da Drive → locale",
-                key="btn_drive_download",
-                type="secondary",
-                width="stretch",
-                disabled=download_disabled,
-            ):
+            def _modal() -> None:
+                st.write(
+                    "Questa operazione scarica i file dalle cartelle di Google Drive "
+                    "nelle cartelle locali corrispondenti."
+                )
+                st.write("Stiamo verificando la presenza di file preesistenti nelle cartelle locali.")
 
-                def _modal() -> None:
-                    st.write(
-                        "Questa operazione scarica i file dalle cartelle di Google Drive "
-                        "nelle cartelle locali corrispondenti."
-                    )
-                    st.write("Stiamo verificando la presenza di file preesistenti nella cartelle locali.")
-
-                    try:
-                        conflicts, labels = drive_component.prepare_download_plan(
-                            _plan_raw_download,
-                            slug=slug,
-                            logger=LOGGER,
-                        )
-                    except Exception as e:
-                        LOGGER.exception(
-                            "ui.manage.drive.plan_failed",
-                            extra={"slug": slug, "error": str(e)},
-                        )
-                        message = f"Impossibile preparare il piano di download: {e}"
-                        HttpErrorType: type[BaseException] | None
-                        try:
-                            from googleapiclient.errors import HttpError as _HttpError
-                        except Exception:
-                            HttpErrorType = None
-                        else:
-                            HttpErrorType = _HttpError
-
-                        if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
-                            status = getattr(getattr(e, "resp", None), "status", None)
-                        else:
-                            status = None
-
-                        if status == 500:
-                            st.error(
-                                f"{message}\n"
-                                "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
-                                "Riprovare tra qualche minuto. "
-                                "Il problema persiste? Scarica i PDF manualmente da Drive "
-                                "e copiali nella cartella `raw/`."
-                            )
-                        else:
-                            st.error(message)
-                        return
-
-                    drive_component.render_download_plan(st, conflicts, labels)
-
-                    overwrite_label = "Sovrascrivi i file locali in conflitto"
-                    overwrite_help = (
-                        "Se attivato, i PDF già presenti verranno riscritti. "
-                        "In caso contrario verranno importati solo i file mancanti."
-                    )
-                    overwrite_toggle = st.checkbox(
-                        overwrite_label,
-                        value=False,
-                        help=overwrite_help,
-                        key=f"drive_overwrite_{slug}",
-                        disabled=not conflicts,
-                    )
-                    cA, cB = st.columns(2)
-                    if _column_button(cA, "Annulla", key="dl_cancel"):
-                        return
-                    if _column_button(cB, "Procedi e scarica", key="dl_proceed", type="primary"):
-                        if drive_component.execute_drive_download(
-                            slug,
-                            conflicts,
-                            download_with_progress=_download_with_progress,
-                            download_simple=_download_simple,
-                            invalidate_index=_invalidate_drive_index,
-                            logger=LOGGER,
-                            st=st,
-                            status_guard=status_guard,
-                            overwrite_requested=bool(overwrite_toggle),
-                        ):
-                            _safe_rerun()
-
-                dialog_builder = getattr(st, "dialog", None)
-                if callable(dialog_builder):
-                    open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
-                    runner = open_modal(_modal)
-                    (runner if callable(runner) else _modal)()
-                else:
-                    _modal()
-
-    def _render_semantic_section() -> None:
-        backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
-        backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
-
-        with st.expander("Arricchimento semantico + revisione tags", expanded=True):
-            st.caption(
-                f"Metodo attivo: {backend_label} (SpaCy {'attivo' if backend == 'spacy' else 'non attivo'}) "
-                "e euristica sempre eseguita per completare la lista keyword."
-            )
-            if not has_pdfs and not can_stub:
-                st.caption("Non ci sono PDF in raw/: scaricali o copiali manualmente prima di procedere.")
-
-            cols = st.columns([2, 1])
-            open_semantic = _column_button(
-                cols[0],
-                "Genera i tags",
-                key="btn_semantic_start",
-                type="primary",
-                width="stretch",
-                help=semantic_help,
-                disabled=not prerequisites_ok,
-            )
-            if _column_button(
-                cols[1],
-                "Modifica tags YAML",
-                key="btn_semantic_edit",
-                type="secondary",
-                help="Apri l'editor atomico di `tags_reviewed.yaml` per aggiungere/cancellare keyword.",
-            ):
-                _open_tags_editor_modal(slug)
-
-            if open_semantic:
-                if tags_mode == "stub":
-                    _open_tags_raw_modal(slug)
-                elif run_tags_fn is None:
-                    LOGGER.error(
-                        "ui.manage.tags.service_missing",
-                        extra={"slug": slug, "mode": tags_mode or "default"},
-                    )
-                    st.error("Servizio di estrazione tag non disponibile.")
-                    st.stop()
-                elif not has_pdfs:
-                    st.error(
-                        f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente."
-                    )
-                    st.stop()
-                else:
-                    try:
-                        st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
-                        run_tags_fn(slug)
-                        _open_tags_raw_modal(slug)
-                    except Exception as exc:  # pragma: no cover
-                        LOGGER.exception(
-                            "ui.manage.tags.run_failed",
-                            extra={"slug": slug, "error": str(exc)},
-                        )
-                        st.error(f"Estrazione tag non riuscita: {exc}")
-
-    def _render_tag_kg_section() -> None:
-        service_available = _run_tag_kg_builder is not None
-        tags_raw_path = semantic_dir / "tags_raw.json"
-        has_tags_raw = tags_raw_path.exists()
-        kg_json_path = semantic_dir / "kg.tags.json"
-        default_namespace = slug
-        namespace_value = st.session_state.get(f"tag_kg_namespace_{slug}", default_namespace)
-
-        with st.expander("Knowledge Graph dei tag (Tag KG Builder)", expanded=False):
-            st.caption(
-                "Costruisce il grafo probabilistico dei tag e salva `kg.tags.json` / `kg.tags.md` "
-                "a partire da `semantic/tags_raw.json`."
-            )
-            if kg_json_path.exists():
-                st.caption(f"Ultimo KG salvato: `{kg_json_path.name}`.")
-            if not has_tags_raw:
-                st.warning("Genera prima i tag raw (`tags_raw.json`).")
-            namespace_value = st.text_input(
-                "Namespace (facoltativo)",
-                value=namespace_value or default_namespace,
-                key=f"tag_kg_namespace_{slug}",
-            )
-            run_enabled = service_available and has_tags_raw
-            if _column_button(
-                st,
-                "Genera Knowledge Graph dei tag",
-                key="btn_tag_kg_build",
-                type="primary",
-                width="stretch",
-                disabled=not run_enabled,
-            ):
-                if not service_available:
-                    st.error("Servizio Tag KG Builder non disponibile.")
-                    return
                 try:
-                    with status_guard(
-                        "Costruisco il Knowledge Graph dei tag...",
-                        expanded=True,
-                        error_label="Errore durante il Tag KG Builder",
-                    ) as status_widget:
-                        result = _run_tag_kg_builder(
-                            slug,
-                            namespace=namespace_value or None,
-                            logger=LOGGER,
-                        )
-                        if status_widget is not None and hasattr(status_widget, "update"):
-                            status_widget.update(
-                                label=f"Tag KG pronto ({result['tags']} tag, {result['relations']} relazioni).",
-                                state="complete",
-                            )
-                    st.success(f"Tag KG generato: {result['tags']} tag, {result['relations']} relazioni.")
-                    if result.get("json_path"):
-                        st.caption(f"JSON: `{Path(result['json_path']).name}`")
-                    if result.get("md_path"):
-                        st.caption(f"Markdown: `{Path(result['md_path']).name}`")
-                    _safe_rerun()
-                except Exception as exc:
-                    LOGGER.exception("ui.manage.tag_kg.build_failed", extra={"slug": slug, "error": str(exc)})
-                    st.error(f"Tag KG Builder fallito: {exc}")
-
-    def _render_readme_section() -> None:
-        emit_disabled = _emit_readmes_for_raw is None
-        with st.expander("Genera README in raw (Drive)", expanded=False):
-            drive_component.render_drive_status_message(
-                st,
-                emit_disabled,
-                "Funzione Drive non disponibile: installa gli extra (`pip install .[drive]`) "
-                "e configura le credenziali.",
-            )
-            if _column_button(
-                st,
-                "Genera README in raw/ (Drive)",
-                key="btn_emit_readmes",
-                type=emit_btn_type,
-                width="stretch",
-                disabled=emit_disabled,
-            ):
-                emit_fn = _emit_readmes_for_raw
-                if emit_fn is None:
-                    st.error(
-                        "Funzione non disponibile. Abilita gli extra Drive: "
-                        "`pip install .[drive]` e configura `SERVICE_ACCOUNT_FILE` / `DRIVE_ID`."
+                    conflicts, labels = drive_component.prepare_download_plan(
+                        _plan_raw_download,
+                        slug=slug,
+                        logger=LOGGER,
                     )
-                else:
+                except Exception as e:
+                    LOGGER.exception(
+                        "ui.manage.drive.plan_failed",
+                        extra={"slug": slug, "error": str(e)},
+                    )
+                    message = f"Impossibile preparare il piano di download: {e}"
+                    HttpErrorType: type[BaseException] | None
                     try:
-                        with status_guard(
-                            "Genero i README nelle sottocartelle di raw/ su Drive…",
-                            expanded=True,
-                            error_label="Errore durante la generazione dei README",
-                        ) as status_widget:
-                            try:
-                                result = manage_helpers.call_best_effort(
-                                    emit_fn,
-                                    logger=LOGGER,
-                                    slug=slug,
-                                    ensure_structure=False,
-                                    require_env=True,
-                                )
-                            except TypeError:
-                                result = manage_helpers.call_best_effort(
-                                    emit_fn,
-                                    logger=LOGGER,
-                                    slug=slug,
-                                    ensure_structure=False,
-                                )
-                            count = len(result or {})
-                            if status_widget is not None and hasattr(status_widget, "update"):
-                                status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
+                        from googleapiclient.errors import HttpError as _HttpError
+                    except Exception:
+                        HttpErrorType = None
+                    else:
+                        HttpErrorType = _HttpError
 
-                        try:
-                            if _invalidate_drive_index is not None:
-                                _invalidate_drive_index(slug)
-                            st.toast("README generati su Drive.")
-                            _safe_rerun()
-                        except Exception:
-                            pass
-                    except Exception as e:  # pragma: no cover
-                        LOGGER.exception("ui.manage.drive.readme_failed", extra={"slug": slug, "error": str(e)})
-                        st.error(f"Impossibile generare i README: {e}")
+                    if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
+                        status = getattr(getattr(e, "resp", None), "status", None)
+                    else:
+                        status = None
 
-    _render_download_section()
-    _render_semantic_section()
+                    if status == 500:
+                        st.error(
+                            f"{message}\n"
+                            "Potrebbe trattarsi di un errore temporaneo del servizio Drive. "
+                            "Riprovare tra qualche minuto. "
+                            "Il problema persiste? Scarica i PDF manualmente da Drive "
+                            "e copiali nella cartella `raw/`."
+                        )
+                    else:
+                        st.error(message)
+                    return
 
+                drive_component.render_download_plan(st, conflicts, labels)
+
+                overwrite_label = "Sovrascrivi i file locali in conflitto"
+                overwrite_help = (
+                    "Se attivato, i PDF già presenti verranno riscritti. "
+                    "In caso contrario verranno importati solo i file mancanti."
+                )
+                overwrite_toggle = st.checkbox(
+                    overwrite_label,
+                    value=False,
+                    help=overwrite_help,
+                    key=f"drive_overwrite_{slug}",
+                    disabled=not conflicts,
+                )
+                cA, cB = st.columns(2)
+                if _column_button(cA, "Annulla", key="dl_cancel"):
+                    return
+                if _column_button(cB, "Procedi e scarica", key="dl_proceed", type="primary"):
+                    if drive_component.execute_drive_download(
+                        slug,
+                        conflicts,
+                        download_with_progress=_download_with_progress,
+                        download_simple=_download_simple,
+                        invalidate_index=_invalidate_drive_index,
+                        logger=LOGGER,
+                        st=st,
+                        status_guard=status_guard,
+                        overwrite_requested=bool(overwrite_toggle),
+                    ):
+                        _safe_rerun()
+
+            dialog_builder = getattr(st, "dialog", None)
+            if callable(dialog_builder):
+                open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
+                runner = open_modal(_modal)
+                (runner if callable(runner) else _modal)()
+            else:
+                _modal()
+
+    with col_semantic:
+        if _column_button(
+            st,
+            "Arricchimento semantico",
+            key="btn_semantic_action",
+            type="secondary",
+            width="stretch",
+            disabled=semantic_disabled,
+            help=semantic_help,
+        ):
+            backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
+            backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
+            if tags_mode == "stub":
+                _open_tags_raw_modal(slug)
+            elif run_tags_fn is None:
+                LOGGER.error(
+                    "ui.manage.tags.service_missing",
+                    extra={"slug": slug, "mode": tags_mode or "default"},
+                )
+                st.error("Servizio di estrazione tag non disponibile.")
+            elif not has_pdfs and not can_stub:
+                st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
+            else:
+                try:
+                    st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
+                    run_tags_fn(slug)
+                    _open_tags_raw_modal(slug)
+                except Exception as exc:  # pragma: no cover
+                    LOGGER.exception(
+                        "ui.manage.tags.run_failed",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+                    st.error(f"Estrazione tag non riuscita: {exc}")
+
+    # helper sections removed
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
         # Sostituisce anchor HTML interno con API native di navigazione
         link_label = "📌 Prosegui con l’arricchimento semantico"
@@ -658,40 +549,3 @@ if slug:
         else:
             st.link_button(link_label, url="/semantics")
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
-
-    _render_readme_section()
-
-    # --- Danger zone: cleanup ---
-    cleanup_client_name = cleanup_component.client_display_name(slug, get_clients)
-    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir)
-    st.markdown("---")
-    with st.expander("Danger zone · Cleanup cliente", expanded=False):
-        st.markdown(f"**Cliente:** {cleanup_client_name}  \\\n**Google Drive:** `{slug}`")
-        if cleanup_raw_folders:
-            folders = ", ".join(f"`{name}`" for name in cleanup_raw_folders)
-            st.markdown(f"**Cartelle RAW:** {folders}")
-        else:
-            st.markdown("**Cartelle RAW:** *(nessuna cartella trovata o RAW non presente)*")
-        st.caption("Elimina workspace locale, registro clienti e (se configurato) la cartella Drive.")
-
-        run_cleanup_fn = cleanup_component.resolve_run_cleanup()
-        perform_cleanup_fn = cleanup_component.resolve_perform_cleanup()
-        if run_cleanup_fn is None and perform_cleanup_fn is None:
-            st.info(
-                "Funzioni di cleanup non disponibili. Installa il modulo `tools.clean_client_workspace` "
-                "per abilitare la cancellazione guidata."
-            )
-        if st.button(
-            "Cancella cliente…",
-            key="manage_cleanup_open_confirm",
-            type="secondary",
-            help="Rimozione completa: locale, DB e Drive",
-        ):
-            cleanup_component.open_cleanup_modal(
-                st=st,
-                slug=slug,
-                client_name=cleanup_client_name,
-                set_slug=set_slug,
-                run_cleanup=run_cleanup_fn,
-                perform_cleanup=perform_cleanup_fn,
-            )

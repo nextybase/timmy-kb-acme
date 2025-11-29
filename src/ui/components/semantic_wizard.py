@@ -32,6 +32,18 @@ from ui.semantic_progress import (
 ActionFn = Callable[[], None]
 
 
+def _maybe_divider() -> None:
+    divider_fn = getattr(st, "divider", None)
+    if callable(divider_fn):
+        divider_fn()
+
+
+def _maybe_progress(value: float | int) -> None:
+    progress_fn = getattr(st, "progress", None)
+    if callable(progress_fn):
+        progress_fn(value)
+
+
 def _render_step_row(
     step_number: int,
     step_id: str,
@@ -126,17 +138,17 @@ def render_semantic_wizard(
         "README/SUMMARY, quindi la preview è la vista finale."
     )
 
-    st.divider()
+    _maybe_divider()
 
     # Progress bar complessiva (0/4, 1/4, ...)
     total_steps = len(SEMANTIC_STEP_IDS)
     completed_steps = sum(1 for v in progress.values() if v)
 
     if total_steps > 0:
-        st.progress(completed_steps / total_steps)
+        _maybe_progress(completed_steps / total_steps)
     st.caption(f"{completed_steps}/{total_steps} passi completati")
 
-    st.divider()
+    _maybe_divider()
 
     # ---- Passo 1: Converti PDF in Markdown ----
     _render_step_row(
@@ -156,7 +168,7 @@ def render_semantic_wizard(
         busy_text="Conversione PDF → Markdown in corso…",
     )
 
-    st.divider()
+    _maybe_divider()
 
     # ---- Passo 2: Arricchisci frontmatter ----
     _render_step_row(
@@ -175,7 +187,7 @@ def render_semantic_wizard(
         busy_text="Arricchimento semantico del frontmatter in corso…",
     )
 
-    st.divider()
+    _maybe_divider()
 
     # ---- Passo 3: Genera README/SUMMARY ----
     _render_step_row(
@@ -194,7 +206,7 @@ def render_semantic_wizard(
         busy_text="Generazione di README e SUMMARY in corso…",
     )
 
-    st.divider()
+    _maybe_divider()
 
     # ---- Passo 4: Vai alla preview Docker (HonKit) ----
     _render_step_row(

@@ -3,7 +3,7 @@
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
-> Avvio interfaccia: `streamlit run onboarding_ui.py`    vedi [Guida UI (Streamlit)](guida_ui.md).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI imposta `REPO_ROOT_DIR` sul repo prima di importare i moduli).
 
 Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 `semantic.convert_service`, `semantic.frontmatter_service`,

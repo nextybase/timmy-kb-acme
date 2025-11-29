@@ -65,6 +65,7 @@ from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
 from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent
+os.environ.pop("REPO_ROOT_DIR", None)
 
 # Logger strutturato per eventi di preflight
 LOGGER = get_structured_logger("ui.preflight")
