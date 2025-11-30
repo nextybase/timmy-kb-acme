@@ -52,12 +52,6 @@ def _on_dummy_kb() -> None:
         st.error(f"Script CLI non trovato: {script}")
         return
 
-    def _dummy_workspace_path(slug: str) -> Path:
-        return REPO_ROOT / "output" / f"timmy-kb-{slug}"
-
-    def _dummy_exists(slug: str) -> bool:
-        return _dummy_workspace_path(slug).exists()
-
     def _cleanup_dummy(slug: str, *, client_name: str, status_label: str) -> tuple[int | None, Exception | None]:
         run_cleanup = cleanup_component.resolve_run_cleanup()
         perform_cleanup = _perform_cleanup or cleanup_component.resolve_perform_cleanup()
@@ -179,10 +173,8 @@ def _on_dummy_kb() -> None:
         st.divider()
         st.button("Chiudi", type="secondary")
 
-    def _render_modal_body(post_cleanup_message: str | None = None) -> None:
+    def _render_modal_body() -> None:
         st.subheader("Opzioni generazione")
-        if post_cleanup_message:
-            st.success(post_cleanup_message)
         no_drive = st.checkbox("Disabilita Drive", value=False, help="Salta provisioning/upload su Google Drive")
         no_vision = st.checkbox(
             "Disabilita Vision (genera YAML basici)",
@@ -192,8 +184,7 @@ def _on_dummy_kb() -> None:
         cleanup = st.button("Cancella dummy (locale + Drive)", type="secondary")
         proceed = st.button("Prosegui", type="primary")
         if cleanup:
-            if _cleanup_dummy(slug, client_name=f"Dummy {slug}", status_label="Pulizia dummy in corso.")[0] == 0:
-                st.toast("Dummy cancellato.")
+            _cleanup_dummy(slug, client_name=f"Dummy {slug}", status_label="Pulizia dummy in corso.")
         if proceed:
             cmd = [sys.executable, str(script), "--slug", slug]
             if no_drive:
@@ -202,43 +193,15 @@ def _on_dummy_kb() -> None:
                 cmd.append("--no-vision")
             _run_and_render(cmd)
 
-    def _render_existing_dummy_prompt() -> None:
-        st.warning(
-            "È già presente una configurazione del Dummy. Procedendo la versione attuale verrà "
-            "cancellata prima della nuova generazione.",
-            icon="⚠️",
-        )
-        c1, c2 = st.columns(2)
-        if c1.button("Annulla", key="dummy_confirm_cancel"):
-            return
-        if c2.button("Prosegui", key="dummy_confirm_proceed"):
-            code, error = _cleanup_dummy(
-                slug,
-                client_name=f"Dummy {slug}",
-                status_label="Pulizia dummy esistente in corso...",
-            )
-            if error is not None or code is None:
-                return
-            _render_modal_body(post_cleanup_message="Dummy esistente eliminato automaticamente.")
-
     dialog_builder = getattr(st, "dialog", None)
     if callable(dialog_builder):
-        if _dummy_exists(slug):
-            confirm_modal = dialog_builder("E' presente un Dummy", width="large")
-            runner = confirm_modal(_render_existing_dummy_prompt)
-            if callable(runner):
-                runner()
-        else:
-            open_modal = dialog_builder("Generazione Dummy KB", width="large")
-            runner = open_modal(_render_modal_body)
-            if callable(runner):
-                runner()
+        open_modal = dialog_builder("Generazione Dummy KB", width="large")
+        runner = open_modal(_render_modal_body)
+        if callable(runner):
+            runner()
     else:
         # Fallback per Streamlit vecchio: render inline
-        if _dummy_exists(slug):
-            _render_existing_dummy_prompt()
-        else:
-            _render_modal_body()
+        _render_modal_body()
 
 
 def _on_exit() -> None:
