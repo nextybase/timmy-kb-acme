@@ -54,7 +54,7 @@ from pipeline.logging_utils import (
     tail_path,
 )
 from pipeline.observability_config import get_observability_settings
-from pipeline.path_utils import ensure_valid_slug, ensure_within  # STRONG guard SSoT
+from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
 
 create_drive_folder = None
 create_drive_minimal_structure = None
@@ -441,6 +441,23 @@ def ensure_local_workspace_for_ui(
         logger.warning(
             "cli.pre_onboarding.config_merge_failed",
             extra={"slug": context.slug, "err": str(e).splitlines()[:1]},
+        )
+
+    # Copia il system prompt Vision nel workspace (serve per test/casi con REPO_ROOT_DIR override)
+    try:
+        if context.base_dir is not None:
+            repo_root = Path(__file__).resolve().parents[1]
+            prompt_src = repo_root / "config" / "assistant_vision_system_prompt.txt"
+        if prompt_src.exists():
+            prompt_dest = context.base_dir / "config" / "assistant_vision_system_prompt.txt"
+            prompt_dest.parent.mkdir(parents=True, exist_ok=True)
+            ensure_within(context.base_dir, prompt_dest)
+            source_text = read_text_safe(prompt_src.parent, prompt_src, encoding="utf-8")
+            safe_write_text(prompt_dest, source_text, encoding="utf-8", atomic=True)
+    except Exception as exc:
+        logger.warning(
+            "cli.pre_onboarding.prompt_copy_failed",
+            extra={"slug": context.slug, "error": str(exc)},
         )
 
     logger.info(

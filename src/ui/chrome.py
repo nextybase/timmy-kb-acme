@@ -52,6 +52,52 @@ def _on_dummy_kb() -> None:
         st.error(f"Script CLI non trovato: {script}")
         return
 
+    def _dummy_workspace_path(slug: str) -> Path:
+        return REPO_ROOT / "output" / f"timmy-kb-{slug}"
+
+    def _dummy_exists(slug: str) -> bool:
+        return _dummy_workspace_path(slug).exists()
+
+    def _cleanup_dummy(slug: str, *, client_name: str, status_label: str) -> tuple[int | None, Exception | None]:
+        run_cleanup = cleanup_component.resolve_run_cleanup()
+        perform_cleanup = _perform_cleanup or cleanup_component.resolve_perform_cleanup()
+        with st.status(status_label, expanded=True) as status_widget:
+            code: int | None = None
+            runner_error: Exception | None = None
+            try:
+                if callable(perform_cleanup):
+                    results = perform_cleanup(slug, client_name=client_name)
+                    code = int(results.get("exit_code", 1)) if isinstance(results, dict) else 1
+                elif callable(run_cleanup):
+                    code = int(run_cleanup(slug, True))
+                else:
+                    raise RuntimeError("Funzioni cleanup non disponibili")
+            except Exception as exc:  # noqa: BLE001
+                runner_error = exc
+
+            if runner_error is not None:
+                status_widget.update(label="Pulizia fallita", state="error")
+                st.error(f"Errore durante il cleanup: {runner_error}")
+                return None, runner_error
+            if code is None:
+                status_widget.update(label="Risultato non disponibile", state="error")
+                st.error("Risultato della cancellazione non disponibile.")
+                return None, None
+            if code == 0:
+                status_widget.update(label="Pulizia completata", state="complete")
+                st.success(f"Workspace dummy '{slug}' eliminato (locale + Drive).")
+            elif code == 3:
+                status_widget.update(label="Pulizia parziale (Drive non eliminato)", state="error")
+                st.error("Workspace locale e DB rimossi ma Drive non eliminato per permessi/driver.")
+            elif code == 4:
+                status_widget.update(label="Rimozione locale incompleta", state="error")
+                st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
+            else:
+                status_widget.update(label="Completato con avvisi", state="error")
+                st.error("Operazione completata con avvisi o errori parziali.")
+
+            return code, None
+
     def _run_and_render(cmd: list[str]) -> None:
         st.caption("Esecuzione comando:")
         st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
@@ -133,8 +179,10 @@ def _on_dummy_kb() -> None:
         st.divider()
         st.button("Chiudi", type="secondary")
 
-    def _render_modal_body() -> None:
+    def _render_modal_body(post_cleanup_message: str | None = None) -> None:
         st.subheader("Opzioni generazione")
+        if post_cleanup_message:
+            st.success(post_cleanup_message)
         no_drive = st.checkbox("Disabilita Drive", value=False, help="Salta provisioning/upload su Google Drive")
         no_vision = st.checkbox(
             "Disabilita Vision (genera YAML basici)",
@@ -144,47 +192,8 @@ def _on_dummy_kb() -> None:
         cleanup = st.button("Cancella dummy (locale + Drive)", type="secondary")
         proceed = st.button("Prosegui", type="primary")
         if cleanup:
-            run_cleanup = cleanup_component.resolve_run_cleanup()
-            perform_cleanup = _perform_cleanup or cleanup_component.resolve_perform_cleanup()
-            if run_cleanup is None and perform_cleanup is None:
-                st.warning(
-                    "Funzioni di cleanup non disponibili. Installa `tools.clean_client_workspace` "
-                    "oppure esegui il cleanup manuale su Drive e in output/timmy-kb-<slug>."
-                )
-            else:
-                with st.status("Pulizia dummy in corso.", expanded=True) as status_widget:
-                    code: int | None = None
-                    runner_error: Exception | None = None
-                    try:
-                        if callable(perform_cleanup):
-                            results = perform_cleanup(slug, client_name=f"Dummy {slug}")
-                            code = int(results.get("exit_code", 1)) if isinstance(results, dict) else 1
-                        elif callable(run_cleanup):
-                            code = int(run_cleanup(slug, True))
-                    except Exception as exc:  # noqa: BLE001
-                        runner_error = exc
-
-                    if runner_error is not None:
-                        status_widget.update(label="Pulizia fallita", state="error")
-                        st.error(f"Errore durante il cleanup: {runner_error}")
-                    elif code is None:
-                        status_widget.update(label="Risultato non disponibile", state="error")
-                        st.error("Risultato della cancellazione non disponibile.")
-                    elif code == 0:
-                        status_widget.update(label="Pulizia completata", state="complete")
-                        st.success(f"Workspace dummy '{slug}' eliminato (locale + Drive).")
-                    elif code == 3:
-                        status_widget.update(label="Pulizia parziale (Drive non eliminato)", state="error")
-                        st.error(
-                            "Workspace locale e DB rimossi. Cartella Drive non eliminata "
-                            "per permessi/driver: verifica manuale."
-                        )
-                    elif code == 4:
-                        status_widget.update(label="Rimozione locale incompleta", state="error")
-                        st.error("Rimozione locale incompleta: verifica file bloccati e riprova.")
-                    else:
-                        status_widget.update(label="Completato con avvisi", state="error")
-                        st.error("Operazione completata con avvisi o errori parziali.")
+            if _cleanup_dummy(slug, client_name=f"Dummy {slug}", status_label="Pulizia dummy in corso.")[0] == 0:
+                st.toast("Dummy cancellato.")
         if proceed:
             cmd = [sys.executable, str(script), "--slug", slug]
             if no_drive:
@@ -193,15 +202,43 @@ def _on_dummy_kb() -> None:
                 cmd.append("--no-vision")
             _run_and_render(cmd)
 
+    def _render_existing_dummy_prompt() -> None:
+        st.warning(
+            "È già presente una configurazione del Dummy. Procedendo la versione attuale verrà "
+            "cancellata prima della nuova generazione.",
+            icon="⚠️",
+        )
+        c1, c2 = st.columns(2)
+        if c1.button("Annulla", key="dummy_confirm_cancel"):
+            return
+        if c2.button("Prosegui", key="dummy_confirm_proceed"):
+            code, error = _cleanup_dummy(
+                slug,
+                client_name=f"Dummy {slug}",
+                status_label="Pulizia dummy esistente in corso...",
+            )
+            if error is not None or code is None:
+                return
+            _render_modal_body(post_cleanup_message="Dummy esistente eliminato automaticamente.")
+
     dialog_builder = getattr(st, "dialog", None)
     if callable(dialog_builder):
-        open_modal = dialog_builder("Generazione Dummy KB", width="large")
-        runner = open_modal(_render_modal_body)
-        if callable(runner):
-            runner()
+        if _dummy_exists(slug):
+            confirm_modal = dialog_builder("E' presente un Dummy", width="large")
+            runner = confirm_modal(_render_existing_dummy_prompt)
+            if callable(runner):
+                runner()
+        else:
+            open_modal = dialog_builder("Generazione Dummy KB", width="large")
+            runner = open_modal(_render_modal_body)
+            if callable(runner):
+                runner()
     else:
         # Fallback per Streamlit vecchio: render inline
-        _render_modal_body()
+        if _dummy_exists(slug):
+            _render_existing_dummy_prompt()
+        else:
+            _render_modal_body()
 
 
 def _on_exit() -> None:

@@ -483,6 +483,7 @@ def _rank_candidates(
     k: int,
     *,
     deadline: Optional[float] = None,
+    abort_if_deadline: bool = False,
 ) -> tuple[list[SearchResult], int, dict[str, int], float, int, bool]:
     """Restituisce (risultati, n_candidati_tot, stats, ms, valutati, budget_hit)."""
     stats: dict[str, int] = {"short": 0, "normalized": 0, "skipped": 0}
@@ -539,7 +540,59 @@ def _rank_candidates(
             results = [item for _, item in sorted(heap, key=lambda t: (-t[0][0], t[0][1]))]
 
     elapsed_ms = (time.time() - t0) * 1000.0
+    if abort_if_deadline and budget_hit:
+        return results, total_candidates, stats, elapsed_ms, evaluated, budget_hit
     return results, total_candidates, stats, elapsed_ms, evaluated, budget_hit
+
+
+def _log_retriever_metrics(
+    params: QueryParams,
+    total_ms: float,
+    t_emb_ms: float,
+    t_fetch_ms: float,
+    t_score_sort_ms: float,
+    candidates_count: int,
+    evaluated_count: int,
+    coerce_stats: Mapping[str, int],
+) -> None:
+    try:
+        LOGGER.info(
+            "retriever.metrics",
+            extra={
+                "project_slug": params.project_slug,
+                "scope": params.scope,
+                "k": int(params.k),
+                "candidate_limit": int(params.candidate_limit),
+                "candidates": int(candidates_count),
+                "evaluated": int(evaluated_count),
+                "ms": {
+                    "total": float(total_ms),
+                    "embed": float(t_emb_ms),
+                    "fetch": float(t_fetch_ms),
+                    "score_sort": float(t_score_sort_ms),
+                },
+                "coerce": {
+                    "short": int(coerce_stats.get("short", 0)),
+                    "normalized": int(coerce_stats.get("normalized", 0)),
+                    "skipped": int(coerce_stats.get("skipped", 0)),
+                },
+            },
+        )
+    except Exception:
+        LOGGER.info(
+            (
+                "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms "
+                "fetch=%.1fms score+sort=%.1fms evaluated=%s"
+            ),
+            params.k,
+            candidates_count,
+            params.candidate_limit,
+            total_ms,
+            t_emb_ms,
+            t_fetch_ms,
+            t_score_sort_ms,
+            evaluated_count,
+        )
 
 
 # ---------------- Wrapper pubblico per calibrazione candidate_limit -------------
@@ -615,6 +668,7 @@ def search(
     """
     throttle_cfg = _normalize_throttle_settings(throttle)
     deadline = _deadline_from_settings(throttle_cfg)
+    _validate_params_logged(params)
     throttle_ctx = (
         _throttle_guard(throttle_key or params.project_slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
@@ -622,7 +676,6 @@ def search(
     )
 
     with throttle_ctx:
-        _validate_params_logged(params)
         if authorizer is not None:
             authorizer(params)
         if throttle_check is not None:
@@ -712,49 +765,20 @@ def search(
             candidates,
             params.k,
             deadline=deadline,
+            abort_if_deadline=True,
         )
         budget_hit = rank_budget_hit
         total_ms = (time.time() - t_total_start) * 1000.0
-
-        # Logging metriche (campi chiave + timing + coerce)
-        try:
-            LOGGER.info(
-                "retriever.metrics",
-                extra={
-                    "project_slug": params.project_slug,
-                    "scope": params.scope,
-                    "k": int(params.k),
-                    "candidate_limit": int(params.candidate_limit),
-                    "candidates": int(candidates_count),
-                    "evaluated": int(evaluated_count),
-                    "ms": {
-                        "total": float(total_ms),
-                        "embed": float(t_emb_ms),
-                        "fetch": float(t_fetch_ms),
-                        "score_sort": float(t_score_sort_ms),
-                    },
-                    "coerce": {
-                        "short": int(coerce_stats.get("short", 0)),
-                        "normalized": int(coerce_stats.get("normalized", 0)),
-                        "skipped": int(coerce_stats.get("skipped", 0)),
-                    },
-                },
-            )
-        except Exception:
-            LOGGER.info(
-                (
-                    "search(): k=%s candidates=%s limit=%s total=%.1fms embed=%.1fms "
-                    "fetch=%.1fms score+sort=%.1fms evaluated=%s"
-                ),
-                params.k,
-                candidates_count,
-                params.candidate_limit,
-                total_ms,
-                t_emb_ms,
-                t_fetch_ms,
-                t_score_sort_ms,
-                evaluated_count,
-            )
+        _log_retriever_metrics(
+            params=params,
+            total_ms=total_ms,
+            t_emb_ms=t_emb_ms,
+            t_fetch_ms=t_fetch_ms,
+            t_score_sort_ms=t_score_sort_ms,
+            candidates_count=candidates_count,
+            evaluated_count=evaluated_count,
+            coerce_stats=coerce_stats,
+        )
 
         if throttle_cfg:
             try:

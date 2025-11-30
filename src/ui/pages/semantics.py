@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple, cast
+from typing import Any, Callable, Optional, Sequence, Tuple, cast
 
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -16,7 +16,14 @@ st = get_streamlit()
 
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger, tail_path
-from semantic.api import convert_markdown, enrich_frontmatter, get_paths, load_reviewed_vocab, write_summary_and_readme
+from semantic.api import load_reviewed_vocab  # noqa: F401
+from semantic.api import (
+    convert_markdown,
+    enrich_frontmatter,
+    get_paths,
+    require_reviewed_vocab,
+    write_summary_and_readme,
+)
 from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
@@ -128,14 +135,28 @@ def _run_convert(slug: str) -> None:
     _update_client_state(slug, "pronto", logger)
 
 
+def _get_canonical_vocab(
+    base_dir: Path,
+    logger: logging.Logger,
+    slug: str,
+) -> dict[str, dict[str, Sequence[str]]]:
+    """Restituisce il vocabolario canonico o solleva ConfigError."""
+
+    vocab = load_reviewed_vocab(base_dir, logger)
+    if vocab:
+        return vocab
+    return require_reviewed_vocab(base_dir, logger, slug=slug)
+
+
 def _run_enrich(slug: str) -> None:
     _require_semantic_gating(slug, reuse_last=True)
     ctx, logger = _make_ctx_and_logger(slug)
     base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
-    vocab = load_reviewed_vocab(base_dir, logger)
-    if not vocab:
+    try:
+        vocab = _get_canonical_vocab(base_dir, logger, slug=slug)
+    except ConfigError as exc:
         try:
-            logger.warning("ui.semantics.vocab_missing", extra={"slug": slug})
+            logger.warning("ui.semantics.vocab_missing", extra={"slug": slug, "error": str(exc)})
         except Exception:
             pass
         _update_client_state(slug, "pronto", logger)

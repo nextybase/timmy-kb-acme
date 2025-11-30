@@ -109,8 +109,11 @@ def _load_raw_cache_defaults() -> None:
         ttl = _parse_positive_float(cfg.get("ttl_seconds"), ttl)
         capacity = _parse_positive_int(cfg.get("max_entries"), capacity)
     except Exception as exc:
-        # se il file manca o e' invalido manteniamo i fallback
-        _logger.debug("pipeline.raw_cache.defaults_fallback", extra={"error": str(exc)})
+        # se il file manca o e' invalido manteniamo i fallback ma segnaliamo warning
+        _logger.warning(
+            "pipeline.raw_cache.defaults_invalid",
+            extra={"error": str(exc), "config_path": str(config_path)},
+        )
 
     _SAFE_PDF_CACHE_DEFAULT_TTL = ttl
     _SAFE_PDF_CACHE_CAPACITY = capacity
