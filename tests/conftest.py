@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/conftest.py
+import importlib.util
+import json
 import logging
 import os
 import shutil
@@ -10,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -25,7 +28,34 @@ for candidate in (REPO_ROOT, SRC_ROOT):
 
 import sqlite3
 
-from storage.tags_store import ensure_schema_v2
+
+def _install_yaml_stub() -> None:
+    """Installa uno stub minimale di yaml se la dipendenza manca."""
+
+    if importlib.util.find_spec("yaml") is not None:
+        return
+
+    def _safe_load(text: str | bytes | None = None, **_: object):
+        if text is None:
+            return {}
+        try:
+            return json.loads(text)
+        except Exception:
+            return {}
+
+    def _safe_dump(data: object, **_: object) -> str:
+        try:
+            return json.dumps(data)
+        except Exception:
+            return "{}"
+
+    yaml_stub = types.SimpleNamespace(safe_load=_safe_load, safe_dump=_safe_dump)
+    sys.modules["yaml"] = yaml_stub
+
+
+_install_yaml_stub()
+
+from pipeline.file_utils import safe_write_text
 
 # Reindirizza di default il registry clienti verso una copia interna usata solo dai test
 _DEFAULT_TEST_CLIENTS_DB_DIR = Path(".pytest_clients_db")
@@ -149,6 +179,57 @@ def _bool_env(name: str, default: bool) -> bool:
     return v not in {"0", "false", "False", ""}
 
 
+def _build_minimal_workspace(base_parent: Path, clients_db_relative: Path) -> dict[str, Any]:
+    """Costruisce un workspace dummy minimo senza dipendenze extra."""
+
+    base = base_parent / f"timmy-kb-{DUMMY_SLUG}"
+    config_dir = base / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    cfg = config_dir / "config.yaml"
+    safe_write_text(cfg, "client_name: Dummy\nauto_push: false\n", encoding="utf-8")
+    pdf = config_dir / "VisionStatement.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    raw_dir = base / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n", encoding="utf-8")
+    safe_write_text(book / "README.md", "# Dummy KB\n", encoding="utf-8")
+
+    sem_dir = base / "semantic"
+    sem_dir.mkdir(parents=True, exist_ok=True)
+    sem_map = sem_dir / "semantic_mapping.yaml"
+    safe_write_text(
+        sem_map,
+        "context:\n  slug: dummy\n  client_name: Dummy dummy\n",
+        encoding="utf-8",
+    )
+    sem_cart = sem_dir / "cartelle_raw.yaml"
+    safe_write_text(sem_cart, "version: 1\nfolders: []\ncontext:\n  slug: dummy\n", encoding="utf-8")
+
+    clients_db_dir = base / clients_db_relative.parent
+    clients_db_dir.mkdir(parents=True, exist_ok=True)
+    clients_db_file = clients_db_dir / clients_db_relative.name
+    safe_write_text(clients_db_file, "[]\n", encoding="utf-8")
+
+    return {
+        "base": base,
+        "config": cfg,
+        "vision_pdf": pdf,
+        "semantic_mapping": sem_map,
+        "cartelle_raw": sem_cart,
+        "book_dir": book,
+        "raw_dir": raw_dir,
+        "slug": DUMMY_SLUG,
+        "client_name": f"Dummy {DUMMY_SLUG}",
+        "with_semantic": True,
+        "clients_db_file": clients_db_file,
+        "clients_db_dir": clients_db_dir,
+    }
+
+
 @pytest.fixture(scope="session")
 def dummy_workspace(tmp_path_factory):
     """
@@ -163,8 +244,11 @@ def dummy_workspace(tmp_path_factory):
     """
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_relative = Path("clients_db/clients.yaml")
-    gen_dummy_main = _ensure_gen_dummy_available()
-    rc = gen_dummy_main(
+
+    if _gen_dummy_main is None:
+        return _build_minimal_workspace(base_parent, clients_db_relative)
+
+    rc = _gen_dummy_main(
         [
             "--base-dir",
             str(base_parent),
@@ -352,6 +436,8 @@ def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
     Crea semantic/tags.db nel workspace popolando tag/tag_synonyms (old schema).
     Questo permette a `load_tags_reviewed` di ritornare i canonical attesi.
     """
+    from storage.tags_store import ensure_schema_v2
+
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     db_path = semantic_dir / "tags.db"

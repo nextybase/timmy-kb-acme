@@ -20,8 +20,6 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _LOG = get_structured_logger("ui.semantic_progress")
-_STORAGE_DIR = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "clients_db" / "semantic_progress")
-_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 SEMANTIC_STEP_IDS = ("convert", "enrich", "summary", "preview")
 STEP_CONVERT, STEP_ENRICH, STEP_SUMMARY, STEP_PREVIEW = SEMANTIC_STEP_IDS
@@ -35,9 +33,18 @@ def _normalize_slug(slug: str) -> str:
     return value
 
 
+def _get_storage_dir() -> Path:
+    """Restituisce la directory di storage assicurandone l'esistenza."""
+
+    storage_dir = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "clients_db" / "semantic_progress")
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    return storage_dir
+
+
 def _progress_path(slug: str) -> Path:
     normalized = _normalize_slug(slug)
-    return ensure_within_and_resolve(REPO_ROOT, _STORAGE_DIR / f"{normalized}.json")
+    storage_dir = _get_storage_dir()
+    return ensure_within_and_resolve(REPO_ROOT, storage_dir / f"{normalized}.json")
 
 
 def _read_progress(path: Path) -> Dict[str, bool]:
