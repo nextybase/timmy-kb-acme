@@ -460,6 +460,31 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     readme = target / "README.md"
 
     sections: list[str] = []
+    sections.append(
+        (
+            "## Come preparare i documenti per l'onboarding\n\n"
+            "1. Leggi il Vision Statement: e' il contratto semantico tra la tua organizzazione e il sistema.\n"
+            "2. Associa ogni documento a un'entita (es. Progetto, Organizzazione, Contratto, Decisione).\n"
+            "3. Rinomina i file anteponendo un codice di 3-4 lettere (prefisso) seguito da un trattino.\n\n"
+            "Esempi:\n"
+            "- `PRJ-Progetto_Sviluppo_AI_2025.pdf` -> entita: Progetto (operativo)\n"
+            "- `ORG-Statuto_NeXT_srl.pdf` -> entita: Organizzazione (attore)\n"
+            "- `CTR-Contratto_servizi_Cloud_ClienteX.pdf` -> entita: Contratto (oggetto)\n"
+            "- `DEC-Verbale_CDA_2025-01-15.pdf` -> entita: Decisione (azione)\n\n"
+            "Questi codici collegano i documenti alle entita del modello ER e migliorano tagging, layout ed embedding."
+        )
+    )
+    sections.append(
+        (
+            "## Entita fondamentali (estratto)\n\n"
+            "- Operativi: Progetto, Obiettivo, Milestone, Epic, Task, Processo, Deliverable\n"
+            "- Attori: Organizzazione, Cliente, Stakeholder, Team, Operatore, Decisore, Management, Fornitore\n"
+            "- Azioni: Decisione, Analisi, Modifica, Intervento, Upgrade, Downgrade, Validazione\n"
+            "- Oggetti: Bene, Servizio, Skill, Risorsa, Esternalizzazione, Documento, Contratto, Dataset\n\n"
+            "Il modello ER deriva dal Vision Statement: se cambia la struttura o le entita, "
+            "aggiorna il Vision e rigenera la run Vision."
+        )
+    )
     logger = get_structured_logger("pipeline.content_utils")
     try:
         cfg = load_semantic_config(ctx.base_dir)

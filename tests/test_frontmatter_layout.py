@@ -45,7 +45,14 @@ def test_append_layout_note_to_readme(tmp_path: Path) -> None:
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir()
     layout = semantic_dir / "layout_proposal.yaml"
-    layout.write_text("strategy:\n  overview: {}\ndata:\n  datasets: {}", encoding="utf-8")
+    layout.write_text(
+        "entities:\n"
+        "  - entity: strategy\n"
+        "    category: operativo\n"
+        "  - entity: data\n"
+        "    category: operativo\n",
+        encoding="utf-8",
+    )
 
     front._append_layout_note_to_readme(base_dir, book_dir, logging.getLogger("test"), slug="dummy")
 
@@ -90,7 +97,7 @@ def test_enrich_frontmatter_sets_layout_section(tmp_path: Path) -> None:
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True)
     layout = semantic_dir / "layout_proposal.yaml"
-    layout.write_text("strategy:\n  overview: {}\n", encoding="utf-8")
+    layout.write_text("areas:\n  - key: strategy\n    ambito: ops\n", encoding="utf-8")
 
     ctx = Ctx(base_dir)
     vocab = {"strategy": {"aliases": []}}

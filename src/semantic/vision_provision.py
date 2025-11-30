@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
-from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
+from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.import_utils import import_from_candidates
@@ -560,19 +560,13 @@ def _prepare_payload(
         else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
     )
 
-    use_kb = get_bool("VISION_USE_KB", default=True)
-    if use_kb:
-        run_instructions = (
-            "Durante QUESTA run puoi usare **File Search** (KB allegata all'assistente) "
-            "per verifiche e contesto. I blocchi del Vision Statement restano la fonte primaria. "
-            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
-        )
-    else:
-        run_instructions = (
-            "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
-            "usa esclusivamente i blocchi forniti dall'utente. "
-            "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
-        )
+    use_kb = False
+    # Forziamo la prima fase Vision a NON usare la KB per evitare contaminazioni semantiche
+    run_instructions = (
+        "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
+        "usa esclusivamente i blocchi forniti dall'utente. "
+        "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+    )
 
     return _VisionPrepared(
         slug=slug,
@@ -626,7 +620,12 @@ def _persist_outputs(
     mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
 
-    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug)
+    doc_map = payload.get("entity_to_document_type", {})
+    raw_folders = None
+    if isinstance(doc_map, dict) and doc_map:
+        codes = [str(code).strip() for code in doc_map.values() if str(code).strip()]
+        raw_folders = {code: [] for code in codes}
+    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug, raw_folders=raw_folders)
     safe_write_text(prepared.paths.cartelle_yaml, cartelle_yaml_str)
 
     ts = datetime.now(timezone.utc).isoformat()

@@ -107,6 +107,21 @@ Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
    `semantic/semantic_mapping.yaml`.
 4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.
 
+### Entità fondamentali e codici documentali
+- **Operativi:** Progetto, Obiettivo, Milestone, Epic, Task, Processo, Deliverable
+- **Attori:** Organizzazione, Cliente, Stakeholder, Team, Operatore, Decisore, Management, Fornitore
+- **Azioni:** Decisione, Analisi, Modifica, Intervento, Upgrade, Downgrade, Validazione
+- **Oggetti:** Bene, Servizio, Skill, Risorsa, Outsourcing, Documento, Contratto, Dataset
+
+| Categoria   | Entità        | Codice suggerito | Esempio nome file                     |
+|-------------|---------------|------------------|---------------------------------------|
+| Operativo   | Progetto      | PRJ-             | PRJ-Progetto_neXT_roadmap.pdf         |
+| Attore      | Organizzazione| ORG-             | ORG-Statuto_NeXT_srl.pdf              |
+| Oggetto     | Contratto     | CTR-             | CTR-Contratto_servizi_AI_2025.pdf     |
+| Azione      | Decisione     | DEC-             | DEC-Verbale_CDA_2025-01-15.pdf        |
+
+I prefissi non sono decorativi: servono a collegare i file alle entità, alimentare il modello ER e migliorare ricerca/tagging ed embedding. Se cambi entità o strutture, aggiorna il Vision Statement e riesegui la funzione Vision per rigenerare mapping/ER.
+
 
 ## Struttura output
 ```

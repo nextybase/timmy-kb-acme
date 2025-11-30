@@ -270,6 +270,104 @@
     "message_ui": {
       "type": "string"
     },
+    "entities": {
+      "type": "array",
+      "description": "Lista delle entità fondamentali estratte dal Vision Statement",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "category"
+        ]
+      }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Relazioni tra entità nel modello ER",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "type"
+        ]
+      }
+    },
+    "entity_to_area": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Mappa: nome_entità → key_area"
+    },
+    "entity_to_document_type": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Mappa: nome_entità → codice documentale (es. PRJ-, ORG-, ecc.)"
+    },
+    "er_model": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "type"
+            ]
+          }
+        }
+      }
+    },
     "metadata_policy": {
       "type": "object",
       "properties": {

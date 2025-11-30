@@ -8,7 +8,7 @@ Allineato al refactor Vision (Fase 1):
 - i termini per il tagging restano in semantic/tags_reviewed.yaml (Fase 2)
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -29,14 +29,7 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
         raise ConfigError("Vision data: 'areas' deve contenere tra 3 e 9 elementi.")
 
-    payload: Dict[str, Any] = {
-        "version": 1,
-        "source": "vision",
-        "context": {"slug": slug},
-        "areas": [],
-        "system_folders": {},
-    }
-
+    normalized_areas: List[Dict[str, Any]] = []
     for idx, area in enumerate(areas):
         if not isinstance(area, dict):
             raise ConfigError(f"Vision data: area #{idx} non è un oggetto JSON.")
@@ -77,21 +70,112 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
             if out_corr:
                 entry["correlazioni"] = out_corr
 
-        payload["areas"].append(entry)
+        normalized_areas.append(entry)
+
+    entities_raw = data.get("entities")
+    entities: List[Dict[str, Any]] = []
+    if isinstance(entities_raw, list):
+        for ent in entities_raw:
+            if not isinstance(ent, dict):
+                continue
+            name = str(ent.get("name", "")).strip()
+            category = str(ent.get("category", "")).strip()
+            if not name or not category:
+                continue
+            ent_payload: Dict[str, Any] = {"name": name, "category": category}
+            if ent.get("description"):
+                ent_payload["description"] = str(ent.get("description", "")).strip()
+            examples_raw = ent.get("examples") or []
+            if isinstance(examples_raw, str):
+                examples_raw = [examples_raw]
+            if isinstance(examples_raw, list):
+                examples_norm = [str(x).strip() for x in examples_raw if str(x).strip()]
+                if examples_norm:
+                    ent_payload["examples"] = examples_norm
+            entities.append(ent_payload)
+
+    relations_raw = data.get("relations")
+    relations: List[Dict[str, str]] = []
+    if isinstance(relations_raw, list):
+        for rel in relations_raw:
+            if not isinstance(rel, dict):
+                continue
+            src = str(rel.get("from", "")).strip()
+            dst = str(rel.get("to", "")).strip()
+            rel_type = str(rel.get("type", "")).strip()
+            if src and dst and rel_type:
+                relations.append({"from": src, "to": dst, "type": rel_type})
+
+    entity_to_area = data.get("entity_to_area")
+    normalized_entity_to_area = (
+        {str(k).strip(): str(v).strip() for k, v in entity_to_area.items() if str(k).strip() and str(v).strip()}
+        if isinstance(entity_to_area, dict)
+        else {}
+    )
+
+    entity_to_document_type = data.get("entity_to_document_type")
+    normalized_entity_to_doc = (
+        {
+            str(k).strip(): str(v).strip()
+            for k, v in entity_to_document_type.items()
+            if str(k).strip() and str(v).strip()
+        }
+        if isinstance(entity_to_document_type, dict)
+        else {}
+    )
+
+    er_model_raw = data.get("er_model")
+    er_model: Dict[str, Any] = {}
+    if isinstance(er_model_raw, dict):
+        er_entities = er_model_raw.get("entities")
+        if isinstance(er_entities, list):
+            ent_list = [str(x).strip() for x in er_entities if str(x).strip()]
+            if ent_list:
+                er_model["entities"] = ent_list
+        er_relations = er_model_raw.get("relations")
+        if isinstance(er_relations, list):
+            rels_out: List[Dict[str, str]] = []
+            for rel in er_relations:
+                if not isinstance(rel, dict):
+                    continue
+                src = str(rel.get("from", "")).strip()
+                dst = str(rel.get("to", "")).strip()
+                rel_type = str(rel.get("type", "")).strip()
+                if src and dst and rel_type:
+                    rels_out.append({"from": src, "to": dst, "type": rel_type})
+            if rels_out:
+                er_model["relations"] = rels_out
 
     sys = data.get("system_folders") or {}
     if not isinstance(sys, dict) or "identity" not in sys or "glossario" not in sys:
         raise ConfigError("Vision data: system_folders mancanti (identity, glossario).")
-    payload["system_folders"] = sys
 
     meta = data.get("metadata_policy")
-    if isinstance(meta, dict):
-        payload["metadata_policy"] = meta
+    metadata_policy = meta if isinstance(meta, dict) else None
+
+    payload: Dict[str, Any] = {
+        "version": 1,
+        "source": "vision",
+        "context": {"slug": slug},
+        "areas": normalized_areas,
+        "entities": entities,
+        "relations": relations,
+        "entity_to_area": normalized_entity_to_area,
+        "entity_to_document_type": normalized_entity_to_doc,
+        "er_model": er_model,
+        "system_folders": sys,
+    }
+    if metadata_policy:
+        payload["metadata_policy"] = metadata_policy
 
     return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False, width=100)
 
 
-def json_to_cartelle_raw_yaml(data: Dict[str, Any], slug: str) -> str:
+def json_to_cartelle_raw_yaml(
+    data: Dict[str, Any],
+    slug: str,
+    raw_folders: Optional[Dict[str, List[str]]] = None,
+) -> str:
     """
     Converte il payload Vision v1.0-beta in semantic/_raw_from_mapping.yaml.
     examples <- documents (fallback: descrizione_dettagliata.include)
@@ -172,5 +256,7 @@ def json_to_cartelle_raw_yaml(data: Dict[str, Any], slug: str) -> str:
         }
     )
 
-    payload = {"version": 1, "source": "vision", "context": {"slug": slug}, "folders": folders}
+    payload: Dict[str, Any] = {"version": 1, "source": "vision", "context": {"slug": slug}, "folders": folders}
+    if isinstance(raw_folders, dict):
+        payload["raw_folders"] = raw_folders
     return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False, width=100)

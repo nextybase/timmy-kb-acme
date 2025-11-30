@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
@@ -15,6 +16,10 @@ except Exception:  # pragma: no cover
     yaml_module: Any | None = None
 else:
     yaml_module = _yaml
+
+
+vision_run_params = SimpleNamespace(run_for_vision=SimpleNamespace(use_kb=False))
+# Forziamo la prima fase Vision a NON usare la KB per evitare contaminazioni semantiche
 
 
 def _read_pdf_text(pdf_path: Path) -> str:

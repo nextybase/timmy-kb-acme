@@ -138,6 +138,47 @@ def _save_hash(base_dir: Path, *, digest: str, model: str) -> None:
     safe_write_text(_hash_sentinel(base_dir), payload + "\n")
 
 
+def _ensure_structured_output_and_prompt(ctx: Any, *, slug: str) -> None:
+    """
+    Garantisce che la run Vision usi structured output e un system prompt aggiornato.
+    """
+    strict_output = True
+    settings = getattr(ctx, "settings", None)
+    try:
+        vision_settings = getattr(settings, "vision_settings", None)
+        strict_output = getattr(vision_settings, "strict_output", strict_output)
+    except Exception:
+        strict_output = True
+    if strict_output is False:
+        raise ConfigError(
+            "Vision richiede structured output attivo (vision.strict_output=True nel config).",
+            slug=slug,
+        )
+
+    repo_root = Path(__file__).resolve().parents[2]
+    prompt_path = ensure_within_and_resolve(repo_root, repo_root / "config" / "assistant_vision_system_prompt.txt")
+    try:
+        prompt_text = read_text_safe(repo_root, prompt_path, encoding="utf-8").strip()
+    except Exception as exc:
+        raise ConfigError(
+            (
+                "System prompt Vision mancante: aggiorna config/assistant_vision_system_prompt.txt "
+                "e riallinea l'assistente."
+            ),
+            slug=slug,
+            file_path=str(prompt_path),
+        ) from exc
+    if not prompt_text:
+        raise ConfigError(
+            (
+                "System prompt Vision vuoto: aggiorna config/assistant_vision_system_prompt.txt "
+                "e riallinea l'assistente."
+            ),
+            slug=slug,
+            file_path=str(prompt_path),
+        )
+
+
 # -----------------------------
 # API principale (bridge UI)
 # -----------------------------
@@ -238,6 +279,7 @@ def run_vision(
     Wrapper semplificato per la UI: esegue Vision con logger di default.
     Se `preview_prompt` è True mostra il prompt generato prima di inviare la richiesta.
     """
+    _ensure_structured_output_and_prompt(ctx, slug=slug)
     eff_logger = logger or get_structured_logger("ui.vision.service")
     pdf_path = Path(pdf_path)
     base_dir = getattr(ctx, "base_dir", None)

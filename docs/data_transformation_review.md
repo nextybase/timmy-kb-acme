@@ -7,6 +7,7 @@
 - **Frontmatter & layout**: i `.md` ora includono il campo `layout_section` dedotto dalla proposta ER, e la UI documenta i top-level suggeriti aggiungendo una nota nel README generato.
 - **Pubblicazione GitBook/Drive**: ora scriviamo anche `book/layout_summary.md` con i top-level suggeriti, così la preview GitBook/Drive può leggere direttamente la proposta ER e infrastruttura di cartelle.
 - **Automazione GitBook**: `onboarding_full.py` tenta ora un upload automatico usando `GITBOOK_TOKEN` + `GITBOOK_SPACE_ID`, caricando il contenuto di `book/` (zip) e allegando la summary per guidance di layout.
+- **Codici documentali**: i prefissi (PRJ-, ORG-, CTR-, DEC-, …) sono parte del layer semantico; il mapping `entity_to_document_type` vive in `semantic/semantic_mapping.yaml` e guida layout, frontmatter ed embedding.
 
 ## Gap mitigati
 - Il contenuto Markdown ora contiene un estratto reale dal PDF (se disponibile), quindi il corpo non è più solo un placeholder.

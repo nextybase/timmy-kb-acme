@@ -268,6 +268,17 @@ def _persist_markdown_embeddings(
         )
 
     for rel_name, payload_meta, body, vector in batch_chunks:
+        # Enrich metadata with ER-aware fields if present
+        if isinstance(payload_meta, dict):
+            entity = payload_meta.get("entity")
+            area = payload_meta.get("area")
+            relation_hints = payload_meta.get("relation_hints")
+            if entity:
+                payload_meta["entity"] = entity
+            if area:
+                payload_meta["area"] = area
+            if relation_hints:
+                payload_meta["relation_hints"] = relation_hints
         inserted_total += _insert_chunks(
             project_slug=slug,
             scope=scope,

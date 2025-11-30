@@ -96,6 +96,13 @@ def _read_layout_top_levels(layout_path: Path) -> list[str]:
         return []
     if not isinstance(data, dict):
         return []
+    # Nuovo layout: se presenti entità o aree, usali come top-level per note/sectioning
+    if isinstance(data.get("entities"), list):
+        names = [str(e.get("entity") or e.get("name") or e).strip() for e in data["entities"] if isinstance(e, dict)]
+        return sorted({n for n in names if n})
+    if isinstance(data.get("areas"), list):
+        keys = [str(a.get("key") or a).strip() for a in data["areas"] if isinstance(a, dict) or isinstance(a, str)]
+        return sorted({k for k in keys if k})
     return sorted(str(key).strip() for key in data.keys() if key)
 
 
@@ -200,26 +207,58 @@ def _persist_layout_proposal(base_dir: Path, logger: logging.Logger, *, slug: st
         )
         return
 
-    base_yaml = cfg.mapping if isinstance(cfg.mapping, dict) else {}
-    if not base_yaml:
-        return
+    mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
+    entities = mapping_all.get("entities")
+    if isinstance(entities, list) and entities:
+        entity_to_area = mapping_all.get("entity_to_area") or {}
+        entity_to_doc = mapping_all.get("entity_to_document_type") or {}
+        entity_blocks: list[dict[str, Any]] = []
+        for ent in entities:
+            if not isinstance(ent, dict):
+                continue
+            name = ent.get("name")
+            if not name:
+                continue
+            entity_blocks.append(
+                {
+                    "entity": name,
+                    "category": ent.get("category", ""),
+                    "description": ent.get("description", ""),
+                    "area": entity_to_area.get(name),
+                    "document_type": entity_to_doc.get(name),
+                }
+            )
+        layout_dict: dict[str, Any] = {
+            "version": mapping_all.get("version", 1),
+            "source": mapping_all.get("source", "vision"),
+            "context": mapping_all.get("context", {}),
+            "entities": entity_blocks,
+            "relations": mapping_all.get("relations", []),
+            "areas": mapping_all.get("areas", []),
+            "entity_to_area": entity_to_area,
+            "entity_to_document_type": entity_to_doc,
+            "er_model": mapping_all.get("er_model", {}),
+        }
+        layout_yaml = _dump_layout_yaml(layout_dict)
+    else:
+        base_yaml = mapping_all if isinstance(mapping_all, dict) else {}
+        if not base_yaml:
+            return
+        constraints = _build_layout_constraints(base_yaml)
+        vision_text = _load_vision_text(base_dir)
+        try:
+            proposal = suggest_layout(base_yaml, vision_text, constraints)
+        except Exception as exc:
+            logger.warning(
+                "semantic.layout_proposal.failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            return
+        if not proposal:
+            return
+        merged = merge_non_distruttivo(base_yaml, proposal)
+        layout_yaml = _dump_layout_yaml(merged)
 
-    constraints = _build_layout_constraints(base_yaml)
-    vision_text = _load_vision_text(base_dir)
-    try:
-        proposal = suggest_layout(base_yaml, vision_text, constraints)
-    except Exception as exc:
-        logger.warning(
-            "semantic.layout_proposal.failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
-        return
-
-    if not proposal:
-        return
-
-    merged = merge_non_distruttivo(base_yaml, proposal)
-    layout_yaml = _dump_layout_yaml(merged)
     if not layout_yaml:
         return
 
@@ -248,6 +287,21 @@ def enrich_frontmatter(
     base_dir, md_dir = paths.base_dir, paths.md_dir
     ensure_within(base_dir, md_dir)
     layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
+    mapping_all = {}
+    try:
+        cfg = load_semantic_config(base_dir)
+        mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
+    except Exception:
+        mapping_all = {}
+    vision_entities = []
+    if isinstance(mapping_all.get("entities"), list):
+        vision_entities = [
+            str(ent.get("name")).strip()
+            for ent in mapping_all["entities"]
+            if isinstance(ent, dict) and str(ent.get("name", "")).strip()
+        ]
+    entity_to_area = mapping_all.get("entity_to_area") if isinstance(mapping_all.get("entity_to_area"), dict) else {}
+    relations_all = mapping_all.get("relations") if isinstance(mapping_all.get("relations"), list) else []
 
     if not vocab:
         tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
@@ -286,6 +340,33 @@ def enrich_frontmatter(
             section = _layout_section_from_md(md, md_dir, layout_keys)
             if section and not new_meta.get("layout_section"):
                 new_meta["layout_section"] = section
+            # Enrichment ER-driven: entity/area/relation_hints
+            inferred_entity: Optional[str] = None
+            tag_candidates = _as_list_str(new_meta.get("tags")) + _as_list_str(new_meta.get("tags_raw"))
+            for t in tag_candidates:
+                if t.strip().lower() in {e.lower() for e in vision_entities}:
+                    inferred_entity = next((e for e in vision_entities if e.lower() == t.strip().lower()), None)
+                    break
+            if inferred_entity and not new_meta.get("entity"):
+                new_meta["entity"] = inferred_entity
+            if new_meta.get("entity") and not new_meta.get("area"):
+                new_meta["area"] = entity_to_area.get(new_meta["entity"]) or section
+            if not new_meta.get("relation_hints") and new_meta.get("entity"):
+                rel_hints: list[dict[str, str]] = []
+                for rel in relations_all:
+                    if not isinstance(rel, dict):
+                        continue
+                    src = str(rel.get("from", "")).strip()
+                    dst = str(rel.get("to", "")).strip()
+                    rtype = str(rel.get("type", "")).strip()
+                    if not (src and dst and rtype):
+                        continue
+                    if src == new_meta["entity"]:
+                        rel_hints.append({"type": rtype, "target": dst})
+                    elif dst == new_meta["entity"]:
+                        rel_hints.append({"type": rtype, "target": src})
+                if rel_hints:
+                    new_meta["relation_hints"] = rel_hints
             # Arricchimento additivo da doc_entities (se presenti e approvate)
             try:
                 tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
