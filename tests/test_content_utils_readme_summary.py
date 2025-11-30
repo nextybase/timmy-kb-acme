@@ -43,3 +43,32 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
     assert "## Area Uno" in readme
     assert "Descrizione Area Uno" in readme
     assert "- [Doc](area-uno/doc.md)" in summary
+
+
+def test_readme_includes_entity_table(tmp_path: Path) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    config_dir = base / "config"
+    semantic_dir = base / "semantic"
+
+    book.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    mapping_yaml = (
+        "areas:\n"
+        "  - key: area-uno\n"
+        "    descrizione: Descrizione Area Uno\n"
+        "entity_to_area:\n"
+        "  Progetto: area-uno\n"
+    )
+    (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
+
+    ctx = _ctx(base, book)
+    readme_path = cu.generate_readme_markdown(ctx)
+    content = readme_path.read_text(encoding="utf-8")
+
+    assert "## Entità rilevanti per il tuo dominio" in content
+    assert "| Progetto |" in content
+    assert "PRJ-" in content

@@ -1,0 +1,187 @@
+version: 1
+owner: "NeXT / Nexty core"
+description: >
+  Elenco centrale e trasversale delle entità fondamentali usate da NeXT
+  per modellare i domini dei clienti (PMI, scuole, territori, PA).
+  Questo file è gestito SOLO a livello Nexty, non dai singoli clienti.
+
+categories:
+  operativi:
+    label: "Entità operative"
+    description: "Elementi che rappresentano lavoro, output, processi."
+    entities:
+      - id: progetto
+        label: "Progetto"
+        document_code: "PRJ-"
+        description: "Insieme strutturato di attività orientate al raggiungimento di uno o più obiettivi."
+        examples: ["Progetto NeXT Sicilia", "Progetto Digitalizzazione PMI"]
+      - id: obiettivo
+        label: "Obiettivo"
+        document_code: "OBJ-"
+        description: "Risultato atteso, misurabile e collegato a progetti, milestone o iniziative."
+        examples: ["Ridurre effort del 20%", "Introdurre AI in 10 PMI"]
+      - id: milestone
+        label: "Milestone"
+        document_code: "MLS-"
+        description: "Punto di controllo temporale che scandisce l’avanzamento del progetto."
+        examples: ["Completamento onboarding", "Rilascio prototipo Timmy v0.1"]
+      - id: epic
+        label: "Epic"
+        document_code: "EPK-"
+        description: "Insieme di funzionalità o attività ad alto livello, scomponibile in task."
+        examples: ["Setup infrastruttura AI", "Formazione Team C"]
+      - id: task
+        label: "Task"
+        document_code: "TAS-"
+        description: "Unità operativa atomica assegnabile ad attori specifici."
+        examples: ["Configurare workspace", "Caricare contratti su Timmy"]
+      - id: deliverable
+        label: "Deliverable"
+        document_code: "DLV-"
+        description: "Output tangibile di un progetto o task (documento, report, prototipo)."
+        examples: ["Report di impatto", "Prototipo Timmy v0.1"]
+      - id: processo
+        label: "Processo"
+        document_code: "PRC-"
+        description: "Flusso di attività ripetibili che descrive come viene svolto un lavoro."
+        examples: ["Processo di onboarding", "Ciclo di aggiornamento modelli"]
+      - id: procedura
+        label: "Procedura"
+        document_code: "PDC-"
+        description: "Descrizione formalizzata di un processo o di una parte di esso."
+        examples: ["Procedura gestione incident", "Procedura approvazione fornitori"]
+
+  attori:
+    label: "Attori"
+    description: "Soggetti umani o organizzativi coinvolti nei processi."
+    entities:
+      - id: organizzazione
+        label: "Organizzazione"
+        document_code: "ORG-"
+        description: "Soggetto organizzato che utilizza NeXT (azienda, scuola, ente locale)."
+        examples: ["NeXT srl", "Comune di Trapani", "Istituto Comprensivo X"]
+      - id: cliente
+        label: "Cliente"
+        document_code: "CLI-"
+        description: "Soggetto che commissiona o utilizza servizi erogati tramite NeXT."
+        examples: ["PMI cliente", "Ente partner territoriale"]
+      - id: stakeholder
+        label: "Stakeholder"
+        document_code: "STK-"
+        description: "Soggetto interessato o impattato dalle attività di NeXT."
+        examples: ["Associazioni locali", "Genitori", "Studenti"]
+      - id: team
+        label: "Team"
+        document_code: "TEM-"
+        description: "Gruppo di lavoro interno o misto che opera sui progetti."
+        examples: ["Team C", "Team Docenti", "Team Progetto Zenobia"]
+      - id: operatore
+        label: "Operatore"
+        document_code: "OPR-"
+        description: "Utente operativo che interagisce quotidianamente con sistemi e processi."
+        examples: ["Impiegato amministrativo", "Docente", "Tecnico comunale"]
+      - id: decisore
+        label: "Decisore"
+        document_code: "DEC-"
+        description: "Soggetto con responsabilità decisionale su progetti, priorità, budget."
+        examples: ["Dirigente scolastico", "Assessore", "CEO"]
+      - id: management
+        label: "Management"
+        document_code: "MNG-"
+        description: "Strato direzionale dell’organizzazione, responsabile di strategia e supervisione."
+        examples: ["Direzione generale", "C-Suite"]
+      - id: fornitore
+        label: "Fornitore"
+        document_code: "FRT-"
+        description: "Soggetto esterno che fornisce beni o servizi."
+        examples: ["Provider cloud", "Consulente IT", "Studio legale"]
+
+  azioni:
+    label: "Azioni"
+    description: "Tipologie di azioni rilevanti per il modello decisionale e operativo."
+    entities:
+      - id: decisione
+        label: "Decisione"
+        document_code: "DSN-"
+        description: "Atto che stabilisce una scelta tra alternative possibili."
+        examples: ["Approvazione progetto", "Scelta fornitore"]
+      - id: analisi
+        label: "Analisi"
+        document_code: "ANL-"
+        description: "Attività di valutazione o interpretazione di dati e informazioni."
+        examples: ["Analisi KPI", "Analisi impatto territoriale"]
+      - id: modifica
+        label: "Modifica"
+        document_code: "MOD-"
+        description: "Cambiamento strutturale o operativo su processi, configurazioni o documenti."
+        examples: ["Aggiornamento policy", "Revisione procedura"]
+      - id: intervento
+        label: "Intervento"
+        document_code: "INT-"
+        description: "Azione concreta sul campo o sui sistemi per risolvere problemi o attuare cambiamenti."
+        examples: ["Intervento sul sistema informativo", "Intervento di manutenzione"]
+      - id: upgrade
+        label: "Upgrade"
+        document_code: "UPG-"
+        description: "Aggiornamento migliorativo di sistemi, processi o servizi."
+        examples: ["Upgrade versione Timmy", "Aggiornamento infrastruttura cloud"]
+      - id: downgrade
+        label: "Downgrade"
+        document_code: "DWN-"
+        description: "Riduzione intenzionale di funzionalità o ritorno a uno stato precedente."
+        examples: ["Rollback modello", "Riduzione ambito progetto"]
+      - id: validazione
+        label: "Validazione"
+        document_code: "VAL-"
+        description: "Conferma che un output o un processo soddisfa requisiti e criteri definiti."
+        examples: ["Validazione sprint", "Validazione prototipo"]
+      - id: segnalazione
+        label: "Segnalazione"
+        document_code: "SEG-"
+        description: "Notifica di problema, anomalia o opportunità di miglioramento."
+        examples: ["Segnalazione bug", "Segnalazione rischio"]
+
+  oggetti:
+    label: "Oggetti"
+    description: "Elementi non umani (materiali o informazionali) rilevanti per i processi."
+    entities:
+      - id: bene
+        label: "Bene"
+        document_code: "BEN-"
+        description: "Oggetto materiale utilizzato o gestito nell’ambito dei progetti."
+        examples: ["Server", "Device in aula"]
+      - id: servizio
+        label: "Servizio"
+        document_code: "SRV-"
+        description: "Offerta immateriale che genera valore per clienti o utenti."
+        examples: ["Servizio di assistenza AI", "Servizio di formazione"]
+      - id: skill
+        label: "Skill"
+        document_code: "SKL-"
+        description: "Competenza rilevante per lo svolgimento di attività critiche."
+        examples: ["Competenze AI", "Competenze Agile"]
+      - id: risorsa
+        label: "Risorsa"
+        document_code: "RSC-"
+        description: "Elemento umano, tecnologico o informativo impiegato nei processi."
+        examples: ["Tempo del team", "Budget", "Server"]
+      - id: esternalizzazione
+        label: "Esternalizzazione"
+        document_code: "EXT-"
+        description: "Attività o funzione affidata a soggetti esterni."
+        examples: ["Outsourcing IT", "Servizi legali esterni"]
+      - id: documento
+        label: "Documento"
+        document_code: "DOC-"
+        description: "Supporto informativo strutturato (file, registri, report, contratti)."
+        examples: ["Statuto", "Report di progetto"]
+      - id: contratto
+        label: "Contratto"
+        document_code: "CTR-"
+        description: "Accordo formale tra due o più parti, spesso collegato a beni o servizi."
+        examples: ["Contratto fornitura AI", "Contratto di servizio cloud"]
+      - id: dataset
+        label: "Dataset"
+        document_code: "DST-"
+        description: "Insieme di dati utilizzato per analisi, addestramento o decisioni."
+        examples: ["Dataset KPI territoriali", "Dataset progetti PMI"]

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol, TypeAlias, cast
 from urllib.parse import quote
 
+from pipeline import ontology
 from pipeline.exceptions import PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
@@ -430,6 +431,57 @@ def _discover_safe_pdfs(
 # -----------------------------
 
 
+def generate_entity_section(cfg: SemanticConfig) -> str | None:
+    """Costruisce la sezione README con tabella entità/area/codice."""
+    mapping = cfg.mapping if isinstance(cfg.mapping, dict) else {}
+    entity_to_area = mapping.get("entity_to_area") if isinstance(mapping, dict) else {}
+    if not isinstance(entity_to_area, dict) or not entity_to_area:
+        return None
+
+    try:
+        global_entities = ontology.get_all_entities()
+    except Exception:
+        global_entities = []
+
+    if not global_entities:
+        return None
+
+    idx: dict[str, dict[str, Any]] = {}
+    for ent in global_entities:
+        label = str(ent.get("label") or "").strip()
+        ent_id = str(ent.get("id") or "").strip()
+        if label:
+            idx.setdefault(label.lower(), ent)
+        if ent_id:
+            idx.setdefault(ent_id.lower(), ent)
+
+    rows: list[tuple[str, str, str, str, str]] = []
+    for entity_name, area_key in entity_to_area.items():
+        label = str(entity_name or "").strip()
+        if not label:
+            continue
+        meta = idx.get(label.lower()) or idx.get(str(entity_name).lower())
+        category = str((meta or {}).get("category") or "").strip()
+        code = str((meta or {}).get("document_code") or "").strip()
+        examples_raw = (meta or {}).get("examples") or []
+        examples = ", ".join(str(e) for e in examples_raw) if isinstance(examples_raw, (list, tuple)) else ""
+        rows.append((label, category, str(area_key or "").strip(), code, examples))
+
+    if not rows:
+        return None
+
+    rows.sort(key=lambda r: r[0].lower())
+    lines = [
+        "## Entità rilevanti per il tuo dominio",
+        "",
+        "| Entità | Categoria | Area | Codice Documentale | Esempi |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for label, category, area, code, examples in rows:
+        lines.append(f"| {label} | {category} | {area} | {code} | {examples} |")
+    return "\n".join(lines)
+
+
 def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     """Verifica che la cartella markdown esista, sia una directory e sia 'safe' rispetto a ctx.base_dir."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
@@ -488,6 +540,9 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     logger = get_structured_logger("pipeline.content_utils")
     try:
         cfg = load_semantic_config(ctx.base_dir)
+        entity_section = generate_entity_section(cfg)
+        if entity_section:
+            sections.append(entity_section)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
         iterable: Iterable[tuple[str, Any]]
         if isinstance(areas_data, dict):

@@ -52,6 +52,9 @@ La tua analisi deve produrre TUTTI i seguenti elementi:
 REGOLE IMPORTANTI:
 - NON inventare domini esterni al Vision Statement.
 - NON aggiungere entità “creative” se non supportate dal testo.
+- NON creare nuove entità: usa SOLO quelle elencate nel blocco [GlobalEntities]; se un’entità non è rilevante per il cliente, ignorala ma non inventarne altre.
+- Compila entities, entity_to_area, entity_to_document_type usando esclusivamente le entità fornite.
+- er_model.entities deve contenere SOLO entità esistenti in [GlobalEntities] e selezionate.
 - Se il Vision Statement è ambiguo, scegli la soluzione più conservativa.
 - Devi rispettare rigorosamente lo schema JSON fornito dal sistema.
 - NON restituire testo libero: SOLO JSON.

@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
+from pipeline import ontology
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
@@ -520,6 +521,23 @@ def prepare_assistant_input(
         user_block_lines.append(f"[{title}]")
         user_block_lines.append(sections[title])
         user_block_lines.append(f"[/{title}]")
+
+    try:
+        global_entities = ontology.get_all_entities()
+    except Exception as exc:  # pragma: no cover - fallback safe
+        logger.warning(
+            _evt("entities.load_failed"),
+            extra={"slug": slug, "error": str(exc)},
+        )
+        global_entities = []
+
+    user_block_lines.append(
+        "Entità globali disponibili (non inventare nuove entità; seleziona solo quelle rilevanti; "
+        "assegna area e document_code usando i dati sottostanti):"
+    )
+    user_block_lines.append("[GlobalEntities]")
+    user_block_lines.append(json.dumps(global_entities, ensure_ascii=False, indent=2))
+    user_block_lines.append("[/GlobalEntities]")
     return "\n".join(user_block_lines)
 
 

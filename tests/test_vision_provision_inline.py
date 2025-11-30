@@ -193,7 +193,18 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
         captured["user_messages"] = user_messages
         return output_parsed
 
+    sample_entities = [
+        {
+            "id": "progetto",
+            "label": "Progetto",
+            "category": "operativo",
+            "document_code": "PRJ-",
+            "examples": ["progetto CRM"],
+        }
+    ]
+
     monkeypatch.setattr(S, "_call_assistant_json", _fake_call)
+    monkeypatch.setattr(S.ontology, "get_all_entities", lambda: sample_entities)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
     ctx = DummyCtx(base_dir=tmp_workspace)
@@ -213,6 +224,10 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
 
     # Ha passato un unico messaggio utente coerente
     assert captured["user_messages"] and isinstance(captured["user_messages"][0]["content"], str)
+    prompt = captured["user_messages"][0]["content"]
+    assert "[GlobalEntities]" in prompt and "[/GlobalEntities]" in prompt
+    assert '"progetto"' in prompt and "document_code" in prompt
+    assert "non inventare nuove entità" in prompt
 
 
 def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
