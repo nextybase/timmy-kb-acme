@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Sequence, cast
+from typing import TYPE_CHECKING, Callable, Dict, List, Sequence, TypeVar, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -29,6 +29,8 @@ from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 from storage.tags_store import get_conn as _get_tags_conn
 from storage.tags_store import save_doc_entities as _save_doc_entities
+
+_T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
@@ -264,19 +266,72 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return int(_copy_local_pdfs_to_raw(src_dir, raw_dir, logger))
 
 
+def _run_build_workflow(
+    context: ClientContextType,
+    logger: logging.Logger,
+    *,
+    slug: str,
+    stage_wrapper: Callable[[str, Callable[[], _T]], _T] | None = None,
+    convert_fn: Callable[[ClientContextType, logging.Logger, str], List[Path]] | None = None,
+    vocab_fn: Callable[[Path, logging.Logger, str], Dict[str, Dict[str, set[str]]]] | None = None,
+    enrich_fn: (
+        Callable[[ClientContextType, logging.Logger, Dict[str, Dict[str, set[str]]], str], list[Path]] | None
+    ) = None,
+    summary_fn: Callable[[ClientContextType, logging.Logger, str], object] | None = None,
+) -> tuple[Path, list[Path], list[Path]]:
+    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti.
+
+    stage_wrapper: opzionale funzione (stage_name, callable) -> value per avvolgere le singole fasi
+    con telemetry personalizzata (es. phase_scope nel CLI).
+    """
+    ctx_base = cast(Path, getattr(context, "base_dir", None))
+    base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
+
+    def _wrap(stage_name: str, func: Callable[[], _T]) -> _T:
+        if stage_wrapper is None:
+            return func()
+        return stage_wrapper(stage_name, func)
+
+    convert_impl = convert_fn or convert_markdown
+    vocab_impl = vocab_fn or _require_reviewed_vocab
+    enrich_impl = enrich_fn or enrich_frontmatter
+    summary_impl = summary_fn or write_summary_and_readme
+
+    if convert_fn is None:
+        mds = cast(List[Path], _wrap("convert_markdown", lambda: convert_impl(context, logger, slug=slug)))
+    else:
+        mds = cast(List[Path], _wrap("convert_markdown", lambda: convert_impl(context, logger, slug)))
+
+    if vocab_fn is None:
+        vocab = _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug))
+    else:
+        vocab = _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug))
+
+    if enrich_fn is None:
+        touched = _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug=slug))
+    else:
+        touched = _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug))
+    try:
+        logger.info(
+            "semantic.book.frontmatter",
+            extra={"slug": slug, "enriched": len(cast(list, touched))},
+        )
+    except Exception:
+        logger.info("semantic.book.frontmatter", extra={"slug": slug, "enriched": None})
+    if summary_fn is None:
+        _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
+    else:
+        _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug))
+    return base_dir, mds, cast(list[Path], touched)
+
+
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
     """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
     if logger is None:
         logger = get_structured_logger("semantic.book", context={"slug": slug})
     start_ts = time.perf_counter()
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
-        ctx_base = cast(Path, getattr(context, "base_dir", None))
-        base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
-
-        mds = cast(List[Path], convert_markdown(context, logger, slug=slug))
-        vocab = _require_reviewed_vocab(base_dir, logger, slug=slug)
-        touched = enrich_frontmatter(context, logger, vocab, slug=slug)
-        write_summary_and_readme(context, logger, slug=slug)
+        _base_dir, mds, touched = _run_build_workflow(context, logger, slug=slug, stage_wrapper=None)
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))

@@ -103,6 +103,7 @@ class _ThrottleState:
         self.parallelism = max(1, parallelism)
         self._semaphore = threading.BoundedSemaphore(self.parallelism)
         self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
         self._last_completed = 0.0
 
     def acquire(self, *, timeout_s: float | None = None) -> bool:
@@ -114,23 +115,32 @@ class _ThrottleState:
     def release(self) -> None:
         self._semaphore.release()
 
-    def wait_interval(self, sleep_ms: int) -> None:
+    def wait_interval(self, sleep_ms: int, *, deadline: float | None = None) -> bool:
         if sleep_ms <= 0:
-            return
+            return False
+
         min_interval = sleep_ms / 1000.0
-        while True:
-            with self._lock:
-                last = self._last_completed
-            if last == 0.0:
-                return
-            elapsed = time.perf_counter() - last
-            if elapsed >= min_interval:
-                return
-            time.sleep(min(min_interval - elapsed, 0.05))
+
+        def _ready() -> bool:
+            if deadline is not None and time.perf_counter() >= deadline:
+                return True
+            if self._last_completed == 0.0:
+                return True
+            return (time.perf_counter() - self._last_completed) >= min_interval
+
+        with self._cond:
+            if _ready():
+                return deadline is not None and time.perf_counter() >= deadline
+            timeout = None
+            if deadline is not None:
+                timeout = max(0.0, deadline - time.perf_counter())
+            self._cond.wait_for(_ready, timeout=timeout)
+            return deadline is not None and time.perf_counter() >= deadline
 
     def mark_complete(self) -> None:
-        with self._lock:
+        with self._cond:
             self._last_completed = time.perf_counter()
+            self._cond.notify_all()
 
 
 class _ThrottleRegistry:
@@ -158,7 +168,9 @@ def reset_throttle_registry() -> None:
 
 
 @contextmanager
-def _throttle_guard(key: str, settings: Optional[ThrottleSettings]) -> Generator[None, None, None]:
+def _throttle_guard(
+    key: str, settings: Optional[ThrottleSettings], *, deadline: float | None = None
+) -> Generator[None, None, None]:
     if settings is None:
         yield
         return
@@ -176,7 +188,12 @@ def _throttle_guard(key: str, settings: Optional[ThrottleSettings]) -> Generator
         yield
         return
     try:
-        state.wait_interval(settings.sleep_ms_between_calls)
+        deadline_hit = state.wait_interval(settings.sleep_ms_between_calls, deadline=deadline)
+        if deadline_hit and deadline is not None:
+            LOGGER.warning(
+                "retriever.throttle.deadline",
+                extra={"key": key, "deadline_ms": int(settings.latency_budget_ms or 0)},
+            )
         yield
     finally:
         state.mark_complete()
@@ -597,8 +614,9 @@ def search(
     - Se batch/vettore è vuoto: warning e `[]`.
     """
     throttle_cfg = _normalize_throttle_settings(throttle)
+    deadline = _deadline_from_settings(throttle_cfg)
     throttle_ctx = (
-        _throttle_guard(throttle_key or params.project_slug or "retriever", throttle_cfg)
+        _throttle_guard(throttle_key or params.project_slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
         else nullcontext()
     )
@@ -626,7 +644,6 @@ def search(
         if params.candidate_limit == 0:
             return []
 
-        deadline = _deadline_from_settings(throttle_cfg)
         budget_hit = False
 
         t_total_start = time.time()

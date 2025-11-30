@@ -21,7 +21,7 @@ from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.components.semantic_wizard import render_semantic_wizard
-from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE, SEMANTIC_READY_STATES
+from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE
 from ui.errors import to_user_message
 from ui.pages.registry import PagePaths
 from ui.utils.compat import nav_to, set_tab
@@ -99,6 +99,18 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
         _raise_semantic_unavailable(slug, state, ready, raw_dir)
     result = (state, ready, raw_dir)
     _GATE_CACHE[cache_key] = result
+    try:
+        _GATING_LOG.info(
+            "ui.semantics.gating_allowed",
+            extra={
+                "slug": slug or "",
+                "state": state or "n/d",
+                "raw_ready": bool(ready),
+                "raw_path": tail_path(raw_dir) if raw_dir else "",
+            },
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -267,7 +279,7 @@ def _handle_semantic_action(action: Callable[[str], None]) -> None:
         _display_user_error(exc)
 
 
-client_state_ok = _client_state in SEMANTIC_READY_STATES
+client_state_ok = _client_state in SEMANTIC_ENTRY_STATES
 
 actions = {
     "convert": lambda: _handle_semantic_action(_run_convert),

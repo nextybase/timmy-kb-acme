@@ -61,3 +61,26 @@ class _NoopLogger:
 
     def error(self, *a, **k):
         pass
+
+
+def test_build_markdown_book_logs_enriched_count(tmp_path, caplog, monkeypatch):
+    base = tmp_path / "kb"
+    base.mkdir(parents=True, exist_ok=True)
+
+    ctx = _Ctx(base)
+
+    monkeypatch.setattr(sapi, "convert_markdown", lambda *_, **__: [base / "book" / "a.md", base / "book" / "b.md"])
+    monkeypatch.setattr(sapi, "_require_reviewed_vocab", lambda *_, **__: {"canon": {"aliases": set()}})
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *_, **__: [base / "book" / "a.md"])
+    monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_, **__: None)
+
+    import logging
+
+    logger = logging.getLogger("semantic.book.test")
+    caplog.set_level(logging.INFO, logger="semantic.book.test")
+
+    sapi.build_markdown_book(ctx, logger=logger, slug="obs")
+
+    assert any(
+        r.getMessage() == "semantic.book.frontmatter" and getattr(r, "enriched", None) == 1 for r in caplog.records
+    )

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import socket
+from pathlib import Path
 from typing import List, Tuple
 
 try:
@@ -48,6 +49,55 @@ def _docker_ok() -> tuple[bool, str]:
     return check_docker_status()
 
 
+def _timmykb_origin_ok() -> tuple[bool, str]:
+    """
+    Verifica che i moduli `timmykb` e `ui` provengano dallo stesso root.
+
+    Serve a intercettare scenari in cui:
+    - la UI viene eseguita dal repository clonato;
+    - ma la pipeline viene importata da una vecchia installazione in site-packages.
+    """
+    try:
+        import timmykb  # type: ignore[import]
+    except Exception as exc:  # pragma: no cover - ambiente minimale
+        # Non blocchiamo l'esecuzione: la UI può usare i fallback basati su src/*
+        return (
+            False,
+            "Pacchetto 'timmykb' non importabile " f"({exc}). Consigliato: `pip install -e .` nella root del repo.",
+        )
+
+    try:
+        pkg_file = Path(timmykb.__file__).resolve()  # type: ignore[attr-defined]
+    except Exception:
+        # Se __file__ non è disponibile non possiamo verificare l'origine,
+        # ma non consideriamo il caso bloccante.
+        return True, "Origine 'timmykb' non determinabile (__file__ mancante)."
+
+    preflight_file = Path(__file__).resolve()
+    # directory comune dei moduli di progetto (es. <repo>/src oppure site-packages)
+    ui_root = preflight_file.parents[1]
+    pkg_root = pkg_file.parents[1]
+
+    if ui_root == pkg_root:
+        return True, f"OK (UI e pipeline allineate in {pkg_root})"
+
+    hint = (
+        "UI e pacchetto 'timmykb' provengono da root diversi.\n"
+        f" - UI: {ui_root}\n"
+        f" - timmykb: {pkg_root}\n"
+        "Probabile installazione vecchia nel venv. "
+        "Attiva il venv corretto e riesegui `pip install -e .` nella root del repo."
+    )
+    try:
+        LOGGER.warning(
+            "ui.preflight.timmykb_mismatch",
+            extra={"ui_root": str(ui_root), "pkg_root": str(pkg_root)},
+        )
+    except Exception:
+        pass
+    return False, hint
+
+
 def _port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(("127.0.0.1", port)) == 0
@@ -70,6 +120,10 @@ def run_preflight() -> tuple[List[CheckItem], bool]:
 
     docker_ok, hint = _docker_ok()
     results.append(("Docker", docker_ok, hint or "OK"))
+
+    # Allineamento UI/pipeline: evita mismatch tra repo clonato e installazione pip.
+    timmy_ok, timmy_hint = _timmykb_origin_ok()
+    results.append(("TimmyKB install", timmy_ok, timmy_hint))
 
     results.append(("PyMuPDF", _is_importable("fitz"), "pip install pymupdf"))
     results.append(("ReportLab", _is_importable("reportlab"), "pip install reportlab"))

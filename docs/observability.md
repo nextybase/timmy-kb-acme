@@ -19,8 +19,9 @@ sia i log globali (`/var/timmy/global-logs/*.log`). Le pipeline di Promtail
 promuovono come label principali:
 
  - `event`
-  - `slug`
+ - `slug`
   - `run_id`
+  - `ui.semantics.*` eventi di gating (`ui.semantics.gating_blocked` / `ui.semantics.gating_allowed`) utili per verificare lo stato RAW e i percorsi.
 
 > Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
 > header sensibili (`Authorization`, `x-access-token`).

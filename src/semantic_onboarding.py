@@ -20,6 +20,7 @@ from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
+from semantic.api import _run_build_workflow  # type: ignore[attr-defined]
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import (
     convert_markdown,
@@ -78,20 +79,27 @@ def main() -> int:
         trace_kind="onboarding",
     ):
         try:
-            # 1) Converti i PDF in Markdown
-            with phase_scope(logger, stage="cli.convert_markdown", customer=slug):
-                convert_markdown(ctx, logger, slug=slug)
 
-            # 2) Arricchisci il frontmatter usando il vocabolario consolidato
-            paths = get_paths(slug)
-            base_dir: Path = ctx.base_dir or paths["base"]
-            vocab = require_reviewed_vocab(base_dir, logger, slug=slug)
-            with phase_scope(logger, stage="cli.enrich_frontmatter", customer=slug) as m:
-                touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
-                try:
-                    m.set_artifacts(len(touched))
-                except Exception:
-                    m.set_artifacts(None)
+            def _stage_wrapper(stage_name: str, fn):
+                with phase_scope(logger, stage=f"cli.{stage_name}", customer=slug) as m:
+                    result = fn()
+                    try:
+                        if stage_name in {"convert_markdown", "enrich_frontmatter"}:
+                            m.set_artifacts(len(result))
+                    except Exception:
+                        m.set_artifacts(None)
+                    return result
+
+            base_dir, _mds, touched = _run_build_workflow(  # type: ignore[attr-defined,assignment]
+                ctx,
+                logger,
+                slug=slug,
+                stage_wrapper=_stage_wrapper,
+                convert_fn=lambda context, lgr, sl: convert_markdown(context, lgr, slug=sl),
+                vocab_fn=lambda base_dir, lgr, sl: require_reviewed_vocab(base_dir, lgr, slug=sl),
+                enrich_fn=lambda context, lgr, vocab, sl: enrich_frontmatter(context, lgr, vocab, slug=sl),
+                summary_fn=lambda context, lgr, sl: write_summary_and_readme(context, lgr, slug=sl),
+            )
 
             # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
             semantic_dir = Path(base_dir) / "semantic"
@@ -104,10 +112,6 @@ def main() -> int:
                     "cli.tag_kg_builder.skipped",
                     extra={"slug": slug, "reason": "semantic/tags_raw.json assente"},
                 )
-
-            # 4) Genera SUMMARY.md e README.md e valida la cartella book/
-            with phase_scope(logger, stage="cli.write_summary_and_readme", customer=slug):
-                write_summary_and_readme(ctx, logger, slug=slug)
         except (ConfigError, PipelineError) as exc:
             # Mappa verso exit code deterministici (no traceback non gestiti)
             logger.error("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})

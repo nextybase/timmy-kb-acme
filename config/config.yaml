@@ -42,7 +42,7 @@ finance:
 client_name: prova srl
 semantic_mapping_yaml: timmy-kb-prova\semantic\tags_reviewed.yaml
 vision_statement_pdf: config/VisionStatement.pdf
-drive_folder_id: 1eJP1Fn4mtnuBBPCCc0oJqCGzQqzlLEf_  # pragma: allowlist secret
-drive_raw_folder_id: 1pdlFpU7A8hAsEXT_dXo8IiZXvbCWUwBb  # pragma: allowlist secret
-drive_contrattualistica_folder_id: 1uTdVPUesJ0Mg_RjZJZAxKduSS0PKg4hd  # pragma: allowlist secret
-drive_config_folder_id: 1eJP1Fn4mtnuBBPCCc0oJqCGzQqzlLEf_  # pragma: allowlist secret
+drive_folder_id: null
+drive_raw_folder_id: null
+drive_contrattualistica_folder_id: null
+drive_config_folder_id: null

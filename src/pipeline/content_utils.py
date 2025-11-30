@@ -300,7 +300,11 @@ def _write_markdown_for_pdf(
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
-        except Exception:
+        except (OSError, PipelineError) as exc:
+            logger.warning(
+                "pipeline.content.frontmatter_read_failed",
+                extra={"slug": slug, "path": str(md_path), "error": str(exc)},
+            )
             existing_created_at = None
             existing_meta = {}
 
@@ -323,6 +327,16 @@ def _write_markdown_for_pdf(
     elif existing_meta.get("content_chunks"):
         meta["content_chunks"] = existing_meta["content_chunks"]
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
+
+    # Aggiorna la cache locale del frontmatter con il nuovo contenuto scritto
+    try:
+        stat = md_path.stat()
+        cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
+        _FRONTMATTER_CACHE[cache_key] = (meta, body)
+        if len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
+            _FRONTMATTER_CACHE.popitem(last=False)
+    except OSError:
+        pass
     return md_path
 
 

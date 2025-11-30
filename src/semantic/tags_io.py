@@ -224,8 +224,12 @@ def write_tags_reviewed_from_nlp_db(
     semantic_dir = Path(semantic_dir).resolve()
     semantic_dir.mkdir(parents=True, exist_ok=True)
     out_path = semantic_dir / "tags_reviewed.yaml"
+    tags_store.ensure_schema_v2(str(db_path))
 
     tags_payload: list[dict[str, Any]] = []
+    keep_only_listed_val = bool(keep_only_listed)
+    reviewed_at_val: str | None = None
+    used_fallback = False
 
     try:
         with sqlite3.connect(str(db_path)) as con:
@@ -268,13 +272,31 @@ def write_tags_reviewed_from_nlp_db(
                         "note": "",
                     }
                 )
+            if not tags_payload:
+                fallback = tags_store.load_tags_reviewed(str(db_path))
+                reviewed_at_val = str(fallback.get("reviewed_at") or "") or None
+                keep_only_listed_val = bool(fallback.get("keep_only_listed", keep_only_listed_val))
+                for item in fallback.get("tags", []):
+                    name = str(item.get("name", "")).strip()
+                    if not name:
+                        continue
+                    syns = [str(s).strip() for s in item.get("synonyms") or [] if str(s).strip()]
+                    tags_payload.append(
+                        {
+                            "name": name,
+                            "action": "keep",
+                            "synonyms": syns,
+                            "note": str(item.get("note") or ""),
+                        }
+                    )
+                used_fallback = bool(tags_payload)
     except Exception as exc:
         raise ConfigError(f"Impossibile esportare i tag dal DB NLP: {exc}", file_path=str(db_path)) from exc
 
     payload: dict[str, Any] = {
         "version": version,
-        "reviewed_at": None,
-        "keep_only_listed": bool(keep_only_listed),
+        "reviewed_at": reviewed_at_val,
+        "keep_only_listed": keep_only_listed_val,
         "tags": tags_payload,
     }
 
@@ -286,6 +308,11 @@ def write_tags_reviewed_from_nlp_db(
             "tags_reviewed.yaml exported from NLP",
             extra={"file_path": str(out_path), "tags": len(tags_payload)},
         )
+        if used_fallback:
+            logger.warning(
+                "semantic.tags_yaml.fallback_tags_table",
+                extra={"file_path": str(out_path), "tags": len(tags_payload)},
+            )
     except Exception:
         pass
     return out_path

@@ -98,6 +98,8 @@ meta, body = read_frontmatter(base_dir, md_path)
 new_text = dump_frontmatter({**meta, "title": "Nuovo titolo"}) + body
 ```
 
+Nota cache: dopo le scritture il frontmatter viene riallineato nella cache LRU (256 entry); nei run lunghi resta buona pratica chiamare `clear_frontmatter_cache()` per liberare memoria.
+
 ------
 
 ## Path-safety & IO sicuro
@@ -118,6 +120,7 @@ safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
 ## Retriever (ricerca)
 - `search(...)` restituisce `list[SearchResult]` tipizzata (`content`, `meta`, `score`).
 - Hardening errori: le eccezioni di embedding vengono intercettate e loggate come `retriever.query.embed_failed`, con ritorno `[]` per evitare crash negli orchestratori UI/CLI.
+- Throttling: il guard emette `retriever.throttle.deadline` quando il budget latenza si esaurisce; `candidate_limit` configurato viene clampato e loggato.
 - Il budget di latenza (`throttle.latency_budget_ms`) ora viene verificato prima di embedding e fetch dal DB: i call-site devono considerare `[]` anche come “timeout/errore gestito” e loggare l’evento utente se necessario.
 
 ---

@@ -64,7 +64,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 
 ### 2) Semantic API — Conversione, frontmatter, book, indicizzazione, tag CSV
 - **Conversione & guardie:** `test_semantic_api_convert_md.py`, `test_semantic_convert_failfast.py`, `test_convert_markdown_no_pdfs_raises.py`, `test_convert_markdown_rerun_processes_new_pdfs.py`, `test_convert_markdown_unsafe_message.py`.
-- **Frontmatter & arricchimento:** `test_semantic_api_frontmatter.py`, `test_semantic_api_enrich_frontmatter.py`, `test_semantic_enrich_ctx_override.py`, `test_semantic_enrich_and_unicode.py`, `test_semantic_frontmatter_and_matching.py`, `test_semantic_headless_enrichment_without_vocab.py`.
+- **Frontmatter & arricchimento:** `test_semantic_api_frontmatter.py`, `test_semantic_api_enrich_frontmatter.py`, `test_semantic_enrich_ctx_override.py`, `test_semantic_enrich_and_unicode.py`, `test_semantic_frontmatter_and_matching.py`, `test_semantic_headless_enrichment_without_vocab.py` (log `semantic.book.frontmatter`).
 - **Build libro & listing:** `test_semantic_build_markdown_book.py`, `test_semantic_api_summary_readme.py`, `test_semantic_api_list_content_markdown.py`.
 - **Estrattore & mapping:** `test_semantic_extractor.py`, `test_semantic_extractor_punct_matching.py`, `test_semantic_mapping.py`.
 - **Indicizzazione DB:** `test_semantic_index_markdown_db.py`.
@@ -107,6 +107,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Config & auto-budget:** `test_retriever_config.py`, `test_retriever_unit.py`.
 - **Scoring & ranking:** `test_retriever_scoring.py`, `test_retriever_topk.py`.
 - **Strumenti I/O:** `test_retriever_calibrate_io.py`.
+- **Throttling & limiti:** `tests/retriever/test_throttle_guard.py` (guardia `retriever.throttle.deadline`, clamp `candidate_limit`/log `limit.clamped`).
 - **Proprietà embedding:** `test_embeddings_property.py`.
 
 ### 7) DB layer e ingest — SQLite, idempotenza, performance

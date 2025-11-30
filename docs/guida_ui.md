@@ -21,6 +21,7 @@ Usa la UI per:
 
 - **Configurazione**: consulta [docs/configurazione.md](configurazione.md) per `.env`, `config/config.yaml`, OIDC e segreti.
 - **Software**: Python >= 3.11, Streamlit >= 1.50.0. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
+- **Allineamento installazione**: il preflight verifica che UI e pacchetto `timmykb` provengano dallo stesso root (repo vs site-packages). Se segnala mismatch, attiva il venv corretto ed esegui `pip install -e .` dalla root del repo.
 - **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; ricorda di installare gli extra `pip install .[drive]`.
   - \`DRIVE\_ID\` -> ID del Drive o cartella radice.
   - Installa gli extra Drive: \`pip install .[drive]\`.
@@ -224,6 +225,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 2. **Arricchisci frontmatter**
    - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` è ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB è lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
+   - **Telemetria:** l'arricchimento emette `semantic.book.frontmatter` con il numero di file aggiornati (UI/CLI).
    - **Entità e relazioni:** se in `semantic/tags.db` sono presenti entità con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entità definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entità e le relazioni del mapping Vision-only.
     - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
 > **DIKW in azione:** i PDF in `raw/` più i tag grezzi rappresentano i **Data**, la conversione PDF→Markdown più l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker è la vista finale sulla Knowledge disponibile.
