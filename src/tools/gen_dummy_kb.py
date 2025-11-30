@@ -204,6 +204,90 @@ _DEFAULT_VISION_PDF = (
 )
 
 
+def _build_generic_vision_template_pdf() -> bytes:
+    """
+    Genera un VisionStatement.pdf generico con testo esplicativo per Vision, Mission,
+    Framework Etico, Goal e Contesto Operativo. Fallback sul PDF minimale se fallisce.
+    """
+
+    try:
+        from io import BytesIO
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4)
+        styles = getSampleStyleSheet()
+        normal = styles["Normal"]
+        heading = styles["Heading2"]
+
+        story = []
+
+        def add_title(text: str) -> None:
+            story.append(Paragraph(text, heading))
+            story.append(Spacer(1, 0.4 * cm))
+
+        def add_paragraph(text: str) -> None:
+            story.append(Paragraph(text, normal))
+            story.append(Spacer(1, 0.4 * cm))
+
+        story.append(Paragraph("Vision Statement – Template generico", styles["Title"]))
+        story.append(Spacer(1, 0.8 * cm))
+
+        add_title("Vision")
+        add_paragraph(
+            "In questa sezione il cliente descrive la propria Vision, ovvero l’orizzonte di lungo periodo "
+            "verso cui tende l’organizzazione. La Vision dovrebbe rispondere alla domanda: "
+            "«In che tipo di realtà vogliamo contribuire a vivere tra 5–10 anni grazie al nostro lavoro "
+            "e all’uso dell’Intelligenza Artificiale?».",
+        )
+
+        add_title("Mission")
+        add_paragraph(
+            "Qui va descritta la Mission, cioè il modo concreto in cui l’organizzazione intende agire "
+            "per avvicinarsi alla Vision. La Mission risponde tipicamente a: "
+            "«Cosa facciamo, per chi lo facciamo e con quali modalità operative?».",
+        )
+
+        add_title("Framework Etico")
+        add_paragraph(
+            "In questa parte vanno indicati i principi etici che guidano l’uso dell’AI e dei dati: "
+            "trasparenza, tracciabilità, supervisione umana, sostenibilità, inclusione, gestione dei bias, "
+            "adesione alle normative (es. AI Act) e alle policy interne. "
+            "Il Framework Etico deve chiarire quali pratiche sono accettabili e quali no.",
+        )
+
+        add_title("Goal (es. orizzonti 3/6/12 mesi)")
+        add_paragraph(
+            "Qui si definiscono gli obiettivi operativi a breve, medio e lungo termine. "
+            "Un possibile schema è quello a basket temporali: ad esempio 3 mesi (attivazione e primi risultati), "
+            "6 mesi (consolidamento e trend), 12 mesi (impatto complessivo e scalabilità). "
+            "Per ogni orizzonte temporale è utile indicare obiettivi chiari e, se possibile, alcuni KPI indicativi.",
+        )
+
+        add_title("Contesto Operativo")
+        add_paragraph(
+            "In questa sezione il cliente descrive il contesto in cui opera il progetto: "
+            "settore di attività (es. PMI, scuola, PA, territorio), tipologia di utenti coinvolti, "
+            "lingue di lavoro, normative chiave di riferimento (es. regolamenti di settore, privacy, "
+            "linee guida interne). L’obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
+        )
+
+        add_paragraph(
+            "Questo documento funge da contratto semantico tra l’organizzazione e il sistema: "
+            "non deve essere perfetto, ma sufficientemente chiaro da permettere di individuare "
+            "le aree tematiche principali e gli obiettivi del progetto.",
+        )
+
+        doc.build(story)
+        return buf.getvalue()
+    except Exception:
+        return _DEFAULT_VISION_PDF
+
+
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
@@ -748,13 +832,22 @@ def build_payload(
                 "tools.gen_dummy_kb.vision_template_unreadable",
                 extra={"file_path": str(repo_pdf), "slug": slug},
             )
-            pdf_bytes = _DEFAULT_VISION_PDF
+            pdf_bytes = _build_generic_vision_template_pdf()
     else:
         logger.warning(
             "tools.gen_dummy_kb.vision_template_missing",
             extra={"file_path": str(repo_pdf), "slug": slug},
         )
-        pdf_bytes = _DEFAULT_VISION_PDF
+        pdf_bytes = _build_generic_vision_template_pdf()
+        try:
+            repo_pdf.parent.mkdir(parents=True, exist_ok=True)
+            with repo_pdf.open("wb") as handle:
+                handle.write(pdf_bytes)
+        except Exception:
+            logger.debug(
+                "tools.gen_dummy_kb.vision_template_write_failed",
+                extra={"file_path": str(repo_pdf), "slug": slug},
+            )
 
     ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
 
