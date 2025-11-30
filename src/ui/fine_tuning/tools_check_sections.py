@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from pipeline import ontology
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import read_text_safe
 from ui.utils.stubs import get_streamlit
@@ -88,12 +89,20 @@ def render_controls(
             st.session_state[SS_VISION_OPEN] = False
             _trigger_modal(st, SS_SYS_OPEN)
 
+    # Preview README/entità se disponibile un mapping in sessione
+    last_result = st.session_state.get(STATE_LAST_VISION_RESULT)
+    mapping_data = _load_mapping_data(last_result)
+    if mapping_data:
+        try:
+            render_readme_preview(mapping_data, ontology.get_all_entities(), st_module=st)
+        except Exception:
+            pass
+
     if _consume_flag(st, SS_VISION_OPEN):
         open_vision_modal(slug=slug)
     elif _consume_flag(st, SS_SYS_OPEN):
         open_system_prompt_modal()
 
-    last_result = st.session_state.get(STATE_LAST_VISION_RESULT)
     if last_result:
         render_vision_output(last_result, st_module=st)
 
@@ -102,21 +111,28 @@ def render_vision_output(last_result: Any, *, st_module: Any | None = None) -> N
     """Mostra i risultati dell'ultima Vision eseguita (mapping YAML, metadata, areas)."""
     st = st_module or get_streamlit()
     with st.expander("Ultimo output Vision", expanded=False):
-        mapping_data: Optional[Dict[str, Any]] = None
-        if isinstance(last_result, dict):
-            mapping_path = last_result.get("mapping")
-            if isinstance(mapping_path, str) and yaml is not None:
-                try:
-                    mapping_file = Path(mapping_path)
-                    text = read_text_safe(mapping_file.parent, mapping_file)
-                    mapping_data = yaml.safe_load(text) or {}
-                except Exception as exc:
-                    st.warning(f"Impossibile leggere semantic_mapping.yaml: {exc}")
+        mapping_data = _load_mapping_data(last_result)
 
         if isinstance(mapping_data, dict) and mapping_data.get("areas"):
             _render_mapping_areas(mapping_data, st)
+            _render_entities_section(mapping_data, st)
+            _render_diagnostics(mapping_data, st)
         elif last_result:
             _emit_json(st, last_result)
+
+
+def _load_mapping_data(last_result: Any) -> Optional[Dict[str, Any]]:
+    mapping_data: Optional[Dict[str, Any]] = None
+    if isinstance(last_result, dict):
+        mapping_path = last_result.get("mapping")
+        if isinstance(mapping_path, str) and yaml is not None:
+            try:
+                mapping_file = Path(mapping_path)
+                text = read_text_safe(mapping_file.parent, mapping_file)
+                mapping_data = yaml.safe_load(text) or {}
+            except Exception:
+                mapping_data = None
+    return mapping_data
 
 
 def _render_mapping_areas(mapping_data: Dict[str, Any], st: Any) -> None:
@@ -181,6 +197,7 @@ def _render_mapping_areas(mapping_data: Dict[str, Any], st: Any) -> None:
         with st.expander("Metadata policy", expanded=False):
             _emit_json(st, metadata_policy)
 
+    _render_diagnostics(mapping_data, st)
     with st.expander("JSON completo", expanded=False):
         _emit_json(st, mapping_data)
 
@@ -193,6 +210,203 @@ def _emit_json(st_module: Any, payload: Any) -> None:
         st_module.markdown(f"```json\n{payload}\n```")
 
 
+def _global_vocab() -> Dict[str, Dict[str, Any]]:
+    """Indicizza le entità globali per id/label (lowercase)."""
+    vocab: Dict[str, Dict[str, Any]] = {}
+    try:
+        for ent in ontology.get_all_entities():
+            ent_id = str(ent.get("id") or "").strip()
+            label = str(ent.get("label") or "").strip()
+            if ent_id:
+                vocab.setdefault(ent_id.lower(), ent)
+            if label:
+                vocab.setdefault(label.lower(), ent)
+    except Exception:
+        return {}
+    return vocab
+
+
+def _render_entities_section(mapping_data: Dict[str, Any], st: Any) -> None:
+    entities = mapping_data.get("entities") or []
+    entity_to_area = mapping_data.get("entity_to_area") or {}
+    entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
+    vocab = _global_vocab()
+
+    if entities:
+        st.markdown("### Entità rilevanti (dall’assistant)")
+        rows: List[str] = ["| Entità | Categoria | Codice |", "| --- | --- | --- |"]
+        out_of_vocab = False
+        for ent in entities:
+            if not isinstance(ent, dict):
+                continue
+            name = str(ent.get("name") or "").strip()
+            category = str(ent.get("category") or "").strip()
+            code = str(entity_to_document_type.get(name, "")).strip()
+            rows.append(f"| {name} | {category} | {code or '-'} |")
+            if name and name.lower() not in vocab:
+                out_of_vocab = True
+        st.markdown("\n".join(rows))
+        if out_of_vocab:
+            st.warning("ATTENZIONE: entità fuori dal vocabolario NeXT")
+
+    if isinstance(entity_to_area, dict) and entity_to_area:
+        st.markdown("### Mapping entità → aree")
+        rows_area = ["| Entità | Area |", "| --- | --- |"]
+        for ent_name, area in entity_to_area.items():
+            rows_area.append(f"| {ent_name} | {area} |")
+        st.markdown("\n".join(rows_area))
+
+    if isinstance(entity_to_document_type, dict) and entity_to_document_type:
+        st.markdown("### Mapping entità → prefissi documentali")
+        rows_doc = ["| Entità | Prefisso |", "| --- | --- |"]
+        for ent_name, code in entity_to_document_type.items():
+            rows_doc.append(f"| {ent_name} | {code} |")
+        st.markdown("\n".join(rows_doc))
+
+    if entities:
+        missing_area = [e.get("name") for e in entities if (e.get("name") and e.get("name") not in entity_to_area)]
+        missing_code = [
+            e.get("name") for e in entities if (e.get("name") and e.get("name") not in entity_to_document_type)
+        ]
+        if missing_area:
+            st.error(f"Entità senza area: {', '.join(str(x) for x in missing_area)}")
+        if missing_code:
+            st.error(f"Entità senza prefisso documentale: {', '.join(str(x) for x in missing_code)}")
+
+
+def _render_diagnostics(mapping_data: Dict[str, Any], st: Any) -> None:
+    st.markdown("### Diagnostica VisionOutput")
+    entities = mapping_data.get("entities") or []
+    entity_to_area = mapping_data.get("entity_to_area") or {}
+    entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
+    areas = mapping_data.get("areas") or []
+    er_model = mapping_data.get("er_model") or {}
+    vocab = _global_vocab()
+
+    names = [str(e.get("name") or "").strip() for e in entities if isinstance(e, dict)]
+    dup = sorted({n for n in names if n and names.count(n) > 1})
+    if dup:
+        st.error(f"Entità duplicate: {', '.join(dup)}")
+    else:
+        st.success("Entità duplicate: PASS")
+
+    missing_area = [n for n in names if n and n not in entity_to_area]
+    if missing_area:
+        st.error(f"Entità senza area: {', '.join(missing_area)}")
+    else:
+        st.success("Entità senza area: PASS")
+
+    missing_code = [n for n in names if n and n not in entity_to_document_type]
+    if missing_code:
+        st.error(f"Entità senza prefisso: {', '.join(missing_code)}")
+    else:
+        st.success("Entità senza prefisso: PASS")
+
+    out_of_vocab = [n for n in names if n and n.lower() not in vocab]
+    if out_of_vocab:
+        st.warning(f"Entità non riconosciute: {', '.join(out_of_vocab)}")
+    else:
+        st.success("Entità non riconosciute: PASS")
+
+    area_keys = [a.get("key") for a in areas if isinstance(a, dict) and a.get("key")]
+    mapped_areas = {v for v in entity_to_area.values() if v}
+    no_entities = [k for k in area_keys if k not in mapped_areas]
+    if no_entities:
+        st.warning(f"Aree senza entità: {', '.join(str(k) for k in no_entities)}")
+    else:
+        st.success("Aree senza entità: PASS")
+
+    if not entity_to_area or not entity_to_document_type:
+        st.warning("Mapping entità mancanti o incompleti")
+    else:
+        st.success("Mapping entità: PASS")
+
+    if not isinstance(er_model, dict) or not er_model:
+        st.warning("ER model mancante o incompleto")
+    else:
+        er_entities = er_model.get("entities") or []
+        er_rel = er_model.get("relations") or []
+        if not er_entities or not er_rel:
+            st.warning("ER model incompleto (entities/relations)")
+        else:
+            st.success("ER model completo")
+
+
+def render_readme_preview(
+    mapping_data: Dict[str, Any],
+    global_entities: List[Dict[str, Any]],
+    *,
+    st_module: Any | None = None,
+) -> None:
+    """Mostra una preview del README basata su mapping + vocabolario globale."""
+    st = st_module or get_streamlit()
+    with st.expander("Preview README", expanded=False):
+        entities = mapping_data.get("entities") or []
+        entity_to_area = mapping_data.get("entity_to_area") or {}
+        entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
+
+        idx: Dict[str, Dict[str, Any]] = {}
+        for ent in global_entities or []:
+            ent_id = str(ent.get("id") or "").strip().lower()
+            label = str(ent.get("label") or "").strip().lower()
+            if ent_id:
+                idx.setdefault(ent_id, ent)
+            if label:
+                idx.setdefault(label, ent)
+
+        st.markdown("#### Entità rilevanti")
+        rows = ["| Entità | Categoria | Area | Prefisso | Esempi |", "| --- | --- | --- | --- | --- |"]
+        for ent in entities:
+            if not isinstance(ent, dict):
+                continue
+            name = str(ent.get("name") or "").strip()
+            meta = idx.get(name.lower())
+            category = ent.get("category") or (meta or {}).get("category", "")
+            area = entity_to_area.get(name, "-")
+            prefix = entity_to_document_type.get(name, (meta or {}).get("document_code", "-"))
+            examples = ", ".join((meta or {}).get("examples") or [])
+            rows.append(f"| {name} | {category} | {area} | {prefix} | {examples} |")
+        st.markdown("\n".join(rows))
+
+        areas = mapping_data.get("areas") or []
+        if areas:
+            st.markdown("#### Sezioni previste nel README")
+            st.markdown("\n".join(f"- Area `{a.get('key')}`: {a.get('descrizione_breve', '')}" for a in areas))
+
+
+def render_global_entities(*, st_module: Any | None = None) -> None:
+    """Visualizza le entità globali caricate da ontology.yaml, organizzate per categoria."""
+    st = st_module or get_streamlit()
+    with st.expander("Entità globali di NeXT", expanded=False):
+        try:
+            data = ontology.load_entities()
+        except Exception as exc:  # pragma: no cover - fallback UI
+            st.warning(f"Impossibile caricare le entità globali: {exc}")
+            return
+
+        categories = data.get("categories") if isinstance(data, dict) else {}
+        if not isinstance(categories, dict) or not categories:
+            st.info("Nessuna entità globale disponibile.")
+            return
+
+        for cat_id, meta in categories.items():
+            if not isinstance(meta, dict):
+                continue
+            label = meta.get("label") or cat_id
+            entities = meta.get("entities") or []
+            with st.expander(str(label), expanded=False):
+                for ent in entities:
+                    if not isinstance(ent, dict):
+                        continue
+                    ent_id = ent.get("id") or "-"
+                    name = ent.get("label") or ent_id
+                    code = ent.get("document_code") or "-"
+                    examples = ent.get("examples") or []
+                    st.markdown(f"- **{name}** (`{ent_id}`) - codice: `{code}`")
+                    if examples:
+                        st.markdown("  - Esempi: " + ", ".join(str(x) for x in examples))
+
+
 def render_advanced_options(*, st_module: Any | None = None) -> None:
     """Renderizza le opzioni avanzate (reset state)."""
     st = st_module or get_streamlit()
@@ -202,3 +416,4 @@ def render_advanced_options(*, st_module: Any | None = None) -> None:
             for key in keys_to_clear:
                 st.session_state.pop(key, None)
             st.success("Stato ripulito.")
+        render_global_entities(st_module=st)

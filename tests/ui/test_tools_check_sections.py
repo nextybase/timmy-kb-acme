@@ -116,3 +116,98 @@ def test_render_advanced_options_clears_state(monkeypatch: pytest.MonkeyPatch) -
     assert "_SS_FLAG" not in st_stub.session_state
     assert st_stub.session_state["other"] == "keep"
     assert "Stato ripulito." in st_stub.success_messages
+
+
+def test_render_global_entities_handles_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    st_stub = install_streamlit_stub(monkeypatch)
+    module = importlib.import_module("ui.fine_tuning.tools_check_sections")
+
+    sample = {
+        "categories": {
+            "operativi": {
+                "label": "Entità operative",
+                "entities": [
+                    {"id": "progetto", "label": "Progetto", "document_code": "PRJ-", "examples": ["esempio"]},
+                ],
+            }
+        }
+    }
+    monkeypatch.setattr(module.ontology, "load_entities", lambda: sample)
+
+    module.render_global_entities(st_module=st_stub)
+
+
+def test_render_vision_output_entities_and_warnings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    st_stub = install_streamlit_stub(monkeypatch)
+    module = importlib.import_module("ui.fine_tuning.tools_check_sections")
+
+    mapping_file = tmp_path / "semantic_mapping.yaml"
+    mapping_file.write_text(
+        """
+version: 1.0-beta
+areas:
+  - key: area-uno
+    ambito: ambito
+    descrizione_breve: breve
+entities:
+  - name: Progetto
+    category: operativo
+  - name: Fantasma
+    category: oggetto
+entity_to_area:
+  Progetto: area-uno
+entity_to_document_type:
+  Progetto: PRJ-
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        module.ontology,
+        "get_all_entities",
+        lambda: [{"id": "progetto", "label": "Progetto", "document_code": "PRJ-"}],
+    )
+
+    module.render_vision_output({"mapping": str(mapping_file)}, st_module=st_stub)
+
+    assert any("vocabolario" in msg for msg in st_stub.warning_messages)
+    assert any("senza area" in msg for msg in st_stub.error_messages)
+    assert any("senza prefisso" in msg for msg in st_stub.error_messages)
+    assert any(
+        "Mapping entità" in msg or "Mapping entit" in msg for msg in st_stub.warning_messages + st_stub.success_messages
+    )
+
+
+def test_render_controls_calls_readme_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    st_stub = install_streamlit_stub(monkeypatch)
+    module = importlib.import_module("ui.fine_tuning.tools_check_sections")
+
+    mapping_file = tmp_path / "semantic_mapping.yaml"
+    mapping_file.write_text(
+        """
+version: 1
+areas: []
+entities:
+  - name: Progetto
+    category: operativo
+entity_to_area:
+  Progetto: area-uno
+entity_to_document_type:
+  Progetto: PRJ-
+""",
+        encoding="utf-8",
+    )
+
+    st_stub.session_state[module.STATE_LAST_VISION_RESULT] = {"mapping": str(mapping_file)}
+
+    called = {"preview": 0}
+
+    def _preview(mapping, entities_global, *, st_module=None):
+        called["preview"] += 1
+
+    monkeypatch.setattr(module, "render_readme_preview", _preview)
+    monkeypatch.setattr(module.ontology, "get_all_entities", lambda: [])
+
+    module.render_controls(slug="acme", st_module=st_stub)
+
+    assert called["preview"] == 1
