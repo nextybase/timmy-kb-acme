@@ -37,6 +37,13 @@ def check_schema(schema_path: Path) -> None:
     print(f"[schema] ok ({len(props)} properties, required allineato)")
 
 
+def expand_pattern(path: Path) -> Sequence[Path]:
+    text = str(path)
+    if "*" in text or "?" in text or "[" in text:
+        return [Path(p) for p in glob(text)]
+    return [path]
+
+
 def scan_logs(pattern: str, files: Iterable[Path]) -> None:
     matcher = re.compile(pattern)
     found = False
@@ -80,7 +87,8 @@ def main() -> int:
 
     log_paths: list[Path] = []
     if args.logs:
-        log_paths.extend(args.logs)
+        for entry in args.logs:
+            log_paths.extend(expand_pattern(entry))
     if args.scan_dirs:
         for base_dir in args.scan_dirs:
             if not base_dir.exists():
