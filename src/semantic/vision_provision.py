@@ -754,7 +754,7 @@ def _determine_structured_output(client: Any, assistant_id: str, strict_output: 
 def _build_response_format(use_structured: bool) -> Dict[str, Any]:
     if not use_structured:
         return {"type": "json_object"}
-    return {
+    schema_payload = {
         "type": "json_schema",
         "json_schema": {
             "name": "VisionOutput",
@@ -762,6 +762,14 @@ def _build_response_format(use_structured: bool) -> Dict[str, Any]:
             "strict": True,
         },
     }
+    LOGGER.debug(
+        _evt("response_format"),
+        extra={
+            "schema_keys": list(schema_payload["json_schema"]["schema"]["properties"].keys()),
+            "strict": True,
+        },
+    )
+    return schema_payload
 
 
 def _call_assistants_api(
