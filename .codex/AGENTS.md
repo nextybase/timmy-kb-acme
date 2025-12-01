@@ -18,3 +18,11 @@
 - [ ] QA locale eseguito: `isort` → `black` → `ruff --fix` → `mypy` → `pytest -q -k 'not slow'`
 - [ ] Micro-PR: 1 change set, motivazione chiara, diff minimale; se tocco X aggiorno anche docs Y/Z
 - [ ] UI: messaggi brevi; salvataggi solo via utility SSoT (no `Path.write_text` diretto)
+
+## Collaborazione con Senior Reviewer
+- L'agente Codex lavora a supporto dello sviluppatore umano (Franco / team) e del Senior Reviewer esterno (AI esterna) per mantenere allineata la qualità NeXT.
+- Quando è prevista una review esterna Codex DEVE:
+  1. Preparare un riepilogo sintetico con contesto del task, file toccati e perché la soluzione rispetta `.codex/CONSTITUTION.md` e `docs/AGENTS_INDEX.md`.
+  2. Limitare lo scope: micro-PR che affrontano un singolo problema e nessun refactor massivo non richiesto.
+  3. Eseguire la pipeline QA locale standard (formatter, linter, type-checker, test) e riportare esplicitamente l'esito nel messaggio al Senior.
+  4. Esplicitare dubbi, trade-off, TODO e problemi noti, inclusi test falliti o limiti della soluzione, prima di inoltrare la review.

@@ -6,6 +6,12 @@
 - Se tocchi firme/flow: aggiorna **docs** (+ note migrazione).
 - 0 warning cSpell in `docs/`.
 
+### Revisione con Senior Reviewer
+- [ ] Per modifiche non banali (new feature, logica di sicurezza/I/O, integrazioni) ho usato il prompt "Dev task con review del Senior" in `.codex/PROMPTS.md` prima di chiedere aiuto a Codex.
+- [ ] Ho preparato un messaggio di riepilogo seguendo il prompt "Preparare la richiesta di review per il Senior".
+- [ ] Ho condiviso con il Senior contesto del task, sintesi dei cambi, esito della pipeline QA e i dubbi/trade-off principali.
+- [ ] Ho applicato (o discusso) i feedback del Senior prima del merge su branch protette.
+
 ## Sicurezza & I/O
 - Path validati (ensure_within); nessuna write "a mano".
 - Scritture atomiche; rollback definito su errori.
