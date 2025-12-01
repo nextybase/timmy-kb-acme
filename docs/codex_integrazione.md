@@ -28,6 +28,11 @@ Nota OS: su Windows l'esperienza migliore è tramite WSL; l'estensione è pienam
 
 Obiettivo: accelerare il lavoro senza sorprese. L’agente propone, tu approvi: HiTL come regola, *repo-aware* come prassi.
 
+## Flusso Codex + Senior Reviewer
+- Quando il task richiede review esterne (nuove feature, refactor sensibili, integrazioni Drive/Vision), Codex opera nel modello tripartito: sviluppatore umano (Franco/team), agente Codex e Senior Reviewer esterno.
+- Prima di coinvolgere il Senior Codex prepara un riepilogo sintetico (contesto, file interessati, motivi di coerenza con `.codex/CONSTITUTION.md` e `docs/AGENTS_INDEX.md`) e usa i prompt dedicati in `.codex/PROMPTS.md` per la fase di coding e per il messaggio di review.
+- Ogni modifica resta micro-PR idempotente, segue la pipeline QA locale (formatter, linter, type-checker, test) e documenta esplicitamente QA/dubbi/trade-off. La checklist in `.codex/CHECKLISTS.md` è il promemoria operativo.
+
 ---
 
 ## Prerequisiti Rapidi
