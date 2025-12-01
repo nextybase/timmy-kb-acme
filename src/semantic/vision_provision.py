@@ -784,6 +784,15 @@ def _call_assistants_api(
     LOGGER.debug(_evt("create_thread"), extra={"assistant_id": assistant_id})
     thread = client.beta.threads.create()
 
+    LOGGER.debug(
+        _evt("response_format_payload"),
+        extra={
+            "assistant_id": assistant_id,
+            "response_format": response_format,
+            "use_kb": use_kb,
+        },
+    )
+
     for msg in user_messages:
         role = (msg.get("role") or "user").strip() or "user"
         content = str(msg.get("content") or "")
@@ -847,6 +856,15 @@ def _call_responses_json(
     use_kb: bool,
     response_format: Dict[str, Any],
 ) -> Dict[str, Any]:
+    LOGGER.debug(
+        _evt("response_format_payload"),
+        extra={
+            "assistant_id": assistant_id,
+            "response_format": response_format,
+            "use_kb": use_kb,
+        },
+    )
+
     LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id})
     tool_choice: Any = {"type": "file_search"} if use_kb else "auto"
     input_payload = [
