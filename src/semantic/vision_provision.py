@@ -281,7 +281,11 @@ def _load_vision_schema() -> Dict[str, Any]:
     schema_path = _vision_schema_path()
     try:
         raw = read_text_safe(schema_path.parents[0], schema_path, encoding="utf-8")
-        return cast(Dict[str, Any], json.loads(raw))
+        loaded = cast(Dict[str, Any], json.loads(raw))
+        properties = loaded.get("properties")
+        if isinstance(properties, dict):
+            loaded["required"] = list(properties.keys())
+        return loaded
     except json.JSONDecodeError as exc:
         raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
 
