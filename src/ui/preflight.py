@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib
+import json
+import os
 import socket
 from pathlib import Path
 from typing import List, Tuple
@@ -19,6 +21,7 @@ except Exception:  # pragma: no cover
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 CheckItem = Tuple[str, bool, str]
 LOGGER = get_structured_logger("ui.preflight")
@@ -114,9 +117,39 @@ def _has_openai_key() -> bool:
     return False
 
 
+def _vision_schema_ok() -> tuple[bool, str]:
+    if os.getenv("TIMMY_VISION_SKIP_SCHEMA_CHECK", "0").lower() in {"1", "true", "yes", "on"}:
+        return True, "Vision schema check bypassed (TIMMY_VISION_SKIP_SCHEMA_CHECK)"
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_path = ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json")
+    if not schema_path.exists():
+        return False, f"schema mancante: {schema_path}"
+    try:
+        schema_text = read_text_safe(repo_root, schema_path, encoding="utf-8")
+        schema = json.loads(schema_text)
+    except json.JSONDecodeError as exc:
+        return False, f"schema JSON invalido: {exc}"
+    props = set(schema.get("properties", {}).keys())
+    required = set(schema.get("required", []))
+    missing = props - required
+    extra = required - props
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(f"mancano in required: {', '.join(sorted(missing))}")
+        if extra:
+            parts.append(f"required contiene chiavi assenti: {', '.join(sorted(extra))}")
+        detail = "; ".join(parts)
+        return False, detail
+    return True, "Vision schema allineato"
+
+
 def run_preflight() -> tuple[List[CheckItem], bool]:
     _maybe_load_dotenv()
     results: List[CheckItem] = []
+
+    schema_ok, schema_msg = _vision_schema_ok()
+    results.append(("Vision schema", schema_ok, schema_msg))
 
     docker_ok, hint = _docker_ok()
     results.append(("Docker", docker_ok, hint or "OK"))
