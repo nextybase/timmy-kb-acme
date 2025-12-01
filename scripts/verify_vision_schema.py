@@ -15,8 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from glob import glob
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 
 def check_schema(schema_path: Path) -> None:
@@ -38,22 +39,35 @@ def check_schema(schema_path: Path) -> None:
 
 def scan_logs(pattern: str, files: Iterable[Path]) -> None:
     matcher = re.compile(pattern)
+    found = False
     for log_path in files:
         if not log_path.exists():
+            print(f"[log] file mancante: {log_path}")
             continue
         print(f"[log] esamino {log_path}")
-        for idx, line in enumerate(log_path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
+        lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        for idx, line in enumerate(lines, start=1):
             if matcher.search(line):
+                found = True
                 start = max(0, idx - 2)
-                tail = line
-                print(f"\n== match {log_path}:{idx} ==")
-                print(f"{start+1:05d}: {tail}")
+                end = min(len(lines), idx + 2)
+                snippet = "\n".join(f"{ln:05d}: {lines[ln-1]}" for ln in range(start + 1, end + 1))
+                print(f"\n== match {log_path}:{idx} ==\n{snippet}")
+    if not found:
+        print("[log] pattern non trovato in nessun file analizzato.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verifica schema VisionOutput e log response_format")
     parser.add_argument("--schema", type=Path, help="Path allo schema JSON da validare")
-    parser.add_argument("--logs", nargs="+", type=Path, help="Glob (via PowerShell) dei log da scansionare")
+    parser.add_argument("--logs", nargs="+", type=Path, help="Percorsi o glob espliciti dei log da scansionare")
+    parser.add_argument(
+        "--scan-dirs",
+        nargs="+",
+        type=Path,
+        default=[Path("output"), Path(".timmykb/logs")],
+        help="Directory da esplorare automaticamente (cerco *.log)",
+    )
     parser.add_argument(
         "--pattern",
         default=r"semantic\.vision\.response_format(_payload)?",
@@ -64,10 +78,19 @@ def main() -> int:
     if args.schema:
         check_schema(args.schema)
 
+    log_paths: list[Path] = []
     if args.logs:
-        scan_logs(args.pattern, args.logs)
+        log_paths.extend(args.logs)
+    if args.scan_dirs:
+        for base_dir in args.scan_dirs:
+            if not base_dir.exists():
+                continue
+            for match in glob(str(base_dir / "*.log")):
+                log_paths.append(Path(match))
 
-    if not args.schema and not args.logs:
+    if log_paths:
+        scan_logs(args.pattern, log_paths)
+    elif not args.schema:
         parser.print_help()
         return 1
     return 0
