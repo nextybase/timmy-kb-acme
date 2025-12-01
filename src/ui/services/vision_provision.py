@@ -155,7 +155,7 @@ def _ensure_structured_output_and_prompt(ctx: Any, *, slug: str) -> None:
             slug=slug,
         )
 
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     prompt_path = ensure_within_and_resolve(repo_root, repo_root / "config" / "assistant_vision_system_prompt.txt")
     try:
         prompt_text = read_text_safe(repo_root, prompt_path, encoding="utf-8").strip()

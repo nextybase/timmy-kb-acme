@@ -39,10 +39,8 @@ def _fake_pdf_text() -> str:
         "Obiettivi...\n"
         "Framework etico\n"
         "Valori e policy...\n"
-        "Prodotto/Azienda\n"
-        "Descrizione del prodotto/azienda...\n"
-        "Mercato\n"
-        "Descrizione del mercato...\n"
+        "Contesto Operativo\n"
+        "Descrizione del contesto operativo...\n"
     )
 
 

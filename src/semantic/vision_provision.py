@@ -21,6 +21,7 @@ from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
+from pipeline.vision_template import load_vision_template_sections
 from semantic.validation import validate_context_slug
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
@@ -87,43 +88,32 @@ class HaltError(RuntimeError):
 # =========================
 
 # CHIAVI CANONICHE utilizzate nel parsing, nel prompt e nella validazione.
-# I test Fase 1 richiedono che le chiavi finali includano "Prodotto/Azienda" e "Mercato".
+# I test Fase 1 richiedono che le chiavi finali includano le sezioni canoniche della Vision 1.0.
 REQUIRED_SECTIONS_CANONICAL: Tuple[str, ...] = (
     "Vision",
     "Mission",
+    "Framework Etico",
     "Goal",
-    "Framework etico",
-    "Prodotto/Azienda",
-    "Mercato",
+    "Contesto Operativo",
 )
 
 # Varianti d'intestazione accettate nel PDF che mappiamo ai canonici
-# (case-insensitive; gestione spazi intorno allo slash; ":" finale opzionale).
+# (case-insensitive; gestione spazi intorno agli slash o maiuscole).
 _HEADER_VARIANTS: Dict[str, List[str]] = {
     "Vision": ["Vision"],
     "Mission": ["Mission"],
+    "Framework Etico": ["Framework Etico", "Framework etico"],
     "Goal": ["Goal"],
-    "Framework etico": ["Framework etico"],
-    "Prodotto/Azienda": [
-        "Prodotto/Azienda",
-        "Prodotto / Azienda",
-        "Descrizione prodotto/azienda",
-        "Descrizione prodotto / azienda",
-    ],
-    "Mercato": [
-        "Mercato",
-        "Descrizione mercato",
-    ],
+    "Contesto Operativo": ["Contesto Operativo", "Contesto operativo"],
 }
 
-# Etichette “friendly” per messaggi d’errore (i test vogliono le versioni estese)
+# Etichette “friendly” per messaggi d’errore
 _DISPLAY_LABEL: Dict[str, str] = {
     "Vision": "Vision",
     "Mission": "Mission",
+    "Framework Etico": "Framework Etico",
     "Goal": "Goal",
-    "Framework etico": "Framework etico",
-    "Prodotto/Azienda": "Descrizione prodotto/azienda",
-    "Mercato": "Descrizione mercato",
+    "Contesto Operativo": "Contesto Operativo",
 }
 
 # Precompilazione: mappa variante (casefold) -> canonico, e regex header
@@ -134,6 +124,28 @@ for _canon, _vars in _HEADER_VARIANTS.items():
         _VARIANT_TO_CANON[_v.casefold()] = _canon
         _all_variants.append(re.escape(_v))
 _HEADER_RE = re.compile(rf"(?im)^(?P<h>({'|'.join(_all_variants)}))\s*:?\s*$")
+
+
+def _validate_against_template(found: Mapping[str, str]) -> None:
+    sections = load_vision_template_sections()
+    if not sections:
+        return
+    for section in sections:
+        if not section.get("required"):
+            continue
+        title = str(section.get("title") or "").strip()
+        if not title:
+            continue
+        canon = _VARIANT_TO_CANON.get(title.casefold(), title)
+        canonical = canon.strip()
+        if not canonical:
+            continue
+        if not found.get(canonical, "").strip():
+            LOGGER.warning(
+                "template_sections.missing",
+                extra={"section": title, "canonical": canonical},
+            )
+
 
 # Giorni di retention per snapshot/log (solo pulizia best-effort)
 _SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
@@ -362,14 +374,11 @@ def _resolve_paths(ctx_base_dir: str) -> _Paths:
 def _parse_required_sections(raw_text: str) -> Dict[str, str]:
     """
     Estrae in modo deterministico le sezioni obbligatorie, tagliando il testo
-    da ciascuna intestazione alla successiva. Le intestazioni sono cercate
-    a inizio riga (case-insensitive), con due varianti di sintassi:
-      - <titolo>
-      - <titolo>:
-    Ritorna {Chiave Canonica -> contenuto (trim)} con chiavi in REQUIRED_SECTIONS_CANONICAL.
-    Aggiunge anche le alias “Descrizione prodotto/azienda” e “Descrizione mercato”
-    per compatibilità con test legacy.
+    da ciascuna intestazione alla successiva. Le intestazioni vengono cercate
+    a inizio riga (case-insensitive) con formati “Titolo” o “Titolo:”.
+    Ritorna {Chiave canonica -> contenuto (trim)} con chiavi in REQUIRED_SECTIONS_CANONICAL.
     Se una o più sezioni mancano, solleva ConfigError con elenco “friendly”.
+    Al termine avvia anche la validazione soft contro il template ufficiale.
     """
     text = re.sub(r"\n{3,}", "\n\n", raw_text.strip())
 
@@ -394,9 +403,7 @@ def _parse_required_sections(raw_text: str) -> Dict[str, str]:
         human = ", ".join(_DISPLAY_LABEL.get(m, m) for m in missing_canon)
         raise ConfigError("VisionStatement incompleto: sezioni mancanti - " + human, file_path=None)
 
-    # Alias legacy richiesti da alcuni test (stesso contenuto dei canonici)
-    found.setdefault("Descrizione prodotto/azienda", found.get("Prodotto/Azienda", ""))
-    found.setdefault("Descrizione mercato", found.get("Mercato", ""))
+    _validate_against_template(found)
 
     return found
 

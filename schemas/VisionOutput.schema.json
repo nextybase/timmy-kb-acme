@@ -294,8 +294,11 @@
         },
         "required": [
           "name",
-          "category"
-        ]
+          "category",
+          "description",
+          "examples"
+        ],
+        "additionalProperties": false
       }
     },
     "relations": {
@@ -318,7 +321,8 @@
           "from",
           "to",
           "type"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     "entity_to_area": {
@@ -363,10 +367,16 @@
               "from",
               "to",
               "type"
-            ]
+            ],
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entities",
+        "relations"
+      ]
     },
     "metadata_policy": {
       "type": "object",
@@ -410,6 +420,11 @@
     "system_folders",
     "missing",
     "message_ui",
+    "entities",
+    "relations",
+    "entity_to_area",
+    "entity_to_document_type",
+    "er_model",
     "metadata_policy"
   ],
   "additionalProperties": false

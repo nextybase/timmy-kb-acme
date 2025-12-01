@@ -40,7 +40,7 @@ def tmp_ws(tmp_path: Path) -> Path:
     # PDF con le 6 sezioni obbligatorie (intestazioni a inizio riga)
     _write_pdf(
         pdf,
-        "Vision\nA\nMission\nB\nGoal\nC\nFramework etico\nD\nDescrizione prodotto/azienda\nE\nDescrizione mercato\nF\n",
+        "Vision\nA\nMission\nB\nGoal\nC\nFramework etico\nD\nContesto Operativo\nE\n",
     )
     return base
 

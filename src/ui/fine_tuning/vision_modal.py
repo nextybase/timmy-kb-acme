@@ -29,10 +29,9 @@ _SS_LAST_RESULT = "ft_last_vision_result"
 _SECTION_MAPPING: Tuple[Tuple[str, str], ...] = (
     ("Vision", "vision"),
     ("Mission", "mission"),
+    ("Framework Etico", "framework_etico"),
     ("Goal", "goal"),
-    ("Framework etico", "framework_etico"),
-    ("Prodotto/Azienda", "prodotto_azienda"),
-    ("Mercato", "mercato"),
+    ("Contesto Operativo", "contesto_operativo"),
 )
 
 

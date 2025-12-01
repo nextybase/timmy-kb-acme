@@ -12,8 +12,7 @@ def test_missing_sections_raises():
     m = str(exc.value).lower()
     assert "sezioni mancanti" in m
     assert "framework etico" in m
-    assert "descrizione prodotto/azienda" in m
-    assert "descrizione mercato" in m
+    assert "contesto operativo" in m
 
 
 def test_all_sections_ok():
@@ -25,10 +24,8 @@ Goal
 C
 Framework etico
 D
-Descrizione prodotto/azienda
+Contesto Operativo
 E
-Descrizione mercato
-F
 """
     sections = _parse_required_sections(text)
     assert all(
@@ -37,8 +34,7 @@ F
             "Vision",
             "Mission",
             "Goal",
-            "Framework etico",
-            "Descrizione prodotto/azienda",
-            "Descrizione mercato",
+            "Framework Etico",
+            "Contesto Operativo",
         )
     )

@@ -1,0 +1,113 @@
+version: 1
+description: >
+  Struttura vincolante per tutti i Vision Statement utilizzati nella pipeline NeXT.
+  Questo template definisce le sezioni obbligatorie e il loro significato.
+  È usato come Single Source of Truth per generazione template PDF, validazione
+  dei Vision Statement e documentazione.
+
+sections:
+  - key: vision
+    title: "Vision"
+    required: true
+    order: 1
+    description: >
+      Descrive l’orizzonte di lungo periodo: che tipo di realtà l’organizzazione
+      vuole contribuire a creare nei prossimi 5–10 anni grazie al progetto e
+      all’uso dell’Intelligenza Artificiale. La Vision risponde in sintesi alla
+      domanda: «In che mondo vogliamo vivere, se il progetto avrà successo?».
+
+  - key: mission
+    title: "Mission"
+    required: true
+    order: 2
+    description: >
+      Spiega cosa fa concretamente l’organizzazione, per chi e con quali modalità
+      operative, in relazione alla Vision. La Mission chiarisce attività principali,
+      destinatari (clienti, utenti, cittadini, studenti, ecc.) e approccio
+      metodologico (es. uso dell’AI, modello organizzativo, canali).
+
+  - key: framework_etico
+    title: "Framework Etico"
+    required: true
+    order: 3
+    description: >
+      Definisce i principi etici che guidano l’uso dell’AI, dei dati e dei processi
+      digitali. Può includere, tra gli altri: trasparenza, tracciabilità, supervisione
+      umana (Human-in-the-Loop), sostenibilità e benessere lavorativo, inclusione e
+      accessibilità, gestione di bias e pregiudizi, adesione alle normative rilevanti.
+
+    hints:
+      - "Descrivere come vengono rese spiegabili e verificabili le decisioni supportate dall’AI."
+      - "Specificare quando e come interviene la supervisione umana nei processi critici."
+      - "Indicare se e come l’AI è usata per migliorare il benessere lavorativo."
+      - "Esplicitare l’attenzione a bias su genere, etnia, orientamento politico/sociale, cultura."
+      - "Richiamare le principali normative (es. AI Act UE, leggi nazionali, regolamenti interni)."
+
+  - key: goal
+    title: "Goal"
+    required: true
+    order: 4
+    description: >
+      Definisce gli obiettivi operativi del progetto AI. È consigliata un’organizzazione
+      per orizzonti temporali (es. breve/medio/lungo termine). I goal dovrebbero essere
+      formulati in modo chiaro e, se possibile, associati a indicatori o KPI misurabili.
+
+    suggested_structure:
+      - label: "Breve termine (es. 3 mesi)"
+        description: >
+          Obiettivi iniziali e non ambigui: avvio del progetto, primi prototipi,
+          attivazione dei team, primi risultati misurabili.
+      - label: "Medio termine (es. 6 mesi)"
+        description: >
+          Obiettivi di consolidamento: estensione del perimetro, stabilizzazione
+          dei processi, osservazione di trend (es. riduzione effort, miglioramento
+          qualità del servizio, soddisfazione utenti).
+      - label: "Lungo termine (es. 12 mesi)"
+        description: >
+          Obiettivi di impatto: cambiamenti strutturali, scalabilità in altri
+          contesti (reparti, territori, servizi), benefici misurabili sulla
+          sostenibilità e sulla qualità del lavoro.
+
+  - key: contesto_operativo
+    title: "Contesto Operativo"
+    required: true
+    order: 5
+    description: >
+      Fornisce un quadro sintetico ma chiaro dell’ambiente in cui verrà applicato
+      il progetto AI: settore, soggetti coinvolti, lingue utilizzate, quadro
+      normativo rilevante. Serve a dare al sistema il contesto minimo per
+      interpretare correttamente Vision, Mission, Framework Etico e Goal.
+
+    subsections:
+      - key: ambito_settoriale
+        label: "Ambito settoriale"
+        required: true
+        description: >
+          Descrive il/i settore/i principali in cui opera l’organizzazione
+          (es. PMI, scuola, PA, sanità, turismo, servizi professionali, sviluppo
+          territoriale) ed eventuali sottosettori rilevanti.
+
+      - key: utenti_primari
+        label: "Utenti primari"
+        required: true
+        description: >
+          Indica chi utilizzerà direttamente i sistemi AI o beneficerà per primo
+          dei risultati (es. dipendenti, docenti, studenti, tecnici, manager,
+          cittadini, partner esterni).
+
+      - key: lingua_lavoro
+        label: "Lingua di lavoro"
+        required: true
+        description: >
+          Specifica la lingua principale di lavoro (es. Italiano) e le eventuali
+          lingue aggiuntive usate per documentazione tecnica, standard o
+          comunicazioni internazionali.
+
+      - key: normative_chiave
+        label: "Normative chiave"
+        required: true
+        description: >
+          Elenca le principali normative e linee guida che devono essere considerate
+          nel progetto (es. AI Act UE, GDPR, normative di settore, regolamenti
+          interni, policy ESG). Non è richiesta esaustività, ma almeno i riferimenti
+          fondamentali.

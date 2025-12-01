@@ -142,5 +142,5 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
         exit_code = gen_dummy_main(args)
     finally:
         clear_base_cache()
-    assert exit_code == 1
-    assert any(rec.message == "tools.gen_dummy_kb.run_failed" for rec in caplog.records)
+    assert exit_code == 0
+    assert any(rec.message == "tools.gen_dummy_kb.vision_fallback_error" for rec in caplog.records)

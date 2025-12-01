@@ -73,6 +73,7 @@ from pipeline.path_utils import (  # noqa: E402
     read_text_safe,
     to_kebab,
 )
+from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
     from pipeline.exceptions import ConfigError  # type: ignore
@@ -224,7 +225,7 @@ def _build_generic_vision_template_pdf() -> bytes:
         normal = styles["Normal"]
         heading = styles["Heading2"]
 
-        story = []
+        story: list[Any] = []
 
         def add_title(text: str) -> None:
             story.append(Paragraph(text, heading))
@@ -237,51 +238,73 @@ def _build_generic_vision_template_pdf() -> bytes:
         story.append(Paragraph("Vision Statement – Template generico", styles["Title"]))
         story.append(Spacer(1, 0.8 * cm))
 
-        add_title("Vision")
-        add_paragraph(
-            "In questa sezione il cliente descrive la propria Vision, ovvero l’orizzonte di lungo periodo "
-            "verso cui tende l’organizzazione. La Vision dovrebbe rispondere alla domanda: "
-            "«In che tipo di realtà vogliamo contribuire a vivere tra 5–10 anni grazie al nostro lavoro "
-            "e all’uso dell’Intelligenza Artificiale?».",
-        )
-
-        add_title("Mission")
-        add_paragraph(
-            "Qui va descritta la Mission, cioè il modo concreto in cui l’organizzazione intende agire "
-            "per avvicinarsi alla Vision. La Mission risponde tipicamente a: "
-            "«Cosa facciamo, per chi lo facciamo e con quali modalità operative?».",
-        )
-
-        add_title("Framework Etico")
-        add_paragraph(
-            "In questa parte vanno indicati i principi etici che guidano l’uso dell’AI e dei dati: "
-            "trasparenza, tracciabilità, supervisione umana, sostenibilità, inclusione, gestione dei bias, "
-            "adesione alle normative (es. AI Act) e alle policy interne. "
-            "Il Framework Etico deve chiarire quali pratiche sono accettabili e quali no.",
-        )
-
-        add_title("Goal (es. orizzonti 3/6/12 mesi)")
-        add_paragraph(
-            "Qui si definiscono gli obiettivi operativi a breve, medio e lungo termine. "
-            "Un possibile schema è quello a basket temporali: ad esempio 3 mesi (attivazione e primi risultati), "
-            "6 mesi (consolidamento e trend), 12 mesi (impatto complessivo e scalabilità). "
-            "Per ogni orizzonte temporale è utile indicare obiettivi chiari e, se possibile, alcuni KPI indicativi.",
-        )
-
-        add_title("Contesto Operativo")
-        add_paragraph(
-            "In questa sezione il cliente descrive il contesto in cui opera il progetto: "
-            "settore di attività (es. PMI, scuola, PA, territorio), tipologia di utenti coinvolti, "
-            "lingue di lavoro, normative chiave di riferimento (es. regolamenti di settore, privacy, "
-            "linee guida interne). L’obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
-        )
-
-        add_paragraph(
-            "Questo documento funge da contratto semantico tra l’organizzazione e il sistema: "
-            "non deve essere perfetto, ma sufficientemente chiaro da permettere di individuare "
-            "le aree tematiche principali e gli obiettivi del progetto.",
-        )
-
+        sections = load_vision_template_sections() or []
+        if sections:
+            ordered = sorted(sections, key=lambda s: float(s.get("order") or 0))
+            for section in ordered:
+                title = str(section.get("title") or section.get("key") or "Sezione").strip()
+                if title:
+                    add_title(title)
+                description = str(section.get("description") or "").strip()
+                if description:
+                    add_paragraph(description)
+                subsections = section.get("subsections") or section.get("suggested_structure") or section.get("hints")
+                if isinstance(subsections, list):
+                    for item in subsections:
+                        text: str | None = None
+                        if isinstance(item, str):
+                            text = item.strip()
+                        elif isinstance(item, dict):
+                            label = str(item.get("label") or item.get("key") or "").strip()
+                            desc = str(item.get("description") or "").strip()
+                            if label and desc:
+                                text = f"{label}: {desc}"
+                            else:
+                                text = label or desc
+                        if text:
+                            add_paragraph(text)
+        else:
+            add_title("Vision")
+            add_paragraph(
+                "In questa sezione il cliente descrive la propria Vision, ovvero l’orizzonte di lungo periodo "
+                "verso cui tende l’organizzazione. La Vision dovrebbe rispondere alla domanda: "
+                "«In che tipo di realtà vogliamo contribuire a vivere tra 5–10 anni grazie al nostro lavoro "
+                "e all’uso dell’Intelligenza Artificiale?».",
+            )
+            add_title("Mission")
+            add_paragraph(
+                "Qui va descritta la Mission, cioè il modo concreto in cui l’organizzazione intende agire "
+                "per avvicinarsi alla Vision. La Mission risponde tipicamente a: "
+                "«Cosa facciamo, per chi lo facciamo e con quali modalità operative?».",
+            )
+            add_title("Framework Etico")
+            add_paragraph(
+                "In questa parte vanno indicati i principi etici che guidano l’uso dell’AI e dei dati: "
+                "trasparenza, tracciabilità, supervisione umana, sostenibilità, inclusione, gestione dei bias, "
+                "adesione alle normative (es. AI Act) e alle policy interne. "
+                "Il Framework Etico deve chiarire quali pratiche sono accettabili e quali no.",
+            )
+            add_title("Goal (es. orizzonti 3/6/12 mesi)")
+            add_paragraph(
+                "Qui si definiscono gli obiettivi operativi a breve, medio e lungo termine. "
+                "Un possibile schema è quello a basket temporali: ad esempio 3 mesi (attivazione e primi "
+                "risultati), 6 mesi (consolidamento e trend), 12 mesi (impatto complessivo e scalabilità)."
+            )
+            add_paragraph(
+                "Per ogni orizzonte temporale è utile indicare obiettivi chiari e, se possibile, alcuni KPI indicativi."
+            )
+            add_title("Contesto Operativo")
+            add_paragraph(
+                "In questa sezione il cliente descrive il contesto in cui opera il progetto: "
+                "settore di attività (es. PMI, scuola, PA, territorio), tipologia di utenti coinvolti, "
+                "lingue di lavoro, normative chiave di riferimento (es. regolamenti di settore, privacy, "
+                "linee guida interne). L’obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
+            )
+            add_paragraph(
+                "Questo documento funge da contratto semantico tra l’organizzazione e il sistema: "
+                "non deve essere perfetto, ma sufficientemente chiaro da permettere di individuare "
+                "le aree tematiche principali e gli obiettivi del progetto.",
+            )
         doc.build(story)
         return buf.getvalue()
     except Exception:
@@ -839,15 +862,6 @@ def build_payload(
             extra={"file_path": str(repo_pdf), "slug": slug},
         )
         pdf_bytes = _build_generic_vision_template_pdf()
-        try:
-            repo_pdf.parent.mkdir(parents=True, exist_ok=True)
-            with repo_pdf.open("wb") as handle:
-                handle.write(pdf_bytes)
-        except Exception:
-            logger.debug(
-                "tools.gen_dummy_kb.vision_template_write_failed",
-                extra={"file_path": str(repo_pdf), "slug": slug},
-            )
 
     ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
 
@@ -861,6 +875,17 @@ def build_payload(
     categories_for_readmes: Dict[str, Dict[str, Any]] = {}
     fallback_info: Optional[Dict[str, Any]] = None
     vision_completed = False
+
+    def _apply_semantic_fallback(reason_tag: str) -> None:
+        nonlocal fallback_info, categories_for_readmes
+        if fallback_info and categories_for_readmes:
+            return
+        fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
+        categories_for_readmes = fallback_info.get("categories", {})
+        logger.warning(
+            "tools.gen_dummy_kb.vision_fallback_applied",
+            extra={"slug": slug, "reason": reason_tag},
+        )
 
     if enable_vision:
         success, vision_meta = _run_vision_with_timeout(
@@ -883,8 +908,7 @@ def build_payload(
                     "tools.gen_dummy_kb.vision_fallback_no_vision",
                     extra={"slug": slug, "mode": "timeout"},
                 )
-                fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
-                categories_for_readmes = fallback_info.get("categories", {})
+                _apply_semantic_fallback("timeout")
             elif ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
                 logger.info(
                     "tools.gen_dummy_kb.vision_already_completed",
@@ -893,7 +917,11 @@ def build_payload(
                 vision_completed = True
                 categories_for_readmes = _load_mapping_categories(base_dir)
             else:
-                raise ConfigError(message or "Vision fallita", slug=slug, file_path=reason.get("file_path"))
+                logger.error(
+                    "tools.gen_dummy_kb.vision_fallback_error",
+                    extra={"slug": slug, "error": message, "file_path": sentinel or None},
+                )
+                _apply_semantic_fallback("error")
     else:
         fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
         categories_for_readmes = fallback_info.get("categories", {})

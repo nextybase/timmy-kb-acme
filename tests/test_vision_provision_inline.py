@@ -59,7 +59,7 @@ def tmp_workspace(tmp_path: Path) -> Path:
     pdf = base / "config" / "VisionStatement.pdf"
     _write_pdf(
         pdf,
-        "Vision\nA\nMission\nB\nGoal\nC\nFramework etico\nD\nDescrizione prodotto/azienda\nE\nDescrizione mercato\nF\n",
+        "Vision\nA\nMission\nB\nGoal\nC\nFramework etico\nD\nContesto Operativo\nE\n",
     )
     return base
 

@@ -12,7 +12,7 @@ try:
 except Exception:  # pragma: no cover
     yaml = None  # type: ignore
 
-SECTION_ORDER = ["Vision", "Mission", "Goal", "Framework etico", "Prodotto/Azienda", "Mercato"]
+SECTION_ORDER = ["Vision", "Mission", "Framework Etico", "Goal", "Contesto Operativo"]
 
 
 def repo_root() -> Path:
@@ -61,10 +61,9 @@ def build_prompt_from_yaml(data: Dict[str, Any]) -> str:
     tag_map = {
         "Vision": _sec("vision"),
         "Mission": _sec("mission"),
+        "Framework Etico": _sec("framework_etico"),
         "Goal": _sec("goal"),
-        "Framework etico": _sec("framework_etico"),
-        "Prodotto/Azienda": _sec("prodotto_azienda"),
-        "Mercato": _sec("mercato"),
+        "Contesto Operativo": _sec("contesto_operativo"),
     }
 
     lines = [

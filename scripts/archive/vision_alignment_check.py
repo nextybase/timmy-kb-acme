@@ -83,10 +83,8 @@ def main():
         "Aumentare produttività del 25% in 12 mesi con progetti pilota iterativi.\n\n"
         "[Framework etico]\n"
         "Human-in-the-Loop, tracciabilità, minimizzazione dei bias, AI literacy.\n\n"
-        "[Prodotto/Azienda]\n"
-        "Servizi consulenziali e piattaforma Nexty/Timmy per onboarding AI.\n\n"
-        "[Mercato]\n"
-        "PMI di servizi/manifattura nel territorio regionale, canale B2B diretto.\n"
+        "[Contesto Operativo]\n"
+        "Settore servizi/manifattura regionale, lingue di lavoro: italiano e inglese, normative: GDPR, AI Act UE, policy interne di data governance.\n"
     )
 
     try:
