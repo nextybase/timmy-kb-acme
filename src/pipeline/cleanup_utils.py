@@ -35,13 +35,13 @@ def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
     try:
         if target.exists():
             shutil.rmtree(target, ignore_errors=False)
-            log.info("🧹 Rimossa directory", extra={"file_path": str(target)})
+            log.info("pipeline.cleanup.dir_removed", extra={"file_path": str(target)})
         else:
-            log.info("ℹ️  Nessuna directory da rimuovere (assente)", extra={"file_path": str(target)})
+            log.info("pipeline.cleanup.dir_absent", extra={"file_path": str(target)})
         return True
     except Exception as e:
         log.warning(
-            "⚠️  Impossibile rimuovere directory",
+            "pipeline.cleanup.dir_remove_failed",
             extra={"file_path": str(target), "error": str(e)},
         )
         return False
@@ -76,7 +76,7 @@ def clean_push_leftovers(
         ensure_within(base_dir, book_dir)
     except Exception as e:
         _logger.warning(
-            "Path book non sicuro: skip cleanup",
+            "pipeline.cleanup.unsafe_book_path",
             extra={"file_path": str(book_dir), "error": str(e)},
         )
         return {"ok": False, "reason": "unsafe_path", "targets": []}
@@ -91,7 +91,7 @@ def clean_push_leftovers(
             targets.append(git_dir)
         except Exception as e:
             _logger.warning(
-                "Target .git non sicuro: skip",
+                "pipeline.cleanup.git_dir_unsafe",
                 extra={"file_path": str(git_dir), "error": str(e)},
             )
 
@@ -103,5 +103,5 @@ def clean_push_leftovers(
         "ok": all(results.values()) if results else True,
         "targets": list(results.keys()),
     }
-    _logger.info("✅ Cleanup completato", extra=summary)
+    _logger.info("pipeline.cleanup.completed", extra=summary)
     return summary

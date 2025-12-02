@@ -180,7 +180,7 @@ def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_pat
     res = github_flow._stage_changes(tmp_path, {}, slug="demo", force_ack=None, logger=_Recorder())  # type: ignore[arg-type]
 
     assert res is False
-    assert any("Nessuna modifica" in msg for msg in recorded)
+    assert any(msg == "github.push.no_changes" for msg in recorded)
     assert called["commit_msg"].startswith("Aggiornamento contenuto KB")
 
 

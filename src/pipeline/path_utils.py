@@ -245,7 +245,7 @@ def is_safe_subpath(path: Path, base: Path) -> bool:
             return False
     except Exception as e:
         _logger.error(
-            "Errore nella validazione path (is_safe_subpath)",
+            "path_utils.validation_error",
             extra={"error": str(e), "path": str(path), "base": str(base)},
         )
         return False
@@ -505,7 +505,7 @@ def _load_slug_regex() -> str:
                 return pattern if isinstance(pattern, str) and pattern else default_regex
         except Exception as e:
             _logger.error(
-                "Errore caricamento config slug_regex",
+                "path_utils.slug_regex_load_error",
                 extra={"error": str(e), "file_path": str(cfg_path)},
             )
     return default_regex
@@ -516,7 +516,7 @@ def clear_slug_regex_cache() -> None:
     try:
         _load_slug_regex.cache_clear()
     except Exception as e:
-        _logger.error("Errore nel reset della cache slug_regex", extra={"error": str(e)})
+        _logger.error("path_utils.slug_regex_reset_failed", extra={"error": str(e)})
 
 
 def is_valid_slug(slug: str) -> bool:
@@ -529,7 +529,7 @@ def is_valid_slug(slug: str) -> bool:
         return bool(re.fullmatch(pattern, slug))
     except re.error as e:
         # Regex malformata in config → fallback sicuro
-        _logger.error("Regex slug non valida in config", extra={"error": str(e)})
+        _logger.error("path_utils.slug_regex_invalid", extra={"error": str(e)})
         return bool(re.fullmatch(r"^[a-z0-9-]+$", slug))
 
 
@@ -552,7 +552,7 @@ def normalize_path(path: Path) -> Path:
     try:
         return Path(path).resolve()
     except Exception as e:
-        _logger.error("Errore nella normalizzazione path", extra={"error": str(e)})
+        _logger.error("path_utils.normalize_error", extra={"error": str(e)})
         return Path(path)
 
 
@@ -730,7 +730,7 @@ def ensure_valid_slug(
             validate_slug(slug)
             return slug
         except InvalidSlug:
-            logger.error("Slug non valido secondo le regole configurate.")
+            logger.error("path_utils.slug_invalid", extra={"slug": slug})
             if not interactive:
                 raise
             slug = ""

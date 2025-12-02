@@ -23,12 +23,19 @@ scrape_configs:
           expression: 'run_id=(?P<run_id>[^\s]+)'
       - regex:
           expression: 'event=(?P<event>[^\s]+)'
+      - regex:
+          expression: 'trace_id=(?P<trace_id>[0-9a-f]{32})'
+      - regex:
+          expression: 'span_id=(?P<span_id>[0-9a-f]{16})'
       - replace:
           expression: '(Authorization:\s+)(Bearer|Basic)\s+[^ ]+'
           replace: '$1<REDACTED>'
       - replace:
           expression: 'x-access-token=[^&\s]+'
           replace: 'x-access-token=<REDACTED>'
+      - replace:
+          expression: '(SERVICE_ACCOUNT_FILE=)[^\s]+'
+          replace: '$1<REDACTED>'
       - labels:
           slug:
           run_id:
@@ -44,13 +51,23 @@ scrape_configs:
       - regex:
           expression: 'slug=(?P<slug>[^\s]+)'
       - regex:
+          expression: 'run_id=(?P<run_id>[^\s]+)'
+      - regex:
           expression: 'event=(?P<event>[^\s]+)'
+      - regex:
+          expression: 'trace_id=(?P<trace_id>[0-9a-f]{32})'
+      - regex:
+          expression: 'span_id=(?P<span_id>[0-9a-f]{16})'
       - replace:
           expression: '(Authorization:\s+)(Bearer|Basic)\s+[^ ]+'
           replace: '$1<REDACTED>'
       - replace:
           expression: 'x-access-token=[^&\s]+'
           replace: 'x-access-token=<REDACTED>'
+      - replace:
+          expression: '(SERVICE_ACCOUNT_FILE=)[^\s]+'
+          replace: '$1<REDACTED>'
       - labels:
           slug:
+          run_id:
           event:

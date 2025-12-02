@@ -67,7 +67,7 @@ def _load_guide() -> Dict[str, Dict[str, Any]]:
     """
     try:
         if not GUIDE_PATH.is_file():
-            logger.info("secrets_guide.yaml not found at %s", GUIDE_PATH)
+            logger.info("ui.secrets_guide.missing", extra={"file_path": str(GUIDE_PATH)})
             return {}
 
         text = read_text_safe(GUIDE_PATH.parent, GUIDE_PATH, encoding="utf-8")
@@ -80,7 +80,7 @@ def _load_guide() -> Dict[str, Dict[str, Any]]:
         # normalizziamo le chiavi a stringa
         return {str(k): (v or {}) for k, v in secrets.items() if isinstance(v, dict)}
     except Exception:  # noqa: BLE001
-        logger.exception("Failed to load secrets_guide.yaml")
+        logger.exception("ui.secrets_guide.load_failed", extra={"file_path": str(GUIDE_PATH)})
         return {}
 
 
@@ -111,11 +111,12 @@ def main() -> None:
         ),
     )
 
+    env_path = Path(".env")
     try:
         ensure_dotenv_loaded()
     except Exception:  # noqa: BLE001
         # In caso di problemi con dotenv mostriamo comunque gli stati
-        logger.exception("Failed to load .env file")
+        logger.exception("ui.secrets_health.env_load_failed", extra={"env_path": str(env_path)})
 
     catalog: List[Dict[str, Any]] = Settings.env_catalog()
     guide = _load_guide()

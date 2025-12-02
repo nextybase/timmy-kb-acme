@@ -295,6 +295,14 @@ def _resolve_vision_strict_output(ctx: Any) -> bool:
         if isinstance(raw, bool):
             return raw
 
+    base_dir = getattr(ctx, "base_dir", None)
+    if base_dir:
+        try:
+            fallback_settings = Settings.load(Path(base_dir))
+            return bool(fallback_settings.vision_settings.strict_output)
+        except Exception:
+            pass
+
     return True
 
 
@@ -335,9 +343,6 @@ def _load_vision_schema() -> Dict[str, Any]:
         schema["type"] = "object"
 
     properties = schema.get("properties")
-    if isinstance(properties, dict):
-        schema["required"] = list(properties.keys())
-
     LOGGER.debug(
         _evt("schema.keys"),
         extra={
@@ -486,6 +491,19 @@ def _call_assistant_json(
     use_structured = _determine_structured_output(client, assistant_id, strict_output)
     response_format = _build_response_format(use_structured)
     normalized_engine = (engine or "assistants").strip().lower()
+
+    if response_format:
+        schema_dict = response_format.get("json_schema", {}).get("schema", {})
+        props = schema_dict.get("properties") if isinstance(schema_dict, dict) else None
+        reqs = schema_dict.get("required") if isinstance(schema_dict, dict) else None
+        LOGGER.debug(
+            _evt("response_format.keys"),
+            extra={
+                "engine": normalized_engine,
+                "properties": sorted(props.keys()) if isinstance(props, dict) else [],
+                "required": sorted(reqs) if isinstance(reqs, list) else [],
+            },
+        )
 
     if normalized_engine.startswith("responses"):
         return _call_responses_json(
@@ -820,7 +838,7 @@ def _determine_structured_output(client: Any, assistant_id: str, strict_output: 
 
 def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
     if not use_structured:
-        return None
+        return {"type": "json_object"}
     schema_payload = {
         "type": "json_schema",
         "json_schema": {
@@ -878,7 +896,7 @@ def _call_assistants_api(
         "instructions": run_instructions or None,
         "tool_choice": tool_choice,
     }
-    if use_structured and response_format is not None:
+    if response_format is not None:
         run_kwargs["response_format"] = response_format
 
     run = client.beta.threads.runs.create_and_poll(**run_kwargs)
@@ -957,7 +975,7 @@ def _call_responses_json(
         "instructions": run_instructions or None,
         "tool_choice": tool_choice,
     }
-    if use_structured and response_format is not None:
+    if response_format is not None:
         request_kwargs["response_format"] = response_format
     if use_kb:
         request_kwargs["tools"] = [{"type": "file_search"}]

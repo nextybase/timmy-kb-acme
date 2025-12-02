@@ -84,7 +84,7 @@ def test_secret(name: str, value: str, context: Dict[str, Any] | None = None) ->
             return _test_allowed_google_domain(value)
 
     except Exception:  # noqa: BLE001
-        logger.exception("Unexpected error while testing secret %s", name)
+        logger.exception("secret_checks.unexpected_error", extra={"secret_name": name})
         return _error(
             "Errore imprevisto durante il test.",
             details="Controlla i log dell'applicazione per maggiori dettagli.",

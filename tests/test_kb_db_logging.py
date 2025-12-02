@@ -56,5 +56,5 @@ def test_fetch_candidates_logs_invalid_json(tmp_path: Path, caplog):
     assert "kb_db.fetch.invalid_embedding_json" in msgs
     mrec = next(r for r in caplog.records if r.msg == "kb_db.fetch.invalid_meta_json")
     erec = next(r for r in caplog.records if r.msg == "kb_db.fetch.invalid_embedding_json")
-    assert getattr(mrec, "project_slug", None) == project
+    assert getattr(mrec, "slug", None) == project
     assert getattr(erec, "scope", None) == scope

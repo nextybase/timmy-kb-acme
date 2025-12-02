@@ -65,7 +65,7 @@ def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -
         if strict:
             raise ConfigError(f"fsync(file) fallito: {e}", file_path=str(path) if path else None) from e
         _logger.debug(
-            "fsync(file) best-effort fallito",
+            "file_utils.fsync_file_failed",
             extra={"file_path": str(path) if path else None},
         )
 
@@ -84,7 +84,7 @@ def _fsync_dir_best_effort(dir_path: Path) -> None:
         finally:
             os.close(dfd)
     except Exception:  # pragma: no cover - dipende dall'OS/FS
-        _logger.debug("fsync(dir) best-effort fallito", extra={"dir_path": str(dir_path)})
+        _logger.debug("file_utils.fsync_dir_failed", extra={"dir_path": str(dir_path)})
 
 
 def _extended_str(path: Path) -> str:
@@ -349,8 +349,8 @@ def safe_append_text(
             try:
                 os.close(lock_fd)
             except Exception:
-                _logger.debug("Chiusura lock fallita", extra={"lock_path": str(lock_path)})
+                _logger.debug("file_utils.lock_close_failed", extra={"lock_path": str(lock_path)})
         try:
             Path(lock_path_str).unlink(missing_ok=True)
         except Exception:
-            _logger.debug("Rimozione lock fallita", extra={"lock_path": str(lock_path)})
+            _logger.debug("file_utils.lock_remove_failed", extra={"lock_path": str(lock_path)})

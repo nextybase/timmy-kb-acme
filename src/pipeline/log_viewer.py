@@ -175,7 +175,14 @@ def parse_log_line(line: str) -> Optional[Dict[str, Any]]:
 
     m = _LOG_LINE_RE.match(raw)
     if not m:
-        return None
+        return {
+            "timestamp": None,
+            "level": "UNKNOWN",
+            "logger": None,
+            "message": raw,
+            "event": raw,
+            "_raw": raw,
+        }
 
     data = m.groupdict()
     meta = data.pop("meta") or ""

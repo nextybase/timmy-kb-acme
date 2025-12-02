@@ -140,6 +140,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert rc == 1
         assert called["value"] is False
         out, err = capsys.readouterr()
-        assert "PDF non trovato" in out or "PDF non trovato" in err
+        combined = out + err
+        assert "vision_yaml.pdf_not_found" in combined
     finally:
         sys.argv = argv_bak

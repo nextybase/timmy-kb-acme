@@ -440,11 +440,10 @@ def _materialize_query_vector(
         LOGGER.warning(
             "retriever.query.embed_failed",
             extra={
-                "project_slug": params.project_slug,
+                "slug": params.project_slug,
                 "scope": params.scope,
                 "error": repr(exc),
                 "ms": float(t_ms),
-                "event": "retriever.query.embed_failed",
             },
         )
         raise RetrieverError("embedding fallita") from exc
@@ -454,7 +453,7 @@ def _materialize_query_vector(
         LOGGER.warning(
             "retriever.query.invalid",
             extra={
-                "project_slug": params.project_slug,
+                "slug": params.project_slug,
                 "scope": params.scope,
                 "reason": "empty_embedding",
             },
@@ -559,7 +558,7 @@ def _log_retriever_metrics(
         LOGGER.info(
             "retriever.metrics",
             extra={
-                "project_slug": params.project_slug,
+                "slug": params.project_slug,
                 "scope": params.scope,
                 "k": int(params.k),
                 "candidate_limit": int(params.candidate_limit),
@@ -688,7 +687,7 @@ def search(
             LOGGER.warning(
                 "retriever.query.invalid",
                 extra={
-                    "project_slug": params.project_slug,
+                    "slug": params.project_slug,
                     "scope": params.scope,
                     "reason": "empty_query",
                 },
@@ -706,7 +705,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "project_slug": params.project_slug,
+                    "slug": params.project_slug,
                     "scope": params.scope,
                     "stage": "embedding",
                 },
@@ -722,7 +721,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "project_slug": params.project_slug,
+                    "slug": params.project_slug,
                     "scope": params.scope,
                     "stage": "embedding",
                 },
@@ -734,7 +733,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "project_slug": params.project_slug,
+                    "slug": params.project_slug,
                     "scope": params.scope,
                     "stage": "fetch_candidates",
                 },
@@ -745,7 +744,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "project_slug": params.project_slug,
+                    "slug": params.project_slug,
                     "scope": params.scope,
                     "stage": "fetch_candidates",
                 },
@@ -785,7 +784,7 @@ def search(
                 LOGGER.info(
                     "retriever.throttle.metrics",
                     extra={
-                        "project_slug": params.project_slug,
+                        "slug": params.project_slug,
                         "scope": params.scope,
                         "throttle": {
                             "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
@@ -802,7 +801,7 @@ def search(
                 LOGGER.warning(
                     "retriever.latency_budget.hit",
                     extra={
-                        "project_slug": params.project_slug,
+                        "slug": params.project_slug,
                         "scope": params.scope,
                         "stage": "ranking",
                     },

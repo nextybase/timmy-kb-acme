@@ -6,7 +6,7 @@ openai:
   max_retries: 2
   http2_enabled: false
 vision:
-  engine: responses
+  engine: assistant
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
   use_kb: false
@@ -36,7 +36,7 @@ security:
     token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN
     ci_required: false
 ops:
-  log_level: INFO
+  log_level: DEBUG
 finance:
   import_enabled: false
 client_name: prova srl

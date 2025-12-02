@@ -22,9 +22,11 @@ promuovono come label principali:
  - `slug`
   - `run_id`
   - `ui.semantics.*` eventi di gating (`ui.semantics.gating_blocked` / `ui.semantics.gating_allowed`) utili per verificare lo stato RAW e i percorsi.
+  - `run_id` viene estratto anche dai log UI globali (`.timmykb/logs/ui.log`) generati da l'entrypoint Streamlit; se OTEL è attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per la correlazione traces→logs.
 
 > Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
 > header sensibili (`Authorization`, `x-access-token`).
+> È prevista anche la redazione `SERVICE_ACCOUNT_FILE` per i percorsi delle credenziali.
 
 ### Provisioning Grafana
 

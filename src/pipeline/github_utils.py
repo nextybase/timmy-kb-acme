@@ -114,8 +114,12 @@ def _build_push_plan(
 
     if not should_push(context):
         logger.info(
-            "Push GitHub disabilitato da variabili d'ambiente (TIMMY_NO_GITHUB/SKIP_GITHUB_PUSH).",
-            extra={"slug": context.slug},
+            "github.push.disabled_by_env",
+            extra={
+                "slug": context.slug,
+                "TIMMY_NO_GITHUB": bool(os.environ.get("TIMMY_NO_GITHUB")),
+                "SKIP_GITHUB_PUSH": bool(os.environ.get("SKIP_GITHUB_PUSH")),
+            },
         )
         return None
 
@@ -256,7 +260,7 @@ def push_output_to_github(
         return
 
     local_logger.info(
-        "Preparazione push su GitHub",
+        "github.push.prepare",
         extra={"slug": context.slug, "branch": plan.default_branch},
     )
     lock = LeaseLock(plan.base_dir, slug=context.slug, logger=local_logger, **plan.lock_config)
@@ -333,7 +337,7 @@ def push_output_to_github(
                 )
 
         local_logger.info(
-            "Push GitHub completato",
+            "github.push.completed",
             extra={"slug": context.slug, "repo": repo.full_name, "branch": plan.default_branch},
         )
     except CmdError as e:

@@ -84,7 +84,7 @@ def copy_from_local(
     if not local_path:
         local_path = str(raw_dir)
         logger.info(
-            "Nessun --local-path fornito: uso RAW del cliente come sorgente",
+            "tag_onboarding_raw.using_raw_as_source",
             extra={"raw": str(raw_dir), "slug": context.slug},
         )
 

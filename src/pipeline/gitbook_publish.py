@@ -41,7 +41,10 @@ def publish_book_to_gitbook(
 ) -> None:
     """Carica `book/` su GitBook (endpoint v1, payload da adattare se necessario)."""
     if not (space_id and token):
-        logger.info("GitBook publish saltato: spazio/token mancanti", extra={"slug": slug})
+        logger.info(
+            "gitbook.publish.skipped_missing_token",
+            extra={"slug": slug, "space_id_present": bool(space_id), "token_present": bool(token)},
+        )
         return
 
     ensure_within(book_dir, book_dir)
@@ -75,7 +78,7 @@ def publish_book_to_gitbook(
                 file_path=str(book_dir),
             )
         logger.info(
-            "GitBook publish completato",
+            "gitbook.publish.completed",
             extra={
                 "slug": slug,
                 "entries": summary_entries,

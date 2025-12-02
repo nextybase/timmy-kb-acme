@@ -103,15 +103,13 @@ def check_book_dir(book_dir: Path) -> Tuple[bool, list[str]]:
     # Logging di supporto per debug/observability
     if ready:
         logger.info(
-            "Book pronta: %s (README/SUMMARY presenti, %d file di contenuto).",
-            book_dir,
-            len(content_mds),
+            "book.readiness.ok",
+            extra={"book_dir": str(book_dir), "content_files": len(content_mds)},
         )
     else:
         logger.warning(
-            "Book NON pronta: %s. Errori: %s",
-            book_dir,
-            "; ".join(errors),
+            "book.readiness.fail",
+            extra={"book_dir": str(book_dir), "errors": errors},
         )
 
     return ready, errors

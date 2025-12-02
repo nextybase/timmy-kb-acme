@@ -116,7 +116,13 @@ def _compute_embeddings_for_markdown(
     except Exception as exc:  # noqa: BLE001 - surface per telemetria
         logger.error(
             "semantic.index.embedding_error",
-            extra={"slug": slug, "error": str(exc), "count": len(collected.contents)},
+            extra={
+                "slug": slug,
+                "error": str(exc),
+                "count": len(collected.contents),
+                "files": collected.rel_paths[:5],
+                "provider": getattr(embeddings_client, "__class__", type("x", (), {})).__name__,
+            },
         )
         return None, 0
 

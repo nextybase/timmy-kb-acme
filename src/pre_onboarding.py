@@ -53,8 +53,10 @@ from pipeline.logging_utils import (
     phase_scope,
     tail_path,
 )
+from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
+from pipeline.tracing import start_root_trace
 
 create_drive_folder = None
 create_drive_minimal_structure = None
@@ -461,12 +463,12 @@ def ensure_local_workspace_for_ui(
         )
 
     logger.info(
-        {
-            "event": "new_client_workspace_created",
+        "pre_onboarding.workspace.created",
+        extra={
             "slug": context.slug,
             "base": str(context.base_dir) if context.base_dir else None,
             "config": str(config_path),
-        }
+        },
     )
     return config_path
 
@@ -659,6 +661,7 @@ def _parse_args() -> argparse.ArgumentParser:
 if __name__ == "__main__":
     args = _parse_args().parse_args()
     run_id = uuid.uuid4().hex
+    start_metrics_server_once()
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
     def _error_extra(err_value: list[str], slug_value: Optional[str] = None) -> Dict[str, Any]:
@@ -683,32 +686,41 @@ if __name__ == "__main__":
     except ConfigError as exc:
         sys.exit(exit_code_for(exc))
 
-    try:
-        pre_onboarding_main(
-            slug=slug,
-            client_name=args.name,
-            interactive=not args.non_interactive,
-            dry_run=args.dry_run,
-            run_id=run_id,
-        )
-        sys.exit(0)
-    except KeyboardInterrupt:
-        sys.exit(130)
-    except ConfigError as exc:
-        early_logger.error(
-            "cli.pre_onboarding.exit.config_error",
-            extra=_error_extra(str(exc).splitlines()[:1], slug),
-        )
-        sys.exit(exit_code_for(exc))
-    except PipelineError as exc:
-        early_logger.error(
-            "cli.pre_onboarding.exit.pipeline_error",
-            extra=_error_extra(str(exc).splitlines()[:1], slug),
-        )
-        sys.exit(exit_code_for(exc))
-    except Exception as exc:  # noqa: BLE001 - hardening finale
-        early_logger.error(
-            "cli.pre_onboarding.exit.unhandled",
-            extra=_error_extra(str(exc).splitlines()[:1], slug),
-        )
-        sys.exit(exit_code_for(PipelineError(str(exc))))
+    env = get_env_var("TIMMY_ENV", default="dev")
+    with start_root_trace(
+        "onboarding",
+        slug=slug,
+        run_id=run_id,
+        entry_point="cli",
+        env=env,
+        trace_kind="onboarding",
+    ):
+        try:
+            pre_onboarding_main(
+                slug=slug,
+                client_name=args.name,
+                interactive=not args.non_interactive,
+                dry_run=args.dry_run,
+                run_id=run_id,
+            )
+            sys.exit(0)
+        except KeyboardInterrupt:
+            sys.exit(130)
+        except ConfigError as exc:
+            early_logger.error(
+                "cli.pre_onboarding.exit.config_error",
+                extra=_error_extra(str(exc).splitlines()[:1], slug),
+            )
+            sys.exit(exit_code_for(exc))
+        except PipelineError as exc:
+            early_logger.error(
+                "cli.pre_onboarding.exit.pipeline_error",
+                extra=_error_extra(str(exc).splitlines()[:1], slug),
+            )
+            sys.exit(exit_code_for(exc))
+        except Exception as exc:  # noqa: BLE001 - hardening finale
+            early_logger.error(
+                "cli.pre_onboarding.exit.unhandled",
+                extra=_error_extra(str(exc).splitlines()[:1], slug),
+            )
+            sys.exit(exit_code_for(PipelineError(str(exc))))

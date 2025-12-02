@@ -43,6 +43,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, ContextManager, Literal, Mapping, Optional, Type, Union
 
+from pipeline.metrics import observe_phase_duration, record_phase_failed
 from pipeline.tracing import ensure_tracer, infer_trace_kind, start_phase_span
 
 try:
@@ -156,14 +157,19 @@ class _RedactFilter(logging.Filter):
             if isinstance(record.msg, str):
                 record.msg = redact_secrets(record.msg)
             # redigi campi extra comuni
-            for field in (
+            redact_keys = {
                 "GITHUB_TOKEN",
                 "SERVICE_ACCOUNT_FILE",
                 "Authorization",
                 "GIT_HTTP_EXTRAHEADER",
-            ):
-                if hasattr(record, field):
-                    setattr(record, field, "***")
+            }
+            sensitive_substrings = ("token", "secret", "authorization", "password", "key", "service_account")
+            for field, _value in list(record.__dict__.items()):
+                if field in redact_keys or any(sub in field.lower() for sub in sensitive_substrings):
+                    try:
+                        setattr(record, field, "***")
+                    except Exception:
+                        pass
         except Exception:
             # mai bloccare il logging per un errore di redazione
             pass
@@ -272,6 +278,22 @@ def _set_logger_filter(lg: logging.Logger, flt: logging.Filter, key: str) -> Non
     lg.addFilter(flt)
 
 
+class _PhaseInjectFilter(logging.Filter):
+    """Inietta il campo 'phase' sui record se mancante (utile dentro phase_scope)."""
+
+    def __init__(self, phase: str):
+        super().__init__()
+        self.phase = phase
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "phase"):
+            try:
+                record.phase = self.phase
+            except Exception:
+                pass
+        return True
+
+
 def get_structured_logger(
     name: str,
     *,
@@ -326,6 +348,16 @@ def get_structured_logger(
     # 3) Tracing OTEL
     if enable_tracing is None:
         enable_tracing = settings.tracing_enabled
+
+    # 4) Se viene passato un run_id e un log_file, usa un file unico per run:
+    #    esempio: onboarding.log -> onboarding-<run_id>.log
+    if log_file and run_id:
+        try:
+            if log_file.suffix:
+                log_file = log_file.with_name(f"{log_file.stem}-{run_id}{log_file.suffix}")
+        except Exception:
+            # fallback: usa il path originale se qualcosa va storto
+            pass
 
     lg = logging.getLogger(name)
     lg.setLevel(level)
@@ -457,6 +489,8 @@ class phase_scope:
         self._span: Any | None = None
         self._span_ctx: ContextManager[Any] | None = None
         self._trace_kind = infer_trace_kind(self.stage)
+        self._phase_filter_key = f"{getattr(logger, 'name', 'logger')}::phase::{self.stage}"
+        self._phase_filter: logging.Filter | None = None
 
     def set_artifacts(self, count: Optional[int]) -> None:
         if count is None:
@@ -485,6 +519,12 @@ class phase_scope:
         except Exception:
             self._span = None
             self._span_ctx = None
+        try:
+            self._phase_filter = _PhaseInjectFilter(self.stage)
+            # se il logger supporta chiavi dei filtri, usa lo stesso schema di _set_logger_filter
+            self.logger.addFilter(self._phase_filter)
+        except Exception:
+            self._phase_filter = None
         extra = self._base_extra()
         extra.update({"event": "phase_started", "status": "start"})
         self.logger.info("phase_started", extra=extra)
@@ -518,6 +558,10 @@ class phase_scope:
             extra["error"] = str(exc)
             extra["status"] = "failed"
             self.logger.error("phase_failed", extra={"event": "phase_failed", **extra})
+            try:
+                record_phase_failed(self.customer, self.stage)
+            except Exception:
+                pass
             try:
                 if self._span is not None:
                     self._span.record_exception(exc)
@@ -553,6 +597,16 @@ class phase_scope:
         if self._span_ctx is not None:
             try:
                 self._span_ctx.__exit__(None, None, None)  # type: ignore[union-attr]
+            except Exception:
+                pass
+        if duration_ms is not None:
+            try:
+                observe_phase_duration(self.customer, self.stage, duration_ms / 1000.0)
+            except Exception:
+                pass
+        if self._phase_filter is not None:
+            try:
+                self.logger.removeFilter(self._phase_filter)
             except Exception:
                 pass
         return False

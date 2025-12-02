@@ -66,7 +66,7 @@ def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
         "`relative_path | suggested_tags | entities | keyphrases | score | sources`.\n"
     )
     safe_write_text(out, content, encoding="utf-8", atomic=True)
-    logger.info("README_TAGGING scritto", extra={"file_path": str(out)})
+    logger.info("semantic.tags.readme_written", extra={"file_path": str(out)})
     return out
 
 
@@ -147,7 +147,7 @@ def write_tags_review_stub_from_csv(
     }
     save_tags_reviewed_db(db_path, data)
     logger.info(
-        "tags_reviewed stub scritto",
+        "semantic.tags_review_stub.written",
         extra={"file_path": str(db_path), "suggested": len(suggested)},
     )
     return Path(db_path)
@@ -305,7 +305,7 @@ def write_tags_reviewed_from_nlp_db(
     safe_write_text(out_path, yaml_text, encoding="utf-8", atomic=True)
     try:
         logger.info(
-            "tags_reviewed.yaml exported from NLP",
+            "semantic.tags_yaml.exported_from_nlp",
             extra={"file_path": str(out_path), "tags": len(tags_payload)},
         )
         if used_fallback:

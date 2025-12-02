@@ -25,6 +25,7 @@ from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.metrics import record_document_processed, start_metrics_server_once
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span, start_root_trace
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
@@ -104,9 +105,8 @@ def _iter_ingest_candidates(
                 LOGGER.warning(
                     "ingest.skip.traversal",
                     extra={
-                        "event": "ingest.skip.traversal",
                         "file": str(p),
-                        "project": customer,
+                        "slug": customer,
                         "scope": scope,
                         "error": str(exc),
                     },
@@ -140,7 +140,7 @@ def _read_text_file(base_dir: Path, p: Path) -> str:
     except UnicodeDecodeError as exc:
         LOGGER.error(
             "ingest.read.unsupported_encoding",
-            extra={"event": "ingest.read.unsupported_encoding", "file": str(p)},
+            extra={"file": str(p)},
         )
         raise ConfigError(
             f"Il file {p} non è codificato in UTF-8. Converti il file in UTF-8 prima di procedere."
@@ -246,7 +246,7 @@ def ingest_path(
     if not p.exists() or not p.is_file():
         LOGGER.error(
             "ingest.invalid_file",
-            extra={"event": "ingest.invalid_file", "file": str(p)},
+            extra={"file": str(p), "slug": project_slug},
         )
         return 0
     try:
@@ -269,9 +269,8 @@ def ingest_path(
             LOGGER.warning(
                 "ingest.skip.traversal",
                 extra={
-                    "event": "ingest.skip.traversal",
                     "file": str(p),
-                    "project": project_slug,
+                    "slug": project_slug,
                     "scope": scope,
                     "error": str(exc),
                 },
@@ -293,7 +292,7 @@ def ingest_path(
         ):
             LOGGER.info(
                 "ingest.skip.binary",
-                extra={"event": "ingest.skip.binary", "file": str(p)},
+                extra={"file": str(p), "slug": project_slug},
             )
         return 0
     text = _read_text_file(base, p)
@@ -324,13 +323,17 @@ def ingest_path(
     LOGGER.info(
         "ingest.file.saved",
         extra={
-            "event": "ingest.file.saved",
-            "project": project_slug,
+            "slug": project_slug,
             "scope": scope,
             "file": str(safe_p),
             "chunks": inserted,
         },
     )
+    if inserted > 0:
+        try:
+            record_document_processed(project_slug, inserted)
+        except Exception:
+            pass
     return inserted
 
 
@@ -357,6 +360,7 @@ def ingest_folder(
 
     Restituisce un dizionario di riepilogo con i conteggi: {files, chunks}.
     """
+    start_metrics_server_once()
     base = Path(base_dir).resolve() if base_dir is not None else _infer_base_dir(folder_glob)
     client: EmbeddingsClient | None = embeddings_client
 
@@ -419,8 +423,7 @@ def ingest_folder(
                                 LOGGER.info(
                                     "pipeline.processing.progress",
                                     extra={
-                                        "event": "pipeline.processing.progress",
-                                        "project": project_slug,
+                                        "slug": project_slug,
                                         "scope": scope,
                                         "processed": count_files,
                                         "chunks": total_chunks,
@@ -430,10 +433,9 @@ def ingest_folder(
                         LOGGER.warning(
                             "ingest.skip.config_error",
                             extra={
-                                "event": "ingest.skip.config_error",
                                 "file": str(p),
                                 "scope": scope,
-                                "project": project_slug,
+                                "slug": project_slug,
                                 "error": str(exc),
                             },
                         )
@@ -441,10 +443,9 @@ def ingest_folder(
                         LOGGER.exception(
                             "ingest.error",
                             extra={
-                                "event": "ingest.error",
                                 "file": str(p),
                                 "scope": scope,
-                                "project": project_slug,
+                                "slug": project_slug,
                             },
                         )
                         raise
@@ -457,8 +458,7 @@ def ingest_folder(
         LOGGER.info(
             "ingest.limit_reached",
             extra={
-                "event": "ingest.limit_reached",
-                "project": project_slug,
+                "slug": project_slug,
                 "scope": scope,
                 "files_processed": count_files,
                 "max_files": max_files,
@@ -468,8 +468,7 @@ def ingest_folder(
         LOGGER.info(
             "ingest.summary",
             extra={
-                "event": "ingest.summary",
-                "project": project_slug,
+                "slug": project_slug,
                 "scope": scope,
                 "files": count_files,
                 "chunks": total_chunks,

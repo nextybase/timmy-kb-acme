@@ -50,7 +50,7 @@ def test_search_logs_empty_query(caplog: pytest.LogCaptureFixture) -> None:
         None,
     )
     assert record is not None
-    assert getattr(record, "project_slug") == DUMMY_SLUG
+    assert getattr(record, "slug") == DUMMY_SLUG
     assert getattr(record, "scope") == "kb"
 
 
@@ -71,7 +71,7 @@ def test_search_logs_empty_embedding(caplog: pytest.LogCaptureFixture) -> None:
         None,
     )
     assert record is not None
-    assert getattr(record, "project_slug") == DUMMY_SLUG
+    assert getattr(record, "slug") == DUMMY_SLUG
     assert getattr(record, "scope") == "kb"
 
 
@@ -91,6 +91,6 @@ def test_search_logs_embedding_failure(caplog: pytest.LogCaptureFixture) -> None
         None,
     )
     assert record is not None
-    assert getattr(record, "project_slug") == DUMMY_SLUG
+    assert getattr(record, "slug") == DUMMY_SLUG
     assert getattr(record, "scope") == "kb"
     assert "boom" in str(getattr(record, "error", ""))

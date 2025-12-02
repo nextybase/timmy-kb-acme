@@ -88,7 +88,7 @@ def collect_doc_tasks(
 
         filename_val = doc.get("filename")
         if not isinstance(filename_val, str) or not filename_val.strip():
-            log.warning("NLP skip: filename mancante o non valido", extra={"doc": doc})
+            log.warning("nlp.skip.invalid_filename", extra={"doc": doc})
             return None
 
         candidate = folder_fs_path / filename_val
@@ -96,7 +96,7 @@ def collect_doc_tasks(
             return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
         except Exception as exc:  # pragma: no cover - defensive guard
             log.warning(
-                "NLP skip: percorso non sicuro",
+                "nlp.skip.unsafe_path",
                 extra={"doc": doc, "candidate": str(candidate), "error": str(exc)},
             )
             return None
@@ -106,7 +106,7 @@ def collect_doc_tasks(
         try:
             doc_id = int(doc_id_val)
         except (TypeError, ValueError):
-            log.warning("ID documento non valido", extra={"doc": doc})
+            log.warning("nlp.skip.invalid_doc_id", extra={"doc": doc})
             continue
 
         folder_id_val = doc.get("folder_id")
@@ -128,7 +128,7 @@ def collect_doc_tasks(
         if pdf_path is None:
             continue
         if not pdf_path.exists():
-            log.warning("NLP skip: file non trovato", extra={"file_path": str(pdf_path)})
+            log.warning("nlp.skip.file_missing", extra={"file_path": str(pdf_path), "doc": doc})
             continue
 
         tasks.append(DocTask(doc_id=doc_id, pdf_path=pdf_path))
@@ -210,7 +210,7 @@ def _persist_sections(
                 phrase_global[phrase] = weight_f
         folder_stats[fid] = norm_items
 
-        logger.debug("Aggregazione cartella", extra={"folder_id": fid, "terms": len(norm_items)})
+        logger.debug("nlp.folder.aggregate_terms", extra={"folder_id": fid, "terms": len(norm_items)})
 
     global_list = list(phrase_global.items())
     clusters = cluster_synonyms(global_list, model_name=model, sim_thr=float(cluster_thr))
@@ -218,7 +218,7 @@ def _persist_sections(
         aliases = sum(max(0, len(c.get("synonyms", []) or [])) for c in clusters)
         avg_size = sum(len(c.get("members", []) or []) for c in clusters) / max(1, len(clusters))
         logger.info(
-            "Cluster calcolati",
+            "nlp.folder.clusters_built",
             extra={"k": len(clusters), "avg_size": avg_size, "aliases": aliases},
         )
 
@@ -244,7 +244,7 @@ def _persist_sections(
                 continue
             term_agg[tid] = term_agg.get(tid, 0.0) + float(weight)
 
-        logger.debug("Aggregazione termini per folder", extra={"folder_id": fid, "terms": len(term_agg)})
+        logger.debug("nlp.folder.aggregate_terms_by_doc", extra={"folder_id": fid, "terms": len(term_agg)})
         for tid, weight in sorted(term_agg.items(), key=lambda kv: kv[1], reverse=True):
             upsert_folder_term(conn, fid, tid, float(weight), status="keep", note=None)
             folder_terms_count += 1
@@ -275,7 +275,7 @@ def _persist_doc_terms(
                 tags_store.save_doc_terms(conn, task.doc_id, top_items)
                 saved_items += len(top_items)
             if total_docs and idx % 100 == 0:
-                logger.info("NLP progress", extra={"processed": idx, "documents": total_docs})
+                logger.info("nlp.progress", extra={"processed": idx, "documents": total_docs})
         return saved_items
 
     executor = ThreadPoolExecutor(max_workers=worker_count)
@@ -292,7 +292,7 @@ def _persist_doc_terms(
             tags_store.save_doc_terms(conn, task.doc_id, top_items)
             saved_items += len(top_items)
         if total_docs and current_index % 100 == 0:
-            logger.info("NLP progress", extra={"processed": current_index, "documents": total_docs})
+            logger.info("nlp.progress", extra={"processed": current_index, "documents": total_docs})
         return current_index
 
     try:

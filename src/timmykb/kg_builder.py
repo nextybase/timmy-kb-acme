@@ -200,7 +200,10 @@ def _save_kg_json(workspace_root: Path, kg: TagKnowledgeGraph) -> Path:
     output_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
     payload = json.dumps(kg.to_dict(), ensure_ascii=False, indent=2)
     safe_write_text(output_path, payload, encoding="utf-8", atomic=True)
-    logger.info("Saved tag KG JSON to %s", output_path)
+    logger.info(
+        "kg_builder.kg_json_saved",
+        extra={"workspace": str(workspace_root), "file_path": str(output_path)},
+    )
     return output_path
 
 
@@ -269,7 +272,10 @@ def _save_kg_markdown(workspace_root: Path, kg: TagKnowledgeGraph) -> Path:
     output_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
     markdown = _render_kg_markdown(kg)
     safe_write_text(output_path, markdown, encoding="utf-8", atomic=True)
-    logger.info("Saved tag KG Markdown to %s", output_path)
+    logger.info(
+        "kg_builder.kg_markdown_saved",
+        extra={"workspace": str(workspace_root), "file_path": str(output_path)},
+    )
     return output_path
 
 
@@ -293,7 +299,7 @@ def _resolve_tag_kg_assistant_id() -> str:
         except KeyError:
             continue
         if value:
-            logger.debug("Tag KG assistant id resolved", extra={"env": env, "assistant_id": value})
+            logger.debug("kg_builder.assistant_id_resolved", extra={"env": env, "assistant_id": value})
             return value
     raise ConfigError(
         "Manca l'assistant ID per il Tag KG Builder. "
@@ -408,7 +414,7 @@ def build_kg_for_workspace(workspace_root: Path, namespace: Optional[str] = None
     - namespace: opzionale, se None viene ricavato dai dati dei tag o dal nome directory.
     """
     workspace_root = workspace_root.resolve()
-    logger.info("Building tag KG for workspace %s", workspace_root)
+    logger.info("kg_builder.started", extra={"workspace": str(workspace_root)})
 
     payload = _load_raw_tags(workspace_root)
     if namespace:
@@ -420,10 +426,13 @@ def build_kg_for_workspace(workspace_root: Path, namespace: Optional[str] = None
     _save_kg_markdown(workspace_root, kg)
 
     logger.info(
-        "Tag KG built for namespace=%s (tags=%d, relations=%d)",
-        kg.namespace,
-        len(kg.tags),
-        len(kg.relations),
+        "kg_builder.completed",
+        extra={
+            "workspace": str(workspace_root),
+            "namespace": kg.namespace,
+            "tags": len(kg.tags),
+            "relations": len(kg.relations),
+        },
     )
 
     return kg

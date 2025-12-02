@@ -351,10 +351,10 @@ def stop_container_safely(container_name: str) -> None:
             logger=logger,
             capture=True,
         )
-        logger.info("🧹 Cleanup container completato", extra={"container": container_name})
+        logger.info("gitbook.preview.cleanup_completed", extra={"container": container_name})
     except Exception:
         # non interrompere il flusso in caso di fallimento del cleanup
-        logger.warning("Cleanup container non riuscito", extra={"container": container_name})
+        logger.warning("gitbook.preview.cleanup_failed", extra={"container": container_name})
 
 
 # ----------------------------

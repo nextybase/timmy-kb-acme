@@ -84,9 +84,9 @@ def fetch_github_id_token(
     token_raw = payload.get("value") or payload.get("id_token")
     token = token_raw if isinstance(token_raw, str) else None
     if token:
-        log.info("oidc.github.token.ok")
+        log.info("oidc.github.token.ok", extra={"provider": "github"})
         return token
-    log.debug("oidc.github.token.empty")
+    log.debug("oidc.github.token.empty", extra={"provider": "github"})
     return None
 
 
@@ -109,7 +109,7 @@ def ensure_oidc_context(
     enabled = bool(sec_oidc.get("enabled"))
     provider = str(sec_oidc.get("provider") or "github").strip().lower()
     if not enabled:
-        log.debug("oidc.disabled")
+        log.debug("oidc.disabled", extra={"provider": provider})
         return {"enabled": False, "provider": provider, "has_token": False}
 
     audience_name = str(sec_oidc.get("audience_env") or "")

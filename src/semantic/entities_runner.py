@@ -77,7 +77,10 @@ def run_doc_entities_pipeline(
         lexicon_entries = build_lexicon(mapping)
         lexicon = build_lexicon_map(lexicon_entries)
         if not lexicon:
-            log.info("semantic.entities.lexicon_empty")
+            log.info(
+                "semantic.entities.lexicon_empty",
+                extra={"entries": len(lexicon_entries)},
+            )
             return {"entities_written": 0}
 
         nlp = _load_spacy(cfg.spacy_model)

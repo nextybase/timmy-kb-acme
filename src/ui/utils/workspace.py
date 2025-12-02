@@ -149,7 +149,7 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
         # Non scrivere cache negative su errore: segnala e rientra
         try:
             _log.warning(
-                "Errore durante la scansione di raw/",
+                "ui.workspace.scan_raw_failed",
                 extra={"error": str(e), "raw_dir": tail_path(raw_dir)},
             )
         except Exception:

@@ -386,7 +386,7 @@ def docker_available(*, logger: Optional[logging.Logger] = None, timeout_s: Opti
         return True
     except CmdError:
         if logger:
-            logger.warning("docker.unavailable")
+            logger.warning("docker.unavailable", extra={"host": "local"})
         return False
 
 

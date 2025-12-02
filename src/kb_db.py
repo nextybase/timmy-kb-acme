@@ -229,7 +229,7 @@ def fetch_candidates(
                 meta = {}
                 LOGGER.warning(
                     "kb_db.fetch.invalid_meta_json",
-                    extra={"project_slug": project_slug, "scope": scope},
+                    extra={"slug": project_slug, "scope": scope},
                 )
             try:
                 emb = json.loads(emb_json) if emb_json else []
@@ -237,6 +237,6 @@ def fetch_candidates(
                 emb = []
                 LOGGER.warning(
                     "kb_db.fetch.invalid_embedding_json",
-                    extra={"project_slug": project_slug, "scope": scope},
+                    extra={"slug": project_slug, "scope": scope},
                 )
             yield {"content": content, "meta": meta, "embedding": emb}

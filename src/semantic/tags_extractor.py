@@ -89,7 +89,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
         # SOFT: filtro preliminare (non autorizza write)
         if not is_safe_subpath(dst, raw_dir):
-            logger.warning("Skip per path non sicuro (soft check)", extra={"file_path": str(dst)})
+            logger.warning("tags_extractor.skip_unsafe_path", extra={"file_path": str(dst)})
             continue
 
         # STRONG (SSoT): autorizzazione write su dir e file di destinazione
@@ -99,7 +99,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         except Exception as e:
             # Qui manteniamo un log e saltiamo: path non valido per policy SSoT
             logger.warning(
-                "Skip per path non valido (strong guard)",
+                "tags_extractor.skip_invalid_path",
                 extra={"file_path": str(dst), "error": str(e)},
             )
             continue
@@ -108,16 +108,16 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
         try:
             if dst.exists() and dst.stat().st_size == src.stat().st_size:
-                logger.debug("Skip copia (stessa dimensione)", extra={"file_path": str(dst)})
+                logger.debug("tags_extractor.skip_same_size", extra={"file_path": str(dst)})
             else:
                 shutil.copy2(src, dst)
-                logger.info("PDF copiato", extra={"file_path": str(dst)})
+                logger.info("tags_extractor.pdf_copied", extra={"file_path": str(dst)})
                 copied += 1
         except (OSError, shutil.Error) as e:
             err_msg = f"{e.__class__.__name__}: {e}"
             failures.append((src, dst, err_msg))
             logger.error(
-                "Copia fallita",
+                "tags_extractor.copy_failed",
                 extra={"src": str(src), "dst": str(dst), "error": err_msg},
             )
 

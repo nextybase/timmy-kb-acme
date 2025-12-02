@@ -29,7 +29,9 @@ from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
 from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.metrics import start_metrics_server_once
 from pipeline.path_utils import ensure_valid_slug, ensure_within, iter_safe_paths  # SSoT guardia STRONG
+from pipeline.tracing import start_root_trace
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
@@ -88,15 +90,24 @@ def _maybe_publish_gitbook(context: ClientContext, logger: logging.Logger) -> No
     token = getattr(settings, "GITBOOK_TOKEN", None) if settings else None
     space_id = getattr(settings, "GITBOOK_SPACE_ID", None) if settings else None
     if not (token and space_id):
-        logger.info("GitBook push saltato: token/spazio non configurato", extra={"slug": context.slug})
+        logger.info(
+            "gitbook.publish.skipped_missing_token",
+            extra={"slug": context.slug, "space_id_present": bool(space_id), "token_present": bool(token)},
+        )
         return
     if not context.md_dir:
-        logger.warning("GitBook push saltato: md_dir non disponibile", extra={"slug": context.slug})
+        logger.warning(
+            "gitbook.publish.skipped_missing_md_dir",
+            extra={"slug": context.slug},
+        )
         return
     try:
         publish_book_to_gitbook(context.md_dir, space_id=space_id, token=token, slug=context.slug)
     except GitBookPublishError as exc:
-        logger.warning("GitBook publish fallito", extra={"slug": context.slug, "error": str(exc)})
+        logger.warning(
+            "gitbook.publish.failed",
+            extra={"slug": context.slug, "error": str(exc)},
+        )
 
 
 def _git_push(context: ClientContext, logger: logging.Logger) -> None:
@@ -227,11 +238,12 @@ if __name__ == "__main__":
     """Entrypoint CLI dell'orchestratore onboarding_full."""
     args = _parse_args().parse_args()
     run_id = uuid.uuid4().hex
+    start_metrics_server_once()
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("cli.onboarding_full.missing_slug")
+        early_logger.error("cli.onboarding_full.missing_slug", extra={"slug": None})
         sys.exit(EXIT_CODES.get("ConfigError", 2))
     try:
         slug = ensure_valid_slug(
@@ -243,22 +255,31 @@ if __name__ == "__main__":
     except ConfigError:
         sys.exit(EXIT_CODES.get("ConfigError", 2))
 
-    try:
-        onboarding_full_main(
-            slug=slug,
-            non_interactive=args.non_interactive,
-            run_id=run_id,
-        )
-        sys.exit(0)
-    except KeyboardInterrupt:
-        sys.exit(130)
-    except ConfigError as e:
-        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
-    except PipelineError as e:
-        code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
-        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-        sys.exit(code)
-    except Exception as e:
-        early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-        sys.exit(EXIT_CODES.get("PipelineError", 1))
+    env = get_env_var("TIMMY_ENV", default="dev")
+    with start_root_trace(
+        "onboarding",
+        slug=slug,
+        run_id=run_id,
+        entry_point="cli",
+        env=env,
+        trace_kind="onboarding",
+    ):
+        try:
+            onboarding_full_main(
+                slug=slug,
+                non_interactive=args.non_interactive,
+                run_id=run_id,
+            )
+            sys.exit(0)
+        except KeyboardInterrupt:
+            sys.exit(130)
+        except ConfigError as e:
+            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
+            sys.exit(EXIT_CODES.get("ConfigError", 2))
+        except PipelineError as e:
+            code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
+            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
+            sys.exit(code)
+        except Exception as e:
+            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
+            sys.exit(EXIT_CODES.get("PipelineError", 1))

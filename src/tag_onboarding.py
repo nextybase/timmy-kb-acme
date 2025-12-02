@@ -50,6 +50,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
@@ -58,6 +59,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     iter_safe_paths,
     open_for_read_bytes_selfguard,
 )
+from pipeline.tracing import start_root_trace
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload
@@ -423,7 +425,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 
     except ConfigError as e:
 
-        logger.error(str(e))
+        logger.error("cli.tag_onboarding.validation_error", extra={"error": str(e)})
 
         return 1
 
@@ -455,7 +457,7 @@ def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: l
 
         if not proceed_after_csv:
 
-            logger.info("cli.tag_onboarding.stop_after_csv")
+            logger.info("cli.tag_onboarding.stop_after_csv", extra={"reason": "non_interactive"})
 
             return False
 
@@ -467,7 +469,7 @@ def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: l
 
     if cont != "y":
 
-        logger.info("cli.tag_onboarding.user_aborted")
+        logger.info("cli.tag_onboarding.user_aborted", extra={"choice": cont})
 
         return False
 
@@ -729,6 +731,7 @@ if __name__ == "__main__":
     args = _parse_args()
 
     run_id = uuid.uuid4().hex
+    start_metrics_server_once()
 
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
@@ -736,7 +739,7 @@ if __name__ == "__main__":
 
     if not unresolved_slug and args.non_interactive:
 
-        early_logger.error("cli.tag_onboarding.missing_slug")
+        early_logger.error("cli.tag_onboarding.missing_slug", extra={"slug": None})
 
         sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
 
@@ -753,122 +756,100 @@ if __name__ == "__main__":
 
         sys.exit(exit_code_for(exc))
 
-    # Ramo di sola validazione
+    env = os.getenv("TIMMY_ENV", "dev")
+    with start_root_trace(
+        "onboarding",
+        slug=slug,
+        run_id=run_id,
+        entry_point="cli",
+        env=env,
+        trace_kind="onboarding",
+    ):
+        # Ramo di sola validazione
+        if args.validate_only:
+            code = validate_tags_reviewed(slug, run_id=run_id)
+            sys.exit(code)
 
-    if args.validate_only:
+        # Scansione RAW -> DB (schema v2)
+        if getattr(args, "scan_raw", False):
+            ctx = ClientContext.load(
+                slug=slug,
+                interactive=False,
+                require_env=False,
+                run_id=run_id,
+                stage="scan_raw",
+            )
+            base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+                ctx,
+                raw_override=args.raw_dir,
+                db_override=args.db,
+            )
+            stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
+            log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
+            log.info("cli.tag_onboarding.scan_completed", extra=stats)
+            sys.exit(0)
 
-        code = validate_tags_reviewed(slug, run_id=run_id)
+        # NLP -> DB
+        if getattr(args, "nlp", False):
+            ctx = ClientContext.load(
+                slug=slug,
+                interactive=False,
+                require_env=False,
+                run_id=run_id,
+                stage="nlp",
+            )
+            base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+                ctx,
+                raw_override=args.raw_dir,
+                db_override=args.db,
+            )
+            lang = args.lang if args.lang != "auto" else "it"
+            worker_override = 1 if args.nlp_no_parallel else args.nlp_workers
+            stats = run_nlp_to_db(
+                slug,
+                raw_dir,
+                db_path,
+                base_dir=base_dir,
+                lang=lang,
+                topn_doc=int(args.topn_doc),
+                topk_folder=int(args.topk_folder),
+                cluster_thr=float(args.cluster_thr),
+                model=str(args.model),
+                rebuild=bool(args.rebuild),
+                only_missing=bool(args.only_missing),
+                max_workers=worker_override if worker_override is not None else None,
+                worker_batch_size=int(args.nlp_batch_size),
+            )
+            log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
+            log.info("cli.tag_onboarding.nlp_completed", extra=stats)
+            sys.exit(0)
 
-        sys.exit(code)
-
-    # Scansione RAW -> DB (schema v2)
-
-    if getattr(args, "scan_raw", False):
-
-        ctx = ClientContext.load(
-            slug=slug,
-            interactive=False,
-            require_env=False,
-            run_id=run_id,
-            stage="scan_raw",
-        )
-
-        base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
-            ctx,
-            raw_override=args.raw_dir,
-            db_override=args.db,
-        )
-
-        stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
-
-        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
-
-        log.info("cli.tag_onboarding.scan_completed", extra=stats)
-
-        sys.exit(0)
-
-    # NLP → DB
-
-    if getattr(args, "nlp", False):
-
-        ctx = ClientContext.load(
-            slug=slug,
-            interactive=False,
-            require_env=False,
-            run_id=run_id,
-            stage="nlp",
-        )
-
-        base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
-            ctx,
-            raw_override=args.raw_dir,
-            db_override=args.db,
-        )
-
-        lang = args.lang if args.lang != "auto" else "it"
-
-        worker_override = 1 if args.nlp_no_parallel else args.nlp_workers
-
-        stats = run_nlp_to_db(
-            slug,
-            raw_dir,
-            db_path,
-            base_dir=base_dir,
-            lang=lang,
-            topn_doc=int(args.topn_doc),
-            topk_folder=int(args.topk_folder),
-            cluster_thr=float(args.cluster_thr),
-            model=str(args.model),
-            rebuild=bool(args.rebuild),
-            only_missing=bool(args.only_missing),
-            max_workers=worker_override if worker_override is not None else None,
-            worker_batch_size=int(args.nlp_batch_size),
-        )
-
-        log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
-
-        log.info("cli.tag_onboarding.nlp_completed", extra=stats)
-
-        sys.exit(0)
-
-    try:
-
-        tag_onboarding_main(
-            slug=slug,
-            source=args.source,
-            local_path=args.local_path,
-            non_interactive=args.non_interactive,
-            proceed_after_csv=bool(args.proceed),
-            run_id=run_id,
-        )
-
-        sys.exit(0)
-
-    except KeyboardInterrupt:
-
-        sys.exit(130)
-
-    except PipelineError as exc:
-
-        logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
-
-        logger.error(
-            "cli.tag_onboarding.failed",
-            extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(exc)},
-        )
-
-        sys.exit(exit_code_for(exc))
-
-    except Exception as exc:  # noqa: BLE001
-
-        logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
-
-        logger.error(
-            "cli.tag_onboarding.failed",
-            extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(PipelineError(str(exc)))},
-        )
-
-        sys.exit(exit_code_for(PipelineError(str(exc))))
+        try:
+            tag_onboarding_main(
+                slug=slug,
+                source=args.source,
+                local_path=args.local_path,
+                non_interactive=args.non_interactive,
+                proceed_after_csv=bool(args.proceed),
+                run_id=run_id,
+            )
+            sys.exit(0)
+        except KeyboardInterrupt:
+            sys.exit(130)
+        except PipelineError as exc:
+            logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
+            logger.error(
+                "cli.tag_onboarding.failed",
+                extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(exc)},
+            )
+            sys.exit(exit_code_for(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
+            logger.error(
+                "cli.tag_onboarding.failed",
+                extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(PipelineError(str(exc)))},
+            )
+            sys.exit(exit_code_for(PipelineError(str(exc))))
 
 
 # Sezione helper duplicati rimossa (copy/CSV delegati)

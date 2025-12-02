@@ -178,7 +178,11 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
             if client_cfg:
                 source_cfg = client_cfg
         except ConfigError as exc:
-            _logger.debug("get_retriever_settings.client_fallback", exc_info=exc)
+            _logger.debug(
+                "get_retriever_settings.client_fallback",
+                exc_info=exc,
+                extra={"slug": slug, "error": str(exc)},
+            )
 
     raw_section: Any = source_cfg.get("retriever")
     if isinstance(raw_section, dict):

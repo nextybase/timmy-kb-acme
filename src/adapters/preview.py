@@ -109,17 +109,23 @@ def start_preview(
             wait_on_exit=False,  # sempre detached per semplicità dell’orchestratore
             redact_logs=redact,
         )
-        logger.info("Preview avviata", extra={"container": cname, "port": port, "redact_logs": redact})
+        logger.info(
+            "adapter.preview.started",
+            extra={"container": cname, "port": port, "redact_logs": redact, "slug": getattr(context, "slug", None)},
+        )
         return cname
     except Exception as e:
         hint = _docker_unavailable_hint(str(e))
         if hint:
             logger.warning(
-                "Preview non avviata: Docker non attivo",
-                extra={"container": cname, "port": port, "error": str(e)},
+                "adapter.preview.docker_unavailable",
+                extra={"container": cname, "port": port, "error": str(e), "slug": getattr(context, "slug", None)},
             )
             raise ConfigError(hint)
-        logger.error("Avvio preview fallito", extra={"container": cname, "port": port, "error": str(e)})
+        logger.error(
+            "adapter.preview.start_failed",
+            extra={"container": cname, "port": port, "error": str(e), "slug": getattr(context, "slug", None)},
+        )
         raise ConfigError(f"Avvio preview fallito: {e}")
 
 
@@ -131,26 +137,29 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
         container_name: nome del container da fermare; se falsy non fa nulla.
     """
     if not container_name:
-        logger.debug("Nessun container_name fornito: skip stop_preview.")
+        logger.debug("adapter.preview.stop.skip_no_name", extra={"container": None})
         return
 
     # Validazione “soft”: se non valido, log avviso e interrompiamo (best-effort)
     if not _CONTAINER_RE.match(container_name):
-        logger.warning("Nome container non valido: skip stop_preview.", extra={"container": container_name})
+        logger.warning(
+            "adapter.preview.stop.invalid_name",
+            extra={"container": container_name},
+        )
         return
 
     try:
         stop_container_safely(container_name)
-        logger.info("Preview Docker fermata", extra={"container": container_name})
+        logger.info("adapter.preview.stopped", extra={"container": container_name})
     except Exception as e:  # best-effort
         hint = _docker_unavailable_hint(str(e))
         if hint:
             logger.warning(
-                "Stop preview: Docker non attivo (best-effort)",
+                "adapter.preview.stop.docker_unavailable",
                 extra={"container": container_name, "error": str(e)},
             )
             return
         logger.warning(
-            "Stop preview fallito (best-effort)",
+            "adapter.preview.stop_failed",
             extra={"container": container_name, "error": str(e)},
         )

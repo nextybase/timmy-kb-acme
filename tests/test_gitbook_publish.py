@@ -50,4 +50,4 @@ def test_publish_book_to_gitbook_skips_missing_token(tmp_path: Path, caplog):
 
     gitbook_publish.publish_book_to_gitbook(book_dir, space_id="space", token="", slug="dummy")
 
-    assert "GitBook publish saltato" in caplog.text
+    assert "gitbook.publish.skipped_missing_token" in caplog.text

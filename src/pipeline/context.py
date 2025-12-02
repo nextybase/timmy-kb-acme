@@ -160,7 +160,7 @@ class ClientContext:
         # Deprecation notice soft (parametro non più usato qui)
         if interactive is not None:
             _logger.debug(
-                ("Parametro 'interactive' è deprecato e viene ignorato; " "gestire l'I/O utente negli orchestratori."),
+                "context.deprecated_interactive_param",
                 extra={"slug": slug},
             )
 
@@ -400,9 +400,7 @@ class ClientContext:
         log = self._get_logger()
         self.step_status[step] = status
         log.info(
-            "Step '%s' → %s",
-            step,
-            status,
+            "context.step.status",
             extra={"slug": self.slug, "step": step, "status": status},
         )
 

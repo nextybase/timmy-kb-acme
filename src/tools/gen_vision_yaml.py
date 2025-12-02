@@ -33,7 +33,7 @@ def main() -> int:
 
     pdf_path = Path(args.pdf).resolve()
     if not pdf_path.is_file():
-        log.error("PDF non trovato", extra={"slug": args.slug, "file_path": str(pdf_path)})
+        log.error("vision_yaml.pdf_not_found", extra={"slug": args.slug, "file_path": str(pdf_path)})
         return 1
 
     try:

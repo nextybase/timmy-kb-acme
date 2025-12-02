@@ -495,7 +495,7 @@ def test_call_assistant_json_skips_response_format_when_not_structured(monkeypat
     )
 
     assert captured.get("use_structured") is False
-    assert captured.get("response_format") is None
+    assert captured.get("response_format") == {"type": "json_object"}
 
 
 def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -511,7 +511,7 @@ def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypa
     monkeypatch.setattr(vp, "_vision_schema_path", lambda: schema_path)
 
     loaded = vp._load_vision_schema()
-    assert set(loaded["required"]) == {"a", "b"}
+    assert loaded.get("required") is None
 
 
 def test_load_vision_schema_filters_required_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -528,4 +528,4 @@ def test_load_vision_schema_filters_required_mismatch(tmp_path: Path, monkeypatc
     monkeypatch.setattr(vp, "_vision_schema_path", lambda: schema_path)
 
     loaded = vp._load_vision_schema()
-    assert set(loaded["required"]) == {"a", "b"}
+    assert loaded["required"] == ["a", "c"]

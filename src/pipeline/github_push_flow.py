@@ -163,7 +163,7 @@ def _stage_changes(
         stage_and_commit_fn = _stage_and_commit
     committed = stage_and_commit_fn(tmp_dir, env, commit_msg=commit_msg)
     if not committed:
-        logger.info("Nessuna modifica da pubblicare (working dir identica)", extra={"slug": slug})
+        logger.info("github.push.no_changes", extra={"slug": slug})
         return False
     return True
 
@@ -184,10 +184,10 @@ def _push_with_retry(
         run_func(["git", "push", "origin", default_branch], cwd=tmp_dir, env=env, op="git push")
 
     try:
-        logger.info("Push su origin/%s", default_branch)
+        logger.info("github.push.attempt", extra={"branch": default_branch})
         _attempt_push()
     except CmdError:
-        logger.warning("Push rifiutato. Tentativo di sincronizzazione (pull --rebase) e nuovo push...")
+        logger.warning("github.push.retry_after_rebase", extra={"branch": default_branch})
         try:
             run_func(
                 ["git", "pull", "--rebase", "origin", default_branch],
@@ -227,7 +227,7 @@ def _force_push_with_lease(
     remote_sha = git_rev_parse_fn(f"origin/{default_branch}", cwd=tmp_dir, env=env)
     local_sha = git_rev_parse_fn("HEAD", cwd=tmp_dir, env=env)
     logger.info(
-        "Force push governato (with-lease)",
+        "github.push.force_with_lease",
         extra={
             "branch": default_branch,
             "local_sha": local_sha,
@@ -279,8 +279,8 @@ def _prepare_repo(
     env = _sanitize_env(getattr(context, "env", {}) or {}, extra_env, allow=allow)
 
     logger.info(
-        "Clonazione repo remoto in working dir temporanea",
-        extra={"slug": context.slug, "file_path": str(tmp_dir)},
+        "github.push.clone_remote",
+        extra={"slug": context.slug, "tmp_dir": str(tmp_dir), "repo": repo.full_name},
     )
 
     def _to_bool(value: object) -> bool:
@@ -325,7 +325,7 @@ def _prepare_repo(
             op="git checkout",
         )
         logger.info(
-            "Pull --rebase per sincronizzazione iniziale",
+            "github.push.pull_rebase_initial",
             extra={"slug": context.slug, "branch": default_branch},
         )
         _run(
@@ -338,7 +338,7 @@ def _prepare_repo(
         _run(["git", "checkout", "-B", default_branch], cwd=tmp_dir, env=env, op="git checkout")
 
     logger.info(
-        "Preparazione contenuti da book/",
+        "github.push.prepare_book",
         extra={"slug": context.slug, "file_path": str(book_dir)},
     )
     _copy_md_tree(md_files, book_dir, tmp_dir)

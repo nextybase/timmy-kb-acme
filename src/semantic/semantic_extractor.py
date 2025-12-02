@@ -49,9 +49,8 @@ def _list_markdown_files(context: _Ctx, logger: Optional[logging.Logger] = None)
     iterator = iter_safe_paths(context.md_dir, include_dirs=False, include_files=True, suffixes=(".md",))
     files = sorted(iterator, key=lambda p: p.relative_to(context.md_dir).as_posix().lower())
     logger.info(
-        "📄 Trovati %d file markdown",
-        len(files),
-        extra={"slug": context.slug, "file_path": str(context.md_dir)},
+        "semantic.files.found",
+        extra={"slug": context.slug, "file_path": str(context.md_dir), "count": len(files)},
     )
     return files
 
@@ -86,7 +85,7 @@ def extract_semantic_concepts(
     mapping = _sanitize_and_dedup_mapping(mapping)
     if not mapping:
         logger.warning(
-            "⚠️ Mapping semantico vuoto: salto l'estrazione concetti.",
+            "semantic.extract.mapping_empty",
             extra={"slug": context.slug},
         )
         return {}
@@ -122,7 +121,7 @@ def extract_semantic_concepts(
                         size = file.stat().st_size
                         if size > max_scan_bytes:
                             logger.info(
-                                "⏭️  Skip MD troppo grande",
+                                "semantic.extract.skip_large_md",
                                 extra={
                                     "slug": context.slug,
                                     "file_path": str(file),
@@ -152,15 +151,13 @@ def extract_semantic_concepts(
                     matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
             except Exception as e:
                 logger.warning(
-                    "⚠️ Impossibile leggere %s: %s",
-                    file,
-                    e,
-                    extra={"slug": context.slug, "file_path": str(file)},
+                    "semantic.extract.read_failed",
+                    extra={"slug": context.slug, "file_path": str(file), "error": str(e)},
                 )
                 continue
         extracted_data[concept] = matches
 
-    logger.info("🔍 Estrazione concetti completata", extra={"slug": context.slug})
+    logger.info("semantic.extract.completed", extra={"slug": context.slug})
     return extracted_data
 
 
@@ -188,29 +185,25 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
         pass
 
     logger.info(
-        "📂 Avvio arricchimento semantico su %d file",
-        len(markdown_files),
-        extra={"slug": context.slug, "file_path": str(context.md_dir)},
+        "semantic.enrich.start",
+        extra={"slug": context.slug, "file_path": str(context.md_dir), "count": len(markdown_files)},
     )
 
     for file in markdown_files:
         try:
             logger.debug(
-                "✏️ Elaborazione semantica per %s",
-                file.name,
+                "semantic.enrich.file_start",
                 extra={"slug": context.slug, "file_path": str(file)},
             )
             _enrich_md(context, file, logger)
         except Exception as e:
             logger.warning(
-                "⚠️ Errore durante arricchimento %s: %s",
-                file,
-                e,
-                extra={"slug": context.slug, "file_path": str(file)},
+                "semantic.enrich.file_failed",
+                extra={"slug": context.slug, "file_path": str(file), "error": str(e)},
             )
             continue
 
-    logger.info("✅ Arricchimento semantico completato.", extra={"slug": context.slug})
+    logger.info("semantic.enrich.completed", extra={"slug": context.slug})
 
 
 def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:

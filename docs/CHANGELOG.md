@@ -1,5 +1,6 @@
-## [Unreleased] – 2025-11-13
+## [Unreleased] — 2025-11-13
 <!-- cspell:ignore configurativo -->
+- Logging/osservabilità: logger UI centralizzato (`.timmykb/logs/ui.log` con propagazione), redazione estesa (token/secret/password/key/service_account) e Promtail che etichetta anche `run_id`/`trace_id`/`span_id` per i log UI; gli entrypoint CLI (`pre_onboarding`, `tag_onboarding`, `onboarding_full`) aprono ora trace root OTEL per la correlazione Grafana/Tempo; `log_viewer` mostra anche righe non strutturate.
 - Unity of the semantic test suite: `build_vocab_db` now covers merge-into aliases, duplicates, canonical-only, plus new DB-first guards (load failure, duplicate alias, merge_into semantics) so every matcher test runs on the real `tags.db`.
 - Vision provisioning riallineato allo health-check: `use_kb` segue ENV/Settings/config (default True) e le `run_instructions` abilitano File Search solo quando il flag è attivo.
 - `vision_alignment_check.py` now reads `vision.use_kb`/`vision.strict_output` from `Settings`, logs the chosen source, and applies the configured OpenAI timeout/retries/http2 so the tool mirrors the UI SSoT.

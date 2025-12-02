@@ -65,10 +65,10 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ---
 
 ## Telemetria & sicurezza
-- Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti.
-- I log globali della UI (Streamlit) sono salvati in `.timmykb/logs/` e visibili dalla pagina “Log dashboard”.
+- Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti (token/password/key/service_account). L'entrypoint UI crea l'handler condiviso `.timmykb/logs/ui.log` e propaga agli altri logger `ui.*`.
+- I log globali della UI (Streamlit) sono salvati in `.timmykb/logs/` e visibili dalla pagina “Log dashboard”; Promtail estrae `slug/run_id/event` (e, se OTEL attivo, `trace_id/span_id` nei campi log) per la correlazione Grafana/Tempo.
 - La rotazione file (`RotatingFileHandler`) si regola tramite ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default: 1 MiB, 3 backup).
-- L'esportazione tracing (OTel) si attiva impostando `TIMMY_OTEL_ENDPOINT` (OTLP/HTTP), `TIMMY_SERVICE_NAME` e `TIMMY_ENV`.
+- L'esportazione tracing (OTel) si attiva impostando `TIMMY_OTEL_ENDPOINT` (OTLP/HTTP), `TIMMY_SERVICE_NAME` e `TIMMY_ENV`; gli entrypoint CLI sono già avvolti in `start_root_trace`.
 - Path-safety e scritture atomiche per ogni operazione su workspace/Drive.
 - CSpell, gitleaks e controlli SPDX sono inclusi nella configurazione `pre-commit`.
 - Il push GitHub (`py src/onboarding_full.py`) usa `pipeline.github_utils.push_output_to_github`: prepara un clone temporaneo `.push_*`, copia solo i Markdown e gestisce retry/force push (`--force-with-lease`) secondo `TIMMY_NO_GITHUB`/`SKIP_GITHUB_PUSH`, `GIT_DEFAULT_BRANCH` e `GIT_FORCE_ALLOWED_BRANCHES` + `force_ack`.

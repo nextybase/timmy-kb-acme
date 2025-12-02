@@ -57,7 +57,7 @@ def emit_stub_phase(
             phase.set_artifacts(None)
 
     logger.info(
-        "Arricchimento semantico completato",
+        "tag_onboarding.semantic.completed",
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
     )
 

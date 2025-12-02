@@ -145,7 +145,4 @@ def write_validation_report(report_path: Path, result: dict[str, Any], logger: l
     except Exception as e:
         raise ConfigError(f"Errore scrittura report: {e}", file_path=str(safe_path)) from e
 
-    try:
-        logger.info("Report validazione scritto", extra={"file_path": str(safe_path)})
-    except Exception:
-        logger.info("Report validazione scritto: %s", str(safe_path))
+    logger.info("semantic.tags_validation.report_written", extra={"file_path": str(safe_path)})

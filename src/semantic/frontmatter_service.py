@@ -453,7 +453,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
         except Exception as exc:  # pragma: no cover
             readme_path = md_dir / "README.md"
             logger.error(
-                "Generazione README.md fallita",
+                "frontmatter.readme_generation_failed",
                 extra={"slug": slug, "file_path": str(readme_path)},
             )
             logger.exception(

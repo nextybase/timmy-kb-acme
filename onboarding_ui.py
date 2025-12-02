@@ -52,6 +52,7 @@ _bootstrap_sys_path()
 import streamlit as st  # noqa: E402
 
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
+from pipeline.path_utils import ensure_within_and_resolve  # noqa: E402
 from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
 from ui.gating import compute_gates, visible_page_specs  # noqa: E402
 from ui.preflight import run_preflight  # noqa: E402
@@ -67,7 +68,19 @@ from ui.utils.workspace import has_raw_pdfs  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent
 os.environ.pop("REPO_ROOT_DIR", None)
 
-# Logger strutturato per eventi di preflight
+def _init_ui_logging() -> None:
+    """Inizializza il logger condiviso della UI su `.timmykb/logs/ui.log`."""
+    log_dir = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / ".timmykb" / "logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "ui.log"
+    # Propagazione abilitata cos� i logger delle pagine ereditano l'handler file.
+    os.environ.setdefault("TIMMY_LOG_PROPAGATE", "1")
+    get_structured_logger("ui", log_file=log_file, propagate=True)
+
+
+_init_ui_logging()
+
+# Logger strutturato per eventi di preflight (eredita handler file da logger 'ui')
 LOGGER = get_structured_logger("ui.preflight")
 
 # Router/state helper (fail-fast se non presente)

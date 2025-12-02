@@ -118,7 +118,7 @@ def main() -> None:
     try:
         kg_build_main(workspace, args.namespace, slug, run_id, context)
     except KeyboardInterrupt:
-        early_logger.error("cli.kg_build.interrupted")
+        early_logger.error("cli.kg_build.interrupted", extra={"slug": slug, "run_id": run_id})
         sys.exit(130)
     except ConfigError as exc:
         early_logger.error("cli.kg_build.failed", extra={"error": str(exc)})

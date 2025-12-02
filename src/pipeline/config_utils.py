@@ -151,7 +151,7 @@ class Settings(_BaseSettings):
                 )
                 raise ConfigError(f"Parametro critico '{key}' mancante!", key=key)
         if not self.slug:
-            logger.error("pipeline.config_utils.missing_slug")
+            logger.error("pipeline.config_utils.missing_slug", extra={"param": "slug"})
             raise ConfigError("Parametro 'slug' mancante!", param="slug")
 
 
@@ -181,8 +181,8 @@ def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> 
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
         shutil.copy(config_path, backup_path)
         logger.info(
-            "Backup config creato",
-            extra={"slug": context.slug, "file_path": str(backup_path)},
+            "pipeline.config_utils.backup_created",
+            extra={"slug": context.slug, "backup_path": str(backup_path)},
         )
 
     config_to_dump: dict[str, Any] = dict(config)
@@ -193,7 +193,7 @@ def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> 
         raise ConfigError(f"Errore scrittura config {config_path}: {exc}") from exc
 
     logger.info(
-        "Config cliente salvato",
+        "pipeline.config_utils.config_written",
         extra={"slug": context.slug, "file_path": str(config_path)},
     )
     _refresh_context_settings(context)
@@ -264,7 +264,10 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
             raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
 
         if not isinstance(raw_cfg, dict):
-            logger.error("Config YAML non valido o vuoto.")
+            logger.error(
+                "pipeline.config_utils.config_invalid",
+                extra={"config_path": str(context.config_path)},
+            )
             raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
         cfg = dict(raw_cfg)
 
@@ -487,12 +490,8 @@ def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None =
     new_val = current + 1
     if log:
         log.info(
-            {
-                "event": "bump_n_ver",
-                "old": current,
-                "new": new_val,
-                "slug": context.slug,
-            }
+            "config.n_ver.bumped",
+            extra={"old": current, "new": new_val, "slug": context.slug},
         )
     update_config_with_drive_ids(context, updates={"N_VER": new_val}, logger=log)
 
@@ -506,5 +505,5 @@ def set_data_ver_today(context: ClientContext, logger: logging.Logger | None = N
     log = logger or globals().get("logger")
     today = date.today().isoformat()
     if log:
-        log.info({"event": "set_data_ver_today", "value": today, "slug": context.slug})
+        log.info("config.data_ver.set", extra={"value": today, "slug": context.slug})
     update_config_with_drive_ids(context, updates={"DATA_VER": today}, logger=log)

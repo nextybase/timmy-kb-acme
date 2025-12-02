@@ -112,17 +112,17 @@ def _read_config() -> Dict[str, Any] | None:
     try:
         path = _get_config_path()
     except Exception:  # noqa: BLE001
-        logger.exception("Config path outside repo root or invalid")
+        logger.exception("ui.config.path_invalid", extra={"action": "read"})
         return None
 
     if not path.is_file():
-        logger.warning("Config file not found at %s", path)
+        logger.warning("ui.config.missing", extra={"file_path": str(path)})
         return None
 
     try:
         text = read_text_safe(path.parent, path, encoding="utf-8")
     except OSError:
-        logger.exception("Error while reading %s", path)
+        logger.exception("ui.config.read_error", extra={"file_path": str(path)})
         return None
 
     if not text.strip():
@@ -131,13 +131,16 @@ def _read_config() -> Dict[str, Any] | None:
     try:
         data = yaml.safe_load(text)
     except Exception:  # noqa: BLE001
-        logger.exception("Failed to parse config.yaml as YAML")
+        logger.exception("ui.config.parse_error", extra={"file_path": str(path)})
         return None
 
     if data is None:
         return {}
     if not isinstance(data, dict):
-        logger.warning("config.yaml root is not a mapping, got %r", type(data))
+        logger.warning(
+            "ui.config.invalid_root",
+            extra={"file_path": str(path), "type": str(type(data))},
+        )
         # Per questa UI lavoriamo solo su root mapping
         return None
 
@@ -331,7 +334,7 @@ def _write_config(config: Dict[str, Any]) -> bool:
     try:
         path = _get_config_path()
     except Exception:  # noqa: BLE001
-        logger.exception("Config path outside repo root or invalid on write")
+        logger.exception("ui.config.path_invalid", extra={"action": "write"})
         return False
 
     try:
@@ -341,15 +344,15 @@ def _write_config(config: Dict[str, Any]) -> bool:
             allow_unicode=True,
         )
     except Exception:  # noqa: BLE001
-        logger.exception("Failed to dump config dict to YAML")
+        logger.exception("ui.config.dump_error", extra={"file_path": str(path)})
         return False
 
     try:
         safe_write_text(path, text)
-        logger.info("Configuration updated at %s", path)
+        logger.info("ui.config.updated", extra={"file_path": str(path)})
         return True
     except OSError:
-        logger.exception("Error while writing %s", path)
+        logger.exception("ui.config.write_error", extra={"file_path": str(path)})
         return False
 
 
