@@ -252,6 +252,32 @@ def _optional_env(name: str) -> Optional[str]:
     return cast(Optional[str], value)
 
 
+def _resolve_vision_use_kb(ctx: Any) -> bool:
+    """
+    Risolve il flag use_kb con precedenza a ENV, poi Settings, poi payload dict.
+    Default finale: True (allineato allo health-check).
+    """
+    env_value = _optional_env("VISION_USE_KB")
+    if env_value is not None:
+        normalized = env_value.strip().lower()
+        return normalized not in {"0", "false", "no", "off"}
+
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    if isinstance(settings_obj, Settings):
+        try:
+            return bool(settings_obj.vision_settings.use_kb)
+        except Exception:
+            pass
+
+    vision_cfg = settings_payload.get("vision")
+    if isinstance(vision_cfg, Mapping):
+        raw = vision_cfg.get("use_kb")
+        if isinstance(raw, bool):
+            return raw
+
+    return True
+
+
 # =========================
 # Utility locali
 # =========================
@@ -589,12 +615,15 @@ def _prepare_payload(
         else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
     )
 
-    use_kb = False
-    # Forziamo la prima fase Vision a NON usare la KB per evitare contaminazioni semantiche
+    use_kb = _resolve_vision_use_kb(ctx)
     run_instructions = (
-        "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
-        "usa esclusivamente i blocchi forniti dall'utente. "
-        "Produci SOLO JSON conforme allo schema richiesto, senza testo aggiuntivo."
+        "Durante QUESTA run puoi usare File Search (KB collegata al progetto/assistente) "
+        "per integrare e validare i contenuti. Dai priorità al blocco Vision qui sopra. "
+        "Produci SOLO il JSON richiesto, niente testo extra."
+        if use_kb
+        else "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
+        "usa esclusivamente il blocco Vision qui sopra. "
+        "Produci SOLO il JSON richiesto, niente testo extra."
     )
 
     return _VisionPrepared(

@@ -13,6 +13,7 @@ yaml = pytest.importorskip("yaml")
 
 import semantic.vision_provision as vp
 from pipeline.exceptions import ConfigError
+from pipeline.settings import Settings
 from semantic.vision_provision import HaltError, provision_from_vision
 
 pytestmark = pytest.mark.regression_light
@@ -119,6 +120,27 @@ def _halt_payload(slug: str) -> dict:
         },
         "message_ui": "Integra Mission e Framework etico e riprova.",
     }
+
+
+def _make_settings(use_kb: bool) -> Settings:
+    return Settings(
+        config_path=Path("config.yaml"),
+        data={
+            "openai": {},
+            "vision": {
+                "model": "gpt-4o-mini",
+                "engine": "assistants",
+                "assistant_id_env": "OBNEXT_ASSISTANT_ID",
+                "snapshot_retention_days": 30,
+                "strict_output": True,
+                "use_kb": use_kb,
+            },
+            "ui": {},
+            "retriever": {"throttle": {}},
+            "ops": {},
+            "finance": {},
+        },
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -346,3 +368,97 @@ def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pyte
         provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
 
     assert "Assistant ID" in str(excinfo.value)
+
+
+def test_resolve_vision_use_kb_prefers_env(monkeypatch: pytest.MonkeyPatch):
+    ctx = _Ctx(Path("dummy"))
+    ctx.settings = _make_settings(True)
+    monkeypatch.setenv("VISION_USE_KB", "0")
+    assert vp._resolve_vision_use_kb(ctx) is False
+
+
+def test_resolve_vision_use_kb_from_settings_obj(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("VISION_USE_KB", raising=False)
+    ctx = _Ctx(Path("dummy"))
+    ctx.settings = _make_settings(False)
+    assert vp._resolve_vision_use_kb(ctx) is False
+
+
+def test_resolve_vision_use_kb_from_dict(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("VISION_USE_KB", raising=False)
+    ctx = _Ctx(Path("dummy"))
+    ctx.settings = {"vision": {"use_kb": False}}
+    assert vp._resolve_vision_use_kb(ctx) is False
+
+
+def test_resolve_vision_use_kb_defaults_true(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("VISION_USE_KB", raising=False)
+    ctx = _Ctx(Path("dummy"))
+    ctx.settings = {}
+    assert vp._resolve_vision_use_kb(ctx) is True
+
+
+def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-instructions"
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+    ctx = _Ctx(tmp_path)
+
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+    monkeypatch.delenv("VISION_USE_KB", raising=False)
+
+    prepared_true = vp._prepare_payload(
+        ctx,
+        slug,
+        pdf,
+        prepared_prompt="prompt",
+        model=None,
+        logger=logging.getLogger("test"),
+    )
+    assert prepared_true.use_kb is True
+    assert "puoi usare File Search" in prepared_true.run_instructions
+    assert "Produci SOLO il JSON richiesto" in prepared_true.run_instructions
+
+    monkeypatch.setenv("VISION_USE_KB", "false")
+    prepared_false = vp._prepare_payload(
+        ctx,
+        slug,
+        pdf,
+        prepared_prompt="prompt",
+        model=None,
+        logger=logging.getLogger("test"),
+    )
+    assert prepared_false.use_kb is False
+    assert "ignora File Search" in prepared_false.run_instructions
+    assert "usa esclusivamente il blocco Vision" in prepared_false.run_instructions
+
+
+def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    captured: Dict[str, Any] = {}
+
+    def _fake_call(**kwargs: Any) -> Dict[str, Any]:
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
+
+    paths = vp._Paths(
+        base_dir=tmp_path, semantic_dir=tmp_path, mapping_yaml=tmp_path / "a", cartelle_yaml=tmp_path / "b"
+    )
+    prepared = vp._VisionPrepared(
+        slug="s",
+        display_name="d",
+        safe_pdf=tmp_path / "vision.pdf",
+        prompt_text="p",
+        assistant_id="asst",
+        run_instructions="instr",
+        use_kb=False,
+        client=object(),
+        paths=paths,
+        engine="assistants",
+    )
+
+    vp._invoke_assistant(prepared)
+
+    assert captured.get("use_kb") is False
+    assert captured.get("run_instructions") == "instr"

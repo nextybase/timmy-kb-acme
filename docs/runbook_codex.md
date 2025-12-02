@@ -251,6 +251,7 @@ Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](.
 - La UI legge sempre il modello da `config/config.yaml` via `get_vision_model()` (SSoT).
 - Preferire scenario **Agent**; *Full Access* solo con motivazione esplicita e branch dedicato.
 - Health-check Vision (`scripts/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell’output JSON (oltre ai log) per agevolare diagnosi end-to-end.
+- `use_kb` segue l’SSoT Settings/config con override opzionale `VISION_USE_KB` (0/false/no/off → False); le istruzioni runtime abilitano File Search solo se il flag risulta attivo.
 
 Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -> Configurazione](developer_guide.md).
 

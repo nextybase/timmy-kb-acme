@@ -1,6 +1,7 @@
 ## [Unreleased] – 2025-11-13
 <!-- cspell:ignore configurativo -->
 - Unity of the semantic test suite: `build_vocab_db` now covers merge-into aliases, duplicates, canonical-only, plus new DB-first guards (load failure, duplicate alias, merge_into semantics) so every matcher test runs on the real `tags.db`.
+- Vision provisioning riallineato allo health-check: `use_kb` segue ENV/Settings/config (default True) e le `run_instructions` abilitano File Search solo quando il flag è attivo.
 - `vision_alignment_check.py` now reads `vision.use_kb`/`vision.strict_output` from `Settings`, logs the chosen source, and applies the configured OpenAI timeout/retries/http2 so the tool mirrors the UI SSoT.
 - `vision_alignment_check.py` builds the JSON Schema only when `vision.strict_output` is `true`, otherwise it omits the `text` payload so the check stays as permissive as the UI uptime.
 - `vision_alignment_check.py` registra `vision_alignment_check.strict_output` con `value`/`source` e include `strict_output` + `response_format` nell’output JSON; i nuovi `tests/scripts/test_vision_alignment_check.py` coprono i casi config vs default.
