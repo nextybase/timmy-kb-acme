@@ -11,7 +11,7 @@ vision:
   assistant_id_env: OBNEXT_ASSISTANT_ID
   use_kb: false
   snapshot_retention_days: 30
-  strict_output: true
+  strict_output: false
 ui:
   skip_preflight: true
   allow_local_only: true

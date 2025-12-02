@@ -454,6 +454,7 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
         assistant_id="asst",
         run_instructions="instr",
         use_kb=False,
+        strict_output=True,
         client=object(),
         paths=paths,
         engine="assistants",
@@ -463,6 +464,38 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     assert captured.get("use_kb") is False
     assert captured.get("run_instructions") == "instr"
+
+
+def test_call_assistant_json_skips_response_format_when_not_structured(monkeypatch: pytest.MonkeyPatch):
+    captured: Dict[str, Any] = {}
+
+    class _DummyClient:
+        pass
+
+    monkeypatch.setattr(
+        vp,
+        "_determine_structured_output",
+        lambda client, assistant_id, strict_output: False,
+    )
+
+    def _fake_assistants_api(**kwargs: Any) -> Dict[str, Any]:
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(vp, "_call_assistants_api", _fake_assistants_api)
+
+    vp._call_assistant_json(
+        client=_DummyClient(),
+        assistant_id="asst",
+        user_messages=[{"role": "user", "content": "hi"}],
+        strict_output=False,
+        run_instructions=None,
+        use_kb=False,
+        engine="assistants",
+    )
+
+    assert captured.get("use_structured") is False
+    assert captured.get("response_format") is None
 
 
 def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

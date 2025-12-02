@@ -278,6 +278,26 @@ def _resolve_vision_use_kb(ctx: Any) -> bool:
     return True
 
 
+def _resolve_vision_strict_output(ctx: Any) -> bool:
+    """
+    Risolve il flag strict_output: Settings -> payload dict -> default True.
+    """
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    if isinstance(settings_obj, Settings):
+        try:
+            return bool(settings_obj.vision_settings.strict_output)
+        except Exception:
+            pass
+
+    vision_cfg = settings_payload.get("vision")
+    if isinstance(vision_cfg, Mapping):
+        raw = vision_cfg.get("strict_output")
+        if isinstance(raw, bool):
+            return raw
+
+    return True
+
+
 # =========================
 # Utility locali
 # =========================
@@ -401,6 +421,7 @@ class _VisionPrepared:
     assistant_id: str
     run_instructions: str
     use_kb: bool
+    strict_output: bool
     client: Any
     paths: _Paths
     engine: str
@@ -473,6 +494,7 @@ def _call_assistant_json(
             user_messages=user_messages,
             run_instructions=run_instructions,
             use_kb=use_kb,
+            use_structured=use_structured,
             response_format=response_format,
         )
 
@@ -482,6 +504,7 @@ def _call_assistant_json(
         user_messages=user_messages,
         run_instructions=run_instructions,
         use_kb=use_kb,
+        use_structured=use_structured,
         response_format=response_format,
     )
 
@@ -628,6 +651,7 @@ def _prepare_payload(
         else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
     )
 
+    strict_output = _resolve_vision_strict_output(ctx)
     use_kb = _resolve_vision_use_kb(ctx)
     run_instructions = (
         "Durante QUESTA run puoi usare File Search (KB collegata al progetto/assistente) "
@@ -647,6 +671,7 @@ def _prepare_payload(
         assistant_id=assistant_id,
         run_instructions=run_instructions,
         use_kb=use_kb,
+        strict_output=strict_output,
         client=client,
         paths=paths,
         engine=engine,
@@ -658,7 +683,7 @@ def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
         client=prepared.client,
         assistant_id=prepared.assistant_id,
         user_messages=[{"role": "user", "content": prepared.prompt_text}],
-        strict_output=True,
+        strict_output=prepared.strict_output,
         run_instructions=prepared.run_instructions,
         use_kb=prepared.use_kb,
         engine=prepared.engine,
@@ -793,9 +818,9 @@ def _determine_structured_output(client: Any, assistant_id: str, strict_output: 
     return "gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model
 
 
-def _build_response_format(use_structured: bool) -> Dict[str, Any]:
+def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
     if not use_structured:
-        return {"type": "json_object"}
+        return None
     schema_payload = {
         "type": "json_schema",
         "json_schema": {
@@ -825,7 +850,8 @@ def _call_assistants_api(
     user_messages: List[Dict[str, str]],
     run_instructions: Optional[str],
     use_kb: bool,
-    response_format: Dict[str, Any],
+    use_structured: bool,
+    response_format: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     LOGGER.debug(_evt("create_thread"), extra={"assistant_id": assistant_id})
     thread = client.beta.threads.create()
@@ -846,13 +872,16 @@ def _call_assistants_api(
 
     tool_choice = {"type": "file_search"} if use_kb else "auto"
 
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant_id,
-        response_format=response_format,
-        instructions=run_instructions or None,
-        tool_choice=tool_choice,
-    )
+    run_kwargs: Dict[str, Any] = {
+        "thread_id": thread.id,
+        "assistant_id": assistant_id,
+        "instructions": run_instructions or None,
+        "tool_choice": tool_choice,
+    }
+    if use_structured and response_format is not None:
+        run_kwargs["response_format"] = response_format
+
+    run = client.beta.threads.runs.create_and_poll(**run_kwargs)
 
     status = getattr(run, "status", None)
     if status != "completed":
@@ -900,7 +929,8 @@ def _call_responses_json(
     user_messages: List[Dict[str, str]],
     run_instructions: Optional[str],
     use_kb: bool,
-    response_format: Dict[str, Any],
+    use_structured: bool,
+    response_format: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     LOGGER.debug(
         _evt("response_format_payload"),
@@ -924,10 +954,11 @@ def _call_responses_json(
     request_kwargs: Dict[str, Any] = {
         "assistant_id": assistant_id,
         "input": input_payload,
-        "response_format": response_format,
         "instructions": run_instructions or None,
         "tool_choice": tool_choice,
     }
+    if use_structured and response_format is not None:
+        request_kwargs["response_format"] = response_format
     if use_kb:
         request_kwargs["tools"] = [{"type": "file_search"}]
 
