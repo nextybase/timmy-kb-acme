@@ -495,4 +495,4 @@ def test_load_vision_schema_filters_required_mismatch(tmp_path: Path, monkeypatc
     monkeypatch.setattr(vp, "_vision_schema_path", lambda: schema_path)
 
     loaded = vp._load_vision_schema()
-    assert set(loaded["required"]) == {"a"}
+    assert set(loaded["required"]) == {"a", "b"}

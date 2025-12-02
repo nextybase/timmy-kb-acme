@@ -307,58 +307,26 @@ def _load_vision_schema() -> Dict[str, Any]:
     schema_path = _vision_schema_path()
     try:
         raw = read_text_safe(schema_path.parents[0], schema_path, encoding="utf-8")
-        loaded = cast(Dict[str, Any], json.loads(raw))
-        properties = loaded.get("properties") or {}
-        if not isinstance(properties, dict):
-            raise ConfigError(
-                "Vision schema JSON non valido: 'properties' deve essere un oggetto.", file_path=str(schema_path)
-            )
-
-        prop_keys = list(properties.keys())
-        required_raw = loaded.get("required")
-        required_keys: List[str] = []
-
-        if isinstance(required_raw, list):
-            required_keys = [k for k in required_raw if isinstance(k, str)]
-        elif required_raw is not None:
-            LOGGER.warning(
-                _evt("schema.required.invalid"),
-                extra={"path": str(schema_path), "type": type(required_raw).__name__},
-            )
-
-        missing_in_props = [k for k in required_keys if k not in properties]
-        missing_in_required = [k for k in prop_keys if k not in required_keys]
-
-        if not required_keys:
-            required_keys = prop_keys
-        else:
-            # Mantiene required come sottoinsieme di properties, preservando l'ordine originale
-            required_keys = [k for k in required_keys if k in properties]
-            if missing_in_props or missing_in_required:
-                LOGGER.info(
-                    _evt("schema.required.mismatch"),
-                    extra={
-                        "path": str(schema_path),
-                        "missing_in_props": sorted(missing_in_props),
-                        "missing_in_required": sorted(missing_in_required),
-                    },
-                )
-
-        loaded["required"] = required_keys
-
-        LOGGER.debug(
-            _evt("schema.keys"),
-            extra={
-                "path": str(schema_path),
-                "properties": sorted(prop_keys),
-                "required": sorted(required_keys),
-                "required_minus_properties": sorted(missing_in_props),
-                "properties_minus_required": sorted(missing_in_required),
-            },
-        )
-        return loaded
+        schema = cast(Dict[str, Any], json.loads(raw))
     except json.JSONDecodeError as exc:
         raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
+
+    if "type" not in schema:
+        schema["type"] = "object"
+
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        schema["required"] = list(properties.keys())
+
+    LOGGER.debug(
+        _evt("schema.keys"),
+        extra={
+            "path": str(schema_path),
+            "properties": sorted(properties.keys()) if isinstance(properties, dict) else [],
+            "required": schema.get("required", []),
+        },
+    )
+    return schema
 
 
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") -> str:
@@ -831,7 +799,7 @@ def _build_response_format(use_structured: bool) -> Dict[str, Any]:
     schema_payload = {
         "type": "json_schema",
         "json_schema": {
-            "name": "VisionOutput",
+            "name": "VisionOutput_v2",
             "schema": _load_vision_schema(),
             "strict": True,
         },

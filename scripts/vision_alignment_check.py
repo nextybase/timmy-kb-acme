@@ -215,11 +215,9 @@ def main() -> None:
         text_cfg = {
             "format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "VisionOutput",
-                    "schema": schema,
-                    "strict": True,
-                },
+                "name": "VisionOutput_v2",
+                "schema": schema,
+                "strict": True,
             }
         }
 
