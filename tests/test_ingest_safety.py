@@ -25,7 +25,7 @@ def test_ingest_rejects_outside_base(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "insert_chunks", lambda **kwargs: 0)
 
     n = ingest.ingest_path(
-        project_slug="p",
+        slug="p",
         scope="s",
         path=str(outside),
         version="v",
@@ -52,7 +52,7 @@ def test_ingest_within_base_succeeds(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "insert_chunks", _stub_insert_chunks)
 
     n = ingest.ingest_path(
-        project_slug="p",
+        slug="p",
         scope="s",
         path=str(f),
         version="v",
@@ -69,7 +69,7 @@ def test_ingest_path_requires_base_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "insert_chunks", lambda **kwargs: 0)
     with pytest.raises(ConfigError):
         ingest.ingest_path(
-            project_slug="p",
+            slug="p",
             scope="s",
             path=str(f),
             version="v",
@@ -94,7 +94,7 @@ def test_ingest_folder_infers_base_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "ingest_path", _fake_ingest_path)
 
     summary = ingest.ingest_folder(
-        project_slug="slug",
+        slug="slug",
         scope="scope",
         folder_glob=str(root / "**" / "*.txt"),
         version="v1",
@@ -119,7 +119,7 @@ def test_ingest_folder_bubbles_unexpected_errors(monkeypatch, tmp_path: Path) ->
 
     with pytest.raises(RuntimeError):
         ingest.ingest_folder(
-            project_slug="slug",
+            slug="slug",
             scope="scope",
             folder_glob=str(root / "*.txt"),
             version="v1",
@@ -144,7 +144,7 @@ def test_ingest_folder_skips_config_error(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "ingest_path", _ingest)
 
     summary = ingest.ingest_folder(
-        project_slug="slug",
+        slug="slug",
         scope="scope",
         folder_glob=str(root / "*.txt"),
         version="v1",
@@ -169,7 +169,7 @@ def test_ingest_within_base_calls_insert(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(ingest, "insert_chunks", _stub_insert_chunks)
     n = ingest.ingest_path(
-        project_slug="p",
+        slug="p",
         scope="s",
         path=str(f),
         version="v",
@@ -194,7 +194,7 @@ def test_ingest_folder_respects_max_files(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "ingest_path", _stub_ingest_path)
 
     summary = ingest.ingest_folder(
-        project_slug="slug",
+        slug="slug",
         scope="scope",
         folder_glob=str(tmp_path / "*.md"),
         version="v1",
@@ -223,7 +223,7 @@ def test_ingest_folder_honors_batch_size(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ingest, "ingest_path", _stub_ingest_path)
 
     summary = ingest.ingest_folder(
-        project_slug="slug",
+        slug="slug",
         scope="scope",
         folder_glob=str(tmp_path / "*.md"),
         version="v1",

@@ -13,7 +13,7 @@ class _EmbClient:
 def _params():
     return retr.QueryParams(
         db_path=None,
-        project_slug="proj",
+        slug="proj",
         scope="kb",
         query="hello",
         k=4,

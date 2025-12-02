@@ -10,7 +10,7 @@ Quick demo script:
 3) Example ingest (from a Python REPL or a separate script):
    >>> from timmykb.ingest import ingest_folder
    >>> summary = ingest_folder(
-   ...     project_slug="evagrin", scope="Timmy",
+   ...     slug="evagrin", scope="Timmy",
    ...     folder_glob="docs/**/*.md", version="v1",
    ...     meta={"source": "docs"},
    ... )
@@ -153,7 +153,7 @@ def main() -> None:
     with col1:
         use_rag = st.toggle("Usa RAG", value=True, key="coder_use_rag")
     with col2:
-        project_slug = st.text_input("Project slug", value="evagrin", key="coder_project_slug")
+        slug = st.text_input("Project slug", value="evagrin", key="coder_slug")
     with col3:
         scope = cast(str, st.selectbox("Scope", options=["Timmy", "ClasScrum", "Zeno"], index=0, key="coder_scope"))
 
@@ -171,7 +171,7 @@ def main() -> None:
         emb_client = _emb_client_or_none(use_rag)
         if use_rag and emb_client is not None:
             try:
-                cfg = _load_client_cfg(project_slug)
+                cfg = _load_client_cfg(slug)
                 retr_cfg = cfg.get("retriever") if isinstance(cfg, dict) else {}
                 if not isinstance(retr_cfg, dict):
                     retr_cfg = {}
@@ -182,7 +182,7 @@ def main() -> None:
                     candidate_limit = 2000
                 params = QueryParams(
                     db_path=get_db_path(),
-                    project_slug=project_slug,
+                    slug=slug,
                     scope=scope,
                     query=f"{task}\n\n{chat_context}" if chat_context else task,
                     k=8,
@@ -200,7 +200,7 @@ def main() -> None:
                     "coder.search.error",
                     extra={
                         "event": "coder.search.error",
-                        "slug": project_slug,
+                        "slug": slug,
                         "scope": scope,
                         "error": str(e),
                     },
@@ -213,7 +213,7 @@ def main() -> None:
                 "coder.search.summary",
                 extra={
                     "event": "coder.search.summary",
-                    "slug": project_slug,
+                    "slug": slug,
                     "scope": scope,
                     "results": int(len(retrieved or [])),
                 },

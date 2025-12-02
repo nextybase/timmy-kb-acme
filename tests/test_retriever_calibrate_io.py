@@ -50,7 +50,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
             self,
             *,
             db_path: Path | None,
-            project_slug: str,
+            slug: str,
             scope: str,
             query: str,
             k: int,
@@ -59,7 +59,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
             created_params.append(
                 {
                     "db_path": db_path,
-                    "project_slug": project_slug,
+                    "slug": slug,
                     "scope": scope,
                     "query": query,
                     "k": k,
@@ -67,7 +67,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
                 }
             )
             self.db_path = db_path
-            self.project_slug = project_slug
+            self.slug = slug
             self.scope = scope
             self.query = query
             self.k = k
@@ -162,7 +162,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     first_params = created_params[0]
     assert first_params == {
         "db_path": None,
-        "project_slug": "dummy",
+        "slug": "dummy",
         "scope": "faq",
         "query": "hello",
         "k": 2,

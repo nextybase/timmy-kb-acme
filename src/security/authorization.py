@@ -23,12 +23,12 @@ LOGGER = get_structured_logger("security.authorization", propagate=False)
 _ENV_SLUG_KEYS: tuple[str, ...] = (
     "TIMMY_ACTIVE_SLUG",
     "TIMMY_KB_ACTIVE_SLUG",
-    "PROJECT_SLUG",
+    "slug",
 )
 
 _SESSION_KEYS: tuple[str, ...] = (
     "active_slug",
-    "project_slug",
+    "slug",
     "client_slug",
     "slug",
 )
@@ -71,7 +71,7 @@ def authorizer_session(params: "QueryParams") -> None:
     """Consente la ricerca solo se lo slug coincide con quello del contesto attivo."""
     active_slug = _resolve_active_slug()
     # Hardening: confronto normalizzato
-    req_slug_norm = params.project_slug.strip().lower()
+    req_slug_norm = params.slug.strip().lower()
     active_slug_norm = active_slug.strip().lower()
     if req_slug_norm != active_slug_norm:
         LOGGER.warning(

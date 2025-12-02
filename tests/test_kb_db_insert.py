@@ -25,7 +25,7 @@ def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
 
     # Inserimento diretto a basso livello
     k1 = insert_chunks(
-        project_slug="obs",
+        slug="obs",
         scope="s",
         path="p",
         version="v",
@@ -38,7 +38,7 @@ def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
 
     # Re-run identico: nessun nuovo inserimento
     k2 = insert_chunks(
-        project_slug="obs",
+        slug="obs",
         scope="s",
         path="p",
         version="v",

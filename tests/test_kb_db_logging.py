@@ -38,12 +38,12 @@ def test_fetch_candidates_logs_invalid_json(tmp_path: Path, caplog):
     project, scope = "proj", "book"
     with kb.connect(db) as con:
         con.execute(
-            "INSERT INTO chunks (project_slug, scope, path, version, meta_json, content, embedding_json, created_at)"
+            "INSERT INTO chunks (slug, scope, path, version, meta_json, content, embedding_json, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (project, scope, "p1", "v", "{invalid", "c1", "[1,2,3]", now),
         )
         con.execute(
-            "INSERT INTO chunks (project_slug, scope, path, version, meta_json, content, embedding_json, created_at)"
+            "INSERT INTO chunks (slug, scope, path, version, meta_json, content, embedding_json, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (project, scope, "p2", "v", "{}", "c2", "not_json", now),
         )

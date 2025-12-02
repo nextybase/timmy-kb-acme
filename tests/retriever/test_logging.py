@@ -26,7 +26,7 @@ def _no_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
 def _base_params(query: str) -> QueryParams:
     return QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query=query,
         k=3,

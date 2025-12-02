@@ -18,7 +18,7 @@ class FakeEmb:
 def _mk_stub_candidates(contents: list[str], scores: list[float]):
     assert len(contents) == len(scores)
 
-    def _gen(project_slug: str, scope: str, limit: int, db_path: Path | None):
+    def _gen(slug: str, scope: str, limit: int, db_path: Path | None):
         for c, s in zip(contents, scores, strict=False):
             # embedding normalizzato per avere coseno = s
             s = float(s)

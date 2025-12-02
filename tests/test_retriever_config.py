@@ -10,12 +10,12 @@ from timmykb.retriever import QueryParams, choose_limit_for_budget, with_config_
 
 def test_with_config_candidate_limit_precedence() -> None:
     # default params -> prende dal config
-    p = QueryParams(db_path=None, project_slug="p", scope="s", query="q")
+    p = QueryParams(db_path=None, slug="p", scope="s", query="q")
     cfg = {"retriever": {"throttle": {"candidate_limit": 2000}}}
     out = with_config_candidate_limit(p, cfg)
     assert out.candidate_limit == 2000
     # valore esplicito diverso dal default -> non sovrascrivere
-    p2 = QueryParams(db_path=None, project_slug="p", scope="s", query="q", candidate_limit=1234)
+    p2 = QueryParams(db_path=None, slug="p", scope="s", query="q", candidate_limit=1234)
     out2 = with_config_candidate_limit(p2, cfg)
     assert out2.candidate_limit == 1234
 
@@ -29,7 +29,7 @@ def test_choose_limit_for_budget_mapping() -> None:
 
 
 def test_with_config_or_budget_auto() -> None:
-    p = QueryParams(db_path=None, project_slug="p", scope="s", query="q")
+    p = QueryParams(db_path=None, slug="p", scope="s", query="q")
     cfg = {
         "retriever": {
             "auto_by_budget": True,
@@ -61,13 +61,13 @@ def _typed_params(**over: Any) -> QueryParams:
     """
     Costruisce QueryParams forzando i tipi corretti per evitare warning Pylance:
     - db_path: Path|None
-    - project_slug/scope/query: str
+    - slug/scope/query: str
     - k/candidate_limit: int
     Ignora eventuali chiavi extra.
     """
     base: Dict[str, Any] = dict(
         db_path=None,
-        project_slug="p",
+        slug="p",
         scope="s",
         query="q",
         k=8,
@@ -89,7 +89,7 @@ def _typed_params(**over: Any) -> QueryParams:
 
     return QueryParams(
         db_path=db_path,
-        project_slug=_as_str(base.get("project_slug"), "p"),
+        slug=_as_str(base.get("slug"), "p"),
         scope=_as_str(base.get("scope"), "s"),
         query=_as_str(base.get("query"), "q"),
         k=_as_int(base.get("k"), 8),

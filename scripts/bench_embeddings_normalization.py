@@ -49,7 +49,7 @@ def _bench_retriever_normalization() -> Dict[str, Dict[str, float]]:
     """Esegue micro-bench per 3 taglie (S/M/L) e 4 formati di embedding client."""
 
     def make_stub(n: int):
-        def stub_fetch_candidates(project_slug: str, scope: str, limit: int, db_path: Any) -> Iterable[dict[str, Any]]:
+        def stub_fetch_candidates(slug: str, scope: str, limit: int, db_path: Any) -> Iterable[dict[str, Any]]:
             for _ in range(n):
                 yield {"content": "x", "meta": {}, "embedding": [1.0, 0.0]}
 
@@ -79,7 +79,7 @@ def _bench_retriever_normalization() -> Dict[str, Dict[str, float]]:
     out: Dict[str, Dict[str, float]] = {}
     for label, n in sizes.items():
         retr.fetch_candidates = make_stub(n)
-        params = retr.QueryParams(db_path=None, project_slug="acme", scope="kb", query="hello", k=8)
+        params = retr.QueryParams(db_path=None, slug="acme", scope="kb", query="hello", k=8)
         out[label] = {
             "ndarray_2d": _timeit(lambda: retr.search(params, Nd2())),
             "list_of_ndarray": _timeit(lambda: retr.search(params, ListNd())),

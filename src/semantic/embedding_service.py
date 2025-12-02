@@ -286,7 +286,7 @@ def _persist_markdown_embeddings(
             if relation_hints:
                 payload_meta["relation_hints"] = relation_hints
         inserted_total += _insert_chunks(
-            project_slug=slug,
+            slug=slug,
             scope=scope,
             path=rel_name,
             version=version,

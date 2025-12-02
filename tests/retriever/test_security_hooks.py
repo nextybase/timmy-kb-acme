@@ -28,7 +28,7 @@ def _stub_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
 def _base_params(query: str = "hello") -> QueryParams:
     return QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query=query,
         k=1,

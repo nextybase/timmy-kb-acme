@@ -39,13 +39,13 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
 
     # stub locale di fetch_candidates, con una riga vuota prima per E306
     def stub_fetch_candidates(
-        project_slug: str,
+        slug: str,
         scope: str,
         limit: int,
         db_path: Path | None,
     ):
         """Cattura i parametri e produce tre candidati con embedding identico."""
-        seen.update(project_slug=project_slug, scope=scope, limit=limit, db_path=db_path)
+        seen.update(slug=slug, scope=scope, limit=limit, db_path=db_path)
         yield {"content": "a", "meta": {}, "embedding": [1.0, 0.0]}
         yield {"content": "b", "meta": {}, "embedding": [1.0, 0.0]}
         yield {"content": "c", "meta": {}, "embedding": [1.0, 0.0]}
@@ -54,7 +54,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
 
     params = QueryParams(
         db_path=tmp_path / "kb.sqlite",
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="Timmy",
         query="hello",
         k=2,
@@ -68,7 +68,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     assert emb.calls and emb.calls[-1] == ("hello",)
     # pass-through di QueryParams verso fetch_candidates
     assert seen == {
-        "project_slug": DUMMY_SLUG,
+        "slug": DUMMY_SLUG,
         "scope": "Timmy",
         "limit": retr.MIN_CANDIDATE_LIMIT,
         "db_path": tmp_path / "kb.sqlite",
@@ -83,7 +83,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
     import numpy as np
 
     # Stub di fetch_candidates: un solo candidato compatibile
-    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
 
     monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
@@ -95,7 +95,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,
@@ -114,7 +114,7 @@ def test_search_skips_invalid_candidate_embeddings(monkeypatch):
     import timmykb.retriever as retr
 
     # 2 validi, 3 invalidi
-    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "ok1", "meta": {}, "embedding": [1.0, 0.0]}
         yield {"content": "bad_empty", "meta": {}, "embedding": []}
         yield {"content": "bad_non_numeric", "meta": {}, "embedding": [1.0, "x"]}
@@ -129,7 +129,7 @@ def test_search_skips_invalid_candidate_embeddings(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=10,
@@ -147,7 +147,7 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
 
     import timmykb.retriever as retr
 
-    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
 
     monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
@@ -158,7 +158,7 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=5,
@@ -177,7 +177,7 @@ def test_search_accepts_deque_embedding(monkeypatch):
     from timmykb.retriever import QueryParams
 
     # Stub di fetch_candidates: un solo candidato compatibile
-    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
 
     monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
@@ -189,7 +189,7 @@ def test_search_accepts_deque_embedding(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,
@@ -209,7 +209,7 @@ def test_search_accepts_list_of_numpy_arrays(monkeypatch):
     import timmykb.retriever as retr
     from timmykb.retriever import QueryParams
 
-    def stub_fetch_candidates(project_slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
 
     monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
@@ -221,7 +221,7 @@ def test_search_accepts_list_of_numpy_arrays(monkeypatch):
 
     params = QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
         k=1,

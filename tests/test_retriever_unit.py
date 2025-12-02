@@ -81,7 +81,7 @@ def _default_params():
     # Usa i default del dataclass (candidate_limit=4000 by design)
     return QueryParams(
         db_path=None,
-        project_slug=DUMMY_SLUG,
+        slug=DUMMY_SLUG,
         scope="kb",
         query="test",
         # k default = 8 nel dataclass
@@ -218,7 +218,7 @@ def test_search_with_config_passes_throttle(monkeypatch: pytest.MonkeyPatch):
     assert throttle.parallelism == 3
     assert throttle.sleep_ms_between_calls == 25
     assert throttle.latency_budget_ms == 150
-    assert captured["throttle_key"] == f"{params.project_slug}:{params.scope}"
+    assert captured["throttle_key"] == f"{params.slug}:{params.scope}"
 
 
 def test_rank_candidates_respects_deadline():

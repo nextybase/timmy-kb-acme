@@ -3,8 +3,8 @@
 """Archivio SQLite leggero per Timmy KB.
 
 Espone:
-- insert_chunks(project_slug, scope, path, version, meta_dict, chunks, embeddings)
-- fetch_candidates(project_slug, scope, limit=64)
+- insert_chunks(slug, scope, path, version, meta_dict, chunks, embeddings)
+- fetch_candidates(slug, scope, limit=64)
 
 Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
 Le embedding sono salvate come array JSON per portabilità. Usa la modalità WAL
@@ -111,7 +111,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
             """
             CREATE TABLE IF NOT EXISTS chunks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_slug TEXT NOT NULL,
+                slug TEXT NOT NULL,
                 scope TEXT NOT NULL,
                 path TEXT NOT NULL,
                 version TEXT,
@@ -122,20 +122,20 @@ def init_db(db_path: Optional[Path] = None) -> None:
             );
             """
         )
-        # Crea un indice composito per ricerche rapide su progetto e scope
+        # Crea un indice composito per ricerche rapide su slug e scope
         con.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_chunks_project_scope
-            ON chunks(project_slug, scope);
+            CREATE INDEX IF NOT EXISTS idx_chunks_slug_scope
+            ON chunks(slug, scope);
             """
         )
-        # Indice UNIQUE per idempotenza su chiave naturale (project, scope, path, version, content)
+        # Indice UNIQUE per idempotenza su chiave naturale (slug, scope, path, version, content)
         # Safe-migration: se esistono già duplicati, la creazione fallisce -> log warning e prosegui.
         try:
             con.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_chunks_natural
-                ON chunks(project_slug, scope, path, version, content);
+                ON chunks(slug, scope, path, version, content);
                 """
             )
         except sqlite3.IntegrityError:
@@ -145,7 +145,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
 
 
 def insert_chunks(
-    project_slug: str,
+    slug: str,
     scope: str,
     path: str,
     version: str,
@@ -167,7 +167,7 @@ def insert_chunks(
     now = datetime.utcnow().isoformat()
     rows = [
         (
-            project_slug,
+            slug,
             scope,
             path,
             version,
@@ -180,10 +180,10 @@ def insert_chunks(
     ]
     with connect(db_path) as con:
         sql = (
-            "INSERT INTO chunks (project_slug, scope, path, version, meta_json, content, embedding_json, created_at) "
+            "INSERT INTO chunks (slug, scope, path, version, meta_json, content, embedding_json, created_at) "
             "SELECT ?, ?, ?, ?, ?, ?, ?, ? "
             "WHERE NOT EXISTS ("
-            "  SELECT 1 FROM chunks WHERE project_slug=? AND scope=? AND path=? AND version=? AND content=? LIMIT 1"
+            "  SELECT 1 FROM chunks WHERE slug=? AND scope=? AND path=? AND version=? AND content=? LIMIT 1"
             ")"
         )
         params = [(pr, sc, pa, ve, mj, co, ej, ts, pr, sc, pa, ve, co) for (pr, sc, pa, ve, mj, co, ej, ts) in rows]
@@ -194,7 +194,7 @@ def insert_chunks(
     LOGGER.info(
         "semantic.index.db_inserted",
         extra={
-            "project_slug": project_slug,
+            "slug": slug,
             "scope": scope,
             "path": path,
             "version": version,
@@ -206,30 +206,29 @@ def insert_chunks(
 
 
 def fetch_candidates(
-    project_slug: str,
+    slug: str,
     scope: str,
     limit: int = 64,
     db_path: Optional[Path] = None,
 ) -> Iterator[dict[str, Any]]:
-    """Restituisce (iterator) i candidati per (project_slug, scope).
+    """Restituisce (iterator) i candidati per (slug, scope).
 
     Ogni dict prodotto contiene: content (str), meta (dict), embedding (list[float]).
     Ordinati dal più recente. Il LIMIT è applicato a livello SQL.
     """
     init_db(db_path)
     sql = (
-        "SELECT content, meta_json, embedding_json FROM chunks "
-        "WHERE project_slug = ? AND scope = ? ORDER BY id DESC LIMIT ?"
+        "SELECT content, meta_json, embedding_json FROM chunks " "WHERE slug = ? AND scope = ? ORDER BY id DESC LIMIT ?"
     )
     with connect(db_path) as con:
-        for content, meta_json, emb_json in con.execute(sql, (project_slug, scope, int(limit))):
+        for content, meta_json, emb_json in con.execute(sql, (slug, scope, int(limit))):
             try:
                 meta = json.loads(meta_json) if meta_json else {}
             except json.JSONDecodeError:
                 meta = {}
                 LOGGER.warning(
                     "kb_db.fetch.invalid_meta_json",
-                    extra={"slug": project_slug, "scope": scope},
+                    extra={"slug": slug, "scope": scope},
                 )
             try:
                 emb = json.loads(emb_json) if emb_json else []
@@ -237,6 +236,6 @@ def fetch_candidates(
                 emb = []
                 LOGGER.warning(
                     "kb_db.fetch.invalid_embedding_json",
-                    extra={"slug": project_slug, "scope": scope},
+                    extra={"slug": slug, "scope": scope},
                 )
             yield {"content": content, "meta": meta, "embedding": emb}

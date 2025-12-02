@@ -42,7 +42,7 @@ class HappyEmbeddings:
 
 def _params(
     *,
-    project_slug: str = DUMMY_SLUG,
+    slug: str = DUMMY_SLUG,
     scope: str = "kb",
     query: str = "q",
     k: int = 1,
@@ -51,7 +51,7 @@ def _params(
     """Costruttore tipizzato per evitare dict Any→str|int|None che confondono Pylance."""
     return QueryParams(
         db_path=None,
-        project_slug=project_slug,
+        slug=slug,
         scope=scope,
         query=query,
         k=k,
@@ -59,9 +59,9 @@ def _params(
     )
 
 
-def test_validate_params_empty_project_slug() -> None:
-    with pytest.raises(RetrieverError, match="project_slug"):
-        search(_params(project_slug="   "), DummyEmbeddings())
+def test_validate_params_empty_slug() -> None:
+    with pytest.raises(RetrieverError, match="slug"):
+        search(_params(slug="   "), DummyEmbeddings())
 
 
 def test_validate_params_empty_scope() -> None:

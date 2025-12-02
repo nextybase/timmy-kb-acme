@@ -88,7 +88,7 @@ def main() -> None:
         default="500,1000,2000,5000,10000,20000",
         help="Lista di candidate_limit separati da virgola",
     )
-    ap.add_argument("--slug", type=str, default="x", help="project_slug da usare per il DB")
+    ap.add_argument("--slug", type=str, default="x", help="slug da usare per il DB")
     ap.add_argument("--scope", type=str, default="book", help="scope da usare per il DB")
     ap.add_argument("--db", type=Path, default=None, help="Percorso DB (opzionale)")
     ap.add_argument("--out", type=Path, default=Path("bench.json"), help="File risultati JSON")
@@ -114,7 +114,7 @@ def main() -> None:
             for q in queries:
                 params = QueryParams(
                     db_path=args.db,
-                    project_slug=args.slug,
+                    slug=args.slug,
                     scope=args.scope,
                     query=str(q["q"]),
                     k=int(args.k),

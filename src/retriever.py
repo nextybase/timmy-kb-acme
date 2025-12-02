@@ -48,7 +48,7 @@ class QueryParams:
     Note:
     - `db_path`: percorso del DB SQLite; se None, usa il default interno di
       `fetch_candidates`.
-    - `project_slug`: progetto/spazio logico da cui recuperare i candidati.
+    - `slug`: progetto/spazio logico da cui recuperare i candidati.
     - `scope`: sotto-spazio o ambito (es. sezione o agente).
     - `query`: testo naturale da embeddare e confrontare con i candidati.
     - `k`: numero di risultati da restituire (top-k).
@@ -56,7 +56,7 @@ class QueryParams:
     """
 
     db_path: Optional[Path]
-    project_slug: str
+    slug: str
     scope: str
     query: str
     k: int = 8
@@ -295,8 +295,8 @@ def _validate_params(params: QueryParams) -> None:
 
     Range candidato: 500-20000 inclusi.
     """
-    if not params.project_slug.strip():
-        raise RetrieverError("project_slug vuoto")
+    if not params.slug.strip():
+        raise RetrieverError("slug vuoto")
     if not params.scope.strip():
         raise RetrieverError("scope vuoto")
     if params.candidate_limit < 0:
@@ -315,7 +315,7 @@ def _validate_params_logged(params: QueryParams) -> None:
         LOGGER.error(
             "retriever.params.invalid",
             extra={
-                "project_slug": params.project_slug,
+                "slug": params.slug,
                 "scope": params.scope,
                 "candidate_limit": params.candidate_limit,
                 "k": params.k,
@@ -440,7 +440,7 @@ def _materialize_query_vector(
         LOGGER.warning(
             "retriever.query.embed_failed",
             extra={
-                "slug": params.project_slug,
+                "slug": params.slug,
                 "scope": params.scope,
                 "error": repr(exc),
                 "ms": float(t_ms),
@@ -453,7 +453,7 @@ def _materialize_query_vector(
         LOGGER.warning(
             "retriever.query.invalid",
             extra={
-                "slug": params.project_slug,
+                "slug": params.slug,
                 "scope": params.scope,
                 "reason": "empty_embedding",
             },
@@ -467,7 +467,7 @@ def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
     t0 = time.time()
     candidates = list(
         fetch_candidates(
-            params.project_slug,
+            params.slug,
             params.scope,
             limit=params.candidate_limit,
             db_path=params.db_path,
@@ -558,7 +558,7 @@ def _log_retriever_metrics(
         LOGGER.info(
             "retriever.metrics",
             extra={
-                "slug": params.project_slug,
+                "slug": params.slug,
                 "scope": params.scope,
                 "k": int(params.k),
                 "candidate_limit": int(params.candidate_limit),
@@ -610,7 +610,7 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     t0 = time.time()
     candidates = list(
         fetch_candidates(
-            params.project_slug,
+            params.slug,
             params.scope,
             limit=params.candidate_limit,
             db_path=params.db_path,
@@ -621,7 +621,7 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
         LOGGER.info(
             "retriever.raw_candidates",
             extra={
-                "project_slug": params.project_slug,
+                "slug": params.slug,
                 "scope": params.scope,
                 "candidate_limit": int(params.candidate_limit),
                 "candidates": int(len(candidates)),
@@ -652,7 +652,7 @@ def search(
     1) Ottiene l'embedding di `params.query` tramite
        `embeddings_client.embed_texts([str])`.
     2) Carica al massimo `params.candidate_limit` candidati per
-       `(project_slug, scope)`.
+       `(slug, scope)`.
     3) Calcola similarità coseno e ordina per score decrescente con tie-break
        deterministico.
     4) Restituisce i top-`params.k` in forma di lista di dict:
@@ -669,7 +669,7 @@ def search(
     deadline = _deadline_from_settings(throttle_cfg)
     _validate_params_logged(params)
     throttle_ctx = (
-        _throttle_guard(throttle_key or params.project_slug or "retriever", throttle_cfg, deadline=deadline)
+        _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
         else nullcontext()
     )
@@ -687,7 +687,7 @@ def search(
             LOGGER.warning(
                 "retriever.query.invalid",
                 extra={
-                    "slug": params.project_slug,
+                    "slug": params.slug,
                     "scope": params.scope,
                     "reason": "empty_query",
                 },
@@ -705,7 +705,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "slug": params.project_slug,
+                    "slug": params.slug,
                     "scope": params.scope,
                     "stage": "embedding",
                 },
@@ -721,7 +721,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "slug": params.project_slug,
+                    "slug": params.slug,
                     "scope": params.scope,
                     "stage": "embedding",
                 },
@@ -733,7 +733,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "slug": params.project_slug,
+                    "slug": params.slug,
                     "scope": params.scope,
                     "stage": "fetch_candidates",
                 },
@@ -744,7 +744,7 @@ def search(
             LOGGER.warning(
                 "retriever.latency_budget.hit",
                 extra={
-                    "slug": params.project_slug,
+                    "slug": params.slug,
                     "scope": params.scope,
                     "stage": "fetch_candidates",
                 },
@@ -784,7 +784,7 @@ def search(
                 LOGGER.info(
                     "retriever.throttle.metrics",
                     extra={
-                        "slug": params.project_slug,
+                        "slug": params.slug,
                         "scope": params.scope,
                         "throttle": {
                             "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
@@ -801,7 +801,7 @@ def search(
                 LOGGER.warning(
                     "retriever.latency_budget.hit",
                     extra={
-                        "slug": params.project_slug,
+                        "slug": params.slug,
                         "scope": params.scope,
                         "stage": "ranking",
                     },
@@ -1042,12 +1042,12 @@ def search_with_config(
     sia allineato a config/budget e che i log `limit.source=...` vengano emessi.
 
     Esempio:
-        params = QueryParams(db_path=None, project_slug="acme", scope="kb", query=q)
+        params = QueryParams(db_path=None, slug="acme", scope="kb", query=q)
         results = search_with_config(params, cfg, embeddings)
     """
     effective = with_config_or_budget(params, config)
     throttle_cfg = _normalize_throttle_settings(_build_throttle_settings(config))
-    throttle_key = f"{params.project_slug}:{params.scope}"
+    throttle_key = f"{params.slug}:{params.scope}"
     return search(
         effective,
         embeddings_client,

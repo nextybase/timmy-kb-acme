@@ -29,7 +29,7 @@ def test_ingest_folder_reuses_single_embeddings_instance(monkeypatch, tmp_path: 
     _SpyEmb.instances = 0
 
     summary = ing.ingest_folder(
-        project_slug="p",
+        slug="p",
         scope="s",
         folder_glob=str(tmp_path / "*.md"),
         version="v1",
@@ -47,7 +47,7 @@ def test_ingest_folder_short_circuit_on_empty(monkeypatch, tmp_path: Path):
     _SpyEmb.instances = 0
 
     summary = ing.ingest_folder(
-        project_slug="p",
+        slug="p",
         scope="s",
         folder_glob=str(tmp_path / "*.md"),
         version="v1",

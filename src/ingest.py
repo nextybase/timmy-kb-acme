@@ -2,8 +2,8 @@
 """Utility di ingestion per Timmy KB.
 
 Funzioni:
-- ingest_path(project_slug, scope, path, version, meta)
-- ingest_folder(project_slug, scope, folder_glob, version, meta)
+- ingest_path(slug, scope, path, version, meta)
+- ingest_folder(slug, scope, folder_glob, version, meta)
 - get_vision_cfg(cfg)
 
 Legge file di testo, li divide in chunk, calcola le embedding e le salva in SQLite
@@ -74,7 +74,7 @@ def _iter_ingest_candidates(
     *,
     customer: str | None,
     scope: str,
-    project_slug: str,
+    slug: str,
     on_count: Callable[[int], None] | None = None,
 ) -> Iterable[Path]:
     allowed_suffixes = {".md", ".txt"}
@@ -90,7 +90,7 @@ def _iter_ingest_candidates(
         except PathTraversalError as exc:
             with start_decision_span(
                 "filter",
-                slug=customer or project_slug,
+                slug=customer or slug,
                 run_id=None,
                 trace_kind="ingest",
                 phase="ingest.discover",
@@ -229,7 +229,7 @@ class OpenAIEmbeddings:
 
 
 def ingest_path(
-    project_slug: str,
+    slug: str,
     scope: str,
     path: str,
     version: str,
@@ -246,7 +246,7 @@ def ingest_path(
     if not p.exists() or not p.is_file():
         LOGGER.error(
             "ingest.invalid_file",
-            extra={"file": str(p), "slug": project_slug},
+            extra={"file": str(p), "slug": slug},
         )
         return 0
     try:
@@ -254,7 +254,7 @@ def ingest_path(
     except PathTraversalError as exc:
         with start_decision_span(
             "filter",
-            slug=project_slug,
+            slug=slug,
             run_id=None,
             trace_kind="ingest",
             phase="ingest.process_file",
@@ -270,7 +270,7 @@ def ingest_path(
                 "ingest.skip.traversal",
                 extra={
                     "file": str(p),
-                    "slug": project_slug,
+                    "slug": slug,
                     "scope": scope,
                     "error": str(exc),
                 },
@@ -279,7 +279,7 @@ def ingest_path(
     if _is_binary(safe_p):
         with start_decision_span(
             "filter",
-            slug=project_slug,
+            slug=slug,
             run_id=None,
             trace_kind="ingest",
             phase="ingest.process_file",
@@ -292,12 +292,12 @@ def ingest_path(
         ):
             LOGGER.info(
                 "ingest.skip.binary",
-                extra={"file": str(p), "slug": project_slug},
+                extra={"file": str(p), "slug": slug},
             )
         return 0
     text = _read_text_file(base, p)
-    slug = meta.get("slug") if isinstance(meta, dict) else None
-    with phase_scope(LOGGER, stage="ingest.embed", customer=slug) as phase_embed:
+    customer = meta.get("slug") if isinstance(meta, dict) else None
+    with phase_scope(LOGGER, stage="ingest.embed", customer=customer or slug) as phase_embed:
         chunks: List[str] = _chunk_text(text)
         phase_embed.set_artifacts(len(chunks))
         client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
@@ -307,10 +307,10 @@ def ingest_path(
         vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
         phase_embed.set_artifacts(len(vectors))
 
-    with phase_scope(LOGGER, stage="ingest.persist", customer=slug) as phase_persist:
+    with phase_scope(LOGGER, stage="ingest.persist", customer=customer or slug) as phase_persist:
         inserted = int(
             insert_chunks(
-                project_slug=project_slug,
+                slug=slug,
                 scope=scope,
                 path=str(safe_p),
                 version=version,
@@ -323,7 +323,7 @@ def ingest_path(
     LOGGER.info(
         "ingest.file.saved",
         extra={
-            "slug": project_slug,
+            "slug": slug,
             "scope": scope,
             "file": str(safe_p),
             "chunks": inserted,
@@ -331,14 +331,14 @@ def ingest_path(
     )
     if inserted > 0:
         try:
-            record_document_processed(project_slug, inserted)
+            record_document_processed(slug, inserted)
         except Exception:
             pass
     return inserted
 
 
 def ingest_folder(
-    project_slug: str,
+    slug: str,
     scope: str,
     folder_glob: str,
     version: str,
@@ -352,7 +352,7 @@ def ingest_folder(
     """Ingest di tutti i file .md/.txt che corrispondono al glob indicato.
 
     Args:
-        project_slug/scope/version/meta: parametri dominio.
+        slug/scope/version/meta: parametri dominio.
         embeddings_client: facoltativo, riuso di un client embedding.
         base_dir: override del perimetro path-safety (default: inferito dal glob).
         max_files: limita il numero massimo di file elaborati (None -> tutti).
@@ -369,7 +369,7 @@ def ingest_folder(
     customer = meta.get("slug") if isinstance(meta, dict) else None
     limit_reached = False
     env = os.getenv("TIMMY_ENV", "dev")
-    root_slug = customer or project_slug
+    root_slug = customer or slug
     run_id = meta.get("run_id") if isinstance(meta, dict) else None
 
     with start_root_trace(
@@ -393,7 +393,7 @@ def ingest_folder(
                 base,
                 customer=customer,
                 scope=scope,
-                project_slug=project_slug,
+                slug=slug,
                 on_count=_update,
             )
 
@@ -407,7 +407,7 @@ def ingest_folder(
                             if client is None:
                                 client = cast(EmbeddingsClient, OpenAIEmbeddings())
                             n = ingest_path(
-                                project_slug=project_slug,
+                                slug=slug,
                                 scope=scope,
                                 path=str(p),
                                 version=version,
@@ -423,7 +423,7 @@ def ingest_folder(
                                 LOGGER.info(
                                     "pipeline.processing.progress",
                                     extra={
-                                        "slug": project_slug,
+                                        "slug": slug,
                                         "scope": scope,
                                         "processed": count_files,
                                         "chunks": total_chunks,
@@ -435,7 +435,7 @@ def ingest_folder(
                             extra={
                                 "file": str(p),
                                 "scope": scope,
-                                "slug": project_slug,
+                                "slug": slug,
                                 "error": str(exc),
                             },
                         )
@@ -445,7 +445,7 @@ def ingest_folder(
                             extra={
                                 "file": str(p),
                                 "scope": scope,
-                                "slug": project_slug,
+                                "slug": slug,
                             },
                         )
                         raise
@@ -458,7 +458,7 @@ def ingest_folder(
         LOGGER.info(
             "ingest.limit_reached",
             extra={
-                "slug": project_slug,
+                "slug": slug,
                 "scope": scope,
                 "files_processed": count_files,
                 "max_files": max_files,
@@ -468,7 +468,7 @@ def ingest_folder(
         LOGGER.info(
             "ingest.summary",
             extra={
-                "slug": project_slug,
+                "slug": slug,
                 "scope": scope,
                 "files": count_files,
                 "chunks": total_chunks,

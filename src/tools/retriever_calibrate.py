@@ -117,7 +117,7 @@ def main() -> int:
     log = get_structured_logger("tools.retriever_calibrate")
 
     ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
-    project_slug = ctx.slug
+    slug = ctx.slug
     scope = str(args.scope or DEF_SCOPE).strip() or DEF_SCOPE
     base_dir = Path(".").resolve()
 
@@ -125,16 +125,16 @@ def main() -> int:
     queries = _load_queries(base_dir, Path(args.queries))
 
     if not limits:
-        log.warning("retriever_calibrate.no_limits", extra={"slug": project_slug, "scope": scope})
+        log.warning("retriever_calibrate.no_limits", extra={"slug": slug, "scope": scope})
         return 0
     if not queries:
-        log.warning("retriever_calibrate.no_queries", extra={"slug": project_slug, "scope": scope})
+        log.warning("retriever_calibrate.no_queries", extra={"slug": slug, "scope": scope})
         return 0
 
     log.info(
         "retriever_calibrate.start",
         extra={
-            "slug": project_slug,
+            "slug": slug,
             "scope": scope,
             "limits": limits,
             "queries": len(queries),
@@ -150,7 +150,7 @@ def main() -> int:
             for repetition in range(int(args.repetitions)):
                 params = QueryParams(
                     db_path=None,
-                    project_slug=project_slug,
+                    slug=slug,
                     scope=scope,
                     query=query.text,
                     k=query.k,
@@ -163,7 +163,7 @@ def main() -> int:
                     log.error(
                         "retriever_calibrate.retrieve_failed",
                         extra={
-                            "slug": project_slug,
+                            "slug": slug,
                             "scope": scope,
                             "limit": limit,
                             "query_index": query_index,
@@ -178,7 +178,7 @@ def main() -> int:
                 log.info(
                     "retriever_calibrate.run",
                     extra={
-                        "slug": project_slug,
+                        "slug": slug,
                         "scope": scope,
                         "limit": limit,
                         "query_index": query_index,
@@ -203,12 +203,12 @@ def main() -> int:
         avg_latency = sum(r.latency_ms for r in rows) / len(rows)
         log.info(
             "retriever_calibrate.done",
-            extra={"slug": project_slug, "scope": scope, "runs": len(rows), "avg_latency_ms": round(avg_latency, 2)},
+            extra={"slug": slug, "scope": scope, "runs": len(rows), "avg_latency_ms": round(avg_latency, 2)},
         )
     else:
         log.warning(
             "retriever_calibrate.no_runs",
-            extra={"slug": project_slug, "scope": scope},
+            extra={"slug": slug, "scope": scope},
         )
 
     return 0

@@ -10,7 +10,7 @@ def test_db_default_under_data(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     inserted = insert_chunks(
-        project_slug="obs",
+        slug="obs",
         scope="s",
         path="p",
         version="v",

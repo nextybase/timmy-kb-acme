@@ -105,7 +105,7 @@ def throttle_token_bucket(
     """Applica un rate limit per-identità con token bucket in-process."""
     if max_requests <= 0 or interval_seconds <= 0:
         raise RetrieverError("Configurazione throttle invalida.")
-    user_identity = _resolve_identity(identity or params.project_slug)
+    user_identity = _resolve_identity(identity or params.slug)
     now = time.monotonic()
 
     with _LOCK:

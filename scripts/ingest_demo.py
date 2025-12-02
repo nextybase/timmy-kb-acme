@@ -66,7 +66,7 @@ def main() -> None:
         raise SystemExit("OPENAI_API_KEY_CODEX mancante. Impostalo nell'ambiente o in un file .env.")
 
     summary = ingest_folder(
-        project_slug=args.project,
+        slug=args.project,
         scope=args.scope,
         folder_glob=args.glob,
         version=args.version,
