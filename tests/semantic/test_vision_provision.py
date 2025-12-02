@@ -2,6 +2,7 @@
 # tests/semantic/test_vision_provision.py
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict
@@ -462,3 +463,36 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     assert captured.get("use_kb") is False
     assert captured.get("run_instructions") == "instr"
+
+
+def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    schema_path = tmp_path / "VisionOutput.schema.json"
+    schema_payload = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}, "b": {"type": "string"}},
+    }
+    schema_path.write_text(json.dumps(schema_payload), encoding="utf-8")
+
+    vp._load_vision_schema.cache_clear()
+    vp._vision_schema_path.cache_clear()
+    monkeypatch.setattr(vp, "_vision_schema_path", lambda: schema_path)
+
+    loaded = vp._load_vision_schema()
+    assert set(loaded["required"]) == {"a", "b"}
+
+
+def test_load_vision_schema_filters_required_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    schema_path = tmp_path / "VisionOutput.schema.json"
+    schema_payload = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}, "b": {"type": "string"}},
+        "required": ["a", "c"],
+    }
+    schema_path.write_text(json.dumps(schema_payload), encoding="utf-8")
+
+    vp._load_vision_schema.cache_clear()
+    vp._vision_schema_path.cache_clear()
+    monkeypatch.setattr(vp, "_vision_schema_path", lambda: schema_path)
+
+    loaded = vp._load_vision_schema()
+    assert set(loaded["required"]) == {"a"}
