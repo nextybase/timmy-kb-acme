@@ -69,7 +69,7 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
 
 
 def require_reviewed_vocab(base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]:
-    """Facade pubblica che fallisce se il vocabolario canonico non e' disponibile."""
+    """Restituisce il vocabolario canonico e solleva ConfigError se mancante (fail-fast)."""
     return _require_reviewed_vocab(base_dir, logger, slug=slug)
 
 
@@ -198,7 +198,7 @@ def _apply_folder_terms(
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
-    """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP."""
+    """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
@@ -230,7 +230,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         except Exception as exc:
             logger.exception(
                 "semantic.tags_csv.enrichment_failed",
-                extra={"slug": slug, "error": str(exc)},
+                extra={"slug": slug, "error": str(exc), "tags_db": str(tags_db_path)},
             )
             raise ConfigError("Arricchimento tag fallito", slug=slug) from exc
 
@@ -303,11 +303,8 @@ def _run_build_workflow(
     ) = None,
     summary_fn: Callable[[ClientContextType, logging.Logger, str], object] | None = None,
 ) -> tuple[Path, list[Path], list[Path]]:
-    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti.
+    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti."""
 
-    stage_wrapper: opzionale funzione (stage_name, callable) -> value per avvolgere le singole fasi
-    con telemetry personalizzata (es. phase_scope nel CLI).
-    """
     ctx_base = cast(Path, getattr(context, "base_dir", None))
     base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
@@ -340,8 +337,11 @@ def _run_build_workflow(
             "semantic.book.frontmatter",
             extra={"slug": slug, "enriched": len(cast(list, touched))},
         )
-    except Exception:
-        logger.info("semantic.book.frontmatter", extra={"slug": slug, "enriched": None})
+    except Exception as exc:
+        logger.warning(
+            "semantic.book.frontmatter",
+            extra={"slug": slug, "enriched": None, "error": str(exc)},
+        )
     if summary_fn is None:
         _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
     else:
