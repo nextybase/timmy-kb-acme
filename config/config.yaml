@@ -6,7 +6,7 @@ openai:
   max_retries: 2
   http2_enabled: false
 vision:
-  engine: assistant
+  engine: responses
   model: gpt-4o-mini-2024-07-18
   assistant_id_env: OBNEXT_ASSISTANT_ID
   use_kb: false
