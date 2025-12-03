@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Sequence, TypeVar, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -105,6 +105,98 @@ def _require_reviewed_vocab(
 _LAST_VOCAB_STUBBED = False
 
 
+def _collect_doc_entities(candidates: Mapping[str, Mapping[str, Any]]) -> List[DocEntityRecord]:
+    """Estrae le entity NLP dai metadati dei candidati in una lista flat."""
+
+    doc_entities: List[DocEntityRecord] = []
+    for rel_path, meta in candidates.items():
+        sources = cast(Mapping[str, Any], meta.get("sources") or {})
+        spacy_src = cast(Mapping[str, Any], sources.get("spacy") or {})
+        areas = cast(Mapping[str, Sequence[str]], spacy_src.get("areas") or {})
+        score_map = cast(Mapping[str, Any], meta.get("score") or {})
+        rel_uid = Path(rel_path).as_posix()
+        for area_key, ent_list in areas.items():
+            for entity_id in ent_list or []:
+                key = f"{area_key}:{entity_id}"
+                try:
+                    confidence = float(score_map.get(key, 0.0))
+                except Exception:
+                    confidence = 0.0
+                if confidence <= 0.0:
+                    continue
+                doc_entities.append(
+                    DocEntityRecord(
+                        doc_uid=rel_uid,
+                        area_key=str(area_key),
+                        entity_id=str(entity_id),
+                        confidence=confidence,
+                        origin="spacy",
+                        status="suggested",
+                    )
+                )
+    return doc_entities
+
+
+def _load_folder_terms(tags_db_path: Path) -> Dict[str, List[str]]:
+    """Ritorna i top-term per cartella dal DB NLP (se presente)."""
+
+    folder_terms: Dict[str, List[str]] = {}
+    if not tags_db_path.exists():
+        return folder_terms
+
+    _ensure_tags_schema_v2(str(tags_db_path))
+    with _get_tags_conn(str(tags_db_path)) as conn:
+        rows = conn.execute(
+            """
+            SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
+            FROM folder_terms ft
+            JOIN folders f ON f.id = ft.folder_id
+            JOIN terms   t ON t.id = ft.term_id
+            GROUP BY f.path, t.canonical
+            ORDER BY f.path, weight DESC
+            """
+        ).fetchall()
+    for row in rows:
+        folder_path = str(row["folder_path"] or "")
+        canonical = str(row["term"] or "").strip()
+        if not canonical:
+            continue
+        rel_folder = folder_path[4:] if folder_path.startswith("raw/") else folder_path
+        rel_folder = rel_folder.strip("/")
+        folder_terms.setdefault(rel_folder, []).append(canonical)
+    return folder_terms
+
+
+def _apply_folder_terms(
+    candidates: Dict[str, Dict[str, Any]],
+    folder_terms: Mapping[str, Sequence[str]],
+) -> None:
+    """Arricchisce i metadati candidati con i top-term per cartella (in-place)."""
+
+    for rel_path, meta in candidates.items():
+        rel_folder = Path(rel_path).parent.as_posix()
+        rel_folder = "" if rel_folder == "." else rel_folder
+        nlp_tags = folder_terms.get(rel_folder)
+        if not nlp_tags:
+            continue
+        existing = list(meta.get("tags") or [])
+        seen_lower = {str(tag).strip().lower() for tag in existing if str(tag).strip()}
+        enriched: list[str] = list(existing)
+        for term in nlp_tags:
+            term_norm = str(term).strip()
+            if not term_norm:
+                continue
+            key = term_norm.lower()
+            if key in seen_lower:
+                continue
+            enriched.append(term_norm)
+            seen_lower.add(key)
+            if len(enriched) >= 16:
+                break
+        if enriched:
+            meta["tags"] = enriched
+
+
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP."""
     paths = get_paths(slug)
@@ -122,83 +214,15 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         cfg = _load_semantic_config(base_dir)
         candidates = _extract_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
-        doc_entities: List[DocEntityRecord] = []
-        for rel_path, meta in candidates.items():
-            sources = meta.get("sources") or {}
-            spacy_src = sources.get("spacy") or {}
-            areas = spacy_src.get("areas") or {}
-            score_map = meta.get("score") or {}
-            rel_uid = Path(rel_path).as_posix()
-            for area_key, ent_list in areas.items():
-                for entity_id in ent_list or []:
-                    key = f"{area_key}:{entity_id}"
-                    try:
-                        confidence = float(score_map.get(key, 0.0))
-                    except Exception:
-                        confidence = 0.0
-                    if confidence <= 0.0:
-                        continue
-                    doc_entities.append(
-                        DocEntityRecord(
-                            doc_uid=rel_uid,
-                            area_key=str(area_key),
-                            entity_id=str(entity_id),
-                            confidence=confidence,
-                            origin="spacy",
-                            status="suggested",
-                        )
-                    )
+        doc_entities = _collect_doc_entities(candidates)
 
         # Arricchimento con top-terms NLP (se disponibili in tags.db)
         try:
             tags_db_path = Path(_derive_tags_db_path(semantic_dir / "tags_reviewed.yaml"))
             tags_db_path = ensure_within_and_resolve(semantic_dir, tags_db_path)
-            folder_terms: Dict[str, List[str]] = {}
-            if tags_db_path.exists():
-                _ensure_tags_schema_v2(str(tags_db_path))
-                with _get_tags_conn(str(tags_db_path)) as conn:
-                    rows = conn.execute(
-                        """
-                        SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
-                        FROM folder_terms ft
-                        JOIN folders f ON f.id = ft.folder_id
-                        JOIN terms   t ON t.id = ft.term_id
-                        GROUP BY f.path, t.canonical
-                        ORDER BY f.path, weight DESC
-                        """
-                    ).fetchall()
-                for row in rows:
-                    folder_path = str(row["folder_path"] or "")
-                    canonical = str(row["term"] or "").strip()
-                    if not canonical:
-                        continue
-                    rel_folder = folder_path[4:] if folder_path.startswith("raw/") else folder_path
-                    rel_folder = rel_folder.strip("/")
-                    folder_terms.setdefault(rel_folder, []).append(canonical)
-
+            folder_terms = _load_folder_terms(tags_db_path)
             if folder_terms:
-                for rel_path, meta in candidates.items():
-                    rel_folder = Path(rel_path).parent.as_posix()
-                    rel_folder = "" if rel_folder == "." else rel_folder
-                    nlp_tags = folder_terms.get(rel_folder)
-                    if not nlp_tags:
-                        continue
-                    existing = list(meta.get("tags") or [])
-                    seen_lower = {str(tag).strip().lower() for tag in existing if str(tag).strip()}
-                    enriched: list[str] = list(existing)
-                    for term in nlp_tags:
-                        term_norm = str(term).strip()
-                        if not term_norm:
-                            continue
-                        key = term_norm.lower()
-                        if key in seen_lower:
-                            continue
-                        enriched.append(term_norm)
-                        seen_lower.add(key)
-                        if len(enriched) >= 16:
-                            break
-                    if enriched:
-                        meta["tags"] = enriched
+                _apply_folder_terms(candidates, folder_terms)
             if doc_entities:
                 _save_doc_entities(tags_db_path, doc_entities)
         except PathTraversalError:
