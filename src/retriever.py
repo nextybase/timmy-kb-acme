@@ -62,9 +62,16 @@ class QueryParams:
     candidate_limit: int = 4000
 
 
+class SearchMeta(TypedDict, total=False):
+    slug: str
+    scope: str
+    file_path: str
+    source: str
+
+
 class SearchResult(TypedDict):
     content: str
-    meta: Mapping[str, Any]
+    meta: SearchMeta
     score: float
 
 
@@ -182,7 +189,11 @@ def _throttle_guard(
     if not acquired:
         LOGGER.warning(
             "retriever.throttle.timeout",
-            extra={"key": key, "timeout_ms": settings.acquire_timeout_ms},
+            extra={
+                "key": key,
+                "timeout_ms": settings.acquire_timeout_ms,
+                "slug": key.split("::", maxsplit=1)[0],
+            },
         )
         yield
         return
@@ -191,7 +202,11 @@ def _throttle_guard(
         if deadline_hit and deadline is not None:
             LOGGER.warning(
                 "retriever.throttle.deadline",
-                extra={"key": key, "deadline_ms": int(settings.latency_budget_ms or 0)},
+                extra={
+                    "key": key,
+                    "deadline_ms": int(settings.latency_budget_ms or 0),
+                    "slug": key.split("::", maxsplit=1)[0],
+                },
             )
         yield
     finally:

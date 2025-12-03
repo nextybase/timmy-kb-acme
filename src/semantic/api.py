@@ -126,25 +126,28 @@ def _collect_doc_entities(candidates: Mapping[str, Mapping[str, Any]]) -> List[D
     return doc_entities
 
 
-def _load_folder_terms(tags_db_path: Path) -> Dict[str, List[str]]:
+def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[str, List[str]]:
     """Ritorna i top-term per cartella dal DB NLP (se presente)."""
 
     folder_terms: Dict[str, List[str]] = {}
     if not tags_db_path.exists():
         return folder_terms
 
-    _ensure_tags_schema_v2(str(tags_db_path))
-    with _get_tags_conn(str(tags_db_path)) as conn:
-        rows = conn.execute(
-            """
-            SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
-            FROM folder_terms ft
-            JOIN folders f ON f.id = ft.folder_id
-            JOIN terms   t ON t.id = ft.term_id
-            GROUP BY f.path, t.canonical
-            ORDER BY f.path, weight DESC
-            """
-        ).fetchall()
+    try:
+        _ensure_tags_schema_v2(str(tags_db_path))
+        with _get_tags_conn(str(tags_db_path)) as conn:
+            rows = conn.execute(
+                """
+                SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
+                FROM folder_terms ft
+                JOIN folders f ON f.id = ft.folder_id
+                JOIN terms   t ON t.id = ft.term_id
+                GROUP BY f.path, t.canonical
+                ORDER BY f.path, weight DESC
+                """
+            ).fetchall()
+    except Exception as exc:  # pragma: no cover - fail-fast wrapping
+        raise ConfigError("Errore accesso tags.db", slug=slug, file_path=tags_db_path) from exc
     for row in rows:
         folder_path = str(row["folder_path"] or "")
         canonical = str(row["term"] or "").strip()
@@ -157,16 +160,19 @@ def _load_folder_terms(tags_db_path: Path) -> Dict[str, List[str]]:
 
 
 def _apply_folder_terms(
-    candidates: Dict[str, Dict[str, Any]],
+    candidates: Mapping[str, Dict[str, Any]],
     folder_terms: Mapping[str, Sequence[str]],
-) -> None:
-    """Arricchisce i metadati candidati con i top-term per cartella (in-place)."""
+) -> Dict[str, Dict[str, Any]]:
+    """Arricchisce i metadati candidati con i top-term per cartella."""
 
+    enriched_candidates: Dict[str, Dict[str, Any]] = {}
+    max_terms = 16
     for rel_path, meta in candidates.items():
         rel_folder = Path(rel_path).parent.as_posix()
         rel_folder = "" if rel_folder == "." else rel_folder
         nlp_tags = folder_terms.get(rel_folder)
         if not nlp_tags:
+            enriched_candidates[rel_path] = dict(meta)
             continue
         existing = list(meta.get("tags") or [])
         seen_lower = {str(tag).strip().lower() for tag in existing if str(tag).strip()}
@@ -180,10 +186,13 @@ def _apply_folder_terms(
                 continue
             enriched.append(term_norm)
             seen_lower.add(key)
-            if len(enriched) >= 16:
+            if len(enriched) >= max_terms:
                 break
+        updated = dict(meta)
         if enriched:
-            meta["tags"] = enriched
+            updated["tags"] = enriched
+        enriched_candidates[rel_path] = updated
+    return enriched_candidates
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
@@ -209,9 +218,9 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         try:
             tags_db_path = Path(_derive_tags_db_path(semantic_dir / "tags_reviewed.yaml"))
             tags_db_path = ensure_within_and_resolve(semantic_dir, tags_db_path)
-            folder_terms = _load_folder_terms(tags_db_path)
+            folder_terms = _load_folder_terms(tags_db_path, slug=slug)
             if folder_terms:
-                _apply_folder_terms(candidates, folder_terms)
+                candidates = _apply_folder_terms(candidates, folder_terms)
             if doc_entities:
                 _save_doc_entities(tags_db_path, doc_entities)
         except PathTraversalError:
