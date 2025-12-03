@@ -44,7 +44,7 @@ def test_require_reviewed_vocab_detects_stub(monkeypatch: pytest.MonkeyPatch, tm
         api.require_reviewed_vocab(base_dir, logger, slug="acme")
 
     text = str(excinfo.value)
-    assert "Vocabolario stub" in text
+    assert "Vocabolario canonico assente" in text
     assert excinfo.value.file_path == base_dir / "semantic" / "tags.db"
 
 

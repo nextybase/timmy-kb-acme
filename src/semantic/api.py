@@ -79,21 +79,10 @@ def _require_reviewed_vocab(
     *,
     slug: str,
 ) -> Dict[str, Dict[str, Sequence[str]]]:
-    """Restituisce il vocabolario canonico o solleva ConfigError se assente."""
-    global _LAST_VOCAB_STUBBED
+    """Restituisce il vocabolario canonico o solleva ConfigError se assente (fail-fast)."""
     vocab = load_reviewed_vocab(base_dir, logger)
     if vocab:
-        _LAST_VOCAB_STUBBED = False
         return vocab
-    loader_module = getattr(_load_reviewed_vocab, "__module__", "")
-    if loader_module != "semantic.vocab_loader":
-        _LAST_VOCAB_STUBBED = True
-        raise ConfigError(
-            "Vocabolario stub: rigenera semantic/tags.db prima di procedere.",
-            slug=slug,
-            file_path=base_dir / "semantic" / "tags.db",
-        )
-    _LAST_VOCAB_STUBBED = False
     tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
     raise ConfigError(
         "Vocabolario canonico assente. Esegui l'estrazione tag per popolare semantic/tags.db.",
@@ -101,8 +90,6 @@ def _require_reviewed_vocab(
         file_path=tags_db,
     )
 
-
-_LAST_VOCAB_STUBBED = False
 
 BuildWorkflowResult: TypeAlias = tuple[Path, list[Path], list[Path]]
 
