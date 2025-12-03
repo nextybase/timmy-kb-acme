@@ -99,7 +99,7 @@ def test_build_logs_archive_applies_limits(tmp_path: Path, monkeypatch: pytest.M
     assert archive.read("logs/log1.txt") == b"log-1"
 
 
-def test_build_logs_archive_returns_none_on_errors(tmp_path: Path) -> None:
+def test_build_logs_archive_returns_none_on_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     missing = tmp_path / "missing.log"
 
     @contextmanager
@@ -107,7 +107,8 @@ def test_build_logs_archive_returns_none_on_errors(tmp_path: Path) -> None:
         raise RuntimeError("boom")
         yield  # pragma: no cover
 
-    assert diag.build_logs_archive([missing], slug="demo", safe_reader=reader) is None
+    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
+    assert diag.build_logs_archive([missing], slug="dummy", safe_reader=reader) is None
 
 
 def test_build_workspace_summary_uses_base_dir(tmp_path: Path) -> None:
