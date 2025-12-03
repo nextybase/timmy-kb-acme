@@ -14,6 +14,7 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pre_onboarding import ensure_local_workspace_for_ui
+from ui.config_store import get_vision_model
 from ui.utils.context_cache import get_client_context
 from ui.utils.workspace import workspace_root
 
@@ -219,8 +220,8 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     return True, slug, client_name
 
 
-# Legacy helper mantenuto per compatibilitÃ  con i test esistenti
 def _render_logo() -> None:
+    """Render del logo nella landing (usato dai test UI)."""
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -398,6 +399,7 @@ def render_workspace_summary(
                     log or get_structured_logger("ui.vision_provision"),
                     slug=slug,
                     pdf_path=pdf_path,
+                    model=get_vision_model(),
                 )
                 yaml_paths = cast(Dict[str, str], result.get("yaml_paths") or {})
                 vision_state["yaml_paths"] = yaml_paths

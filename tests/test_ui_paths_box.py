@@ -84,7 +84,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(landing, "ClientContext", type("_C", (), {"load": staticmethod(lambda **k: _DummyCtx(base))}))
     monkeypatch.setattr(landing, "get_client_context", lambda *_args, **_kwargs: _DummyCtx(base), raising=True)
 
-    def _fake_provision(ctx, log, *, slug, pdf_path):
+    def _fake_provision(ctx, log, *, slug, pdf_path, model):
         return {"yaml_paths": {"mapping": str(mapping), "cartelle_raw": str(cartelle)}}
 
     monkeypatch.setattr(landing.vision_services, "provision_from_vision", _fake_provision, raising=True)

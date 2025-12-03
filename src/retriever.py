@@ -819,16 +819,7 @@ def _coerce_throttle_section(retriever_section: Mapping[str, Any] | RetrieverCon
     throttle = retriever_section.get("throttle")
     if isinstance(throttle, Mapping):
         return throttle
-    legacy: dict[str, Any] = {}
-    if "candidate_limit" in retriever_section:
-        legacy["candidate_limit"] = retriever_section["candidate_limit"]
-    if "latency_budget_ms" in retriever_section:
-        legacy["latency_budget_ms"] = retriever_section["latency_budget_ms"]
-    if "parallelism" in retriever_section:
-        legacy["parallelism"] = retriever_section["parallelism"]
-    if "sleep_ms_between_calls" in retriever_section:
-        legacy["sleep_ms_between_calls"] = retriever_section["sleep_ms_between_calls"]
-    return legacy
+    return {}
 
 
 def _safe_int(value: Any, default: int) -> int:

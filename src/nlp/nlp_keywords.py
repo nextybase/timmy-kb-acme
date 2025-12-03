@@ -143,7 +143,7 @@ def clean_candidates(text: str) -> List[str]:
 
 
 def spacy_candidates(text: str) -> List[str]:
-    """Alias legacy per compatibilità con test/stub precedenti."""
+    """Alias di convenienza verso `clean_candidates` (firma invariata)."""
     return clean_candidates(text)
 
 

@@ -21,7 +21,6 @@ from semantic.api import (
 
 __all__ = ["build_markdown_headless"]
 
-# Tipi compatibili con semantic.api:
 # - in fase di type checking usiamo la classe concreta
 # - a runtime usiamo il Protocol per evitare dipendenze hard
 if TYPE_CHECKING:
@@ -36,7 +35,7 @@ def build_markdown_headless(
     *,
     slug: str,
 ) -> Dict[str, object]:
-    """Esegue la pipeline semantica in modalità headless (senza prompt/UI):
+    """Esegue la pipeline semantica in modalitÃ  headless (senza prompt/UI):
 
     1) convert_markdown -> genera .md in book/ 2) load_reviewed_vocab -> carica vocabolario canonico
     da base/semantic 3) enrich_frontmatter -> arricchisce i frontmatter con titoli e tag 4)
@@ -72,19 +71,16 @@ def build_markdown_headless(
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="semantic_headless",
-        description="Esegue la build semantica (RAW -> BOOK) in modalità headless.",
+        description="Esegue la build semantica (RAW -> BOOK) in modalitÃ  headless.",
     )
     p.add_argument("--slug", required=True, help="Identificativo cliente (slug).")
     p.add_argument(
         "--non-interactive",
         action="store_true",
-        help="Disabilita prompt interattivi (modalità batch/CI).",
+        help="Disabilita prompt interattivi (modalitÃ  batch/CI).",
     )
-    # Opzione legacy/ignorable per compatibilità con i test
     p.add_argument(
-        "--no-preview",
         action="store_true",
-        help="Compatibilità: non avvia alcuna preview (opzione ignorata).",
     )
     p.add_argument(
         "--log-level",
@@ -104,7 +100,7 @@ def _setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
 
 
 def _safe_len_seq(obj: object) -> int:
-    """Restituisce len(obj) solo se obj è una lista/tupla, altrimenti 0 (type-safe per Pylance)."""
+    """Restituisce len(obj) solo se obj Ã¨ una lista/tupla, altrimenti 0 (type-safe per Pylance)."""
     if isinstance(obj, (list, tuple)):
         return len(obj)
     return 0

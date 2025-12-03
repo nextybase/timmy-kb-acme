@@ -209,7 +209,7 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
 
     ctx = DummyCtx(base_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
-    result = S.provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path)
+    result = S.provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path, model="test-model")
 
     # File creati
     mapping = Path(result["mapping"])
@@ -239,7 +239,11 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     with pytest.raises(ConfigError):
         S.provision_from_vision(
-            ctx, _NoopLogger(), slug="dummy", pdf_path=tmp_workspace / "config" / "VisionStatement.pdf"
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
+            model="test-model",
         )
 
 
@@ -284,7 +288,11 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     with pytest.raises(ConfigError):
         S.provision_from_vision(
-            ctx, _NoopLogger(), slug="dummy", pdf_path=tmp_workspace / "config" / "VisionStatement.pdf"
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
+            model="test-model",
         )
 
 
@@ -329,5 +337,9 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
     ctx = DummyCtx(base_dir=tmp_workspace)
     with pytest.raises((ConfigError, ValueError)):
         S.provision_from_vision(
-            ctx, _NoopLogger(), slug="dummy", pdf_path=tmp_workspace / "config" / "VisionStatement.pdf"
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
+            model="test-model",
         )

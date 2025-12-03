@@ -46,25 +46,26 @@ def _maybe_redact(text: str, redact: bool) -> str:
 
 
 def _context_settings_map(context: Any) -> Mapping[str, Any]:
-    """Estrae un mapping di configurazione dal contesto (Settings o dict legacy)."""
-    result: Mapping[str, Any] = {}
+    """Estrae un mapping di configurazione dal contesto (Settings o mapping)."""
     cfg_source = getattr(context, "settings", None)
     if isinstance(cfg_source, Settings):
-        result = cfg_source.as_dict()
-    elif isinstance(cfg_source, Mapping):
-        result = cfg_source
-    else:
-        legacy_cfg = getattr(context, "config", {}) or {}
-        if isinstance(legacy_cfg, Mapping):
-            result = legacy_cfg
-    return result
+        try:
+            return cfg_source.as_dict()
+        except Exception:
+            return {}
+    if isinstance(cfg_source, Mapping):
+        try:
+            return dict(cfg_source)
+        except Exception:
+            return {}
+    return {}
 
 
 def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int, int]:
     """Risoluzione porte (host e container) con precedenza:
 
-    host: 1) parametro -> 2) env PREVIEW_PORT -> 3) context.config.preview_port -> 4) default
-    container: 1) env HONKIT_PORT -> 2) context.config.honkit_port -> 3) default
+    host: 1) parametro -> 2) env PREVIEW_PORT -> 3) settings.preview_port -> 4) default
+    container: 1) env HONKIT_PORT -> 2) settings.honkit_port -> 3) default
     """
     # Host port
     host_port = explicit_host_port
@@ -87,7 +88,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
             except Exception:
                 logger.warning(
                     "pipeline.gitbook_preview.invalid_port",
-                    extra={"key": "config.preview_port", "value": cfg_val},
+                    extra={"key": "settings.preview_port", "value": cfg_val},
                 )
     if host_port is None:
         host_port = _DEFAULT_HOST_PREVIEW_PORT
@@ -111,7 +112,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
             except Exception:
                 logger.warning(
                     "pipeline.gitbook_preview.invalid_port",
-                    extra={"key": "config.honkit_port", "value": cfg_val},
+                    extra={"key": "settings.honkit_port", "value": cfg_val},
                 )
     if container_port is None:
         container_port = _DEFAULT_HONKIT_INTERNAL_PORT

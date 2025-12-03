@@ -26,8 +26,7 @@ class _ProvisionFromVisionFunc(Protocol):
         logger: logging.Logger,
         slug: str,
         pdf_path: Path,
-        force: bool = False,
-        model: Optional[str] = None,
+        model: str,
         prepared_prompt: Optional[str] = None,
     ) -> Dict[str, Any]: ...
 
@@ -67,6 +66,13 @@ HaltError: Type[Exception]
 _provision_from_vision: _ProvisionFromVisionFunc
 _prepare_prompt: _PreparePromptFunc
 HaltError, _provision_from_vision, _prepare_prompt = _load_semantic_bindings()
+
+
+def _resolve_model(slug: str, model: Optional[str]) -> str:
+    resolved = (model or get_vision_model()).strip()
+    if not resolved:
+        raise ConfigError("Modello Vision non configurato o vuoto.", slug=slug)
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -231,6 +237,8 @@ def provision_from_vision(
             file_path=str(_hash_sentinel(base_dir)),
         )
 
+    resolved_model = _resolve_model(slug, model)
+
     # Esecuzione reale (delegata al layer semantic)
     try:
         result = _provision_from_vision(
@@ -238,9 +246,8 @@ def provision_from_vision(
             logger=logger,
             slug=slug,
             pdf_path=safe_pdf,
-            # onora default centralizzato
-            model=(model or get_vision_model()),
-            force=force,
+            # modello risolto a monte (richiesto da semantic)
+            model=resolved_model,
             prepared_prompt=prepared_prompt,
         )
     except HaltError:
@@ -248,7 +255,7 @@ def provision_from_vision(
         raise
 
     # Aggiorna sentinel JSON (con log utile ai test)
-    _save_hash(base_dir, digest=digest, model=(model or get_vision_model()))
+    _save_hash(base_dir, digest=digest, model=resolved_model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
 
     # Ritorno coerente con la firma documentata

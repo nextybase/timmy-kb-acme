@@ -8,6 +8,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+from ui.config_store import get_vision_model
 from ui.services.vision_provision import provision_from_vision
 from ui.utils.context_cache import get_client_context
 from ui.utils.stubs import get_streamlit
@@ -148,9 +149,8 @@ def open_vision_modal(slug: str = "dummy") -> None:
                             logger=LOG,
                             slug=slug,
                             pdf_path=pdf_path,
+                            model=get_vision_model(),
                             prepared_prompt=prompt,
-                            force=False,
-                            model=None,
                         )
                     except ConfigError as err:
                         if not _is_gate_error(err):
@@ -161,9 +161,8 @@ def open_vision_modal(slug: str = "dummy") -> None:
                             logger=LOG,
                             slug=slug,
                             pdf_path=pdf_path,
+                            model=get_vision_model(),
                             prepared_prompt=prompt,
-                            force=True,
-                            model=None,
                         )
                 st.session_state[_SS_LAST_RESULT] = result_payload
                 st.success("Vision completata correttamente.")

@@ -75,23 +75,6 @@ def _safe_success(message: str, **kwargs: Any) -> bool:
     return False
 
 
-def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
-    """Fallback compatto quando l'API `link_button` non è disponibile."""
-    link_btn = getattr(st, "link_button", None)
-    if callable(link_btn):
-        try:
-            return bool(link_btn(label, url, **kwargs))
-        except Exception:
-            pass
-    button = getattr(st, "button", None)
-    if callable(button):
-        try:
-            return bool(button(label, **kwargs))
-        except Exception:
-            pass
-    return False
-
-
 def _matches_text(row: Dict[str, Any], query: str) -> bool:
     """Match case-insensitive su message/event/slug/file_path."""
     if not query:

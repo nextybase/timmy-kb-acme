@@ -79,8 +79,6 @@ def extract_semantic_concepts(
 ) -> Dict[str, List[Dict[str, str]]]:
     logger = logger or get_structured_logger("semantic.extract", context=context)
 
-    # Carica i keyword (fase 2) tramite compat-shim (patchabile nei test)
-    # NB: niente keyword argument 'logger' per compatibilita con i test legacy
     mapping = load_semantic_mapping(context)
     mapping = _sanitize_and_dedup_mapping(mapping)
     if not mapping:
@@ -207,9 +205,7 @@ def enrich_markdown_folder(context: _Ctx, logger: Optional[logging.Logger] = Non
 
 
 def load_semantic_mapping(context: Any, _logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
-    """
-    Shim compatibile con i test legacy: restituisce i keywords di Fase 2.
-    """
+    """Carica i keyword di Fase 2 dal vocabolario revisionato."""
     base_dir = getattr(context, "base_dir", None)
     if base_dir is None:
         raise PipelineError("Context privo di base_dir per estrazione semantica.", slug=getattr(context, "slug", None))

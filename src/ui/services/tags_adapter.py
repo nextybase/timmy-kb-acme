@@ -88,7 +88,3 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     except Exception:  # pragma: no cover
         st.error("Errore inatteso durante l'estrazione dei tag. Consulta i log.")
         svc_logger.exception("ui.tags_adapter.failed", extra={"slug": slug})
-
-
-# Alias retro-compatibile
-extract_tags_for_review = run_tags_update

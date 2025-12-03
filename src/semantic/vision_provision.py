@@ -201,6 +201,21 @@ def _resolve_assistant_env(ctx: Any) -> str:
     return default_env
 
 
+def _resolve_model_from_settings(ctx: Any) -> str:
+    settings_obj, settings_payload = _extract_context_settings(ctx)
+    if isinstance(settings_obj, Settings):
+        try:
+            candidate = settings_obj.vision_model
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        except Exception:
+            pass
+    candidate = settings_payload.get("vision_model")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+    return "assistants"
+
+
 def _resolve_snapshot_retention_days(ctx: Any) -> int:
     settings_obj, settings_payload = _extract_context_settings(ctx)
     slug = getattr(ctx, "slug", None)
@@ -785,21 +800,23 @@ def provision_from_vision(
     *,
     slug: str,
     pdf_path: Path,
-    force: bool = False,  # mantenuto per compat con layer UI, qui non fa gating
-    model: Optional[str] = None,  # argomento accettato per compat, non usato con Assistant
+    model: str,
     prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Onboarding Vision (flusso **semplificato e bloccante**).
+
+    Richiede il modello Vision risolto a monte dall'orchestratore.
     """
     ensure_dotenv_loaded()
 
+    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
     prepared = _prepare_payload(
         ctx,
         slug,
         pdf_path,
         prepared_prompt=prepared_prompt,
-        model=model,
+        model=resolved_model,
         logger=logger,
     )
 

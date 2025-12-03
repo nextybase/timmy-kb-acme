@@ -130,7 +130,11 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     monkeypatch.setattr(S, "_call_assistant_json", _fake_call)
 
     S.provision_from_vision(
-        ctx, S.logging.getLogger("noop"), slug=slug, pdf_path=tmp_ws / "config" / "VisionStatement.pdf"
+        ctx,
+        S.logging.getLogger("noop"),
+        slug=slug,
+        pdf_path=tmp_ws / "config" / "VisionStatement.pdf",
+        model="test-model",
     )
 
     # Verifica che il client_name sia stato incluso nel prompt inviato all'assistente

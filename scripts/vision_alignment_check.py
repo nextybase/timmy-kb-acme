@@ -24,7 +24,7 @@ from dotenv import load_dotenv, find_dotenv
 def _detect_repo_root() -> Path:
     """
     Trova la root del repo risalendo le cartelle finché non vede `src/`.
-    Funziona sia se il file è in `scripts/` che in `scripts/archive/`.
+    Funziona dal percorso corrente `scripts/` (cartella archive rimossa).
     """
     here = Path(__file__).resolve()
     for candidate in here.parents:

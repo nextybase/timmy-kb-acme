@@ -43,7 +43,7 @@ def test_pdf_path_outside_base_dir_is_rejected_with_slug_and_file(tmp_path: Path
 
     ctx = _Ctx(base)
     with pytest.raises(ConfigError) as ei:
-        prov(ctx, _NoopLogger(), slug="dummy", pdf_path=outside_pdf)
+        prov(ctx, _NoopLogger(), slug="dummy", pdf_path=outside_pdf, model="test-model")
     err = ei.value
     # Deve includere slug e file_path
     assert getattr(err, "slug", None) == "dummy"

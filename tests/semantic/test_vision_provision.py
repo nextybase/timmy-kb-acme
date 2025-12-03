@@ -176,7 +176,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _ok_payload(slug))
 
     # run
-    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
     # assert file paths
     mapping = Path(res["mapping"])
@@ -224,7 +224,7 @@ def test_provision_uses_engine_from_settings(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
     assert captured.get("engine") == "responses"
 
@@ -254,7 +254,7 @@ def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytes
 
     monkeypatch.setattr(vp, "_persist_outputs", _fake_persist)
 
-    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
     assert captured.get("retention_days") == 30
 
@@ -270,7 +270,7 @@ def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _halt_payload(slug))
 
     with pytest.raises(HaltError) as exc:
-        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
     assert "Integra Mission" in str(exc.value)
 
     # Nessun YAML deve essere scritto
@@ -306,6 +306,7 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
         logger=logging.getLogger("test"),
         slug=slug,
         pdf_path=pdf,
+        model="test-model",
         prepared_prompt=prepared_prompt,
     )
 
@@ -339,7 +340,7 @@ def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pyte
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
     assert Path(res["mapping"]).exists()
     assert Path(res["cartelle_raw"]).exists()
@@ -366,7 +367,7 @@ def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pyte
     )
 
     with pytest.raises(ConfigError) as excinfo:
-        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf)
+        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
     assert "Assistant ID" in str(excinfo.value)
 

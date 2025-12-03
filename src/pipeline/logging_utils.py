@@ -16,8 +16,6 @@ Indice funzioni principali (ruolo):
 - `get_structured_logger(name, *, context=None, log_file=None, run_id=None, level=INFO)`:
     istanzia un logger con handler console (sempre) e file (opzionale),
     aggiunge i filtri di contesto e redazione.
-- `metrics_scope(logger, *, stage, customer=None)`:
-    alias di `phase_scope` per retro-compatibilità (stessa telemetria strutturata).
 - `redact_secrets(msg)`:
     redige pattern comuni di segreti in testo libero.
 - `mask_partial(value, keep=3)`, `mask_id_map(d)`, `mask_updates(d)`:
