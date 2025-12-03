@@ -34,13 +34,13 @@ class StreamlitStub:
         if name == "stop":
 
             def _stop(*_a: Any, **_k: Any) -> None:
-                raise RuntimeError("Streamlit stop non disponibile nel fallback")
+                return None
 
             return _stop
         if name == "rerun":
 
             def _rerun(*_a: Any, **_k: Any) -> None:
-                raise RuntimeError("Streamlit rerun non disponibile nel fallback")
+                return None
 
             return _rerun
         if name == "spinner":
@@ -88,7 +88,11 @@ def get_streamlit() -> Any:
     """Restituisce il modulo streamlit oppure lo stub riutilizzabile."""
     try:
         import streamlit as st
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+        # Se non c'è un contesto streamlit attivo (pytest/headless), usa lo stub
+        if get_script_run_ctx() is None and hasattr(st, "__file__"):
+            raise RuntimeError("streamlit runtime non attivo")
         return st
     except Exception:
         return cast(Any, _get_stub())

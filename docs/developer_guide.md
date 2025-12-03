@@ -1,6 +1,7 @@
 # Developer Guide  v1.0 Beta
 
 Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa versione e la base iniziale della documentazione tecnica: niente riferimenti a legacy o migrazioni passate.
+Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_quickstart.md).
 
 ---
 
@@ -34,22 +35,16 @@ vision:
 
 **Regole:**
 - Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `vision.model`.
-- Il flusso **Assistant** usa l'ID letto da l'env il cui nome e in `vision.assistant_id_env`.
+- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `vision.assistant_id_env`.
+- Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
+- Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` → `context.settings` → `.as_dict()` per le UI/CLI.
 
 Getter consigliato lato UI:
 
 ```python
-# src/ui/config_store.py
-from pathlib import Path
-from pipeline.yaml_utils import yaml_read
+from ui.config_store import get_vision_model
 
-
-def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
-    """Legge vision.model da config/config.yaml (SSoT UI)."""
-    cfg_path = get_config_path()  # definito in questo modulo
-    cfg_file = Path(cfg_path)
-    data = yaml_read(cfg_file.parent, cfg_file) or {}
-    return str((data.get("vision") or {}).get("model") or default)
+model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 ```
 
 ### OIDC (opzionale)

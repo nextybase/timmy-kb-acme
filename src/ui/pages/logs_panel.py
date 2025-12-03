@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import requests
 
@@ -110,7 +111,7 @@ def _is_docker_available() -> bool:
 
 def _check_grafana_reachable(url: str, timeout: float = 2.0) -> tuple[bool, str]:
     """HEAD rapido su Grafana per mostrare uno stato online/offline."""
-    parsed = requests.utils.urlparse(url)
+    parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         return False, f"schema non supportato '{parsed.scheme}'"
     try:

@@ -32,7 +32,7 @@ LOGGER = get_structured_logger("semantic.spacy_extractor")
 # --------------------------------------------------------------------------------------
 
 
-def _load_spacy(model_name: str):
+def _load_spacy(model_name: str) -> Any:
     try:
         import spacy
     except Exception as exc:  # pragma: no cover
@@ -48,7 +48,8 @@ def _load_spacy(model_name: str):
 
 
 @lru_cache(maxsize=2)
-def _get_nlp(model_name: str):
+def _get_nlp(model_name: str) -> Any:
+    """Restituisce (con cache) il modello SpaCy richiesto."""
     return _load_spacy(model_name)
 
 
@@ -77,7 +78,7 @@ def _read_pdf_text(pdf_path: Path) -> str:
     return "\n\n".join(texts).strip()
 
 
-def _collect_phrases(doc, limit: int) -> Tuple[List[str], List[Tuple[str, str]]]:
+def _collect_phrases(doc: Any, limit: int) -> Tuple[List[str], List[Tuple[str, str]]]:
     """Restituisce noun-chunks (lemmi) e entita' (testo, label), con limite soft."""
     noun_chunks: List[str] = []
     entities: List[Tuple[str, str]] = []
@@ -104,7 +105,7 @@ def _collect_phrases(doc, limit: int) -> Tuple[List[str], List[Tuple[str, str]]]
     return noun_chunks, entities
 
 
-def _build_phrase_matcher(nlp, lexicon: Iterable[LexiconEntry]):
+def _build_phrase_matcher(nlp: Any, lexicon: Iterable[LexiconEntry]) -> Tuple[Any, Dict[int, Tuple[str, str]]]:
     """Crea un matcher SpaCy con termini -> (area, entity)."""
     try:
         from spacy.matcher import PhraseMatcher
@@ -125,8 +126,8 @@ def _build_phrase_matcher(nlp, lexicon: Iterable[LexiconEntry]):
 
 
 def _score_matches(
-    matches,
-    doc,
+    matches: Iterable[Tuple[int, int, int]] | Any,
+    doc: Any,
     label_map: Dict[int, Tuple[str, str]],
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[str]]]]:
     """Aggrega conteggi per area/entity con evidenze."""

@@ -16,7 +16,7 @@ funzioni sono no-op per non bloccare il runtime.
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Any, Optional, cast
 
 _PROM_AVAILABLE = False
 _METRICS_STARTED = False
@@ -26,9 +26,9 @@ try:
 
     _PROM_AVAILABLE = True
 except Exception:  # pragma: no cover - opzionale
-    Counter = None  # type: ignore[assignment]
-    Histogram = None  # type: ignore[assignment]
-    start_http_server = None  # type: ignore[assignment]
+    Counter = cast(Any, None)
+    Histogram = cast(Any, None)
+    start_http_server = cast(Any, None)
 
 if _PROM_AVAILABLE:
     documents_processed_total = Counter(
@@ -58,8 +58,10 @@ def start_metrics_server_once(port: Optional[int] = None) -> None:
     if _METRICS_STARTED or not _PROM_AVAILABLE or start_http_server is None:
         return
     try:
-        eff_port = int(port or os.getenv("TIMMY_METRICS_PORT", "8000"))
-    except ValueError:
+        env_port = os.getenv("TIMMY_METRICS_PORT")
+        eff_port_str = str(port) if port is not None else (env_port or "8000")
+        eff_port = int(eff_port_str)
+    except (ValueError, TypeError):
         eff_port = 8000
     try:
         start_http_server(eff_port)

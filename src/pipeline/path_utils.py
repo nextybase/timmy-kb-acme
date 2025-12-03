@@ -41,11 +41,28 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache  # caching per slug regex
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Iterable, Iterator, List, Optional, Sequence, TextIO, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    BinaryIO,
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    TextIO,
+    Tuple,
+    cast,
+)
 
 from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
 from .yaml_utils import yaml_read
+
+if TYPE_CHECKING:
+    from .settings import Settings
 
 # Logger di modulo
 _logger = get_structured_logger("pipeline.path_utils")
@@ -95,25 +112,69 @@ def _parse_positive_int(value: Any, default: int) -> int:
         return default
 
 
-def _load_raw_cache_defaults() -> None:
-    """Carica TTL/capacita della cache RAW da config/config.yaml."""
+@lru_cache(maxsize=2)
+def _load_global_settings(repo_root: Path | None = None, config_path: Path | None = None) -> Settings | None:
+    """
+    Carica le impostazioni globali (config/config.yaml) tramite Settings (SSoT).
+
+    Usa caching interna per evitare letture ripetute.
+    """
+    from .settings import Settings
+
+    root = repo_root or Path(__file__).resolve().parents[2]
+    try:
+        return Settings.load(root, config_path=config_path)
+    except Exception as exc:
+        _logger.debug(
+            "path_utils.settings_load_failed",
+            extra={"error": str(exc), "root": str(root), "config_path": str(config_path) if config_path else None},
+        )
+        return None
+
+
+def _load_raw_cache_defaults(loader: Callable[[], Mapping[str, Any]] | None = None) -> None:
+    """Carica TTL/capacita della cache RAW (SSoT config) con loader iniettabile per test."""
     global _SAFE_PDF_CACHE_DEFAULT_TTL, _SAFE_PDF_CACHE_CAPACITY
 
     ttl = _DEFAULT_RAW_CACHE_TTL
     capacity = _DEFAULT_RAW_CACHE_CAPACITY
 
-    config_path = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
-    try:
-        config = yaml_read(config_path.parent, config_path, use_cache=True) or {}
-        cfg = (config.get("raw_cache") or {}) if isinstance(config, dict) else {}
-        ttl = _parse_positive_float(cfg.get("ttl_seconds"), ttl)
-        capacity = _parse_positive_int(cfg.get("max_entries"), capacity)
-    except Exception as exc:
-        # se il file manca o e' invalido manteniamo i fallback ma segnaliamo warning
-        _logger.warning(
-            "pipeline.raw_cache.defaults_invalid",
-            extra={"error": str(exc), "config_path": str(config_path)},
-        )
+    cfg_source: Mapping[str, Any] | None = None
+
+    if loader is not None:
+        try:
+            cfg_source = loader()
+        except Exception as exc:
+            _logger.warning(
+                "pipeline.raw_cache.loader_failed",
+                extra={"error": str(exc)},
+            )
+    else:
+        settings = _load_global_settings()
+        if settings:
+            if hasattr(settings, "as_dict"):
+                cfg_source = cast(Mapping[str, Any], settings.as_dict())
+            elif isinstance(settings, Mapping):
+                cfg_source = dict(settings)
+            else:
+                try:
+                    cfg_source = dict(vars(settings))
+                except Exception:
+                    cfg_source = {}
+        else:
+            config_path = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+            try:
+                cfg_source = yaml_read(config_path.parent, config_path, use_cache=True) or {}
+            except Exception as exc:
+                _logger.warning(
+                    "pipeline.raw_cache.defaults_invalid",
+                    extra={"error": str(exc), "config_path": str(config_path)},
+                )
+
+    raw_cfg = (cfg_source.get("raw_cache") or {}) if isinstance(cfg_source, Mapping) else {}
+    if isinstance(raw_cfg, Mapping):
+        ttl = _parse_positive_float(raw_cfg.get("ttl_seconds"), ttl)
+        capacity = _parse_positive_int(raw_cfg.get("max_entries"), capacity)
 
     _SAFE_PDF_CACHE_DEFAULT_TTL = ttl
     _SAFE_PDF_CACHE_CAPACITY = capacity
@@ -486,27 +547,35 @@ def _load_slug_regex() -> str:
     """Carica la regex per la validazione dello slug da `config/config.yaml` (chiave: `slug_regex`).
 
     Strategia:
-    - Cerca prima `./config/config.yaml` (working dir),
-      poi `<project_root>/config/config.yaml` risalendo da questo file.
+    - Usa `Settings` (SSoT) del progetto.
+    - Fallback su `./config/config.yaml` se esistente.
     - Fallback: `^[a-z0-9-]+$`.
     """
     default_regex = r"^[a-z0-9-]+$"
-    candidates = [
-        Path("config") / "config.yaml",
-        Path(__file__).resolve().parents[2] / "config" / "config.yaml",
-    ]
-    for cfg_path in candidates:
+    settings = _load_global_settings()
+    if settings:
         try:
-            if cfg_path.exists():
-                from pipeline.yaml_utils import yaml_read
+            if hasattr(settings, "get_value"):
+                candidate = cast(Any, settings).get_value("slug_regex", default=default_regex)
+            else:
+                candidate = getattr(settings, "slug_regex", default_regex)
+        except Exception:
+            candidate = default_regex
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
 
-                cfg = yaml_read(cfg_path.parent, cfg_path) or {}
-                pattern = cfg.get("slug_regex", default_regex)
-                return pattern if isinstance(pattern, str) and pattern else default_regex
+    # Fallback a un eventuale config locale in cwd
+    fallback_cfg = Path("config") / "config.yaml"
+    if fallback_cfg.exists():
+        try:
+            cfg = yaml_read(fallback_cfg.parent, fallback_cfg) or {}
+            pattern = cfg.get("slug_regex", default_regex)
+            if isinstance(pattern, str) and pattern.strip():
+                return pattern.strip()
         except Exception as e:
             _logger.error(
                 "path_utils.slug_regex_load_error",
-                extra={"error": str(e), "file_path": str(cfg_path)},
+                extra={"error": str(e), "file_path": str(fallback_cfg)},
             )
     return default_regex
 

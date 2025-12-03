@@ -10,7 +10,7 @@ passato già caricato). Serve come step intermedio prima di salvare nel DB
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from spacy.language import Language
 from spacy.matcher import PhraseMatcher
@@ -62,12 +62,13 @@ def make_phrase_matcher(
     return matcher
 
 
-def _decode_pattern_id(vocab_strings, pattern_id: int) -> Tuple[str, str]:
+def _decode_pattern_id(vocab_strings: Sequence[str] | Any, pattern_id: int) -> Tuple[str, str]:
     """Decodifica l'ID del pattern "area_key::entity_id"."""
     text = str(vocab_strings[pattern_id])
     if "::" not in text:
         return "unknown", text
-    return text.split("::", 1)
+    area_key, entity_id = text.split("::", 1)
+    return area_key, entity_id
 
 
 def extract_doc_entities(

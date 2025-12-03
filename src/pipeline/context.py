@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
 
 from .env_utils import compute_redact_flag, get_bool, get_env_var
 from .exceptions import ConfigError, InvalidSlug
@@ -62,18 +62,39 @@ def validate_slug(slug: str) -> str:
         raise ConfigError(str(e), slug=slug) from e
 
 
+@runtime_checkable
+class SupportsGetItem(Protocol):
+    def __getitem__(self, key: str) -> Any: ...
+
+    def get(self, key: str, default: Any | None = None) -> Any: ...
+
+
+class ClientSettingsDict(TypedDict, total=False):
+    client_name: str
+    slug: str
+    ops_log_level: str
+
+
 def _safe_settings_get(settings: Any | None, key: str) -> Any:
     """Estrae un valore da settings (dict/oggetto) senza assumere .get presente."""
     if settings is None:
         return None
     if isinstance(settings, dict):
         return settings.get(key)
+    if isinstance(settings, SupportsGetItem):
+        try:
+            return settings.get(key)
+        except Exception:
+            try:
+                return settings[key]
+            except Exception:
+                return None
     getter = getattr(settings, "get", None)
     if callable(getter):
         try:
             return getter(key)
         except Exception:
-            pass
+            return None
     return getattr(settings, key, None)
 
 

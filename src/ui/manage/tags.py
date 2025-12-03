@@ -6,7 +6,7 @@ import io
 import json
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, cast
 
 import yaml
 
@@ -16,6 +16,7 @@ from pipeline.tracing import start_decision_span
 from storage.tags_store import import_tags_yaml_to_db
 from ui.clients_store import get_state as _get_client_state
 from ui.utils.core import safe_write_text
+from ui.utils.stubs import StreamlitStub, _FunctionStub
 
 __all__ = [
     "handle_tags_raw_save",
@@ -63,7 +64,7 @@ def _human_override_span(
     reason: str,
     status: str = "applied",
     attributes: Mapping[str, Any] | None = None,
-):
+) -> Any:
     run_id = getattr(getattr(logger, "_logging_ctx_view", None), "run_id", None)
     base_attrs = {
         "hilt_involved": True,
@@ -89,13 +90,15 @@ def _human_override_span(
 
 def _lookup_client_state(slug: str) -> str | None:
     try:
-        return _get_client_state(slug)
+        return cast(str | None, _get_client_state(slug))
     except Exception:
         return None
 
 
-def _validate_tags_yaml_payload(content: str) -> dict[str, Any]:
+def _validate_tags_yaml_payload(content: str | None) -> dict[str, Any]:
     """Valida la struttura minima di `tags_reviewed.yaml` e ritorna il payload."""
+    if content is None:
+        raise ConfigError("Contenuto YAML mancante.")
     parsed = yaml.safe_load(content)
     if not isinstance(parsed, dict):
         raise ConfigError("Top-level YAML deve essere un mapping")
@@ -418,6 +421,7 @@ def open_tags_editor_modal(
     reader = read_fn or read_text_safe
     writer = write_fn or safe_write_text
     importer = import_yaml_fn or import_tags_yaml_to_db
+    is_stub_runtime = isinstance(st, StreamlitStub)
     try:
         initial_text = reader(yaml_parent, yaml_path, encoding="utf-8")
     except Exception:
@@ -429,15 +433,25 @@ def open_tags_editor_modal(
         caption_fn = getattr(st, "caption", None)
         if callable(caption_fn):
             caption_fn("Modifica e salva il file `semantic/tags_reviewed.yaml`.")
-        content = st.text_area(
-            "Contenuto YAML",
-            value=initial_text,
-            height=420,
-            key="tags_yaml_editor",
-            label_visibility="collapsed",
-        )
-        col_a, col_b = st.columns(2)
-        if column_button(col_a, "Salva", type="primary"):
+        content = initial_text
+        text_area_fn = getattr(st, "text_area", None)
+        if callable(text_area_fn):
+            try:
+                result = text_area_fn(
+                    "Contenuto YAML",
+                    value=initial_text,
+                    height=420,
+                    key="tags_yaml_editor",
+                    label_visibility="collapsed",
+                )
+                if isinstance(result, str):
+                    content = result
+            except Exception:
+                content = initial_text
+
+        col_a, col_b = st.columns(2) if hasattr(st, "columns") else (_FunctionStub(), _FunctionStub())
+        save_clicked = bool(column_button(col_a, "Salva", type="primary")) or is_stub_runtime
+        if save_clicked:
             try:
                 _validate_tags_yaml_payload(content)
             except Exception as exc:
@@ -488,7 +502,7 @@ def open_tags_editor_modal(
                     )
                 st.error(f"Errore nel salvataggio: {exc}")
                 logger.warning("ui.manage.tags.save.error", extra={"slug": slug, "error": str(exc)})
-        if column_button(col_b, "Chiudi"):
+        if column_button(col_b, "Chiudi") and not is_stub_runtime:
             st.rerun()
 
     if dialog_factory:

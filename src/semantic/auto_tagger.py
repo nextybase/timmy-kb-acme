@@ -254,7 +254,7 @@ def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str,
                     phase="semantic.auto_tagger",
                     attributes={
                         "decision_type": "semantic_classification",
-                        "dataset_area": cfg.mapping.name if getattr(cfg.mapping, "name", None) else None,
+                        "dataset_area": getattr(cfg.mapping, "name", None),
                         "model_version": os.getenv("SPACY_MODEL", cfg.spacy_model),
                         "status": "success",
                     },

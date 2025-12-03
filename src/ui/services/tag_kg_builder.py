@@ -25,11 +25,11 @@ def _require_streamlit() -> None:
 
 def _resolve_workspace(slug: str) -> Path:
     ctx = get_client_context(slug, interactive=False, require_env=False)
-    base_dir = getattr(ctx, "base_dir", None)
-    if base_dir is None:
-        base_dir = workspace_root(slug)
-    candidate = Path(base_dir).resolve()
-    workspace = ensure_within_and_resolve(candidate.parent, candidate)
+    base_dir_obj = getattr(ctx, "base_dir", None)
+    if base_dir_obj is None:
+        base_dir_obj = workspace_root(slug)
+    candidate = Path(base_dir_obj).resolve()
+    workspace: Path = ensure_within_and_resolve(candidate.parent, candidate)
     return workspace
 
 
@@ -49,11 +49,11 @@ def run_tag_kg_builder(
         if not tags_raw.exists():
             raise ConfigError("tags_raw.json mancante: genera prima i tag raw.")
 
-        kg = build_kg_for_workspace(workspace, namespace=namespace)
-        result = {
-            "namespace": kg.namespace,
-            "tags": len(kg.tags),
-            "relations": len(kg.relations),
+        kg: Any = build_kg_for_workspace(workspace, namespace=namespace)
+        result: dict[str, int | str] = {
+            "namespace": str(getattr(kg, "namespace", namespace or "")),
+            "tags": len(getattr(kg, "tags", [])),
+            "relations": len(getattr(kg, "relations", [])),
             "json_path": str(ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")),
             "md_path": str(ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")),
         }

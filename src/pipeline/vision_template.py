@@ -19,7 +19,7 @@ def vision_template_path() -> Path:
     """Percorso canonical a config/vision_template.yaml all'interno del repository."""
 
     repo_root = Path(__file__).resolve().parents[2]
-    return ensure_within_and_resolve(repo_root, repo_root / "config" / "vision_template.yaml")
+    return Path(ensure_within_and_resolve(repo_root, repo_root / "config" / "vision_template.yaml"))
 
 
 def load_vision_template_sections() -> List[Dict[str, Any]] | None:

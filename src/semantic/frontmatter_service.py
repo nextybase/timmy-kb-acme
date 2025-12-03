@@ -58,7 +58,8 @@ def _load_vision_text(base_dir: Path) -> str:
         return ""
     try:
         safe = ensure_within_and_resolve(base_dir, path)
-        return read_text_safe(safe.parent, safe, encoding="utf-8")
+        text = read_text_safe(safe.parent, safe, encoding="utf-8")
+        return str(text)
     except Exception:
         return ""
 
@@ -91,17 +92,27 @@ def _read_layout_top_levels(layout_path: Path) -> list[str]:
     try:
         safe = ensure_within_and_resolve(layout_path.parent, layout_path)
         text = read_text_safe(safe.parent, safe, encoding="utf-8")
-        data = yaml.safe_load(text)
+        data_raw = yaml.safe_load(text)
     except Exception:
         return []
-    if not isinstance(data, dict):
+    if not isinstance(data_raw, dict):
         return []
+    data: Dict[str, Any] = dict(data_raw)
     # Nuovo layout: se presenti entità o aree, usali come top-level per note/sectioning
     if isinstance(data.get("entities"), list):
         names = [str(e.get("entity") or e.get("name") or e).strip() for e in data["entities"] if isinstance(e, dict)]
         return sorted({n for n in names if n})
     if isinstance(data.get("areas"), list):
-        keys = [str(a.get("key") or a).strip() for a in data["areas"] if isinstance(a, dict) or isinstance(a, str)]
+        keys: list[str] = []
+        for area_entry in data["areas"]:
+            if isinstance(area_entry, dict):
+                key_val = str(area_entry.get("key") or area_entry).strip()
+            elif isinstance(area_entry, str):
+                key_val = area_entry.strip()
+            else:
+                continue
+            if key_val:
+                keys.append(key_val)
         return sorted({k for k in keys if k})
     return sorted(str(key).strip() for key in data.keys() if key)
 
@@ -287,21 +298,24 @@ def enrich_frontmatter(
     base_dir, md_dir = paths.base_dir, paths.md_dir
     ensure_within(base_dir, md_dir)
     layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
-    mapping_all = {}
+    mapping_all: Dict[str, Any] = {}
     try:
         cfg = load_semantic_config(base_dir)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     except Exception:
         mapping_all = {}
-    vision_entities = []
-    if isinstance(mapping_all.get("entities"), list):
+    vision_entities: list[str] = []
+    entities_raw = mapping_all.get("entities")
+    if isinstance(entities_raw, list):
         vision_entities = [
             str(ent.get("name")).strip()
-            for ent in mapping_all["entities"]
+            for ent in entities_raw
             if isinstance(ent, dict) and str(ent.get("name", "")).strip()
         ]
-    entity_to_area = mapping_all.get("entity_to_area") if isinstance(mapping_all.get("entity_to_area"), dict) else {}
-    relations_all = mapping_all.get("relations") if isinstance(mapping_all.get("relations"), list) else []
+    entity_map_raw = mapping_all.get("entity_to_area")
+    entity_to_area: Dict[str, Any] = entity_map_raw if isinstance(entity_map_raw, dict) else {}
+    relations_raw = mapping_all.get("relations")
+    relations_all: list[Any] = relations_raw if isinstance(relations_raw, list) else []
 
     if not vocab:
         tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))

@@ -513,7 +513,8 @@ class phase_scope:
                 run_id=self._run_id,
                 trace_kind=self._trace_kind,
             )
-            self._span = self._span_ctx.__enter__()
+            if self._span_ctx is not None:
+                self._span = self._span_ctx.__enter__()
         except Exception:
             self._span = None
             self._span_ctx = None
@@ -576,7 +577,7 @@ class phase_scope:
                     pass
             if self._span_ctx is not None:
                 try:
-                    self._span_ctx.__exit__(exc_type, exc, tb)  # type: ignore[union-attr]
+                    self._span_ctx.__exit__(exc_type, exc, tb)
                 except Exception:
                     pass
             return False
@@ -594,7 +595,7 @@ class phase_scope:
                 pass
         if self._span_ctx is not None:
             try:
-                self._span_ctx.__exit__(None, None, None)  # type: ignore[union-attr]
+                self._span_ctx.__exit__(None, None, None)
             except Exception:
                 pass
         if duration_ms is not None:

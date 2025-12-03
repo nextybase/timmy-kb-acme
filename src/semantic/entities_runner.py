@@ -48,7 +48,7 @@ def _read_pdf_text(pdf_path: Path) -> str:
     return "\n\n".join(texts).strip()
 
 
-def _load_spacy(model_name: str):
+def _load_spacy(model_name: str) -> Any:
     import spacy
 
     return spacy.load(model_name)

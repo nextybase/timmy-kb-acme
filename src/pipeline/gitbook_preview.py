@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple, cast
 
 from pipeline.constants import BOOK_JSON_NAME, HONKIT_DOCKER_IMAGE, PACKAGE_JSON_NAME
 from pipeline.env_utils import get_env_var, get_int
@@ -50,7 +50,7 @@ def _context_settings_map(context: Any) -> Mapping[str, Any]:
     cfg_source = getattr(context, "settings", None)
     if isinstance(cfg_source, Settings):
         try:
-            return cfg_source.as_dict()
+            return cast(Mapping[str, Any], cfg_source.as_dict())
         except Exception:
             return {}
     if isinstance(cfg_source, Mapping):

@@ -33,7 +33,7 @@ import logging
 import shutil
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Any, Mapping, Optional, TypedDict, cast
 
 import yaml
 from pydantic import AliasChoices, Field
@@ -63,6 +63,14 @@ from pipeline.settings import Settings as ContextSettings
 logger = get_structured_logger("pipeline.config_utils")
 
 
+class ClientConfigPayload(TypedDict, total=False):
+    cartelle_raw_yaml: str
+    semantic_defaults: dict[str, Any]
+    semantic_mapping_path: str
+    client_name: str
+    slug: str
+
+
 def _extract_context_settings(context: ClientContext) -> tuple[Optional[ContextSettings], dict[str, Any], bool]:
     """Ritorna (wrapper Settings, payload dict, available)."""
     settings_obj = getattr(context, "settings", None)
@@ -86,6 +94,55 @@ def _refresh_context_settings(context: ClientContext) -> None:
     except Exception:
         # best-effort: se fallisce lasciamo il contesto invariato
         pass
+
+
+def load_client_settings(
+    context: ClientContext,
+    *,
+    reload: bool = False,
+    logger: Optional[logging.Logger] = None,
+) -> ContextSettings:
+    """API unica per ottenere il `Settings` del cliente a runtime (SSoT).
+
+    - Riusa `context.settings` se giÇÿ presente e typed, a meno di `reload=True`.
+    - Carica tramite `Settings.load(...)` usando i path del contesto.
+    - Aggiorna `context.settings` per mantenere l'invariante SSoT nel chiamante.
+    """
+    if not reload:
+        current = getattr(context, "settings", None)
+        if isinstance(current, ContextSettings):
+            return current
+
+    cfg_path = context.config_path
+    root_dir = context.repo_root_dir
+    if root_dir is None and cfg_path is not None:
+        try:
+            root_dir = cfg_path.parent.parent
+        except Exception:
+            root_dir = None
+    if root_dir is None or cfg_path is None:
+        raise PipelineError("Contesto incompleto: repo_root_dir/config_path mancanti", slug=context.slug)
+
+    settings_raw = ContextSettings.load(
+        cast(Path, root_dir),
+        config_path=cast(Path, cfg_path),
+        logger=logger,
+        slug=context.slug,
+    )
+    if hasattr(settings_raw, "as_dict"):
+        settings = settings_raw
+    else:
+        payload: dict[str, Any] = {}
+        if isinstance(settings_raw, Mapping):
+            payload = dict(settings_raw)
+        else:
+            try:
+                payload = dict(vars(settings_raw))
+            except Exception:
+                payload = {}
+        settings = ContextSettings(config_path=cast(Path, cfg_path), data=payload)
+    context.settings = settings
+    return settings
 
 
 # ----------------------------------------------------------
@@ -158,7 +215,7 @@ class Settings(_BaseSettings):
 # ----------------------------------------------------------
 #  Scrittura configurazione cliente su file YAML
 # ----------------------------------------------------------
-def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> Path:
+def write_client_config_file(context: ClientContext, config: ClientConfigPayload) -> Path:
     """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT)."""
     output_dir = context.output_dir
     base_dir = context.base_dir
@@ -185,7 +242,7 @@ def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> 
             extra={"slug": context.slug, "backup_path": str(backup_path)},
         )
 
-    config_to_dump: dict[str, Any] = dict(config)
+    config_to_dump: ClientConfigPayload = cast(ClientConfigPayload, dict(config))
     try:
         yaml_dump = yaml.safe_dump(config_to_dump, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
@@ -203,27 +260,13 @@ def write_client_config_file(context: ClientContext, config: dict[str, Any]) -> 
 # ----------------------------------------------------------
 #  Lettura configurazione cliente
 # ----------------------------------------------------------
-def get_client_config(context: ClientContext) -> dict[str, Any]:
+def get_client_config(context: ClientContext) -> ClientConfigPayload:
     """Restituisce il contenuto del `config.yaml` dal contesto."""
-    if context.config_path is None:
-        raise PipelineError("Contesto incompleto: config_path mancante", slug=context.slug)
-    if not context.config_path.exists():
-        raise ConfigError(f"Config file non trovato: {context.config_path}")
     _, settings_payload, available = _extract_context_settings(context)
     if available:
-        return dict(settings_payload)
-    try:
-        from pipeline.path_utils import ensure_within_and_resolve
-        from pipeline.yaml_utils import yaml_read
-
-        # Path-safety anche in LETTURA
-        safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
-        data = yaml_read(safe_cfg_path.parent, safe_cfg_path) or {}
-        if not isinstance(data, dict):
-            raise ConfigError("Config YAML non valido.")
-        return cast(dict[str, Any], data)
-    except Exception as e:
-        raise ConfigError(f"Errore lettura config {context.config_path}: {e}") from e
+        return cast(ClientConfigPayload, dict(settings_payload))
+    settings = load_client_settings(context)
+    return cast(ClientConfigPayload, settings.as_dict())
 
 
 # ----------------------------------------------------------
@@ -462,6 +505,7 @@ __all__ = [
     "Settings",
     "write_client_config_file",
     "get_client_config",
+    "load_client_settings",
     "validate_preonboarding_environment",
     "merge_client_config_from_template",
     "update_config_with_drive_ids",
@@ -483,9 +527,13 @@ def bump_n_ver_if_needed(context: ClientContext, logger: logging.Logger | None =
     """
     log = logger or globals().get("logger")
     cfg = get_client_config(context) or {}
-    try:
-        current = int(cfg.get("N_VER", 0) or 0)
-    except Exception:
+    current_raw = cfg.get("N_VER", 0)
+    if isinstance(current_raw, (int, float, str)):
+        try:
+            current = int(current_raw) if current_raw not in (None, "") else 0
+        except Exception:
+            current = 0
+    else:
         current = 0
     new_val = current + 1
     if log:

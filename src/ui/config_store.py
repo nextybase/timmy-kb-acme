@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-# Remove TYPE_CHECKING import
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 import yaml
 
+from pipeline.config_utils import load_client_settings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.settings import Settings
 from ui.utils.context_cache import get_client_context
 
 try:
@@ -51,7 +51,20 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
-def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
+class RetrieverConfig(TypedDict, total=False):
+    candidate_limit: int
+    latency_budget_ms: int
+    auto_by_budget: bool
+    throttle: dict[str, Any]
+
+
+class GlobalConfig(TypedDict, total=False):
+    vision: dict[str, Any]
+    ui: dict[str, Any]
+    retriever: RetrieverConfig
+
+
+def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
     """
     Carica il config specifico del cliente, garantendo path-safety.
 
@@ -80,15 +93,22 @@ def _load_client_config(slug: str) -> tuple[Path, dict[str, Any]]:
     cfg_path = ensure_within_and_resolve(ctx.config_path.parent, ctx.config_path)
 
     try:
-        text = read_text_safe(cfg_path.parent, cfg_path, encoding="utf-8")
-        data = yaml.safe_load(text) or {}
+        settings = load_client_settings(ctx, reload=True, logger=_logger)
+        if hasattr(settings, "as_dict"):
+            return Path(cfg_path), cast(GlobalConfig, settings.as_dict())
+        if isinstance(settings, dict):
+            return Path(cfg_path), cast(GlobalConfig, settings)
+        try:
+            return Path(cfg_path), cast(GlobalConfig, dict(vars(settings)))
+        except Exception:
+            return Path(cfg_path), {}
     except Exception as exc:
-        raise ConfigError(f"Config cliente non leggibile: {exc}", slug=slug, file_path=str(cfg_path)) from exc
-
-    if not isinstance(data, dict):
-        data = {}
-
-    return Path(cfg_path), cast(dict[str, Any], data)
+        try:
+            text = read_text_safe(cfg_path.parent, cfg_path, encoding="utf-8")
+            data = yaml.safe_load(text) or {}
+            return Path(cfg_path), cast(GlobalConfig, data if isinstance(data, dict) else {})
+        except Exception:
+            raise ConfigError(f"Config cliente non leggibile: {exc}", slug=slug, file_path=str(cfg_path)) from exc
 
 
 def get_config_dir() -> Path:
@@ -99,6 +119,36 @@ def get_config_path() -> Path:
     return CONFIG_FILE
 
 
+def _load_config() -> GlobalConfig:
+    """Carica config/config.yaml tramite Settings (SSoT)."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not CONFIG_FILE.exists():
+        safe_write_text(CONFIG_FILE, "{}\n", encoding="utf-8", atomic=True)
+    try:
+        settings = Settings.load(REPO_ROOT, config_path=CONFIG_FILE, logger=_logger)
+        if hasattr(settings, "as_dict"):
+            return cast(GlobalConfig, settings.as_dict())
+        raise AttributeError("settings.as_dict missing")
+    except Exception as exc:
+        _logger.warning(
+            "ui.config_store.global_config_load_failed",
+            extra={"error": str(exc), "file_path": str(CONFIG_FILE)},
+        )
+        try:
+            text = read_text_safe(CONFIG_FILE.parent, CONFIG_FILE, encoding="utf-8")
+            data = yaml.safe_load(text) or {}
+            return cast(GlobalConfig, data if isinstance(data, dict) else {})
+        except Exception:
+            return {}
+
+
+def _save_config(cfg: GlobalConfig) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    payload: str = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
+    safe_write_text(CONFIG_FILE, payload, encoding="utf-8", atomic=True)
+
+
+# ------------------- UI flags (config globale repo) -------------------
 def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
     """Restituisce vision.model dal config UI (fallback sul default)."""
     cfg = _load_config()
@@ -110,37 +160,11 @@ def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
     return default
 
 
-def _load_config() -> dict[str, Any]:
-    """Carica config.yaml; se assente o malformato, ritorna {}."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if not CONFIG_FILE.exists():
-        safe_write_text(CONFIG_FILE, "{}\n", encoding="utf-8", atomic=True)
-        return {}
-    try:
-        text: str = read_text_safe(CONFIG_DIR, CONFIG_FILE, encoding="utf-8")
-    except Exception:
-        return {}
-    try:
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return cast(dict[str, Any], data)
-
-
-def _save_config(cfg: dict[str, Any]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    payload: str = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
-    safe_write_text(CONFIG_FILE, payload, encoding="utf-8", atomic=True)
-
-
-# ------------------- UI flags (config globale repo) -------------------
 def get_skip_preflight() -> bool:
     """
     Flag persistente per saltare il preflight (config/config.yaml -> ui.skip_preflight).
     """
-    cfg: dict[str, Any] = _load_config()
+    cfg: GlobalConfig = _load_config()
     ui_section: Any = cfg.get("ui")
     if isinstance(ui_section, dict):
         try:
@@ -157,7 +181,7 @@ def set_skip_preflight(flag: bool) -> None:
     """
     Aggiorna ui.skip_preflight persistendo la configurazione in modo atomico.
     """
-    cfg: dict[str, Any] = _load_config()
+    cfg: GlobalConfig = _load_config()
     ui_section: Any = cfg.get("ui")
     if not isinstance(ui_section, dict):
         ui_section = {}
@@ -168,9 +192,8 @@ def set_skip_preflight(flag: bool) -> None:
 
 def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
     """(limit, budget_ms, auto). Clampa e fornisce default sicuri."""
-    cfg: dict[str, Any] = _load_config()
-
-    source_cfg: dict[str, Any] = cfg
+    cfg: GlobalConfig = _load_config()
+    source_cfg: GlobalConfig = cfg
 
     if slug:
         try:
@@ -185,16 +208,10 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
             )
 
     raw_section: Any = source_cfg.get("retriever")
-    if isinstance(raw_section, dict):
-        section: dict[str, Any] = cast(dict[str, Any], raw_section)
-    else:
-        section = {}
+    section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
 
     throttle = section.get("throttle")
-    if isinstance(throttle, dict):
-        throttle_section: dict[str, Any] = cast(dict[str, Any], throttle)
-    else:
-        throttle_section = {}
+    throttle_section: dict[str, Any] = throttle if isinstance(throttle, dict) else {}
 
     limit = _coerce_int(
         throttle_section.get("candidate_limit", section.get("candidate_limit")),
@@ -231,8 +248,8 @@ def set_retriever_settings(
     limit = max(MIN_CANDIDATE_LIMIT, min(MAX_CANDIDATE_LIMIT, int(candidate_limit)))
     budget = max(0, min(2000, int(budget_ms)))
 
-    cfg: dict[str, Any] = _load_config()
-    target_cfg = cfg
+    cfg: GlobalConfig = _load_config()
+    target_cfg: GlobalConfig = cfg
     target_path: Path | None = None
 
     if slug:
@@ -246,16 +263,10 @@ def set_retriever_settings(
             target_cfg = cfg
 
     raw_section: Any = target_cfg.get("retriever")
-    if isinstance(raw_section, dict):
-        section: dict[str, Any] = cast(dict[str, Any], raw_section)
-    else:
-        section = {}
+    section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
 
     throttle = section.get("throttle")
-    if isinstance(throttle, dict):
-        throttle_section: dict[str, Any] = cast(dict[str, Any], throttle)
-    else:
-        throttle_section = {}
+    throttle_section: dict[str, Any] = throttle if isinstance(throttle, dict) else {}
     throttle_section.setdefault("parallelism", DEFAULT_THROTTLE_PARALLELISM)
     throttle_section.setdefault("sleep_ms_between_calls", DEFAULT_THROTTLE_SLEEP_MS)
     throttle_section["candidate_limit"] = int(limit)

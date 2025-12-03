@@ -16,6 +16,12 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 | **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, ...) | `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
 | **Runtime/Infra** |  | `PYTHONUTF8`, `PYTHONIOENCODING`, `GF_SECURITY_ADMIN_PASSWORD`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`, `LOG_REDACTION`, `LOG_PATH`, `CI`, ecc. |
 
+### Accesso runtime (SSoT)
+
+- **Config globale**: usa sempre `pipeline.settings.Settings.load(...)` oppure `ClientContext.settings`; la UI passa da `ui.config_store.get_vision_model()` (nessuna lettura YAML diretta).
+- **Config cliente**: API unificata `pipeline.config_utils.load_client_settings(context)` → `context.settings` → dict via `.as_dict()`.
+- **Segreti**: recuperati solo via `Settings.resolve_env_ref` / `Settings.get_secret`; evitare `os.environ[...]` per credenziali nei call-site applicativi.
+
 > **Nota:** una *deny-list* interna impedisce di spostare in YAML variabili che devono
 > rimanere nello `.env`. Se configuri per errore chiavi come `OPENAI_API_KEY` o
 > `SERVICE_ACCOUNT_FILE` nel file YAML, verranno ignorate (con warning

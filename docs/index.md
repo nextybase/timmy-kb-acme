@@ -13,6 +13,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [User Guide](user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
   - [Architettura del sistema](architecture.md) - componenti, flussi end-to-end, API interne.
   - [Developer Guide](developer_guide.md) - principi architetturali, redazione log, test suggeriti.
+  - [Developer Quickstart](developer_quickstart.md) - happy path minimi (CLI e UI).
   - [Coding Rules](coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
   - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
   - [Configuration (EN)](configurazione.md) - overview di configurazione in inglese.

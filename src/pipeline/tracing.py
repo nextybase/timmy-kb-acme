@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import os
 import random
-from typing import Any, ContextManager, Mapping
+from typing import Any, ContextManager, Iterator, Literal, Mapping
 
 from pipeline.observability_config import get_tracing_state
 
@@ -34,7 +34,7 @@ def _is_enabled() -> bool:
     if not _OTEL_IMPORT_OK:
         return False
     state = get_tracing_state()
-    return state.effective_enabled
+    return bool(getattr(state, "effective_enabled", False))
 
 
 def ensure_tracer(*, context: Mapping[str, Any] | None = None, enable_tracing: bool = True) -> None:
@@ -64,7 +64,7 @@ class _NoopSpan:
     def __enter__(self) -> "_NoopSpan":
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
         return False
 
     def set_attribute(self, *_: Any, **__kwargs: Any) -> "_NoopSpan":
@@ -78,9 +78,7 @@ class _NoopSpan:
 
 
 @contextlib.contextmanager
-def _span_context(
-    name: str, *, attributes: Mapping[str, Any] | None = None
-) -> ContextManager[_otel_trace.Span | _NoopSpan]:
+def _span_context(name: str, *, attributes: Mapping[str, Any] | None = None) -> Iterator[_otel_trace.Span | _NoopSpan]:
     ensure_tracer()
     if not _TRACING_READY or not _OTEL_IMPORT_OK:
         yield _NoopSpan()
@@ -163,7 +161,7 @@ def start_decision_span(
 ) -> ContextManager[_otel_trace.Span | _NoopSpan]:
     if _DECISION_SPAN_SAMPLING < 1.0 and random.random() > _DECISION_SPAN_SAMPLING:
         return contextlib.nullcontext(_NoopSpan())
-    base_attrs = {
+    base_attrs: dict[str, Any] = {
         "decision_type": decision_type,
         "slug": slug,
         "run_id": run_id,

@@ -279,7 +279,7 @@ def render_file_actions(dataset: DiffDataset, st_module: Any, *, columns: Option
     """Rende le sezioni "Solo su Drive" e "Solo su locale" su due colonne (fallback: singola)."""
     col_drive, col_local = columns or (st_module, st_module)
 
-    def _expander(target: Any):
+    def _expander(target: Any) -> Any:
         expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
         if not callable(expander_fn):
             raise AttributeError("expander API non disponibile")

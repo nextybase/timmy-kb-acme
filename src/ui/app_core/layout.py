@@ -1,18 +1,11 @@
 # src/ui/app_core/layout.py
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""
-UI layout helpers (beta 0).
-
-- Solo funzioni necessarie per header e sidebar.
-- Nessuna retrocompatibilità con router/switcher a tab.
-- Niente API experimental, niente flag di container width.
-- HTML solo tramite st.html(...).
-"""
+"""Helper di layout Streamlit per header e sidebar (routing Page/navigation)."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional, Protocol
 
 __all__ = [
     "render_client_header",
@@ -20,6 +13,10 @@ __all__ = [
     "render_sidebar_quick_actions",
     "render_sidebar_skiplink_and_quicknav",
 ]
+
+
+class ActionCallback(Protocol):
+    def __call__(self) -> None: ...
 
 
 def render_client_header(
@@ -34,11 +31,11 @@ def render_client_header(
 
     Args:
         st_module: modulo Streamlit (passa `st`).
-        repo_root: root del repository (non usato in beta0).
+        repo_root: root del repository (firma allineata agli entrypoint UI).
         slug: identificativo cliente corrente (se presente).
         state: eventuale stato/phase normalizzato (se presente).
     """
-    del repo_root  # non usato in beta0
+    del repo_root  # parametro non usato qui, mantenuto per compatibilità
 
     # Ancorina sicura per skiplink
     try:
@@ -46,7 +43,7 @@ def render_client_header(
     except Exception:
         pass
 
-    st_module.title("Timmy-KB • Onboarding")
+    st_module.title("Timmy-KB - Onboarding")
 
     parts: list[str] = []
     if slug:
@@ -54,7 +51,7 @@ def render_client_header(
     if state:
         parts.append(f"Stato: {state}")
     if parts:
-        st_module.caption(" • ".join(parts))
+        st_module.caption(" · ".join(parts))
 
 
 def render_sidebar_branding(
@@ -65,7 +62,7 @@ def render_sidebar_branding(
     """
     Sezione "branding" nella sidebar. Mantiene un profilo minimale e robusto.
     """
-    del repo_root  # non richiesto in beta0
+    del repo_root  # parametro riservato per uniformità delle firme
 
     with st_module.sidebar:
         st_module.subheader("Onboarding")
@@ -77,9 +74,9 @@ def render_sidebar_quick_actions(
     *,
     st_module: Any,
     slug: Optional[str],
-    refresh_callback: Optional[Callable[[], Any]] = None,
-    generate_dummy_callback: Optional[Callable[[], Any]] = None,
-    request_shutdown_callback: Optional[Callable[[], Any]] = None,
+    refresh_callback: Optional[ActionCallback] = None,
+    generate_dummy_callback: Optional[ActionCallback] = None,
+    request_shutdown_callback: Optional[ActionCallback] = None,
     logger: Optional[Any] = None,
 ) -> None:
     """
@@ -87,7 +84,7 @@ def render_sidebar_quick_actions(
     Le callback sono opzionali; se presenti, vengono invocate con gestione errori.
     """
 
-    def _safe_call(cb: Optional[Callable[[], Any]], label: str) -> None:
+    def _safe_call(cb: Optional[ActionCallback], label: str) -> None:
         if cb is None:
             st_module.sidebar.info(f"{label}: non disponibile")
             return
@@ -119,10 +116,7 @@ def render_sidebar_quick_actions(
 
 
 def render_sidebar_skiplink_and_quicknav(*, st_module: Any) -> None:
-    """
-    Piccola utility di accessibilità e quick-nav.
-    In beta0 teniamo tutto minimale e senza HTML non sicuro.
-    """
+    """Utility di accessibilità e quick-nav senza HTML personalizzato."""
     with st_module.sidebar:
         st_module.subheader("Navigazione")
         # Skiplink sicuro verso l'ancora in header

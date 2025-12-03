@@ -6,53 +6,48 @@ from typing import Any
 
 import pytest
 
-from pipeline import path_utils, yaml_utils
+from pipeline import path_utils
 
 
 def test_raw_cache_defaults_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_yaml_read = path_utils.yaml_read
-
-    def fake_yaml_read(base: Any, path: Any, *, use_cache: bool = True):
-        return {"raw_cache": {"ttl_seconds": 123, "max_entries": 5}}
-
-    monkeypatch.setattr(path_utils, "yaml_read", fake_yaml_read)
-
-    path_utils._load_raw_cache_defaults()
+    path_utils._load_raw_cache_defaults(loader=lambda: {"raw_cache": {"ttl_seconds": 123, "max_entries": 5}})
 
     assert path_utils._SAFE_PDF_CACHE_DEFAULT_TTL == 123
     assert path_utils._SAFE_PDF_CACHE_CAPACITY == 5
 
     # Restore defaults
-    monkeypatch.setattr(path_utils, "yaml_read", original_yaml_read)
-    path_utils._load_raw_cache_defaults()
+    path_utils._load_raw_cache_defaults(loader=lambda: {})
 
 
 def test_raw_cache_lazy_loading(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
-    calls: list[Any] = []
-    original_yaml_read = yaml_utils.yaml_read
-
-    def fake_yaml_read(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        calls.append((args, kwargs))
-        return {}
-
-    monkeypatch.setattr(yaml_utils, "yaml_read", fake_yaml_read)
+    calls = 0
 
     module = importlib.reload(path_utils)
-    try:
-        assert getattr(module, "_CACHE_DEFAULTS_LOADED") is False
-        assert calls == []
+    original_loader = module._load_raw_cache_defaults
 
-        raw_dir = tmp_path / "raw"
-        raw_dir.mkdir()
+    def counting_loader() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {}
 
-        list(module.iter_safe_pdfs(raw_dir, use_cache=True))
-        assert len(calls) == 1
+    def patched(loader: Any | None = None) -> None:
+        return original_loader(loader=loader or counting_loader)
 
-        list(module.iter_safe_pdfs(raw_dir, use_cache=True))
-        assert len(calls) == 1
-    finally:
-        monkeypatch.setattr(yaml_utils, "yaml_read", original_yaml_read)
-        importlib.reload(path_utils)
+    monkeypatch.setattr(module, "_load_raw_cache_defaults", patched)
+
+    assert getattr(module, "_CACHE_DEFAULTS_LOADED") is False
+    assert calls == 0
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    list(module.iter_safe_pdfs(raw_dir, use_cache=True))
+    assert calls == 1
+
+    list(module.iter_safe_pdfs(raw_dir, use_cache=True))
+    assert calls == 1
+
+    importlib.reload(path_utils)
 
 
 def test_raw_cache_defaults_remain_until_first_guard(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
@@ -60,10 +55,14 @@ def test_raw_cache_defaults_remain_until_first_guard(monkeypatch: pytest.MonkeyP
     sentinel_ttl = 42.0
     sentinel_capacity = 2
 
-    def fake_yaml_read(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        return {"raw_cache": {"ttl_seconds": sentinel_ttl, "max_entries": sentinel_capacity}}
+    original_loader = module._load_raw_cache_defaults
 
-    monkeypatch.setattr(module, "yaml_read", fake_yaml_read)
+    def patched(loader: Any | None = None) -> None:
+        return original_loader(
+            loader=loader or (lambda: {"raw_cache": {"ttl_seconds": sentinel_ttl, "max_entries": sentinel_capacity}})
+        )
+
+    monkeypatch.setattr(module, "_load_raw_cache_defaults", patched)
     module._CACHE_DEFAULTS_LOADED = False
 
     assert module._SAFE_PDF_CACHE_DEFAULT_TTL == module._DEFAULT_RAW_CACHE_TTL
@@ -91,12 +90,19 @@ def test_raw_cache_guard_invoked_in_public_apis(
     module = importlib.reload(path_utils)
     call_count = 0
 
-    def fake_yaml_read(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        nonlocal call_count
-        call_count += 1
-        return {}
+    original_loader = module._load_raw_cache_defaults
 
-    monkeypatch.setattr(module, "yaml_read", fake_yaml_read)
+    def patched(loader: Any | None = None) -> None:
+        nonlocal call_count
+
+        def counting_loader() -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            return {}
+
+        return original_loader(loader=loader or counting_loader)
+
+    monkeypatch.setattr(module, "_load_raw_cache_defaults", patched)
     module._CACHE_DEFAULTS_LOADED = False
 
     raw_dir = tmp_path / "customer" / "raw"

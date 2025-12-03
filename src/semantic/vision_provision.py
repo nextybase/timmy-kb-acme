@@ -853,7 +853,7 @@ def _determine_structured_output(client: Any, assistant_id: str, strict_output: 
 def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
     if not use_structured:
         return {"type": "json_object"}
-    schema_payload = {
+    schema_payload: Dict[str, Any] = {
         "type": "json_schema",
         "json_schema": {
             "name": "VisionOutput_v2",
@@ -861,7 +861,7 @@ def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
             "strict": True,
         },
     }
-    schema_dict = schema_payload["json_schema"]["schema"]
+    schema_dict = cast(Dict[str, Any], schema_payload["json_schema"]["schema"])
     properties = schema_dict.get("properties") or {}
     required = schema_dict.get("required") or []
     LOGGER.debug(

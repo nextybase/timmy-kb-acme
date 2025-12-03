@@ -36,7 +36,7 @@ def _normalize_slug(slug: str) -> str:
 def _get_storage_dir() -> Path:
     """Restituisce la directory di storage assicurandone l'esistenza."""
 
-    storage_dir = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "clients_db" / "semantic_progress")
+    storage_dir: Path = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "clients_db" / "semantic_progress")
     storage_dir.mkdir(parents=True, exist_ok=True)
     return storage_dir
 
@@ -44,7 +44,8 @@ def _get_storage_dir() -> Path:
 def _progress_path(slug: str) -> Path:
     normalized = _normalize_slug(slug)
     storage_dir = _get_storage_dir()
-    return ensure_within_and_resolve(REPO_ROOT, storage_dir / f"{normalized}.json")
+    progress_path: Path = ensure_within_and_resolve(REPO_ROOT, storage_dir / f"{normalized}.json")
+    return progress_path
 
 
 def _read_progress(path: Path) -> Dict[str, bool]:
@@ -76,12 +77,14 @@ def _write_progress(path: Path, data: Dict[str, bool]) -> None:
 
 
 def get_semantic_progress(slug: str) -> Dict[str, bool]:
+    """Restituisce lo stato dei passi semantici per lo slug richiesto."""
     path = _progress_path(slug)
     stored = _read_progress(path)
     return {step: stored.get(step, False) for step in SEMANTIC_STEP_IDS}
 
 
 def mark_semantic_step_done(slug: str, step_id: str) -> None:
+    """Segna un passo semantico come completato per lo slug dato."""
     if step_id not in SEMANTIC_STEP_IDS:
         raise ConfigError(f"Step non valido: {step_id!r}", slug=slug)
     path = _progress_path(slug)

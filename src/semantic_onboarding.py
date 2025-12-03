@@ -95,10 +95,10 @@ def main() -> int:
                 logger,
                 slug=slug,
                 stage_wrapper=_stage_wrapper,
-                convert_fn=lambda context, lgr, sl: convert_markdown(context, lgr, slug=sl),
-                vocab_fn=lambda base_dir, lgr, sl: require_reviewed_vocab(base_dir, lgr, slug=sl),
-                enrich_fn=lambda context, lgr, vocab, sl: enrich_frontmatter(context, lgr, vocab, slug=sl),
-                summary_fn=lambda context, lgr, sl: write_summary_and_readme(context, lgr, slug=sl),
+                convert_fn=lambda context, lgr, *, slug: convert_markdown(context, lgr, slug=slug),
+                vocab_fn=lambda base_dir, lgr, *, slug: require_reviewed_vocab(base_dir, lgr, slug=slug),
+                enrich_fn=lambda context, lgr, vocab, *, slug: enrich_frontmatter(context, lgr, vocab, slug=slug),
+                summary_fn=lambda context, lgr, *, slug: write_summary_and_readme(context, lgr, slug=slug),
             )
 
             # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)

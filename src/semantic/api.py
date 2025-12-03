@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Sequence, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Protocol, Sequence, TypeAlias, TypeVar, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -31,6 +31,32 @@ from storage.tags_store import get_conn as _get_tags_conn
 from storage.tags_store import save_doc_entities as _save_doc_entities
 
 _T = TypeVar("_T")
+
+
+class ConvertStage(Protocol):
+    def __call__(self, context: "ClientContextType", logger: logging.Logger, *, slug: str) -> list[Path]: ...
+
+
+class VocabStage(Protocol):
+    def __call__(self, base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]: ...
+
+
+class EnrichStage(Protocol):
+    def __call__(
+        self,
+        context: "ClientContextType",
+        logger: logging.Logger,
+        vocab: Dict[str, Dict[str, Sequence[str]]],
+        *,
+        slug: str,
+    ) -> list[Path]: ...
+
+
+class SummaryStage(Protocol):
+    def __call__(self, context: "ClientContextType", logger: logging.Logger, *, slug: str) -> object: ...
+
+
+StageWrapper = Callable[[str, Callable[[], Any]], Any]
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
@@ -295,58 +321,53 @@ def _run_build_workflow(
     logger: logging.Logger,
     *,
     slug: str,
-    stage_wrapper: Callable[[str, Callable[[], _T]], _T] | None = None,
-    convert_fn: Callable[[ClientContextType, logging.Logger, str], List[Path]] | None = None,
-    vocab_fn: Callable[[Path, logging.Logger, str], Dict[str, Dict[str, set[str]]]] | None = None,
-    enrich_fn: (
-        Callable[[ClientContextType, logging.Logger, Dict[str, Dict[str, set[str]]], str], list[Path]] | None
-    ) = None,
-    summary_fn: Callable[[ClientContextType, logging.Logger, str], object] | None = None,
+    stage_wrapper: StageWrapper | None = None,
+    convert_fn: ConvertStage | None = None,
+    vocab_fn: VocabStage | None = None,
+    enrich_fn: EnrichStage | None = None,
+    summary_fn: SummaryStage | None = None,
 ) -> BuildWorkflowResult:
     """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti."""
 
     ctx_base = cast(Path, getattr(context, "base_dir", None))
     base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
 
-    def _wrap(stage_name: str, func: Callable[[], _T]) -> _T:
+    def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
         if stage_wrapper is None:
             return func()
         return stage_wrapper(stage_name, func)
 
-    convert_impl = convert_fn or convert_markdown
-    vocab_impl = vocab_fn or _require_reviewed_vocab
-    enrich_impl = enrich_fn or enrich_frontmatter
-    summary_impl = summary_fn or write_summary_and_readme
+    convert_impl: ConvertStage = convert_fn or convert_markdown
+    vocab_impl: VocabStage = vocab_fn or _require_reviewed_vocab
+    enrich_impl: EnrichStage = enrich_fn or enrich_frontmatter
+    summary_impl: SummaryStage = summary_fn or write_summary_and_readme
 
-    if convert_fn is None:
-        mds = cast(List[Path], _wrap("convert_markdown", lambda: convert_impl(context, logger, slug=slug)))
-    else:
-        mds = cast(List[Path], _wrap("convert_markdown", lambda: convert_impl(context, logger, slug)))
+    mds: List[Path] = cast(
+        List[Path],
+        _wrap("convert_markdown", lambda: convert_impl(context, logger, slug=slug)),
+    )
 
-    if vocab_fn is None:
-        vocab = _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug))
-    else:
-        vocab = _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug))
+    vocab: Dict[str, Dict[str, Sequence[str]]] = cast(
+        Dict[str, Dict[str, Sequence[str]]],
+        _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug)),
+    )
 
-    if enrich_fn is None:
-        touched = _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug=slug))
-    else:
-        touched = _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug))
+    touched: List[Path] = cast(
+        List[Path],
+        _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug=slug)),
+    )
     try:
         logger.info(
             "semantic.book.frontmatter",
-            extra={"slug": slug, "enriched": len(cast(list, touched))},
+            extra={"slug": slug, "enriched": len(touched)},
         )
     except Exception as exc:
         logger.warning(
             "semantic.book.frontmatter",
             extra={"slug": slug, "enriched": None, "error": str(exc)},
         )
-    if summary_fn is None:
-        _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
-    else:
-        _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug))
-    return base_dir, mds, cast(list[Path], touched)
+    _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
+    return base_dir, mds, touched
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
@@ -369,7 +390,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
             "slug": slug,
             "ms": ms,
             "artifacts": {"content_files": len(mds)},
-            "enriched_files": len(cast(list, touched)),
+            "enriched_files": len(touched),
         },
     )
     return mds

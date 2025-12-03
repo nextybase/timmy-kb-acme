@@ -141,10 +141,11 @@ def _get_canonical_vocab(
 ) -> dict[str, dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError."""
 
-    vocab = load_reviewed_vocab(base_dir, logger)
+    vocab = cast(dict[str, dict[str, Sequence[str]]], load_reviewed_vocab(base_dir, logger))
     if vocab:
         return vocab
-    return require_reviewed_vocab(base_dir, logger, slug=slug)
+    required = cast(dict[str, dict[str, Sequence[str]]], require_reviewed_vocab(base_dir, logger, slug=slug))
+    return required
 
 
 def _run_enrich(slug: str) -> None:

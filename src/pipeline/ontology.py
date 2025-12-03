@@ -18,7 +18,7 @@ _ENTITIES_FILE = _REPO_ROOT / "config" / "entities.yaml"
 def _entities_path() -> Path:
     """Restituisce il path risolto e validato di config/entities.yaml."""
     try:
-        resolved = ensure_within_and_resolve(_REPO_ROOT, _ENTITIES_FILE)
+        resolved = Path(ensure_within_and_resolve(_REPO_ROOT, _ENTITIES_FILE))
     except Exception as exc:  # pragma: no cover - safety guard
         raise ConfigError("entities.yaml fuori dal workspace consentito.") from exc
     if not resolved.exists():

@@ -23,9 +23,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.config_utils import load_client_settings
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings as PipelineSettings
 from pipeline.yaml_utils import yaml_read
+
+try:  # compat per import in UI/CLI
+    from pipeline.context import ClientContext
+except Exception:  # pragma: no cover
+    ClientContext = None
 
 yaml: Any | None
 try:
@@ -183,8 +189,16 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 # ----------------------------- API pubblica ---------------------------------- #
-def _load_client_settings(base_dir: Path) -> dict[str, Any]:
-    """Carica config.yaml del cliente tramite loader centralizzato."""
+def _load_client_settings(base_dir: Path | Any) -> dict[str, Any]:
+    """Carica config.yaml del cliente tramite loader centralizzato (SSoT)."""
+    if ClientContext is not None and isinstance(base_dir, ClientContext):
+        try:
+            settings = load_client_settings(base_dir)
+            return cast(dict[str, Any], settings.as_dict())
+        except Exception:
+            return {}
+
+    base_dir = Path(base_dir).resolve()
     config_path = (base_dir / "config" / "config.yaml").resolve()
     try:
         settings = PipelineSettings.load(base_dir, config_path=config_path)
@@ -195,68 +209,59 @@ def _load_client_settings(base_dir: Path) -> dict[str, Any]:
         return {}
 
 
-def load_semantic_config(base_dir: Path, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
+def load_semantic_config(base_dir: Path | Any, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
     """Carica la configurazione semantica per il cliente sotto `base_dir`.
 
     Parametri:
-      - base_dir: Path della sandbox cliente, es. output/timmy-kb-<slug>
+      - base_dir: Path della sandbox cliente (es. output/timmy-kb-<slug>) oppure ClientContext
       - overrides: dict opzionale con parametri espliciti (massima precedenza)
 
     Ritorna:
       - SemanticConfig con parametri finali e mapping completo (da semantic_mapping.yaml)
     """
-    base_dir = Path(base_dir).resolve()
-    semantic_dir = (base_dir / "semantic").resolve()
-    raw_dir = (base_dir / "raw").resolve()
+    ctx = base_dir if ClientContext is not None and isinstance(base_dir, ClientContext) else None
+    base_dir_path = Path(getattr(ctx, "base_dir", None) or base_dir).resolve()
+    semantic_dir = (base_dir_path / "semantic").resolve()
+    raw_dir = (base_dir_path / "raw").resolve()
 
     # 1) Defaults hardcoded
     acc: dict[str, Any] = dict(_DEFAULTS)
 
-    # 2) config.yaml → semantic_defaults
+    # 2) config.yaml -> semantic_defaults
     cfg_all = _load_client_settings(base_dir)
     defaults_from_cfg = _normalize_tagger_section(
         (cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {}
     )
     acc = _merge(acc, defaults_from_cfg)
 
-    # 3) semantic_mapping.yaml → semantic_tagger
-    semantic_mapping_yaml = (semantic_dir / "semantic_mapping.yaml").resolve()
-    mapping_all = _safe_load_yaml(semantic_mapping_yaml)
-    tagger_from_mapping = _normalize_tagger_section(mapping_all.get("semantic_tagger") or {})
-    acc = _merge(acc, tagger_from_mapping)
+    # 3) semantic_mapping.yaml -> semantic_tagger
+    mapping_path = semantic_dir / "semantic_mapping.yaml"
+    mapping_all = _safe_load_yaml(mapping_path)
 
-    # 4) overrides espliciti
-    overrides_norm = _normalize_tagger_section(overrides or {})
-    acc = _merge(acc, overrides_norm)
+    semantic_tagger_raw = mapping_all.get("semantic_tagger") if isinstance(mapping_all, dict) else {}
+    semantic_tagger = _normalize_tagger_section(semantic_tagger_raw if isinstance(semantic_tagger_raw, dict) else {})
 
-    stop_tags = _coerce_stop_tags(acc.get("stop_tags", _DEFAULTS["stop_tags"]))
-    if not stop_tags:
-        stop_tags = _coerce_stop_tags(_DEFAULTS["stop_tags"])
+    acc = _merge(acc, semantic_tagger)
 
-    lang = _coerce_str(acc.get("lang"), cast(str, _DEFAULTS["lang"]))
-    max_pages = _coerce_int(acc.get("max_pages"), cast(int, _DEFAULTS["max_pages"]))
-    top_k = _coerce_int(acc.get("top_k"), cast(int, _DEFAULTS["top_k"]))
-    score_min = _coerce_float(acc.get("score_min"), cast(float, _DEFAULTS["score_min"]))
-    ner = _coerce_bool(acc.get("ner"), cast(bool, _DEFAULTS["ner"]))
-    keyphrases = _coerce_bool(acc.get("keyphrases"), cast(bool, _DEFAULTS["keyphrases"]))
-    embeddings = _coerce_bool(acc.get("embeddings"), cast(bool, _DEFAULTS["embeddings"]))
-    nlp_backend = _coerce_str(acc.get("nlp_backend"), cast(str, _DEFAULTS["nlp_backend"]))
-    spacy_model = _coerce_str(acc.get("spacy_model"), cast(str, _DEFAULTS["spacy_model"]))
+    # 4) overrides runtime (precedenza massima)
+    if overrides:
+        acc = _merge(acc, _normalize_tagger_section(overrides))
 
+    # 5) Validazione soft + coercizioni
     cfg = SemanticConfig(
-        lang=lang,
-        max_pages=max_pages,
-        top_k=top_k,
-        score_min=score_min,
-        ner=ner,
-        keyphrases=keyphrases,
-        embeddings=embeddings,
-        stop_tags=stop_tags,
-        nlp_backend=nlp_backend,
-        spacy_model=spacy_model,
-        base_dir=base_dir,
+        lang=_coerce_str(acc.get("lang"), _DEFAULTS["lang"]),
+        max_pages=_coerce_int(acc.get("max_pages"), _DEFAULTS["max_pages"]),
+        top_k=_coerce_int(acc.get("top_k"), _DEFAULTS["top_k"]),
+        score_min=_coerce_float(acc.get("score_min"), _DEFAULTS["score_min"]),
+        ner=_coerce_bool(acc.get("ner"), _DEFAULTS["ner"]),
+        keyphrases=_coerce_bool(acc.get("keyphrases"), _DEFAULTS["keyphrases"]),
+        embeddings=_coerce_bool(acc.get("embeddings"), _DEFAULTS["embeddings"]),
+        stop_tags=_coerce_stop_tags(acc.get("stop_tags")),
+        nlp_backend=_coerce_str(acc.get("nlp_backend"), _DEFAULTS["nlp_backend"]),
+        spacy_model=_coerce_str(acc.get("spacy_model"), _DEFAULTS["spacy_model"]),
+        base_dir=base_dir_path,
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,
-        mapping=mapping_all,
+        mapping=mapping_all if isinstance(mapping_all, dict) else {},
     )
     return cfg

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pipeline.env_utils import get_int
 from pipeline.file_utils import safe_write_text
@@ -35,8 +35,11 @@ else:  # pragma: no cover
     ClientContext = Any  # type: ignore[misc]
 
 _PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
-_START_PREVIEW: Any | None = None
-_STOP_PREVIEW: Any | None = None
+StartPreviewFn = Callable[[Any, logging.Logger], str]
+StopPreviewFn = Callable[[logging.Logger, Optional[str]], None]
+
+_START_PREVIEW: StartPreviewFn | None = None
+_STOP_PREVIEW: StopPreviewFn | None = None
 
 
 def _load_preview_impl() -> bool:
@@ -58,7 +61,9 @@ def _load_preview_impl() -> bool:
 
 def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
     if _load_preview_impl():
-        name = cast(str, _START_PREVIEW(ctx, logger))
+        if _START_PREVIEW is None:
+            return _start_preview_stub(ctx, logger, status_widget)
+        name = _START_PREVIEW(ctx, logger)
         if status_widget is not None and hasattr(status_widget, "update"):
             status_widget.update(label=f"Preview avviata ({name}).", state="complete")
         return name
@@ -67,7 +72,9 @@ def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: An
 
 def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
     if _load_preview_impl():
-        _STOP_PREVIEW(logger, container_name=container_name)
+        if _STOP_PREVIEW is None:
+            return
+        _STOP_PREVIEW(logger, container_name)
         if status_widget is not None and hasattr(status_widget, "update"):
             status_widget.update(label="Preview arrestata.", state="complete")
         return

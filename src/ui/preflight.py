@@ -49,7 +49,8 @@ def _is_importable(mod: str) -> bool:
 
 
 def _docker_ok() -> tuple[bool, str]:
-    return check_docker_status()
+    status, hint = check_docker_status()
+    return bool(status), str(hint or "")
 
 
 def _pipeline_origin_ok() -> tuple[bool, str]:
@@ -58,7 +59,7 @@ def _pipeline_origin_ok() -> tuple[bool, str]:
     In caso di venv incoerente segnala un hint per l'installazione editable.
     """
     try:
-        import pipeline.context as _ctx  # type: ignore
+        import pipeline.context as _ctx
     except Exception as exc:  # pragma: no cover - ambiente minimale
         return (
             False,
@@ -66,8 +67,11 @@ def _pipeline_origin_ok() -> tuple[bool, str]:
             f"({exc}). Attiva il venv corretto ed esegui `pip install -e .` dalla root del repo.",
         )
 
+    pkg_file_raw = getattr(_ctx, "__file__", None)
+    if not pkg_file_raw:
+        return True, "Origine moduli pipeline non determinabile (__file__ mancante)."
     try:
-        pkg_file = Path(_ctx.__file__).resolve()  # type: ignore[attr-defined]
+        pkg_file = Path(pkg_file_raw).resolve()
     except Exception:
         return True, "Origine moduli pipeline non determinabile (__file__ mancante)."
 

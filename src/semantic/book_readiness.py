@@ -24,8 +24,8 @@ from typing import List, Tuple
 logger = logging.getLogger(__name__)
 
 # Proviamo a riutilizzare le costanti di progetto, se esistono.
-try:  # type: ignore[try-except-raise]
-    from semantic.constants import README_MD_NAME, SUMMARY_MD_NAME  # type: ignore[import]
+try:
+    from semantic.constants import README_MD_NAME, SUMMARY_MD_NAME
 except Exception:  # pragma: no cover - fallback di sicurezza
     README_MD_NAME = "README.md"
     SUMMARY_MD_NAME = "SUMMARY.md"

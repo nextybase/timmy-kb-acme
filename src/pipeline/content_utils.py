@@ -274,7 +274,8 @@ def _write_markdown_for_pdf(
     logger = get_structured_logger("pipeline.content_utils", context={"slug": slug})
     text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
     excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger, text=text)
-    chunks = _chunk_pdf_text(text, chunk_chars=900, max_chunks=4)
+    safe_text = text or ""
+    chunks = _chunk_pdf_text(safe_text, chunk_chars=900, max_chunks=4)
     chunk_summaries = _build_chunk_summaries(chunks)
     body_parts: list[str] = []
     if excerpt:
