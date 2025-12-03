@@ -27,7 +27,7 @@ def test_get_vision_model_falls_back_to_default(tmp_path: Path, monkeypatch: pyt
 
 
 def test_get_vision_model_reads_value_from_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cfg_payload = {"vision": {"model": "gpt-4.1-mini-2025-04-14"}}
+    cfg_payload = {"ai": {"vision": {"model": "gpt-4.1-mini-2025-04-14"}}}
     cfg_path = _setup_repo_config(tmp_path, cfg_payload)
     monkeypatch.setattr(config_store, "CONFIG_DIR", cfg_path.parent)
     monkeypatch.setattr(config_store, "CONFIG_FILE", cfg_path)

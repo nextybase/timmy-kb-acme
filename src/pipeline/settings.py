@@ -152,6 +152,60 @@ _VISION_ENGINE_ALIASES: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class MetaSection:
+    cartelle_raw_yaml: Optional[str]
+    n_ver: int
+    data_ver: Optional[str]
+    client_name: Optional[str]
+    semantic_mapping_yaml: Optional[str]
+    vision_statement_pdf: Optional[str]
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "MetaSection":
+        return cls(
+            cartelle_raw_yaml=_extract_optional_str(
+                data.get("cartelle_raw_yaml"),
+                "meta.cartelle_raw_yaml",
+                config_path=config_path,
+                default=None,
+            ),
+            n_ver=_extract_int(
+                data.get("N_VER"),
+                "meta.N_VER",
+                config_path=config_path,
+                default=0,
+                minimum=0,
+            ),
+            data_ver=_extract_optional_str(
+                data.get("DATA_VER"),
+                "meta.DATA_VER",
+                config_path=config_path,
+                default=None,
+                allow_empty=True,
+            ),
+            client_name=_extract_optional_str(
+                data.get("client_name"),
+                "meta.client_name",
+                config_path=config_path,
+                default=None,
+                allow_empty=False,
+            ),
+            semantic_mapping_yaml=_extract_optional_str(
+                data.get("semantic_mapping_yaml"),
+                "meta.semantic_mapping_yaml",
+                config_path=config_path,
+                default=None,
+            ),
+            vision_statement_pdf=_extract_optional_str(
+                data.get("vision_statement_pdf"),
+                "meta.vision_statement_pdf",
+                config_path=config_path,
+                default=None,
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class OpenAISection:
     timeout: int = 120
     max_retries: int = 2
@@ -162,21 +216,21 @@ class OpenAISection:
         return cls(
             timeout=_extract_int(
                 data.get("timeout"),
-                "openai.timeout",
+                "ai.openai.timeout",
                 config_path=config_path,
                 default=cls.timeout,
                 minimum=1,
             ),
             max_retries=_extract_int(
                 data.get("max_retries"),
-                "openai.max_retries",
+                "ai.openai.max_retries",
                 config_path=config_path,
                 default=cls.max_retries,
                 minimum=0,
             ),
             http2_enabled=_extract_bool(
                 data.get("http2_enabled"),
-                "openai.http2_enabled",
+                "ai.openai.http2_enabled",
                 config_path=config_path,
                 default=cls.http2_enabled,
             ),
@@ -197,39 +251,39 @@ class VisionSection:
         return cls(
             model=_require_str(
                 data.get("model"),
-                "vision.model",
+                "ai.vision.model",
                 config_path=config_path,
             ),
             engine=_extract_enum(
                 data.get("engine"),
-                "vision.engine",
+                "ai.vision.engine",
                 config_path=config_path,
                 default="assistants",
                 alias_map=_VISION_ENGINE_ALIASES,
             ),
             assistant_id_env=_extract_optional_str(
                 data.get("assistant_id_env"),
-                "vision.assistant_id_env",
+                "ai.vision.assistant_id_env",
                 config_path=config_path,
                 default=None,
                 allow_empty=False,
             ),
             snapshot_retention_days=_extract_int(
                 data.get("snapshot_retention_days"),
-                "vision.snapshot_retention_days",
+                "ai.vision.snapshot_retention_days",
                 config_path=config_path,
                 default=30,
                 minimum=0,
             ),
             strict_output=_extract_bool(
                 data.get("strict_output"),
-                "vision.strict_output",
+                "ai.vision.strict_output",
                 config_path=config_path,
                 default=True,
             ),
             use_kb=_extract_bool(
                 data.get("use_kb"),
-                "vision.use_kb",
+                "ai.vision.use_kb",
                 config_path=config_path,
                 default=True,
             ),
@@ -278,28 +332,28 @@ class RetrieverThrottleSection:
         return cls(
             latency_budget_ms=_extract_int(
                 data.get("latency_budget_ms"),
-                "retriever.throttle.latency_budget_ms",
+                "pipeline.retriever.throttle.latency_budget_ms",
                 config_path=config_path,
                 default=cls.latency_budget_ms,
                 minimum=0,
             ),
             candidate_limit=_extract_int(
                 data.get("candidate_limit"),
-                "retriever.throttle.candidate_limit",
+                "pipeline.retriever.throttle.candidate_limit",
                 config_path=config_path,
                 default=cls.candidate_limit,
                 minimum=0,
             ),
             parallelism=_extract_int(
                 data.get("parallelism"),
-                "retriever.throttle.parallelism",
+                "pipeline.retriever.throttle.parallelism",
                 config_path=config_path,
                 default=cls.parallelism,
                 minimum=1,
             ),
             sleep_ms_between_calls=_extract_int(
                 data.get("sleep_ms_between_calls"),
-                "retriever.throttle.sleep_ms_between_calls",
+                "pipeline.retriever.throttle.sleep_ms_between_calls",
                 config_path=config_path,
                 default=cls.sleep_ms_between_calls,
                 minimum=0,
@@ -314,11 +368,13 @@ class RetrieverSection:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "RetrieverSection":
-        throttle_mapping = _mapping_or_empty(data.get("throttle"), "retriever.throttle", config_path=config_path)
+        throttle_mapping = _mapping_or_empty(
+            data.get("throttle"), "pipeline.retriever.throttle", config_path=config_path
+        )
         return cls(
             auto_by_budget=_extract_bool(
                 data.get("auto_by_budget"),
-                "retriever.auto_by_budget",
+                "pipeline.retriever.auto_by_budget",
                 config_path=config_path,
                 default=cls.auto_by_budget,
             ),
@@ -443,16 +499,23 @@ class Settings:
         return mapping
 
     @cached_property
+    def meta_settings(self) -> MetaSection:
+        return MetaSection.from_mapping(
+            self._section_mapping("meta", required=False),
+            config_path=self.config_path,
+        )
+
+    @cached_property
     def openai_settings(self) -> OpenAISection:
         return OpenAISection.from_mapping(
-            self._section_mapping("openai", required=True),
+            self._section_mapping("ai.openai", required=True),
             config_path=self.config_path,
         )
 
     @cached_property
     def vision_settings(self) -> VisionSection:
         return VisionSection.from_mapping(
-            self._section_mapping("vision", required=True),
+            self._section_mapping("ai.vision", required=True),
             config_path=self.config_path,
         )
 
@@ -466,7 +529,7 @@ class Settings:
     @cached_property
     def retriever_settings(self) -> RetrieverSection:
         return RetrieverSection.from_mapping(
-            self._section_mapping("retriever", required=True),
+            self._section_mapping("pipeline.retriever", required=True),
             config_path=self.config_path,
         )
 
@@ -485,6 +548,10 @@ class Settings:
         )
 
     # ----------------------------- Typed accessors -----------------------------
+
+    @property
+    def client_name(self) -> Optional[str]:
+        return self.meta_settings.client_name
 
     @property
     def vision_model(self) -> Optional[str]:

@@ -27,15 +27,16 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 Il file `config/config.yaml` e la fonte unica per i parametri condivisi. Esempio per LLM **diretti**:
 
 ```yaml
-vision:
-  model: gpt-4o-mini-2024-07-18   # modello per le chiamate dirette
-  strict_output: true             # abilita validazioni strutturali quando necessario
-  assistant_id_env: OBNEXT_ASSISTANT_ID  # usato solo dal flusso Assistant
+ai:
+  vision:
+    model: gpt-4o-mini-2024-07-18   # modello per le chiamate dirette
+    strict_output: true             # abilita validazioni strutturali quando necessario
+    assistant_id_env: OBNEXT_ASSISTANT_ID  # usato solo dal flusso Assistant
 ```
 
 **Regole:**
-- Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `vision.model`.
-- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `vision.assistant_id_env`.
+- Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `ai.vision.model`.
+- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `ai.vision.assistant_id_env`.
 - Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
 - Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` → `context.settings` → `.as_dict()` per le UI/CLI.
 

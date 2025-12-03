@@ -25,41 +25,29 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # ---------------------------------------------------------------------------
 
 _SECTION_META: Dict[str, Tuple[str, str]] = {
-    "cartelle_raw_yaml": (
-        "Cartelle RAW/YAML",
-        "Percorsi base per i file PDF originali e per gli output YAML/Markdown generati.",
-    ),
-    "N_VER": (
-        "Versione NeXT",
-        "Parametri di versione interni al framework NeXT.",
-    ),
-    "DATA_VER": (
-        "Versione dati",
-        "Versioning dello schema e dei dati gestiti da Timmy KB.",
-    ),
-    "openai": (
-        "OpenAI e LLM",
-        "Configurazione dei modelli OpenAI e parametri LLM (le credenziali restano nei segreti).",
-    ),
-    "vision": (
-        "Vision e OCR",
-        "Provider e parametri per l'estrazione del testo dai PDF (Vision/OCR).",
+    "meta": (
+        "Metadati cliente",
+        "Versioning interno, nominativo cliente, riferimenti SSoT (Vision Statement, mapping semantici).",
     ),
     "ui": (
         "Interfaccia utente",
-        "Impostazioni della UI di onboarding (preflight, comportamento schermate, ecc.).",
+        "Impostazioni della UI di onboarding (preflight, modalità locale, pannello admin).",
     ),
-    "retriever": (
-        "Retriever semantico",
-        "Budget di latenza, parallelismo e limiti del retriever semantico.",
+    "ai": (
+        "AI / LLM / Vision",
+        "Configurazione OpenAI (timeout/retry) e modelli Vision/Assistants (gli ID restano nei segreti).",
     ),
-    "raw_cache": (
-        "Cache RAW",
-        "Strategia di cache per i contenuti RAW e per i risultati intermedi.",
+    "pipeline": (
+        "Pipeline",
+        "Parametri operativi della pipeline: retriever (throttle/auto_by_budget) e cache RAW.",
     ),
     "security": (
         "Sicurezza e OIDC",
         "Abilitazione OIDC, provider, ruoli e policy di accesso.",
+    ),
+    "integrations": (
+        "Integrazioni esterne",
+        "Integrazioni con terze parti (es. Google Drive) e relativi identificativi.",
     ),
     "ops": (
         "Operatività e logging",

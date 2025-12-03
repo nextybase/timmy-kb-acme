@@ -171,7 +171,10 @@ def _load_raw_cache_defaults(loader: Callable[[], Mapping[str, Any]] | None = No
                     extra={"error": str(exc), "config_path": str(config_path)},
                 )
 
-    raw_cfg = (cfg_source.get("raw_cache") or {}) if isinstance(cfg_source, Mapping) else {}
+    raw_cfg: dict[str, Any] = {}
+    if isinstance(cfg_source, Mapping):
+        pipeline_cfg = cfg_source.get("pipeline") if isinstance(cfg_source.get("pipeline"), Mapping) else cfg_source
+        raw_cfg = (pipeline_cfg.get("raw_cache") or {}) if isinstance(pipeline_cfg, Mapping) else {}
     if isinstance(raw_cfg, Mapping):
         ttl = _parse_positive_float(raw_cfg.get("ttl_seconds"), ttl)
         capacity = _parse_positive_int(raw_cfg.get("max_entries"), capacity)

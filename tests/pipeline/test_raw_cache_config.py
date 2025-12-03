@@ -10,7 +10,9 @@ from pipeline import path_utils
 
 
 def test_raw_cache_defaults_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    path_utils._load_raw_cache_defaults(loader=lambda: {"raw_cache": {"ttl_seconds": 123, "max_entries": 5}})
+    path_utils._load_raw_cache_defaults(
+        loader=lambda: {"pipeline": {"raw_cache": {"ttl_seconds": 123, "max_entries": 5}}}
+    )
 
     assert path_utils._SAFE_PDF_CACHE_DEFAULT_TTL == 123
     assert path_utils._SAFE_PDF_CACHE_CAPACITY == 5
@@ -59,7 +61,8 @@ def test_raw_cache_defaults_remain_until_first_guard(monkeypatch: pytest.MonkeyP
 
     def patched(loader: Any | None = None) -> None:
         return original_loader(
-            loader=loader or (lambda: {"raw_cache": {"ttl_seconds": sentinel_ttl, "max_entries": sentinel_capacity}})
+            loader=loader
+            or (lambda: {"pipeline": {"raw_cache": {"ttl_seconds": sentinel_ttl, "max_entries": sentinel_capacity}}})
         )
 
     monkeypatch.setattr(module, "_load_raw_cache_defaults", patched)

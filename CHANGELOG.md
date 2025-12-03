@@ -8,6 +8,9 @@
 ### Pending
 - Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
 
+### Breaking
+- Schema `config/config.yaml` riorganizzato in macro-sezioni `meta`, `ui`, `ai` (openai/vision), `pipeline` (retriever/raw_cache), `security`, `integrations`, `ops`, `finance`; aggiornare eventuali tool esterni che leggevano le chiavi legacy.
+
 ### Changed
 - Dev tooling: rinominata la cartella root `tools/` in `scripts/`; aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`).
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune) con telemetria aggiornata (`semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned`, `semantic.index.skips`).

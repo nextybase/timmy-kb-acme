@@ -36,32 +36,39 @@ Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](develo
 
 **Esempio corretto (`config/config.yaml`, vedi anche `config/config.example.yaml`):**
 ```yaml
-openai:
-  timeout: 120
-  max_retries: 2
-  http2_enabled: false
-vision:
-  model: gpt-4o-mini-2024-07-18
-  engine: assistants
-  assistant_id_env: OBNEXT_ASSISTANT_ID
-  snapshot_retention_days: 30
-retriever:
-  auto_by_budget: false
-  throttle:
-    candidate_limit: 3000
-    latency_budget_ms: 300
-    parallelism: 1
-    sleep_ms_between_calls: 0
+meta:
+  client_name: "Cliente Demo"
 ui:
   skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
+ai:
+  openai:
+    timeout: 120
+    max_retries: 2
+    http2_enabled: false
+  vision:
+    model: gpt-4o-mini-2024-07-18
+    engine: assistants
+    assistant_id_env: OBNEXT_ASSISTANT_ID
+    snapshot_retention_days: 30
+pipeline:
+  retriever:
+    auto_by_budget: false
+    throttle:
+      candidate_limit: 3000
+      latency_budget_ms: 300
+      parallelism: 1
+      sleep_ms_between_calls: 0
+  raw_cache:
+    ttl_seconds: 300
+    max_entries: 8
 ```
 **Regole operative**
-- Le chiamate **dirette** leggono `vision.model` (UI/CLI).
-- Il flusso **Assistant** usa l'ID letto da `vision.assistant_id_env` (ENV).
+- Le chiamate **dirette** leggono `ai.vision.model` (UI/CLI).
+- Il flusso **Assistant** usa l'ID letto da `ai.vision.assistant_id_env` (ENV).
 - La UI legge il modello tramite `get_vision_model()` (SSoT).
-- Il retriever applica i limiti da `retriever.throttle.*` (candidate_limit, latency, parallelism).
+- Il retriever applica i limiti da `pipeline.retriever.throttle.*` (candidate_limit, latency, parallelism).
 - Il retriever logga `retriever.query.embed_failed` e short-circuita a `[]` su errori embedding; se `latency_budget_ms` e gia esaurito interrompe prima di embedding/fetch.
 - I flag `ui.allow_local_only` e `ui.admin_local_mode` governano gating e accesso al pannello Admin.
 
@@ -80,7 +87,7 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
   - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
   - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
 - **Hash & masking:** le funzioni `hash_identifier` / `sha256_path` producono digest a 32 caratteri e accettano `TIMMY_HASH_SALT` per rafforzare l'entropia dei log; `mask_id_map` resta la via raccomandata per extra sensibili.
-- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
+- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`pipeline.raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
 - **Cache frontmatter Markdown (refresh):** dopo le write il contenuto e riallineato nella cache LRU (256 entry); nei run lunghi (UI/CLI) resta disponibile `clear_frontmatter_cache()` per rilasciare memoria.
 - **Cache frontmatter Markdown:** `_FRONTMATTER_CACHE` e LRU bounded (256 entry) con promotion: nei run lunghi (UI/CLI) puoi chiamare `clear_frontmatter_cache()` per rilasciare memoria tra batch.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.

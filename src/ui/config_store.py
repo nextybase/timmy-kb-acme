@@ -59,9 +59,14 @@ class RetrieverConfig(TypedDict, total=False):
 
 
 class GlobalConfig(TypedDict, total=False):
-    vision: dict[str, Any]
+    meta: dict[str, Any]
+    ai: dict[str, Any]
     ui: dict[str, Any]
-    retriever: RetrieverConfig
+    pipeline: dict[str, Any]
+    security: dict[str, Any]
+    integrations: dict[str, Any]
+    retriever: dict[str, Any]  # legacy fallback
+    raw_cache: dict[str, Any]  # legacy fallback
 
 
 def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
@@ -150,13 +155,15 @@ def _save_config(cfg: GlobalConfig) -> None:
 
 # ------------------- UI flags (config globale repo) -------------------
 def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
-    """Restituisce vision.model dal config UI (fallback sul default)."""
+    """Restituisce ai.vision.model dal config UI (fallback sul default)."""
     cfg = _load_config()
-    vision = cfg.get("vision")
-    if isinstance(vision, dict):
-        model = vision.get("model")
-        if isinstance(model, str) and model.strip():
-            return model.strip()
+    ai_section = cfg.get("ai")
+    if isinstance(ai_section, dict):
+        vision = ai_section.get("vision")
+        if isinstance(vision, dict):
+            model = vision.get("model")
+            if isinstance(model, str) and model.strip():
+                return model.strip()
     return default
 
 
@@ -207,7 +214,10 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
                 extra={"slug": slug, "error": str(exc)},
             )
 
-    raw_section: Any = source_cfg.get("retriever")
+    pipeline_section: Any = source_cfg.get("pipeline") if isinstance(source_cfg, dict) else {}
+    raw_section: Any = (
+        pipeline_section.get("retriever") if isinstance(pipeline_section, dict) else source_cfg.get("retriever")
+    )
     section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
 
     throttle = section.get("throttle")
@@ -262,7 +272,10 @@ def set_retriever_settings(
             )
             target_cfg = cfg
 
-    raw_section: Any = target_cfg.get("retriever")
+    pipeline_section: dict[str, Any] = (
+        cast(dict[str, Any], target_cfg.get("pipeline")) if isinstance(target_cfg.get("pipeline"), dict) else {}
+    )
+    raw_section: Any = pipeline_section.get("retriever") if pipeline_section else target_cfg.get("retriever")
     section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
 
     throttle = section.get("throttle")
@@ -273,7 +286,9 @@ def set_retriever_settings(
     throttle_section["latency_budget_ms"] = int(budget)
     section["throttle"] = throttle_section
     section["auto_by_budget"] = bool(auto)
-    target_cfg["retriever"] = section
+    pipeline_section = pipeline_section or {}
+    pipeline_section["retriever"] = section
+    target_cfg["pipeline"] = pipeline_section
 
     if target_path is not None:
         payload: str = yaml.safe_dump(target_cfg, allow_unicode=True, sort_keys=False)

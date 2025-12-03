@@ -7,10 +7,12 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 
 | Ambito | `config/config.yaml` (SSoT non segreto) | `.env` (segreti/processo) |
 |--------|-----------------------------------------|---------------------------|
-| **OpenAI** | `openai.timeout: 120`<br>`openai.max_retries: 2`<br>`openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_API_KEY_CODEX`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
-| **Vision** | `vision.model: gpt-4o-mini-2024-07-18`<br>`vision.engine: assistants`<br>`vision.snapshot_retention_days: 30`<br>`vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID` |
+| **Meta** | `meta.client_name`, `meta.semantic_mapping_yaml`, `meta.vision_statement_pdf`, `meta.N_VER`, `meta.DATA_VER` |  |
+| **OpenAI** | `ai.openai.timeout: 120`<br>`ai.openai.max_retries: 2`<br>`ai.openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_API_KEY_CODEX`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
+| **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID` |
 | **UI** | `ui.skip_preflight`, `ui.allow_local_only`, `ui.admin_local_mode` |  |
-| **Retriever** | `retriever.auto_by_budget`, `retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
+| **Retriever** | `pipeline.retriever.auto_by_budget`, `pipeline.retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
+| **Cache RAW** | `pipeline.raw_cache.ttl_seconds`, `pipeline.raw_cache.max_entries` |  |
 | **Ops / Logging** | `ops.log_level: INFO` | `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE` |
 | **Finance** | `finance.import_enabled: false` |  |
 | **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, ...) | `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
@@ -32,26 +34,29 @@ Regola doro: se un campo richiede un segreto, il valore in YAML **termina con `_
 e contiene solo il nome della variabile:
 
 ```yaml
-vision:
-  model: gpt-4o-mini-2024-07-18
-  assistant_id_env: OBNEXT_ASSISTANT_ID
+ai:
+  vision:
+    model: gpt-4o-mini-2024-07-18
+    assistant_id_env: OBNEXT_ASSISTANT_ID
 ```
 
 ```yaml
 #  errato (mai salvare il segreto nel config)
-vision:
-  assistant_id: asst_dummy
+ai:
+  vision:
+    assistant_id: asst_dummy
 ```
 
 ## Config YAML
 
-`config/config.yaml` e la SSoT applicativa. Oltre ai blocchi storici (retriever, vision,
-ui, raw_cache) ospita nuovi blocchi operativi:
+`config/config.yaml` è la SSoT applicativa strutturata per macro-sezioni:
 
-- `openai`: timeout (s), max_retries, `http2_enabled`.
-- `vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, riferimenti *_env ai segreti.
+- `meta`: nome cliente, riferimenti SSoT (`semantic_mapping_yaml`, `vision_statement_pdf`), versioning (`N_VER`, `DATA_VER`).
 - `ui`: `skip_preflight`, `allow_local_only`, `admin_local_mode`.
-- `retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`.
+- `ai.openai`: timeout (s), max_retries, `http2_enabled`.
+- `ai.vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, `use_kb`, riferimenti *_env ai segreti.
+- `pipeline.retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`; flag `auto_by_budget`.
+- `pipeline.raw_cache`: `ttl_seconds`, `max_entries`.
 - `ops`: `log_level` per i logger applicativi.
 - `finance`: `import_enabled` per attivare il flusso Finance.
 

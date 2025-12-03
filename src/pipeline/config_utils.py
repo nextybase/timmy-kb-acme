@@ -325,7 +325,7 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
-    logs_dir = (base_dir / "logs").resolve()
+    logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
     if not logs_dir.exists():
         logger.warning(
             "pipeline.config_utils.logs_dir_missing",

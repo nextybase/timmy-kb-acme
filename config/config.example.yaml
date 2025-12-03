@@ -1,38 +1,43 @@
 # config/config.example.yaml
 # Copia questo file come config/config.yaml e personalizza i campi per il cliente.
 
-cartelle_raw_yaml: config/cartelle_raw.yaml
-N_VER: 0
-DATA_VER: null
-
-openai:
-  timeout: 120              # secondi
-  max_retries: 2
-  http2_enabled: false
-
-vision:
-  engine: assistants        # assistants | responses | ...
-  model: gpt-4o-mini-2024-07-18
-  assistant_id_env: OBNEXT_ASSISTANT_ID
-  snapshot_retention_days: 30
-  strict_output: true
+meta:
+  cartelle_raw_yaml: config/cartelle_raw.yaml   # YAML con elenco cartelle RAW per onboarding
+  N_VER: 0                                       # Versione config interna (int)
+  DATA_VER: null                                 # Versione dataset/contrattualistica
+  client_name: "Cliente Demo"                    # Nome cliente leggibile
+  semantic_mapping_yaml: "semantic/tags_reviewed.yaml"  # Mapping semantico (per bootstrap)
+  vision_statement_pdf: "config/VisionStatement.pdf"    # Vision statement di riferimento
 
 ui:
   skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
 
-retriever:
-  auto_by_budget: false
-  throttle:
-    candidate_limit: 4000
-    latency_budget_ms: 0
-    parallelism: 1
-    sleep_ms_between_calls: 0
+ai:
+  openai:
+    timeout: 120              # secondi
+    max_retries: 2
+    http2_enabled: false
+  vision:
+    engine: assistants        # assistants | responses | ...
+    model: gpt-4o-mini-2024-07-18
+    assistant_id_env: OBNEXT_ASSISTANT_ID
+    use_kb: false
+    snapshot_retention_days: 30
+    strict_output: true
 
-raw_cache:
-  ttl_seconds: 300
-  max_entries: 8
+pipeline:
+  retriever:
+    auto_by_budget: false
+    throttle:
+      candidate_limit: 4000
+      latency_budget_ms: 0
+      parallelism: 1
+      sleep_ms_between_calls: 0
+  raw_cache:
+    ttl_seconds: 300
+    max_entries: 8
 
 security:
   oidc:
@@ -43,6 +48,13 @@ security:
     token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
     token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN
     ci_required: false
+
+integrations:
+  drive:
+    folder_id: ""
+    raw_folder_id: ""
+    contrattualistica_folder_id: ""
+    config_folder_id: ""
 
 ops:
   log_level: INFO
