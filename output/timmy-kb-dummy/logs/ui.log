@@ -1,2 +1,6 @@
 2025-12-03 18:31:54,209 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only phase=init
 2025-12-03 18:31:54,257 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only
+2025-12-03 18:34:14,231 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only phase=init
+2025-12-03 18:34:14,271 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only
+2025-12-03 18:35:33,147 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only phase=init
+2025-12-03 18:35:33,193 WARNING ui.diagnostics: ui.drive.not_configured_local_only | slug=dummy run_id=- file_path=C:\Users\User\clienti\timmy-kb-acme\src\ui\pages\new_client.py event=ui.drive.not_configured_local_only
