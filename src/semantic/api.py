@@ -122,7 +122,7 @@ def _collect_doc_entities(candidates: Mapping[str, Mapping[str, Any]]) -> List[D
                 key = f"{area_key}:{entity_id}"
                 try:
                     confidence = float(score_map.get(key, 0.0))
-                except Exception:
+                except (TypeError, ValueError):
                     confidence = 0.0
                 if confidence <= 0.0:
                     continue
