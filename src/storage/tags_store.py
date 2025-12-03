@@ -44,12 +44,10 @@ __all__ = [
     "clear_doc_terms",
     "get_folder_id_for_document",
     "get_documents_by_folder",
-    "import_tags_yaml_to_db",
 ]
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 LOG = get_structured_logger("storage.tags_store")
 
@@ -1037,33 +1035,10 @@ class _TagMutation:
 
 def parse_yaml_safe(yaml_path: str | Path) -> tuple[Path, Path, list[Any]]:
     ypath = Path(yaml_path)
-    if not ypath.exists():
-        raise ConfigError(f"File YAML non trovato: {ypath}")
-
-    db_path = derive_db_path_from_yaml_path(ypath)
-    ensure_schema_v2(db_path)
-
-    try:
-        safe_yaml_path = ensure_within_and_resolve(ypath.parent, ypath)
-        raw = read_text_safe(ypath.parent, safe_yaml_path, encoding="utf-8")
-        if yaml is not None:
-            data = yaml.safe_load(raw) or {}
-        else:
-            LOG.warning(
-                "storage.tags_store.import_yaml.fallback",
-                extra={"yaml": str(ypath), "reason": "pyyaml_missing"},
-            )
-            data = _parse_yaml_minimal(raw)
-    except ConfigError:
-        raise
-    except Exception as exc:  # pragma: no cover
-        raise ConfigError("YAML non valido o non supportato: installare PyYAML per casi complessi.") from exc
-
-    items = data.get("tags") or []
-    if not isinstance(items, list):
-        raise ConfigError("Struttura YAML non valida: 'tags' deve essere una lista.")
-
-    return ypath, Path(db_path), items
+    raise ConfigError(
+        "Import YAML legacy non supportato: usa semantic/tags.db come SSoT.",
+        file_path=str(ypath),
+    )
 
 
 def build_mutations(items: list[Any]) -> tuple[list[_TagMutation], int]:
@@ -1184,46 +1159,12 @@ def import_tags_yaml_to_db(
     logger: Any | None = None,
     default_lang: str = "it",
 ) -> dict[str, int]:
-    """
-    Importa il vocabolario revisionato da `semantic/tags_reviewed.yaml` nel DB SQLite v2.
-    - Idempotente: usa upsert su terms, term_aliases, folders, folder_terms.
-    - Normalizzazioni:
-        canonical/alias → lowercase+trim
-        folders → path relativo, prefisso raw/ se mancante, divieto di assoluti/..
-    - Schema: garantito via ensure_schema_v2(derive_db_path_from_yaml_path(yaml)).
-    - Logging strutturato: storage.tags_store.import_yaml.* (può ricevere logger esterno).
-    Ritorna conteggi: {"terms": int, "aliases": int, "folders": int, "links": int, "skipped": int}
-    """
-    log = logger or get_structured_logger("storage.tags_store")
-
-    ypath, db_path, items = parse_yaml_safe(yaml_path)
-    if ypath.name != "tags_reviewed.yaml":
-        log.warning(
-            "storage.tags_store.import_yaml.nonstandard_name",
-            extra={"yaml": str(ypath)},
-        )
-
-    mutations, skipped = build_mutations(items)
-
-    log.info(
-        "storage.tags_store.import_yaml.start",
-        extra={"yaml": str(ypath), "db": str(db_path), "items": len(items)},
+    """Import YAML legacy non supportato: usare semantic/tags.db come SSoT."""
+    _ = logger, default_lang
+    raise ConfigError(
+        "Import YAML non supportato: rigenera semantic/tags.db prima di procedere.",
+        file_path=str(Path(yaml_path)),
     )
-
-    with get_conn(str(db_path)) as conn:
-        counts = persist_with_transaction(
-            conn,
-            mutations,
-            default_lang=default_lang,
-        )
-
-    counts["skipped"] += skipped
-
-    log.info(
-        "storage.tags_store.import_yaml.completed",
-        extra={"yaml": str(ypath), "db": str(db_path), **counts},
-    )
-    return counts
 
 
 if __name__ == "__main__":  # pragma: no cover

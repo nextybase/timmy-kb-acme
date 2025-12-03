@@ -32,8 +32,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
@@ -229,7 +227,6 @@ def write_tags_reviewed_from_nlp_db(
     tags_payload: list[dict[str, Any]] = []
     keep_only_listed_val = bool(keep_only_listed)
     reviewed_at_val: str | None = None
-    used_fallback = False
 
     try:
         with sqlite3.connect(str(db_path)) as con:
@@ -272,24 +269,6 @@ def write_tags_reviewed_from_nlp_db(
                         "note": "",
                     }
                 )
-            if not tags_payload:
-                fallback = tags_store.load_tags_reviewed(str(db_path))
-                reviewed_at_val = str(fallback.get("reviewed_at") or "") or None
-                keep_only_listed_val = bool(fallback.get("keep_only_listed", keep_only_listed_val))
-                for item in fallback.get("tags", []):
-                    name = str(item.get("name", "")).strip()
-                    if not name:
-                        continue
-                    syns = [str(s).strip() for s in item.get("synonyms") or [] if str(s).strip()]
-                    tags_payload.append(
-                        {
-                            "name": name,
-                            "action": "keep",
-                            "synonyms": syns,
-                            "note": str(item.get("note") or ""),
-                        }
-                    )
-                used_fallback = bool(tags_payload)
     except Exception as exc:
         raise ConfigError(f"Impossibile esportare i tag dal DB NLP: {exc}", file_path=str(db_path)) from exc
 
@@ -301,18 +280,13 @@ def write_tags_reviewed_from_nlp_db(
     }
 
     ensure_within(semantic_dir, out_path)
-    yaml_text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+    yaml_text = tags_store.serialize_tags_payload(payload)
     safe_write_text(out_path, yaml_text, encoding="utf-8", atomic=True)
     try:
         logger.info(
             "semantic.tags_yaml.exported_from_nlp",
             extra={"file_path": str(out_path), "tags": len(tags_payload)},
         )
-        if used_fallback:
-            logger.warning(
-                "semantic.tags_yaml.fallback_tags_table",
-                extra={"file_path": str(out_path), "tags": len(tags_payload)},
-            )
     except Exception:
         pass
     return out_path
