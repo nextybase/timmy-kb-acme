@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
 from ui.pages.registry import PagePaths
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
@@ -102,27 +101,6 @@ def ui_allow_local_only_enabled() -> bool:
 
 
 LOGGER = get_structured_logger("ui.new_client")
-
-
-# --------- env helpers ---------
-def _sanitize_openai_env() -> List[str]:
-    """Rimuove variabili legacy OpenAI e avvisa l'utente/telemetria."""
-    removed: List[str] = []
-    legacy_keys = ("OPENAI_FORCE_HTTPX",)
-    for key in legacy_keys:
-        if os.environ.pop(key, None) is not None:
-            removed.append(key)
-
-    if removed:
-        LOGGER.warning("ui.new_client.openai_legacy_env", extra={"removed": removed})
-        warn = getattr(st, "warning", None)
-        if callable(warn):
-            warn(
-                "Variabili legacy OpenAI ignorate automaticamente: "
-                + ", ".join(removed)
-                + ". Aggiorna il tuo .env per rimuoverle.",
-            )
-    return removed
 
 
 # --------- helper ---------
@@ -468,7 +446,6 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante Vision",
             ) as status:
                 try:
-                    _sanitize_openai_env()
                     step_progress = st.progress(0, text="Preparazione Vision...")
                     progress.progress(80, text="Eseguo Vision...")
                     run_vision(

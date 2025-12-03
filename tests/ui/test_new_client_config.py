@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -51,20 +50,6 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     assert "client_name: dummy" in updated
     assert updated.count("client_name") == original.count("client_name")
     assert "foo: bar" in updated
-
-
-def test_sanitize_openai_env_removes_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
-    import ui.pages.new_client as new_client
-
-    stub = StreamlitStub()
-    monkeypatch.setattr(new_client, "st", stub, raising=False)
-    monkeypatch.setenv("OPENAI_FORCE_HTTPX", "1")
-
-    removed = new_client._sanitize_openai_env()
-
-    assert "OPENAI_FORCE_HTTPX" in removed
-    assert os.getenv("OPENAI_FORCE_HTTPX") is None
-    assert any("OPENAI_FORCE_HTTPX" in msg for msg in stub.warning_messages)
 
 
 def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

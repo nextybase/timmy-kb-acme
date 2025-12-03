@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Optional
 
-from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
+from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
@@ -22,35 +22,18 @@ def _normalize_base_url(raw: str) -> str:
     return base
 
 
-def _optional_env(name: str) -> Optional[str]:
-    try:
-        return get_env_var(name)
-    except Exception:
-        return None
-
-
 def make_openai_client():
     """
     Costruisce un client OpenAI (SDK >= 2) applicando le policy del progetto.
 
     Richiede che `OPENAI_API_KEY` sia impostata.
-    Le variabili legacy (`OPENAI_API_KEY_FOLDER`, `OPENAI_FORCE_HTTPX`) non sono più supportate.
     """
     ensure_dotenv_loaded()
 
-    legacy_key = _optional_env("OPENAI_API_KEY_FOLDER")
     try:
         api_key = get_env_var("OPENAI_API_KEY", required=True)
     except KeyError as exc:
         raise ConfigError("Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.") from exc
-
-    if legacy_key and not api_key:
-        raise ConfigError(
-            "OPENAI_API_KEY_FOLDER non è più supportata. Sposta il valore in OPENAI_API_KEY (.env/ambiente)."
-        )
-
-    if get_bool("OPENAI_FORCE_HTTPX", default=False):
-        raise ConfigError("OPENAI_FORCE_HTTPX non è più supportata: il client utilizza solo l'SDK ufficiale.")
 
     try:
         from openai import OpenAI  # type: ignore
@@ -63,8 +46,8 @@ def make_openai_client():
         "default_headers": default_headers,
     }
 
-    base_url_env = _optional_env("OPENAI_BASE_URL")
-    project_env = _optional_env("OPENAI_PROJECT")
+    base_url_env = get_env_var("OPENAI_BASE_URL", default=None)
+    project_env = get_env_var("OPENAI_PROJECT", default=None)
     settings_obj = _load_settings()
     if settings_obj is not None:
         openai_cfg = settings_obj.openai_settings

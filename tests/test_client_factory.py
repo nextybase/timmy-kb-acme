@@ -12,10 +12,6 @@ from pipeline.exceptions import ConfigError
 
 
 def test_make_openai_client_requires_modern_sdk(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY_FOLDER", raising=False)
-    monkeypatch.setenv("OPENAI_FORCE_HTTPX", "false")
-    monkeypatch.setattr(client_factory, "get_bool", lambda *a, **k: False)
-    assert client_factory.get_bool("OPENAI_FORCE_HTTPX", default=True) is False
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")  # pragma: allowlist secret
     monkeypatch.setattr(client_factory, "_load_settings", lambda: None)
 
@@ -35,8 +31,6 @@ def test_make_openai_client_requires_modern_sdk(monkeypatch):
 
 
 def test_make_openai_client_success(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY_FOLDER", raising=False)
-    monkeypatch.delenv("OPENAI_FORCE_HTTPX", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "secret")  # pragma: allowlist secret
     monkeypatch.setenv("OPENAI_BASE_URL", "api.nexty.ai")
     monkeypatch.setenv("OPENAI_PROJECT", "alpha")

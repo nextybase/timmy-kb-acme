@@ -217,18 +217,6 @@ def bootstrap_semantic_templates(
                 extra={"slug": context.slug, "file_path": str(mapping_dst)},
             )
 
-        # (Opzionale) retro-compatibilitÃ : mantieni anche semantic_mapping.yaml
-        legacy = semantic_dir / "semantic_mapping.yaml"
-        if not legacy.exists():
-            try:
-                shutil.copy2(mapping_dst, legacy)
-                logger.info(
-                    "cli.pre_onboarding.semantic_mapping_legacy_copied",
-                    extra={"slug": context.slug, "file_path": str(legacy)},
-                )
-            except Exception:
-                pass
-
     except Exception as e:  # non blocca il flusso
         logger.warning(
             "cli.pre_onboarding.semantic_mapping_context_inject_failed",
