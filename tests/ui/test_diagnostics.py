@@ -60,7 +60,7 @@ def test_tail_log_bytes_prefers_safe_reader(tmp_path: Path) -> None:
     assert calls == [log_file]
 
 
-def test_build_logs_archive_applies_limits(tmp_path: Path) -> None:
+def test_build_logs_archive_applies_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
     files = []
@@ -74,9 +74,11 @@ def test_build_logs_archive_applies_limits(tmp_path: Path) -> None:
         with path.open("rb") as fh:
             yield fh
 
+    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
+
     data = diag.build_logs_archive(
         files,
-        slug="demo",
+        slug="dummy",
         safe_reader=reader,
         max_files=2,
         max_total_bytes=20,
