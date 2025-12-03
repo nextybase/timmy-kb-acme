@@ -682,6 +682,12 @@ def search(
     throttle_cfg = _normalize_throttle_settings(throttle)
     deadline = _deadline_from_settings(throttle_cfg)
     _validate_params_logged(params)
+    if _deadline_exceeded(deadline):
+        LOGGER.info(
+            "retriever.query.budget_exceeded",
+            extra={"slug": params.slug, "scope": params.scope},
+        )
+        return []
     throttle_ctx = (
         _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg

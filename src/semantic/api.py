@@ -5,7 +5,20 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Protocol, Sequence, TypeAlias, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Protocol,
+    Sequence,
+    TypeAlias,
+    TypedDict,
+    TypeVar,
+    cast,
+)
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -120,7 +133,15 @@ def _require_reviewed_vocab(
 BuildWorkflowResult: TypeAlias = tuple[Path, list[Path], list[Path]]
 
 
-def _collect_doc_entities(candidates: Mapping[str, Mapping[str, Any]]) -> List[DocEntityRecord]:
+class CandidateMeta(TypedDict, total=False):
+    tags: Sequence[str]
+    sources: Mapping[str, Any]
+    score: Mapping[str, Any]
+    entities: Sequence[Any]
+    keyphrases: Sequence[Any]
+
+
+def _collect_doc_entities(candidates: Mapping[str, CandidateMeta]) -> List[DocEntityRecord]:
     """Estrae le entity NLP dai metadati dei candidati in una lista flat."""
 
     doc_entities: List[DocEntityRecord] = []
@@ -186,12 +207,12 @@ def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[s
 
 
 def _apply_folder_terms(
-    candidates: Mapping[str, Dict[str, Any]],
+    candidates: Mapping[str, CandidateMeta],
     folder_terms: Mapping[str, Sequence[str]],
-) -> Dict[str, Dict[str, Any]]:
+) -> Dict[str, CandidateMeta]:
     """Arricchisce i metadati candidati con i top-term per cartella."""
 
-    enriched_candidates: Dict[str, Dict[str, Any]] = {}
+    enriched_candidates: Dict[str, CandidateMeta] = {}
     max_terms = 16
     for rel_path, meta in candidates.items():
         rel_folder = Path(rel_path).parent.as_posix()
@@ -342,32 +363,43 @@ def _run_build_workflow(
     enrich_impl: EnrichStage = enrich_fn or enrich_frontmatter
     summary_impl: SummaryStage = summary_fn or write_summary_and_readme
 
-    mds: List[Path] = cast(
-        List[Path],
-        _wrap("convert_markdown", lambda: convert_impl(context, logger, slug=slug)),
-    )
-
-    vocab: Dict[str, Dict[str, Sequence[str]]] = cast(
-        Dict[str, Dict[str, Sequence[str]]],
-        _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug)),
-    )
-
-    touched: List[Path] = cast(
-        List[Path],
-        _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug=slug)),
-    )
     try:
-        logger.info(
-            "semantic.book.frontmatter",
-            extra={"slug": slug, "enriched": len(touched)},
+        mds: List[Path] = cast(
+            List[Path],
+            _wrap("convert_markdown", lambda: convert_impl(context, logger, slug=slug)),
         )
-    except Exception as exc:
-        logger.warning(
-            "semantic.book.frontmatter",
-            extra={"slug": slug, "enriched": None, "error": str(exc)},
+
+        vocab: Dict[str, Dict[str, Sequence[str]]] = cast(
+            Dict[str, Dict[str, Sequence[str]]],
+            _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug)),
         )
-    _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
-    return base_dir, mds, touched
+
+        touched: List[Path] = cast(
+            List[Path],
+            _wrap("enrich_frontmatter", lambda: enrich_impl(context, logger, vocab, slug=slug)),
+        )
+        try:
+            logger.info(
+                "semantic.book.frontmatter",
+                extra={"slug": slug, "enriched": len(touched)},
+            )
+        except Exception as exc:
+            logger.warning(
+                "semantic.book.frontmatter",
+                extra={"slug": slug, "enriched": None, "error": str(exc)},
+            )
+        _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
+        return base_dir, mds, touched
+    finally:
+        try:
+            from pipeline.content_utils import clear_frontmatter_cache
+
+            clear_frontmatter_cache()
+        except Exception as exc:
+            logger.warning(
+                "semantic.frontmatter_cache.clear_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:

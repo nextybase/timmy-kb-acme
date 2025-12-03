@@ -194,7 +194,7 @@ class MetaSection:
                 data.get("semantic_mapping_yaml"),
                 "meta.semantic_mapping_yaml",
                 config_path=config_path,
-                default=None,
+                default="semantic/tags_reviewed.yaml",
             ),
             vision_statement_pdf=_extract_optional_str(
                 data.get("vision_statement_pdf"),

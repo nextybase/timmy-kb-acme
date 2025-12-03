@@ -3,7 +3,7 @@ meta:
   N_VER: 0
   DATA_VER: ''
   client_name: "prova srl"
-  semantic_mapping_yaml: "timmy-kb-prova\\semantic\\tags_reviewed.yaml"
+  semantic_mapping_yaml: "semantic/tags_reviewed.yaml"
   vision_statement_pdf: "config/VisionStatement.pdf"
 
 ui:

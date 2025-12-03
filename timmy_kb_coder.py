@@ -36,7 +36,7 @@ from pipeline.logging_utils import get_structured_logger
 import pipeline.path_utils as ppath
 
 from semantic.types import EmbeddingsClient
-from ingest import OpenAIEmbeddings, ingest_folder
+from ingest import OpenAIEmbeddings
 from kb_db import get_db_path, init_db
 from prompt_builder import build_prompt
 from retriever import QueryParams, search_with_config  # <-- usa la facade
