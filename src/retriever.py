@@ -646,24 +646,24 @@ def search(
     throttle: Optional[ThrottleSettings] = None,
     throttle_key: Optional[str] = None,
 ) -> list[SearchResult]:
-    """Esegue la ricerca di chunk rilevanti per una query usando similarità coseno.
+    """Esegue una ricerca vettoriale sui chunk del workspace indicato.
+
+    Args:
+        params: Query strutturata (slug, scope, query, k, candidate_limit).
+        embeddings_client: Client compatibile con `EmbeddingsClient`.
+        authorizer: Hook opzionale per autorizzare la query.
+        throttle_check: Hook opzionale per controlli aggiuntivi di throttling.
+        throttle: Configurazione di throttling (rate/deadline).
+        throttle_key: Chiave di throttling (default: slug).
+
+    Raises:
+        RetrieverError: se i parametri non rispettano i contratti.
 
     Flusso:
-    1) Ottiene l'embedding di `params.query` tramite
-       `embeddings_client.embed_texts([str])`.
-    2) Carica al massimo `params.candidate_limit` candidati per
-       `(slug, scope)`.
-    3) Calcola similarità coseno e ordina per score decrescente con tie-break
-       deterministico.
-    4) Restituisce i top-`params.k` in forma di lista di dict:
-       {content, meta, score}.
-
-    Note compatibilità embedding:
-    - Supporta output `list[list[float]]`, `numpy.ndarray` 2D, `list[np.ndarray]`,
-      e vettori singoli (deque/generatori/ndarray/liste).
-    - I generatori vengono materializzati; gli array NumPy sono convertiti con `.tolist()`.
-    - Distingue batch di vettori da vettore singolo, evitando doppi wrapping.
-    - Se batch/vettore è vuoto: warning e `[]`.
+    1) Embedding della query via `embeddings_client.embed_texts([query])`.
+    2) Carica fino a `candidate_limit` candidati per `(slug, scope)`.
+    3) Similarita' coseno e ordinamento stabile per score decrescente.
+    4) Restituisce i top-`k` come lista di `SearchResult`.
     """
     throttle_cfg = _normalize_throttle_settings(throttle)
     deadline = _deadline_from_settings(throttle_cfg)
