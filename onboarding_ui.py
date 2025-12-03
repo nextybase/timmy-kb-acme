@@ -9,9 +9,9 @@ Onboarding UI entrypoint (beta 0).
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,12 @@ try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover
     load_dotenv = None
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+os.environ.pop("REPO_ROOT_DIR", None)
+
+st: Any | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -45,36 +51,15 @@ def _bootstrap_sys_path() -> None:
     _ensure_repo_src_on_sys_path()
 
 
-_bootstrap_sys_path()
-
-# --------------------------------------------------------------------------------------
-# Streamlit setup
-# --------------------------------------------------------------------------------------
-import streamlit as st  # noqa: E402
-
-from pipeline.logging_utils import get_structured_logger  # noqa: E402
-from pipeline.path_utils import ensure_within_and_resolve  # noqa: E402
-from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
-from ui.gating import compute_gates, visible_page_specs  # noqa: E402
-from ui.preflight import run_preflight  # noqa: E402
-from ui.theme_enhancements import inject_theme_css  # noqa: E402
-from ui.utils import get_active_slug  # noqa: E402
-from ui.utils.branding import get_favicon_path, get_main_logo_path  # noqa: E402
-from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
-from ui.utils.slug import clear_active_slug  # noqa: E402
-from ui.utils.status import status_guard  # noqa: E402
-from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
-from ui.utils.workspace import has_raw_pdfs  # noqa: E402
-
-REPO_ROOT = Path(__file__).resolve().parent
-os.environ.pop("REPO_ROOT_DIR", None)
-
 def _init_ui_logging() -> None:
     """Inizializza il logger condiviso della UI su `.timmykb/logs/ui.log`."""
+    from pipeline.logging_utils import get_structured_logger
+    from pipeline.path_utils import ensure_within_and_resolve
+
     log_dir = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / ".timmykb" / "logs")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "ui.log"
-    # Propagazione abilitata cos� i logger delle pagine ereditano l'handler file.
+    # Propagazione abilitata cosi i logger delle pagine ereditano l'handler file.
     os.environ.setdefault("TIMMY_LOG_PROPAGATE", "1")
     get_structured_logger("ui", log_file=log_file, propagate=True)
 
@@ -84,13 +69,21 @@ LOGGER: logging.Logger = logging.getLogger("ui.preflight")
 
 def _lazy_bootstrap() -> None:
     """Bootstrap logging in modo idempotente (invocato all'avvio UI)."""
+    from pipeline.logging_utils import get_structured_logger
+
     global LOGGER
+    _bootstrap_sys_path()
     _init_ui_logging()
     LOGGER = get_structured_logger("ui.preflight")
 
 
 def _render_preflight_header() -> None:
     """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
+    from ui.utils.branding import get_main_logo_path
+
+    if st is None:
+        return
+
     logo_path = None
     try:
         logo_path = get_main_logo_path(REPO_ROOT)
@@ -153,6 +146,8 @@ def _parse_version(raw: str) -> tuple[int, ...]:
 
 
 def _ensure_streamlit_api() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit non inizializzato")
     version = getattr(st, "__version__", "0")
     if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st, "Page") or not hasattr(st, "navigation"):
         raise RuntimeError(
@@ -195,7 +190,27 @@ def _truthy(v: object) -> bool:
 
 
 def main() -> None:
+    global st
+
     _lazy_bootstrap()
+
+    try:  # noqa: E402
+        import streamlit as st  # type: ignore
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("Streamlit non disponibile: installa le dipendenze UI") from exc
+
+    from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
+    from ui.gating import compute_gates, visible_page_specs  # noqa: E402
+    from ui.preflight import run_preflight  # noqa: E402
+    from ui.theme_enhancements import inject_theme_css  # noqa: E402
+    from ui.utils import get_active_slug  # noqa: E402
+    from ui.utils.branding import get_favicon_path  # noqa: E402
+    from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
+    from ui.utils.slug import clear_active_slug  # noqa: E402
+    from ui.utils.status import status_guard  # noqa: E402
+    from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
+    from ui.utils.workspace import has_raw_pdfs  # noqa: E402
+
     global clear_tab, get_slug_from_qp, get_tab, set_tab
     try:  # noqa: E402
         from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
@@ -237,7 +252,7 @@ def main() -> None:
 
     if _truthy(getattr(st, "query_params", {}).get("exit")):
         st.title("Sessione terminata")
-        st.info("Puoi chiudere questa scheda. Lo slug attivo � stato azzerato.")
+        st.info("Puoi chiudere questa scheda. Lo slug attivo e' stato azzerato.")
         try:
             clear_active_slug(persist=True, update_query=True)
             clear_tab()
@@ -323,7 +338,7 @@ def main() -> None:
     except Exception:
         slug = None
 
-    cl1, cl2 = st.columns([4, 1])
+    st.columns([4, 1])  # layout preservato anche se non riassegniamo le colonne
 
     if slug:
         try:
@@ -344,9 +359,7 @@ def main() -> None:
     try:
         LOGGER.info(
             "ui.navigation.pages",
-            extra={
-                "pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}
-            },
+            extra={"pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}},
         )
     except Exception:
         pass
