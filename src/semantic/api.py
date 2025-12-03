@@ -69,7 +69,7 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
 
 
 def require_reviewed_vocab(base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]:
-    """Facade pubblica che fallisce se il vocabolario canonico non è disponibile."""
+    """Facade pubblica che fallisce se il vocabolario canonico non e' disponibile."""
     return _require_reviewed_vocab(base_dir, logger, slug=slug)
 
 
