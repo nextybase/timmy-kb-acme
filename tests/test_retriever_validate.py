@@ -120,9 +120,5 @@ def test_search_early_return_on_zero_k(monkeypatch) -> None:
 
 
 def test_search_early_return_on_zero_candidate_limit(monkeypatch) -> None:
-    def _boom(*a, **k):
-        raise AssertionError("fetch_candidates should not be called when candidate_limit==0")
-
-    monkeypatch.setattr(r, "fetch_candidates", _boom)
-    out = search(_params(candidate_limit=0), DummyEmbeddings())
-    assert out == []
+    with pytest.raises(RetrieverError, match="candidate_limit"):
+        search(_params(candidate_limit=0), DummyEmbeddings())

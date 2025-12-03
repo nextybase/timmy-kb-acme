@@ -106,6 +106,7 @@ _LAST_VOCAB_STUBBED = False
 
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
+    """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP."""
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
@@ -203,12 +204,11 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         except PathTraversalError:
             raise
         except Exception as exc:
-            logger.warning(
+            logger.exception(
                 "semantic.tags_csv.enrichment_failed",
                 extra={"slug": slug, "error": str(exc)},
-                exc_info=True,
             )
-            # Se l'arricchimento fallisce, continuiamo con i soli candidati euristici.
+            raise ConfigError("Arricchimento tag fallito", slug=slug) from exc
 
         _render_tags_csv(candidates, csv_path, base_dir=base_dir)
         count = len(candidates)

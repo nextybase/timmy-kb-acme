@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -78,20 +79,14 @@ def _init_ui_logging() -> None:
     get_structured_logger("ui", log_file=log_file, propagate=True)
 
 
-_init_ui_logging()
+LOGGER: logging.Logger = logging.getLogger("ui.preflight")
 
-# Logger strutturato per eventi di preflight (eredita handler file da logger 'ui')
-LOGGER = get_structured_logger("ui.preflight")
 
-# Router/state helper (fail-fast se non presente)
-try:  # noqa: E402
-    from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
-except Exception as exc:  # pragma: no cover
-    LOGGER.error(
-        "ui.preflight.route_state_missing",
-        extra={"error": repr(exc)},
-    )
-    raise RuntimeError("Router UI non disponibile: reinstalla Streamlit/UI") from exc
+def _lazy_bootstrap() -> None:
+    """Bootstrap logging in modo idempotente (invocato all'avvio UI)."""
+    global LOGGER
+    _init_ui_logging()
+    LOGGER = get_structured_logger("ui.preflight")
 
 
 def _render_preflight_header() -> None:
@@ -172,15 +167,20 @@ def _hydrate_query_defaults() -> None:
         from ui.utils.route_state import get_slug_from_qp as _get_slug
         from ui.utils.route_state import get_tab as _get_tab
     except Exception:
-        _ = get_tab("home")
-        _ = get_slug_from_qp()
+        def _noop_tab(*_args: object, **_kwargs: object) -> None:
+            return None
+
+        def _noop_slug(*_args: object, **_kwargs: object) -> None:
+            return None
+
+        _ = _noop_tab("home")
+        _ = _noop_slug()
         return
     try:
         _ = _get_tab("home")
         _ = _get_slug()
     except Exception:
-        _ = get_tab("home")
-        _ = get_slug_from_qp()
+        return
 
 
 def _truthy(v: object) -> bool:
@@ -195,6 +195,17 @@ def _truthy(v: object) -> bool:
 
 
 def main() -> None:
+    _lazy_bootstrap()
+    global clear_tab, get_slug_from_qp, get_tab, set_tab
+    try:  # noqa: E402
+        from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
+    except Exception as exc:  # pragma: no cover
+        LOGGER.error(
+            "ui.preflight.route_state_missing",
+            extra={"error": repr(exc)},
+        )
+        raise RuntimeError("Router UI non disponibile: reinstalla Streamlit/UI") from exc
+
     st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
         page_icon=str(get_favicon_path(REPO_ROOT)),

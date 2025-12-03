@@ -44,10 +44,15 @@ _FRONTMATTER_CACHE_MAX = 256
 _PDF_EXCERPT_MAX_CHARS = 2048
 
 
-def clear_frontmatter_cache() -> None:
-    """Svuota la cache del frontmatter (uso test/debug)."""
+def clear_frontmatter_cache(path: Path | None = None) -> None:
+    """Svuota la cache del frontmatter o invalida una singola entry."""
 
-    _FRONTMATTER_CACHE.clear()
+    if path is None:
+        _FRONTMATTER_CACHE.clear()
+        return
+    for key in list(_FRONTMATTER_CACHE.keys()):
+        if key[0] == path:
+            _FRONTMATTER_CACHE.pop(key, None)
 
 
 # -----------------------------

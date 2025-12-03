@@ -463,7 +463,7 @@ def ensure_local_workspace_for_ui(
         )
 
     logger.info(
-        "pre_onboarding.workspace.created",
+        "cli.pre_onboarding.workspace.created",
         extra={
             "slug": context.slug,
             "base": str(context.base_dir) if context.base_dir else None,
@@ -484,7 +484,7 @@ def _drive_phase(
     """Crea struttura remota minima su Drive, carica config e aggiorna il config locale."""
     _sync_env(context, require_env=require_env)
     logger.info(
-        "pre_onboarding.drive.preflight",
+        "cli.pre_onboarding.drive.preflight",
         extra={
             "SERVICE_ACCOUNT_FILE": mask_partial(context.env.get("SERVICE_ACCOUNT_FILE")),
             "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID")),

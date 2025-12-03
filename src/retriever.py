@@ -299,9 +299,9 @@ def _validate_params(params: QueryParams) -> None:
         raise RetrieverError("slug vuoto")
     if not params.scope.strip():
         raise RetrieverError("scope vuoto")
-    if params.candidate_limit < 0:
-        raise RetrieverError("candidate_limit negativo")
-    if 0 < params.candidate_limit < MIN_CANDIDATE_LIMIT or params.candidate_limit > MAX_CANDIDATE_LIMIT:
+    if params.candidate_limit <= 0:
+        raise RetrieverError("candidate_limit non positivo")
+    if params.candidate_limit < MIN_CANDIDATE_LIMIT or params.candidate_limit > MAX_CANDIDATE_LIMIT:
         raise RetrieverError(f"candidate_limit fuori range [{MIN_CANDIDATE_LIMIT}, {MAX_CANDIDATE_LIMIT}]")
     if params.k < 0:
         raise RetrieverError("k negativo")
@@ -693,9 +693,6 @@ def search(
                 },
             )
             return []
-        if params.candidate_limit == 0:
-            return []
-
         budget_hit = False
 
         t_total_start = time.time()
