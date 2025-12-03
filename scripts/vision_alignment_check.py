@@ -184,16 +184,13 @@ def main() -> None:
         "[Mission]\n"
         "Formare team interni e integrare micro-agenti AI nei processi core.\n\n"
         "[Goal]\n"
-        "Aumentare produttività del 25% in 12 mesi con progetti pilota iterativi.\n\n"
+        "Aumentare produttivita' del 25% in 12 mesi con progetti pilota iterativi.\n\n"
         "[Framework etico]\n"
-        "Human-in-the-Loop, tracciabilità, minimizzazione dei bias, AI literacy.\n\n"
+        "Human-in-the-Loop, tracciabilita', minimizzazione dei bias, AI literacy.\n\n"
         "[Contesto Operativo]\n"
-        (
-            "Settore servizi/manifattura regionale, lingue di lavoro: italiano e inglese, normative: GDPR, AI Act UE, "
-            "policy interne di data governance.\n"
-        )
+        "Settore servizi/manifattura regionale, lingue di lavoro: italiano e inglese, normative: GDPR, AI Act UE, "
+        "policy interne di data governance.\n"
     )
-
     # 3) Structured output: JSON Schema reale di Vision
     try:
         schema = _load_vision_schema()  # deve restituire un dict JSON Schema
