@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Sequence, TypeAlias, TypeVar, cast
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -103,6 +103,8 @@ def _require_reviewed_vocab(
 
 
 _LAST_VOCAB_STUBBED = False
+
+BuildWorkflowResult: TypeAlias = tuple[Path, list[Path], list[Path]]
 
 
 def _collect_doc_entities(candidates: Mapping[str, Mapping[str, Any]]) -> List[DocEntityRecord]:
@@ -243,7 +245,8 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         _write_tagging_readme(semantic_dir, logger)
         try:
             m.set_artifacts(count)
-        except Exception:
+        except Exception as exc:
+            logger.warning("semantic.tags_csv.artifacts_missing", extra={"slug": slug, "error": str(exc)})
             m.set_artifacts(None)
     return csv_path
 
@@ -287,6 +290,7 @@ def export_tags_yaml_from_db(
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:
+    """Copia PDF locali in raw/ rispettando path-safety, restituisce il conteggio copiato."""
     return int(_copy_local_pdfs_to_raw(src_dir, raw_dir, logger))
 
 
@@ -302,7 +306,7 @@ def _run_build_workflow(
         Callable[[ClientContextType, logging.Logger, Dict[str, Dict[str, set[str]]], str], list[Path]] | None
     ) = None,
     summary_fn: Callable[[ClientContextType, logging.Logger, str], object] | None = None,
-) -> tuple[Path, list[Path], list[Path]]:
+) -> BuildWorkflowResult:
     """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti."""
 
     ctx_base = cast(Path, getattr(context, "base_dir", None))
@@ -359,7 +363,8 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))
-        except Exception:
+        except Exception as exc:
+            logger.warning("semantic.book.artifacts_missing", extra={"slug": slug, "error": str(exc)})
             m.set_artifacts(None)
     ms = int((time.perf_counter() - start_ts) * 1000)
     logger.info(
