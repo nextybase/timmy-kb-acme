@@ -321,17 +321,7 @@ def derive_db_path_from_yaml_path(p: str | Path) -> str:
 
 
 def load_tags_reviewed(db_path: str) -> dict[str, Any]:
-    """Ritorna un dict con la stessa struttura del file YAML legacy.
-
-    Struttura:
-    {
-      "version": str,
-      "reviewed_at": str,
-      "keep_only_listed": bool,
-      "tags": [{"name": str, "action": str, "synonyms": [str,...], "note": str|None}, ... ]
-    }
-    Se il DB è assente o vuoto, ritorna la struttura minima di default.
-    """
+    """Carica il vocabolario rivisto da SQLite e ritorna la struttura SSoT."""
     dbp = Path(db_path)
     if not dbp.parent.exists():
         dbp.parent.mkdir(parents=True, exist_ok=True)
