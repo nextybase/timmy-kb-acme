@@ -37,11 +37,14 @@ htmlcov/
 .tox/
 
 # === Output Pipeline / Workspace locali ===
-output/
+output/**
 tmp_repo_push/
 logs/
 data/
 .timmykb/
+# Mantieni solo il workspace di esempio
+!output/timmy-kb-dummy/
+!output/timmy-kb-dummy/**
 
 # === Credenziali e segreti ===
 .env
