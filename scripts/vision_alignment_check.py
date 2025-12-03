@@ -188,7 +188,10 @@ def main() -> None:
         "[Framework etico]\n"
         "Human-in-the-Loop, tracciabilità, minimizzazione dei bias, AI literacy.\n\n"
         "[Contesto Operativo]\n"
-        "Settore servizi/manifattura regionale, lingue di lavoro: italiano e inglese, normative: GDPR, AI Act UE, policy interne di data governance.\n"
+        (
+            "Settore servizi/manifattura regionale, lingue di lavoro: italiano e inglese, normative: GDPR, AI Act UE, "
+            "policy interne di data governance.\n"
+        )
     )
 
     # 3) Structured output: JSON Schema reale di Vision

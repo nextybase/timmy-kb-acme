@@ -17,8 +17,6 @@ ribalta lo zip, i metadata e la summary.
 from __future__ import annotations
 
 import argparse
-import logging
-import sys
 from typing import Optional
 
 from pipeline.context import ClientContext
@@ -65,7 +63,9 @@ def main() -> int:
     _report_summary(context.md_dir)
 
     token = getattr(context.settings, "GITBOOK_TOKEN", None) if hasattr(context.settings, "GITBOOK_TOKEN") else None
-    space_id = getattr(context.settings, "GITBOOK_SPACE_ID", None) if hasattr(context.settings, "GITBOOK_SPACE_ID") else None
+    space_id = (
+        getattr(context.settings, "GITBOOK_SPACE_ID", None) if hasattr(context.settings, "GITBOOK_SPACE_ID") else None
+    )
 
     if not token or not space_id:
         LOGGER.warning(

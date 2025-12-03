@@ -45,7 +45,8 @@ def main() -> None:
     print("response_format_type:", response_format.get("type"))
     print("json_schema_name:", response_format.get("json_schema", {}).get("name"))
     print("strict:", response_format.get("json_schema", {}).get("strict"))
-    print("response_schema_keys:", sorted(json.loads(json.dumps(response_format["json_schema"]["schema"])).get("properties", {}).keys()))
+    response_schema = json.loads(json.dumps(response_format["json_schema"]["schema"]))
+    print("response_schema_keys:", sorted(response_schema.get("properties", {}).keys()))
 
 
 if __name__ == "__main__":

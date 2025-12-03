@@ -359,7 +359,11 @@ def main() -> None:
     try:
         LOGGER.info(
             "ui.navigation.pages",
-            extra={"pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}},
+            extra={
+                "pages": {
+                    group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()
+                }
+            },
         )
     except Exception:
         pass
