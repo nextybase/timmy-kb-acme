@@ -13,13 +13,7 @@ from pipeline.exceptions import RetrieverError
 from pipeline.logging_utils import get_structured_logger
 
 if TYPE_CHECKING:
-    try:
-        from src.retriever import QueryParams  # type: ignore
-    except ImportError:
-        try:
-            from timmykb.retriever import QueryParams  # type: ignore
-        except ImportError:  # pragma: no cover
-            from ..retriever import QueryParams
+    from ..retriever import QueryParams
 
 LOGGER = get_structured_logger("security.throttle", propagate=False)
 

@@ -40,7 +40,6 @@ IMPORT_LOGGER = get_structured_logger(_evt("imports"))
 make_openai_client = import_from_candidates(
     [
         "ai.client_factory:make_openai_client",
-        "timmykb.ai.client_factory:make_openai_client",
         "..ai.client_factory:make_openai_client",
     ],
     package=__package__,
@@ -51,7 +50,6 @@ make_openai_client = import_from_candidates(
 _masking_module = import_from_candidates(
     [
         "security.masking",
-        "timmykb.security.masking",
         "..security.masking",
     ],
     package=__package__,
@@ -65,7 +63,6 @@ sha256_path = getattr(_masking_module, "sha256_path")
 purge_old_artifacts = import_from_candidates(
     [
         "security.retention:purge_old_artifacts",
-        "timmykb.security.retention:purge_old_artifacts",
         "..security.retention:purge_old_artifacts",
     ],
     package=__package__,

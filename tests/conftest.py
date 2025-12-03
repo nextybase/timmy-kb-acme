@@ -153,7 +153,7 @@ def observability_stack_fixture():
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
 try:
-    from timmykb.tools.gen_dummy_kb import main as _gen_dummy_main  # type: ignore
+    from tools.gen_dummy_kb import main as _gen_dummy_main  # type: ignore
 except ModuleNotFoundError as exc:
     if exc.name in {"yaml", "pyyaml"}:
         _gen_dummy_main = None
@@ -166,7 +166,7 @@ DUMMY_SLUG = "dummy"
 def _ensure_gen_dummy_available():
     if _gen_dummy_main is None:
         pytest.skip(
-            "pyyaml richiesto per generare il workspace dummy (timmykb.tools.gen_dummy_kb)",
+            "pyyaml richiesto per generare il workspace dummy (tools.gen_dummy_kb)",
             allow_module_level=True,
         )
     return _gen_dummy_main

@@ -4,13 +4,7 @@
 import pytest
 
 from pipeline.exceptions import ConversionError
-from timmykb.semantic.layout_enricher import (
-    Constraints,
-    merge_non_distruttivo,
-    suggest_layout,
-    to_kebab,
-    validate_yaml_schema,
-)
+from semantic.layout_enricher import Constraints, merge_non_distruttivo, suggest_layout, to_kebab, validate_yaml_schema
 
 
 @pytest.fixture

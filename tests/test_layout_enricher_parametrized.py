@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from timmykb.semantic.layout_enricher import suggest_layout, to_kebab
+from semantic.layout_enricher import suggest_layout, to_kebab
 
 
 @pytest.mark.parametrize(

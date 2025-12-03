@@ -11,7 +11,7 @@ import pytest
 
 def _import_builder():
     # Import locale per evitare side-effects globali
-    from timmykb.prompt_builder import build_prompt  # type: ignore
+    from prompt_builder import build_prompt  # type: ignore
 
     return build_prompt
 

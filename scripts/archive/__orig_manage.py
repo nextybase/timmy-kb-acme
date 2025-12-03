@@ -90,7 +90,7 @@ _download_simple = _safe_get("ui.services.drive_runner:download_raw_from_drive")
 
 # Tool di pulizia workspace (locale + DB + Drive)
 
-_run_cleanup = _safe_get("timmykb.tools.clean_client_workspace:run_cleanup")  # noqa: F401
+_run_cleanup = _safe_get("tools.clean_client_workspace:run_cleanup")  # noqa: F401
 
 
 

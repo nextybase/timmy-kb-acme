@@ -25,7 +25,7 @@ def main() -> int:
         except Exception:
             pass
 
-        from timmykb.ai.client_factory import make_openai_client  # usa lo stesso factory della UI
+        from ai.client_factory import make_openai_client  # usa lo stesso factory della UI
     except Exception as e:
         print(f"ERRORE import: {e}")
         return 2

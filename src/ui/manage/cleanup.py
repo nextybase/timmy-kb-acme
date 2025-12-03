@@ -9,13 +9,11 @@ from typing import Any, Callable, Iterable, Optional, Sequence, cast
 from ui.manage import _helpers as manage_helpers
 
 _RUN_CLEANUP_PATHS: Sequence[str] = (
-    "timmykb.tools.clean_client_workspace:run_cleanup",
     "tools.clean_client_workspace:run_cleanup",
     "src.tools.clean_client_workspace:run_cleanup",
 )
 
 _PERFORM_CLEANUP_PATHS: Sequence[str] = (
-    "timmykb.tools.clean_client_workspace:perform_cleanup",
     "tools.clean_client_workspace:perform_cleanup",
     "src.tools.clean_client_workspace:perform_cleanup",
 )

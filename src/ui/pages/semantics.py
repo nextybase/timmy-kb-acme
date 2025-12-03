@@ -31,7 +31,6 @@ from ui.components.semantic_wizard import render_semantic_wizard
 from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE
 from ui.errors import to_user_message
 from ui.pages.registry import PagePaths
-from ui.utils.compat import nav_to, set_tab
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
 
@@ -193,18 +192,11 @@ def _go_preview() -> None:
     """
     Step 4: passa dalla pagina Semantica alla pagina Docker Preview.
 
-    Usa il router compat (`nav_to`) così funziona sia con `st.switch_page`
-    sia con il fallback via ?tab=preview.
     """
     try:
-        nav_to(PagePaths.PREVIEW)
-        return
+        st.switch_page(PagePaths.PREVIEW)
     except Exception:
-        try:
-            set_tab("preview")  # type: ignore[arg-type]
-            getattr(st, "rerun", lambda: None)()
-        except Exception:
-            return
+        return
 
 
 # ---------------- UI ----------------

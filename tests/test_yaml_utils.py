@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from timmykb.pipeline.exceptions import ConfigError
-from timmykb.pipeline.yaml_utils import clear_yaml_cache, yaml_read
+from pipeline.exceptions import ConfigError
+from pipeline.yaml_utils import clear_yaml_cache, yaml_read
 
 
 def test_yaml_read_ok(tmp_path: Path) -> None:

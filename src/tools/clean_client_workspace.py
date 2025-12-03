@@ -31,9 +31,9 @@ from types import SimpleNamespace, TracebackType
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict, cast
 
 # SSoT percorsi registry clienti dalla UI
-from timmykb.ui.clients_store import get_registry_paths as _get_registry_paths  # type: ignore
-from timmykb.ui.clients_store import load_clients as _load_clients
-from timmykb.ui.clients_store import save_clients as _save_clients
+from ui.clients_store import get_registry_paths as _get_registry_paths
+from ui.clients_store import load_clients as _load_clients
+from ui.clients_store import save_clients as _save_clients
 
 from ..pipeline.context import ClientContext
 from ..pipeline.drive_utils import MIME_FOLDER, delete_drive_file, get_drive_service, list_drive_files

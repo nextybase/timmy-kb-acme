@@ -1,33 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-KG_BUILDER_PATH = ROOT / "src" / "timmykb" / "kg_builder.py"
-_KG_MODELS_PATH = ROOT / "src" / "timmykb" / "kg_models.py"
-_KG_MODELS_SPEC = importlib.util.spec_from_file_location("timmykb.kg_models", _KG_MODELS_PATH)
-if _KG_MODELS_SPEC is None or _KG_MODELS_SPEC.loader is None:
-    raise RuntimeError("Impossibile caricare kg_models per i test.")
-kg_models = importlib.util.module_from_spec(_KG_MODELS_SPEC)
-sys.modules["timmykb.kg_models"] = kg_models
-_KG_MODELS_SPEC.loader.exec_module(kg_models)
-
-_KG_SPEC = importlib.util.spec_from_file_location("timmykb.kg_builder", KG_BUILDER_PATH)
-if _KG_SPEC is None or _KG_SPEC.loader is None:
-    raise RuntimeError("Impossibile caricare kg_builder per i test.")
-kg_builder = importlib.util.module_from_spec(_KG_SPEC)
-sys.modules["timmykb.kg_builder"] = kg_builder
-_KG_SPEC.loader.exec_module(kg_builder)
-
-RawTag = kg_builder.RawTag
-TagKgInput = kg_builder.TagKgInput
-_load_raw_tags = kg_builder._load_raw_tags
-call_openai_tag_kg_assistant = kg_builder.call_openai_tag_kg_assistant
+import kg_builder
+from kg_builder import RawTag, TagKgInput, _load_raw_tags, call_openai_tag_kg_assistant
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -144,9 +123,18 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
         def __init__(self) -> None:
             self.threads = DummyThreads()
 
+    class DummyCompletions:
+        def create(self, **kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(tool_output)))])
+
+    class DummyChat:
+        def __init__(self) -> None:
+            self.completions = DummyCompletions()
+
     class DummyClient:
         def __init__(self) -> None:
             self.beta = DummyBeta()
+            self.chat = DummyChat()
 
     monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
 

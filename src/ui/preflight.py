@@ -52,48 +52,40 @@ def _docker_ok() -> tuple[bool, str]:
     return check_docker_status()
 
 
-def _timmykb_origin_ok() -> tuple[bool, str]:
+def _pipeline_origin_ok() -> tuple[bool, str]:
     """
-    Verifica che i moduli `timmykb` e `ui` provengano dallo stesso root.
-
-    Serve a intercettare scenari in cui:
-    - la UI viene eseguita dal repository clonato;
-    - ma la pipeline viene importata da una vecchia installazione in site-packages.
+    Verifica che i moduli core siano importabili dalla stessa root della UI.
+    In caso di venv incoerente segnala un hint per l'installazione editable.
     """
     try:
-        import timmykb  # type: ignore[import]
+        import pipeline.context as _ctx  # type: ignore
     except Exception as exc:  # pragma: no cover - ambiente minimale
-        # Non blocchiamo l'esecuzione: la UI può usare i fallback basati su src/*
         return (
             False,
-            "Pacchetto 'timmykb' non importabile " f"({exc}). Consigliato: `pip install -e .` nella root del repo.",
+            "Moduli di pipeline non importabili "
+            f"({exc}). Attiva il venv corretto ed esegui `pip install -e .` dalla root del repo.",
         )
 
     try:
-        pkg_file = Path(timmykb.__file__).resolve()  # type: ignore[attr-defined]
+        pkg_file = Path(_ctx.__file__).resolve()  # type: ignore[attr-defined]
     except Exception:
-        # Se __file__ non è disponibile non possiamo verificare l'origine,
-        # ma non consideriamo il caso bloccante.
-        return True, "Origine 'timmykb' non determinabile (__file__ mancante)."
+        return True, "Origine moduli pipeline non determinabile (__file__ mancante)."
 
-    preflight_file = Path(__file__).resolve()
-    # directory comune dei moduli di progetto (es. <repo>/src oppure site-packages)
-    ui_root = preflight_file.parents[1]
+    ui_root = Path(__file__).resolve().parents[1]
     pkg_root = pkg_file.parents[1]
-
     if ui_root == pkg_root:
         return True, f"OK (UI e pipeline allineate in {pkg_root})"
 
     hint = (
-        "UI e pacchetto 'timmykb' provengono da root diversi.\n"
+        "UI e pipeline provengono da root diversi.\n"
         f" - UI: {ui_root}\n"
-        f" - timmykb: {pkg_root}\n"
+        f" - pipeline: {pkg_root}\n"
         "Probabile installazione vecchia nel venv. "
         "Attiva il venv corretto e riesegui `pip install -e .` nella root del repo."
     )
     try:
         LOGGER.warning(
-            "ui.preflight.timmykb_mismatch",
+            "ui.preflight.pipeline_mismatch",
             extra={"ui_root": str(ui_root), "pkg_root": str(pkg_root)},
         )
     except Exception:
@@ -155,8 +147,8 @@ def run_preflight() -> tuple[List[CheckItem], bool]:
     results.append(("Docker", docker_ok, hint or "OK"))
 
     # Allineamento UI/pipeline: evita mismatch tra repo clonato e installazione pip.
-    timmy_ok, timmy_hint = _timmykb_origin_ok()
-    results.append(("TimmyKB install", timmy_ok, timmy_hint))
+    pipe_ok, pipe_hint = _pipeline_origin_ok()
+    results.append(("Pipeline install", pipe_ok, pipe_hint))
 
     results.append(("PyMuPDF", _is_importable("fitz"), "pip install pymupdf"))
     results.append(("ReportLab", _is_importable("reportlab"), "pip install reportlab"))

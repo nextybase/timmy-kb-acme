@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 from pipeline.exceptions import RetrieverError
+from retriever import QueryParams, search
+from security.throttle import reset_token_buckets, throttle_token_bucket
 from tests.conftest import DUMMY_SLUG
-from timmykb.retriever import QueryParams, search
-from timmykb.security.throttle import reset_token_buckets, throttle_token_bucket
 
 
 class _DummyEmbeddingsClient:

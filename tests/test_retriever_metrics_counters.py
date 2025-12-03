@@ -2,7 +2,7 @@
 # tests/test_retriever_metrics_counters.py
 import logging
 
-import timmykb.retriever as retr
+import retriever as retr
 
 
 class _EmbClient:

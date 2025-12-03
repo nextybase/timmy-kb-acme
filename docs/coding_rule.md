@@ -163,7 +163,7 @@ make ci-safe
 **Chiamata AI (Responses API) con modello da config:**
 ```python
 from ui.config_store import get_vision_model
-from timmykb.ai.client_factory import make_openai_client
+from ai.client_factory import make_openai_client
 
 MODEL = get_vision_model()
 client = make_openai_client()

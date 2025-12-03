@@ -37,7 +37,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:
     pass
 
-from timmykb.ingest import ingest_folder
+from ingest import ingest_folder
 
 
 def main() -> None:

@@ -43,6 +43,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ## Dipendenze & QA
 - Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configurazione.md](docs/configurazione.md).
 - L'import del vocabolario (`tags_reviewed.yaml`) funziona anche senza PyYAML grazie a un parser fallback minimale, ma per YAML complessi raccomandiamo di installare PyYAML: in fallback viene emesso il log `storage.tags_store.import_yaml.fallback`.
+- Namespace: i moduli sono importabili direttamente da `src` (es. `from ingest import ingest_folder`, `from pipeline.context import ClientContext`); il vecchio alias `timmykb.*` � stato rimosso.
 - Hook consigliati:
   ```bash
   pre-commit install --hook-type pre-commit --hook-type pre-push

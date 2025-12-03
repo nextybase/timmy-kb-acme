@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Sequence
 
-import timmykb.semantic.vocab_loader as vl
+import semantic.vocab_loader as vl
 
 
 class _NoopLogger:

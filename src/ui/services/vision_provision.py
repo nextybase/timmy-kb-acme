@@ -40,7 +40,6 @@ def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc
     """Carica dinamicamente le binding da semantic.vision_provision."""
     candidates = (
         "src.semantic.vision_provision",
-        "timmykb.semantic.vision_provision",
         "semantic.vision_provision",
     )
     for module_name in candidates:

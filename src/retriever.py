@@ -31,12 +31,11 @@ from itertools import tee
 from pathlib import Path
 from typing import Any, Callable, Generator, Iterable, Mapping, Optional, Sequence, TypedDict
 
+from kb_db import fetch_candidates
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 from pipeline.logging_utils import get_structured_logger
 from semantic.types import EmbeddingsClient
-
-from .kb_db import fetch_candidates
 
 LOGGER = get_structured_logger("timmy_kb.retriever")
 

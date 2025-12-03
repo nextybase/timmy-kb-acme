@@ -26,7 +26,7 @@ import subprocess
 from pathlib import Path
 from textwrap import fill
 
-from timmykb.pipeline.file_utils import safe_write_text
+from pipeline.file_utils import safe_write_text
 
 # pattern: detect long comment lines
 COMMENT_RE = re.compile(r"^(\s*)#( ?)(.*\S.*)$")

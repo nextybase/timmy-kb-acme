@@ -21,7 +21,7 @@ Usa la UI per:
 
 - **Configurazione**: consulta [docs/configurazione.md](configurazione.md) per `.env`, `config/config.yaml`, OIDC e segreti.
 - **Software**: Python >= 3.11, Streamlit >= 1.50.0. (Facoltativo: Docker per anteprima, ReportLab per README.pdf)
-- **Allineamento installazione**: il preflight verifica che UI e pacchetto `timmykb` provengano dallo stesso root (repo vs site-packages). Se segnala mismatch, attiva il venv corretto ed esegui `pip install -e .` dalla root del repo.
+- **Allineamento installazione**: il preflight verifica che i moduli pipeline siano importabili dallo stesso root della UI. Se segnala mismatch, attiva il venv corretto ed esegui `pip install -e .` dalla root del repo.
 - **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; ricorda di installare gli extra `pip install .[drive]`.
   - \`DRIVE\_ID\` -> ID del Drive o cartella radice.
   - Installa gli extra Drive: \`pip install .[drive]\`.

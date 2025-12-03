@@ -12,7 +12,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     il ramo source=="drive" deve sollevare ConfigError con istruzioni chiare,
     non TypeError da chiamata su None.
     """
-    import timmykb.tag_onboarding as tag
+    import tag_onboarding as tag
 
     # Isola la root del workspace cliente
     client_root = tmp_path / "timmy-kb-dummy"
@@ -80,7 +80,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     monkeypatch.setattr(raw_mod, "download_drive_pdfs_to_local", None, raising=False)
     assert getattr(raw_mod, "get_drive_service") is None  # sanity: modulo flat patchato
     assert getattr(raw_mod, "download_drive_pdfs_to_local") is None
-    package_raw_mod = sys.modules.get("timmykb.tag_onboarding_raw")
+    package_raw_mod = sys.modules.get("tag_onboarding_raw")
     if package_raw_mod is not None:
         monkeypatch.setattr(package_raw_mod, "get_drive_service", None, raising=False)
         monkeypatch.setattr(package_raw_mod, "download_drive_pdfs_to_local", None, raising=False)

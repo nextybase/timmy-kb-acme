@@ -9,12 +9,12 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from kg_builder import build_kg_for_workspace
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve
-from timmykb.kg_builder import build_kg_for_workspace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

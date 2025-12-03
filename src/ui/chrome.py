@@ -18,7 +18,6 @@ from ui.clients_store import get_all as get_clients
 from ui.manage import cleanup as cleanup_component
 from ui.pages.registry import PagePaths
 from ui.theme_enhancements import inject_theme_css
-from ui.utils.compat import nav_to
 
 try:  # cleanup opzionale
     from tools.clean_client_workspace import perform_cleanup as _perform_cleanup
@@ -292,7 +291,10 @@ def sidebar(slug: str | None) -> None:
                     clear_active_slug(persist=True, update_query=True)
                 except Exception:
                     pass
-                nav_to(PagePaths.MANAGE)
+                try:
+                    st.switch_page(PagePaths.MANAGE)
+                except Exception:
+                    pass
 
         _call("subheader", "Azioni rapide")
 

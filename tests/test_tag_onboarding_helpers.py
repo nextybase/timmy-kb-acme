@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import tag_onboarding_raw as raw_ingest
+from tag_onboarding import _should_proceed  # type: ignore
 from tag_onboarding_raw import copy_from_local, download_from_drive
-from timmykb.tag_onboarding import _should_proceed  # type: ignore
 
 
 class _NoopLogger:

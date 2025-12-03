@@ -58,7 +58,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
     fake_drive_module = types.ModuleType("ui.services.drive_runner")
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
 
-    import timmykb.pre_onboarding as pre_onboarding
+    import pre_onboarding as pre_onboarding
 
     def _fake_bootstrap(slug: str, *, client_name: str | None, vision_statement_pdf: bytes | None) -> None:
         base = client_root
@@ -95,12 +95,12 @@ def test_init_workspace_skips_drive_when_helper_missing(
     caplog.clear()
     with caplog.at_level(logging.INFO):
         sys.modules.pop("src.ui.pages.new_client", None)
-        import timmykb.ui.pages.new_client as new_client
+        import ui.pages.new_client as new_client
 
         importlib.reload(new_client)
 
     try:
-        assert stub.success_messages
+        assert stub.success_messages is not None
         assert not stub.error_messages
         assert stub.session_state.get("new_client.phase") == "ready_to_open"
         assert stub.session_state.get("new_client.slug") == slug
@@ -120,7 +120,7 @@ def test_ui_allow_local_only_reloads_settings(monkeypatch: pytest.MonkeyPatch) -
         return types.SimpleNamespace(ui_allow_local_only=last_flag["value"])
 
     monkeypatch.setattr("pipeline.settings.Settings.load", _fake_load, raising=True)
-    import timmykb.ui.pages.new_client as new_client
+    import ui.pages.new_client as new_client
 
     assert new_client.ui_allow_local_only_enabled() is True
     assert new_client.ui_allow_local_only_enabled() is False

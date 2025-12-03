@@ -18,7 +18,6 @@ from pipeline.yaml_utils import yaml_read
 from ui.imports import getattr_if_callable, import_first
 
 ensure_local_workspace_for_ui = import_first(
-    "timmykb.pre_onboarding",
     "src.pre_onboarding",
     "pre_onboarding",
 ).ensure_local_workspace_for_ui
@@ -47,7 +46,6 @@ else:  # pragma: no cover
 
 _vision_module = import_first(
     "ui.services.vision_provision",
-    "timmykb.ui.services.vision_provision",
     "src.ui.services.vision_provision",
 )
 run_vision = getattr(_vision_module, "run_vision")
@@ -56,7 +54,6 @@ BuildDriveCallable = Callable[..., Dict[str, str]]
 EnsureDriveCallable = Callable[..., Path]
 _drive_runner = import_first(
     "ui.services.drive_runner",
-    "timmykb.ui.services.drive_runner",
     "src.ui.services.drive_runner",
 )
 _build_drive_from_mapping_impl = cast(

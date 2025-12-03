@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import timmykb.semantic_headless as sh
+import semantic_headless as sh
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
 

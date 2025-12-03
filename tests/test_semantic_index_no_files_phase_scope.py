@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-import timmykb.semantic.api as api
+import semantic.api as api
 
 
 class _DummyEmb:

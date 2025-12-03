@@ -7,15 +7,16 @@ from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from storage.tags_store import import_tags_yaml_to_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
 from ui.manage import _helpers as manage_helpers
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
-from ui.manage.compat import import_tags_yaml_to_db, read_text_safe, safe_write_text
 from ui.pages.registry import PagePaths
+from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button

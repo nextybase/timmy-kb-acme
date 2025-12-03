@@ -25,7 +25,7 @@ from storage.tags_store import derive_db_path_from_yaml_path, save_tags_reviewed
 def _load_yaml(path: Path) -> Dict[str, Any]:
     # Usa utility centrale per path-safety e SafeLoader
     try:
-        from timmykb.pipeline.yaml_utils import yaml_read
+        from pipeline.yaml_utils import yaml_read
 
         return yaml_read(path.parent, path) or {}
     except Exception as e:

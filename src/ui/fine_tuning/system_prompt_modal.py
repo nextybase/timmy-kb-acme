@@ -39,7 +39,6 @@ def _get_client() -> Any:
     """Restituisce un client OpenAI preferendo la factory del progetto."""
     factory_candidates = [
         "ai.client_factory:make_openai_client",
-        "timmykb.ai.client_factory:make_openai_client",
         "..ai.client_factory:make_openai_client",
     ]
     try:

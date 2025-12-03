@@ -14,6 +14,7 @@ _SRC_ROOT = Path(__file__).resolve().parent
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
+from kg_builder import build_kg_for_workspace
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
@@ -29,7 +30,6 @@ from semantic.api import (
     require_reviewed_vocab,
     write_summary_and_readme,
 )
-from timmykb.kg_builder import build_kg_for_workspace
 
 
 def _parse_args() -> argparse.Namespace:

@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from timmykb.pipeline.context import ClientContext
-from timmykb.pipeline.file_utils import safe_write_bytes
-from timmykb.pipeline.path_utils import ensure_within_and_resolve
+from pipeline.context import ClientContext
+from pipeline.file_utils import safe_write_bytes
+from pipeline.path_utils import ensure_within_and_resolve
 
 
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:

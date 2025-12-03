@@ -6,9 +6,9 @@ from typing import Sequence
 
 import pytest
 
-import timmykb.retriever as r
+import retriever as r
+from retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 from tests.conftest import DUMMY_SLUG
-from timmykb.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 
 class DummyEmbeddings:

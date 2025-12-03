@@ -12,15 +12,15 @@ from typing import Iterable
 
 import pytest
 
-import timmykb.retriever as retriever
-from tests.conftest import DUMMY_SLUG
-from timmykb.retriever import (
+import retriever as retriever
+from retriever import (
     QueryParams,
     cosine,
     preview_effective_candidate_limit,
     with_config_candidate_limit,
     with_config_or_budget,
 )
+from tests.conftest import DUMMY_SLUG
 
 # ----------------------------- Test cosine (iterator-safe) -----------------------------
 

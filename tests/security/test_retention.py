@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from timmykb.security.retention import purge_old_artifacts
+from security.retention import purge_old_artifacts
 
 
 def test_purge_old_artifacts_removes_old_snapshot(tmp_path: Path) -> None:

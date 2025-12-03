@@ -62,6 +62,21 @@ def validate_slug(slug: str) -> str:
         raise ConfigError(str(e), slug=slug) from e
 
 
+def _safe_settings_get(settings: Any | None, key: str) -> Any:
+    """Estrae un valore da settings (dict/oggetto) senza assumere .get presente."""
+    if settings is None:
+        return None
+    if isinstance(settings, dict):
+        return settings.get(key)
+    getter = getattr(settings, "get", None)
+    if callable(getter):
+        try:
+            return getter(key)
+        except Exception:
+            pass
+    return getattr(settings, key, None)
+
+
 @dataclass(slots=True)
 class ClientContext:
     """Contesto unificato per le pipeline Timmy-KB.
@@ -191,7 +206,7 @@ class ClientContext:
 
         return cls(
             slug=slug,
-            client_name=settings.get("client_name") if settings else None,
+            client_name=_safe_settings_get(settings, "client_name"),
             repo_root_dir=repo_root,
             settings=settings,
             env=env_vars,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import timmykb.semantic.vocab_loader as vl
+import semantic.vocab_loader as vl
 from pipeline.exceptions import ConfigError
 
 

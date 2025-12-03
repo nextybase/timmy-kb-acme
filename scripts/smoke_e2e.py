@@ -8,8 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from timmykb.pipeline.file_utils import safe_write_text
-from timmykb.pipeline.path_utils import ensure_within_and_resolve
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve
 
 
 def _add_paths() -> None:
@@ -46,10 +46,10 @@ def main() -> int:
     import importlib
     from typing import Any, Dict
 
-    pre_onboarding = importlib.import_module("timmykb.pre_onboarding")
-    onboarding_full = importlib.import_module("timmykb.onboarding_full")
+    pre_onboarding = importlib.import_module("pre_onboarding")
+    onboarding_full = importlib.import_module("onboarding_full")
     finance_api = importlib.import_module("finance.api")
-    pipeline_context = importlib.import_module("timmykb.pipeline.context")
+    pipeline_context = importlib.import_module("pipeline.context")
 
     parser = argparse.ArgumentParser(description="Smoke E2E: REPO_ROOT_DIR + orchestratore + finanza")
     parser.add_argument("--slug", default="dummy", help="Slug cliente per il test (default: dummy)")

@@ -464,7 +464,7 @@ Prima di aprire una PR:
 
 - Usa `st.Page`/`st.navigation` e niente router legacy.
 - Se la pagina richiede slug: `render_chrome_then_require()` / `require_active_slug()`.
-- Navigazione interna con `st.page_link`; usa `ui.utils.compat.nav_to(PagePaths.X)` solo dopo side-effects (salvataggi, reset) dove serve rerun controllato.
+- Navigazione interna con `st.page_link`; usa `st.switch_page(PagePaths.X)` solo dopo side-effects (salvataggi, reset) dove serve rerun controllato.
 
 **File I/O**
 
@@ -478,7 +478,7 @@ Prima di aprire una PR:
 **UX & stub-compat**
 
 - Feedback con `status_guard` o `st.status` (no sleep/progress finti).
-- Modali: preferisci `ui.utils.compat.open_dialog(...)` (wrappa `st.dialog` e degrada inline se non supportato).
+- Modali: usa `st.dialog` se disponibile, altrimenti degrada inline con un semplice render del corpo.
  - Evita `with col:` se lo stub non lo supporta; usa gli helper centralizzati:
    `from ui.utils.ui_controls import columns3, column_button, button`.
 
@@ -490,7 +490,7 @@ Usa:
 - `from ui.pages.registry import PagePaths` per link diretti (`st.page_link(PagePaths.NEW_CLIENT, ...)`).
 - `from ui.pages.registry import build_pages` nell'entrypoint per generare il `pages` dict per `st.navigation(...)`.
 
-La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X)`, che gestisce `st.switch_page(...)` e il fallback via `?tab=<url_path>`. Preferisci il link dichiarativo (`st.page_link(...)`) quando non hai side-effect da completare prima del rerun.
+La navigazione programmativa deve passare da `st.switch_page(PagePaths.X)`; preferisci il link dichiarativo (`st.page_link(...)`) quando non hai side-effect da completare prima del rerun.
 
 ---
 

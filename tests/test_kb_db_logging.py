@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-import timmykb.kb_db as kb
+import kb_db as kb
 
 
 def test_insert_chunks_logs_db_inserted_and_idempotent(tmp_path: Path, caplog):

@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import timmykb.pipeline.content_utils as cu
+import pipeline.content_utils as cu
 
 
 def _ctx(base: Path, book: Path):

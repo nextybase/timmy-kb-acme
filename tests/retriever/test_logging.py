@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
+from retriever import QueryParams, search
 from tests.conftest import DUMMY_SLUG
-from timmykb.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:

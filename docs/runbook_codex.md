@@ -15,7 +15,7 @@
   Vedi anche README -> *Prerequisiti rapidi*.
 - Credenziali: `OPENAI_API_KEY`, `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
 - Pre-commit: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
-- Preflight UI: controlla anche che UI e pacchetto `timmykb` provengano dallo stesso root (repo vs site-packages); se c'e mismatch, attiva il venv corretto ed esegui `pip install -e .` dal root del repo.
+- Preflight UI: verifica che i moduli pipeline siano importabili dalla stessa root della UI; in caso di mismatch attiva il venv corretto ed esegui `pip install -e .` dal root del repo.
 
 **Ambiente**
 ```bash

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import logging
 
-from timmykb.semantic.tags_extractor import copy_local_pdfs_to_raw
+from semantic.tags_extractor import copy_local_pdfs_to_raw
 
 
 def test_copy_local_pdfs_accepts_uppercase_extension(tmp_path):

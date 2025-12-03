@@ -3,8 +3,8 @@ import logging
 
 import pytest
 
-import timmykb.retriever as retriever
-from timmykb.retriever import QueryParams, with_config_or_budget
+import retriever as retriever
+from retriever import QueryParams, with_config_or_budget
 
 
 def test_with_config_or_budget_clamps_candidate_limit(
@@ -15,7 +15,7 @@ def test_with_config_or_budget_clamps_candidate_limit(
 
     # isola i log ed evita chiamate reali a fetch_candidates se il test dovesse evolvere
     caplog.set_level(logging.WARNING)
-    monkeypatch.setattr(retriever, "LOGGER", retriever.get_structured_logger("timmykb.retriever.test"))
+    monkeypatch.setattr(retriever, "LOGGER", retriever.get_structured_logger("retriever.test"))
 
     effective = with_config_or_budget(params, config)
 

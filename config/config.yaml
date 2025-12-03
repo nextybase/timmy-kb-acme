@@ -13,7 +13,7 @@ vision:
   snapshot_retention_days: 30
   strict_output: false
 ui:
-  skip_preflight: true
+  skip_preflight: false
   allow_local_only: true
   admin_local_mode: false
 retriever:
@@ -42,7 +42,7 @@ finance:
 client_name: prova srl
 semantic_mapping_yaml: timmy-kb-prova\semantic\tags_reviewed.yaml
 vision_statement_pdf: config/VisionStatement.pdf
-drive_folder_id: null
-drive_raw_folder_id: null
-drive_contrattualistica_folder_id: null
-drive_config_folder_id: null
+drive_folder_id: ''
+drive_raw_folder_id: ''
+drive_contrattualistica_folder_id: ''
+drive_config_folder_id: ''

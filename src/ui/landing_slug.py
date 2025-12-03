@@ -13,7 +13,7 @@ from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
-from timmykb.pre_onboarding import ensure_local_workspace_for_ui
+from pre_onboarding import ensure_local_workspace_for_ui
 from ui.utils.context_cache import get_client_context
 from ui.utils.workspace import workspace_root
 

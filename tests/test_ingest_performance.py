@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-import timmykb.ingest as ing
+import ingest as ing
 
 
 class _SpyEmb:

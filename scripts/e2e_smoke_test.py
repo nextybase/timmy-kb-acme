@@ -133,7 +133,7 @@ def main():
         need_gen = (not raw_dir.exists()) or (not any(raw_dir.rglob("*.pdf")))
         if need_gen:
             print("[INFO] RAW vuota: genero sandbox dummy…")
-            run([sys.executable, "-m", "timmykb.tools.gen_dummy_kb", "--slug", args.slug], check=True)
+            run([sys.executable, "-m", "tools.gen_dummy_kb", "--slug", args.slug], check=True)
 
     # 1) preflight
     check_optional_deps(args.lang)
@@ -143,7 +143,7 @@ def main():
         [
             sys.executable,
             "-m",
-            "timmykb.tag_onboarding",
+            "tag_onboarding",
             "--slug",
             args.slug,
             "--scan-raw",
@@ -160,7 +160,7 @@ def main():
         [
             sys.executable,
             "-m",
-            "timmykb.tag_onboarding",
+            "tag_onboarding",
             "--slug",
             args.slug,
             "--nlp",

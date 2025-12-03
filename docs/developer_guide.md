@@ -225,7 +225,7 @@ Checklist per le PR che riducono il debito:
 ```python
 # Lettura modello e chiamata Responses API
 from ui.config_store import get_vision_model
-from timmykb.ai.client_factory import make_openai_client
+from ai.client_factory import make_openai_client
 
 MODEL = get_vision_model()
 client = make_openai_client()

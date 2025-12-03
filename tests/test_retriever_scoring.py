@@ -6,9 +6,9 @@ from typing import Sequence
 
 import numpy as np
 
-import timmykb.retriever as r
+import retriever as r
+from retriever import QueryParams, search
 from tests.conftest import DUMMY_SLUG
-from timmykb.retriever import QueryParams, search
 
 
 class EmbedOne:

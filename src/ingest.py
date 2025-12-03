@@ -22,6 +22,8 @@ from glob import iglob
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
+# Importa kb_db in modo locale senza alias legacy
+from kb_db import insert_chunks
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
@@ -29,15 +31,6 @@ from pipeline.metrics import record_document_processed, start_metrics_server_onc
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span, start_root_trace
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
-
-# IMPORT alias: supporta sia import locale che pacchetto installato
-try:
-    from src.kb_db import insert_chunks  # type: ignore
-except ImportError:
-    try:
-        from timmykb.kb_db import insert_chunks  # type: ignore
-    except ImportError:  # pragma: no cover
-        from .kb_db import insert_chunks
 
 LOGGER = get_structured_logger("timmy_kb.ingest")
 

@@ -3,7 +3,7 @@ import pytest
 
 
 def test_emit_readmes_guard_when_drive_utils_missing(monkeypatch):
-    import timmykb.ui.services.drive_runner as dr
+    import ui.services.drive_runner as dr
 
     # Simula funzioni pipeline drive mancanti
     monkeypatch.setattr(dr, "get_drive_service", None, raising=False)
@@ -17,7 +17,7 @@ def test_emit_readmes_guard_when_drive_utils_missing(monkeypatch):
 
 
 def test_download_with_progress_guard_when_drive_utils_missing(monkeypatch):
-    import timmykb.ui.services.drive_runner as dr
+    import ui.services.drive_runner as dr
 
     # Simula funzioni pipeline drive mancanti
     monkeypatch.setattr(dr, "get_drive_service", None, raising=False)

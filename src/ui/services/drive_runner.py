@@ -128,12 +128,7 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     Ritorna il path del config locale aggiornato.
     Richiede .env valido (SERVICE_ACCOUNT_FILE, DRIVE_ID, ecc.).
     """
-    from timmykb.pre_onboarding import (  # import locale per evitare costi a import-time
-        _create_local_structure,
-        _drive_phase,
-        _prepare_context_and_logger,
-        _require_drive_utils,
-    )
+    from pre_onboarding import _create_local_structure, _drive_phase, _prepare_context_and_logger, _require_drive_utils
 
     ctx, logger, resolved_name = _prepare_context_and_logger(
         slug,

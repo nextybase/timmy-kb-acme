@@ -8,7 +8,7 @@ Quick demo script:
 2) Run the app:
    python -m streamlit run timmy_kb_coder.py
 3) Example ingest (from a Python REPL or a separate script):
-   >>> from timmykb.ingest import ingest_folder
+   >>> from ingest import ingest_folder
    >>> summary = ingest_folder(
    ...     slug="evagrin", scope="Timmy",
    ...     folder_glob="docs/**/*.md", version="v1",
@@ -36,13 +36,13 @@ from pipeline.logging_utils import get_structured_logger
 import pipeline.path_utils as ppath
 
 from semantic.types import EmbeddingsClient
-from timmykb.ingest import OpenAIEmbeddings
-from timmykb.kb_db import get_db_path, init_db
-from timmykb.prompt_builder import build_prompt
-from timmykb.retriever import QueryParams, search_with_config  # <-- usa la facade
-from timmykb.security.authorization import authorizer_session
-from timmykb.security.throttle import throttle_token_bucket
-from timmykb.vscode_bridge import read_response, write_request
+from ingest import OpenAIEmbeddings, ingest_folder
+from kb_db import get_db_path, init_db
+from prompt_builder import build_prompt
+from retriever import QueryParams, search_with_config  # <-- usa la facade
+from security.authorization import authorizer_session
+from security.throttle import throttle_token_bucket
+from vscode_bridge import read_response, write_request
 
 st: Any | None
 try:
