@@ -9,17 +9,17 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 - **OIDC (preferito)**: sostituisci le credenziali statiche con ruoli federati.
   Nel workflow `ci.yaml` trovi un blocco commentato che usa
   `aws-actions/configure-aws-credentials@<PIN_SHA>` con le variabili
-  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non Ã¨ piÃ¹ necessario salvare
+  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non A  piA1 necessario salvare
   access key nel repository.
-- **Fallback**: i secrets esistenti restano supportati; assicurati perÃ² di ruotarli periodicamente.
+- **Fallback**: i secrets esistenti restano supportati; assicurati perA2 di ruotarli periodicamente.
 
 ## OIDC config (local & CI)
 
 - Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
 - Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
-- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `scripts/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` è valorizzata.
+- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `scripts/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` e valorizzata.
 - Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
-- Per rendere la pipeline “hard” imposta in `config/config.yaml`:
+- Per rendere la pipeline hard imposta in `config/config.yaml`:
   ```yaml
   security:
     oidc:
@@ -79,7 +79,7 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 
 ## Protezione dei branch
 
-Configura la regola su `main` (GitHub â†’ Settings â†’ Branches):
+Configura la regola su `main` (GitHub a Settings a Branches):
 
 1. **Require a pull request before merging**
    - Minimum 1 approval
@@ -103,7 +103,7 @@ per applicare automaticamente la policy (non eseguire in CI).
 - Evita di serializzare payload completi o variabili di ambiente. In caso di dubbio,
   passa gli extra nel campo `extra={...}` dopo averli filtrati.
 - Per alert in tempo reale abilita un ricevitore (Slack/Sentry) o usa i campi `trace_id`/`span_id`
-  generati quando `TIMMY_OTEL_ENDPOINT` Ã¨ impostato (vedi `docs/observability.md`).
+  generati quando `TIMMY_OTEL_ENDPOINT` A  impostato (vedi `docs/observability.md`).
 
 ## Query rapide (Loki / Grafana)
 

@@ -10,7 +10,7 @@ La pipeline semantica genera e consuma tag durante l'onboarding dei documenti. I
 Adottiamo **SQLite (`semantic/tags.db`) come Single Source of Truth runtime** per tag, sinonimi e metadati. YAML rimane per l'authoring umano, mentre la UI e gli orchestratori leggono/scrivono solo attraverso le API `semantic.tags_*`/`storage.tags_store`.
 
 ## Alternative considerate
-- **YAML esclusivo**: semplice da versionare, ma non supporta query efficienti né garantisce l'atomicità richiesta da UI e NLP incrementale.
+- **YAML esclusivo**: semplice da versionare, ma non supporta query efficienti ne garantisce l'atomicita richiesta da UI e NLP incrementale.
 - **JSON/CSV + cache in memoria**: facile da manipolare ma richiede logica custom per stati consistenti e lock.
 - **Servizio esterno (es. Postgres)**: offre robustezza, ma introduce dipendenza infrastrutturale non necessaria per il deployment on-premise del cliente.
 

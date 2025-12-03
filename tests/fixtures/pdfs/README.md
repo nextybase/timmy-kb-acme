@@ -1,4 +1,4 @@
-Fixture PDF “cattivi” generate a runtime nei test.
+Fixture PDF cattivi generate a runtime nei test.
 
 Contenuti creati dal test `tests/test_smoke_e2e.py` usando reportlab:
 - nome lunghissimo

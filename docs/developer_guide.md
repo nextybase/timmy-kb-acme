@@ -1,6 +1,6 @@
-# Developer Guide — v1.0 Beta
+# Developer Guide  v1.0 Beta
 
-Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa versione è la base iniziale della documentazione tecnica: niente riferimenti a legacy o migrazioni passate.
+Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa versione e la base iniziale della documentazione tecnica: niente riferimenti a legacy o migrazioni passate.
 
 ---
 
@@ -8,22 +8,22 @@ Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa
 - **SSoT (Single Source of Truth)** per configurazioni, dipendenze e utility condivise.
 - **Logging strutturato centralizzato**, redazione automatica dei segreti, handler idempotenti.
 - **Path-safety** e **scritture atomiche** per ogni I/O nel workspace cliente.
-- **UI import‑safe** (nessun side‑effect a import‑time).
-- **Parità di firma** tra wrapper/facade UI e backend `pipeline.*`/`semantic.*`.
-- **Riproducibilità ambienti** tramite pin gestiti con `pip-tools` (requirements/constraints).
+- **UI import-safe** (nessun sideeffect a import-time).
+- **Parita di firma** tra wrapper/facade UI e backend `pipeline.*`/`semantic.*`.
+- **Riproducibilita ambienti** tramite pin gestiti con `pip-tools` (requirements/constraints).
 
 ---
 
 ## Architettura in breve
 - **Pipeline** (`pipeline.*`): funzioni SSoT per I/O, path-safety, logging, semantica e orchestrazione.
 - **UI/Service Layer** (`src/ui/*`): presenta funzioni e schermate Streamlit, delega alla pipeline senza cambiare semantica.
-- **Semantic** (`semantic.*`): conversione PDF→Markdown, arricchimento frontmatter, generazione `SUMMARY.md`/`README.md`.
+- **Semantic** (`semantic.*`): conversione PDFMarkdown, arricchimento frontmatter, generazione `SUMMARY.md`/`README.md`.
 - **Workspace cliente**: `output/timmy-kb-<slug>/` con sottocartelle `raw/`, `book/`, `semantic/`, `config/`, `logs/`.
 
 ---
 
 ## Configurazione (SSoT)
-Il file `config/config.yaml` è la fonte unica per i parametri condivisi. Esempio per LLM **diretti**:
+Il file `config/config.yaml` e la fonte unica per i parametri condivisi. Esempio per LLM **diretti**:
 
 ```yaml
 vision:
@@ -34,7 +34,7 @@ vision:
 
 **Regole:**
 - Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `vision.model`.
-- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `vision.assistant_id_env`.
+- Il flusso **Assistant** usa l'ID letto da l'env il cui nome e in `vision.assistant_id_env`.
 
 Getter consigliato lato UI:
 
@@ -76,20 +76,20 @@ log.info("ui.preview.open", extra={"slug": "acme", "page": "preview"})
 
 **Caratteristiche:**
 - Output in `output/timmy-kb-<slug>/logs/`.
-- Redazione automatica di token/segreti quando `LOG_REDACTION` è attivo.
-- Handler idempotenti (console/file), formatter key‑value, `run_id` opzionale.
+- Redazione automatica di token/segreti quando `LOG_REDACTION` e attivo.
+- Handler idempotenti (console/file), formatter key-value, `run_id` opzionale.
 
-**Regola d’uso nei servizi/UI:** il logger viene creato per modulo e passato in call‑chain dove necessario, evitando stati globali.
+**Regola d'uso nei servizi/UI:** il logger viene creato per modulo e passato in call-chain dove necessario, evitando stati globali.
 
 
 ## Frontmatter (SSoT)
 Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
 `pipeline.frontmatter_utils`:
 
-- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l’SSoT.
-- `read_frontmatter(base, path, use_cache=True)` effettua path‑safety e caching (invalidazione su mtime/size).
-- Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat già presenti.
-- La cache del frontmatter `_FRONTMATTER_CACHE` è ora LRU bounded (256 entry): non affidarti a cache “infinite” e, nei run lunghi/Streamlit, usa `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
+- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono lSSoT.
+- `read_frontmatter(base, path, use_cache=True)` effettua path-safety e caching (invalidazione su mtime/size).
+- Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat gia presenti.
+- La cache del frontmatter `_FRONTMATTER_CACHE` e ora LRU bounded (256 entry): non affidarti a cache infinite e, nei run lunghi/Streamlit, usa `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
 
 Esempio rapido:
 ```python
@@ -121,7 +121,7 @@ safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
 - `search(...)` restituisce `list[SearchResult]` tipizzata (`content`, `meta`, `score`).
 - Hardening errori: le eccezioni di embedding vengono intercettate e loggate come `retriever.query.embed_failed`, con ritorno `[]` per evitare crash negli orchestratori UI/CLI.
 - Throttling: il guard emette `retriever.throttle.deadline` quando il budget latenza si esaurisce; `candidate_limit` configurato viene clampato e loggato.
-- Il budget di latenza (`throttle.latency_budget_ms`) ora viene verificato prima di embedding e fetch dal DB: i call-site devono considerare `[]` anche come “timeout/errore gestito” e loggare l’evento utente se necessario.
+- Il budget di latenza (`throttle.latency_budget_ms`) ora viene verificato prima di embedding e fetch dal DB: i call-site devono considerare `[]` anche come timeout/errore gestito e loggare l'evento utente se necessario.
 
 ---
 
@@ -132,15 +132,15 @@ safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
 
 ---
 
-## Wrapper & Facade: parità di firma (SSoT)
+## Wrapper & Facade: parita di firma (SSoT)
 Qualsiasi wrapper UI che delega a `pipeline.*`/`semantic.*` **mantiene la stessa firma** (nomi, posizione, default). Nessuna modifica semantica dei default.
 
 **Linee guida:**
 1. Riesponi le nuove feature del backend **nello stesso commit** (es. nuovi flag `fsync`, `retry`, `atomic`).
-2. Copertura con **test di parità firma** e **test pass‑through** dei parametri.
+2. Copertura con **test di parita firma** e **test passthrough** dei parametri.
 
 ```python
-# Esempio test di parità firma
+# Esempio test di parita firma
 import importlib, inspect
 
 def _sig(fn):  # rappresentazione semplice della firma
@@ -154,7 +154,7 @@ def test_safe_write_text_signature_matches_backend():
 
 ---
 
-## Gestione dipendenze (pip‑tools)
+## Gestione dipendenze (pip-tools)
 - I pin vivono nei file generati `requirements*.txt` e `constraints.txt`.
 - Modifichi **solo** i sorgenti `requirements*.in` e rigeneri con `pip-compile`.
 
@@ -170,11 +170,11 @@ pip-compile requirements-dev.in
 pip-compile requirements-optional.in
 ```
 
-**Extras opzionali** (ambienti non pin‑locked): `pip install .[drive]` oppure `pip install -e ".[drive]"` in sviluppo.
+**Extras opzionali** (ambienti non pin-locked): `pip install .[drive]` oppure `pip install -e ".[drive]"` in sviluppo.
 
 ---
 
-## Qualità & CI
+## Qualita & CI
 - Lint/format obbligatori: `ruff`, `black`, `isort` (line-length 120).
 - Type checking consigliato: `mypy`/`pyright`.
 - Hook pre-commit: format/lint prima del commit; smoke test in CI.
@@ -188,11 +188,11 @@ make ci-safe     # qa-safe + pytest
 ---
 
 ## Test: piramide e casi minimi
-- **Unit** → **contract/middle** → **smoke E2E** (dataset dummy; nessuna rete).
+- **Unit**  **contract/middle**  **smoke E2E** (dataset dummy; nessuna rete).
 - Casi minimi obbligatori:
   - Slug invalidi (devono essere scartati/validati).
   - Traversal via symlink in `raw/` (gli helper non devono attraversare).
-  - Parità di firma wrapper UI ↔ backend e pass‑through dei parametri.
+  - Parita di firma wrapper UI  backend e passthrough dei parametri.
   - Invarianti su `book/` (presenza `README.md`/`SUMMARY.md` dopo onboarding).
 
 ---
@@ -208,16 +208,16 @@ make ci-safe     # qa-safe + pytest
 ## Typing coverage & debt
 `mypy --config-file mypy.ini src/pipeline src/semantic src/ui` deve essere pulito in CI (`strict` per namespace). I blocchi ancora esclusi dalla copertura formale sono:
 
-- `src/adapters/**` – integrazioni esterne e client API da rifinire con TypedDict/Protocol.
-- `src/tools/**` – script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
-- `scripts/**` – tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
+- `src/adapters/**`  integrazioni esterne e client API da rifinire con TypedDict/Protocol.
+- `src/tools/**`  script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
+- `scripts/**`  tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
 
 Checklist per le PR che riducono il debito:
 1. Isolare un sotto-scope (max ~30 righe modificate) e rendere le funzioni import-safe.
 2. Introdurre `dataclass`/`TypedDict`/`Protocol` al posto di `dict[str, Any]`/`Any` nelle API condivise.
 3. Eliminare i cast ridondanti e aggiungere annotazioni alle entrypoint pubbliche.
-4. Eseguire `mypy --config-file mypy.ini src/<scope>` e aggiornare `mypy.ini` solo quando il comando è pulito.
-5. Documentare nel changelog interno la sezione migrata (link alla PR e note di compatibilità).
+4. Eseguire `mypy --config-file mypy.ini src/<scope>` e aggiornare `mypy.ini` solo quando il comando e pulito.
+5. Documentare nel changelog interno la sezione migrata (link alla PR e note di compatibilita).
 
 ---
 

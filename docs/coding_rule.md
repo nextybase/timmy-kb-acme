@@ -1,8 +1,8 @@
-# Coding Rules — v1.0 Beta
+# Coding Rules  v1.0 Beta
 
 > **TL;DR:** consulta queste regole prima di toccare pipeline o UI: usa gli helper SSoT, niente side-effect a import-time, logging e path-safety sono vincolanti.
 
-Regole di sviluppo per **Timmy KB**. Questa è la base iniziale: nessun riferimento a legacy o migrazioni. Obiettivo: codice coerente, sicuro e riproducibile.
+Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimento a legacy o migrazioni. Obiettivo: codice coerente, sicuro e riproducibile.
 
 ---
 
@@ -11,15 +11,15 @@ Regole di sviluppo per **Timmy KB**. Questa è la base iniziale: nessun riferime
 - **Logging strutturato centralizzato** con redazione segreti.
 - **Path-safety** e **scritture atomiche** su ogni file.
 - **UI import-safe** (nessun side-effect a import-time).
-- **Parità di firma** dei wrapper UI rispetto al backend (`pipeline.*`, `semantic.*`).
+- **Parita di firma** dei wrapper UI rispetto al backend (`pipeline.*`, `semantic.*`).
 
 ---
 
 ## 2) Stile & Convenzioni
-- **Python ≥ 3.11**, tipizzazione obbligatoria per API pubbliche e funzioni non-trivial.
+- **Python  3.11**, tipizzazione obbligatoria per API pubbliche e funzioni non-trivial.
 - **Evita `Any`** salvo casi motivati e documentati (commento o docstring dedicata).
 - Docstring **Google style** o **PEP257**; `Raises:` per eccezioni rilevanti.
-- **Import order**: stdlib → third-party → locali; usa `isort`/`ruff`.
+- **Import order**: stdlib  third-party  locali; usa `isort`/`ruff`.
 - **Line length**: 120.
 - Nomi chiari e stabili; evita abbreviazioni opache.
 - Non introdurre global state; preferisci dipendenze **iniettate** (es. logger, base_dir).
@@ -34,14 +34,14 @@ def load_reviewed_vocab(base_dir: Path, log) -> dict[str, str]:
       log: Logger strutturato.
 
     Returns:
-      Mappa canone→alias.
+      Mappa canonealias.
     """
 ```
 
 ---
 
 ## 2bis) API di modulo
-- Esporta l’interfaccia pubblica esplicitando `__all__ = [...]` quando il modulo è consumato da terzi.
+- Esporta l'interfaccia pubblica esplicitando `__all__ = [...]` quando il modulo e consumato da terzi.
 - Per i parametri contestuali complessi preferisci `Protocol` o `TypedDict` locali per descrivere il contratto.
 - Mantieni chiara la separazione tra API pubbliche e helper `_private`.
 
@@ -51,7 +51,7 @@ def load_reviewed_vocab(base_dir: Path, log) -> dict[str, str]:
 - Usa **solo** `pipeline.logging_utils.get_structured_logger`.
 - **Vietati**: `print`, `logging.basicConfig`, `logging.getLogger(...)`.
 - Log in `output/timmy-kb-<slug>/logs/` con `run_id` opzionale.
-- Redazione automatica dei segreti quando `LOG_REDACTION` è attivo.
+- Redazione automatica dei segreti quando `LOG_REDACTION` e attivo.
 - Formatter **key=value**, handler **idempotenti** (console/file).
 
 Esempio:
@@ -66,7 +66,7 @@ log.info("semantic.index.start", extra={"slug": "acme"})
 
 ---
 
-## 4) Dipendenze (pip‑tools)
+## 4) Dipendenze (pip-tools)
 - Pin esclusivamente in `requirements*.txt`/`constraints.txt` **generati** da `pip-compile`.
 - Modifichi i sorgenti `requirements*.in` e rigeneri con:
 ```bash
@@ -82,13 +82,13 @@ pip install -r requirements-optional.txt
 ```
 - **Extras** per ambienti non pin-locked: `pip install .[drive]` o `pip install -e ".[drive]"` (dev).
 
-**Policy**: niente `pip install` ad‑hoc nei documenti o script; nessun pin manuale in `pyproject.toml` oltre al minimo necessario.
+**Policy**: niente `pip install` adhoc nei documenti o script; nessun pin manuale in `pyproject.toml` oltre al minimo necessario.
 
 ---
 
 ## 5) I/O sicuro & Path-safety
 - Deriva i path **solo** dagli helper della pipeline; non costruire stringhe manualmente verso `output/`.
-- Valida e risolvi i path prima dell’uso; scritture **atomiche**.
+- Valida e risolvi i path prima dell'uso; scritture **atomiche**.
 - Mai seguire symlink non attesi in `raw/`/`book/`.
 
 Esempio:
@@ -105,7 +105,7 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=Fa
 ## 6) Error handling
 - Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`, `PushError`).
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
-- Nei moduli interni è vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
+- Nei moduli interni e vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
 - Mappa gli esiti in **exit codes** standard laddove previsto (0/2/30/40).
 
 ---
@@ -118,12 +118,12 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=Fa
 
 ---
 
-## 8) Test & Qualità
-- **Piramide**: unit → contract/middle → smoke E2E (dataset dummy, senza rete).
+## 8) Test & Qualita
+- **Piramide**: unit  contract/middle  smoke E2E (dataset dummy, senza rete).
 - Casi minimi **obbligatori**:
-  - Slug invalidi → rifiutati/normalizzati.
-  - Traversal via symlink in `raw/` → negato.
-  - Parità di firma wrapper UI ↔ backend.
+  - Slug invalidi  rifiutati/normalizzati.
+  - Traversal via symlink in `raw/`  negato.
+  - Parita di firma wrapper UI  backend.
   - Invarianti su `book/` (solo `.md` tracciati; `README.md`/`SUMMARY.md` sempre presenti; eventuali `.md.fp` restano locali e non vengono commessi).
 - Tooling: `ruff`, `black`, `isort`; type-check con `mypy`/`pyright`.
 - Hook:
@@ -137,13 +137,13 @@ make ci-safe
 
 ## 9) Sicurezza & Segreti
 - Mai loggare token o credenziali **in chiaro**; affidati alla redazione automatica.
-- Le chiavi si leggono da ENV (`OPENAI_API_KEY`); altri meccanismi legacy non sono più supportati.
+- Le chiavi si leggono da ENV (`OPENAI_API_KEY`); altri meccanismi legacy non sono piu supportati.
 - Evita di serializzare payload sensibili in file temporanei non necessari.
 
 ---
 
 ## 10) Git & PR Policy
-- Commit **atomici**, messaggi all’imperativo presente (EN o IT).
+- Commit **atomici**, messaggi all'imperativo presente (EN o IT).
 - PR piccole con descrizione dello scope e checklist QA.
 - Ogni modifica di comportamento va coperta da test; documentazione aggiornata **nello stesso PR**.
 - Branch di lavoro: `feat/*`, `fix/*`, `chore/*`, `docs/*`.
@@ -189,7 +189,7 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True)
 log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ```
 
-> Quando esporti `tags_reviewed.yaml` da database (`export_tags_yaml_from_db`) oppure quando la UI genera il file YAML, la piattaforma valida tutti i path: workspace -> `semantic/` -> `tags_reviewed.yaml` -> `tags.db`. Se il DB vive fuori dal workspace o non corrisponde al YAML il flusso si blocca con `ConfigError`, così nessun export può scavalcare la sicurezza di path.
+> Quando esporti `tags_reviewed.yaml` da database (`export_tags_yaml_from_db`) oppure quando la UI genera il file YAML, la piattaforma valida tutti i path: workspace -> `semantic/` -> `tags_reviewed.yaml` -> `tags.db`. Se il DB vive fuori dal workspace o non corrisponde al YAML il flusso si blocca con `ConfigError`, cosi nessun export puo scavalcare la sicurezza di path.
 
 ---
 
@@ -197,5 +197,5 @@ log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 - [ ] Logging con `get_structured_logger` (niente `print/basicConfig`).
 - [ ] Path validati con helper e scritture atomiche.
 - [ ] Test aggiornati/aggiunti (unit/contract/smoke).
-- [ ] Requirements rigenerati se toccate le dipendenze (`*.in` → `pip-compile`).
+- [ ] Requirements rigenerati se toccate le dipendenze (`*.in`  `pip-compile`).
 - [ ] Documentazione aggiornata (README / Developer Guide / Coding Rules).

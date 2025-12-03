@@ -1,4 +1,4 @@
-# Fase 1 – Fondamenta e copertura
+# Fase 1  Fondamenta e copertura
 
 ## Moduli presidio regressioni
 - `tests/semantic/test_vision_provision.py`: nuovo caso `prepared_prompt` per bloccare letture PDF indesiderate in `provision_from_vision`.

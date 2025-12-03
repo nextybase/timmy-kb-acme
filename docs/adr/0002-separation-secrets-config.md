@@ -1,7 +1,7 @@
-# 0002 – Separare segreti da configurazione applicativa
+# 0002  Separare segreti da configurazione applicativa
 
 ## Stato
-Accepted – 25/10/2025
+Accepted  25/10/2025
 
 ## Contesto
 - Le pipeline Timmy-KB richiedono sia **valori sensibili** (token, API key, ID assistant) sia **parametri di business/UX** (modello da usare, soglie retriever, preferenze UI).
@@ -10,9 +10,9 @@ Accepted – 25/10/2025
 
 ## Decisione
 1. I **segreti vivono soltanto nel `.env`** (o in un vault esterno).
-   Il codice non può serializzarli nei config YAML.
+   Il codice non puo serializzarli nei config YAML.
 2. `config/config.yaml` rimane la SSoT per le impostazioni applicative e contiene solo riferimenti `_env` ai segreti.
-3. `pipeline.settings.Settings` diventa l’unico entrypoint di lettura:
+3. `pipeline.settings.Settings` diventa l'unico entrypoint di lettura:
    - espone accessor tipizzati;
    - fornisce `resolve_env_ref` e `get_secret`;
    - offre un catalogo centralizzato di variabili attese (`env_catalog()`).
@@ -22,10 +22,10 @@ Accepted – 25/10/2025
    - **Secrets Healthcheck** (stato delle ENV senza mostrare i valori).
 
 ## Trade-off
-- ✅ **Sicurezza**: niente segreti nel repository, verifica automatica in CI.
-- ✅ **DX**: `Settings` uniforma l’accesso a config/env; i test possono usare marker dedicati.
-- ⚠️ **Overhead**: chi modifica parametri deve aggiornare sia YAML sia `.env` (ma con tooling guidato).
-- ⚠️ **Compatibilità**: i consumer legacy devono passare dal wrapper (`ClientContext.settings`), pena failure dei nuovi test.
+-  **Sicurezza**: niente segreti nel repository, verifica automatica in CI.
+-  **DX**: `Settings` uniforma l'accesso a config/env; i test possono usare marker dedicati.
+-  **Overhead**: chi modifica parametri deve aggiornare sia YAML sia `.env` (ma con tooling guidato).
+-  **Compatibilita**: i consumer legacy devono passare dal wrapper (`ClientContext.settings`), pena failure dei nuovi test.
 
 ## Conseguenze
 - Nuova documentazione: [docs/configurazione.md](../configurazione.md) e sezione "Settings & guard segreti" nella test suite.

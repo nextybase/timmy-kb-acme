@@ -32,7 +32,7 @@ Usa la UI per:
 streamlit run onboarding_ui.py
 ```
 
-Il file `onboarding_ui.py` setta automaticamente `REPO_ROOT_DIR` sulla directory del repository prima di importare la UI, quindi non serve più un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
+Il file `onboarding_ui.py` setta automaticamente `REPO_ROOT_DIR` sulla directory del repository prima di importare la UI, quindi non serve piu un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
 ### Accesso rapido alla Guida (sidebar)
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
@@ -96,38 +96,38 @@ Provisioning struttura su **Drive**:
 
 ---
 
-> ## Pagina Admin – **Configurazione** (`config/config.yaml`)
+> ## Pagina Admin  **Configurazione** (`config/config.yaml`)
 >
-> La pagina **Configurazione** (menu: **Admin → Configurazione**) permette di leggere e modificare in modo guidato il file globale `config/config.yaml`, senza passare da editor esterni.
+> La pagina **Configurazione** (menu: **Admin  Configurazione**) permette di leggere e modificare in modo guidato il file globale `config/config.yaml`, senza passare da editor esterni.
 >
 > - **Scope**
 >   Le modifiche agiscono sulla configurazione *globale* di Timmy KB (istanza/progetto), non sul singolo workspace cliente.
->   I segreti (token, password, ecc.) restano fuori da questa pagina e continuano a essere gestiti tramite variabili d’ambiente / Secret Manager.
+>   I segreti (token, password, ecc.) restano fuori da questa pagina e continuano a essere gestiti tramite variabili d'ambiente / Secret Manager.
 >
 > - **Struttura della pagina**
 >   Ogni chiave di primo livello del file (`openai`, `vision`, `ui`, `retriever`, `security`, ecc.) viene mostrata come un **box apri/chiudi** con:
->   - un **titolo descrittivo** (es. “OpenAI e LLM”, “Sicurezza e OIDC”…);
+>   - un **titolo descrittivo** (es. OpenAI e LLM, Sicurezza e OIDC...);
 >   - una **breve descrizione** che spiega il significato operativo di quella sezione.
 >
 > - **Modifica dei campi**
->   All’interno di ogni box:
+>   Allinterno di ogni box:
 >   - le **sottovoci scalari** (boolean, numeri, stringhe) sono visualizzate come **righe etichetta + input** sulla stessa linea, per facilitare la scansione visiva;
 >   - le **sottosezioni annidate** (es. `retriever.throttle`, `security.oidc`) vengono mostrate come piccoli blocchi logici, con le singole opzioni modificate tramite input dedicati;
->   - strutture più complesse (liste o dict profondi) sono editabili tramite una **textarea YAML**: il contenuto viene ri-parsato in automatico quando si salva.
+>   - strutture piu complesse (liste o dict profondi) sono editabili tramite una **textarea YAML**: il contenuto viene ri-parsato in automatico quando si salva.
 >
 > - **Salvataggio e validazione**
->   Il pulsante **“💾 Salva configurazione”**:
+>   Il pulsante ** Salva configurazione**:
 >   - serializza lo stato corrente della form in YAML;
 >   - sovrascrive `config/config.yaml` usando la scrittura sicura della pipeline (file temporaneo + rename);
 >   - in caso di errore di parsing o scrittura mostra un messaggio esplicito a schermo e logga il problema.
->   Non è necessario riavviare l’app Streamlit, ma alcune modifiche potrebbero richiedere un nuovo preflight o un nuovo run del client per avere effetto completo.
+>   Non e necessario riavviare lapp Streamlit, ma alcune modifiche potrebbero richiedere un nuovo preflight o un nuovo run del client per avere effetto completo.
 >
 > - **Quando usare questa pagina**
 >   Usa **Configurazione** per:
->   - attivare/disattivare funzionalità globali (es. preflight UI, retriever, logging);
+>   - attivare/disattivare funzionalita globali (es. preflight UI, retriever, logging);
 >   - regolare parametri operativi (latenza, parallelismo, timeout, cache);
 >   - allineare la configurazione ai diversi ambienti (dev/stage/prod) prima di passare a test o onboarding reali.
->   Per modifiche avanzate o interventi strutturali sul formato del file resta consigliato l’uso di editor dedicati o della pagina **Config Editor**.
+>   Per modifiche avanzate o interventi strutturali sul formato del file resta consigliato l'uso di editor dedicati o della pagina **Config Editor**.
 
 ---
 
@@ -175,13 +175,13 @@ flowchart TD
 
 > Pseudocode ingestion: vedi `storage.tags_store.import_tags_yaml_to_db`.
 
-> **SSoT runtime:** `tags.db` (SQLite) è la fonte di verità per i tag canonicali. La pipeline interrompe l’esecuzione con `ConfigError` se `semantic/tags.db` risulta mancante o vuoto e la UI lo segnala invitando a rigenerare il vocabolario (`semantic_onboarding`). `tags_reviewed.yaml` rimane esclusivamente un artefatto di authoring (per review umana), mentre tutti i consumatori runtime leggono da `semantic/tags.db`.
+> **SSoT runtime:** `tags.db` (SQLite) e la fonte di verita per i tag canonicali. La pipeline interrompe lesecuzione con `ConfigError` se `semantic/tags.db` risulta mancante o vuoto e la UI lo segnala invitando a rigenerare il vocabolario (`semantic_onboarding`). `tags_reviewed.yaml` rimane esclusivamente un artefatto di authoring (per review umana), mentre tutti i consumatori runtime leggono da `semantic/tags.db`.
 
 ## 5) Gestione contenuti -> **Gestisci cliente**
 
 **Nota operativa**: prima di lanciare gli arricchimenti assicurati che `raw/<categoria>` contenga i PDF (li puoi scaricare da Drive o copiarli manualmente). Se modifichi le cartelle locali oppure `tags_reviewed.yaml`, premi il pulsante **Ricarica vista Gestisci cliente** (in alto) per rinfrescare i controlli ed evitare stati incoerenti.
 
-Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Drive → locale`, `Arricchimento semantico + revisione tags`, `Genera README in raw (Drive)`. Nella sezione centrale viene anche mostrato quale backend NLP è attivo (`TAGS_NLP_BACKEND`, SpaCy di default) e viene ricordato che l'euristica viene sempre eseguita in aggiunta.
+Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Drive  locale`, `Arricchimento semantico + revisione tags`, `Genera README in raw (Drive)`. Nella sezione centrale viene anche mostrato quale backend NLP e attivo (`TAGS_NLP_BACKEND`, SpaCy di default) e viene ricordato che l'euristica viene sempre eseguita in aggiunta.
 
 
 **Albero Drive**: naviga \`\<DRIVE\_ID>/\` e verifica le cartelle.
@@ -202,7 +202,7 @@ Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Driv
 - **Avanzamento**: barra/progresso su **tutti i candidati** (anche quelli gia' presenti); al termine mostra i **nuovi file creati**.
 - **README generati**: i `README.pdf` presenti nelle cartelle potrebbero comparire nella lista; **deselezionali** se non ti servono in locale. La sincronizzazione locale (espander "Scarica PDF da Drive -> locale") scarica **solo i PDF** e lascia i README su Drive.
 - **Rileva PDF in raw/**: riesegue la **sola scansione locale** per aggiornare lo stato (utile se hai copiato manualmente dei file).
-- **Cancella cliente**: il cleanup (rimozione workspace locale/Drive/DB) è ora controllato nella pagina **Config Editor** (Tools → Configurazione); si apre un wizard con conferma prima di applicare la cancellazione.
+- **Cancella cliente**: il cleanup (rimozione workspace locale/Drive/DB) e ora controllato nella pagina **Config Editor** (Tools  Configurazione); si apre un wizard con conferma prima di applicare la cancellazione.
 
 ---
 
@@ -213,7 +213,7 @@ Prima di usare i pulsanti controlla il riquadro **Prerequisiti**:
 - **Avvia arricchimento semantico** viene abilitato solo se il servizio `ui.services.tags_adapter` e' disponibile oppure se hai impostato `TAGS_MODE=stub`. In modalita' stub l'azione apre direttamente l'editor YAML senza tentare la pipeline AI.
 - **Abilita** (pubblicazione `tags_reviewed.yaml`) resta disattivato se il servizio non e' attivo e non stai usando lo stub; in questo caso la UI mostra l'help per installare l'adapter o abilitare la modalita' stub.
 - In modalita' stub lo YAML viene generato da zero (`DEFAULT_TAGS_YAML`) prima dell'import nel DB. Se il DB resta vuoto lo stato cliente torna a **pronto**; se vengono caricati termini passa ad **arricchito** e viene svuotata la cache di gating.
-- L'esportazione `tags_reviewed.yaml` richiede che `semantic/tags.db` esista sotto il workspace cliente; il percorso (workspace -> semantic -> YAML/DB) è validato con `ensure_within_and_resolve` prima di scrivere. Eventuali mismatch (DB fuori workspace o `tags.db` diverso) provocano errori di configurazione e impediscono la pubblicazione.
+- L'esportazione `tags_reviewed.yaml` richiede che `semantic/tags.db` esista sotto il workspace cliente; il percorso (workspace -> semantic -> YAML/DB) e validato con `ensure_within_and_resolve` prima di scrivere. Eventuali mismatch (DB fuori workspace o `tags.db` diverso) provocano errori di configurazione e impediscono la pubblicazione.
 
 Esegui nell'ordine (ripetibile per nuovi PDF):
 
@@ -223,18 +223,18 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
    - **Idempotenza:** genera/aggiorna solo i file nuovi o modificati; non tocca gli altri.
    - **Note/Errore tipico:** PDF protetti o corrotti vengono segnalati nei log e saltati; gli altri proseguono.
 2. **Arricchisci frontmatter**
-   - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` è ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB è lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
+   - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` e ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB e lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
    - **Telemetria:** l'arricchimento emette `semantic.book.frontmatter` con il numero di file aggiornati (UI/CLI).
-   - **Entità e relazioni:** se in `semantic/tags.db` sono presenti entità con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entità definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entità e le relazioni del mapping Vision-only.
+   - **Entita e relazioni:** se in `semantic/tags.db` sono presenti entita con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entita definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entita e le relazioni del mapping Vision-only.
     - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
-> **DIKW in azione:** i PDF in `raw/` più i tag grezzi rappresentano i **Data**, la conversione PDF→Markdown più l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker è la vista finale sulla Knowledge disponibile.
+> **DIKW in azione:** i PDF in `raw/` piu i tag grezzi rappresentano i **Data**, la conversione PDFMarkdown piu l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker e la vista finale sulla Knowledge disponibile.
 
 3. **Costruisci il Knowledge Graph dei tag (Tag KG Builder)**
     - **Cosa fa:** legge `semantic/tags_raw.json`, invoca la tool call `build_tag_kg` con namespace (puoi scegliere di usare lo slug o un valore custom), e pubblica `semantic/kg.tags.json` + `semantic/kg.tags.md`.
-    - **Output:** `kg.tags.json` (machine-first) più `kg.tags.md` (human-friendly) utilizzati dal team per revisioni e prossimi ingest/embedding.
+    - **Output:** `kg.tags.json` (machine-first) piu `kg.tags.md` (human-friendly) utilizzati dal team per revisioni e prossimi ingest/embedding.
     - **Quando rilanciarlo:** dopo aver generato/aggiornato i tag raw (o quando serve una nuova versione del grafo).
-    - **Dove:** usa il pannello *Knowledge Graph dei tag* nella pagina **Gestisci cliente** oppure il CLI dedicato `py src/kg_build.py --slug <slug>` (lo step è idempotente finché `tags_raw.json` non cambia).
+    - **Dove:** usa il pannello *Knowledge Graph dei tag* nella pagina **Gestisci cliente** oppure il CLI dedicato `py src/kg_build.py --slug <slug>` (lo step e idempotente finche `tags_raw.json` non cambia).
 4. **Genera README/SUMMARY**
    - **SUMMARY.md:** ricostruisce l'indice navigabile di `book/` in base a cartelle e file presenti.
    - **README.md:** crea/aggiorna il README radice e, ove previsto, i README di categoria usando **ambito**/**descrizione** dal mapping.
@@ -245,13 +245,13 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
      della sessione UI. Il vocabolario arriva da `semantic.vocab_loader.load_reviewed_vocab`.
      Se vuoi replicare il comportamento da terminale trovi un esempio completo nella
      [User Guide](user_guide.md#quick-start----terminale-orchestratori).
-   - **Gating preview:** la UI invoca `semantic.book_readiness.check_book_dir` per assicurarsi che `book/` contenga `README.md`, `SUMMARY.md` e almeno un file Markdown di contenuto prima di abilitare la preview Docker; ora la disponibilità della preview riflette la **Knowledge** pronta anziché la sola presenza di PDF in `raw/`.
+   - **Gating preview:** la UI invoca `semantic.book_readiness.check_book_dir` per assicurarsi che `book/` contenga `README.md`, `SUMMARY.md` e almeno un file Markdown di contenuto prima di abilitare la preview Docker; ora la disponibilita della preview riflette la **Knowledge** pronta anziche la sola presenza di PDF in `raw/`.
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
-   - **Log stub:** puoi impostare `PREVIEW_LOG_DIR` con path relativi o assoluti; se il percorso non è raggiungibile la UI mostra un warning con il motivo e salva comunque i log in `logs/preview/` dentro al repository.
+   - **Log stub:** puoi impostare `PREVIEW_LOG_DIR` con path relativi o assoluti; se il percorso non e raggiungibile la UI mostra un warning con il motivo e salva comunque i log in `logs/preview/` dentro al repository.
 
-- La pagina “Semantica” è accessibile da stato **pronto** in poi (con PDF in `raw/`).
+- La pagina Semantica e accessibile da stato **pronto** in poi (con PDF in `raw/`).
 - La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.
 
 ---
@@ -276,7 +276,7 @@ Al momento il push GitHub viene orchestrato dalla CLI (`py src/onboarding_full.p
 - **cartelle\_raw\.yaml**: riflette la struttura di **raw/** + **contrattualistica/**.\
   In scenari standard non toccarlo a mano; se cambi le aree, mantieni coerenza.
 
-> **Cleanup:** la cancellazione guidata del workspace (locale + Drive) si trova ora nella pagina **Config Editor** (Tools → Configurazione); usa il pulsante “Cancella cliente…” in fondo per avviare il wizard irreversibile con conferma.
+> **Cleanup:** la cancellazione guidata del workspace (locale + Drive) si trova ora nella pagina **Config Editor** (Tools  Configurazione); usa il pulsante Cancella cliente... in fondo per avviare il wizard irreversibile con conferma.
 
 **Retriever** (opzionale)
 

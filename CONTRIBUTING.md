@@ -1,6 +1,6 @@
-# Contributing — Timmy-KB
+# Contributing  Timmy-KB
 
-Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al codice o alla documentazione deve mantenere **coerenza, stabilità e tracciabilità**. Le regole qui indicate sono vincolanti per pull request, issue e revisioni.
+Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al codice o alla documentazione deve mantenere **coerenza, stabilita e tracciabilita**. Le regole qui indicate sono vincolanti per pull request, issue e revisioni.
 
 ---
 
@@ -17,7 +17,7 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 
 - Seguire le [Coding Rules](coding_rule.md).
 - Tipizzazione obbligatoria, docstring brevi, logger strutturati.
-- Nessun `print()`, nessuna variabile d’ambiente hardcoded.
+- Nessun `print()`, nessuna variabile d'ambiente hardcoded.
 - Aggiornare sempre documentazione correlata (README, docs/).
 
 ---
@@ -51,7 +51,7 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
   - `docs/developer_guide.md`
   - `docs/architecture.md`
   - `docs/coding_rule.md`
-- La documentazione è **bloccante** per il merge.
+- La documentazione e **bloccante** per il merge.
 
 ---
 
@@ -59,5 +59,5 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 
 - In caso di dubbio, aprire prima una **discussion**.
 - Le modifiche devono essere **retro-compatibili** salvo pianificato diversamente.
-- La qualità del codice e la coerenza con le guide valgono quanto la funzionalità stessa.
+- La qualita del codice e la coerenza con le guide valgono quanto la funzionalita stessa.
 - Tutti i contributori devono attenersi a [LICENSE](LICENSE), [Code of Conduct](CODE_OF_CONDUCT.md) e [Security Policy](SECURITY.md).

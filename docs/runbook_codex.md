@@ -15,7 +15,7 @@
   Vedi anche README -> *Prerequisiti rapidi*.
 - Credenziali: `OPENAI_API_KEY`, `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
 - Pre-commit: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
-- Preflight UI: controlla anche che UI e pacchetto `timmykb` provengano dallo stesso root (repo vs site-packages); se c'è mismatch, attiva il venv corretto ed esegui `pip install -e .` dal root del repo.
+- Preflight UI: controlla anche che UI e pacchetto `timmykb` provengano dallo stesso root (repo vs site-packages); se c'e mismatch, attiva il venv corretto ed esegui `pip install -e .` dal root del repo.
 
 **Ambiente**
 ```bash
@@ -62,7 +62,7 @@ ui:
 - Il flusso **Assistant** usa l'ID letto da `vision.assistant_id_env` (ENV).
 - La UI legge il modello tramite `get_vision_model()` (SSoT).
 - Il retriever applica i limiti da `retriever.throttle.*` (candidate_limit, latency, parallelism).
-- Il retriever logga `retriever.query.embed_failed` e short-circuita a `[]` su errori embedding; se `latency_budget_ms` è già esaurito interrompe prima di embedding/fetch.
+- Il retriever logga `retriever.query.embed_failed` e short-circuita a `[]` su errori embedding; se `latency_budget_ms` e gia esaurito interrompe prima di embedding/fetch.
 - I flag `ui.allow_local_only` e `ui.admin_local_mode` governano gating e accesso al pannello Admin.
 
 Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configurazione.md).
@@ -74,15 +74,15 @@ Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configura
 - **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
 - **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
 - **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` e' attivo.
-  - Rotazione file configurabile via ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
+  - Rotazione file configurabile via ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
   - I log cliente vivono in `output/timmy-kb-<slug>/logs/`; i log UI globali in `.timmykb/logs/`. Entrambi sono consultabili dalla pagina Streamlit **Log dashboard**.
   - L'entrypoint UI crea automaticamente `.timmykb/logs/ui.log` con handler condiviso; Promtail estrae `run_id` e (se OTEL attivo) `trace_id`/`span_id` dai log per la correlazione Grafana.
   - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
   - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
 - **Hash & masking:** le funzioni `hash_identifier` / `sha256_path` producono digest a 32 caratteri e accettano `TIMMY_HASH_SALT` per rafforzare l'entropia dei log; `mask_id_map` resta la via raccomandata per extra sensibili.
 - **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
-- **Cache frontmatter Markdown (refresh):** dopo le write il contenuto è riallineato nella cache LRU (256 entry); nei run lunghi (UI/CLI) resta disponibile `clear_frontmatter_cache()` per rilasciare memoria.
-- **Cache frontmatter Markdown:** `_FRONTMATTER_CACHE` è LRU bounded (256 entry) con promotion: nei run lunghi (UI/CLI) puoi chiamare `clear_frontmatter_cache()` per rilasciare memoria tra batch.
+- **Cache frontmatter Markdown (refresh):** dopo le write il contenuto e riallineato nella cache LRU (256 entry); nei run lunghi (UI/CLI) resta disponibile `clear_frontmatter_cache()` per rilasciare memoria.
+- **Cache frontmatter Markdown:** `_FRONTMATTER_CACHE` e LRU bounded (256 entry) con promotion: nei run lunghi (UI/CLI) puoi chiamare `clear_frontmatter_cache()` per rilasciare memoria tra batch.
 - **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
 - **Download Drive safe-by-default:** la modale UI scarica solo i PDF mancanti; per sovrascrivere attiva il toggle *"Sovrascrivi i file locali in conflitto"* (abilitato solo se il piano rileva conflitti) oppure rimuovi/rinomina i file a mano.
 - **Preview stub log dir:** `PREVIEW_LOG_DIR` puo' indicare anche un path assoluto; se la directory non e' raggiungibile la UI avvisa e ripiega su `logs/preview` sotto il repository.
@@ -105,7 +105,7 @@ Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> 
 
 ---
 
-### Stack osservabilità (Loki/Grafana/Promtail)
+### Stack osservabilita (Loki/Grafana/Promtail)
 
 - Config pronta in `observability/docker-compose.yaml` + `observability/promtail-config.yaml`.
 - Promtail monta `../output/` e `../.timmykb/logs/` (relative alla cartella `observability/`), legge `*.log`, estrae le label `slug`, `run_id`, `event` dalle tuple `key=value` dei log Timmy.
@@ -123,8 +123,8 @@ Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> 
 
 ### Script legacy
 
-- Gli script non più supportati sono stati spostati in `scripts/archive/` ed esclusi dai flussi standard.
-- Milestone di stabilizzazione: vedi `docs/milestones/archive_cleanup.md`; al termine la cartella verrà rimossa.
+- Gli script non piu supportati sono stati spostati in `scripts/archive/` ed esclusi dai flussi standard.
+- Milestone di stabilizzazione: vedi `docs/milestones/archive_cleanup.md`; al termine la cartella verra rimossa.
 
 ---
 
@@ -251,8 +251,8 @@ Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](.
 - Generazione mapping: `tools/gen_vision_yaml.py` produce `semantic/semantic_mapping.yaml` a partire da `config/VisionStatement.pdf`.
 - La UI legge sempre il modello da `config/config.yaml` via `get_vision_model()` (SSoT).
 - Preferire scenario **Agent**; *Full Access* solo con motivazione esplicita e branch dedicato.
-- Health-check Vision (`scripts/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell’output JSON (oltre ai log) per agevolare diagnosi end-to-end.
-- `use_kb` segue l’SSoT Settings/config con override opzionale `VISION_USE_KB` (0/false/no/off → False); le istruzioni runtime abilitano File Search solo se il flag risulta attivo.
+- Health-check Vision (`scripts/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell'output JSON (oltre ai log) per agevolare diagnosi end-to-end.
+- `use_kb` segue lSSoT Settings/config con override opzionale `VISION_USE_KB` (0/false/no/off  False); le istruzioni runtime abilitano File Search solo se il flag risulta attivo.
 
 Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -> Configurazione](developer_guide.md).
 

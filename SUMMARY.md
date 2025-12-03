@@ -1,6 +1,6 @@
 # Summary
 
-> Navigazione principale del repository Timmy‑KB. Questo file segue la sintassi compatibile con GitBook/HonKit e funge da indice anche su GitHub.
+> Navigazione principale del repository TimmyKB. Questo file segue la sintassi compatibile con GitBook/HonKit e funge da indice anche su GitHub.
 
 * [Home](README.md)
 * Documentazione

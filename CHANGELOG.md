@@ -24,7 +24,7 @@
 - Test di integrazione su indexing (mismatch parziale, invariance ranking, metriche coerce, casi artifacts=0).
 - Test per il retriever su vettori lunghi/estremi e ranking deterministico con candidati numerosi.
 - Test per il vocabolario semantico con CapLog sui nuovi eventi e scenario `streamlit` assente in Timmy KB Coder.
-- Test UI di parità firma wrapper `safe_write_text` UI vs backend; TypedDict `SearchResult` per l’output di `retriever.search`.
+- Test UI di parita firma wrapper `safe_write_text` UI vs backend; TypedDict `SearchResult` per l'output di `retriever.search`.
 - Documentazione aggiornata su cache frontmatter LRU bounded e hardening retriever (developer guide + runbook).
 
 ### Compatibility

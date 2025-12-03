@@ -1,4 +1,4 @@
-# Coding Standards – Timmy-KB (minimo)
+# Coding Standards  Timmy-KB (minimo)
 
 - Type hints obbligatori nei moduli core; evita `Any` salvo casi motivati.
 - Nessun `print()` nei moduli: usa `pipeline.logging_utils.get_structured_logger`.
@@ -15,9 +15,9 @@
   - Hook: `forbid-runtime-asserts` (scripts/dev/forbid_runtime_asserts.py)
 - Vietato `Path.write_text/Path.write_bytes` in `src/`: usa `safe_write_text/bytes` (scrittura atomica) dopo guardia `ensure_within`.
   - Hook: `forbid-path-write-text-bytes` (scripts/dev/forbid_path_writetext_bytes.py)
-- SSoT path-safety: chi scrive/copia/elimina deve invocare `ensure_within(base, target)` prima dell’operazione.
+- SSoT path-safety: chi scrive/copia/elimina deve invocare `ensure_within(base, target)` prima delloperazione.
 
 ## API di modulo e tipizzazione
 
-- Esporta solo l’API pubblica con `__all__ = [...]`; helper/Protocol interni restano con prefisso `_`.
+- Esporta solo lAPI pubblica con `__all__ = [...]`; helper/Protocol interni restano con prefisso `_`.
 - Preferisci `Protocol` locali per i parametri `context` quando servono solo pochi attributi; evita dipendenze forti inutili.

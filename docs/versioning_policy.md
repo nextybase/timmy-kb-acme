@@ -1,19 +1,19 @@
 # Policy di Versioning - Timmy-KB (v1.0 Beta)
 
-Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilità.
+Questa policy definisce come versioniamo il codice, etichettiamo le release e gestiamo la compatibilita.
 
 ## 1) Schema: SemVer
 
 Usiamo SemVer `MAJOR.MINOR.PATCH`:
 
-- PATCH: bugfix/refactor compatibili (es. 1.2.0 → 1.2.1)
-- MINOR: nuove feature retro-compatibili (es. 1.2.1 → 1.3.0)
-- MAJOR: cambi API o comportamenti non compatibili (es. 1.3.0 → 2.0.0)
+- PATCH: bugfix/refactor compatibili (es. 1.2.0  1.2.1)
+- MINOR: nuove feature retro-compatibili (es. 1.2.1  1.3.0)
+- MAJOR: cambi API o comportamenti non compatibili (es. 1.3.0  2.0.0)
 
 ### Regole pratiche
 - In PATCH non cambiare default, firme pubbliche o comportamento di CLI compatibile.
 - In MINOR puoi aggiungere opzioni e moduli, mantenendo i vecchi percorsi.
-- In MAJOR è consentita la rimozione di opzioni/percorsi e la modifica dei contratti.
+- In MAJOR e consentita la rimozione di opzioni/percorsi e la modifica dei contratti.
 
 ## 2) Tagging Git
 
@@ -33,7 +33,7 @@ PR obbligatorie verso `main`. Protezioni:
 - Require status checks (lint/test base)
 - Require linear history (no merge commit, preferisci squash)
 
-## 4) compatibilità & Deprecazioni
+## 4) compatibilita & Deprecazioni
 
 - Ogni breaking change richiede:
   - incremento MAJOR
@@ -64,8 +64,8 @@ I documenti in `docs/` riportano la versione in testata. Allineare sempre:
 
 ## 7) Allineamento orchestratori per v1.2.1
 
-- Facade `semantic.api` (conversione/enrichment/preview) come SSoT; è disponibile un thin wrapper CLI `semantic_onboarding.py` che richiama la facade per simmetria con gli altri orchestratori.
+- Facade `semantic.api` (conversione/enrichment/preview) come SSoT; e disponibile un thin wrapper CLI `semantic_onboarding.py` che richiama la facade per simmetria con gli altri orchestratori.
 - Ridotto: `onboarding_full.py` (solo push, in futuro GitBook).
 - SSoT: `ensure_within` in `pipeline.path_utils`.
 
-Queste modifiche sono retro-compatibili a livello di CLI (MINOR → 1.2.x), con breaking nullo lato utente.
+Queste modifiche sono retro-compatibili a livello di CLI (MINOR  1.2.x), con breaking nullo lato utente.

@@ -9,7 +9,7 @@ Questa pagina descrive, passo per passo, cosa succede quando avvii l'arricchimen
 
 ## 2) Backend di tagging
 - Default: `nlp_backend=spacy` (config semantica) o `TAGS_NLP_BACKEND=spacy` da env.
-- Fallback automatico: se SpaCy o il modello non sono disponibili, si usa l'euristica path/filename già esistente.
+- Fallback automatico: se SpaCy o il modello non sono disponibili, si usa l'euristica path/filename gia esistente.
 - Config aggiuntiva:
   - `spacy_model` / `SPACY_MODEL` (default `it_core_news_sm`).
   - Forzare solo l'euristica: `TAGS_NLP_BACKEND=heuristic`.

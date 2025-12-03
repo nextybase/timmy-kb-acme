@@ -22,7 +22,7 @@ Serve ridurre la latenza preservando path-safety, idempotenza e HiTL.
 Documentazione aggiornata (`docs/runbook_codex.md`, `docs/codex_integrazione.md`), nuovo test su invalidazione cache e CLI ampliata.
 
 ## Alternative considerate
-- **ProcessPoolExecutor**: scartato per overhead nel caricare modelli NLP per processo e logging più complesso.
+- **ProcessPoolExecutor**: scartato per overhead nel caricare modelli NLP per processo e logging piu complesso.
 - **Caching nei caller**: avrebbe duplicato logica e violato la SSoT di `path_utils`.
 - **Query SQL incremental-only**: riduce parzialmente i round-trip ma non scala sui grandi dataset.
 

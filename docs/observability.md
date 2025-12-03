@@ -1,6 +1,6 @@
 # Observability Stack
 
-Questa guida completa la documentazione di logging già integrata nel progetto
+Questa guida completa la documentazione di logging gia integrata nel progetto
 (`observability/docker-compose.yaml`, `observability/promtail-config.yaml`).
 
 ## Stack base (Loki + Promtail + Grafana)
@@ -11,7 +11,7 @@ Questa guida completa la documentazione di logging già integrata nel progetto
    ```
 2. I log applicativi vengono raccolti da Promtail e inviati a Loki.
 3. Grafana espone la dashboard (default: <http://localhost:3000>).
-   La password admin è letta da `GRAFANA_ADMIN_PASSWORD` nel `.env` in root;
+   La password admin e letta da `GRAFANA_ADMIN_PASSWORD` nel `.env` in root;
    se assente, parte con `admin` (fallback del compose).
 
 I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/logs/*.log`)
@@ -22,11 +22,11 @@ promuovono come label principali:
  - `slug`
   - `run_id`
   - `ui.semantics.*` eventi di gating (`ui.semantics.gating_blocked` / `ui.semantics.gating_allowed`) utili per verificare lo stato RAW e i percorsi.
-  - `run_id` viene estratto anche dai log UI globali (`.timmykb/logs/ui.log`) generati da l'entrypoint Streamlit; se OTEL è attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per la correlazione traces→logs.
+  - `run_id` viene estratto anche dai log UI globali (`.timmykb/logs/ui.log`) generati da l'entrypoint Streamlit; se OTEL e attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per la correlazione traces/logs.
 
 > Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
 > header sensibili (`Authorization`, `x-access-token`).
-> È prevista anche la redazione `SERVICE_ACCOUNT_FILE` per i percorsi delle credenziali.
+> E prevista anche la redazione `SERVICE_ACCOUNT_FILE` per i percorsi delle credenziali.
 
 ### Provisioning Grafana
 
@@ -57,13 +57,13 @@ export TIMMY_ENV="production"
 L'applicazione manda gli span all'OTEL Collector locale (`TIMMY_OTEL_ENDPOINT`)
 che inoltra i dati a Tempo via OTLP gRPC. Nei log compariranno i campi
 `trace_id` e `span_id`; Grafana sfrutta il datasource Tempo e la feature
-`tracesToLogs` per seguire la catena trace ↔ log (grazie ai label `slug`,
+`tracesToLogs` per seguire la catena trace  log (grazie ai label `slug`,
 `run_id`, `phase`, `event`). Quando usi `pipeline.logging_utils.phase_scope`, i
-log emettono automaticamente gli stessi ID se `TIMMY_OTEL_ENDPOINT` è impostato.
+log emettono automaticamente gli stessi ID se `TIMMY_OTEL_ENDPOINT` e impostato.
 
 Puoi verificare il collegamento aprendo una trace view in Grafana (top right
-“View logs / View trace”), scegliere il trace e cliccare la lente “View logs”
-per aprire Loki con i filtri `trace_id`, `slug`, `run_id`. Se tutto è configurato
+View logs / View trace), scegliere il trace e cliccare la lente View logs
+per aprire Loki con i filtri `trace_id`, `slug`, `run_id`. Se tutto e configurato
 correttamente vedrai la sezione log associata e potrai scorrere sia lo span che
 le righe log correlate (anche da un altro pannello se usi la dashboard dedicata).
 
@@ -85,37 +85,37 @@ le righe log correlate (anche da un altro pannello se usi la dashboard dedicata)
 ## Dashboard predefinito Timmy
 
 - `TIMMY_GRAFANA_LOGS_UID`: UID della dashboard Grafana dedicata ai log di run (`observability/grafana-dashboards/logs-dashboard.json`). Il pannello *Log dashboard* (UI) aggiunge un pulsante per aprire la dashboard log filtrata sullo `slug` attivo (`var-slug`) e il datasource della dashboard punta a Loki (`Loki`).
-- `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana focalizzata su errori per fase (`observability/grafana-dashboards/errors-dashboard.json`). Il pulsante “Apri dashboard errori” apre questa dashboard con filtro `slug`/`phase` e la query Loki `level="ERROR"` per fase.
+- `TIMMY_GRAFANA_ERRORS_UID`: UID della dashboard Grafana focalizzata su errori per fase (`observability/grafana-dashboards/errors-dashboard.json`). Il pulsante Apri dashboard errori apre questa dashboard con filtro `slug`/`phase` e la query Loki `level="ERROR"` per fase.
 
 ### Indicatori di stack
 
-- La UI mostra un badge `Grafana 🟢/🔴` nella sezione osservabilità e lo aggiorna solo se Docker è attivo, così distingui subito se lo stack è raggiungibile o meno.
-- Se Docker non è attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop restano disabilitati fino a quel momento.
-- Quando Docker è disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano internamente le funzioni esposte in `scripts/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`. Se tutto va a buon fine la UI mostra un messaggio di conferma (`Stack avviato: …` / `Stack fermato: …`), altrimenti riporta un warning con l’errore.
+- La UI mostra un badge `Grafana /` nella sezione osservabilita e lo aggiorna solo se Docker e attivo, cosi distingui subito se lo stack e raggiungibile o meno.
+- Se Docker non e attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop restano disabilitati fino a quel momento.
+- Quando Docker e disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano internamente le funzioni esposte in `scripts/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`. Se tutto va a buon fine la UI mostra un messaggio di conferma (`Stack avviato: ...` / `Stack fermato: ...`), altrimenti riporta un warning con l'errore.
 
-I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l’interfaccia.
+I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l'interfaccia.
 
 ### Helper CLI (scripts/observability_stack)
 
-Lo stesso helper `scripts/observability_stack.py` è disponibile anche come script stand-alone per chi preferisce avviare/fermare lo stack da shell. Esegui il comando
+Lo stesso helper `scripts/observability_stack.py` e disponibile anche come script stand-alone per chi preferisce avviare/fermare lo stack da shell. Esegui il comando
 
 ```bash
 python scripts/observability_stack.py start
 ```
 
-per avviare l’intero stack e
+per avviare l'intero stack e
 
 ```bash
 python scripts/observability_stack.py stop
 ```
 
-per fermarlo; lo script stampa l’output del `docker compose` e restituisce exit code `0` solo in caso di successo.
+per fermarlo; lo script stampa l'output del `docker compose` e restituisce exit code `0` solo in caso di successo.
 
 Le opzioni `--env-file` / `--compose-file` permettono di sovrascrivere rispettivamente `TIMMY_OBSERVABILITY_ENV_FILE` e `TIMMY_OBSERVABILITY_COMPOSE_FILE` (default `.env` e `observability/docker-compose.yaml`), quindi la UI e lo script condividono la stessa configurazione runtime.
 
 ### Span OTEL e attributi
 
-La nuova telemetria OTEL è composta da:
+La nuova telemetria OTEL e composta da:
 
 - **Trace root** (`timmykb.<journey>`, es. `timmykb.onboarding`, `timmykb.ingest`, `timmykb.reindex`)
   - Attributi: `slug`, `run_id`, `trace_kind`, `env`, `entry_point`, `journey`
@@ -128,28 +128,28 @@ Grafana sfrutta `trace_id`, `span_id`, `slug`, `run_id`, `phase` e `decision_typ
 
 ### Human override spans
 
-Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml` (sia in modalità stub che con il servizio `tags_adapter`), il codice chiama `start_decision_span` con `decision_type=human_override` e `phase=ui.manage.tags_yaml`. Gli span portano sempre:
+Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml` (sia in modalita stub che con il servizio `tags_adapter`), il codice chiama `start_decision_span` con `decision_type=human_override` e `phase=ui.manage.tags_yaml`. Gli span portano sempre:
 
 - `slug`, `run_id`, `trace_kind=onboarding` per trovare la trace primaria.
 - `override_reason` (`manual_publish`, `state_override`, `manual_tags_csv`, `stub_publish`) e l'indicazione di `hilt_involved=true` / `user_role` per ricostruire chi ha preso la decisione.
-- `previous_value` / `new_value` per mostrare il cambio di stato (`pronto` → `arricchito`).
+- `previous_value` / `new_value` per mostrare il cambio di stato (`pronto`  `arricchito`).
 - `status` (`success` / `failed`) e `reason` per capire se la modifica ha avuto effetto.
 
-Per ogni cambio di stato (nell'helper `set_client_state`) tracciamo anche un micro-span dedicato con `attributes={"previous_value": ..., "new_value": ...}`: ciò rende possibile, in Grafana, seguire la catena `trace_root → phase_span → decision_span → log (ui.manage.state.update_failed)` e ricostruire ogni decisione umana sul dataset.
+Per ogni cambio di stato (nell'helper `set_client_state`) tracciamo anche un micro-span dedicato con `attributes={"previous_value": ..., "new_value": ...}`: cio rende possibile, in Grafana, seguire la catena `trace_root  phase_span  decision_span  log (ui.manage.state.update_failed)` e ricostruire ogni decisione umana sul dataset.
 
 ### Fallback e resilienza semantica
 
 - `semantic.api.build_tags_csv` valida ora che `tags.db` derivato risieda sotto `semantic/` prima di arricchire il vocabolario e scrivere su SQLite, mantenendo il requisito path-safety descritto nelle regole.
-- Se `storage.tags_store.load_tags_reviewed` non è disponibile (es. ambienti di test minimal), l’evento `semantic.vocab_loader.stubbed` viene loggato immediatamente con l’errore, rendendo visibile il downgrade e permettendo la correzione prima di una fail-fast.
-- `_compute_embeddings_for_markdown` ora cattura gli errori dal provider embedding, logga `semantic.index.embedding_error` e restituisce `(None, 0)` invece di propagare un’eccezione: la trace `index_markdown_to_db` rimane leggibile (phase span completo) e la pipeline può continuare gestendo il fallback nei log successivi.
+- Se `storage.tags_store.load_tags_reviewed` non e disponibile (es. ambienti di test minimal), l'evento `semantic.vocab_loader.stubbed` viene loggato immediatamente con l'errore, rendendo visibile il downgrade e permettendo la correzione prima di una fail-fast.
+- `_compute_embeddings_for_markdown` ora cattura gli errori dal provider embedding, logga `semantic.index.embedding_error` e restituisce `(None, 0)` invece di propagare un'eccezione: la trace `index_markdown_to_db` rimane leggibile (phase span completo) e la pipeline puo continuare gestendo il fallback nei log successivi.
 
 ### Decision span sampling
 
-- La variabile d’ambiente `TIMMY_DECISION_SPAN_SAMPLING` (default `1.0`) controlla quanti micro-span vengono davvero emessi per gli eventi decisionali. Impostando valori più bassi (es. `0.1`) limitiamo la quantità di span in Tempo mantenendo comunque i log completi in Loki. Il sampling avviene solo sui span decisionali; se un trace è attivo ma il campionamento scarta lo span, i log contenenti `trace_id`/`span_id` rimangono intatti per la correlazione.
+- La variabile d'ambiente `TIMMY_DECISION_SPAN_SAMPLING` (default `1.0`) controlla quanti micro-span vengono davvero emessi per gli eventi decisionali. Impostando valori piu bassi (es. `0.1`) limitiamo la quantita di span in Tempo mantenendo comunque i log completi in Loki. Il sampling avviene solo sui span decisionali; se un trace e attivo ma il campionamento scarta lo span, i log contenenti `trace_id`/`span_id` rimangono intatti per la correlazione.
 
 ### Tracing doctor
 
-- Il pannello Log UI aggiunge ora un pulsante “Verifica tracing” che emette un `trace_kind=diagnostic` / `phase=observability.tracing.doctor` con un log `observability.tracing.test_span_emitted`. Dopo aver premuto il pulsante puoi aprire Tempo, filtrare per `trace_kind=diagnostic` e controllare che il Collector riceva davvero gli span generati da l’interfaccia.
+- Il pannello Log UI aggiunge ora un pulsante Verifica tracing che emette un `trace_kind=diagnostic` / `phase=observability.tracing.doctor` con un log `observability.tracing.test_span_emitted`. Dopo aver premuto il pulsante puoi aprire Tempo, filtrare per `trace_kind=diagnostic` e controllare che il Collector riceva davvero gli span generati da l'interfaccia.
 
 ## Alerting critico
 

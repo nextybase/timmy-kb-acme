@@ -29,7 +29,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAUL
 2. Inserisci **Slug cliente** e **Nome cliente** (UI si sblocca).
 3. Tab **Drive**: crea struttura, genera README, poi **Scarica PDF** su `raw/`.
 4. Tab **Semantica**: **Converti**  **Arricchisci**  **README & SUMMARY**.
-5. Tab **Gestisci cliente** → sezione *Knowledge Graph dei tag (Tag KG Builder)*: costruisce `semantic/kg.tags.json` + `semantic/kg.tags.md` a partire da `semantic/tags_raw.json` e ti mostra valori di tag/relazioni e i path generati.
+5. Tab **Gestisci cliente**  sezione *Knowledge Graph dei tag (Tag KG Builder)*: costruisce `semantic/kg.tags.json` + `semantic/kg.tags.md` a partire da `semantic/tags_raw.json` e ti mostra valori di tag/relazioni e i path generati.
 5. (Opz.) Avvia **Preview Docker**.
 
 Note Drive nella UI:
@@ -55,7 +55,7 @@ py src/tag_onboarding.py --slug acme --proceed
 py src/kg_build.py --slug acme
 
 > Nota: `semantic_onboarding.py` invoca internamente `build_kg_for_workspace`,
-> quindi l’intero flusso semantic costruisce automaticamente il Tag KG prima di
+> quindi l'intero flusso semantic costruisce automaticamente il Tag KG prima di
 > generare README/SUMMARY. La CLI `kg_build.py` serve per ricostruire o isolare
 > questo step quando necessario.
 
@@ -83,7 +83,7 @@ write_summary_and_readme(ctx, log, slug=slug)
 PY
 ```
 
-> **Nota**: `semantic_onboarding.py` e `semantic_headless.py` falliscono con `ConfigError` quando `semantic/tags.db` è mancante o vuoto; rigenera il vocabolario eseguendo `py src/tag_onboarding.py --slug <slug> --proceed`.
+> **Nota**: `semantic_onboarding.py` e `semantic_headless.py` falliscono con `ConfigError` quando `semantic/tags.db` e mancante o vuoto; rigenera il vocabolario eseguendo `py src/tag_onboarding.py --slug <slug> --proceed`.
 
 (Puoi continuare a usare `py src/semantic_onboarding.py` come orchestratore
 della sequenza se preferisci una CLI dedicata.)
@@ -107,20 +107,20 @@ Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
    `semantic/semantic_mapping.yaml`.
 4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.
 
-### Entità fondamentali e codici documentali
+### Entita fondamentali e codici documentali
 - **Operativi:** Progetto, Obiettivo, Milestone, Epic, Task, Processo, Deliverable
 - **Attori:** Organizzazione, Cliente, Stakeholder, Team, Operatore, Decisore, Management, Fornitore
 - **Azioni:** Decisione, Analisi, Modifica, Intervento, Upgrade, Downgrade, Validazione
 - **Oggetti:** Bene, Servizio, Skill, Risorsa, Outsourcing, Documento, Contratto, Dataset
 
-| Categoria   | Entità        | Codice suggerito | Esempio nome file                     |
+| Categoria   | Entita        | Codice suggerito | Esempio nome file                     |
 |-------------|---------------|------------------|---------------------------------------|
 | Operativo   | Progetto      | PRJ-             | PRJ-Progetto_neXT_roadmap.pdf         |
 | Attore      | Organizzazione| ORG-             | ORG-Statuto_NeXT_srl.pdf              |
 | Oggetto     | Contratto     | CTR-             | CTR-Contratto_servizi_AI_2025.pdf     |
 | Azione      | Decisione     | DEC-             | DEC-Verbale_CDA_2025-01-15.pdf        |
 
-I prefissi non sono decorativi: servono a collegare i file alle entità, alimentare il modello ER e migliorare ricerca/tagging ed embedding. Se cambi entità o strutture, aggiorna il Vision Statement e riesegui la funzione Vision per rigenerare mapping/ER.
+I prefissi non sono decorativi: servono a collegare i file alle entita, alimentare il modello ER e migliorare ricerca/tagging ed embedding. Se cambi entita o strutture, aggiorna il Vision Statement e riesegui la funzione Vision per rigenerare mapping/ER.
 
 
 ## Struttura output

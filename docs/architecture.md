@@ -82,7 +82,7 @@ flowchart LR
 
     SVISION --> OPENAI
 
-- **Tag KG Builder:** `kg_build.py` (CLI) e il pannello UI “Knowledge Graph dei tag” invocano `build_kg_for_workspace`, leggono `semantic/tags_raw.json` e scrivono `semantic/kg.tags.json`/`semantic/kg.tags.md` prima che `semantic_onboarding` rigeneri i README.
+- **Tag KG Builder:** `kg_build.py` (CLI) e il pannello UI Knowledge Graph dei tag invocano `build_kg_for_workspace`, leggono `semantic/tags_raw.json` e scrivono `semantic/kg.tags.json`/`semantic/kg.tags.md` prima che `semantic_onboarding` rigeneri i README.
 
     PDRIVE --> DRIVE
 ```

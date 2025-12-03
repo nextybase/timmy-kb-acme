@@ -2,11 +2,11 @@
 
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
-## 1) Responsabilità e orchestratori
+## 1) Responsabilita e orchestratori
 
 - Facade `semantic.api`: conversione RAW -> BOOK, enrichment, README/SUMMARY, preview Docker (via adapters). Non fa push.
   - La UI Streamlit non usa direttamente gli helper interni ma passa dalla facade `semantic.api` (API pubblica stabile).
-- `onboarding_full.py`: esegue solo il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia già pronto.
+- `onboarding_full.py`: esegue solo il push GitHub (e in futuro l'integrazione GitBook). Richiede che `book/` sia gia pronto.
 
 ## 2) Prerequisiti
 
@@ -29,7 +29,7 @@ Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciab
 
 - Token: non in chiaro nei log; mai in URL. Usare header.
 - Redazione log: abilitata se `compute_redact_flag(...)` restituisce `True`. Dati sensibili mascherati.
-- Path-safety & atomicità: garantita a monte in fase di generazione contenuti (`ensure_within`, `safe_write_*`).
+- Path-safety & atomicita: garantita a monte in fase di generazione contenuti (`ensure_within`, `safe_write_*`).
 
 ## 5) Sequenza tipica (CLI)
 
@@ -58,7 +58,7 @@ Opzioni comuni:
   - creare PR verso `main`
   - dopo approvazione, eseguire `onboarding_full.py` (solo push) sul merge in `main`.
 
-## 8) Tracciabilità
+## 8) Tracciabilita
 
 - Ogni esecuzione ha `run_id` nei log.
 - I commit devono contenere riferimenti minimi (slug, step, versione).
@@ -69,6 +69,6 @@ Opzioni comuni:
 - Pubblicazione automatica su GitBook a valle del push (`onboarding_full.py`).
 - Gestione token GitBook (`GITBOOK_TOKEN`) con redazione log e spazio di destinazione (`GITBOOK_SPACE_ID`).
 - Allineamento contenuti `book/` -> spazio GitBook, usando `layout_summary.md` per guidare la struttura.
-- Smoke GitBook: `scripts/gitbook_publish_smoke.py` verifica `layout_summary.md` e può lanciare un upload controllato (`--dry-run` evita la chiamata reale).
+- Smoke GitBook: `scripts/gitbook_publish_smoke.py` verifica `layout_summary.md` e puo lanciare un upload controllato (`--dry-run` evita la chiamata reale).
 
 Nota: fino al completamento della roadmap, `onboarding_full.py` gestisce esclusivamente il push GitHub.

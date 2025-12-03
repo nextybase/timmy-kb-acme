@@ -1,15 +1,15 @@
-# Streamlit UI — linee guida (dettagliate)
+# Streamlit UI  linee guida (dettagliate)
 
 *Allineato alle regole di progetto (vedi *[***coding\_rule.md***](./coding_rule.md)*)*.
 
 ---
 
-## Perché queste regole (in breve)
+## Perche queste regole (in breve)
 
 - **Sicurezza**: impedire path traversal/symlink malevoli e scritture non atomiche.
-- **Osservabilità**: avere log strutturati e stabili, senza PII, per investigazioni/metriche.
-- **Testabilità**: far girare i test senza il runtime Streamlit reale (stub), anche su Windows.
-- **Coerenza**: un’unica fonte di verità per stati, query string, e gating funzionali.
+- **Osservabilita**: avere log strutturati e stabili, senza PII, per investigazioni/metriche.
+- **Testabilita**: far girare i test senza il runtime Streamlit reale (stub), anche su Windows.
+- **Coerenza**: un'unica fonte di verita per stati, query string, e gating funzionali.
 
 ---
 
@@ -18,7 +18,7 @@
 - [Prerequisiti (UI Onboarding)](#prerequisiti-ui-onboarding)
 - [Routing e Deep-Linking (fonte unica)](#routing-e-deep-linking-fonte-unica)
 - [Query string & slug](#query-string--slug)
-  - [Perché ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
+  - [Perche ](#perche-stquery_params)[`st.query_params`](#perche-stquery_params)
   - [API consigliata: ](#api-consigliata-uiutils-route_state--uiutils-slug)[`ui.utils.route_state` + `ui.utils.slug`](#api-consigliata-uiutils-route_state--uiutils-slug)
   - [Esempi e anti-pattern](#esempi-e-anti-pattern)
 - [New pages](#new-pages)
@@ -32,8 +32,8 @@
   - [Esempi: pagina Manage](#esempi-pagina-manage)
   - [Test con ](#test-con-caplog)[`caplog`](#test-con-caplog)
 - [Gating e SSoT di stato](#gating-e-ssot-di-stato)
-- [Compatibilità con gli stub di Streamlit nei test](#compatibilita-con-gli-stub-di-streamlit-nei-test)
-- [Checklist “UI page”](#checklist-ui-page)
+- [Compatibilita con gli stub di Streamlit nei test](#compatibilita-con-gli-stub-di-streamlit-nei-test)
+- [Checklist UI page](#checklist-ui-page)
 - [FAQ](#faq)
 - [Anti-pattern da evitare](#anti-pattern-da-evitare)
 
@@ -41,8 +41,8 @@
 
 ## Prerequisiti (UI Onboarding)
 
-- **Streamlit ≥ 1.50.0** – il router nativo (`st.Page`, `st.navigation`) è obbligatorio.
-- Deep-linking via `st.query_params` è supportato, ma l’accesso deve passare dagli helper centralizzati (vedi sotto).
+- **Streamlit  1.50.0**  il router nativo (`st.Page`, `st.navigation`) e obbligatorio.
+- Deep-linking via `st.query_params` e supportato, ma l'accesso deve passare dagli helper centralizzati (vedi sotto).
 
 ---
 
@@ -60,7 +60,7 @@ set_tab("manage")              # aggiorna query params + rerun ordinato
 clear_tab()                    # pulisce lo stato
 ```
 
-Se serve il deep-link “pieno”, invoca `set_tab("home")` appena la pagina viene idratata.
+Se serve il deep-link pieno, invoca `set_tab("home")` appena la pagina viene idratata.
 
 Esempio router completo nell'entrypoint:
 
@@ -79,11 +79,11 @@ navigation.run()
 
 `st.query_params` resta l'SSoT lato client, ma l'accesso passa da `ui.utils.route_state` (tab + letture slug) e da `ui.utils.slug` (setter/getter ad alto livello). Quando serve garantire la presenza dello slug e rendere coerente l'UI (sidebar, breadcrumbs, titoli), usa i facade come `render_chrome_then_require`.
 
-### Perché `st.query_params`
+### Perche `st.query_params`
 
 - Evita parsing manuale degli URL.
 - Funziona come dizionario reattivo: gli update triggerano un **rerun** della pagina.
-- È coperto dai nostri stub di test.
+- E coperto dai nostri stub di test.
 
 ### API consigliata: `ui.utils.route_state` + `ui.utils.slug`
 
@@ -109,7 +109,7 @@ from ui.chrome import render_chrome_then_require
 slug = render_chrome_then_require()
 ```
 
-### Esempi e anti‑pattern
+### Esempi e anti-pattern
 
 **OK**
 
@@ -121,8 +121,8 @@ set_tab("manage")                  # se serve cambiare tab
 **EVITARE**
 
 ```python
-# ❌ Non leggere/scrivere direttamente dalla stringa dell’URL
-# ❌ Non conservare lo slug in variabili globali non sincronizzate con query params
+#  Non leggere/scrivere direttamente dalla stringa dellURL
+#  Non conservare lo slug in variabili globali non sincronizzate con query params
 ```
 
 ---
@@ -144,13 +144,13 @@ Checklist minima per una pagina nuova:
 
 1. Copiare uno scheletro esistente (`home.py` per Admin, `diagnostics.py` per Tools) dentro `src/ui/pages/`.
 2. Richiamare header/sidebar coerenti con il tipo di pagina (Admin -> `None`, Tools -> slug richiesto).
-3. Aggiornare `ui/navigation_spec.py` (coppia `PagePaths` + `NAVIGATION_GROUPS`) così da riflettere titolo/gruppo/url-path della nuova pagina; rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
+3. Aggiornare `ui/navigation_spec.py` (coppia `PagePaths` + `NAVIGATION_GROUPS`) cosi da riflettere titolo/gruppo/url-path della nuova pagina; rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
 4. Aggiungere/aggiornare i test UI (`tests/ui/...`) sfruttando gli stub Streamlit.
 5. Validare con `pytest -q` per riallineare la suite e i contratti di navigazione.
 
 ---
 
-## Path‑safety (lettura/scrittura)
+## path-safety (lettura/scrittura)
 
 ### Flusso consigliato
 
@@ -191,7 +191,7 @@ def save_tags_yaml(slug: str, text: str) -> None:
     safe_write_text(yaml_path, text, encoding="utf-8", atomic=True)
 ```
 
-**Perché atomico?** Minimizza corruzioni/condizioni di gara: si scrive su un file temporaneo e poi si fa un rename.
+**Perche atomico?** Minimizza corruzioni/condizioni di gara: si scrive su un file temporaneo e poi si fa un rename.
 
 ---
 
@@ -203,7 +203,7 @@ def save_tags_yaml(slug: str, text: str) -> None:
 
 ## Scan PDF sicuro (DRY)
 
-Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa sempre l’utility condivisa `iter_safe_pdfs` che applica path-safety forte, ignora i symlink e restituisce path canonicalizzati in ordine deterministico.
+Per contare/iterare i PDF **non** usare `Path.rglob`/`os.walk`. Usa sempre l'utility condivisa `iter_safe_pdfs` che applica path-safety forte, ignora i symlink e restituisce path canonicalizzati in ordine deterministico.
 
 ```python
 from pipeline.path_utils import iter_safe_pdfs
@@ -212,7 +212,7 @@ for pdf_path in iter_safe_pdfs(raw_dir):
     ...
 ```
 
-Se sei in UI, `ui.utils.workspace.iter_pdfs_safe` è un wrapper che inoltra alla stessa utility. In questo modo tutte le sezioni della pipeline (UI, semantic, tool CLI) condividono lo stesso comportamento e i test coprono già i corner case (symlink, traversal, Windows).
+Se sei in UI, `ui.utils.workspace.iter_pdfs_safe` e un wrapper che inoltra alla stessa utility. In questo modo tutte le sezioni della pipeline (UI, semantic, tool CLI) condividono lo stesso comportamento e i test coprono gia i corner case (symlink, traversal, Windows).
 Per altri casi d'uso (alberi completi, Markdown, ecc.) usa `pipeline.path_utils.iter_safe_paths(...)`, che replica le stesse guardie per directory e file generici. Evita nuove implementazioni basate su `os.walk`/`Path.rglob`.
 
 ---
@@ -292,7 +292,7 @@ def import_tags_yaml_to_db(semantic_dir: Path, yaml_path: Path, logger):
     )
 ```
 
-> Il loader YAML deve validare lo schema, normalizzare canonical/alias/path e gestire duplicati. L'upsert è idempotente (nessun wipe massivo del DB).
+> Il loader YAML deve validare lo schema, normalizzare canonical/alias/path e gestire duplicati. L'upsert e idempotente (nessun wipe massivo del DB).
 
 ---
 
@@ -378,7 +378,7 @@ pages = {
 st.navigation(pages)
 ```
 
-**Perché**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
+**Perche**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
 In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo slug attivo ha effettivamente PDF validi in `raw/` (`ui.utils.workspace.has_raw_pdfs`). Analogamente la pagina *Preview* viene resa visibile solo se sono presenti PDF validi e lo stato cliente appartiene a `SEMANTIC_READY_STATES`; in caso contrario il router emette `ui.gating.sem_hidden`/`ui.gating.preview_hidden` per telemetria.
 
 ### Modalita stub e SSoT semantica
@@ -396,12 +396,12 @@ except RuntimeError as exc:
     st.caption(str(exc))
     st.stop()
 
-> Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: “La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.” Così lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
+> Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`. Cosi lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
 ```
 
 **Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.
 
-> Per mantenere lo stesso gating anche nelle esecuzioni *headless* (stub di Streamlit, runner CLI, test unitari) la UI centralizza il controllo in `_require_semantic_gating(slug)`. La funzione chiama `has_raw_pdfs`/`get_state`, solleva `RuntimeError` se RAW non è presente o lo stato non è in `SEMANTIC_ENTRY_STATES`, e viene invocata sia appena la pagina viene caricata sia prima dell'avvio di `_run_convert/_run_enrich/_run_summary`. In questo modo anche gli automation test falliscono immediatamente con lo stesso messaggio visibile alla UI e nessun branch può bypassare il gate.
+> Per mantenere lo stesso gating anche nelle esecuzioni *headless* (stub di Streamlit, runner CLI, test unitari) la UI centralizza il controllo in `_require_semantic_gating(slug)`. La funzione chiama `has_raw_pdfs`/`get_state`, solleva `RuntimeError` se RAW non e presente o lo stato non e in `SEMANTIC_ENTRY_STATES`, e viene invocata sia appena la pagina viene caricata sia prima dell'avvio di `_run_convert/_run_enrich/_run_summary`. In questo modo anche gli automation test falliscono immediatamente con lo stesso messaggio visibile alla UI e nessun branch puo bypassare il gate.
 
 ### Env preview stub e logging
 
@@ -414,7 +414,7 @@ Il percorso "Preview Docker" supporta una modalita stub pensata per CI ed e2e:
 
 Quando abiliti lo stub ricorda di puntare `CLIENTS_DB_PATH` e altre risorse persistenti a directory isolate (`tmp_path` nelle fixture), cosi gli end-to-end non toccano workspace reali.
 
-## Compatibilità con gli stub di Streamlit nei test
+## Compatibilita con gli stub di Streamlit nei test
 
 I test girano con uno **stub** di Streamlit (assenza del runtime reale). Per evitare rotture:
 
@@ -450,13 +450,13 @@ else:
 
 ### Tema ufficiale + Enhancement CSS (progressive enhancement)
 
-Il **tema ufficiale** vive in `.streamlit/config.toml` ed è la fonte unica del brand (palette, font, base light/dark). Questo garantisce coerenza visiva anche qualora l'iniezione HTML venga bloccata o filtrata. Gli **enhancement CSS** (iniettati una sola volta via `st.html`) servono solo per micro-affinamenti non esposti dalle opzioni native: radius **gentili**, micro-spaziature, focus ring accessibile, piccoli fix di rendering. In pratica: colori e tipografia nel `config.toml`; dettagli tattili e a11y nell'enhancement. Manteniamo gli enhancement **idempotenti**, compatibili con light/dark (evitare override cromatici aggressivi) e confinati in un `<style id="nexty-theme-enhancements">` per tracciabilità e rollback. Criterio di accettazione: con gli enhancement disattivati il brand resta intatto; riattivandoli si percepisce solo un miglioramento della qualità interattiva senza variazioni di palette o regressioni di leggibilità.
+Il **tema ufficiale** vive in `.streamlit/config.toml` ed e la fonte unica del brand (palette, font, base light/dark). Questo garantisce coerenza visiva anche qualora l'iniezione HTML venga bloccata o filtrata. Gli **enhancement CSS** (iniettati una sola volta via `st.html`) servono solo per micro-affinamenti non esposti dalle opzioni native: radius **gentili**, micro-spaziature, focus ring accessibile, piccoli fix di rendering. In pratica: colori e tipografia nel `config.toml`; dettagli tattili e a11y nell'enhancement. Manteniamo gli enhancement **idempotenti**, compatibili con light/dark (evitare override cromatici aggressivi) e confinati in un `<style id="nexty-theme-enhancements">` per tracciabilita e rollback. Criterio di accettazione: con gli enhancement disattivati il brand resta intatto; riattivandoli si percepisce solo un miglioramento della qualita interattiva senza variazioni di palette o regressioni di leggibilita.
 
-- Vedi `.streamlit/config.toml` per la configurazione completa: per passare a base scura mantenendo la palette esistente è sufficiente impostare `base = "dark"` e riavviare la UI.
+- Vedi `.streamlit/config.toml` per la configurazione completa: per passare a base scura mantenendo la palette esistente e sufficiente impostare `base = "dark"` e riavviare la UI.
 
 ---
 
-## Checklist “UI page”
+## Checklist UI page
 
 Prima di aprire una PR:
 
@@ -471,11 +471,11 @@ Prima di aprire una PR:
 - Path-safety con `ensure_within_and_resolve`, I/O atomico con `safe_write_text`.
 - Niente `Path.rglob` sui workspace: usa `iter_pdfs_safe`/`count_pdfs_safe`.
 
-**Osservabilità**
+**Osservabilita**
 
-- Logger `ui.<pagina>` e eventi minimali senza PII (vedi esempi “Manage”).
+- Logger `ui.<pagina>` e eventi minimali senza PII (vedi esempi Manage).
 
-**UX & stub‑compat**
+**UX & stub-compat**
 
 - Feedback con `status_guard` o `st.status` (no sleep/progress finti).
 - Modali: preferisci `ui.utils.compat.open_dialog(...)` (wrappa `st.dialog` e degrada inline se non supportato).
@@ -488,7 +488,7 @@ Prima di aprire una PR:
 Per evitare divergenze tra `onboarding_ui.py` (router) e i link nelle pagine, i path sono definiti una sola volta in `ui/navigation_spec.PagePaths` (ri-esportato da `ui.pages.registry`).
 Usa:
 - `from ui.pages.registry import PagePaths` per link diretti (`st.page_link(PagePaths.NEW_CLIENT, ...)`).
-- `from ui.pages.registry import build_pages` nell’entrypoint per generare il `pages` dict per `st.navigation(...)`.
+- `from ui.pages.registry import build_pages` nell'entrypoint per generare il `pages` dict per `st.navigation(...)`.
 
 La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X)`, che gestisce `st.switch_page(...)` e il fallback via `?tab=<url_path>`. Preferisci il link dichiarativo (`st.page_link(...)`) quando non hai side-effect da completare prima del rerun.
 
@@ -498,30 +498,30 @@ La navigazione programmativa deve passare da `ui.utils.compat.nav_to(PagePaths.X
 ## FAQ
 
 **D: Posso usare **`Path.write_text`** per scrivere file?**\
-R: No. Usa **sempre** `safe_write_text(..., atomic=True)` per garantire atomicità e logging coerente.
+R: No. Usa **sempre** `safe_write_text(..., atomic=True)` per garantire atomicita e logging coerente.
 
-**D: Perché non posso usare **`Path.rglob`**?**\
-R: Non è path‑safe e può seguire symlink non desiderati. Usa `iter_pdfs_safe`/`count_pdfs_safe`.
+**D: Perche non posso usare **`Path.rglob`**?**\
+R: Non e path-safe e puo seguire symlink non desiderati. Usa `iter_pdfs_safe`/`count_pdfs_safe`.
 
 **D: Dove metto i log?**\
-R: Logger strutturato di pagina: `from pipeline.logging_utils import get_structured_logger` → `LOGGER = get_structured_logger('ui.manage')`. Eventi `ui.manage.*`.
+R: Logger strutturato di pagina: `from pipeline.logging_utils import get_structured_logger`  `LOGGER = get_structured_logger('ui.manage')`. Eventi `ui.manage.*`.
 
 **D: Come gestisco la validazione YAML?**\
 R: Valida **prima** di scrivere (`yaml.safe_load`) e, in caso di errore, emetti `ui.<pagina>.<area>.yaml.invalid` senza persist.
 
 ---
 
-## Anti‑pattern da evitare
+## Anti-pattern da evitare
 
-- ❌ `Path(...).rglob('*.pdf')`, `os.walk(...)` sul workspace → **usa** `iter_pdfs_safe` / `count_pdfs_safe`.
-- ❌ Scritture non atomiche (`open(..., 'w')`) → **usa** `safe_write_text(...)`.
-- ❌ Path costruiti a mano senza guardrail → **usa** `ensure_within_and_resolve(...)`.
-- ❌ Dati sensibili nei log (contenuti, token, path assoluti di sistema).
-- ❌ Dipendenze dirette da API Streamlit non stubbate senza `getattr(...)`/fallback.
+-  `Path(...).rglob('*.pdf')`, `os.walk(...)` sul workspace  **usa** `iter_pdfs_safe` / `count_pdfs_safe`.
+-  Scritture non atomiche (`open(..., 'w')`)  **usa** `safe_write_text(...)`.
+-  Path costruiti a mano senza guardrail  **usa** `ensure_within_and_resolve(...)`.
+-  Dati sensibili nei log (contenuti, token, path assoluti di sistema).
+-  Dipendenze dirette da API Streamlit non stubbate senza `getattr(...)`/fallback.
 
 ---
 
 ### Note finali
 
-- Questo documento è SSoT per la UI Streamlit e si affianca a [coding\_rule.md](./coding_rule.md).
+- Questo documento e SSoT per la UI Streamlit e si affianca a [coding\_rule.md](./coding_rule.md).
 - Gli esempi sono tratti da implementazioni reali nelle pagine **Manage** e **Semantics** e risultano eseguibili nel progetto.

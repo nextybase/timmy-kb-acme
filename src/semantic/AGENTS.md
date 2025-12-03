@@ -1,4 +1,4 @@
-# AGENT — Semantica (enrichment/frontmatter)
+# AGENT  Semantica (enrichment/frontmatter)
 > Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
 
 ## Obiettivi
@@ -6,10 +6,10 @@
 - Uso esclusivo della **facade `semantic.api`** per le API pubbliche.
 
 ## Regole
-- **SSoT tag runtime: SQLite (`semantic/tags.db`)**; YAML `tags_reviewed.yaml` è solo authoring/migrazione.
-- Non importare o invocare funzioni `_private`; mantenere compatibilità della façade.
+- **SSoT tag runtime: SQLite (`semantic/tags.db`)**; YAML `tags_reviewed.yaml` e solo authoring/migrazione.
+- Non importare o invocare funzioni `_private`; mantenere compatibilita della facade.
 - README/SUMMARY: usa util repo; se assenti, fallback **idempotenti** (niente sovrascritture distruttive).
-- Nessun side‑effect in import‑time; funzioni pure dove possibile.
+- Nessun sideeffect in import-time; funzioni pure dove possibile.
 
 ## Accettazione
 - Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter.
