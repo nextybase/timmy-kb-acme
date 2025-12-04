@@ -5,6 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, cast
 
+from ui.utils import backend as _backend
+
+ensure_within_and_resolve = _backend.ensure_within_and_resolve
+safe_write_text = _backend.safe_write_text
+to_kebab = _backend.to_kebab
+
 
 def yaml_load(path: Path) -> Dict[str, Any]:
     """Legge YAML dal disco tramite le utility centralizzate di pipeline."""
