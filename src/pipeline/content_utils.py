@@ -45,7 +45,10 @@ _PDF_EXCERPT_MAX_CHARS = 2048
 
 
 def clear_frontmatter_cache(path: Path | None = None) -> None:
-    """Svuota la cache del frontmatter o invalida una singola entry."""
+    """Svuota la cache del frontmatter o invalida una singola entry.
+
+    Usata anche dai workflow semantici (`semantic.api`) per isolare i run all'interno della stessa process.
+    """
 
     if path is None:
         _FRONTMATTER_CACHE.clear()

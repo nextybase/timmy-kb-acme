@@ -85,7 +85,7 @@ Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
 - `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono lSSoT.
 - `read_frontmatter(base, path, use_cache=True)` effettua path-safety e caching (invalidazione su mtime/size).
 - Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat gia presenti.
-- La cache del frontmatter `_FRONTMATTER_CACHE` e ora LRU bounded (256 entry): non affidarti a cache infinite e, nei run lunghi/Streamlit, usa `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
+- La cache del frontmatter `_FRONTMATTER_CACHE` e LRU bounded (256 entry): nei run lunghi/Streamlit resta buona pratica chiamare `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi; i workflow semantici orchestrati da `semantic.api` la svuotano automaticamente a fine run per garantire isolamento tra esecuzioni consecutive.
 
 Esempio rapido:
 ```python
@@ -94,7 +94,7 @@ meta, body = read_frontmatter(base_dir, md_path)
 new_text = dump_frontmatter({**meta, "title": "Nuovo titolo"}) + body
 ```
 
-Nota cache: dopo le scritture il frontmatter viene riallineato nella cache LRU (256 entry); nei run lunghi resta buona pratica chiamare `clear_frontmatter_cache()` per liberare memoria.
+Nota cache: dopo le scritture il frontmatter viene riallineato nella cache LRU (256 entry); i workflow semantici svuotano la cache a fine run, mentre negli altri flussi resta consigliata una chiamata esplicita a `clear_frontmatter_cache()` dopo batch estesi per liberare memoria.
 
 ------
 

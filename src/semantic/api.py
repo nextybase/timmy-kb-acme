@@ -349,7 +349,12 @@ def _run_build_workflow(
     enrich_fn: EnrichStage | None = None,
     summary_fn: SummaryStage | None = None,
 ) -> BuildWorkflowResult:
-    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti."""
+    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti.
+
+    Durante il run usa la cache LRU del frontmatter (gestita da `pipeline.content_utils`) per
+    velocizzare le riletture; al termine svuota sempre la cache con `clear_frontmatter_cache()`
+    per evitare cross-contaminazione tra run consecutivi nella stessa process e rilasciare memoria.
+    """
 
     ctx_base = cast(Path, getattr(context, "base_dir", None))
     base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
@@ -410,7 +415,11 @@ def run_semantic_pipeline(
     slug: str,
     stage_wrapper: StageWrapper | None = None,
 ) -> BuildWorkflowResult:
-    """Esegue la pipeline semantica standard esponendo un'API pubblica stabile."""
+    """Esegue la pipeline semantica standard esponendo un'API pubblica stabile.
+
+    Usa la cache LRU del frontmatter durante il run e la svuota automaticamente a fine workflow
+    per garantire isolamento tra esecuzioni consecutive.
+    """
 
     return _run_build_workflow(
         context,
@@ -425,7 +434,11 @@ def run_semantic_pipeline(
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
-    """Fase unica che copre conversione, summary/readme e arricchimento frontmatter."""
+    """Fase unica che copre conversione, summary/readme e arricchimento frontmatter.
+
+    La cache LRU del frontmatter viene sfruttata durante il run e sempre svuotata a fine workflow
+    per evitare riuso involontario di stato tra run nella stessa process.
+    """
     if logger is None:
         logger = get_structured_logger("semantic.book", context={"slug": slug})
     start_ts = time.perf_counter()
