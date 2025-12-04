@@ -111,7 +111,7 @@ def test_write_markdown_for_pdf_uses_cache_when_unchanged(tmp_path: Path, monkey
 
     stat = first_md.stat()
     cache_key = (first_md, stat.st_mtime_ns, stat.st_size)
-    cu._FRONTMATTER_CACHE[cache_key] = (meta_before, body_before)
+    cu._FRONTMATTER_CACHE.set(cache_key, (meta_before, body_before))
 
     def _fail_read(*_args: Any, **_kwargs: Any) -> None:
         raise AssertionError("read_frontmatter dovrebbe essere bypassata con cache")
@@ -124,7 +124,9 @@ def test_write_markdown_for_pdf_uses_cache_when_unchanged(tmp_path: Path, monkey
 
     second_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg, slug="dummy")
 
-    cached_meta, cached_body = cu._FRONTMATTER_CACHE.get(cache_key, (meta_before, body_before))
+    cached_entry = cu._FRONTMATTER_CACHE.get(cache_key)
+    assert cached_entry is not None
+    cached_meta, cached_body = cached_entry
     assert second_md == first_md
     assert cached_meta["created_at"] == meta_before["created_at"]
     assert cached_body == body_before

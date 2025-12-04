@@ -39,7 +39,9 @@ def test_frontmatter_cache_updates_after_write(tmp_path: Path) -> None:
     # Recupera l'entry appena scritta dalla cache
     stat = (target_root / "doc.md").stat()
     cache_key = ((target_root / "doc.md"), stat.st_mtime_ns, stat.st_size)
-    meta, body = cu._FRONTMATTER_CACHE[cache_key]  # noqa: SLF001
+    cache_entry = cu._FRONTMATTER_CACHE.get(cache_key)  # noqa: SLF001
+    assert cache_entry is not None
+    meta, body = cache_entry
 
     assert meta["tags_raw"] == ["B"]
     assert "Documento sincronizzato" in body

@@ -39,8 +39,51 @@ class _ReadmeCtx(Protocol):
 # Alias per annotazioni lunghe (evita E501)
 CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
 
-_FRONTMATTER_CACHE: OrderedDict[tuple[Path, int, int], tuple[dict[str, Any], str]] = OrderedDict()
-_FRONTMATTER_CACHE_MAX = 256
+
+class FrontmatterCache:
+    """Wrapper LRU leggero per il frontmatter, estendibile con stats/disable."""
+
+    def __init__(self, max_size: int = 256, *, enabled: bool = True) -> None:
+        self.max_size = max_size
+        self.enabled = enabled
+        self._store: OrderedDict[tuple[Path, int, int], tuple[dict[str, Any], str]] = OrderedDict()
+
+    def clear(self, path: Path | None = None) -> None:
+        if not self.enabled:
+            return
+        if path is None:
+            self._store.clear()
+            return
+        for key in list(self._store.keys()):
+            if key[0] == path:
+                self._store.pop(key, None)
+
+    def get(self, key: tuple[Path, int, int]) -> tuple[dict[str, Any], str] | None:
+        if not self.enabled:
+            return None
+        value = self._store.pop(key, None)
+        if value is None:
+            return None
+        # riposiziona in coda per LRU
+        self._store[key] = value
+        return value
+
+    def set(self, key: tuple[Path, int, int], value: tuple[dict[str, Any], str]) -> None:
+        if not self.enabled:
+            return
+        self._store.pop(key, None)
+        self._store[key] = value
+        self._evict()
+
+    def stats(self) -> dict[str, Any]:
+        return {"entries": len(self._store), "max": self.max_size, "enabled": self.enabled}
+
+    def _evict(self) -> None:
+        while len(self._store) > self.max_size:
+            self._store.popitem(last=False)
+
+
+_FRONTMATTER_CACHE = FrontmatterCache(max_size=256)
 _PDF_EXCERPT_MAX_CHARS = 2048
 
 
@@ -50,18 +93,7 @@ def clear_frontmatter_cache(path: Path | None = None) -> None:
     Usata anche dai workflow semantici (`semantic.api`) per isolare i run all'interno della stessa process.
     """
 
-    if path is None:
-        _FRONTMATTER_CACHE.clear()
-        return
-    for key in list(_FRONTMATTER_CACHE.keys()):
-        if key[0] == path:
-            _FRONTMATTER_CACHE.pop(key, None)
-
-
-def _evict_frontmatter_cache() -> None:
-    """Garantisce il rispetto del limite LRU per la cache del frontmatter."""
-    while len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
-        _FRONTMATTER_CACHE.popitem(last=False)
+    _FRONTMATTER_CACHE.clear(path)
 
 
 # -----------------------------
@@ -304,14 +336,13 @@ def _write_markdown_for_pdf(
                 cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
             except OSError:
                 cache_key = None
-            if cache_key and cache_key in _FRONTMATTER_CACHE:
-                existing_meta, body_prev = _FRONTMATTER_CACHE.pop(cache_key)
-                _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
+            cached_entry: tuple[dict[str, Any], str] | None = _FRONTMATTER_CACHE.get(cache_key) if cache_key else None
+            if cached_entry:
+                existing_meta, body_prev = cached_entry
             else:
                 existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
                 if cache_key:
-                    _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
-                    _evict_frontmatter_cache()
+                    _FRONTMATTER_CACHE.set(cache_key, (existing_meta, body_prev))
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
@@ -347,8 +378,7 @@ def _write_markdown_for_pdf(
     try:
         stat = md_path.stat()
         cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
-        _FRONTMATTER_CACHE[cache_key] = (meta, body)
-        _evict_frontmatter_cache()
+        _FRONTMATTER_CACHE.set(cache_key, (meta, body))
     except OSError:
         pass
     return md_path
