@@ -124,6 +124,83 @@ def _check_grafana_reachable(url: str, timeout: float = 2.0) -> tuple[bool, str]
         return False, str(exc)
 
 
+def _render_grafana_block(
+    *,
+    settings,
+    toggle,
+) -> tuple[bool, bool, bool, str]:
+    """
+    Rende la sezione Grafana/dashboards di osservabilità e restituisce:
+    - stack_enabled: nuovo valore del toggle "Osservabilità esterna"
+    - docker_available: bool da _is_docker_available()
+    - grafana_reachable: bool da _check_grafana_reachable()
+    - docker_cmd: stringa di comando Docker suggerito
+    """
+    docker_available = _is_docker_available()
+    docker_cmd = "docker compose --env-file ./.env -f observability/docker-compose.yaml"
+    stack_enabled = toggle(
+        "Osservabilità esterna (Grafana/Loki)",
+        value=settings.stack_enabled,
+        help=(
+            "Indica che vuoi usare lo stack di osservabilità esterno. "
+            "Questa preferenza può essere letta dalla pagina Admin o dagli "
+            "script di deploy per avviare lo stack Grafana/Loki."
+        ),
+    )
+    grafana_url = get_grafana_url()
+    st.caption(f"URL Grafana configurato (env `TIMMY_GRAFANA_URL` o default): `{grafana_url}`")
+    grafana_reachable, reach_msg = (
+        _check_grafana_reachable(grafana_url)
+        if docker_available
+        else (False, "Docker non attivo, abilita Docker prima di controllare Grafana.")
+    )
+    if stack_enabled:
+        _safe_link_button("Apri Grafana", grafana_url, type="secondary")
+        status_icon = "🟢" if grafana_reachable else "🔴"
+        st.caption(f"Grafana {status_icon} ({reach_msg}).")
+    else:
+        st.caption("Abilita 'Osservabilità esterna' per aprire Grafana e le dashboard collegate.")
+    return stack_enabled, docker_available, grafana_reachable, docker_cmd
+
+
+def _render_stack_controls(
+    *,
+    docker_available: bool,
+    docker_cmd: str,
+    stack_enabled: bool,
+    grafana_reachable: bool,
+    action_button,
+) -> None:
+    """
+    Rende i controlli Start/Stop stack e i messaggi informativi
+    relativi allo stato dello stack di osservabilità.
+    """
+    if not docker_available:
+        st.info(
+            "Docker non attivo: avvia il daemon prima di usare i pulsanti Grafana."
+            f" Esempio: `{docker_cmd} up -d` nella root del progetto."
+        )
+        return
+
+    stack_ready = stack_enabled and grafana_reachable
+    if stack_ready:
+        if action_button("Stop Stack"):
+            ok, msg = stop_observability_stack()
+            if ok:
+                _safe_success(f"Stack fermato: {msg}")
+            else:
+                st.warning(f"Errore Stop Stack: {msg}")
+        st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
+    else:
+        if action_button("Start Stack"):
+            ok, msg = start_observability_stack()
+            if ok:
+                _safe_success(f"Stack avviato: {msg}")
+            else:
+                st.warning(f"Errore Start Stack: {msg}")
+        st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
+
+
 def _render_observability_controls() -> None:
     """
     Pannello di controllo per gli strumenti di osservabilità.
@@ -147,31 +224,11 @@ def _render_observability_controls() -> None:
     success = getattr(st, "success", None) or (lambda *_args, **_kwargs: None)
     action_button = getattr(st, "button", None) or (lambda *_args, **_kwargs: False)
 
-    docker_available = _is_docker_available()
-    docker_cmd = "docker compose --env-file ./.env -f observability/docker-compose.yaml"
     with col1:
-        stack_enabled = toggle(
-            "Osservabilità esterna (Grafana/Loki)",
-            value=settings.stack_enabled,
-            help=(
-                "Indica che vuoi usare lo stack di osservabilità esterno. "
-                "Questa preferenza può essere letta dalla pagina Admin o dagli "
-                "script di deploy per avviare lo stack Grafana/Loki."
-            ),
+        stack_enabled, docker_available, reachable, docker_cmd = _render_grafana_block(
+            settings=settings,
+            toggle=toggle,
         )
-        grafana_url = get_grafana_url()
-        st.caption(f"URL Grafana configurato (env `TIMMY_GRAFANA_URL` o default): `{grafana_url}`")
-        reachable, reach_msg = (
-            _check_grafana_reachable(grafana_url)
-            if docker_available
-            else (False, "Docker non attivo, abilita Docker prima di controllare Grafana.")
-        )
-        if stack_enabled:
-            _safe_link_button("Apri Grafana", grafana_url, type="secondary")
-            status_icon = "🟢" if reachable else "🔴"
-            st.caption(f"Grafana {status_icon} ({reach_msg}).")
-        else:
-            st.caption("Abilita 'Osservabilità esterna' per aprire Grafana e le dashboard collegate.")
 
     slug = get_active_slug()
     logs_dashboard_url = get_grafana_logs_dashboard_url(slug=slug)
@@ -189,29 +246,13 @@ def _render_observability_controls() -> None:
             st.caption("Configura `TIMMY_GRAFANA_ERRORS_UID` per mostrare il dashboard alert/errori.")
     st.caption(f"Slug attivo: {slug or 'nessuno'}")
     st.caption("")
-    if not docker_available:
-        st.info(
-            "Docker non attivo: avvia il daemon prima di usare i pulsanti Grafana."
-            f" Esempio: `{docker_cmd} up -d` nella root del progetto."
-        )
-    else:
-        stack_ready = stack_enabled and reachable
-        if stack_ready:
-            if action_button("Stop Stack"):
-                ok, msg = stop_observability_stack()
-                if ok:
-                    _safe_success(f"Stack fermato: {msg}")
-                else:
-                    st.warning(f"Errore Stop Stack: {msg}")
-            st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
-        else:
-            if action_button("Start Stack"):
-                ok, msg = start_observability_stack()
-                if ok:
-                    _safe_success(f"Stack avviato: {msg}")
-                else:
-                    st.warning(f"Errore Start Stack: {msg}")
-            st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
+    _render_stack_controls(
+        docker_available=docker_available,
+        docker_cmd=docker_cmd,
+        stack_enabled=stack_enabled,
+        grafana_reachable=reachable,
+        action_button=action_button,
+    )
 
     with col2:
         tracing_enabled = toggle(
