@@ -492,6 +492,25 @@ def _discover_safe_pdfs(
     return root_pdfs, cat_items
 
 
+def _plan_pdf_groups(
+    *,
+    base_dir: Path,
+    raw_root: Path,
+    safe_pdfs: list[Path] | None,
+    slug: str | None,
+    logger: logging.Logger,
+) -> tuple[list[Path], CategoryGroups]:
+    """Determina l'elenco dei PDF root e di categoria, rispettando eventuali safe_pdfs prevalidate."""
+    if safe_pdfs is not None:
+        return _group_safe_pdfs_by_category(raw_root, safe_pdfs)
+    return _discover_safe_pdfs(
+        raw_root,
+        base_dir=base_dir,
+        slug=slug,
+        logger=logger,
+    )
+
+
 # -----------------------------
 # API
 # -----------------------------
@@ -725,12 +744,13 @@ def convert_files_to_structured_markdown(
 
     logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
 
-    if safe_pdfs is not None:
-        root_pdfs, cat_items = _group_safe_pdfs_by_category(raw_root, safe_pdfs)
-    else:
-        root_pdfs, cat_items = _discover_safe_pdfs(
-            raw_root, base_dir=base, slug=getattr(ctx, "slug", None), logger=logger
-        )
+    root_pdfs, cat_items = _plan_pdf_groups(
+        base_dir=base,
+        raw_root=raw_root,
+        safe_pdfs=safe_pdfs,
+        slug=getattr(ctx, "slug", None),
+        logger=logger,
+    )
 
     slug = getattr(ctx, "slug", None)
     for pdf in root_pdfs:
