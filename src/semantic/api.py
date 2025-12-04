@@ -37,6 +37,7 @@ from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
+from storage.kb_store import KbStore
 from storage.tags_store import DocEntityRecord
 from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
@@ -476,6 +477,8 @@ def index_markdown_to_db(
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
+    store = KbStore.for_slug(slug=slug, db_path=db_path)
+    effective_db_path = store.effective_db_path()
     return cast(
         int,
         embedding_service.index_markdown_to_db(
@@ -485,6 +488,6 @@ def index_markdown_to_db(
             logger=logger,
             scope=scope,
             embeddings_client=embeddings_client,
-            db_path=db_path,
+            db_path=effective_db_path,
         ),
     )

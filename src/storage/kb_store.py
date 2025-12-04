@@ -1,62 +1,51 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# path: src/storage/kb_store.py
+# src/storage/kb_store.py
+"""
+Ownership esplicita del percorso DB della Knowledge Base.
+
+Questo modulo incapsula la policy di mapping tra slug cliente e file SQLite:
+- oggi consente override esplicito e, in mancanza, deriva un path per slug sotto data/ (risolto da kb_db).
+- evita che i call-site decidano il path in modo sparso; kb_db resta l'autorità per path-safety.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from kb_db import get_db_path
+__all__ = ["KbStore"]
 
 
 @dataclass(frozen=True)
 class KbStore:
-    """
-    Owner esplicito del percorso del DB SQLite della KB.
+    """Piccolo oggetto che incapsula la policy di path per il DB KB.
 
-    Design:
-    - Oggi wrappa il default globale esistente (`kb_db.get_db_path()` sotto `data/`).
-    - Domani potrà evolvere verso un DB per slug/workspace senza dover toccare di nuovo
-      il retriever: la risoluzione del path resta centralizzata qui.
+    - `slug`: identifica il tenant (cliente/progetto), può anche essere stringa vuota.
+    - `db_path_override`: path esplicito per test o override.
     """
 
-    db_path: Optional[Path] = None
-    slug: Optional[str] = None
+    slug: str
+    db_path_override: Optional[Path] = None
 
     @classmethod
-    def default(cls) -> "KbStore":
-        """
-        Store di default: replica il comportamento attuale, DB unico globale sotto `data/`.
-        """
-        return cls(db_path=None, slug=None)
+    def for_slug(cls, slug: str, db_path: Optional[Path] = None) -> "KbStore":
+        """Factory per costruire uno store legato a uno slug, con eventuale override esplicito."""
+        return cls(slug=str(slug), db_path_override=db_path)
 
-    @classmethod
-    def for_slug(cls, slug: str, *, base_dir: Optional[Path] = None) -> "KbStore":
-        """
-        Placeholder per strategie future "un DB per slug" o per workspace.
-
-        Comportamento attuale (backward compat):
-        - Se base_dir è None, usa comunque il DB globale (db_path=None).
-        - Se base_dir è fornito, continua a restituire db_path=None per mantenere la
-          compatibilità.
-
-        Futuro:
-        - Questo metodo diventerà l'unico punto in cui si mappa uno slug a un file DB
-          dedicato (es. `base_dir / "data" / f"kb_{slug}.sqlite"` o varianti per workspace).
-        """
-        normalized_slug = slug.strip()
-        if not normalized_slug:
-            return cls.default()
-        return cls(db_path=None, slug=normalized_slug)
-
-    def effective_db_path(self) -> Path:
-        """
-        Restituisce il path effettivo da usare in kb_db/retriever.
+    def effective_db_path(self) -> Optional[Path]:
+        """Restituisce il path da passare a kb_db.
 
         Regole:
-        - Se `self.db_path` è valorizzato, usalo tal quale (test e call-site avanzati).
-        - Altrimenti delega a `kb_db.get_db_path()` per preservare il default globale.
+        - Se c'è un override esplicito -> restituiscilo (assoluto o relativo).
+        - Se `slug` non è vuoto -> ritorna un path RELATIVO basato sullo slug
+          (kb_db._resolve_db_path lo ancora sotto `data/`): Path(f"kb-{slug}.sqlite")
+        - Se slug è vuoto e non c'è override -> restituisci None (kb_db userà `data/kb.sqlite`).
+
+        Nota: path-safety/ancoraggio a `data/` resta responsabilità di kb_db._resolve_db_path.
         """
-        if self.db_path is not None:
-            return self.db_path
-        return get_db_path()
+        if self.db_path_override is not None:
+            return self.db_path_override
+        if self.slug:
+            return Path(f"kb-{self.slug}.sqlite")
+        return None

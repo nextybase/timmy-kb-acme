@@ -42,6 +42,7 @@ from prompt_builder import build_prompt
 from retriever import QueryParams, search_with_config  # <-- usa la facade
 from security.authorization import authorizer_session
 from security.throttle import throttle_token_bucket
+from storage.kb_store import KbStore
 from vscode_bridge import read_response, write_request
 
 st: Any | None
@@ -156,6 +157,7 @@ def main() -> None:
         slug = st.text_input("Project slug", value="evagrin", key="coder_slug")
     with col3:
         scope = cast(str, st.selectbox("Scope", options=["Timmy", "ClasScrum", "Zeno"], index=0, key="coder_scope"))
+    store = KbStore.for_slug(slug=slug)
 
     next_premise = st.text_area("NeXT Premise", height=120, key="coder_next_premise")
     coding_rules = st.text_area("Coding Rules (web)", height=120, key="coder_coding_rules")
@@ -180,8 +182,9 @@ def main() -> None:
                     candidate_limit = int(limit_cfg) if limit_cfg is not None else 2000
                 except Exception:
                     candidate_limit = 2000
+                db_path = store.effective_db_path()
                 params = QueryParams(
-                    db_path=get_db_path(),
+                    db_path=db_path,
                     slug=slug,
                     scope=scope,
                     query=f"{task}\n\n{chat_context}" if chat_context else task,
@@ -234,7 +237,7 @@ def main() -> None:
 
     # Footer
     st.divider()
-    st.caption(f"DB path: {get_db_path()}")
+    st.caption(f"DB path: {store.effective_db_path() or get_db_path()}")
     st.caption(f"Log: {LOG_FILE}")
 
 

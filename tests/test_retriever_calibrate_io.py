@@ -161,7 +161,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     assert created_params
     first_params = created_params[0]
     assert first_params == {
-        "db_path": None,
+        "db_path": Path("kb-dummy.sqlite"),
         "slug": "dummy",
         "scope": "faq",
         "query": "hello",

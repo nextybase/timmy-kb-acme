@@ -151,7 +151,7 @@ def main() -> int:
     for limit in limits:
         for query_index, query in enumerate(queries):
             for repetition in range(int(args.repetitions)):
-                db_path = store.db_path  # DB globale per retrocompat; KbStore centralizza il mapping futuro
+                db_path = store.effective_db_path()
                 params = QueryParams(
                     db_path=db_path,
                     slug=slug,
