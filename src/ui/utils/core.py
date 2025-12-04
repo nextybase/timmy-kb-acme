@@ -15,12 +15,12 @@ def to_kebab(s: str) -> str:
     return str(_to_kebab(s))
 
 
-def ensure_within_and_resolve(root: Path | str, target: Path | str) -> Path:
+def ensure_within_and_resolve(base: Path | str, candidate: Path | str) -> Path:
     """Wrapper SSoT per `pipeline.path_utils.ensure_within_and_resolve`.
 
     Esegue solo il cast `Path|str` â†’ `Path` e delega al backend, mantenendo la firma pubblica.
     """
-    return cast(Path, _ensure_within_and_resolve(Path(root), Path(target)))
+    return cast(Path, _ensure_within_and_resolve(Path(base), Path(candidate)))
 
 
 def yaml_load(path: Path) -> Dict[str, Any]:
