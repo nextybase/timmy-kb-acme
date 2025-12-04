@@ -79,7 +79,8 @@ def _ensure_startup() -> None:
     tm_dir.mkdir(parents=True, exist_ok=True)
     history_dir = ppath.ensure_within_and_resolve(tm_dir, tm_dir / "history")
     history_dir.mkdir(parents=True, exist_ok=True)
-    init_db(get_db_path())
+    legacy_store = KbStore.default()
+    init_db(legacy_store.effective_db_path())
 
 
 def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
