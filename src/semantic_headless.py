@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, cast
 
 from pipeline.exceptions import ConfigError
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger, log_workflow_summary
 from pipeline.tracing import start_root_trace
 from semantic.api import (
     _require_reviewed_vocab,
@@ -35,7 +35,7 @@ def build_markdown_headless(
     *,
     slug: str,
 ) -> Dict[str, object]:
-    """Esegue la pipeline semantica in modalitÃ  headless (senza prompt/UI):
+    """Esegue la pipeline semantica in modalità headless (senza prompt/UI):
 
     1) convert_markdown -> genera .md in book/ 2) load_reviewed_vocab -> carica vocabolario canonico
     da base/semantic 3) enrich_frontmatter -> arricchisce i frontmatter con titoli e tag 4)
@@ -71,16 +71,18 @@ def build_markdown_headless(
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="semantic_headless",
-        description="Esegue la build semantica (RAW -> BOOK) in modalitÃ  headless.",
+        description="Esegue la build semantica (RAW -> BOOK) in modalità headless.",
     )
     p.add_argument("--slug", required=True, help="Identificativo cliente (slug).")
     p.add_argument(
         "--non-interactive",
         action="store_true",
-        help="Disabilita prompt interattivi (modalitÃ  batch/CI).",
+        help="Disabilita prompt interattivi (modalità batch/CI).",
     )
     p.add_argument(
+        "--no-preview",
         action="store_true",
+        help="Non avviare eventuali preview collegate (placeholder).",
     )
     p.add_argument(
         "--log-level",
@@ -100,56 +102,120 @@ def _setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
 
 
 def _safe_len_seq(obj: object) -> int:
-    """Restituisce len(obj) solo se obj Ã¨ una lista/tupla, altrimenti 0 (type-safe per Pylance)."""
+    """Restituisce len(obj) solo se obj è una lista/tupla, altrimenti 0 (type-safe per Pylance)."""
     if isinstance(obj, (list, tuple)):
         return len(obj)
     return 0
 
 
-def main() -> int:
-    args = _parse_args()
-    log = _setup_logger(args.log_level, slug=args.slug)
+def run_semantic_headless(
+    slug: str,
+    *,
+    non_interactive: bool = False,
+    log_level: str = "INFO",
+) -> dict[str, object]:
+    log = _setup_logger(log_level, slug=slug)
     env = os.getenv("TIMMY_ENV", "dev")
 
     with start_root_trace(
         "reindex",
-        slug=args.slug,
+        slug=slug,
         run_id=None,
         entry_point="cli",
         env=env,
         trace_kind="reindex",
     ):
         try:
-            # Carichiamo il contesto concreto quando disponibile a runtime
             from pipeline.context import ClientContext
 
             ctx = ClientContext.load(
-                slug=args.slug,
-                interactive=not bool(args.non_interactive),
+                slug=slug,
+                interactive=not bool(non_interactive),
                 require_env=False,
                 run_id=None,
             )
         except ConfigError as exc:
             log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})
-            return 2
-        except Exception as exc:
+            return {
+                "slug": slug,
+                "status": "config_error",
+                "stage": "context",
+                "converted_count": 0,
+                "enriched_count": 0,
+                "summary_readme": False,
+                "exit_code": 2,
+            }
+        except Exception as exc:  # pragma: no cover - defensive
             log.exception("semantic.headless.context_unexpected", extra={"error": str(exc)})
-            return 1
+            return {
+                "slug": slug,
+                "status": "error",
+                "stage": "context",
+                "converted_count": 0,
+                "enriched_count": 0,
+                "summary_readme": False,
+                "exit_code": 1,
+            }
 
         try:
-            res = build_markdown_headless(ctx, log, slug=args.slug)
+            res = build_markdown_headless(ctx, log, slug=slug)
             conv = _safe_len_seq(res.get("converted"))
             enr = _safe_len_seq(res.get("enriched"))
         except ConfigError as exc:
             log.exception("semantic.headless.run_config_error", extra={"error": str(exc)})
-            return 2
-        except Exception as exc:
+            return {
+                "slug": slug,
+                "status": "config_error",
+                "stage": "run",
+                "converted_count": 0,
+                "enriched_count": 0,
+                "summary_readme": False,
+                "exit_code": 2,
+            }
+        except Exception as exc:  # pragma: no cover - defensive
             log.exception("semantic.headless.run_failed", extra={"error": str(exc)})
-            return 1
+            return {
+                "slug": slug,
+                "status": "error",
+                "stage": "run",
+                "converted_count": 0,
+                "enriched_count": 0,
+                "summary_readme": False,
+                "exit_code": 1,
+            }
 
     log.info("semantic.headless.completed", extra={"converted_count": conv, "enriched_count": enr})
-    return 0
+    log_workflow_summary(
+        log,
+        event="cli.semantic_headless.completed",
+        slug=slug,
+        artifacts=int(conv),
+        extra={"enriched_count": int(enr)},
+    )
+    return {
+        "slug": slug,
+        "status": "success",
+        "stage": "run",
+        "converted_count": conv,
+        "enriched_count": enr,
+        "summary_readme": bool(res.get("summary_readme")),
+        "exit_code": 0,
+    }
+
+
+def main() -> int:
+    args = _parse_args()
+    result = run_semantic_headless(
+        slug=args.slug,
+        non_interactive=bool(args.non_interactive),
+        log_level=str(args.log_level),
+    )
+    return int(result.get("exit_code", 1))
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# Nota: genera prima il dummy ("py src/tools/gen_dummy_kb.py --slug dummy"), poi esegui
+# "py src/tools/retriever_calibrate.py --slug dummy --scope book" e aggiungi
+# "--queries tests/data/retriever_queries.jsonl --limits 500:3000:500" come da docs/test_suite.md.
