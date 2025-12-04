@@ -57,7 +57,17 @@ def convert_markdown(
     if discarded_unsafe > 0:
         logger.info("semantic.convert.discarded_unsafe", extra={"slug": slug, "count": discarded_unsafe})
 
-    return _run_markdown_conversion(
+    if discarded_unsafe > 0 and not safe_pdfs:
+        raise ConfigError(
+            (
+                f"Trovati solo PDF non sicuri/fuori perimetro in RAW (scartati={discarded_unsafe}). "
+                "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
+            ),
+            slug=slug,
+            file_path=shim.raw_dir,
+        )
+
+    result = _run_markdown_conversion(
         shim,
         md_dir,
         logger,
@@ -65,6 +75,15 @@ def convert_markdown(
         discarded_unsafe=discarded_unsafe,
         start_ts=start_ts,
     )
+
+    if not result:
+        raise ConfigError(
+            "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
+            slug=slug,
+            file_path=shim.raw_dir,
+        )
+
+    return result
 
 
 def discover_raw_inputs(raw_dir: Path, logger: logging.Logger, slug: str) -> RawDiscovery:
@@ -173,7 +192,8 @@ def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> Tupl
                 extra={"slug": slug, "file_path": str(candidate), "error": reason},
             )
 
-    for safe_path in ppath.iter_safe_pdfs(raw_dir, on_skip=_on_skip, use_cache=True):
+    # Usiamo sempre la scansione "fresh" per evitare cache stale tra run/test.
+    for safe_path in ppath.iter_safe_pdfs(raw_dir, on_skip=_on_skip, use_cache=False):
         safe.append(safe_path)
 
     return safe, discarded
@@ -227,6 +247,17 @@ def _run_markdown_conversion(
     else:
         safe_list = []
 
+    if not safe_list and not any(md_dir.glob("*.md")):
+        logger.info(
+            "semantic.convert.no_files",
+            extra={"slug": slug, "raw_dir": str(shim.raw_dir), "book_dir": str(md_dir)},
+        )
+        raise ConfigError(
+            "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
+            slug=slug,
+            file_path=shim.raw_dir,
+        )
+
     with phase_scope(logger, stage="convert_markdown", customer=slug) as scope:
         call_convert = _call_convert_md
 
@@ -235,10 +266,16 @@ def _run_markdown_conversion(
             content_mds = cast(List[Path], list_content_markdown(md_dir))
         else:
             content_mds = cast(List[Path], list_content_markdown(md_dir))
-            if not content_mds:
+            user_content = [p for p in content_mds if p.name not in {"README.md", "SUMMARY.md"}]
+            if not user_content:
                 logger.info(
                     "semantic.convert.no_files",
                     extra={"slug": slug, "raw_dir": str(shim.raw_dir), "book_dir": str(md_dir)},
+                )
+                raise ConfigError(
+                    "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
+                    slug=slug,
+                    file_path=shim.raw_dir,
                 )
 
         try:

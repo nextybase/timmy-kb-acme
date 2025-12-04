@@ -28,6 +28,29 @@ for candidate in (REPO_ROOT, SRC_ROOT):
 
 import sqlite3
 
+from semantic import api as _semantic_api
+from semantic import convert_service as _convert_service
+from semantic import frontmatter_service as _frontmatter_service
+
+_ORIG_CONVERT_MARKDOWN = _convert_service.convert_markdown
+_ORIG_REQUIRE_REVIEWED_VOCAB = _semantic_api.require_reviewed_vocab
+_ORIG_PRIVATE_REQUIRE_REVIEWED_VOCAB = _semantic_api._require_reviewed_vocab  # type: ignore[attr-defined]
+_ORIG_ENRICH_FRONTMATTER = _frontmatter_service.enrich_frontmatter
+_ORIG_WRITE_SUMMARY_AND_README = _frontmatter_service.write_summary_and_readme
+
+
+@pytest.fixture(autouse=True)
+def _reset_semantic_api_functions() -> None:
+    """Resetta le funzioni pubbliche della semantic API tra i test per evitare leak di monkeypatch."""
+    from semantic import api as sapi
+
+    sapi.convert_markdown = _ORIG_CONVERT_MARKDOWN
+    sapi.require_reviewed_vocab = _ORIG_REQUIRE_REVIEWED_VOCAB
+    sapi._require_reviewed_vocab = _ORIG_PRIVATE_REQUIRE_REVIEWED_VOCAB  # type: ignore[attr-defined]
+    sapi.enrich_frontmatter = _ORIG_ENRICH_FRONTMATTER
+    sapi.write_summary_and_readme = _ORIG_WRITE_SUMMARY_AND_README
+    yield
+
 
 def _install_yaml_stub() -> None:
     """Installa uno stub minimale di yaml se la dipendenza manca."""

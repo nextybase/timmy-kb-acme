@@ -21,15 +21,12 @@ from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
-from semantic.api import _run_build_workflow  # type: ignore[attr-defined]
+from semantic.api import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
+from semantic.api import enrich_frontmatter  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
-from semantic.api import (
-    convert_markdown,
-    enrich_frontmatter,
-    get_paths,
-    require_reviewed_vocab,
-    write_summary_and_readme,
-)
+from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
+from semantic.api import write_summary_and_readme  # noqa: F401  # esposto per monkeypatch nei test CLI
+from semantic.api import get_paths, run_semantic_pipeline
 
 
 def _parse_args() -> argparse.Namespace:
@@ -90,15 +87,20 @@ def main() -> int:
                         m.set_artifacts(None)
                     return result
 
-            base_dir, _mds, touched = _run_build_workflow(  # type: ignore[attr-defined,assignment]
+            # Allinea le funzioni di pipeline con eventuali monkeypatch locali (usato nei test CLI)
+            import semantic.api as _semantic_api
+
+            _semantic_api.convert_markdown = convert_markdown
+            _semantic_api.require_reviewed_vocab = require_reviewed_vocab
+            _semantic_api._require_reviewed_vocab = require_reviewed_vocab  # type: ignore[attr-defined]
+            _semantic_api.enrich_frontmatter = enrich_frontmatter
+            _semantic_api.write_summary_and_readme = write_summary_and_readme
+
+            base_dir, _mds, touched = run_semantic_pipeline(
                 ctx,
                 logger,
                 slug=slug,
                 stage_wrapper=_stage_wrapper,
-                convert_fn=lambda context, lgr, *, slug: convert_markdown(context, lgr, slug=slug),
-                vocab_fn=lambda base_dir, lgr, *, slug: require_reviewed_vocab(base_dir, lgr, slug=slug),
-                enrich_fn=lambda context, lgr, vocab, *, slug: enrich_frontmatter(context, lgr, vocab, slug=slug),
-                summary_fn=lambda context, lgr, *, slug: write_summary_and_readme(context, lgr, slug=slug),
             )
 
             # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)

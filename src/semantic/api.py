@@ -83,6 +83,7 @@ __all__ = [
     "convert_markdown",
     "enrich_frontmatter",
     "write_summary_and_readme",
+    "run_semantic_pipeline",
     "build_tags_csv",
     "build_markdown_book",
     "index_markdown_to_db",
@@ -400,6 +401,27 @@ def _run_build_workflow(
                 "semantic.frontmatter_cache.clear_failed",
                 extra={"slug": slug, "error": str(exc)},
             )
+
+
+def run_semantic_pipeline(
+    context: ClientContextType,
+    logger: logging.Logger,
+    *,
+    slug: str,
+    stage_wrapper: StageWrapper | None = None,
+) -> BuildWorkflowResult:
+    """Esegue la pipeline semantica standard esponendo un'API pubblica stabile."""
+
+    return _run_build_workflow(
+        context,
+        logger,
+        slug=slug,
+        stage_wrapper=stage_wrapper,
+        convert_fn=None,
+        vocab_fn=None,
+        enrich_fn=None,
+        summary_fn=None,
+    )
 
 
 def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, slug: str) -> list[Path]:
