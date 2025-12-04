@@ -17,7 +17,7 @@ if str(_SRC_ROOT) not in sys.path:
 from kg_builder import build_kg_for_workspace
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
-from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
@@ -149,7 +149,13 @@ def main() -> int:
             "summary_exists": summary_path.exists(),
             "readme_exists": readme_path.exists(),
         }
-        logger.info("cli.semantic_onboarding.summary", extra={"slug": slug, **summary_extra})
+        log_workflow_summary(
+            logger,
+            event="cli.semantic_onboarding.summary",
+            slug=slug,
+            artifacts=len(content_mds),
+            extra=summary_extra,
+        )
     except Exception as exc:
         logger.warning(
             "cli.semantic_onboarding.summary_failed",

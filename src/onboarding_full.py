@@ -28,7 +28,7 @@ from pipeline.context import ClientContext
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import ConfigError, PipelineError, PushError, exit_code_for
-from pipeline.logging_utils import get_structured_logger, phase_scope
+from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.metrics import start_metrics_server_once
 from pipeline.path_utils import ensure_valid_slug, ensure_within, iter_safe_paths  # SSoT guardia STRONG
 from pipeline.tracing import start_root_trace
@@ -224,9 +224,12 @@ def onboarding_full_main(
                 m.set_artifacts(1)
             _maybe_publish_gitbook(context, logger)
 
-        logger.info(
-            "cli.onboarding_full.completed",
-            extra={"slug": slug, "artifacts": int(1 if do_push else 0)},
+        log_workflow_summary(
+            logger,
+            event="cli.onboarding_full.completed",
+            slug=slug,
+            artifacts=int(1 if do_push else 0),
+            extra={"book_files": md_snapshot_count},
         )
         return 0
     except KeyboardInterrupt:
