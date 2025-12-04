@@ -29,7 +29,11 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
+from pipeline.context import ClientContext
+from pipeline.path_utils import ensure_within_and_resolve
 from retriever import QueryParams, search
+from storage.kb_store import KbStore
 
 
 class _DummyEmbeddings:
@@ -98,6 +102,21 @@ def main() -> None:
     candidates_list = [int(x.strip()) for x in str(args.candidates).split(",") if x.strip()]
     emb = _DummyEmbeddings()
 
+    workspace = None
+    try:
+        ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
+        base_dir = getattr(ctx, "base_dir", None)
+        if isinstance(base_dir, Path):
+            workspace = base_dir
+    except Exception:
+        workspace = None
+    if workspace is None:
+        root = Path(OUTPUT_DIR_NAME)
+        workspace = ensure_within_and_resolve(root, root / f"{REPO_NAME_PREFIX}{args.slug}")
+
+    store = KbStore.for_slug(slug=args.slug, base_dir=workspace, db_path=args.db)
+    db_path = store.effective_db_path()
+
     rows: list[BenchRow] = []
     raw_results: dict[str, Any] = {
         "runs": int(args.runs),
@@ -113,7 +132,7 @@ def main() -> None:
         for _ in range(int(args.runs)):
             for q in queries:
                 params = QueryParams(
-                    db_path=args.db,
+                    db_path=db_path,
                     slug=args.slug,
                     scope=args.scope,
                     query=str(q["q"]),
