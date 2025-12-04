@@ -50,8 +50,8 @@ def _safe_rerun() -> None:
     if callable(rerun_fn):
         try:
             rerun_fn()
-        except Exception:
-            pass
+        except Exception as exc:  # pragma: no cover - fallback silenzioso
+            LOGGER.warning("ui.manage.safe_rerun_failed", extra={"error": repr(exc)})
 
 
 _MANAGE_FILE = Path(__file__).resolve()

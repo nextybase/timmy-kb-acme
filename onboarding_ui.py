@@ -87,12 +87,13 @@ def _render_preflight_header() -> None:
     logo_path = None
     try:
         logo_path = get_main_logo_path(REPO_ROOT)
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.warning("ui.preflight.logo_resolve_failed", extra={"error": repr(exc)})
 
     try:
         cols = st.columns([1, 2, 1])
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("ui.preflight.columns_failed", extra={"error": repr(exc)})
         cols = None
 
     target = cols[1] if cols and len(cols) >= 3 else st
@@ -101,17 +102,18 @@ def _render_preflight_header() -> None:
         if logo_path:
             try:
                 target_st.image(str(logo_path))
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.warning("ui.preflight.logo_render_failed", extra={"error": repr(exc)})
         try:
             target_st.markdown("### Controllo di sistema")
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning("ui.preflight.header_render_failed", extra={"error": repr(exc)})
 
     try:
         with target:
             _render(target)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("ui.preflight.header_container_failed", extra={"error": repr(exc)})
         _render(st)
 
 

@@ -43,9 +43,10 @@ def _safe_rerun() -> None:
     if callable(rerun_fn):
         try:
             rerun_fn()
-        except Exception:
-            # In alcune versioni Streamlit puÃ² sollevare eccezioni interne di rerun: ignoriamo.
-            pass
+        except Exception as exc:
+            # In alcune versioni Streamlit può sollevare eccezioni interne di rerun: ignoriamo.
+            log = get_structured_logger("ui.landing_slug")
+            log.warning("ui.landing_slug.safe_rerun_failed", extra={"error": repr(exc)})
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -362,7 +363,7 @@ def render_workspace_summary(
         type=["pdf"],
         accept_multiple_files=False,
         key="ls_pdf",
-        help="Carica il Vision Statement. VerrÃ  salvato come config/VisionStatement.pdf quando crei il workspace.",
+        help="Carica il Vision Statement. VerrÃƒÂ  salvato come config/VisionStatement.pdf quando crei il workspace.",
     )
     if uploaded_pdf is not None:
         raw_pdf = uploaded_pdf.read()
@@ -442,7 +443,7 @@ def render_workspace_summary(
         mapping_content = read_text_safe(base_dir_path, mapping_path, encoding="utf-8")
         cartelle_content = read_text_safe(base_dir_path, cartelle_path, encoding="utf-8")
     except Exception:
-        st.warning("Non Ã¨ stato possibile leggere le ultime configurazioni YAML generate.")
+        st.warning("Non ÃƒÂ¨ stato possibile leggere le ultime configurazioni YAML generate.")
         return False, slug, client_name
 
     with st.expander("YAML generati (vision/cartelle)", expanded=False):
