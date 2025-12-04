@@ -201,6 +201,72 @@ def _render_stack_controls(
         st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
 
 
+def _render_tracing_controls(
+    *,
+    settings,
+    toggle,
+    action_button,
+    logger,
+) -> bool:
+    """
+    Rende la sezione di controllo per il tracing OpenTelemetry
+    e ritorna il nuovo valore di tracing_enabled.
+    """
+    tracing_enabled = toggle(
+        "Tracing OpenTelemetry (OTEL)",
+        value=settings.tracing_enabled,
+        help=(
+            "Abilita il tracing OTEL nella configurazione. "
+            "Per essere effettivo è necessario configurare anche "
+            "la variabile d'ambiente TIMMY_OTEL_ENDPOINT."
+        ),
+    )
+    otel_env_present = bool(os.getenv("TIMMY_OTEL_ENDPOINT"))
+    if otel_env_present:
+        _safe_success("Endpoint OTEL configurato (TIMMY_OTEL_ENDPOINT è impostata).")
+    else:
+        st.info(
+            "Nessun endpoint OTEL configurato: il tracing è solo una preferenza "
+            "finché non imposti TIMMY_OTEL_ENDPOINT."
+        )
+    state = get_tracing_state()
+    st.caption(
+        f"Tracing – preferenze: {'ON' if state.enabled_in_prefs else 'OFF'}, "
+        f"endpoint: {'OK' if state.endpoint_present else 'MANCANTE'}, "
+        f"librerie OTEL: {'OK' if state.otel_installed else 'NON INSTALLATE'}."
+    )
+    if state.enabled_in_prefs and not state.effective_enabled:
+        st.warning(
+            "Tracing attivato nelle preferenze ma non operativo: "
+            "configura TIMMY_OTEL_ENDPOINT e installa le librerie OpenTelemetry."
+        )
+    if action_button("Verifica tracing"):
+        env = os.getenv("TIMMY_ENV", "dev")
+        with start_root_trace(
+            "diagnostic",
+            slug=None,
+            run_id=None,
+            entry_point="ui",
+            env=env,
+            trace_kind="diagnostic",
+        ):
+            with start_phase_span(
+                "observability.tracing.doctor",
+                slug=None,
+                run_id=None,
+                trace_kind="diagnostic",
+            ):
+                logger.info(
+                    "observability.tracing.test_span_emitted",
+                    extra={"trace_kind": "diagnostic"},
+                )
+        st.info(
+            "Span diagnostico emesso. Se Grafana/Tempo sono configurati, "
+            "dovresti vederlo in Tempo filtrando per trace_kind=diagnostic negli ultimi minuti."
+        )
+    return tracing_enabled
+
+
 def _render_observability_controls() -> None:
     """
     Pannello di controllo per gli strumenti di osservabilità.
@@ -255,58 +321,12 @@ def _render_observability_controls() -> None:
     )
 
     with col2:
-        tracing_enabled = toggle(
-            "Tracing OpenTelemetry (OTEL)",
-            value=settings.tracing_enabled,
-            help=(
-                "Abilita il tracing OTEL nella configurazione. "
-                "Per essere effettivo è necessario configurare anche "
-                "la variabile d'ambiente TIMMY_OTEL_ENDPOINT."
-            ),
+        tracing_enabled = _render_tracing_controls(
+            settings=settings,
+            toggle=toggle,
+            action_button=action_button,
+            logger=logger,
         )
-        otel_env_present = bool(os.getenv("TIMMY_OTEL_ENDPOINT"))
-        if otel_env_present:
-            _safe_success("Endpoint OTEL configurato (TIMMY_OTEL_ENDPOINT è impostata).")
-        else:
-            st.info(
-                "Nessun endpoint OTEL configurato: il tracing è solo una preferenza "
-                "finché non imposti TIMMY_OTEL_ENDPOINT."
-            )
-        state = get_tracing_state()
-        st.caption(
-            f"Tracing – preferenze: {'ON' if state.enabled_in_prefs else 'OFF'}, "
-            f"endpoint: {'OK' if state.endpoint_present else 'MANCANTE'}, "
-            f"librerie OTEL: {'OK' if state.otel_installed else 'NON INSTALLATE'}."
-        )
-        if state.enabled_in_prefs and not state.effective_enabled:
-            st.warning(
-                "Tracing attivato nelle preferenze ma non operativo: "
-                "configura TIMMY_OTEL_ENDPOINT e installa le librerie OpenTelemetry."
-            )
-        if action_button("Verifica tracing"):
-            env = os.getenv("TIMMY_ENV", "dev")
-            with start_root_trace(
-                "diagnostic",
-                slug=None,
-                run_id=None,
-                entry_point="ui",
-                env=env,
-                trace_kind="diagnostic",
-            ):
-                with start_phase_span(
-                    "observability.tracing.doctor",
-                    slug=None,
-                    run_id=None,
-                    trace_kind="diagnostic",
-                ):
-                    logger.info(
-                        "observability.tracing.test_span_emitted",
-                        extra={"trace_kind": "diagnostic"},
-                    )
-            st.info(
-                "Span diagnostico emesso. Se Grafana/Tempo sono configurati, "
-                "dovresti vederlo in Tempo filtrando per trace_kind=diagnostic negli ultimi minuti."
-            )
 
     col3, col4 = st.columns([1, 1])
     with col3:
