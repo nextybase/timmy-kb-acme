@@ -224,6 +224,12 @@ def load_and_chunk(
     """Applica path-safety, filtro binario e chunking. Restituisce (safe_path, chunks)."""
     base = Path(base_dir).resolve()
     candidate = Path(path)
+    if not candidate.exists() or not candidate.is_file():
+        LOGGER.error(
+            "ingest.invalid_file",
+            extra={"file": str(candidate), "slug": slug},
+        )
+        return None, []
     try:
         safe_path = ensure_within_and_resolve(base, candidate)
     except PathTraversalError as exc:
@@ -408,7 +414,10 @@ def ingest_path(
     base_dir: Optional[Path] = None,
     db_path: Optional[Path] = None,
 ) -> int:
-    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
+    """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk.
+
+    Funzione di orchestrazione: delega path-safety/lettura a load_and_chunk e l'embed/persist a embed_and_persist.
+    """
     effective_db_path = db_path
     if effective_db_path is None:
         # Riusabile stand-alone: se ingest_folder non ha già risolto il DB, calcola qui il workspace.
@@ -419,12 +428,6 @@ def ingest_path(
     if base_dir is None:
         raise ConfigError("Base directory obbligatoria per ingest_path.")
     base = Path(base_dir).resolve()
-    if not p.exists() or not p.is_file():
-        LOGGER.error(
-            "ingest.invalid_file",
-            extra={"file": str(p), "slug": slug},
-        )
-        return 0
     customer = meta.get("slug") if isinstance(meta, dict) else None
     safe_path, chunks = load_and_chunk(
         path=p,
@@ -435,7 +438,6 @@ def ingest_path(
     )
     if not chunks or safe_path is None:
         return 0
-
     return embed_and_persist(
         slug=slug,
         scope=scope,
