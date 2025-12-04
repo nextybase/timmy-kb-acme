@@ -102,6 +102,26 @@ def _resolve_workspace_base(slug: str) -> Optional[Path]:
     return None
 
 
+def discover_files(
+    folder_glob: str,
+    base_dir: Path,
+    *,
+    slug: str,
+    scope: str,
+    customer: str | None,
+    on_count: Callable[[int], None] | None = None,
+) -> Iterable[Path]:
+    """Wrapper pubblico per `_iter_ingest_candidates`."""
+    return _iter_ingest_candidates(
+        folder_glob,
+        base_dir,
+        customer=customer,
+        scope=scope,
+        slug=slug,
+        on_count=on_count,
+    )
+
+
 def _iter_ingest_candidates(
     folder_glob: str,
     base: Path,
@@ -191,6 +211,121 @@ def _is_binary(path: Path) -> bool:
         return True
     text_bytes = sum(c in b"\n\r\t\f\v\b\x1b" or 32 <= c <= 126 for c in chunk)
     return text_bytes / max(1, len(chunk)) < 0.9
+
+
+def load_and_chunk(
+    *,
+    path: Path,
+    base_dir: Path,
+    slug: str,
+    scope: str,
+    customer: str | None,
+) -> tuple[Optional[Path], list[str]]:
+    """Applica path-safety, filtro binario e chunking. Restituisce (safe_path, chunks)."""
+    base = Path(base_dir).resolve()
+    candidate = Path(path)
+    try:
+        safe_path = ensure_within_and_resolve(base, candidate)
+    except PathTraversalError as exc:
+        with start_decision_span(
+            "filter",
+            slug=customer or slug,
+            run_id=None,
+            trace_kind="ingest",
+            phase="ingest.process_file",
+            attributes={
+                "decision_type": "filter",
+                "file_path_relative": _relative_to(base, candidate),
+                "reason": "traversal",
+                "status": "blocked",
+                "error": str(exc),
+            },
+        ):
+            LOGGER.warning(
+                "ingest.skip.traversal",
+                extra={
+                    "file": str(candidate),
+                    "slug": slug,
+                    "scope": scope,
+                    "error": str(exc),
+                },
+            )
+        return None, []
+
+    if _is_binary(safe_path):
+        with start_decision_span(
+            "filter",
+            slug=customer or slug,
+            run_id=None,
+            trace_kind="ingest",
+            phase="ingest.process_file",
+            attributes={
+                "decision_type": "filter",
+                "file_path_relative": _relative_to(base, candidate),
+                "reason": "binary",
+                "status": "blocked",
+            },
+        ):
+            LOGGER.info(
+                "ingest.skip.binary",
+                extra={"file": str(candidate), "slug": slug},
+            )
+        return None, []
+
+    text = _read_text_file(base, candidate)
+    chunks: list[str] = _chunk_text(text)
+    return safe_path, chunks
+
+
+def embed_and_persist(
+    *,
+    slug: str,
+    scope: str,
+    version: str,
+    safe_path: Path,
+    chunks: list[str],
+    meta: dict[str, Any],
+    embeddings_client: EmbeddingsClient | None,
+    db_path: Path,
+    customer: str | None,
+) -> int:
+    """Calcola le embedding e persiste i chunk nel DB, restituendo il totale inserito."""
+    client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
+    with phase_scope(LOGGER, stage="ingest.embed", customer=customer or slug) as phase_embed:
+        vectors_seq = client.embed_texts(chunks)
+        vectors: list[list[float]] = [list(map(float, v)) for v in vectors_seq]
+        phase_embed.set_artifacts(len(vectors))
+
+    with phase_scope(LOGGER, stage="ingest.persist", customer=customer or slug) as phase_persist:
+        inserted = int(
+            insert_chunks(
+                slug=slug,
+                scope=scope,
+                path=str(safe_path),
+                version=version,
+                meta_dict=meta,
+                chunks=chunks,
+                embeddings=vectors,
+                db_path=db_path,
+            )
+        )
+        phase_persist.set_artifacts(inserted)
+
+    LOGGER.info(
+        "ingest.file.saved",
+        extra={
+            "slug": slug,
+            "scope": scope,
+            "file": str(safe_path),
+            "chunks": inserted,
+        },
+    )
+    if inserted > 0:
+        try:
+            record_document_processed(slug, inserted)
+        except Exception:
+            pass
+    return inserted
 
 
 @lru_cache(maxsize=1)
@@ -290,93 +425,28 @@ def ingest_path(
             extra={"file": str(p), "slug": slug},
         )
         return 0
-    try:
-        safe_p = ensure_within_and_resolve(base, p)
-    except PathTraversalError as exc:
-        with start_decision_span(
-            "filter",
-            slug=slug,
-            run_id=None,
-            trace_kind="ingest",
-            phase="ingest.process_file",
-            attributes={
-                "decision_type": "filter",
-                "file_path_relative": _relative_to(base, p),
-                "reason": "traversal",
-                "status": "blocked",
-                "error": str(exc),
-            },
-        ):
-            LOGGER.warning(
-                "ingest.skip.traversal",
-                extra={
-                    "file": str(p),
-                    "slug": slug,
-                    "scope": scope,
-                    "error": str(exc),
-                },
-            )
-        return 0
-    if _is_binary(safe_p):
-        with start_decision_span(
-            "filter",
-            slug=slug,
-            run_id=None,
-            trace_kind="ingest",
-            phase="ingest.process_file",
-            attributes={
-                "decision_type": "filter",
-                "file_path_relative": _relative_to(base, p),
-                "reason": "binary",
-                "status": "blocked",
-            },
-        ):
-            LOGGER.info(
-                "ingest.skip.binary",
-                extra={"file": str(p), "slug": slug},
-            )
-        return 0
-    text = _read_text_file(base, p)
     customer = meta.get("slug") if isinstance(meta, dict) else None
-    with phase_scope(LOGGER, stage="ingest.embed", customer=customer or slug) as phase_embed:
-        chunks: List[str] = _chunk_text(text)
-        phase_embed.set_artifacts(len(chunks))
-        client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
-        vectors_seq = client.embed_texts(chunks)
-
-        # Converte in List[List[float]] per compatibilità con insert_chunks
-        vectors: List[List[float]] = [list(map(float, v)) for v in vectors_seq]
-        phase_embed.set_artifacts(len(vectors))
-
-    with phase_scope(LOGGER, stage="ingest.persist", customer=customer or slug) as phase_persist:
-        inserted = int(
-            insert_chunks(
-                slug=slug,
-                scope=scope,
-                path=str(safe_p),
-                version=version,
-                meta_dict=meta,
-                chunks=chunks,
-                embeddings=vectors,
-                db_path=effective_db_path,
-            )
-        )
-        phase_persist.set_artifacts(inserted)
-    LOGGER.info(
-        "ingest.file.saved",
-        extra={
-            "slug": slug,
-            "scope": scope,
-            "file": str(safe_p),
-            "chunks": inserted,
-        },
+    safe_path, chunks = load_and_chunk(
+        path=p,
+        base_dir=base,
+        slug=slug,
+        scope=scope,
+        customer=customer,
     )
-    if inserted > 0:
-        try:
-            record_document_processed(slug, inserted)
-        except Exception:
-            pass
-    return inserted
+    if not chunks or safe_path is None:
+        return 0
+
+    return embed_and_persist(
+        slug=slug,
+        scope=scope,
+        version=version,
+        safe_path=safe_path,
+        chunks=chunks,
+        meta=meta,
+        embeddings_client=embeddings_client,
+        db_path=effective_db_path,
+        customer=customer,
+    )
 
 
 def ingest_folder(
@@ -435,15 +505,14 @@ def ingest_folder(
                 discovered = count
                 phase_discover.set_artifacts(count)
 
-            candidate_iter = _iter_ingest_candidates(
+            candidate_iter = discover_files(
                 folder_glob,
                 base,
-                customer=customer,
-                scope=scope,
                 slug=slug,
+                scope=scope,
+                customer=customer,
                 on_count=_update,
             )
-
             for batch in _batched_iterable(candidate_iter, batch_size):
                 for p in batch:
                     if max_files is not None and max_files >= 0 and count_files >= max_files:
