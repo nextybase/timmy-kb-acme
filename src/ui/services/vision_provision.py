@@ -86,9 +86,11 @@ class VisionArtifacts:
 # -----------------------------
 # Utilità hash e idempotenza
 # -----------------------------
-def _sha256_of_file(path: Path, chunk_size: int = 8192) -> str:
+def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
+    """Calcola l'hash del PDF con path-safety garantita."""
+    safe_path = ensure_within_and_resolve(base_dir, path)
     h = hashlib.sha256()
-    with path.open("rb") as fh:
+    with safe_path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(chunk_size), b""):
             h.update(chunk)
     return h.hexdigest()
@@ -129,7 +131,12 @@ def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
         raw = cast(str, read_text_safe(base_dir, path, encoding="utf-8"))
         data = json.loads(raw)
         return data if isinstance(data, dict) else None
-    except Exception:
+    except Exception as exc:
+        logger = get_structured_logger("ui.vision")
+        logger.warning(
+            "ui.vision.hash_read_failed",
+            extra={"path": str(path), "error": str(exc)},
+        )
         return None
 
 
@@ -214,12 +221,11 @@ def provision_from_vision(
 
     # Path sicuri entro il workspace
     pdf_path = Path(pdf_path)
-    safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
-    safe_pdf = cast(Path, safe_pdf)
+    safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
     if not safe_pdf.exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
 
-    digest = _sha256_of_file(safe_pdf)
+    digest = _sha256_of_file(base_dir, safe_pdf)
     last = _load_last_hash(base_dir)
     last_digest = (last or {}).get("hash")
 
