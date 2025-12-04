@@ -511,6 +511,23 @@ def _plan_pdf_groups(
     )
 
 
+def _cleanup_orphan_markdown(target: Path, written: set[Path]) -> None:
+    """Rimuove i markdown non più associati ai PDF, preservando README/SUMMARY."""
+    for candidate in iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",)):
+        low = candidate.name.lower()
+        if low in {"readme.md", "summary.md"}:
+            continue
+        if candidate not in written:
+            ensure_within(target, candidate)
+            try:
+                candidate.unlink(missing_ok=True)
+            except TypeError:
+                try:
+                    candidate.unlink()
+                except FileNotFoundError:
+                    pass
+
+
 # -----------------------------
 # API
 # -----------------------------
@@ -771,19 +788,7 @@ def convert_files_to_structured_markdown(
         for pdf in safe_list:
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
-    for candidate in iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",)):
-        low = candidate.name.lower()
-        if low in {"readme.md", "summary.md"}:
-            continue
-        if candidate not in written:
-            ensure_within(target, candidate)
-            try:
-                candidate.unlink(missing_ok=True)
-            except TypeError:
-                try:
-                    candidate.unlink()
-                except FileNotFoundError:
-                    pass
+    _cleanup_orphan_markdown(target, written)
 
     log_frontmatter_cache_stats(
         logger,
