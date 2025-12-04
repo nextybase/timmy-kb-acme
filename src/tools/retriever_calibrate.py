@@ -111,6 +111,113 @@ def _extract_dump_docs(candidates: list[dict[str, Any]], top_k: int) -> list[str
     return docs
 
 
+def run_single_calibration(
+    *,
+    slug: str,
+    scope: str,
+    store: KbStore,
+    limit: int,
+    query_index: int,
+    query: Query,
+    repetitions: int,
+    dump_top_path: str,
+    log,
+    retrieve_candidates,
+    RetrieverError,
+    QueryParams,
+) -> tuple[list[RunResult], list[str]]:
+    """
+    Esegue la calibrazione per una singola coppia (limit, query) ripetuta `repetitions` volte.
+
+    Ritorna:
+      - una lista di RunResult (uno per ripetizione riuscita),
+      - una lista di righe JSON (stringhe) da aggiungere al dump top-k (0 o 1 record).
+    """
+    rows: list[RunResult] = []
+    dump_records: list[str] = []
+    for repetition in range(repetitions):
+        db_path = store.effective_db_path()
+        params = QueryParams(
+            db_path=db_path,
+            slug=slug,
+            scope=scope,
+            query=query.text,
+            k=query.k,
+            candidate_limit=limit,
+        )
+        t0 = time.perf_counter()
+        try:
+            candidates = retrieve_candidates(params)
+        except RetrieverError as exc:  # type: ignore[misc]
+            log.error(
+                "retriever_calibrate.retrieve_failed",
+                extra={
+                    "slug": slug,
+                    "scope": scope,
+                    "limit": limit,
+                    "query_index": query_index,
+                    "error": str(exc),
+                },
+            )
+            continue
+        dt_ms = (time.perf_counter() - t0) * 1000.0
+
+        rows.append(RunResult(limit=limit, latency_ms=dt_ms, hits=len(candidates)))
+
+        log.info(
+            "retriever_calibrate.run",
+            extra={
+                "slug": slug,
+                "scope": scope,
+                "limit": limit,
+                "query_index": query_index,
+                "repetition": repetition,
+                "hits": len(candidates),
+                "latency_ms": round(dt_ms, 3),
+            },
+        )
+
+        if dump_top_path and repetition == 0 and candidates:
+            record = {
+                "limit": limit,
+                "query": query.text,
+                "docs": _extract_dump_docs(candidates, query.k),
+            }
+            dump_records.append(json.dumps(record, ensure_ascii=False))
+    return rows, dump_records
+
+
+def aggregate_results(
+    *,
+    slug: str,
+    scope: str,
+    rows: list[RunResult],
+    log,
+) -> None:
+    """
+    Logga il riepilogo finale della calibrazione.
+
+    Se ci sono run registrati, logga retriever_calibrate.done con avg_latency_ms e runs;
+    altrimenti logga retriever_calibrate.no_runs.
+    """
+    if rows:
+        avg_latency = sum(r.latency_ms for r in rows) / len(rows)
+        log.info(
+            "retriever_calibrate.done",
+            extra={
+                "slug": slug,
+                "scope": scope,
+                "runs": len(rows),
+                "avg_latency_ms": round(avg_latency, 2),
+            },
+        )
+    else:
+        log.warning(
+            "retriever_calibrate.no_runs",
+            extra={"slug": slug, "scope": scope},
+        )
+
+
 def main() -> int:
     args = _parse_args()
 
@@ -156,73 +263,37 @@ def main() -> int:
 
     dump_records: list[str] = []
     rows: list[RunResult] = []
+    repetitions = int(args.repetitions)
+    dump_top_path = str(args.dump_top or "")
 
     for limit in limits:
         for query_index, query in enumerate(queries):
-            for repetition in range(int(args.repetitions)):
-                db_path = store.effective_db_path()
-                params = QueryParams(
-                    db_path=db_path,
-                    slug=slug,
-                    scope=scope,
-                    query=query.text,
-                    k=query.k,
-                    candidate_limit=limit,
-                )
-                t0 = time.perf_counter()
-                try:
-                    candidates = retrieve_candidates(params)
-                except RetrieverError as exc:
-                    log.error(
-                        "retriever_calibrate.retrieve_failed",
-                        extra={
-                            "slug": slug,
-                            "scope": scope,
-                            "limit": limit,
-                            "query_index": query_index,
-                            "error": str(exc),
-                        },
-                    )
-                    continue
-                dt_ms = (time.perf_counter() - t0) * 1000.0
-
-                rows.append(RunResult(limit=limit, latency_ms=dt_ms, hits=len(candidates)))
-
-                log.info(
-                    "retriever_calibrate.run",
-                    extra={
-                        "slug": slug,
-                        "scope": scope,
-                        "limit": limit,
-                        "query_index": query_index,
-                        "repetition": repetition,
-                        "hits": len(candidates),
-                        "latency_ms": round(dt_ms, 3),
-                    },
-                )
-
-                if args.dump_top and repetition == 0 and candidates:
-                    record = {
-                        "limit": limit,
-                        "query": query.text,
-                        "docs": _extract_dump_docs(candidates, query.k),
-                    }
-                    dump_records.append(json.dumps(record, ensure_ascii=False))
+            run_rows, run_dump = run_single_calibration(
+                slug=slug,
+                scope=scope,
+                store=store,
+                limit=limit,
+                query_index=query_index,
+                query=query,
+                repetitions=repetitions,
+                dump_top_path=dump_top_path,
+                log=log,
+                retrieve_candidates=retrieve_candidates,
+                RetrieverError=RetrieverError,
+                QueryParams=QueryParams,
+            )
+            rows.extend(run_rows)
+            dump_records.extend(run_dump)
 
     if args.dump_top and dump_records:
         _ensure_dump_and_write(Path(args.dump_top), dump_records)
 
-    if rows:
-        avg_latency = sum(r.latency_ms for r in rows) / len(rows)
-        log.info(
-            "retriever_calibrate.done",
-            extra={"slug": slug, "scope": scope, "runs": len(rows), "avg_latency_ms": round(avg_latency, 2)},
-        )
-    else:
-        log.warning(
-            "retriever_calibrate.no_runs",
-            extra={"slug": slug, "scope": scope},
-        )
+    aggregate_results(
+        slug=slug,
+        scope=scope,
+        rows=rows,
+        log=log,
+    )
 
     return 0
 
