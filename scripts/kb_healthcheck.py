@@ -67,6 +67,14 @@ def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
     if cartelle.exists():
         payload["cartelle_raw"] = str(cartelle)
     return payload
+
+
+class HealthcheckError(RuntimeError):
+    def __init__(self, payload: Dict[str, Any], code: int) -> None:
+        super().__init__(payload.get("error") or "healthcheck failed")
+        self.payload = payload
+        self.code = code
+
 def _print_err(payload: Dict[str, Any], code: int) -> None:
     """Stampa JSON su stderr e termina con codice specifico."""
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
@@ -267,6 +275,161 @@ def _load_env() -> None:
         pass
 
 
+def run_healthcheck(
+    slug: str,
+    *,
+    force: bool = False,
+    model: Optional[str] = None,
+    include_prompt: bool = False,
+) -> Dict[str, Any]:
+    slug = slug.strip()
+    base_dir = _client_base(slug)
+    repo_pdf = _repo_pdf_path()
+    if not repo_pdf.exists():
+        raise HealthcheckError(
+            {"error": "VisionStatement non trovato", "expected": str(repo_pdf)},
+            1,
+        )
+    workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
+
+    orig_factory = getattr(vp, "make_openai_client", None)
+    if orig_factory is None:
+        raise HealthcheckError({"error": "make_openai_client non trovato in semantic.vision_provision"}, 1)
+
+    LAST_CLIENT: Dict[str, Any] = {}
+
+    def _tracing_factory():
+        real = orig_factory()
+        traced = TracingClient(real)
+        LAST_CLIENT["client"] = traced
+        return traced
+
+    setattr(vp, "make_openai_client", _tracing_factory)
+
+    class _Ctx:
+        def __init__(self, base_dir: Path):
+            self.base_dir = base_dir
+            self.client_name = slug
+            self.settings = {}
+
+    ctx = _Ctx(base_dir)
+    logger = logging.getLogger("healthcheck.vision")
+    logger.setLevel(logging.INFO)
+
+    prepared_prompt: Optional[str] = None
+    effective_model = model or get_vision_model()
+    prompt_requested = bool(include_prompt)
+    if prompt_requested:
+        prepare_fn = getattr(vp, "prepare_assistant_input", None)
+        if callable(prepare_fn):
+            try:
+                prepared_prompt = prepare_fn(
+                    ctx=ctx,
+                    slug=slug,
+                    pdf_path=workspace_pdf,
+                    model=effective_model,
+                    logger=logger,
+                )
+            except Exception as exc:
+                logger.warning("healthcheck.prompt_prepare_failed", extra={"error": str(exc)})
+                prepared_prompt = None
+        else:
+            prompt_requested = False
+
+    run_skipped = False
+    traced_client: Optional[TracingClient] = None
+    try:
+        vision_result = run_vision(
+            ctx=ctx,
+            slug=slug,
+            pdf_path=workspace_pdf,
+            force=force,
+            model=effective_model,
+            logger=logger,
+            preview_prompt=False,
+            prepared_prompt_override=prepared_prompt,
+        )
+        traced_client = LAST_CLIENT.get("client")  # type: ignore[assignment]
+    except Exception as exc:
+        if prompt_requested and _is_gate_error(exc):
+            run_skipped = True
+            vision_result = _existing_vision_artifacts(base_dir)
+        else:
+            raise HealthcheckError({"error": f"Vision failed: {exc}"}, 1)
+
+    used_file_search = False
+    citations: List[Dict[str, Any]] = []
+    excerpt = ""
+    thread_id: Optional[str] = None
+    run_id: Optional[str] = None
+
+    if not run_skipped:
+        traced: TracingClient = traced_client  # type: ignore[assignment]
+        if traced is None or traced.beta._last_thread_id is None or traced.beta._last_run_id is None:
+            raise HealthcheckError(
+                {"error": "Tracing non riuscito: nessun thread/run ID catturato."},
+                1,
+            )
+
+        thread_id = traced.beta._last_thread_id
+        run_id = traced.beta._last_run_id
+
+        try:
+            steps = traced._orig.beta.threads.runs.steps.list(
+                thread_id=thread_id,
+                run_id=run_id,
+            )
+            for st in getattr(steps, "data", []) or []:
+                tool = getattr(st, "type", None) or getattr(st, "step_type", None)
+                if "tool" in str(tool).lower():
+                    name = getattr(getattr(st, "tool", None), "name", None)
+                    if name == "file_search":
+                        used_file_search = True
+                        break
+        except Exception:
+            used_file_search = False
+
+        text, annotations = _extract_text_and_annotations(traced, thread_id)
+        file_ids = [a.get("file_id") for a in annotations if a.get("file_id")]
+        id_to_name = _resolve_filenames(traced, list(dict.fromkeys(file_ids))) if file_ids else {}
+
+        for a in annotations:
+            fid = a.get("file_id")
+            if not fid:
+                continue
+            citations.append({"file_id": fid, "filename": id_to_name.get(fid), "quote": a.get("quote")})
+
+        excerpt = (text or "").strip()
+        if len(excerpt) > 400:
+            excerpt = excerpt[:400].rstrip() + "..."
+
+    mapping_text: Optional[str] = None
+    try:
+        mp = vision_result.get("mapping")
+        if mp:
+            mapping_text = Path(mp).read_text(encoding="utf-8")
+    except Exception:
+        mapping_text = None
+
+    out: Dict[str, Any] = {
+        "status": "skipped" if run_skipped else "completed",
+        "used_file_search": bool(used_file_search),
+        "citations": citations,
+        "assistant_text_excerpt": excerpt,
+        "thread_id": thread_id,
+        "run_id": run_id,
+        "pdf_path": str(workspace_pdf),
+        "base_dir": str(base_dir),
+        "mapping_yaml": vision_result.get("mapping"),
+        "cartelle_raw_yaml": vision_result.get("cartelle_raw"),
+        "semantic_mapping_content": mapping_text,
+        "vision_skipped": run_skipped,
+    }
+    if prompt_requested and prepared_prompt:
+        out["prompt"] = prepared_prompt
+    return out
+
+
 # ---- main -------------------------------------------------------------------
 def main() -> None:
     _load_env()
@@ -290,158 +453,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    slug = args.slug.strip()
-    base_dir = _client_base(slug)
-    repo_pdf = _repo_pdf_path()
-    if not repo_pdf.exists():
-        _print_err(
-            {"error": "VisionStatement non trovato", "expected": str(repo_pdf)},
-            1,
-        )
-    workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
-
-    # Monkey-patch: sostituiamo la factory OpenAI usata da Vision per inserire il client tracciante
-    orig_factory = getattr(vp, "make_openai_client", None)
-    if orig_factory is None:
-        _print_err({"error": "make_openai_client non trovato in semantic.vision_provision"}, 1)
-
-    LAST_CLIENT: Dict[str, Any] = {}
-
-    def _tracing_factory():
-        real = orig_factory()
-        traced = TracingClient(real)
-        LAST_CLIENT["client"] = traced
-        return traced
-
-    setattr(vp, "make_openai_client", _tracing_factory)
-
-    # Esecuzione Vision reale (UI -> semantic -> Assistants)
-    class _Ctx:
-        def __init__(self, base_dir: Path):
-            self.base_dir = base_dir
-            self.client_name = slug
-            self.settings = {}
-
-    ctx = _Ctx(base_dir)
-    logger = logging.getLogger("healthcheck.vision")
-    logger.setLevel(logging.INFO)
-
-    prepared_prompt: Optional[str] = None
-    include_prompt = bool(args.include_prompt)
-    if include_prompt:
-        prepare_fn = getattr(vp, "prepare_assistant_input", None)
-        if callable(prepare_fn):
-            try:
-                prepared_prompt = prepare_fn(
-                    ctx=ctx,
-                    slug=slug,
-                    pdf_path=workspace_pdf,
-                    model=(args.model or get_vision_model()),
-                    logger=logger,
-                )
-            except Exception as exc:
-                logger.warning("healthcheck.prompt_prepare_failed", extra={"error": str(exc)})
-                prepared_prompt = None
-        else:
-            include_prompt = False
-
-    run_skipped = False
-    traced_client: Optional[TracingClient] = None
     try:
-        vision_result = run_vision(
-            ctx=ctx,
-            slug=slug,
-            pdf_path=workspace_pdf,
-            force=args.force,
+        out = run_healthcheck(
+            slug=args.slug,
+            force=bool(args.force),
             model=(args.model or get_vision_model()),
-            logger=logger,
-            preview_prompt=False,
-            prepared_prompt_override=prepared_prompt,
+            include_prompt=bool(args.include_prompt),
         )
-        traced_client = LAST_CLIENT.get("client")  # type: ignore[assignment]
-    except Exception as exc:
-        if include_prompt and _is_gate_error(exc):
-            run_skipped = True
-            vision_result = _existing_vision_artifacts(base_dir)
-        else:
-            _print_err({"error": f"Vision failed: {exc}"}, 1)
+    except HealthcheckError as exc:
+        _print_err(exc.payload, exc.code)
 
-    used_file_search = False
-    citations: List[Dict[str, Any]] = []
-    excerpt = ""
-    thread_id: Optional[str] = None
-    run_id: Optional[str] = None
-
-    if not run_skipped:
-        traced: TracingClient = traced_client  # type: ignore[assignment]
-        if traced is None or traced.beta._last_thread_id is None or traced.beta._last_run_id is None:
-            _print_err({"error": "Tracing non riuscito: nessun thread/run ID catturato."}, 1)
-
-        thread_id = traced.beta._last_thread_id
-        run_id = traced.beta._last_run_id
-
-        # Verifica steps: uso effettivo di file_search
-        try:
-            steps = traced._orig.beta.threads.runs.steps.list(
-                thread_id=thread_id,
-                run_id=run_id,
-            )
-            for st in getattr(steps, "data", []) or []:
-                tool = getattr(st, "type", None) or getattr(st, "step_type", None)
-                if "tool" in str(tool).lower():
-                    name = getattr(getattr(st, "tool", None), "name", None)
-                    if name == "file_search":
-                        used_file_search = True
-                        break
-        except Exception:
-            used_file_search = False
-
-        # Estrai testo e citazioni
-        text, annotations = _extract_text_and_annotations(traced, thread_id)
-        file_ids = [a.get("file_id") for a in annotations if a.get("file_id")]
-        id_to_name = _resolve_filenames(traced, list(dict.fromkeys(file_ids))) if file_ids else {}
-
-        for a in annotations:
-            fid = a.get("file_id")
-            if not fid:
-                continue
-            citations.append({"file_id": fid, "filename": id_to_name.get(fid), "quote": a.get("quote")})
-
-        excerpt = (text or "").strip()
-        if len(excerpt) > 400:
-            excerpt = excerpt[:400].rstrip() + "..."
-
-    # carica (se presente) il contenuto del semantic_mapping.yaml
-    mapping_text: Optional[str] = None
-    try:
-        mp = vision_result.get("mapping")
-        if mp:
-            mapping_text = Path(mp).read_text(encoding="utf-8")
-    except Exception:
-        mapping_text = None
-
-    out = {
-        "status": "skipped" if run_skipped else "completed",
-        "used_file_search": bool(used_file_search),
-        "citations": citations,
-        "assistant_text_excerpt": excerpt,
-        "thread_id": thread_id,
-        "run_id": run_id,
-        "pdf_path": str(workspace_pdf),
-        "base_dir": str(base_dir),
-        "mapping_yaml": vision_result.get("mapping"),
-        "cartelle_raw_yaml": vision_result.get("cartelle_raw"),
-        "semantic_mapping_content": mapping_text,
-        "vision_skipped": run_skipped,
-    }
-    if include_prompt and prepared_prompt:
-        out["prompt"] = prepared_prompt
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    if run_skipped:
-        sys.exit(0)
-    if not out["used_file_search"] and not citations:
-        sys.exit(3)
 
+    if out.get("vision_skipped"):
+        sys.exit(0)
+    if not out.get("used_file_search") and not out.get("citations"):
+        sys.exit(3)
 
 
 if __name__ == "__main__":
