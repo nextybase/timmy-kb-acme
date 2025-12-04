@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict, Optional, Tuple, cast
 
 REPO_ROOT = Path(__file__).resolve().parent
 SRC_ROOT = REPO_ROOT / "src"
@@ -117,13 +117,19 @@ def _emb_client_or_none(use_rag: bool) -> EmbeddingsClient | None:
 
 
 def _load_client_cfg(slug: str) -> Dict[str, Any]:
-    """Carica il config cliente (output/timmy-kb-<slug>/config/config.yaml) se esiste, altrimenti {}."""
+    """Wrapper compat per caricare solo il config cliente."""
+    _ctx, cfg = _load_client_ctx_and_cfg(slug)
+    return cfg
+
+
+def _load_client_ctx_and_cfg(slug: str) -> Tuple[Optional[ClientContext], Dict[str, Any]]:
+    """Carica ClientContext e config cliente (output/timmy-kb-<slug>/config/config.yaml) se esistono."""
     try:
         ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
         cfg = get_client_config(ctx)
         if not isinstance(cfg, dict):
-            return {}
-        return cast(Dict[str, Any], cfg)
+            return ctx, {}
+        return ctx, cast(Dict[str, Any], cfg)
     except Exception as e:
         LOGGER.warning(
             "coder.config.unavailable",
@@ -133,7 +139,7 @@ def _load_client_cfg(slug: str) -> Dict[str, Any]:
                 "error": str(e),
             },
         )
-        return {}
+        return None, {}
 
 
 def main() -> None:
@@ -157,7 +163,11 @@ def main() -> None:
         slug = st.text_input("Project slug", value="evagrin", key="coder_slug")
     with col3:
         scope = cast(str, st.selectbox("Scope", options=["Timmy", "ClasScrum", "Zeno"], index=0, key="coder_scope"))
-    store = KbStore.for_slug(slug=slug)
+    ctx, _ = _load_client_ctx_and_cfg(slug)
+    base_dir = getattr(ctx, "base_dir", None) if ctx is not None else None
+    if base_dir is not None and not isinstance(base_dir, Path):
+        base_dir = Path(str(base_dir))
+    store = KbStore.for_slug(slug=slug, base_dir=base_dir)
 
     next_premise = st.text_area("NeXT Premise", height=120, key="coder_next_premise")
     coding_rules = st.text_area("Coding Rules (web)", height=120, key="coder_coding_rules")

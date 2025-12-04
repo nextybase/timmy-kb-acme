@@ -24,6 +24,7 @@ from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
 # Importa kb_db in modo locale senza alias legacy
 from kb_db import insert_chunks
+from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
@@ -31,6 +32,7 @@ from pipeline.metrics import record_document_processed, start_metrics_server_onc
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span, start_root_trace
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
+from storage.kb_store import KbStore
 
 LOGGER = get_structured_logger("timmy_kb.ingest")
 
@@ -59,6 +61,45 @@ def _relative_to(base: Path, candidate: Path) -> str:
         return str(candidate.relative_to(base))
     except Exception:
         return str(candidate)
+
+
+def _resolve_workspace_base(slug: str) -> Optional[Path]:
+    """
+    Best-effort resolution del workspace per uno slug.
+
+    Priorità:
+    1) ClientContext.load(...).base_dir
+    2) Se raw_dir è presente, usa raw_dir.parent
+    3) semantic.api.get_paths(slug)["base"]
+    4) Fallback None (DB globale)
+    """
+    slug = (slug or "").strip()
+    if not slug:
+        return None
+    try:
+        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        base_dir = getattr(ctx, "base_dir", None)
+        if isinstance(base_dir, Path):
+            return base_dir
+        raw_dir = getattr(ctx, "raw_dir", None)
+        if isinstance(raw_dir, Path):
+            return raw_dir.parent
+    except Exception:
+        pass
+
+    try:
+        from semantic.api import get_paths as _get_paths
+
+        paths = _get_paths(slug)
+        base = paths.get("base")
+        if isinstance(base, Path):
+            return base
+        if base is not None:
+            return Path(str(base))
+    except Exception:
+        return None
+
+    return None
 
 
 def _iter_ingest_candidates(
@@ -230,8 +271,14 @@ def ingest_path(
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
     base_dir: Optional[Path] = None,
+    db_path: Optional[Path] = None,
 ) -> int:
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
+    effective_db_path = db_path
+    if effective_db_path is None:
+        workspace_base = _resolve_workspace_base(slug)
+        store = KbStore.for_slug(slug, base_dir=workspace_base)
+        effective_db_path = store.effective_db_path()
     p = Path(path)
     if base_dir is None:
         raise ConfigError("Base directory obbligatoria per ingest_path.")
@@ -310,6 +357,7 @@ def ingest_path(
                 meta_dict=meta,
                 chunks=chunks,
                 embeddings=vectors,
+                db_path=effective_db_path,
             )
         )
         phase_persist.set_artifacts(inserted)
@@ -356,6 +404,11 @@ def ingest_folder(
     start_metrics_server_once()
     base = Path(base_dir).resolve() if base_dir is not None else _infer_base_dir(folder_glob)
     client: EmbeddingsClient | None = embeddings_client
+    workspace_base = _resolve_workspace_base(slug)
+    store = KbStore.for_slug(slug, base_dir=workspace_base)
+    db_path = store.effective_db_path()
+    if slug:
+        LOGGER.info("ingest.db_path", extra={"slug": slug, "db_path": str(db_path)})
 
     total_chunks = 0
     count_files = 0
@@ -407,6 +460,7 @@ def ingest_folder(
                                 meta=meta,
                                 embeddings_client=client,
                                 base_dir=base,
+                                db_path=db_path,
                             )
                             phase_file.set_artifacts(n)
                         if n > 0:

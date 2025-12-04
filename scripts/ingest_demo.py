@@ -3,7 +3,7 @@
 
 Uso:
   python scripts/ingest_demo.py \
-      --project evagrin \
+      --slug evagrin \
       --scope Timmy \
       --glob "docs/**/*.md" \
       --version v1 \
@@ -42,7 +42,7 @@ from ingest import ingest_folder
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--project", required=True)
+    ap.add_argument("--slug", required=True, help="Client slug (es. evagrin)")
     ap.add_argument("--scope", required=True, choices=["Timmy", "ClasScrum", "Zeno"])
     ap.add_argument("--glob", required=True)
     ap.add_argument("--version", required=True)
@@ -66,7 +66,7 @@ def main() -> None:
         raise SystemExit("OPENAI_API_KEY_CODEX mancante. Impostalo nell'ambiente o in un file .env.")
 
     summary = ingest_folder(
-        slug=args.project,
+        slug=args.slug,
         scope=args.scope,
         folder_glob=args.glob,
         version=args.version,
