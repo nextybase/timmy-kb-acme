@@ -2,9 +2,9 @@
 # tests/test_semantic_index_no_files_phase_scope.py
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 
 import semantic.api as api
+from tests.support.contexts import TestClientCtx
 
 
 class _DummyEmb:
@@ -13,9 +13,8 @@ class _DummyEmb:
         return [[0.0, 0.0]]
 
 
-def _ctx(base: Path, book: Path):
-    # raw_dir non è usato in index_markdown_to_db; manteniamo solo quelli necessari
-    return SimpleNamespace(base_dir=base, md_dir=book)
+def _ctx(base: Path, book: Path) -> TestClientCtx:
+    return TestClientCtx(slug="dummy", base_dir=base, raw_dir=base / "raw", md_dir=book)
 
 
 def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog):

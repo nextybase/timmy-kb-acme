@@ -4,15 +4,15 @@
 from __future__ import annotations
 
 import argparse
-import sys
 import uuid
 from pathlib import Path
 from typing import Optional
 
 from kg_builder import build_kg_for_workspace
+from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve
 
@@ -104,8 +104,7 @@ def kg_build_main(
         raise
 
 
-def main() -> None:
-    args = _parse_args()
+def main(args: argparse.Namespace) -> None:
     run_id = args.run_id or uuid.uuid4().hex
     early_logger = get_structured_logger("kg_build", run_id=run_id)
 
@@ -113,23 +112,23 @@ def main() -> None:
         workspace, context, slug = _resolve_workspace(args, run_id)
     except ConfigError as exc:
         early_logger.error("cli.kg_build.invalid_input", extra={"error": str(exc)})
-        sys.exit(exit_code_for(exc))
+        raise
 
     try:
         kg_build_main(workspace, args.namespace, slug, run_id, context)
     except KeyboardInterrupt:
         early_logger.error("cli.kg_build.interrupted", extra={"slug": slug, "run_id": run_id})
-        sys.exit(130)
+        raise
     except ConfigError as exc:
         early_logger.error("cli.kg_build.failed", extra={"error": str(exc)})
-        sys.exit(exit_code_for(exc))
+        raise
     except PipelineError as exc:
         early_logger.error("cli.kg_build.failed", extra={"error": str(exc)})
-        sys.exit(exit_code_for(exc))
+        raise
     except Exception as exc:  # noqa: BLE001
         early_logger.error("cli.kg_build.failed", extra={"error": str(exc)})
-        sys.exit(exit_code_for(PipelineError(str(exc))))
+        raise PipelineError(str(exc)) from exc
 
 
 if __name__ == "__main__":
-    main()
+    run_cli_orchestrator("kg_build", _parse_args, main)

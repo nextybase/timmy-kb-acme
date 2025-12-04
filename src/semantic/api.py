@@ -399,8 +399,13 @@ def _run_build_workflow(
         return base_dir, mds, touched
     finally:
         try:
-            from pipeline.content_utils import clear_frontmatter_cache
+            from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
 
+            log_frontmatter_cache_stats(
+                logger,
+                "semantic.frontmatter_cache.stats_before_clear",
+                slug=slug,
+            )
             clear_frontmatter_cache()
         except Exception as exc:
             logger.warning(

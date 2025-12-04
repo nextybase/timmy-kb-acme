@@ -3,12 +3,12 @@
 import csv
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from pipeline.exceptions import PathTraversalError
 from semantic.api import build_tags_csv
+from tests.support.contexts import TestClientCtx
 
 
 def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     (nested / "Welcome Packet 2024.pdf").write_bytes(b"%PDF-1.4\n")
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
-    context = SimpleNamespace(base_dir=base_dir, raw_dir=raw, md_dir=book)
+    context = TestClientCtx(slug=slug, base_dir=base_dir, raw_dir=raw, md_dir=book)
     csv_path = build_tags_csv(context, logging.getLogger("test"), slug=slug)
 
     assert csv_path == sem / "tags_raw.csv"
@@ -77,7 +77,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
 
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
 
-    context = SimpleNamespace(base_dir=base_dir, raw_dir=raw, md_dir=book)
+    context = TestClientCtx(slug=slug, base_dir=base_dir, raw_dir=raw, md_dir=book)
 
     monkeypatch.setattr(
         "semantic.api._derive_tags_db_path",

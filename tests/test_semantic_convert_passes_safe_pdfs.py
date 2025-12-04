@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_convert_passes_safe_pdfs.py
 import logging
-from types import SimpleNamespace
 
 from semantic import api as sapi
 from semantic import convert_service
+from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch, caplog):
@@ -16,7 +16,7 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     pdf = raw / "doc.pdf"
     pdf.write_text("fake-pdf", encoding="utf-8")
 
-    ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
+    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
 
     # Forziamo la discovery sicura: ritorna il PDF trovato
     monkeypatch.setattr(convert_service, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))

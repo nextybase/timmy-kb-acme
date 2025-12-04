@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
 from pathlib import Path
-from types import SimpleNamespace
 
 import pipeline.content_utils as cu
+from tests.support.contexts import TestClientCtx
 
 
-def _ctx(base: Path, raw: Path, book: Path):
-    return SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
+def _ctx(base: Path, raw: Path, book: Path) -> TestClientCtx:
+    return TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
 
 
 def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):

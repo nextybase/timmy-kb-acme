@@ -27,6 +27,7 @@ __all__ = [
     "generate_readme_markdown",
     "generate_summary_markdown",
     "convert_files_to_structured_markdown",
+    "log_frontmatter_cache_stats",
 ]
 
 
@@ -85,6 +86,28 @@ class FrontmatterCache:
 
 _FRONTMATTER_CACHE = FrontmatterCache(max_size=256)
 _PDF_EXCERPT_MAX_CHARS = 2048
+
+
+def log_frontmatter_cache_stats(
+    logger: logging.Logger,
+    event: str = "pipeline.frontmatter_cache.stats",
+    *,
+    slug: str | None = None,
+) -> None:
+    """Emette un log debug con le stats correnti della cache frontmatter."""
+    try:
+        stats = _FRONTMATTER_CACHE.stats()
+        extra: dict[str, Any] = {
+            "entries": stats.get("entries"),
+            "max": stats.get("max"),
+            "enabled": stats.get("enabled"),
+        }
+        if slug:
+            extra["slug"] = slug
+        logger.debug(event, extra=extra)
+    except Exception:
+        # Mai bloccare chiamanti per telemetria accessoria
+        pass
 
 
 def clear_frontmatter_cache(path: Path | None = None) -> None:
@@ -741,3 +764,8 @@ def convert_files_to_structured_markdown(
                     candidate.unlink()
                 except FileNotFoundError:
                     pass
+
+    log_frontmatter_cache_stats(
+        logger,
+        slug=slug,
+    )

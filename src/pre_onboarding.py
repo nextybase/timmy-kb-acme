@@ -29,11 +29,11 @@ import argparse
 import datetime as _dt
 import logging
 import shutil
-import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.config_utils import (
     get_client_config,
     merge_client_config_from_template,
@@ -43,7 +43,7 @@ from pipeline.config_utils import (
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
 from pipeline.logging_utils import (
     get_structured_logger,
@@ -619,19 +619,8 @@ def pre_onboarding_main(
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
 
 
-def _parse_args() -> argparse.ArgumentParser:
-    """Costruisce e restituisce il parser CLI per l'orchestratore di pre-onboarding.
-
-    Opzioni:
-        slug_pos: Argomento posizionale per lo slug cliente.
-        --slug: Slug cliente (alternativa al posizionale).
-        --name: Nome cliente (es. ACME Srl).
-        --non-interactive: Esecuzione senza prompt.
-        --dry-run: Esegue solo la parte locale e salta Google Drive.
-
-    Restituisce:
-        argparse.ArgumentParser: parser configurato (non ancora parsed).
-    """
+def _parse_args() -> argparse.Namespace:
+    """Restituisce gli argomenti CLI per l'orchestratore di pre-onboarding."""
     p = argparse.ArgumentParser(description="Pre-onboarding Timmy-KB")
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
@@ -642,36 +631,37 @@ def _parse_args() -> argparse.ArgumentParser:
         action="store_true",
         help=("Esegue la parte locale, no Google Drive (nessuna variabile d'ambiente)."),
     )
-    return p
+    return p.parse_args()
 
 
-if __name__ == "__main__":
-    args = _parse_args().parse_args()
+def main(args: argparse.Namespace) -> None:
+    """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
     run_id = uuid.uuid4().hex
     start_metrics_server_once()
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
+    unresolved_slug = args.slug_pos or args.slug
+    resolved_slug: Optional[str] = None
+
     def _error_extra(err_value: list[str], slug_value: Optional[str] = None) -> Dict[str, Any]:
-        slug_ref = slug_value if slug_value is not None else (unresolved_slug or None)
+        slug_ref = slug_value if slug_value is not None else (resolved_slug or unresolved_slug)
         mode = "non-interactive" if args.non_interactive else "interactive"
         return {"slug": slug_ref, "mode": mode, "dry_run": bool(args.dry_run), "err": err_value, "run_id": run_id}
 
-    unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
         early_logger.error(
             "cli.pre_onboarding.exit.config_error",
-            extra=_error_extra(["Missing slug in non-interactive mode"], locals().get("slug")),
+            extra=_error_extra(["Missing slug in non-interactive mode"], slug_value=None),
         )
-        sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
-    try:
-        slug = ensure_valid_slug(
-            unresolved_slug,
-            interactive=not args.non_interactive,
-            prompt=_prompt,
-            logger=early_logger,
-        )
-    except ConfigError as exc:
-        sys.exit(exit_code_for(exc))
+        raise ConfigError("Missing slug in non-interactive mode")
+
+    slug = ensure_valid_slug(
+        unresolved_slug,
+        interactive=not args.non_interactive,
+        prompt=_prompt,
+        logger=early_logger,
+    )
+    resolved_slug = slug
 
     env = get_env_var("TIMMY_ENV", default="dev")
     with start_root_trace(
@@ -690,24 +680,26 @@ if __name__ == "__main__":
                 dry_run=args.dry_run,
                 run_id=run_id,
             )
-            sys.exit(0)
         except KeyboardInterrupt:
-            sys.exit(130)
+            raise
         except ConfigError as exc:
             early_logger.error(
-                "cli.pre_onboarding.exit.config_error",
-                extra=_error_extra(str(exc).splitlines()[:1], slug),
+                "cli.pre_onboarding.exit.config_error", extra=_error_extra(str(exc).splitlines()[:1], slug)
             )
-            sys.exit(exit_code_for(exc))
+            raise
         except PipelineError as exc:
             early_logger.error(
                 "cli.pre_onboarding.exit.pipeline_error",
                 extra=_error_extra(str(exc).splitlines()[:1], slug),
             )
-            sys.exit(exit_code_for(exc))
-        except Exception as exc:  # noqa: BLE001 - hardening finale
+            raise
+        except Exception as exc:  # noqa: BLE001
             early_logger.error(
                 "cli.pre_onboarding.exit.unhandled",
                 extra=_error_extra(str(exc).splitlines()[:1], slug),
             )
-            sys.exit(exit_code_for(PipelineError(str(exc))))
+            raise PipelineError(str(exc)) from exc
+
+
+if __name__ == "__main__":
+    run_cli_orchestrator("pre_onboarding", _parse_args, main)

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_convert_fallback_no_safe_pdfs_param.py
 import logging
-from types import SimpleNamespace
 
 from semantic import api as sapi
 from semantic import convert_service
+from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypatch, caplog):
@@ -16,7 +16,7 @@ def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypat
     pdf = raw / "x.pdf"
     pdf.write_text("fake", encoding="utf-8")
 
-    ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
+    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
 
     # Discovery sicura → c'è un PDF valido
     monkeypatch.setattr(convert_service, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))

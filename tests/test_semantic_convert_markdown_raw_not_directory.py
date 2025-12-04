@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_semantic_convert_markdown_raw_not_directory.py
 import logging
-from types import SimpleNamespace
 
 import pytest
 
 from semantic.api import ConfigError, convert_markdown
+from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):
@@ -14,7 +14,7 @@ def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):
     raw.write_text("not a dir", encoding="utf-8")
     book = base / "book"
 
-    ctx = SimpleNamespace(base_dir=base, raw_dir=raw, md_dir=book)
+    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
     logger = logging.getLogger("test.convert_markdown")
     caplog.set_level(logging.INFO)
 

@@ -1,15 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-only
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
 
 from pipeline.exceptions import PathTraversalError
-from semantic.types import ClientContextProtocol
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
 from storage.tags_store import upsert_document, upsert_folder
 from tag_onboarding import _resolve_cli_paths, run_nlp_to_db
+from tests.support.contexts import TestClientCtx
 
 
 def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
@@ -133,17 +131,15 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     semantic_dir = base_dir / "semantic-data"
     raw_dir.mkdir(parents=True)
     semantic_dir.mkdir(parents=True)
-    ctx = cast(
-        ClientContextProtocol,
-        SimpleNamespace(
-            slug="dummy",
-            base_dir=base_dir,
-            raw_dir=raw_dir,
-            semantic_dir=semantic_dir,
-            repo_root_dir=None,
-            redact_logs=False,
-            run_id=None,
-        ),
+    ctx = TestClientCtx(
+        slug="dummy",
+        base_dir=base_dir,
+        raw_dir=raw_dir,
+        md_dir=base_dir / "book",
+        repo_root_dir=None,
+        semantic_dir=semantic_dir,
+        redact_logs=False,
+        run_id=None,
     )
 
     resolved_base, resolved_raw, db_path, resolved_semantic = _resolve_cli_paths(

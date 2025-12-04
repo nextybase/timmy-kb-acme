@@ -7,6 +7,9 @@ Obiettivi:
   I filtri sono attivabili da `context.redact_logs`.
 - Niente `print`: tutti i moduli usano logging strutturato (console + opzionale file).
 - Utility di **masking** coerenti per ID, percorsi e aggiornamenti di config.
+- Le preferenze applicative (livello, redazione, tracing) provengono da
+  `pipeline.observability_config`, mentre gli ENV regolano soli aspetti
+  infrastrutturali (rotazione file, propagate, endpoint OTEL).
 
 Formato di output (console/file):
     %(asctime)s %(levelname)s %(name)s: %(message)s |
@@ -329,23 +332,28 @@ def get_structured_logger(
     """
     from pipeline.observability_config import get_observability_settings
 
-    settings = get_observability_settings()
+    obs_settings = get_observability_settings()
 
     # 1) Livello
     if level is None:
-        level_name = (settings.log_level or "INFO").upper()
+        level_name = (obs_settings.log_level or "INFO").upper()
         level = getattr(logging, level_name, logging.INFO)
     elif isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
 
-    # 2) Redazione
-    if redact_logs is None:
-        ctx_redact = bool(getattr(context, "redact_logs", False)) if context is not None else False
-        redact_logs = ctx_redact if ctx_redact is not None else settings.redact_logs
+    # 2) Redazione (Observability come default, override opzionale da context/parametro)
+    effective_redact = bool(obs_settings.redact_logs)
+    if context is not None:
+        ctx_attr = getattr(context, "redact_logs", None)
+        if ctx_attr is not None:
+            effective_redact = bool(ctx_attr)
+    if redact_logs is not None:
+        effective_redact = bool(redact_logs)
 
-    # 3) Tracing OTEL
-    if enable_tracing is None:
-        enable_tracing = settings.tracing_enabled
+    # 3) Tracing OTEL (Observability come default, override opzionale dal parametro)
+    effective_tracing = bool(obs_settings.tracing_enabled)
+    if enable_tracing is not None:
+        effective_tracing = bool(enable_tracing)
 
     # 4) Se viene passato un run_id e un log_file, usa un file unico per run:
     #    esempio: onboarding.log -> onboarding-<run_id>.log
@@ -384,17 +392,14 @@ def get_structured_logger(
     lg.propagate = propagate
 
     ctx = _ctx_view_from(context, run_id)
-    try:
-        ctx.redact_logs = bool(redact_logs)
-    except Exception:
-        ctx.redact_logs = False
+    ctx.redact_logs = bool(effective_redact)
 
     # formatter base
     fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
     # filtri
     ctx_filter = _ContextFilter(ctx)
-    redact_filter = _RedactFilter(bool(redact_logs))
+    redact_filter = _RedactFilter(bool(effective_redact))
     event_filter = _EventDefaultFilter()
     _set_logger_filter(lg, ctx_filter, f"{name}::ctx_filter")
     _set_logger_filter(lg, redact_filter, f"{name}::redact_filter")
@@ -418,11 +423,11 @@ def get_structured_logger(
 
     # file handler opzionale
     if log_file:
-        settings = getattr(context, "settings", None) if context is not None else None
+        context_settings = getattr(context, "settings", None) if context is not None else None
         max_b_setting: Any = None
         bk_cnt_setting: Any = None
-        if settings is not None:
-            getter = getattr(settings, "get", None)
+        if context_settings is not None:
+            getter = getattr(context_settings, "get", None)
             if callable(getter):
                 try:
                     max_b_setting = getter("log_max_bytes", None)
@@ -430,9 +435,9 @@ def get_structured_logger(
                 except Exception:
                     max_b_setting = None
                     bk_cnt_setting = None
-            elif isinstance(settings, Mapping):
-                max_b_setting = settings.get("log_max_bytes")
-                bk_cnt_setting = settings.get("log_backup_count")
+            elif isinstance(context_settings, Mapping):
+                max_b_setting = context_settings.get("log_max_bytes")
+                bk_cnt_setting = context_settings.get("log_backup_count")
         env_max = os.getenv("TIMMY_LOG_MAX_BYTES")
         if env_max:
             try:
@@ -456,7 +461,7 @@ def get_structured_logger(
         fh.addFilter(event_filter)
         lg.addHandler(fh)
 
-    ensure_tracer(context=context, enable_tracing=bool(enable_tracing))
+    ensure_tracer(context=context, enable_tracing=bool(effective_tracing))
     return lg
 
 

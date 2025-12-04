@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pipeline.content_utils as cu
+from tests.support.contexts import TestClientCtx
 
 
-def _ctx(base: Path, book: Path):
-    return SimpleNamespace(base_dir=base, md_dir=book, slug="acme")
+def _ctx(base: Path, book: Path) -> TestClientCtx:
+    return TestClientCtx(slug="acme", base_dir=base, raw_dir=base / "raw", md_dir=book)
 
 
 def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:

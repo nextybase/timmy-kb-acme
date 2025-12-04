@@ -3,18 +3,17 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from pipeline.exceptions import ConversionError
 from semantic import api as sapi
 from semantic import convert_service
+from tests.support.contexts import TestClientCtx
 
 
-def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> object:
-    # Minimal context shim compatible con ClientContextProtocol
-    return SimpleNamespace(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir)
+def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> TestClientCtx:
+    return TestClientCtx(slug="dummy", base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir)
 
 
 def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monkeypatch):

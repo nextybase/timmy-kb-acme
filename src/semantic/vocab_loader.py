@@ -302,7 +302,8 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
             file_path=db_path,
         ) from exc
 
-    vocab = load_tags_reviewed_db(db_path)
+    vocab_raw = load_tags_reviewed_db(db_path)
+    vocab = _to_vocab(vocab_raw)
     if not vocab:
         _log_vocab_event(
             logger,

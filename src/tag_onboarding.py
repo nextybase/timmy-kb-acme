@@ -41,11 +41,11 @@ import argparse
 import hashlib
 import logging
 import os
-import sys
 import uuid
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
@@ -724,37 +724,23 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-if __name__ == "__main__":
-
-    """Entrypoint CLI orchestratore `tag_onboarding`."""
-
-    args = _parse_args()
-
+def main(args: argparse.Namespace) -> int | None:
+    """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
     run_id = uuid.uuid4().hex
     start_metrics_server_once()
-
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
     unresolved_slug = args.slug_pos or args.slug
-
     if not unresolved_slug and args.non_interactive:
-
         early_logger.error("cli.tag_onboarding.missing_slug", extra={"slug": None})
+        raise ConfigError("Missing slug in non-interactive mode")
 
-        sys.exit(exit_code_for(ConfigError("Missing slug in non-interactive mode")))
-
-    try:
-
-        slug = ensure_valid_slug(
-            unresolved_slug,
-            interactive=not args.non_interactive,
-            prompt=_prompt,
-            logger=early_logger,
-        )
-
-    except ConfigError as exc:
-
-        sys.exit(exit_code_for(exc))
+    slug = ensure_valid_slug(
+        unresolved_slug,
+        interactive=not args.non_interactive,
+        prompt=_prompt,
+        logger=early_logger,
+    )
 
     env = os.getenv("TIMMY_ENV", "dev")
     with start_root_trace(
@@ -765,12 +751,9 @@ if __name__ == "__main__":
         env=env,
         trace_kind="onboarding",
     ):
-        # Ramo di sola validazione
         if args.validate_only:
-            code = validate_tags_reviewed(slug, run_id=run_id)
-            sys.exit(code)
+            return validate_tags_reviewed(slug, run_id=run_id)
 
-        # Scansione RAW -> DB (schema v2)
         if getattr(args, "scan_raw", False):
             ctx = ClientContext.load(
                 slug=slug,
@@ -787,9 +770,8 @@ if __name__ == "__main__":
             stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
             log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
             log.info("cli.tag_onboarding.scan_completed", extra=stats)
-            sys.exit(0)
+            return 0
 
-        # NLP -> DB
         if getattr(args, "nlp", False):
             ctx = ClientContext.load(
                 slug=slug,
@@ -822,7 +804,7 @@ if __name__ == "__main__":
             )
             log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
             log.info("cli.tag_onboarding.nlp_completed", extra=stats)
-            sys.exit(0)
+            return 0
 
         try:
             tag_onboarding_main(
@@ -833,23 +815,30 @@ if __name__ == "__main__":
                 proceed_after_csv=bool(args.proceed),
                 run_id=run_id,
             )
-            sys.exit(0)
+            return 0
         except KeyboardInterrupt:
-            sys.exit(130)
+            raise
         except PipelineError as exc:
             logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
             logger.error(
                 "cli.tag_onboarding.failed",
                 extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(exc)},
             )
-            sys.exit(exit_code_for(exc))
+            raise
         except Exception as exc:  # noqa: BLE001
             logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
             logger.error(
                 "cli.tag_onboarding.failed",
                 extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(PipelineError(str(exc)))},
             )
-            sys.exit(exit_code_for(PipelineError(str(exc))))
+            raise PipelineError(str(exc)) from exc
+
+
+if __name__ == "__main__":
+
+    """Entrypoint CLI orchestratore `tag_onboarding`."""
+
+    run_cli_orchestrator("tag_onboarding", _parse_args, main)
 
 
 # Sezione helper duplicati rimossa (copy/CSV delegati)

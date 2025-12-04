@@ -87,6 +87,7 @@ Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
 - `read_frontmatter(base, path, use_cache=True)` effettua path-safety e caching (invalidazione su mtime/size).
 - Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat gia presenti.
 - La cache del frontmatter `_FRONTMATTER_CACHE` e LRU bounded (256 entry): nei run lunghi/Streamlit resta buona pratica chiamare `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi; i workflow semantici orchestrati da `semantic.api` la svuotano automaticamente a fine run per garantire isolamento tra esecuzioni consecutive.
+- Ogni conversione emette log `debug` con evento `pipeline.frontmatter_cache.stats` (e `semantic.frontmatter_cache.stats_before_clear` prima del reset orchestrato) per diagnosticare l'occupazione della cache senza intaccare la pipeline.
 
 Esempio rapido:
 ```python

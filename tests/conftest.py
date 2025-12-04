@@ -431,6 +431,17 @@ def _stable_env(monkeypatch, dummy_workspace):
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
     monkeypatch.chdir(dummy_workspace["base"])
+
+    # Ripulisce il DB globale (data/kb.sqlite) che alcuni test potrebbero creare
+    # per assicurare che i test che verificano l'isolamento del workspace non
+    # trovino residui da run precedenti.
+    default_db = Path("data") / "kb.sqlite"
+    try:
+        if default_db.exists():
+            default_db.unlink()
+    except OSError:
+        pass
+
     # Reindirizza il registry clienti verso la copia temporanea
     repo_root_override = Path(dummy_workspace["base"])
     clients_db_dir = Path("clients_db")

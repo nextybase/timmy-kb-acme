@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 if str(SRC) not in sys.path:
@@ -15,11 +14,12 @@ import pytest
 import semantic.api as sapi
 import semantic_onboarding as cli
 from pipeline.exceptions import ConfigError, exit_code_for
+from tests.support.contexts import TestClientCtx
 
 
-def _ctx(base_dir: Path) -> SimpleNamespace:
+def _ctx(base_dir: Path) -> TestClientCtx:
     book_dir = base_dir / "book"
-    return SimpleNamespace(base_dir=base_dir, md_dir=book_dir)
+    return TestClientCtx(slug="acme", base_dir=base_dir, raw_dir=base_dir / "raw", md_dir=book_dir)
 
 
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
