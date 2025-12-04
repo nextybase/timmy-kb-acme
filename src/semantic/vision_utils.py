@@ -5,7 +5,7 @@ from __future__ import annotations
 Allineato al refactor Vision (Fase 1):
 - converte il payload VisionOutput (documents/artefatti/…)
 - NON usa né produce 'keywords'
-- i termini per il tagging restano in semantic/tags_reviewed.yaml (Fase 2)
+- i termini per il tagging restano in semantic/tags_reviewed.yaml (SSoT reviewed)
 """
 
 from typing import Any, Dict, List, Optional
@@ -17,13 +17,13 @@ from pipeline.exceptions import ConfigError
 
 def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     """
-    Converte il payload Vision v1.0-beta in semantic_mapping.yaml (1:1 con il JSON dell'assistente).
+    Converte il payload Vision v1.0 in tags_reviewed.yaml (1:1 con il JSON dell'assistente).
     Nessun uso di 'keywords' legacy.
     """
     if not isinstance(data, dict):
         raise ConfigError("Vision data: atteso un oggetto JSON.")
     if data.get("status") == "halt":
-        raise ConfigError("Vision HALT: impossibile generare semantic_mapping.yaml senza struttura base.")
+        raise ConfigError("Vision HALT: impossibile generare tags_reviewed.yaml senza struttura base.")
 
     areas = data.get("areas")
     if not isinstance(areas, list) or not (3 <= len(areas) <= 9):

@@ -306,10 +306,9 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     if client_name:
         cfg["client_name"] = client_name
 
-    # Default coerenti con la nuova UI
-    rel_semantic_dir = Path(f"timmy-kb-{context.slug}/semantic")
-    cfg.setdefault("cartelle_raw_yaml", str(rel_semantic_dir / "cartelle_raw.yaml"))
-    cfg.setdefault("semantic_mapping_yaml", str(rel_semantic_dir / "tags_reviewed.yaml"))
+    # Default coerenti con la nuova UI (path relativi alla sandbox cliente)
+    cfg.setdefault("cartelle_raw_yaml", "semantic/cartelle_raw.yaml")
+    cfg.setdefault("semantic_mapping_yaml", "semantic/tags_reviewed.yaml")
 
     write_client_config_file(context, cfg)
 

@@ -55,6 +55,12 @@ def clear_frontmatter_cache(path: Path | None = None) -> None:
             _FRONTMATTER_CACHE.pop(key, None)
 
 
+def _evict_frontmatter_cache() -> None:
+    """Garantisce il rispetto del limite LRU per la cache del frontmatter."""
+    while len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
+        _FRONTMATTER_CACHE.popitem(last=False)
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -302,8 +308,7 @@ def _write_markdown_for_pdf(
                 existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
                 if cache_key:
                     _FRONTMATTER_CACHE[cache_key] = (existing_meta, body_prev)
-                    while len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
-                        _FRONTMATTER_CACHE.popitem(last=False)
+                    _evict_frontmatter_cache()
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
@@ -340,8 +345,7 @@ def _write_markdown_for_pdf(
         stat = md_path.stat()
         cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
         _FRONTMATTER_CACHE[cache_key] = (meta, body)
-        while len(_FRONTMATTER_CACHE) > _FRONTMATTER_CACHE_MAX:
-            _FRONTMATTER_CACHE.popitem(last=False)
+        _evict_frontmatter_cache()
     except OSError:
         pass
     return md_path
