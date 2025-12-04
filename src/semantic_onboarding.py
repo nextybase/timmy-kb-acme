@@ -27,6 +27,7 @@ from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import write_summary_and_readme  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import get_paths, run_semantic_pipeline
+from semantic.types import SemanticContextProtocol
 
 
 def _parse_args() -> argparse.Namespace:
@@ -54,15 +55,13 @@ def main() -> int:
     touched: list[Path] = []
 
     # Carica contesto locale (niente Drive / env obbligatori)
-    ctx = ClientContext.load(slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id)
+    ctx: SemanticContextProtocol = ClientContext.load(
+        slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id
+    )
 
-    # Imposta flag UX nel contesto (se usati a valle)
-    try:
-        ctx.skip_preview = bool(args.no_preview)
-        ctx.no_interactive = bool(args.non_interactive)
-    except Exception:
-        # Il contesto potrebbe non supportare questi attributi in alcune implementazioni.
-        pass
+    # Imposta flag UX nel contesto (contratto esplicito del semantic context)
+    ctx.skip_preview = bool(args.no_preview)
+    ctx.no_interactive = bool(args.non_interactive)
 
     env = os.getenv("TIMMY_ENV", "dev")
     overall_slug = slug

@@ -74,7 +74,7 @@ StageWrapper = Callable[[str, Callable[[], Any]], Any]
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
 else:
-    from semantic.types import ClientContextProtocol as ClientContextType
+    from semantic.types import SemanticContextProtocol as ClientContextType
 
 __all__ = [
     "get_paths",

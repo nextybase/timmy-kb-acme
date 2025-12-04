@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, Sequence, runtime_checkable
 
-__all__ = ["Vector", "EmbeddingsClient", "ClientContextProtocol"]
+__all__ = ["Vector", "EmbeddingsClient", "ClientContextProtocol", "SemanticContextProtocol"]
 
 
 # Vettore numerico generico per embeddings o simili
@@ -47,3 +47,14 @@ class ClientContextProtocol(Protocol):
 
     # Metadato logico
     slug: str
+
+
+@runtime_checkable
+class SemanticContextProtocol(ClientContextProtocol, Protocol):
+    """Contratto esplicito per i workflow semantici.
+
+    Estende il contesto minimo con i flag UX usati dalla CLI/UI (es. preview, interattivitÇÿ).
+    """
+
+    skip_preview: bool
+    no_interactive: bool
