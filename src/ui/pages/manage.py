@@ -333,17 +333,17 @@ if slug:
     tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
     can_stub = tags_mode == "stub"
     can_run_service = run_tags_fn is not None
-    prerequisites_ok = can_stub or (can_run_service and has_pdfs)
+    service_ok = can_stub or can_run_service
+    prerequisites_ok = has_pdfs and service_ok
     semantic_help = (
         "Estrae keyword dai PDF in raw/, genera/aggiorna tags_raw.csv e lo stub (DB). "
         "Poi puoi rivedere il CSV e abilitare lo YAML."
         if prerequisites_ok
         else (
-            "Disponibile solo quando il servizio di estrazione è attivo e raw/ contiene PDF "
-            "(oppure usa TAGS_MODE=stub)."
+            "Disponibile solo quando raw/ contiene PDF e il servizio di estrazione è attivo "
+            "(puoi usare TAGS_MODE=stub per bypassare il servizio, ma servono comunque PDF)."
         )
     )
-    service_ok = can_stub or can_run_service
 
     st.subheader("Azioni sul workspace")
     emit_disabled = _emit_readmes_for_raw is None
@@ -517,29 +517,30 @@ if slug:
             disabled=semantic_disabled,
             help=semantic_help,
         ):
-            backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
-            backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
-            if tags_mode == "stub":
-                _open_tags_raw_modal(slug)
-            elif run_tags_fn is None:
-                LOGGER.error(
-                    "ui.manage.tags.service_missing",
-                    extra={"slug": slug, "mode": tags_mode or "default"},
-                )
-                st.error("Servizio di estrazione tag non disponibile.")
-            elif not has_pdfs and not can_stub:
+            if not has_pdfs:
                 st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
             else:
-                try:
-                    st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
-                    run_tags_fn(slug)
+                backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
+                backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
+                if tags_mode == "stub":
                     _open_tags_raw_modal(slug)
-                except Exception as exc:  # pragma: no cover
-                    LOGGER.exception(
-                        "ui.manage.tags.run_failed",
-                        extra={"slug": slug, "error": str(exc)},
+                elif run_tags_fn is None:
+                    LOGGER.error(
+                        "ui.manage.tags.service_missing",
+                        extra={"slug": slug, "mode": tags_mode or "default"},
                     )
-                    st.error(f"Estrazione tag non riuscita: {exc}")
+                    st.error("Servizio di estrazione tag non disponibile.")
+                else:
+                    try:
+                        st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
+                        run_tags_fn(slug)
+                        _open_tags_raw_modal(slug)
+                    except Exception as exc:  # pragma: no cover
+                        LOGGER.exception(
+                            "ui.manage.tags.run_failed",
+                            extra={"slug": slug, "error": str(exc)},
+                        )
+                        st.error(f"Estrazione tag non riuscita: {exc}")
 
     # helper sections removed
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
