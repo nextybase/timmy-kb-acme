@@ -13,7 +13,7 @@ import yaml
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span
-from storage.tags_store import import_tags_yaml_to_db
+from storage.tags_store import ensure_schema_v2, import_tags_yaml_to_db
 from ui.clients_store import get_state as _get_client_state
 from ui.utils.core import safe_write_text
 from ui.utils.stubs import StreamlitStub, _FunctionStub
@@ -92,6 +92,34 @@ def _lookup_client_state(slug: str) -> str | None:
     try:
         return cast(str | None, _get_client_state(slug))
     except Exception:
+        return None
+
+
+def _ensure_tags_db_ready(
+    semantic_dir: Path,
+    *,
+    slug: str,
+    logger: Any,
+    st: Any,
+    db_path: Path | None = None,
+) -> Path | None:
+    db_path = db_path or (semantic_dir / "tags.db")
+    if not db_path.exists():
+        logger.warning(
+            "ui.manage.tags.db_missing",
+            extra={"slug": slug, "path": str(db_path)},
+        )
+        st.error("`semantic/tags.db` non trovato: esegui l'onboarding semantico per generarlo.")
+        return None
+    try:
+        ensure_schema_v2(str(db_path))
+        return db_path
+    except Exception as exc:
+        logger.warning(
+            "ui.manage.tags.db_invalid",
+            extra={"slug": slug, "path": str(db_path), "error": str(exc)},
+        )
+        st.error("`semantic/tags.db` non valido: esegui l'onboarding semantico per rigenerarlo.")
         return None
 
 
@@ -189,6 +217,9 @@ def enable_tags_stub(
     import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> bool:
     try:
+        db_path = _ensure_tags_db_ready(semantic_dir, slug=slug, logger=logger, st=st)
+        if db_path is None:
+            return False
         semantic_dir.mkdir(parents=True, exist_ok=True)
         reader = read_fn or read_text_safe
         writer = write_fn or safe_write_text
@@ -308,6 +339,8 @@ def enable_tags_service(
 
         write_tags_review_stub_from_csv(semantic_dir, csv_path, logger)
         db_path = Path(derive_db_path_from_yaml_path(yaml_path))
+        if _ensure_tags_db_ready(semantic_dir, slug=slug, logger=logger, st=st, db_path=db_path) is None:
+            return False
         export_tags_yaml_from_db(
             semantic_dir,
             db_path,
