@@ -86,15 +86,6 @@ def main() -> int:
                         m.set_artifacts(None)
                     return result
 
-            # Allinea le funzioni di pipeline con eventuali monkeypatch locali (usato nei test CLI)
-            import semantic.api as _semantic_api
-
-            _semantic_api.convert_markdown = convert_markdown
-            _semantic_api.require_reviewed_vocab = require_reviewed_vocab
-            _semantic_api._require_reviewed_vocab = require_reviewed_vocab  # type: ignore[attr-defined]
-            _semantic_api.enrich_frontmatter = enrich_frontmatter
-            _semantic_api.write_summary_and_readme = write_summary_and_readme
-
             base_dir, _mds, touched = run_semantic_pipeline(
                 ctx,
                 logger,

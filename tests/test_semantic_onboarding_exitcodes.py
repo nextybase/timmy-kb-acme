@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 
 
@@ -64,6 +65,7 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
 
     # convert ok
     monkeypatch.setattr(mod, "convert_markdown", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(sapi, "convert_markdown", lambda *_a, **_k: None, raising=True)
 
     # get_paths compatto
     def _fake_get_paths(slug: str) -> dict[str, Path]:
@@ -75,12 +77,15 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
     # vocab + enrich ok
     monkeypatch.setattr(mod, "require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
     monkeypatch.setattr(mod, "enrich_frontmatter", lambda *_a, **_k: ["A.md"], raising=True)
+    monkeypatch.setattr(sapi, "_require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *_a, **_k: ["A.md"], raising=True)
 
     # write_summary_and_readme alza PipelineError
     def _raise_pipe(*_a: Any, **_k: Any) -> None:
         raise PipelineError("ws boom")
 
     monkeypatch.setattr(mod, "write_summary_and_readme", _raise_pipe, raising=True)
+    monkeypatch.setattr(sapi, "write_summary_and_readme", _raise_pipe, raising=True)
 
     code = mod.main()
     assert code == exit_code_for(PipelineError("ws boom"))
@@ -134,6 +139,7 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
         return [ctx_.md_dir / "cat.md"]
 
     monkeypatch.setattr(mod, "convert_markdown", _fake_convert, raising=True)
+    monkeypatch.setattr(sapi, "convert_markdown", _fake_convert, raising=True)
 
     def _fake_get_paths(slug: str) -> dict[str, Path]:
         return {"base": ctx.base_dir, "book": ctx.md_dir}
@@ -142,6 +148,9 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
     monkeypatch.setattr(mod, "require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
     monkeypatch.setattr(mod, "enrich_frontmatter", lambda *_a, **_k: ["cat.md"], raising=True)
     monkeypatch.setattr(mod, "write_summary_and_readme", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(sapi, "_require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *_a, **_k: ["cat.md"], raising=True)
+    monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_a, **_k: None, raising=True)
 
     captured: dict[str, object] = {}
     original_get_logger = mod.get_structured_logger

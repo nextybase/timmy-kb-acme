@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
 
 import pytest
 
+import semantic.api as sapi
 import semantic_onboarding as cli
 from pipeline.exceptions import ConfigError, exit_code_for
 
@@ -30,6 +31,7 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
 
     calls: list[object] = []
     monkeypatch.setattr(cli, "convert_markdown", lambda *_, **__: calls.append("convert"))
+    monkeypatch.setattr(sapi, "convert_markdown", lambda *_, **__: calls.append("convert"))
     vocab = {"areas": {"area": ["term"]}}
 
     def _require(base_dir: Path, logger: object, *, slug: str) -> dict[str, dict[str, list[str]]]:
@@ -43,6 +45,11 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr(cli, "require_reviewed_vocab", _require)
     monkeypatch.setattr(cli, "enrich_frontmatter", _enrich)
     monkeypatch.setattr(cli, "write_summary_and_readme", lambda *_, **__: calls.append("write"))
+    # Allinea anche il modulo semantic.api usato da run_semantic_pipeline
+    monkeypatch.setattr(sapi, "require_reviewed_vocab", _require)
+    monkeypatch.setattr(sapi, "_require_reviewed_vocab", _require)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", _enrich)
+    monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_, **__: calls.append("write"))
 
     exit_code = cli.main()
 
@@ -60,11 +67,16 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(cli, "convert_markdown", lambda *_, **__: None)
     monkeypatch.setattr(cli, "enrich_frontmatter", lambda *_, **__: [])
     monkeypatch.setattr(cli, "write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(sapi, "convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *_, **__: [])
+    monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_, **__: None)
 
     def _raise(*_: object, **__: object) -> dict[str, dict[str, list[str]]]:
         raise ConfigError("missing", slug="acme")
 
     monkeypatch.setattr(cli, "require_reviewed_vocab", _raise)
+    monkeypatch.setattr(sapi, "require_reviewed_vocab", _raise)
+    monkeypatch.setattr(sapi, "_require_reviewed_vocab", _raise)
 
     exit_code = cli.main()
 
