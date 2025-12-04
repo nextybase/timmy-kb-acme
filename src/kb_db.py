@@ -7,9 +7,10 @@ Espone:
 - fetch_candidates(slug, scope, limit=64)
 
 Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
-Il contratto sul path è formalizzato in `storage.kb_store.KbStore`, che oggi punta
-al DB globale ma in futuro potrà mappare uno slug su un DB dedicato.
-Le embedding sono salvate come array JSON per portabilità. Usa la modalità WAL
+Il contratto sul path e' formalizzato in `storage.kb_store.KbStore`, che risolve
+ gia' i DB per workspace/slug (default: <workspace>/semantic/kb.sqlite) con
+ fallback sicuro al DB globale sotto `data/`.
+Le embedding sono salvate come array JSON per portabilita'. Usa la modalita' WAL
 per ridurre la contesa dei lock.
 """
 
@@ -76,7 +77,7 @@ def get_db_path() -> Path:
 def connect_from_store(store: "KbStore") -> Iterator[sqlite3.Connection]:
     """Convenience wrapper: apre una connessione usando il path risolto da KbStore.
 
-    Se lo store è legato a un workspace/slug, usa `base_dir/semantic/kb.sqlite`;
+    Se lo store e' legato a un workspace/slug, usa `base_dir/semantic/kb.sqlite`;
     in assenza di base_dir o override, usa il DB globale sotto `data/`.
     """
     return connect(db_path=store.effective_db_path())

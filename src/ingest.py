@@ -276,6 +276,7 @@ def ingest_path(
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk."""
     effective_db_path = db_path
     if effective_db_path is None:
+        # Riusabile stand-alone: se ingest_folder non ha già risolto il DB, calcola qui il workspace.
         workspace_base = _resolve_workspace_base(slug)
         store = KbStore.for_slug(slug, base_dir=workspace_base)
         effective_db_path = store.effective_db_path()

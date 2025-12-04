@@ -71,7 +71,7 @@ def _configure_logging() -> None:
             handler._kb_handler = True
 
 def _ensure_startup() -> None:
-    """Ensure required folders and DB exist."""
+    """Bootstrap legacy globale: crea data/.timmykb e inizializza il DB globale."""
     base = Path.cwd().resolve()
     data_dir = ppath.ensure_within_and_resolve(base, base / "data")
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -247,7 +247,7 @@ def main() -> None:
 
     # Footer
     st.divider()
-    st.caption(f"DB path: {store.effective_db_path() or get_db_path()}")
+    st.caption(f"DB path: {store.effective_db_path()}")
     st.caption(f"Log: {LOG_FILE}")
 
 
