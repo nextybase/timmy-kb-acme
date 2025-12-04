@@ -7,6 +7,8 @@ Espone:
 - fetch_candidates(slug, scope, limit=64)
 
 Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
+Il contratto sul path è formalizzato in `storage.kb_store.KbStore`, che oggi punta
+al DB globale ma in futuro potrà mappare uno slug su un DB dedicato.
 Le embedding sono salvate come array JSON per portabilità. Usa la modalità WAL
 per ridurre la contesa dei lock.
 """
@@ -19,10 +21,13 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+
+if TYPE_CHECKING:
+    from storage.kb_store import KbStore
 
 LOGGER = get_structured_logger("timmy_kb.kb_db")
 # I logger strutturati aggiungono sempre un console handler; sul percorso hot-path (indexer)
@@ -66,6 +71,11 @@ def _resolve_db_path(db_path: Optional[Path]) -> Path:
 def get_db_path() -> Path:
     """Restituisce il path del DB SQLite predefinito sotto `data/` (crea la cartella se manca)."""
     return _resolve_db_path(None)
+
+
+def connect_from_store(store: "KbStore") -> Iterator[sqlite3.Connection]:
+    """Convenience wrapper: apre una connessione usando il path risolto da KbStore."""
+    return connect(db_path=store.effective_db_path())
 
 
 @contextmanager

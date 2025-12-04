@@ -8,8 +8,20 @@ from typing import Any, Dict, cast
 from ui.utils import backend as _backend
 
 ensure_within_and_resolve = _backend.ensure_within_and_resolve
-safe_write_text = _backend.safe_write_text
 to_kebab = _backend.to_kebab
+_safe_write_text = _backend.safe_write_text  # compat: usato dai test/monkeypatch UI
+
+
+def safe_write_text(
+    path: Path,
+    data: str,
+    *,
+    encoding: str = "utf-8",
+    atomic: bool = True,
+    fsync: bool = False,
+) -> None:
+    """Wrapper UI che delega a pipeline.file_utils.safe_write_text (monkeypatchabile nei test)."""
+    return _safe_write_text(path, data, encoding=encoding, atomic=atomic, fsync=fsync)
 
 
 def yaml_load(path: Path) -> Dict[str, Any]:

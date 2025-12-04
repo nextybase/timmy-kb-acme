@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from storage.kb_store import KbStore
+
 
 @dataclass
 class Query:
@@ -118,6 +120,7 @@ def main() -> int:
 
     ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
     slug = ctx.slug
+    store = KbStore.for_slug(slug)
     scope = str(args.scope or DEF_SCOPE).strip() or DEF_SCOPE
     base_dir = Path(".").resolve()
 
@@ -148,8 +151,9 @@ def main() -> int:
     for limit in limits:
         for query_index, query in enumerate(queries):
             for repetition in range(int(args.repetitions)):
+                db_path = store.db_path  # DB globale per retrocompat; KbStore centralizza il mapping futuro
                 params = QueryParams(
-                    db_path=None,
+                    db_path=db_path,
                     slug=slug,
                     scope=scope,
                     query=query.text,
