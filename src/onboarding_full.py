@@ -27,7 +27,7 @@ from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, RE
 from pipeline.context import ClientContext
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_env_var  # env "puro"
-from pipeline.exceptions import EXIT_CODES, ConfigError, PipelineError, PushError
+from pipeline.exceptions import ConfigError, PipelineError, PushError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.metrics import start_metrics_server_once
 from pipeline.path_utils import ensure_valid_slug, ensure_within, iter_safe_paths  # SSoT guardia STRONG
@@ -146,18 +146,26 @@ def onboarding_full_main(
     *,
     non_interactive: bool = False,
     run_id: Optional[str] = None,
-) -> None:
-    """Orchestratore della fase Full: preflight book/ e push GitHub."""
+) -> int:
+    """Orchestratore della fase Full: preflight book/ e push GitHub (ritorna exit code)."""
     early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-    slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
+    try:
+        slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
+    except ConfigError as exc:
+        early_logger.error("cli.onboarding_full.missing_slug", extra={"slug": None, "error": str(exc)})
+        return exit_code_for(exc)
 
     # Carica il contesto PRIMA di determinare i path, per rispettare override (es. REPO_ROOT_DIR)
-    context: ClientContext = ClientContext.load(
-        slug=slug,
-        interactive=not non_interactive,
-        require_env=False,
-        run_id=run_id,
-    )
+    try:
+        context: ClientContext = ClientContext.load(
+            slug=slug,
+            interactive=not non_interactive,
+            require_env=False,
+            run_id=run_id,
+        )
+    except Exception as exc:
+        early_logger.exception("cli.onboarding_full.context_failed", extra={"slug": slug, "error": str(exc)})
+        return exit_code_for(exc if isinstance(exc, (ConfigError, PipelineError)) else PipelineError(str(exc)))
 
     # Preferisci i path dal contesto; fallback deterministico solo se assenti
     ctx_base = getattr(context, "base_dir", None)
@@ -181,8 +189,8 @@ def onboarding_full_main(
             extra={"slug": slug, "hint": docker_hint},
         )
 
-    # 1) README/SUMMARY in book/ (senza fallback)
     try:
+        # 1) README/SUMMARY in book/ (senza fallback)
         with phase_scope(logger, stage="write_summary_and_readme", customer=context.slug) as m:
             _write_summary_and_readme(context, logger, slug=slug)
             # artifact_count: numero di file .md in book/
@@ -192,36 +200,43 @@ def onboarding_full_main(
             except Exception:
                 md_snapshot_count = None
                 m.set_artifacts(None)
-    except Exception as e:
-        raise ConfigError(f"Impossibile generare/validare README/SUMMARY in book/: {e}") from e
 
-    # 2) Preflight book/ (solo .md; ignora .md.fp, builder files e sottodirectory di build)
-    with phase_scope(logger, stage="ensure_book_purity", customer=context.slug) as m:
-        _ensure_book_purity(context, logger)
-        try:
-            if md_snapshot_count is None:
-                md_snapshot_count = _count_content_markdown(context)
-            m.set_artifacts(md_snapshot_count)
-        except Exception:
-            m.set_artifacts(None)
+        # 2) Preflight book/ (solo .md; ignora .md.fp, builder files e sottodirectory di build)
+        with phase_scope(logger, stage="ensure_book_purity", customer=context.slug) as m:
+            _ensure_book_purity(context, logger)
+            try:
+                if md_snapshot_count is None:
+                    md_snapshot_count = _count_content_markdown(context)
+                m.set_artifacts(md_snapshot_count)
+            except Exception:
+                m.set_artifacts(None)
 
-    # 3) Conferma in interattivo (nessun prompt in non-interactive)
-    do_push = True
-    if not non_interactive:
-        ans = (_prompt("Eseguo push su GitHub? (Y/n): ") or "y").lower()
-        if ans.startswith("n"):
-            do_push = False
+        # 3) Conferma in interattivo (nessun prompt in non-interactive)
+        do_push = True
+        if not non_interactive:
+            ans = (_prompt("Eseguo push su GitHub? (Y/n): ") or "y").lower()
+            if ans.startswith("n"):
+                do_push = False
 
-    if do_push:
-        with phase_scope(logger, stage="git_push", customer=context.slug) as m:
-            _git_push(context, logger)
-            m.set_artifacts(1)
-        _maybe_publish_gitbook(context, logger)
+        if do_push:
+            with phase_scope(logger, stage="git_push", customer=context.slug) as m:
+                _git_push(context, logger)
+                m.set_artifacts(1)
+            _maybe_publish_gitbook(context, logger)
 
-    logger.info(
-        "cli.onboarding_full.completed",
-        extra={"slug": slug, "artifacts": int(1 if do_push else 0)},
-    )
+        logger.info(
+            "cli.onboarding_full.completed",
+            extra={"slug": slug, "artifacts": int(1 if do_push else 0)},
+        )
+        return 0
+    except KeyboardInterrupt:
+        return 130
+    except (ConfigError, PipelineError) as exc:
+        logger.exception("cli.onboarding_full.failed", extra={"slug": slug, "error": str(exc)})
+        return exit_code_for(exc)
+    except Exception as exc:
+        logger.exception("cli.onboarding_full.failed", extra={"slug": slug, "error": str(exc)})
+        return exit_code_for(PipelineError(str(exc)))
 
 
 # ---------- CLI ----------
@@ -239,47 +254,20 @@ if __name__ == "__main__":
     args = _parse_args().parse_args()
     run_id = uuid.uuid4().hex
     start_metrics_server_once()
-    early_logger = get_structured_logger("onboarding_full", run_id=run_id)
-
     unresolved_slug = args.slug_pos or args.slug
-    if not unresolved_slug and args.non_interactive:
-        early_logger.error("cli.onboarding_full.missing_slug", extra={"slug": None})
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
-    try:
-        slug = ensure_valid_slug(
-            unresolved_slug,
-            interactive=not args.non_interactive,
-            prompt=_prompt,
-            logger=early_logger,
-        )
-    except ConfigError:
-        sys.exit(EXIT_CODES.get("ConfigError", 2))
 
     env = get_env_var("TIMMY_ENV", default="dev")
     with start_root_trace(
         "onboarding",
-        slug=slug,
+        slug=unresolved_slug or "",
         run_id=run_id,
         entry_point="cli",
         env=env,
         trace_kind="onboarding",
     ):
-        try:
-            onboarding_full_main(
-                slug=slug,
-                non_interactive=args.non_interactive,
-                run_id=run_id,
-            )
-            sys.exit(0)
-        except KeyboardInterrupt:
-            sys.exit(130)
-        except ConfigError as e:
-            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-            sys.exit(EXIT_CODES.get("ConfigError", 2))
-        except PipelineError as e:
-            code = EXIT_CODES.get(e.__class__.__name__, EXIT_CODES.get("PipelineError", 1))
-            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-            sys.exit(code)
-        except Exception as e:
-            early_logger.exception("cli.onboarding_full.failed", extra={"error": str(e)})
-            sys.exit(EXIT_CODES.get("PipelineError", 1))
+        code = onboarding_full_main(
+            slug=unresolved_slug or "",
+            non_interactive=args.non_interactive,
+            run_id=run_id,
+        )
+        sys.exit(code)
