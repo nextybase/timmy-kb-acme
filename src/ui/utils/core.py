@@ -5,23 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, cast
 
-from pipeline.file_utils import safe_write_text as _safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve as _ensure_within_and_resolve
-from pipeline.path_utils import to_kebab as _to_kebab
-
-
-def to_kebab(s: str) -> str:
-    """Converte una stringa in kebab-case usando la utility SSoT di pipeline."""
-    return str(_to_kebab(s))
-
-
-def ensure_within_and_resolve(base: Path | str, candidate: Path | str) -> Path:
-    """Wrapper SSoT per `pipeline.path_utils.ensure_within_and_resolve`.
-
-    Esegue solo il cast `Path|str` â†’ `Path` e delega al backend, mantenendo la firma pubblica.
-    """
-    return cast(Path, _ensure_within_and_resolve(Path(base), Path(candidate)))
-
 
 def yaml_load(path: Path) -> Dict[str, Any]:
     """Legge YAML dal disco tramite le utility centralizzate di pipeline."""
@@ -39,22 +22,6 @@ def yaml_dump(data: Dict[str, Any]) -> str:
     import yaml
 
     return yaml.safe_dump(data or {}, allow_unicode=True, sort_keys=True)
-
-
-def safe_write_text(
-    path: Path,
-    data: str,
-    *,
-    encoding: str = "utf-8",
-    atomic: bool = True,
-    fsync: bool = False,
-) -> None:
-    """Scrive testo su file delegando a `pipeline.file_utils.safe_write_text`.
-
-    Mantiene la **parità di firma** con il backend (incluso `fsync`) per garantire
-    contratti stabili tra UI e pipeline.
-    """
-    _safe_write_text(Path(path), data, encoding=encoding, atomic=atomic, fsync=fsync)
 
 
 def _normalize_theme_value(value: object | None) -> str | None:
