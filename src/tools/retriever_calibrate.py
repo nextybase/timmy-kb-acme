@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
+from pipeline.path_utils import ensure_within_and_resolve
 from storage.kb_store import KbStore
 
 
@@ -120,7 +122,14 @@ def main() -> int:
 
     ctx = ClientContext.load(slug=args.slug, interactive=False, require_env=False, run_id=None)
     slug = ctx.slug
-    store = KbStore.for_slug(slug)
+    base_attr = getattr(ctx, "base_dir", None)
+    if base_attr is not None:
+        workspace = Path(base_attr).resolve()
+    else:
+        root = Path(OUTPUT_DIR_NAME)
+        candidate = root / f"{REPO_NAME_PREFIX}{slug}"
+        workspace = ensure_within_and_resolve(root, candidate)
+    store = KbStore.for_slug(slug=slug, base_dir=workspace)
     scope = str(args.scope or DEF_SCOPE).strip() or DEF_SCOPE
     base_dir = Path(".").resolve()
 

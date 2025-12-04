@@ -477,7 +477,7 @@ def index_markdown_to_db(
     paths = get_paths(slug)
     base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
     book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
-    store = KbStore.for_slug(slug=slug, db_path=db_path)
+    store = KbStore.for_slug(slug=slug, base_dir=base_dir, db_path=db_path)
     effective_db_path = store.effective_db_path()
     return cast(
         int,
