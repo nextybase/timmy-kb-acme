@@ -20,8 +20,13 @@ from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
-from google.auth.transport import requests as greq
-from google.oauth2 import id_token
+
+try:
+    from google.auth.transport import requests as greq  # type: ignore[import]
+    from google.oauth2 import id_token  # type: ignore[import]
+except Exception:  # pragma: no cover - ambiente senza google-auth
+    greq = None
+    id_token = None
 
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -131,8 +136,17 @@ def _exchange_code_for_tokens(code: str, *, code_verifier: str) -> Dict[str, Any
 
 
 def _verify_id_token(idt: str) -> Dict[str, Any]:
+    if id_token is None or greq is None:
+        # Mancano le librerie Google Auth: segnaliamo come errore di configurazione
+        raise ConfigError(
+            "Librerie Google Auth non disponibili. " "Installa il pacchetto 'google-auth' per usare il login Admin."
+        )
+
     cfg = _oauth_env()
-    info = cast(Dict[str, Any], id_token.verify_oauth2_token(idt, greq.Request(), cfg["client_id"]))
+    info = cast(
+        Dict[str, Any],
+        id_token.verify_oauth2_token(idt, greq.Request(), cfg["client_id"]),  # type: ignore[union-attr]
+    )
     iss = str(info.get("iss"))
     if iss not in ISS_ALLOWED:
         raise ConfigError(f"Issuer non valido: {iss}")
@@ -362,52 +376,60 @@ def _mask(s: str) -> str:
 # ---------- UI ----------
 st.subheader("Login con Google (dominio autorizzato)")
 
-# Guardie config (mostra diagnosi ma NON interrompe la sidebar)
-cfg = _oauth_env()
-if not cfg["client_id"] or not cfg["redirect_uri"]:
-    st.error("Config mancante: imposta GOOGLE_CLIENT_ID e GOOGLE_REDIRECT_URI.")
-    with st.expander("Diagnostica"):
-        st.code(
-            f"client_id={_mask(cfg['client_id'])}\nredirect={cfg['redirect_uri']}\nallowed_domain={cfg['allowed_domain']}",
-            language="bash",
-        )
+# Se le librerie Google Auth mancano, rendiamo la pagina import-safe e autoesplicativa.
+if id_token is None or greq is None:
+    st.error(
+        "Librerie Google Auth non disponibili.\n\n"
+        "Installa il pacchetto `google-auth` nel venv per abilitare il login Admin."
+    )
 else:
-    user = _enforce_session_ttl()
-    if user:
-        st.success(f"Accesso già attivo: {user.get('email')}")
-        _render_admin_panel()
-        st.stop()
+    # Guardie config (mostra diagnosi ma NON interrompe la sidebar)
+    cfg = _oauth_env()
+    if not cfg["client_id"] or not cfg["redirect_uri"]:
+        st.error("Config mancante: imposta GOOGLE_CLIENT_ID e GOOGLE_REDIRECT_URI.")
+        with st.expander("Diagnostica"):
+            st.code(
+                f"client_id={_mask(cfg['client_id'])}\nredirect={cfg['redirect_uri']}\n"
+                f"allowed_domain={cfg['allowed_domain']}",
+                language="bash",
+            )
+    else:
+        user = _enforce_session_ttl()
+        if user:
+            st.success(f"Accesso già attivo: {user.get('email')}")
+            _render_admin_panel()
+            st.stop()
 
-    _ensure_session()
-    qp = st.query_params
-    code: Optional[str] = qp.get("code")
-    state: Optional[str] = qp.get("state")
+        _ensure_session()
+        qp = st.query_params
+        code: Optional[str] = qp.get("code")
+        state: Optional[str] = qp.get("state")
 
-    _handle_oauth_callback(code, state)
+        _handle_oauth_callback(code, state)
 
-    # Schermata iniziale
-    login_url = _build_auth_url(st.session_state["oauth_state"], st.session_state["oauth_nonce"])
-    st.link_button("Accedi con Google", login_url, width="stretch")
+        # Schermata iniziale
+        login_url = _build_auth_url(st.session_state["oauth_state"], st.session_state["oauth_nonce"])
+        st.link_button("Accedi con Google", login_url, width="stretch")
 
-    # Modalità locale opzionale: espone il pannello anche senza login
-    settings_obj = _load_settings()
-    if settings_obj and settings_obj.ui_admin_local_mode:
-        st.info(
-            "Modalità locale attiva: pannello osservabilità disponibile senza login. "
-            "Ricorda di valorizzare le credenziali Grafana in `.env`."
-        )
-        _render_admin_panel()
-        st.stop()
+        # Modalità locale opzionale: espone il pannello anche senza login
+        settings_obj = _load_settings()
+        if settings_obj and settings_obj.ui_admin_local_mode:
+            st.info(
+                "Modalità locale attiva: pannello osservabilità disponibile senza login. "
+                "Ricorda di valorizzare le credenziali Grafana in `.env`."
+            )
+            _render_admin_panel()
+            st.stop()
 
-    with st.expander("Diagnostica (locale)"):
-        st.code(
-            json.dumps(
-                {
-                    "GOOGLE_CLIENT_ID": _mask(cfg["client_id"]),
-                    "GOOGLE_REDIRECT_URI": cfg["redirect_uri"],
-                    "ALLOWED_GOOGLE_DOMAIN": cfg["allowed_domain"],
-                },
-                indent=2,
-            ),
-            language="json",
-        )
+        with st.expander("Diagnostica (locale)"):
+            st.code(
+                json.dumps(
+                    {
+                        "GOOGLE_CLIENT_ID": _mask(cfg["client_id"]),
+                        "GOOGLE_REDIRECT_URI": cfg["redirect_uri"],
+                        "ALLOWED_GOOGLE_DOMAIN": cfg["allowed_domain"],
+                    },
+                    indent=2,
+                ),
+                language="json",
+            )
