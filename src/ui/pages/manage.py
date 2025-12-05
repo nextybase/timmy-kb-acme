@@ -16,6 +16,7 @@ from ui.manage import _helpers as manage_helpers
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
 from ui.pages.registry import PagePaths
+from ui.utils.config import get_drive_env_config, get_tags_env_config
 from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
@@ -180,7 +181,7 @@ def _handle_tags_raw_enable(
     csv_path: Path,
     yaml_path: Path,
 ) -> bool:
-    tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
+    tags_cfg = get_tags_env_config()
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     result = tags_component.handle_tags_raw_enable(
         slug,
@@ -189,7 +190,7 @@ def _handle_tags_raw_enable(
         yaml_path,
         st=st,
         logger=LOGGER,
-        tags_mode=tags_mode,
+        tags_mode=tags_cfg.normalized,
         run_tags_fn=run_tags_fn,
         set_client_state=set_client_state,
         reset_gating_cache=_reset_gating_cache,
@@ -222,13 +223,14 @@ def _open_tags_editor_modal(slug: str) -> None:
 
 def _open_tags_raw_modal(slug: str) -> None:
     base_dir = _workspace_root(slug)
+    tags_cfg = get_tags_env_config()
     tags_component.open_tags_raw_modal(
         slug,
         base_dir,
         st=st,
         logger=LOGGER,
         column_button=_column_button,
-        tags_mode=os.getenv("TAGS_MODE", "").strip().lower(),
+        tags_mode=tags_cfg.normalized,
         run_tags_fn=cast(Optional[Callable[[str], Any]], _run_tags_update),
         set_client_state=set_client_state,
         reset_gating_cache=_reset_gating_cache,
@@ -329,9 +331,10 @@ if slug:
 
     pdf_count = count_pdfs_safe(raw_dir, use_cache=True)
     has_pdfs = pdf_count > 0
+    tags_cfg = get_tags_env_config()
+    tags_mode = tags_cfg.normalized
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    tags_mode = os.getenv("TAGS_MODE", "").strip().lower()
-    can_stub = tags_mode == "stub"
+    can_stub = tags_cfg.is_stub
     can_run_service = run_tags_fn is not None
     service_ok = can_stub or can_run_service
     prerequisites_ok = has_pdfs and service_ok
@@ -347,9 +350,8 @@ if slug:
 
     st.subheader("Azioni sul workspace")
     emit_disabled = _emit_readmes_for_raw is None
-    download_disabled = _plan_raw_download is None or not (
-        bool(os.getenv("SERVICE_ACCOUNT_FILE")) and os.getenv("DRIVE_ID")
-    )
+    drive_env = get_drive_env_config()
+    download_disabled = _plan_raw_download is None or not drive_env.download_ready
     semantic_disabled = not prerequisites_ok
 
     col_emit, col_download, col_semantic = st.columns(3)
@@ -404,16 +406,13 @@ if slug:
                     st.error(f"Impossibile generare i README: {e}")
 
     with col_download:
-        service_account_file = os.getenv("SERVICE_ACCOUNT_FILE")
-        service_account_ok = bool(service_account_file and Path(service_account_file).expanduser().exists())
         default_msg = (
             "Download Drive disabilitato: configura `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` o installa gli extra Drive."
         )
-        status_msg = (
-            f"Percorso SERVICE_ACCOUNT_FILE non valido: {service_account_file!r}."
-            if service_account_file and not service_account_ok
-            else default_msg
-        )
+        if drive_env.service_account_file and not drive_env.service_account_ok:
+            status_msg = f"Percorso SERVICE_ACCOUNT_FILE non valido: {drive_env.service_account_file!r}."
+        else:
+            status_msg = default_msg
         drive_component.render_drive_status_message(st, download_disabled, status_msg)
         if _column_button(
             st,
