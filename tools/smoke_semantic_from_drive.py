@@ -43,8 +43,8 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Smoke: Drive → RAW → Semantica (headless)")
     p.add_argument(
         "--slug",
-        required=True,
-        help="Slug cliente (es. acme)",
+        default="dummy",
+        help="Slug cliente (default: dummy)",
     )
     p.add_argument(
         "--skip-drive",

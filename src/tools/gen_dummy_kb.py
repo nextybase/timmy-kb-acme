@@ -23,6 +23,8 @@ try:
 except Exception:
     yaml = None  # type: ignore
 
+from datetime import datetime
+
 
 class _PayloadPaths(TypedDict):
     base: str
@@ -171,6 +173,11 @@ except Exception:
 safe_write_text = None  # type: ignore
 safe_write_bytes = None  # type: ignore
 _fin_import_csv = None  # type: ignore
+
+try:
+    from storage import tags_store as _tags_store  # type: ignore
+except Exception:  # pragma: no cover - opzionale
+    _tags_store = None  # type: ignore[assignment]
 
 
 def _ensure_dependencies() -> None:
@@ -586,6 +593,40 @@ def _ensure_raw_pdfs(base_dir: Path, categories: Optional[dict[str, dict[str, An
             _safe_write_bytes(target, _MINIMAL_RAW_PDF, atomic=True)
 
 
+def _ensure_minimal_tags_db(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]], *, logger) -> None:
+    """Crea un tags.db minimale (schema v2) per sbloccare il gating semantico dei dummy."""
+    if _tags_store is None:
+        return
+
+    sem_dir = base_dir / "semantic"
+    sem_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        db_path = ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
+        _tags_store.ensure_schema_v2(str(db_path))
+        payload_tags: list[dict[str, Any]] = []
+        catalogue = categories or {}
+        if catalogue:
+            for key, meta in catalogue.items():
+                canonical = str(meta.get("ambito") or key or "tag").strip() or "tag"
+                aliases = [str(a).strip() for a in meta.get("keywords") or [] if str(a).strip()]
+                payload_tags.append({"name": canonical, "action": "keep", "synonyms": aliases, "note": None})
+        else:
+            payload_tags.append({"name": "dummy", "action": "keep", "synonyms": ["placeholder"], "note": None})
+
+        payload = {
+            "version": "2",
+            "reviewed_at": datetime.utcnow().replace(microsecond=0).isoformat(),
+            "keep_only_listed": False,
+            "tags": payload_tags,
+        }
+        _tags_store.save_tags_reviewed(str(db_path), payload)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(
+            "tools.gen_dummy_kb.tags_db_seed_failed",
+            extra={"slug": base_dir.name, "error": str(exc)},
+        )
+
+
 def _ensure_local_readmes(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> list[str]:
     raw_dir = base_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -958,6 +999,7 @@ def build_payload(
     if not categories_for_readmes:
         categories_for_readmes = _load_mapping_categories(base_dir)
 
+    _ensure_minimal_tags_db(base_dir, categories_for_readmes, logger=logger)
     _ensure_raw_pdfs(base_dir, categories_for_readmes)
 
     local_readmes = _ensure_local_readmes(base_dir, categories_for_readmes)
