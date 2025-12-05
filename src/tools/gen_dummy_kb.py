@@ -7,23 +7,18 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import io
 import json
 import logging
-import multiprocessing as mp
 import os
 import shutil
 import sys
 from pathlib import Path
-from textwrap import dedent
 from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
 try:
     import yaml
 except Exception:
     yaml = None  # type: ignore
-
-from datetime import datetime
 
 
 class _PayloadPaths(TypedDict):
@@ -51,6 +46,7 @@ class _DummyPayload(TypedDict):
     drive_used: bool
     fallback_used: bool
     local_readmes: List[str]
+    health: Dict[str, Any]
 
 
 # ------------------------------------------------------------
@@ -69,13 +65,55 @@ def _add_paths() -> tuple[Path, Path]:
 REPO_ROOT, SRC_DIR = _add_paths()
 SRC_ROOT = SRC_DIR
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
-from pipeline.path_utils import (  # noqa: E402
-    ensure_within_and_resolve,
-    open_for_read_bytes_selfguard,
-    read_text_safe,
-    to_kebab,
-)
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
+
+try:
+    from .dummy.bootstrap import client_base as _client_base_helper  # type: ignore[misc]  # noqa: E402
+    from .dummy.bootstrap import pdf_path as _pdf_path_helper  # type: ignore[misc]  # noqa: E402
+    from .dummy.orchestrator import build_dummy_payload as _build_dummy_payload  # type: ignore[misc]  # noqa: E402
+    from .dummy.orchestrator import register_client as _register_client_helper  # type: ignore[misc]  # noqa: E402
+    from .dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
+        validate_dummy_structure as _validate_dummy_structure_helper,
+    )
+    from .dummy.semantic import ensure_book_skeleton as _ensure_book_skeleton  # type: ignore[misc]  # noqa: E402
+    from .dummy.semantic import ensure_local_readmes as _ensure_local_readmes  # type: ignore[misc]  # noqa: E402
+    from .dummy.semantic import ensure_minimal_tags_db as _ensure_minimal_tags_db
+    from .dummy.semantic import ensure_raw_pdfs as _ensure_raw_pdfs
+    from .dummy.semantic import load_mapping_categories as _load_mapping_categories
+    from .dummy.semantic import write_basic_semantic_yaml as _write_basic_semantic_yaml
+    from .dummy.vision import run_vision_with_timeout as _run_vision_with_timeout  # type: ignore[misc]  # noqa: E402
+except ImportError:
+    # Esecuzione diretta come script (__package__=None): garantisce sys.path e importa via prefisso src.tools.*
+    repo_root = Path(__file__).resolve().parents[2]
+    src_root = repo_root / "src"
+    for candidate in (repo_root, src_root):
+        if str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+    from src.tools.dummy.bootstrap import client_base as _client_base_helper  # type: ignore[misc]  # noqa: E402
+    from src.tools.dummy.bootstrap import pdf_path as _pdf_path_helper  # type: ignore[misc]  # noqa: E402
+    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
+        build_dummy_payload as _build_dummy_payload,
+    )
+    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
+        register_client as _register_client_helper,
+    )
+    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
+        validate_dummy_structure as _validate_dummy_structure_helper,
+    )
+    from src.tools.dummy.semantic import (  # type: ignore[misc]  # noqa: E402
+        ensure_book_skeleton as _ensure_book_skeleton,
+    )
+    from src.tools.dummy.semantic import (  # type: ignore[misc]  # noqa: E402
+        ensure_local_readmes as _ensure_local_readmes,
+    )
+    from src.tools.dummy.semantic import ensure_minimal_tags_db as _ensure_minimal_tags_db
+    from src.tools.dummy.semantic import ensure_raw_pdfs as _ensure_raw_pdfs
+    from src.tools.dummy.semantic import load_mapping_categories as _load_mapping_categories
+    from src.tools.dummy.semantic import write_basic_semantic_yaml as _write_basic_semantic_yaml
+    from src.tools.dummy.vision import (  # type: ignore[misc]  # noqa: E402
+        run_vision_with_timeout as _run_vision_with_timeout,
+    )
 
 try:
     from pipeline.exceptions import ConfigError  # type: ignore
@@ -122,6 +160,24 @@ except Exception:
     build_drive_from_mapping = None
     emit_readmes_for_raw = None
 
+try:
+    from .dummy.drive import (  # type: ignore[misc]  # noqa: E402
+        call_drive_build_from_mapping as _call_drive_build_from_mapping,
+    )
+    from .dummy.drive import call_drive_emit_readmes as _call_drive_emit_readmes  # type: ignore[misc]  # noqa: E402
+    from .dummy.drive import call_drive_min as _call_drive_min  # type: ignore[misc]  # noqa: E402
+except ImportError:
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    if str(SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(SRC_DIR))
+    from src.tools.dummy.drive import (  # type: ignore[misc]  # noqa: E402
+        call_drive_build_from_mapping as _call_drive_build_from_mapping,
+    )
+    from src.tools.dummy.drive import (  # type: ignore[misc]  # noqa: E402
+        call_drive_emit_readmes as _call_drive_emit_readmes,
+    )
+    from src.tools.dummy.drive import call_drive_min as _call_drive_min  # type: ignore[misc]  # noqa: E402
 try:
     from tools.clean_client_workspace import perform_cleanup as _perform_cleanup  # type: ignore
 except Exception:  # pragma: no cover - il cleanup completo può non essere disponibile in ambienti ridotti
@@ -204,623 +260,24 @@ def _ensure_dependencies() -> None:
 
 _ensure_dependencies._done = False  # type: ignore[attr-defined]
 
-_DEFAULT_VISION_PDF = (
-    b"%PDF-1.4\n"
-    b"1 0 obj\n<< /Type /Catalog >>\nendobj\n"
-    b"xref\n0 2\n0000000000 65535 f \n0000000010 00000 n \n"
-    b"trailer\n<< /Root 1 0 R >>\nstartxref\n9\n%%EOF\n"
-)
-
-_MINIMAL_RAW_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
-
-
-def _build_generic_vision_template_pdf() -> bytes:
-    """
-    Genera un VisionStatement.pdf generico con testo esplicativo per Vision, Mission,
-    Framework Etico, Goal e Contesto Operativo. Fallback sul PDF minimale se fallisce.
-    """
-
-    try:
-        from io import BytesIO
-
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-
-        buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4)
-        styles = getSampleStyleSheet()
-        normal = styles["Normal"]
-        heading = styles["Heading2"]
-
-        story: list[Any] = []
-
-        def add_title(text: str) -> None:
-            story.append(Paragraph(text, heading))
-            story.append(Spacer(1, 0.4 * cm))
-
-        def add_paragraph(text: str) -> None:
-            story.append(Paragraph(text, normal))
-            story.append(Spacer(1, 0.4 * cm))
-
-        story.append(Paragraph("Vision Statement – Template generico", styles["Title"]))
-        story.append(Spacer(1, 0.8 * cm))
-
-        sections = load_vision_template_sections() or []
-        if sections:
-            ordered = sorted(sections, key=lambda s: float(s.get("order") or 0))
-            for section in ordered:
-                title = str(section.get("title") or section.get("key") or "Sezione").strip()
-                if title:
-                    add_title(title)
-                description = str(section.get("description") or "").strip()
-                if description:
-                    add_paragraph(description)
-                subsections = section.get("subsections") or section.get("suggested_structure") or section.get("hints")
-                if isinstance(subsections, list):
-                    for item in subsections:
-                        text: str | None = None
-                        if isinstance(item, str):
-                            text = item.strip()
-                        elif isinstance(item, dict):
-                            label = str(item.get("label") or item.get("key") or "").strip()
-                            desc = str(item.get("description") or "").strip()
-                            if label and desc:
-                                text = f"{label}: {desc}"
-                            else:
-                                text = label or desc
-                        if text:
-                            add_paragraph(text)
-        else:
-            add_title("Vision")
-            add_paragraph(
-                "In questa sezione il cliente descrive la propria Vision, ovvero l’orizzonte di lungo periodo "
-                "verso cui tende l’organizzazione. La Vision dovrebbe rispondere alla domanda: "
-                "«In che tipo di realtà vogliamo contribuire a vivere tra 5–10 anni grazie al nostro lavoro "
-                "e all’uso dell’Intelligenza Artificiale?».",
-            )
-            add_title("Mission")
-            add_paragraph(
-                "Qui va descritta la Mission, cioè il modo concreto in cui l’organizzazione intende agire "
-                "per avvicinarsi alla Vision. La Mission risponde tipicamente a: "
-                "«Cosa facciamo, per chi lo facciamo e con quali modalità operative?».",
-            )
-            add_title("Framework Etico")
-            add_paragraph(
-                "In questa parte vanno indicati i principi etici che guidano l’uso dell’AI e dei dati: "
-                "trasparenza, tracciabilità, supervisione umana, sostenibilità, inclusione, gestione dei bias, "
-                "adesione alle normative (es. AI Act) e alle policy interne. "
-                "Il Framework Etico deve chiarire quali pratiche sono accettabili e quali no.",
-            )
-            add_title("Goal (es. orizzonti 3/6/12 mesi)")
-            add_paragraph(
-                "Qui si definiscono gli obiettivi operativi a breve, medio e lungo termine. "
-                "Un possibile schema è quello a basket temporali: ad esempio 3 mesi (attivazione e primi "
-                "risultati), 6 mesi (consolidamento e trend), 12 mesi (impatto complessivo e scalabilità)."
-            )
-            add_paragraph(
-                "Per ogni orizzonte temporale è utile indicare obiettivi chiari e, se possibile, alcuni KPI indicativi."
-            )
-            add_title("Contesto Operativo")
-            add_paragraph(
-                "In questa sezione il cliente descrive il contesto in cui opera il progetto: "
-                "settore di attività (es. PMI, scuola, PA, territorio), tipologia di utenti coinvolti, "
-                "lingue di lavoro, normative chiave di riferimento (es. regolamenti di settore, privacy, "
-                "linee guida interne). L’obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
-            )
-            add_paragraph(
-                "Questo documento funge da contratto semantico tra l’organizzazione e il sistema: "
-                "non deve essere perfetto, ma sufficientemente chiaro da permettere di individuare "
-                "le aree tematiche principali e gli obiettivi del progetto.",
-            )
-        doc.build(story)
-        return buf.getvalue()
-    except Exception:
-        return _DEFAULT_VISION_PDF
-
 
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
-class _Ctx:
-    """Contesto minimo compatibile con run_vision (serve .base_dir)."""
-
-    def __init__(self, base_dir: Path) -> None:
-        self.base_dir = base_dir
-
-
 def _client_base(slug: str) -> Path:
-    env_root = get_env_var("REPO_ROOT_DIR", default=None)
-    if env_root:
-        try:
-            return Path(env_root).expanduser().resolve()
-        except Exception:
-            pass
-    return REPO_ROOT / "output" / f"timmy-kb-{slug}"
+    return _client_base_helper(slug, REPO_ROOT, get_env_var)
 
 
 def _pdf_path(slug: str) -> Path:
-    return _client_base(slug) / "config" / "VisionStatement.pdf"
+    return _pdf_path_helper(slug, REPO_ROOT, get_env_var)
 
 
-def _yaml_quote(value: str) -> str:
-    """Serializza stringhe in stile YAML sfruttando json.dumps per escaping."""
-    return json.dumps(str(value), ensure_ascii=False)
+def _register_client(slug: str, client_name: str) -> None:
+    _register_client_helper(slug, client_name, ClientEntry=ClientEntry, upsert_client=upsert_client)
 
 
-def _render_default_mapping_yaml(slug: str, client_name: str) -> str:
-    return (
-        dedent(
-            f"""\
-            context:
-              slug: {_yaml_quote(slug)}
-              client_name: {_yaml_quote(client_name)}
-            contracts:
-              ambito: "Contrattualistica e forniture"
-              descrizione: "Documenti contrattuali, NDA, ordini di acquisto, accordi quadro e appendici."
-              keywords:
-                - "contratto"
-                - "NDA"
-                - "fornitore"
-                - "ordine"
-                - "appendice"
-            reports:
-              ambito: "Reportistica e analisi"
-              descrizione: "Report periodici, metriche operative, analisi interne e rendicontazioni."
-              keywords:
-                - "report"
-                - "analisi"
-                - "rendiconto"
-                - "KPI"
-                - "metriche"
-            presentations:
-              ambito: "Presentazioni e materiali"
-              descrizione: "Slide, presentazioni per stakeholder, materiali divulgativi e executive brief."
-              keywords:
-                - "presentazione"
-                - "slide"
-                - "deck"
-                - "brief"
-                - "stakeholder"
-            synonyms:
-              contracts:
-                - "contratti"
-                - "accordi"
-                - "forniture"
-              reports:
-                - "rendiconti"
-                - "analitiche"
-                - "reportistica"
-              presentations:
-                - "slide"
-                - "deck"
-                - "presentazioni"
-            system_folders:
-              identity: "book/identity"
-              glossario: "book/glossario"
-            """
-        ).strip()
-        + "\n"
-    )
-
-
-def _render_default_cartelle_yaml(slug: str) -> str:
-    return (
-        dedent(
-            f"""\
-            version: 1
-            folders:
-              - "raw/contracts"
-              - "raw/reports"
-              - "raw/presentations"
-            system_folders:
-              identity: "book/identity"
-              glossario: "book/glossario"
-            meta:
-              source: "dummy"
-              slug: {_yaml_quote(slug)}
-            """
-        ).strip()
-        + "\n"
-    )
-
-
-def _default_mapping_data(slug: str, client_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    mapping = {
-        "context": {"slug": slug, "client_name": client_name},
-        "contracts": {
-            "ambito": "Contrattualistica e forniture",
-            "descrizione": "Documenti contrattuali, NDA, ordini di acquisto, accordi quadro e appendici.",
-            "keywords": ["contratto", "NDA", "fornitore", "ordine", "appendice"],
-        },
-        "reports": {
-            "ambito": "Reportistica e analisi",
-            "descrizione": "Report periodici, metriche operative, analisi interne e rendicontazioni.",
-            "keywords": ["report", "analisi", "rendiconto", "KPI", "metriche"],
-        },
-        "presentations": {
-            "ambito": "Presentazioni e materiali",
-            "descrizione": "Slide, presentazioni per stakeholder, materiali divulgativi e executive brief.",
-            "keywords": ["presentazione", "slide", "deck", "brief", "stakeholder"],
-        },
-        "synonyms": {
-            "contracts": ["contratti", "accordi", "forniture"],
-            "reports": ["rendiconti", "analitiche", "reportistica"],
-            "presentations": ["slide", "deck", "presentazioni"],
-        },
-        "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
-    }
-    cartelle = {
-        "version": 1,
-        "folders": ["raw/contracts", "raw/reports", "raw/presentations"],
-        "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
-        "meta": {"source": "dummy", "slug": slug},
-    }
-    return mapping, cartelle
-
-
-def _mapping_categories_from_default(mapping: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    categories: dict[str, dict[str, Any]] = {}
-    for key in ("contracts", "reports", "presentations"):
-        section = mapping.get(key) or {}
-        cat_key = to_kebab(str(key))
-        categories[cat_key] = {
-            "ambito": str(section.get("ambito") or key.title()),
-            "descrizione": str(section.get("descrizione") or ""),
-            "keywords": [str(x).strip() for x in section.get("keywords") or [] if str(x).strip()],
-        }
-    return categories
-
-
-def _safe_dump_yaml(path: Path, data: Any, *, fallback: str) -> None:
-    if yaml is not None:
-        _safe_write_text(
-            path,
-            yaml.safe_dump(data, allow_unicode=True, sort_keys=False),  # type: ignore[arg-type]
-            encoding="utf-8",
-            atomic=True,
-        )
-        return
-    _safe_write_text(path, fallback, encoding="utf-8", atomic=True)
-
-
-def _write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) -> dict[str, str]:
-    """
-    Genera YAML "basici" senza passare da Vision:
-      - semantic/semantic_mapping.yaml
-      - semantic/cartelle_raw.yaml
-    Crea anche le cartelle raw/ di base (contracts/reports/presentations).
-    """
-    sem_dir = base_dir / "semantic"
-    sem_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir = base_dir / "raw"
-    for name in ("contracts", "reports", "presentations"):
-        (raw_dir / name).mkdir(parents=True, exist_ok=True)
-
-    mapping_data, cartelle_data = _default_mapping_data(slug, client_name)
-    mapping_path = sem_dir / "semantic_mapping.yaml"
-    cartelle_path = sem_dir / "cartelle_raw.yaml"
-    _safe_dump_yaml(mapping_path, mapping_data, fallback=_render_default_mapping_yaml(slug, client_name))
-    _safe_dump_yaml(cartelle_path, cartelle_data, fallback=_render_default_cartelle_yaml(slug))
-
-    # Genera contenuti minimi in book/ per i test smoke (alpha/beta + README/SUMMARY).
-    book_dir = base_dir / "book"
-    book_dir.mkdir(parents=True, exist_ok=True)
-    defaults = {
-        "alpha.md": "# Alpha\n\nContenuto di esempio per la cartella contracts.\n",
-        "beta.md": "# Beta\n\nContenuto di esempio per la cartella reports.\n",
-        "README.md": "# Dummy KB\n",
-        "SUMMARY.md": "* [Alpha](alpha.md)\n* [Beta](beta.md)\n",
-    }
-    for name, content in defaults.items():
-        target = book_dir / name
-        if not target.exists():
-            _safe_write_text(target, content, encoding="utf-8", atomic=True)
-
-    categories = _mapping_categories_from_default(mapping_data)
-
-    return {"mapping": str(mapping_path), "cartelle": str(cartelle_path), "categories": categories}
-
-
-def _render_local_readme_bytes(title: str, descr: str, examples: list[str]) -> tuple[bytes, str]:
-    """Replica minimale del renderer PDF dei README (fallback su TXT se reportlab assente)."""
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
-        from reportlab.pdfgen import canvas
-
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=A4)
-        width, height = A4
-        x, y = 2 * cm, height - 2 * cm
-
-        def draw_line(text: str, font: str = "Helvetica", size: int = 11, leading: int = 14) -> None:
-            nonlocal y
-            c.setFont(font, size)
-            for line in (text or "").splitlines() or [""]:
-                c.drawString(x, y, line[:120])
-                y -= leading
-                if y < 2 * cm:
-                    c.showPage()
-                    y = height - 2 * cm
-
-        c.setTitle(f"README - {title}")
-        draw_line(f"README - {title}", font="Helvetica-Bold", size=14, leading=18)
-        y -= 4
-        draw_line("")
-        draw_line("Ambito:", font="Helvetica-Bold", size=12, leading=16)
-        draw_line(descr or "")
-        draw_line("")
-        draw_line("Esempi:", font="Helvetica-Bold", size=12, leading=16)
-        for ex in examples or []:
-            draw_line(f"- {ex}")
-        c.showPage()
-        c.save()
-        data = buf.getvalue()
-        buf.close()
-        return data, "application/pdf"
-    except Exception:
-        lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
-        lines.extend(f"- {ex}" for ex in (examples or []))
-        return ("\n".join(lines)).encode("utf-8"), "text/plain"
-
-
-def _ensure_raw_pdfs(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> None:
-    """
-    Deposita un PDF minimale in ogni sottocartella di raw/ (inclusa la root).
-
-    Serve per i test/gating che richiedono la presenza di almeno un PDF valido
-    anche in ambienti privi di reportlab.
-    """
-    raw_dir = base_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate_dirs: set[Path] = {raw_dir}
-    for sub in raw_dir.iterdir():
-        if sub.is_dir():
-            candidate_dirs.add(sub)
-
-    catalogue = categories or {}
-    for key in catalogue.keys():
-        candidate_dirs.add(raw_dir / to_kebab(key))
-
-    for subdir in sorted(candidate_dirs):
-        subdir.mkdir(parents=True, exist_ok=True)
-        existing_pdf = next((p for p in subdir.iterdir() if p.suffix.lower() == ".pdf"), None)
-        if existing_pdf is None:
-            target = subdir / "sample.pdf"
-            _safe_write_bytes(target, _MINIMAL_RAW_PDF, atomic=True)
-
-
-def _ensure_minimal_tags_db(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]], *, logger) -> None:
-    """Crea un tags.db minimale (schema v2) per sbloccare il gating semantico dei dummy."""
-    if _tags_store is None:
-        return
-
-    sem_dir = base_dir / "semantic"
-    sem_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        db_path = ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
-        _tags_store.ensure_schema_v2(str(db_path))
-        payload_tags: list[dict[str, Any]] = []
-        catalogue = categories or {}
-        if catalogue:
-            for key, meta in catalogue.items():
-                canonical = str(meta.get("ambito") or key or "tag").strip() or "tag"
-                aliases = [str(a).strip() for a in meta.get("keywords") or [] if str(a).strip()]
-                payload_tags.append({"name": canonical, "action": "keep", "synonyms": aliases, "note": None})
-        else:
-            payload_tags.append({"name": "dummy", "action": "keep", "synonyms": ["placeholder"], "note": None})
-
-        payload = {
-            "version": "2",
-            "reviewed_at": datetime.utcnow().replace(microsecond=0).isoformat(),
-            "keep_only_listed": False,
-            "tags": payload_tags,
-        }
-        _tags_store.save_tags_reviewed(str(db_path), payload)
-    except Exception as exc:  # pragma: no cover - best effort
-        logger.warning(
-            "tools.gen_dummy_kb.tags_db_seed_failed",
-            extra={"slug": base_dir.name, "error": str(exc)},
-        )
-
-
-def _ensure_local_readmes(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> list[str]:
-    raw_dir = base_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-
-    written: list[str] = []
-    catalogue = categories or {}
-    candidate_dirs: set[Path] = {p for p in raw_dir.iterdir() if p.is_dir()}
-    for key in catalogue.keys():
-        candidate_dirs.add(raw_dir / to_kebab(key))
-
-    for subdir in sorted(candidate_dirs):
-        subdir.mkdir(parents=True, exist_ok=True)
-        cat_key = to_kebab(subdir.name)
-        meta = catalogue.get(cat_key) or catalogue.get(subdir.name) or {}
-        title = str(meta.get("ambito") or subdir.name.replace("-", " ").title())
-        descr = str(meta.get("descrizione") or "")
-        raw_keywords = meta.get("keywords")
-        if isinstance(raw_keywords, list):
-            keywords = [str(x).strip() for x in raw_keywords if str(x).strip()]
-        else:
-            keywords = []
-        data, mime = _render_local_readme_bytes(title, descr, keywords)
-        filename = "README.pdf" if mime == "application/pdf" else "README.txt"
-        target = subdir / filename
-        if mime == "application/pdf":
-            _safe_write_bytes(target, data, atomic=True)
-        else:
-            _safe_write_text(target, data.decode("utf-8"), encoding="utf-8", atomic=True)
-        written.append(str(target))
-    return written
-
-
-def _load_mapping_categories(base_dir: Path) -> dict[str, dict[str, Any]]:
-    mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
-    if not mapping_path.exists():
-        return {}
-    if yaml is None:
-        return {}
-    try:
-        text = read_text_safe(base_dir, mapping_path, encoding="utf-8")  # type: ignore[arg-type]
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        return {}
-
-    categories: dict[str, dict[str, Any]] = {}
-
-    areas = data.get("areas")
-    if isinstance(areas, list):
-        for area in areas:
-            if not isinstance(area, dict):
-                continue
-            key = to_kebab(str(area.get("key") or area.get("ambito") or area.get("title") or ""))
-            if not key:
-                continue
-            keywords: list[str] = []
-            for field in ("documents", "artefatti", "chunking_hints"):
-                raw = area.get(field)
-                if isinstance(raw, list):
-                    keywords.extend(str(x).strip() for x in raw if str(x).strip())
-            descr = str(
-                area.get("descrizione_breve") or area.get("descrizione") or area.get("ambito") or key.replace("-", " ")
-            )
-            categories[key] = {
-                "ambito": str(area.get("ambito") or key.replace("-", " ").title()),
-                "descrizione": descr,
-                "keywords": keywords,
-            }
-    if categories:
-        return categories
-
-    for key, section in data.items():
-        if key in {"context", "synonyms", "system_folders"}:
-            continue
-        if not isinstance(section, dict):
-            continue
-        cat_key = to_kebab(str(key))
-        if not cat_key:
-            continue
-        keywords = section.get("keywords") if isinstance(section.get("keywords"), list) else []
-        categories[cat_key] = {
-            "ambito": str(section.get("ambito") or cat_key.replace("-", " ").title()),
-            "descrizione": str(section.get("descrizione") or section.get("descrizione_breve") or ""),
-            "keywords": [str(x).strip() for x in keywords if str(x).strip()],
-        }
-    return categories
-
-
-def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str) -> None:
-    """Esegue run_vision in un sottoprocesso e restituisce esito tramite queue."""
-    ctx = _Ctx(Path(base_dir))
-    logger = get_structured_logger("tools.gen_dummy_kb.vision", context={"slug": slug})
-    try:
-        run_vision(ctx, slug=slug, pdf_path=Path(pdf_path), logger=logger)
-        queue.put({"status": "ok"})
-    except Exception as exc:  # noqa: BLE001
-        payload: dict[str, Any] = {
-            "status": "error",
-            "error": str(exc),
-            "exc_type": exc.__class__.__name__,
-        }
-        file_path = getattr(exc, "file_path", None)
-        if file_path:
-            payload["file_path"] = str(file_path)
-        queue.put(payload)
-
-
-def _run_vision_with_timeout(
-    *,
-    base_dir: Path,
-    slug: str,
-    pdf_path: Path,
-    timeout_s: float,
-    logger: logging.Logger,
-) -> tuple[bool, Optional[dict[str, Any]]]:
-    ctx = mp.get_context("spawn")
-    queue: mp.Queue = ctx.Queue()
-    proc = ctx.Process(target=_vision_worker, args=(queue, slug, str(base_dir), str(pdf_path)))
-    proc.daemon = False
-    proc.start()
-    proc.join(timeout_s)
-    if proc.is_alive():
-        logger.warning(
-            "tools.gen_dummy_kb.vision_timeout",
-            extra={"slug": slug, "timeout_s": timeout_s},
-        )
-        proc.terminate()
-        proc.join(5)
-        queue.close()
-        queue.join_thread()
-        return False, {"reason": "timeout"}
-    try:
-        result = queue.get_nowait()
-    except Exception:
-        result = {"status": "error", "reason": "no-result"}
-    finally:
-
-        queue.close()
-        queue.join_thread()
-    exit_code = proc.exitcode
-    if exit_code not in (0, None) and result.get("status") == "ok":
-        result = {"status": "error", "exit_code": exit_code}
-    if result.get("status") == "ok":
-        return True, None
-    return False, result  # type: ignore[return-value]
-
-
-def _call_drive_min(slug: str, client_name: str, base_dir: Path, logger: logging.Logger) -> Optional[dict[str, Any]]:
-    """Chiama ensure_drive_minimal_and_upload_config con firme UI. Skip silenzioso se non disponibile."""
-    if not callable(ensure_drive_minimal_and_upload_config):
-        return None
-    ctx = _Ctx(base_dir)
-    try:
-        # firma principale (ctx, slug, client_folder_id=None, logger=None)
-        return ensure_drive_minimal_and_upload_config(ctx, slug=slug, client_folder_id=None, logger=logger)  # type: ignore[arg-type]
-    except TypeError:
-        # fallback legacy: (slug, client_name)
-        return ensure_drive_minimal_and_upload_config(slug=slug, client_name=client_name)  # type: ignore[misc]
-
-
-def _call_drive_build_from_mapping(
-    slug: str, client_name: str, base_dir: Path, logger: logging.Logger
-) -> Optional[dict[str, Any]]:
-    """Chiama build_drive_from_mapping come fa la UI (se disponibile)."""
-    if not callable(build_drive_from_mapping):
-        return None
-    return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
-
-
-def _call_drive_emit_readmes(slug: str, base_dir: Path, logger: logging.Logger) -> Optional[dict[str, Any]]:
-    """Upload dei README delle cartelle RAW su Drive (best-effort)."""
-    if not callable(emit_readmes_for_raw):
-        return None
-    try:
-        base_root = base_dir.parent
-        return emit_readmes_for_raw(  # type: ignore[misc]
-            slug,
-            base_root=base_root,
-            require_env=False,
-            ensure_structure=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "tools.gen_dummy_kb.drive_readmes_failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
-        return None
-
-
-def _register_client(slug: str, client_name: str) -> None:  # pragma: no cover - mantenuto per compatibilità test
-    """
-    In precedenza registrava il cliente nel registry UI.
-    Per la dummy KB lo lasciamo come no-op per evitare side-effect nel DB clienti.
-    """
-    return
+def _validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
+    _validate_dummy_structure_helper(base_dir, logger)
 
 
 def _purge_previous_state(slug: str, client_name: str, logger: logging.Logger) -> None:
@@ -905,149 +362,40 @@ def build_payload(
     records_hint: Optional[str],
     logger: logging.Logger,
 ) -> _DummyPayload:
-    if records_hint:
-        try:
-            _ = int(records_hint)
-        except Exception:
-            logger.debug(
-                "tools.gen_dummy_kb.records_hint_non_numeric",
-                extra={"value": records_hint, "slug": slug},
-            )
-
-    repo_pdf = REPO_ROOT / "config" / "VisionStatement.pdf"
-    if repo_pdf.exists():
-        try:
-            safe_pdf = ensure_within_and_resolve(REPO_ROOT, repo_pdf)
-            with open_for_read_bytes_selfguard(safe_pdf) as handle:
-                pdf_bytes = handle.read()
-        except Exception:
-            logger.warning(
-                "tools.gen_dummy_kb.vision_template_unreadable",
-                extra={"file_path": str(repo_pdf), "slug": slug},
-            )
-            pdf_bytes = _build_generic_vision_template_pdf()
-    else:
-        logger.warning(
-            "tools.gen_dummy_kb.vision_template_missing",
-            extra={"file_path": str(repo_pdf), "slug": slug},
-        )
-        pdf_bytes = _build_generic_vision_template_pdf()
-
-    ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
-
-    base_dir = _client_base(slug)
-    pdf_path = _pdf_path(slug)
-
-    cfg_out: _PayloadConfigIds = _PayloadConfigIds()
-    drive_min_info: Dict[str, Any] | None = None
-    drive_build_info: Dict[str, Any] | None = None
-    drive_readmes_info: Dict[str, Any] | None = None
-    categories_for_readmes: Dict[str, Dict[str, Any]] = {}
-    fallback_info: Optional[Dict[str, Any]] = None
-    vision_completed = False
-
-    def _apply_semantic_fallback(reason_tag: str) -> None:
-        nonlocal fallback_info, categories_for_readmes
-        if fallback_info and categories_for_readmes:
-            return
-        fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
-        categories_for_readmes = fallback_info.get("categories", {})
-        logger.warning(
-            "tools.gen_dummy_kb.vision_fallback_applied",
-            extra={"slug": slug, "reason": reason_tag},
-        )
-
-    if enable_vision:
-        success, vision_meta = _run_vision_with_timeout(
-            base_dir=base_dir,
-            slug=slug,
-            pdf_path=pdf_path,
-            timeout_s=120.0,
-            logger=logger,
-        )
-        if success:
-            vision_completed = True
-            categories_for_readmes = _load_mapping_categories(base_dir)
-        else:
-            reason = vision_meta or {}
-            message = str(reason.get("error") or "")
-            sentinel = str(reason.get("file_path") or "")
-            normalized = message.casefold().replace("à", "a")
-            if reason.get("reason") == "timeout":
-                logger.warning(
-                    "tools.gen_dummy_kb.vision_fallback_no_vision",
-                    extra={"slug": slug, "mode": "timeout"},
-                )
-                _apply_semantic_fallback("timeout")
-            elif ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
-                logger.info(
-                    "tools.gen_dummy_kb.vision_already_completed",
-                    extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
-                )
-                vision_completed = True
-                categories_for_readmes = _load_mapping_categories(base_dir)
-            else:
-                logger.error(
-                    "tools.gen_dummy_kb.vision_fallback_error",
-                    extra={"slug": slug, "error": message, "file_path": sentinel or None},
-                )
-                _apply_semantic_fallback("error")
-    else:
-        fallback_info = _write_basic_semantic_yaml(base_dir, slug=slug, client_name=client_name)
-        categories_for_readmes = fallback_info.get("categories", {})
-
-    if not categories_for_readmes:
-        categories_for_readmes = _load_mapping_categories(base_dir)
-
-    _ensure_minimal_tags_db(base_dir, categories_for_readmes, logger=logger)
-    _ensure_raw_pdfs(base_dir, categories_for_readmes)
-
-    local_readmes = _ensure_local_readmes(base_dir, categories_for_readmes)
-
-    if enable_drive:
-        try:
-            drive_min_info = _call_drive_min(slug, client_name, base_dir, logger)
-            drive_build_info = _call_drive_build_from_mapping(slug, client_name, base_dir, logger)
-            drive_readmes_info = _call_drive_emit_readmes(slug, base_dir, logger)
-        except Exception as exc:
-            logger.warning(
-                "tools.gen_dummy_kb.drive_provisioning_failed",
-                extra={"error": str(exc), "slug": slug},
-            )
-
-    fallback_used = bool(fallback_info)
-
-    cfg_out: dict[str, Any] = {}
-    if callable(get_client_config) and ClientContext:
-        try:
-            ctx_cfg = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[misc]
-            cfg = get_client_config(ctx_cfg) or {}
-            cfg_out = {
-                "drive_folder_id": cfg.get("drive_folder_id"),
-                "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
-            }
-        except Exception:
-            cfg_out = _PayloadConfigIds()
-
-    return {
-        "slug": slug,
-        "client_name": client_name,
-        "paths": {
-            "base": str(base_dir),
-            "config": str(base_dir / "config" / "config.yaml"),
-            "vision_pdf": str(pdf_path),
-            "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
-            "cartelle_raw": str(base_dir / "semantic" / "cartelle_raw.yaml"),
-        },
-        "drive_min": drive_min_info or {},
-        "drive_build": drive_build_info or {},
-        "drive_readmes": drive_readmes_info or {},
-        "config_ids": cfg_out,
-        "vision_used": bool(vision_completed),
-        "drive_used": bool(enable_drive),
-        "fallback_used": fallback_used,
-        "local_readmes": local_readmes,
-    }
+    return _build_dummy_payload(
+        slug=slug,
+        client_name=client_name,
+        enable_drive=enable_drive,
+        enable_vision=enable_vision,
+        records_hint=records_hint,
+        logger=logger,
+        repo_root=REPO_ROOT,
+        ensure_local_workspace_for_ui=ensure_local_workspace_for_ui,
+        run_vision=run_vision,
+        get_env_var=get_env_var,
+        ensure_within_and_resolve_fn=ensure_within_and_resolve,
+        open_for_read_bytes_selfguard=open_for_read_bytes_selfguard,
+        load_vision_template_sections=load_vision_template_sections,
+        client_base=_client_base,
+        pdf_path=_pdf_path,
+        register_client_fn=_register_client,
+        ClientContext=ClientContext,
+        get_client_config=get_client_config,
+        ensure_drive_minimal_and_upload_config=ensure_drive_minimal_and_upload_config,
+        build_drive_from_mapping=build_drive_from_mapping,
+        emit_readmes_for_raw=emit_readmes_for_raw,
+        run_vision_with_timeout_fn=_run_vision_with_timeout,
+        write_basic_semantic_yaml_fn=_write_basic_semantic_yaml,
+        load_mapping_categories_fn=_load_mapping_categories,
+        ensure_minimal_tags_db_fn=_ensure_minimal_tags_db,
+        ensure_raw_pdfs_fn=_ensure_raw_pdfs,
+        ensure_local_readmes_fn=_ensure_local_readmes,
+        ensure_book_skeleton_fn=_ensure_book_skeleton,
+        validate_dummy_structure_fn=_validate_dummy_structure,
+        call_drive_min_fn=_call_drive_min,
+        call_drive_build_from_mapping_fn=_call_drive_build_from_mapping,
+        call_drive_emit_readmes_fn=_call_drive_emit_readmes,
+    )
 
 
 def emit_structure(payload: _DummyPayload | Dict[str, Any], *, stream: TextIO = sys.stdout) -> None:

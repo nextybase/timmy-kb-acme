@@ -17,7 +17,7 @@ ai:
     max_retries: 2
     http2_enabled: false
   vision:
-    engine: responses
+    engine: assistants
     model: gpt-4o-mini-2024-07-18
     assistant_id_env: OBNEXT_ASSISTANT_ID
     use_kb: false

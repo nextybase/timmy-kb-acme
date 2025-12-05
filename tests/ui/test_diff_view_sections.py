@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
-
 from tests.ui.streamlit_stub import StreamlitStub
 
 

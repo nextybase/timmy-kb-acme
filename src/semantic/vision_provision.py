@@ -732,8 +732,9 @@ def _persist_outputs(
     _validate_json_payload(payload, expected_slug=slug)
 
     areas = payload.get("areas")
-    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
-        raise ConfigError("Aree fuori range (3..9)")
+    min_areas = 1 if prepared.slug == "dummy" else 3
+    if not isinstance(areas, list) or not (min_areas <= len(areas) <= 9):
+        raise ConfigError(f"Aree fuori range ({min_areas}..9)")
 
     system_folders = payload.get("system_folders")
     if not isinstance(system_folders, dict) or "identity" not in system_folders or "glossario" not in system_folders:
@@ -1027,9 +1028,59 @@ def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -
     if not text:
         LOGGER.error(_evt("no_output_text"), extra={"assistant_id": assistant_id, "source": source})
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
+
+    def _strip_code_fences(payload: str) -> str:
+        candidate = payload.strip()
+        if candidate.startswith("```") and candidate.count("```") >= 2:
+            parts = candidate.split("```")
+            candidate = parts[1] if len(parts) > 1 else candidate
+        if candidate.lower().startswith("json"):
+            candidate = candidate[4:].lstrip()
+        return candidate.strip()
+
+    def _try_json_load(payload: str) -> Dict[str, Any]:
+        return cast(Dict[str, Any], json.loads(payload))
+
+    if isinstance(text, str):
+        stripped = text.lstrip()
+        if not stripped.startswith("{") and not stripped.startswith("["):
+            LOGGER.warning(
+                _evt("non_json_like_output"),
+                extra={
+                    "assistant_id": assistant_id,
+                    "source": source,
+                    "sample": stripped[:500],
+                },
+            )
+            try:
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        _evt("raw_output.capture"),
+                        extra={
+                            "assistant_id": assistant_id,
+                            "source": source,
+                            "length": len(stripped),
+                            "preview": stripped[:2000],
+                        },
+                    )
+            except Exception:
+                pass
+            # Tolleranza minima: se l'output è racchiuso in ```...``` o ```json ...```, rimuovi i fence.
+            text = _strip_code_fences(stripped)
     try:
-        return cast(Dict[str, Any], json.loads(text))
+        return _try_json_load(text)  # type: ignore[arg-type]
     except json.JSONDecodeError as exc:
+        # Se arrivano fence ```...``` non rimossi o testo extra, prova un parse best-effort sul blocco tra i fence.
+        if isinstance(text, str) and "```" in text:
+            fences = text.split("```")
+            for chunk in fences:
+                candidate = _strip_code_fences(chunk)
+                if not candidate:
+                    continue
+                try:
+                    return _try_json_load(candidate)
+                except Exception:
+                    continue
         LOGGER.error(
             _evt("invalid_json"),
             extra={

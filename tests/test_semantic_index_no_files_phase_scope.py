@@ -3,8 +3,9 @@
 import logging
 from pathlib import Path
 
-import semantic.api as api
 from tests.support.contexts import TestClientCtx
+
+import semantic.api as api
 
 
 class _DummyEmb:

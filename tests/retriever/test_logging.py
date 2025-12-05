@@ -5,9 +5,9 @@ import logging
 from typing import Any
 
 import pytest
+from tests.conftest import DUMMY_SLUG
 
 from retriever import QueryParams, search
-from tests.conftest import DUMMY_SLUG
 
 
 class _DummyEmbeddingsClient:

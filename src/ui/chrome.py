@@ -185,7 +185,7 @@ def _on_dummy_kb() -> None:
         if cleanup:
             _cleanup_dummy(slug, client_name=f"Dummy {slug}", status_label="Pulizia dummy in corso.")
         if proceed:
-            cmd = [sys.executable, str(script), "--slug", slug]
+            cmd = [sys.executable, "-m", "tools.gen_dummy_kb", "--slug", slug]
             if no_drive:
                 cmd.append("--no-drive")
             if no_vision:

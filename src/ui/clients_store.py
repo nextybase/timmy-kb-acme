@@ -113,9 +113,16 @@ class ClientEntry:
     slug: str
     nome: str
     stato: str
+    created_at: str | None = None
+    dummy: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"slug": self.slug, "nome": self.nome, "stato": self.stato}
+        payload = {"slug": self.slug, "nome": self.nome, "stato": self.stato}
+        if self.created_at:
+            payload["created_at"] = self.created_at
+        if self.dummy is not None:
+            payload["dummy"] = bool(self.dummy)
+        return payload
 
 
 def ensure_db() -> None:
@@ -140,8 +147,18 @@ def _parse_entries(text: str) -> list[ClientEntry]:
             slug = str(item.get("slug", "")).strip()
             nome = str(item.get("nome", "")).strip()
             stato = str(item.get("stato", "")).strip()
+            created_at = item.get("created_at")
+            dummy_flag = item.get("dummy")
             if slug:
-                entries.append(ClientEntry(slug=slug, nome=nome, stato=stato))
+                entries.append(
+                    ClientEntry(
+                        slug=slug,
+                        nome=nome,
+                        stato=stato,
+                        created_at=str(created_at).strip() if created_at else None,
+                        dummy=bool(dummy_flag) if isinstance(dummy_flag, bool) else None,
+                    )
+                )
     return entries
 
 

@@ -25,7 +25,7 @@ ai:
     assistant_id_env: OBNEXT_ASSISTANT_ID
     use_kb: false
     snapshot_retention_days: 30
-    strict_output: true
+    strict_output: false
 
 pipeline:
   retriever:

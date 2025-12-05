@@ -193,6 +193,13 @@ make ci-safe     # qa-safe + pytest
   - Parita di firma wrapper UI  backend e passthrough dei parametri.
   - Invarianti su `book/` (presenza `README.md`/`SUMMARY.md` dopo onboarding).
 
+### Dummy KB (smoke E2E)
+- CLI: `python src/tools/gen_dummy_kb.py --slug dummy --no-drive` (usa workspace in `output/` o `--base-dir <tmp>`; nessuna dipendenza Drive).
+- Pipeline: **Vision → Semantic → Tags → RAW → Registry UI** (registro opzionale in `clients_db/clients.yaml`, rispettando gli override `CLIENTS_DB_*`/`REPO_ROOT_DIR`).
+- Health report nel payload JSON (`health`): `vision_status` (`ok`/`error`/`timeout`), `fallback_used`, `raw_pdf_count`, `tags_count`, `mapping_valid`, `summary_exists`, `readmes_count`.
+- Struttura minima generata: `config/config.yaml`, `semantic/{semantic_mapping.yaml,cartelle_raw.yaml,tags.db}`, `book/{README.md,SUMMARY.md}`, almeno un PDF valido in `raw/`.
+- Rigenerazione sicura: la CLI esegue il cleanup locale prima di ogni run; per reset manuale usare `tools.clean_client_workspace.perform_cleanup` o cancellare `output/timmy-kb-<slug>`/override `--base-dir`.
+
 ---
 
 ## Pattern da evitare

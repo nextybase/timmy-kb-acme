@@ -24,6 +24,7 @@ _call_drive_min = _impl._call_drive_min
 _call_drive_build_from_mapping = _impl._call_drive_build_from_mapping
 _call_drive_emit_readmes = _impl._call_drive_emit_readmes
 _purge_previous_state = _impl._purge_previous_state
+_validate_dummy_structure = _impl._validate_dummy_structure
 # Conserva il riferimento all'impl originale di build_payload per evitare ricorsione.
 _build_payload_impl = _impl.build_payload
 
@@ -48,6 +49,8 @@ def _sync_shim_to_impl() -> None:
         _impl._call_drive_emit_readmes = _call_drive_emit_readmes  # type: ignore[assignment]
     if _purge_previous_state is not _impl._purge_previous_state:
         _impl._purge_previous_state = _purge_previous_state  # type: ignore[assignment]
+    if _validate_dummy_structure is not _impl._validate_dummy_structure:
+        _impl._validate_dummy_structure = _validate_dummy_structure  # type: ignore[assignment]
     if build_payload is not _impl.build_payload:
         _impl.build_payload = build_payload  # type: ignore[assignment]
 

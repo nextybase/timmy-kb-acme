@@ -11,9 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+from tests.conftest import DUMMY_SLUG
+
 import retriever as retr
 from retriever import QueryParams
-from tests.conftest import DUMMY_SLUG
 
 
 class FakeEmb:

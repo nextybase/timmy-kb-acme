@@ -5,7 +5,6 @@ import types
 from pathlib import Path
 
 import pytest
-
 from tests.ui.test_manage_modal_save import _build_streamlit_stub
 
 

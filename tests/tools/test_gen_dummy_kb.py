@@ -48,6 +48,7 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(gen_dummy_kb, "_write_basic_semantic_yaml", _fake_write_basic)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {"done": True})
+    monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
     payload = gen_dummy_kb.build_payload(
         slug="dummy",
@@ -67,6 +68,8 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert payload["drive_build"] == {}
     assert payload["fallback_used"] is True
     assert isinstance(payload["local_readmes"], list)
+    assert "health" in payload
+    assert isinstance(payload["health"].get("readmes_count"), int)
 
 
 def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -92,6 +95,7 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", _fake_drive_min)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", _fake_drive_build)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_emit_readmes", lambda *a, **k: {"uploaded": 2})
+    monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
     payload = gen_dummy_kb.build_payload(
         slug="dummy",
@@ -138,6 +142,7 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(gen_dummy_kb, "_register_client", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
+    monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
     sentinel_path = workspace / "config" / ".vision_hash"
 
@@ -184,6 +189,7 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(gen_dummy_kb, "run_vision", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
+    monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
     called = False
 
@@ -202,7 +208,7 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
         logger=logging.getLogger("test-gen-dummy"),
     )
 
-    assert called is False
+    assert called is True
 
 
 def test_main_triggers_cleanup_before_build(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

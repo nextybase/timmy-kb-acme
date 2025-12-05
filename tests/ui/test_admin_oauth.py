@@ -6,7 +6,6 @@ import types
 from typing import Any, Dict, Tuple
 
 import pytest
-
 from tests.ui.streamlit_stub import StreamlitStub
 
 

@@ -79,7 +79,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Path-safety Vision:** `tests/test_semantic_vision_path_safety.py`.
 
 ### 4) Orchestratori e CLI  Onboarding e flussi operativi
-- **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`.
+- **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`, `src/tests/e2e/test_dummy_smoke.py`.
 - **Orchestratori & tag onboarding:** `test_tag_onboarding_cli_smoke.py`, `test_tag_onboarding_helpers.py`, `test_onboarding_full_paths.py`.
 - **CLI & contratti/exit-codes:** `test_cli_env_missing.py`, `test_cli_gen_vision_yaml.py`, `test_contract_defaults.py`, `test_contract_artifacts.py`.
 - **Dummy KB / fallback Vision:** `tests/tools/test_gen_dummy_kb.py` copre workspace idempotente, fallback YAML senza PyYAML, README locali generati (PDF o TXT) e upload Drive best-effort.

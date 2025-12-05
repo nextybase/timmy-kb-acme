@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pipeline.content_utils import convert_files_to_structured_markdown
 from tests.utils.symlink import make_symlink
+
+from pipeline.content_utils import convert_files_to_structured_markdown
 
 
 class _Ctx:

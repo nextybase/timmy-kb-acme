@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
-
 from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 

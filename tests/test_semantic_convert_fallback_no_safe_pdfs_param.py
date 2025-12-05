@@ -2,9 +2,10 @@
 # tests/test_semantic_convert_fallback_no_safe_pdfs_param.py
 import logging
 
+from tests.support.contexts import TestClientCtx
+
 from semantic import api as sapi
 from semantic import convert_service
-from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_legacy_converter_without_safe_pdfs(tmp_path, monkeypatch, caplog):

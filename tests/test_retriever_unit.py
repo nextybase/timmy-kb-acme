@@ -11,6 +11,7 @@ from collections import deque
 from typing import Iterable
 
 import pytest
+from tests.conftest import DUMMY_SLUG
 
 import retriever as retriever
 from retriever import (
@@ -20,7 +21,6 @@ from retriever import (
     with_config_candidate_limit,
     with_config_or_budget,
 )
-from tests.conftest import DUMMY_SLUG
 
 # ----------------------------- Test cosine (iterator-safe) -----------------------------
 

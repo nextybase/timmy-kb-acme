@@ -10,11 +10,11 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import pytest
+from tests.support.contexts import TestClientCtx
 
 import semantic.api as sapi
 import semantic_onboarding as cli
 from pipeline.exceptions import ConfigError, exit_code_for
-from tests.support.contexts import TestClientCtx
 
 
 def _ctx(base_dir: Path) -> TestClientCtx:

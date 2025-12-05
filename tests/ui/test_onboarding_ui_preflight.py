@@ -5,10 +5,10 @@ import logging
 from contextlib import nullcontext
 
 import pytest
-
-import onboarding_ui
 from tests.ui.streamlit_like_adapter import StreamlitStubAdapter
 from tests.ui.streamlit_stub import StreamlitStub
+
+import onboarding_ui
 
 
 def _make_st() -> StreamlitStubAdapter:

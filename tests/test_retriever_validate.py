@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Sequence
 
 import pytest
+from tests.conftest import DUMMY_SLUG
 
 import retriever as r
 from retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
-from tests.conftest import DUMMY_SLUG
 
 
 class DummyEmbeddings:

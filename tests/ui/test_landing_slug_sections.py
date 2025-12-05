@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import pytest
-
 from tests.ui.stub_helpers import install_streamlit_stub
 
 

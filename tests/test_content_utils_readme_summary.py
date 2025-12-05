@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pipeline.content_utils as cu
 from tests.support.contexts import TestClientCtx
+
+import pipeline.content_utils as cu
 
 
 def _ctx(base: Path, book: Path) -> TestClientCtx:

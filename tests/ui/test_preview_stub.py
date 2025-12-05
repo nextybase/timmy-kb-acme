@@ -8,7 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from tests.conftest import DUMMY_SLUG
 from tests.ui.stub_helpers import install_streamlit_stub
 

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import logging
 
-from pipeline.logging_utils import get_structured_logger, phase_scope
 from tests.conftest import DUMMY_SLUG
+
+from pipeline.logging_utils import get_structured_logger, phase_scope
 
 
 class _ListHandler(logging.Handler):

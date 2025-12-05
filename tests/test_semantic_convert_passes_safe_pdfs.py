@@ -2,9 +2,10 @@
 # tests/test_semantic_convert_passes_safe_pdfs.py
 import logging
 
+from tests.support.contexts import TestClientCtx
+
 from semantic import api as sapi
 from semantic import convert_service
-from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch, caplog):

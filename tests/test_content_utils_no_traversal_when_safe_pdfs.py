@@ -2,8 +2,9 @@
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
 from pathlib import Path
 
-import pipeline.content_utils as cu
 from tests.support.contexts import TestClientCtx
+
+import pipeline.content_utils as cu
 
 
 def _ctx(base: Path, raw: Path, book: Path) -> TestClientCtx:

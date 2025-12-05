@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Sequence
 
 import numpy as np
+from tests.conftest import DUMMY_SLUG
 
 import retriever as r
 from retriever import QueryParams, search
-from tests.conftest import DUMMY_SLUG
 
 
 class EmbedOne:

@@ -14,19 +14,37 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     monkeypatch.setattr(gen_dummy_mod, "ensure_local_workspace_for_ui", lambda **_: None)
     monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: tmp_path / f"timmy-kb-{slug}")
     monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: tmp_path / "VisionStatement.pdf")
+    base_dir = tmp_path / "timmy-kb-dummy"
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    (base_dir / "semantic").mkdir(parents=True, exist_ok=True)
+    (base_dir / "book").mkdir(parents=True, exist_ok=True)
+    (base_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config" / "config.yaml").write_text("dummy: true\n", encoding="utf-8")
+    (base_dir / "semantic" / "semantic_mapping.yaml").write_text("", encoding="utf-8")
+    (base_dir / "semantic" / "cartelle_raw.yaml").write_text("", encoding="utf-8")
+    (base_dir / "semantic" / "tags.db").write_bytes(b"")
+    (base_dir / "book" / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (base_dir / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (base_dir / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
     if run_vision_return is None:
         monkeypatch.setattr(gen_dummy_mod, "run_vision", lambda *a, **k: None)
     else:
         monkeypatch.setattr(gen_dummy_mod, "run_vision", run_vision_return)
+    if run_vision_return is None:
+        monkeypatch.setattr(gen_dummy_mod, "_run_vision_with_timeout", lambda **_: (True, None))
+    else:
+        monkeypatch.setattr(gen_dummy_mod, "_run_vision_with_timeout", lambda **_: (False, {"error": "boom"}))
     monkeypatch.setattr(gen_dummy_mod, "_call_drive_min", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_mod, "_call_drive_build_from_mapping", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_mod, "_write_basic_semantic_yaml", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_mod, "_register_client", lambda *a, **k: None)
+    monkeypatch.setattr(gen_dummy_mod, "_validate_dummy_structure", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_mod, "safe_write_text", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_mod, "safe_write_bytes", lambda *a, **k: None)
-    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
-    monkeypatch.setattr(gen_dummy_mod, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(gen_dummy_mod, "SRC_ROOT", tmp_path / "src")
+    monkeypatch.setenv("REPO_ROOT_DIR", str(base_dir))
+    monkeypatch.setattr(gen_dummy_mod, "REPO_ROOT", base_dir)
+    monkeypatch.setattr(gen_dummy_mod, "SRC_ROOT", base_dir / "src")
+    monkeypatch.setattr(gen_dummy_mod, "_purge_previous_state", lambda *a, **k: None)
 
 
 def test_module_import_has_no_side_effects(tmp_path):

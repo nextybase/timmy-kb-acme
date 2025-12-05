@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 import pytest
+from tests.conftest import build_vocab_db
 
 import semantic.semantic_extractor as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
-from tests.conftest import build_vocab_db
 
 
 @dataclass
