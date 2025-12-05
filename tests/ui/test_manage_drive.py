@@ -45,7 +45,7 @@ class _StatusStub:
 def test_prepare_download_plan_requires_tuple(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(drive, "call_best_effort", lambda *_, **__: ["only"])
     with pytest.raises(RuntimeError):
-        drive.prepare_download_plan(lambda **_: [], slug="demo", logger=object())
+        drive.prepare_download_plan(lambda **_: [], slug="dummy", logger=object())
 
 
 def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,7 +70,7 @@ def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyP
         return ["a"]
 
     ok = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=[],
         download_with_progress=download_with_env,
         download_simple=None,
@@ -83,7 +83,7 @@ def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyP
     assert ok is True
     assert captured[0]["require_env"] is True
     assert captured[0]["overwrite"] is False
-    assert invalidate_called.get("slug") == "demo"
+    assert invalidate_called.get("slug") == "dummy"
     assert st_stub.toasts
 
     captured.clear()
@@ -92,7 +92,7 @@ def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyP
         return ["b"]
 
     ok2 = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=[],
         download_with_progress=None,
         download_simple=download_simple,
@@ -125,7 +125,7 @@ def test_execute_drive_download_conflicts_toggle(monkeypatch: pytest.MonkeyPatch
         return ["a"]
 
     ok = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=["raw/x.pdf"],
         download_with_progress=download_with_env,
         download_simple=None,
@@ -144,7 +144,7 @@ def test_execute_drive_download_conflicts_toggle(monkeypatch: pytest.MonkeyPatch
     st_stub.warnings.clear()
 
     ok_force = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=["raw/x.pdf"],
         download_with_progress=download_with_env,
         download_simple=None,
@@ -207,7 +207,7 @@ def test_plan_raw_download_uses_discover_candidates(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(drive_runner, "_resolve_workspace", lambda *_a, **_k: workspace_dir)
     monkeypatch.setattr(drive_runner, "discover_candidates", fake_discover_candidates)
 
-    conflicts, labels = drive_runner.plan_raw_download("demo", require_env=False)
+    conflicts, labels = drive_runner.plan_raw_download("dummy", require_env=False)
 
     assert conflicts == ["existing.pdf"]
     assert labels == ["existing.pdf", "sub/new.pdf"]
@@ -230,7 +230,7 @@ def test_execute_drive_download_logs_failure(monkeypatch: pytest.MonkeyPatch) ->
         raise RuntimeError("boom")
 
     ok = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=["raw/x.pdf"],
         download_with_progress=download_with_progress,
         download_simple=None,
@@ -245,6 +245,6 @@ def test_execute_drive_download_logs_failure(monkeypatch: pytest.MonkeyPatch) ->
     assert log_records == [
         (
             "ui.manage.drive.download_failed",
-            {"slug": "demo", "overwrite": True, "error": "boom"},
+            {"slug": "dummy", "overwrite": True, "error": "boom"},
         )
     ]

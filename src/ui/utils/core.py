@@ -21,7 +21,8 @@ def safe_write_text(
     fsync: bool = False,
 ) -> None:
     """Wrapper UI che delega a pipeline.file_utils.safe_write_text (monkeypatchabile nei test)."""
-    return _safe_write_text(path, data, encoding=encoding, atomic=atomic, fsync=fsync)
+    _safe_write_text(path, data, encoding=encoding, atomic=atomic, fsync=fsync)
+    return None
 
 
 def yaml_load(path: Path) -> Dict[str, Any]:

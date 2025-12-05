@@ -59,7 +59,7 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
 
 
 def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    slug = "acme"
+    slug = "dummy"
     base_root = tmp_path / "output"
     base_dir = base_root / f"timmy-kb-{slug}"
     raw = base_dir / "raw"

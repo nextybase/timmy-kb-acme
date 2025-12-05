@@ -39,8 +39,8 @@ class DiffStreamlitStub(StreamlitStub):
         return cols
 
 
-def _prepare_workspace(tmp_path: Path) -> Path:
-    workspace = tmp_path / "timmy-kb-acme"
+def _prepare_workspace(tmp_path: Path, slug: str = "dummy") -> Path:
+    workspace = tmp_path / f"timmy-kb-{slug}"
     raw_dir = workspace / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     (raw_dir / "foo.txt").write_bytes(b"local-file-updated")
@@ -76,7 +76,7 @@ def sample_dataset(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         },
     }
 
-    dataset = module.build_diff_dataset("acme", drive_index)
+    dataset = module.build_diff_dataset("dummy", drive_index)
     return module, dataset
 
 
@@ -90,7 +90,7 @@ def test_build_diff_dataset_detects_only_and_differences(monkeypatch: pytest.Mon
         "raw/drive_only.txt": {"type": "file", "size": 12, "mtime": 1_100.0},
     }
 
-    dataset = module.build_diff_dataset("acme", drive_index)
+    dataset = module.build_diff_dataset("dummy", drive_index)
 
     assert dataset.only_drive == ["raw/drive_only.txt"]
     assert "raw/local_only.txt" in dataset.only_local
@@ -135,7 +135,7 @@ def test_render_drive_local_diff_integration(sample_dataset, monkeypatch: pytest
     stub = DiffStreamlitStub()
     monkeypatch.setattr(module, "st", stub, raising=False)
 
-    module.render_drive_local_diff("acme", dataset.drive_entries)
+    module.render_drive_local_diff("dummy", dataset.drive_entries)
 
     assert stub.metric_history[:3] == [
         ("Solo Drive", len(dataset.only_drive)),

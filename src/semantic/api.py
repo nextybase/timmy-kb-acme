@@ -149,10 +149,10 @@ def _collect_doc_entities(candidates: Mapping[str, CandidateMeta]) -> List[DocEn
 
     doc_entities: List[DocEntityRecord] = []
     for rel_path, meta in candidates.items():
-        sources = cast(Mapping[str, Any], meta.get("sources") or {})
-        spacy_src = cast(Mapping[str, Any], sources.get("spacy") or {})
-        areas = cast(Mapping[str, Sequence[str]], spacy_src.get("areas") or {})
-        score_map = cast(Mapping[str, Any], meta.get("score") or {})
+        sources: Mapping[str, Any] = meta.get("sources") or {}
+        spacy_src: Mapping[str, Any] = cast(Mapping[str, Any], sources.get("spacy") or {})
+        areas: Mapping[str, Sequence[str]] = cast(Mapping[str, Sequence[str]], spacy_src.get("areas") or {})
+        score_map: Mapping[str, Any] = meta.get("score") or {}
         rel_uid = Path(rel_path).as_posix()
         for area_key, ent_list in areas.items():
             for entity_id in ent_list or []:
@@ -222,7 +222,7 @@ def _apply_folder_terms(
         rel_folder = "" if rel_folder == "." else rel_folder
         nlp_tags = folder_terms.get(rel_folder)
         if not nlp_tags:
-            enriched_candidates[rel_path] = dict(meta)
+            enriched_candidates[rel_path] = cast(CandidateMeta, dict(meta))
             continue
         existing = list(meta.get("tags") or [])
         seen_lower = {str(tag).strip().lower() for tag in existing if str(tag).strip()}
@@ -238,7 +238,7 @@ def _apply_folder_terms(
             seen_lower.add(key)
             if len(enriched) >= max_terms:
                 break
-        updated = dict(meta)
+        updated = cast(CandidateMeta, dict(meta))
         if enriched:
             updated["tags"] = enriched
         enriched_candidates[rel_path] = updated

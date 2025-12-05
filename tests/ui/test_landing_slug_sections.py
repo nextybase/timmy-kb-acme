@@ -27,13 +27,13 @@ def _load_landing(monkeypatch: pytest.MonkeyPatch) -> Tuple[Any, Any]:
 
 def test_render_header_form_returns_slug_and_submit(monkeypatch: pytest.MonkeyPatch) -> None:
     module, st_stub = _load_landing(monkeypatch)
-    st_stub.session_state["ls_slug"] = "acme"
+    st_stub.session_state["ls_slug"] = "dummy"
     st_stub.register_button_sequence("Verifica cliente", [True])
     monkeypatch.setattr(module, "get_bool", lambda *_args, **_kwargs: False, raising=False)
 
-    slug_input, verify_clicked = module.render_header_form("acme", log=None)
+    slug_input, verify_clicked = module.render_header_form("dummy", log=None)
 
-    assert slug_input == "acme"
+    assert slug_input == "dummy"
     assert verify_clicked is True
 
 
@@ -74,9 +74,9 @@ def test_handle_verify_workflow_valid_slug(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_workspace_summary_existing_workspace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module, st_stub = _load_landing(monkeypatch)
-    workspace_dir = tmp_path / "acme"
+    workspace_dir = tmp_path / "dummy"
     workspace_dir.mkdir()
-    vision_state: Dict[str, Any] = {"verified": False, "workspace_created": False, "client_name": "Acme"}
+    vision_state: Dict[str, Any] = {"verified": False, "workspace_created": False, "client_name": "Dummy"}
 
     called: Dict[str, Tuple[str, str]] = {}
 
@@ -87,10 +87,10 @@ def test_workspace_summary_existing_workspace(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setattr(module, "_workspace_dir_for", lambda _slug: workspace_dir, raising=False)
     monkeypatch.setattr(module, "_enter_existing_workspace", _fake_enter, raising=False)
 
-    result = module.render_workspace_summary("acme", vision_state, slug_submitted=True, log=None)
+    result = module.render_workspace_summary("dummy", vision_state, slug_submitted=True, log=None)
 
-    assert result == (True, "acme", "Acme")
-    assert called["args"] == ("acme", "Acme")
+    assert result == (True, "dummy", "Dummy")
+    assert called["args"] == ("dummy", "Dummy")
     assert st_stub.session_state.get("ui.vision_workflow") is None
 
 
@@ -104,10 +104,10 @@ def test_workspace_summary_marks_new_client(monkeypatch: pytest.MonkeyPatch, tmp
         "needs_creation": False,
     }
 
-    ok, slug, client_name = module.render_workspace_summary("acme", vision_state, slug_submitted=True, log=None)
+    ok, slug, client_name = module.render_workspace_summary("dummy", vision_state, slug_submitted=True, log=None)
 
     assert ok is False
-    assert slug == "acme"
+    assert slug == "dummy"
     assert client_name == ""
     assert vision_state["verified"] is True
     assert vision_state["needs_creation"] is True
@@ -119,9 +119,9 @@ def test_workspace_summary_requires_verification_before_form(monkeypatch: pytest
     module, st_stub = _load_landing(monkeypatch)
     vision_state: Dict[str, Any] = {}
 
-    ok, slug, client_name = module.render_workspace_summary("acme", vision_state, slug_submitted=False, log=None)
+    ok, slug, client_name = module.render_workspace_summary("dummy", vision_state, slug_submitted=False, log=None)
 
     assert ok is False
-    assert slug == "acme"
+    assert slug == "dummy"
     assert client_name == ""
     assert st_stub.session_state.get("ui.vision_workflow") is None

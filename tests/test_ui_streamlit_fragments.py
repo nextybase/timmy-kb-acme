@@ -43,11 +43,11 @@ def test_show_error_with_details_renders_message(monkeypatch):
         "Operazione non riuscita",
         RuntimeError("boom"),
         event="ui.test.failure",
-        extra={"slug": "demo"},
+        extra={"slug": "dummy"},
         show_details=True,
     )
 
     assert dummy_st.errors == ["Operazione non riuscita"]
     assert dummy_st.exceptions == ["boom"]
     assert logger.calls and logger.calls[0][0] == "ui.test.failure"
-    assert logger.calls[0][1] and logger.calls[0][1]["slug"] == "demo"
+    assert logger.calls[0][1] and logger.calls[0][1]["slug"] == "dummy"

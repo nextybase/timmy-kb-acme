@@ -50,16 +50,16 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {"done": True})
 
     payload = gen_dummy_kb.build_payload(
-        slug="demo",
-        client_name="Demo Spa",
+        slug="dummy",
+        client_name="Dummy Spa",
         enable_drive=False,
         enable_vision=False,
         records_hint=None,
         logger=logging.getLogger("test-gen-dummy"),
     )
 
-    assert payload["slug"] == "demo"
-    assert payload["client_name"] == "Demo Spa"
+    assert payload["slug"] == "dummy"
+    assert payload["client_name"] == "Dummy Spa"
     assert payload["drive_used"] is False
     assert payload["vision_used"] is False
     assert "called" in captured
@@ -94,8 +94,8 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_emit_readmes", lambda *a, **k: {"uploaded": 2})
 
     payload = gen_dummy_kb.build_payload(
-        slug="demo",
-        client_name="Demo Spa",
+        slug="dummy",
+        client_name="Dummy Spa",
         enable_drive=True,
         enable_vision=False,
         records_hint="7",
@@ -152,8 +152,8 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
 
     payload = gen_dummy_kb.build_payload(
-        slug="demo",
-        client_name="Demo Spa",
+        slug="dummy",
+        client_name="Dummy Spa",
         enable_drive=False,
         enable_vision=True,
         records_hint=None,
@@ -194,8 +194,8 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(gen_dummy_kb, "_register_client", _tracker)
 
     gen_dummy_kb.build_payload(
-        slug="demo",
-        client_name="Demo Spa",
+        slug="dummy",
+        client_name="Dummy Spa",
         enable_drive=False,
         enable_vision=False,
         records_hint=None,
@@ -232,7 +232,7 @@ def test_main_triggers_cleanup_before_build(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr(gen_dummy_kb, "build_payload", _fake_build_payload)
     monkeypatch.setattr(gen_dummy_kb, "emit_structure", lambda payload, stream=sys.stdout: calls.append("emit"))
 
-    exit_code = gen_dummy_kb.main(["--slug", "demo", "--no-drive", "--no-vision", "--base-dir", str(tmp_path)])
+    exit_code = gen_dummy_kb.main(["--slug", "dummy", "--no-drive", "--no-vision", "--base-dir", str(tmp_path)])
 
     assert exit_code == 0
     assert calls[:2] == ["cleanup", "build"]

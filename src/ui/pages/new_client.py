@@ -35,6 +35,7 @@ from ui.utils import set_slug
 from ui.utils.context_cache import get_client_context
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
+from ui.utils.repo_root import get_repo_root
 from ui.utils.status import status_guard
 from ui.utils.workspace import workspace_root
 
@@ -80,7 +81,7 @@ from pipeline.config_utils import get_client_config
 
 def _load_repo_settings() -> Optional[Settings]:
     try:
-        return Settings.load(_repo_root())
+        return Settings.load(get_repo_root())
     except Exception:
         return None
 
@@ -104,18 +105,13 @@ LOGGER = get_structured_logger("ui.new_client")
 
 
 # --------- helper ---------
-def _repo_root() -> Path:
-    # new_client.py -> pages -> ui -> src -> REPO_ROOT
-    return Path(__file__).resolve().parents[3]
-
-
 def _client_base(slug: str) -> Path:
     """
     Determina la radice del workspace cliente.
     - Preferisce `workspace_root` (che valida lo slug e ingloba il ClientContext).
     - Fallback: usa la root del repository (override-friendly per i test) mantenendo le guardie.
     """
-    fallback_base = _repo_root() / "output" / f"timmy-kb-{slug}"
+    fallback_base = get_repo_root() / "output" / f"timmy-kb-{slug}"
     base_parent = fallback_base.parent
 
     candidate: Path
@@ -165,7 +161,7 @@ def _mirror_repo_config_into_client(slug: str, *, pdf_bytes: bytes | None = None
     if pdf_bytes is not None:
         # Compatibilità: l'eventuale PDF è già stato gestito in `ensure_local_workspace_for_ui`.
         pass
-    template_cfg = _repo_root() / "config" / "config.yaml"
+    template_cfg = get_repo_root() / "config" / "config.yaml"
     if not template_cfg.exists():
         return
 

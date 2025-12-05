@@ -6,7 +6,7 @@ Cosa fa questo file
 -------------------
 Centralizza le utilità di configurazione per la pipeline Timmy-KB:
 
-- `Settings`: modello Pydantic per le variabili ambiente critiche (Drive, GitHub,
+- `ClientEnvSettings`: modello Pydantic per le variabili ambiente critiche (Drive, GitHub,
   ecc.), con validazione dei campi essenziali e presenza dello `slug`.
 - `write_client_config_file(context, config) -> Path`: serializza e salva
   **atomicamente** `config.yaml` nella sandbox del cliente usando `safe_write_text`
@@ -148,8 +148,8 @@ def load_client_settings(
 # ----------------------------------------------------------
 #  Modello pydantic per configurazione cliente
 # ----------------------------------------------------------
-class Settings(_BaseSettings):
-    """Modello di configurazione cliente per pipeline Timmy-KB.
+class ClientEnvSettings(_BaseSettings):
+    """Modello Pydantic per i parametri ambiente specifici del cliente.
 
     Le variabili sono risolte dall'ambiente (.env/processo) tramite Pydantic.
     I campi critici vengono validati al termine dell'inizializzazione del modello.
@@ -502,7 +502,7 @@ def update_config_with_drive_ids(
 
 
 __all__ = [
-    "Settings",
+    "ClientEnvSettings",
     "write_client_config_file",
     "get_client_config",
     "load_client_settings",

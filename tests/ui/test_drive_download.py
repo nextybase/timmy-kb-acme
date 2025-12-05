@@ -38,7 +38,7 @@ def test_drive_download_warns_when_overwrite_disabled(monkeypatch: pytest.Monkey
         return ["a"]
 
     ok = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=["raw/existing.pdf"],
         download_with_progress=download_with_env,
         download_simple=None,
@@ -69,7 +69,7 @@ def test_drive_download_force_overwrite(monkeypatch: pytest.MonkeyPatch) -> None
         return ["a"]
 
     ok = drive.execute_drive_download(
-        slug="demo",
+        slug="dummy",
         conflicts=["raw/existing.pdf"],
         download_with_progress=download_with_env,
         download_simple=None,

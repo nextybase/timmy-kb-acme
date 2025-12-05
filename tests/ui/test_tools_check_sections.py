@@ -29,7 +29,7 @@ def test_render_controls_triggers_vision_modal(monkeypatch: pytest.MonkeyPatch) 
 
     calls = _capture_calls(monkeypatch, module, "open_vision_modal")
 
-    module.render_controls(slug="acme", st_module=st_stub)
+    module.render_controls(slug="dummy", st_module=st_stub)
 
     assert calls["open_vision_modal"] == 1
     assert st_stub._rerun_called is True  # type: ignore[attr-defined]
@@ -45,7 +45,7 @@ def test_render_controls_triggers_system_prompt(monkeypatch: pytest.MonkeyPatch)
 
     calls = _capture_calls(monkeypatch, module, "open_system_prompt_modal")
 
-    module.render_controls(slug="acme", st_module=st_stub)
+    module.render_controls(slug="dummy", st_module=st_stub)
 
     assert calls["open_system_prompt_modal"] == 1
 
@@ -58,7 +58,7 @@ def test_render_controls_runs_pdf_conversion(monkeypatch: pytest.MonkeyPatch) ->
 
     calls = _capture_calls(monkeypatch, module, "run_pdf_to_yaml_config")
 
-    module.render_controls(slug="acme", st_module=st_stub)
+    module.render_controls(slug="dummy", st_module=st_stub)
 
     assert calls["run_pdf_to_yaml_config"] == 1
 
@@ -208,6 +208,6 @@ entity_to_document_type:
     monkeypatch.setattr(module, "render_readme_preview", _preview)
     monkeypatch.setattr(module.ontology, "get_all_entities", lambda: [])
 
-    module.render_controls(slug="acme", st_module=st_stub)
+    module.render_controls(slug="dummy", st_module=st_stub)
 
     assert called["preview"] == 1

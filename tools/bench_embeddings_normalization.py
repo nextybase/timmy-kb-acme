@@ -79,7 +79,7 @@ def _bench_retriever_normalization() -> Dict[str, Dict[str, float]]:
     out: Dict[str, Dict[str, float]] = {}
     for label, n in sizes.items():
         retr.fetch_candidates = make_stub(n)
-        params = retr.QueryParams(db_path=None, slug="acme", scope="kb", query="hello", k=8)
+        params = retr.QueryParams(db_path=None, slug="dummy", scope="kb", query="hello", k=8)
         out[label] = {
             "ndarray_2d": _timeit(lambda: retr.search(params, Nd2())),
             "list_of_ndarray": _timeit(lambda: retr.search(params, ListNd())),

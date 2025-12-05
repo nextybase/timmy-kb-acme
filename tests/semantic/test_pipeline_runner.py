@@ -24,12 +24,12 @@ def test_runner_for_slug_calls_gating(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "run_semantic_pipeline", _run_base)
 
     sem.run_semantic_pipeline_for_slug(
-        "acme",
+        "dummy",
         context_factory=_ctx_factory,
         gating=_gating,
     )
 
-    assert called["slug"] == "acme"
+    assert called["slug"] == "dummy"
 
 
 def test_runner_for_slug_propagates_configerror(monkeypatch, tmp_path):
@@ -49,7 +49,7 @@ def test_runner_for_slug_propagates_configerror(monkeypatch, tmp_path):
 
     with pytest.raises(ConfigError, match="Semantica non disponibile"):
         sem.run_semantic_pipeline_for_slug(
-            "acme",
+            "dummy",
             context_factory=_ctx_factory,
             gating=_gating,
         )

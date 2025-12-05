@@ -19,14 +19,14 @@ from tests.support.contexts import TestClientCtx
 
 def _ctx(base_dir: Path) -> TestClientCtx:
     book_dir = base_dir / "book"
-    return TestClientCtx(slug="acme", base_dir=base_dir, raw_dir=base_dir / "raw", md_dir=book_dir)
+    return TestClientCtx(slug="dummy", base_dir=base_dir, raw_dir=base_dir / "raw", md_dir=book_dir)
 
 
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    args = argparse.Namespace(slug="acme", no_preview=False, non_interactive=False)
+    args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=False)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
 
-    ctx = _ctx(tmp_path / "output" / "acme")
+    ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
 
     calls: list[object] = []
@@ -54,14 +54,14 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
     exit_code = cli.main()
 
     assert exit_code == 0
-    assert calls[:3] == ["convert", ("require", "acme"), ("enrich", vocab)]
+    assert calls[:3] == ["convert", ("require", "dummy"), ("enrich", vocab)]
 
 
 def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    args = argparse.Namespace(slug="acme", no_preview=False, non_interactive=True)
+    args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=True)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
 
-    ctx = _ctx(tmp_path / "output" / "acme")
+    ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
 
     monkeypatch.setattr(cli, "convert_markdown", lambda *_, **__: None)
@@ -72,7 +72,7 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_, **__: None)
 
     def _raise(*_: object, **__: object) -> dict[str, dict[str, list[str]]]:
-        raise ConfigError("missing", slug="acme")
+        raise ConfigError("missing", slug="dummy")
 
     monkeypatch.setattr(cli, "require_reviewed_vocab", _raise)
     monkeypatch.setattr(sapi, "require_reviewed_vocab", _raise)
@@ -80,4 +80,4 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
     exit_code = cli.main()
 
-    assert exit_code == exit_code_for(ConfigError("missing", slug="acme"))
+    assert exit_code == exit_code_for(ConfigError("missing", slug="dummy"))

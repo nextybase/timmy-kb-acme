@@ -37,7 +37,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 def test_load_clients_logs_warning_when_broken(caplog, monkeypatch, tmp_path, manage_module):
     caplog.set_level(logging.WARNING)
     clients_path = tmp_path / "clients.yaml"
-    clients_path.write_text("slug: demo", encoding="utf-8")
+    clients_path.write_text("slug: dummy", encoding="utf-8")
 
     monkeypatch.setattr(manage_module, "_clients_db_path", lambda: Path(clients_path))
 

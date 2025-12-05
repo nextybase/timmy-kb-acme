@@ -9,7 +9,7 @@ Uso:
   python -m tools.migrate_yaml_to_db --slug acme --base-root output
 
 Requisiti:
-  - PyYAML installato (giÃ  presente nel progetto)
+  - PyYAML installato (presente nel progetto)
   - Nessuna dipendenza extra (usa sqlite3 stdlib)
 """
 

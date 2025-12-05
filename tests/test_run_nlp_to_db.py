@@ -14,7 +14,7 @@ def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
     raw_dir = tmp_path / "raw"
     pdf_dir = raw_dir / "subdir"
     pdf_dir.mkdir(parents=True)
-    pdf_path = pdf_dir / "demo.pdf"
+    pdf_path = pdf_dir / "dummy.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n% Codex test\n")
 
     db_path = tmp_path / "semantic" / "tags.db"
@@ -52,7 +52,7 @@ def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
 
     monkeypatch.setattr("storage.tags_store.save_doc_terms", fake_save_doc_terms)
 
-    stats = run_nlp_to_db("demo", raw_dir, str(db_path))
+    stats = run_nlp_to_db("dummy", raw_dir, str(db_path))
 
     assert captured_path["value"] == str(pdf_path)
     assert captured_doc_ids == [doc_id]
@@ -63,7 +63,7 @@ def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
 def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
-    pdf_path = raw_dir / "demo.pdf"
+    pdf_path = raw_dir / "dummy.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n% Codex test\n")
 
     db_path = tmp_path / "semantic" / "tags.db"
@@ -102,7 +102,7 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
 
     monkeypatch.setattr("nlp.nlp_keywords.cluster_synonyms", fake_cluster_synonyms)
 
-    stats = run_nlp_to_db("demo", raw_dir, str(db_path))
+    stats = run_nlp_to_db("dummy", raw_dir, str(db_path))
 
     with get_conn(str(db_path)) as conn:
         term_rows = conn.execute("SELECT canonical FROM terms").fetchall()
@@ -122,7 +122,7 @@ def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
     db_outside = tmp_path.parent / "outside" / "tags.db"
 
     with pytest.raises(PathTraversalError):
-        run_nlp_to_db("demo", raw_dir, db_outside, base_dir=base_dir)
+        run_nlp_to_db("dummy", raw_dir, db_outside, base_dir=base_dir)
 
 
 def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):

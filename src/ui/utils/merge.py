@@ -3,21 +3,30 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Mapping, MutableMapping, TypeVar, cast
+
+KT = TypeVar("KT")
+VT = TypeVar("VT")
 
 
-def deep_merge_dict(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def deep_merge_dict(base: Mapping[KT, VT], override: Mapping[KT, VT]) -> dict[KT, VT]:
     """
     Esegue un merge ricorsivo tra dizionari, preservando le chiavi annidate.
-    - Le strutture `dict` vengono fuse profondamente.
+    - Le strutture `dict`/`Mapping` vengono fuse profondamente.
     - Ogni altro valore nell'override sostituisce quello base.
     Ritorna un nuovo dict (non muta gli input).
     """
-    merged: Dict[str, Any] = dict(base)
+    merged: dict[KT, VT] = dict(base)
     for key, value in override.items():
         base_value = merged.get(key)
-        if isinstance(base_value, dict) and isinstance(value, dict):
-            merged[key] = deep_merge_dict(base_value, value)
+        if isinstance(base_value, MutableMapping) and isinstance(value, MutableMapping):
+            merged[key] = cast(
+                VT,
+                deep_merge_dict(
+                    cast(Mapping[KT, VT], base_value),
+                    cast(Mapping[KT, VT], value),
+                ),
+            )
         else:
             merged[key] = value
     return merged

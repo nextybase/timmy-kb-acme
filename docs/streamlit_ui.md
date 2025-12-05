@@ -97,7 +97,7 @@ slug = get_slug_from_qp() or get_active_slug()
 
 # Aggiorna tab/slug sincronizzando query params e chrome
 set_tab("manage")
-set_active_slug("acme-srl")
+set_active_slug("dummy-srl")
 ```
 
 Oppure, quando la pagina **richiede** lo slug:
@@ -114,7 +114,7 @@ slug = render_chrome_then_require()
 **OK**
 
 ```python
-slug = get_slug_from_qp() or get_active_slug() or "acme-srl"
+slug = get_slug_from_qp() or get_active_slug() or "dummy-srl"
 set_tab("manage")                  # se serve cambiare tab
 ```
 

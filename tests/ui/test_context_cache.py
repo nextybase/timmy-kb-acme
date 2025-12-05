@@ -59,15 +59,15 @@ def test_get_client_context_reuses_session(monkeypatch: pytest.MonkeyPatch) -> N
     cache.st.session_state.clear()
     calls.clear()
 
-    cache.get_client_context("Demo-Slug", require_env=False)
-    cache.get_client_context("demo-slug", require_env=False)
-    assert calls == [("Demo-Slug", False, None)]
+    cache.get_client_context("Dummy-Slug", require_env=False)
+    cache.get_client_context("dummy-slug", require_env=False)
+    assert calls == [("Dummy-Slug", False, None)]
 
-    cache.get_client_context("demo-slug", require_env=True)
-    assert calls[-1] == ("demo-slug", True, None)
+    cache.get_client_context("dummy-slug", require_env=True)
+    assert calls[-1] == ("dummy-slug", True, None)
 
-    cache.invalidate_client_context("demo-slug")
-    cache.get_client_context("demo-slug", require_env=False)
+    cache.invalidate_client_context("dummy-slug")
+    cache.get_client_context("dummy-slug", require_env=False)
     assert len(calls) == 3
 
 

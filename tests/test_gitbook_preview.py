@@ -13,7 +13,7 @@ def test_log_layout_summary_records_entries(tmp_path: Path, caplog: pytest.LogCa
     summary.write_text("- **strategy**: descrizione\n- **data**: descrizione", encoding="utf-8")
 
     caplog.set_level("INFO")
-    _log_layout_summary(book_dir, slug="acme", redact_logs=False)
+    _log_layout_summary(book_dir, slug="dummy", redact_logs=False)
 
     assert any("Layout summary disponibile" in rec.message for rec in caplog.records)
     info_records = [rec for rec in caplog.records if "Layout summary disponibile" in rec.message]
@@ -27,6 +27,6 @@ def test_log_layout_summary_warns_when_missing(tmp_path: Path, caplog: pytest.Lo
     book_dir.mkdir()
 
     caplog.set_level("INFO")
-    _log_layout_summary(book_dir, slug="acme", redact_logs=False)
+    _log_layout_summary(book_dir, slug="dummy", redact_logs=False)
 
     assert any("layout_summary.md non è presente" in rec.message for rec in caplog.records)

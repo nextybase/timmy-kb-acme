@@ -93,7 +93,7 @@ def test_build_logs_archive_applies_limits(tmp_path: Path, monkeypatch: pytest.M
     if "workspace_summary.json" in names:
         summary = archive.read("workspace_summary.json")
         payload = json.loads(summary)
-        assert payload["slug"] == "demo"
+        assert payload["slug"] == "dummy"
         assert len(payload.get("log_files", [])) <= 2
     assert archive.read("logs/log0.txt") == b"log-0"
     assert archive.read("logs/log1.txt") == b"log-1"
@@ -122,13 +122,13 @@ def test_build_workspace_summary_uses_base_dir(tmp_path: Path) -> None:
     log_file.write_text("log", encoding="utf-8")
 
     summary = diag.build_workspace_summary(
-        "demo",
+        "dummy",
         [log_file],
         base_dir=base_dir,
     )
 
     assert summary is not None
-    assert summary["slug"] == "demo"
+    assert summary["slug"] == "dummy"
     counts = summary["counts"] or {}
     assert counts.get("raw") == (1, False)
     assert summary["log_files"] == ["log0.txt"]

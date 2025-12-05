@@ -51,9 +51,9 @@ def test_client_display_name_prefers_registry(monkeypatch: pytest.MonkeyPatch) -
             self.nome = nome
 
     def _load() -> Iterable[_Entry]:
-        return [_Entry("demo", "Acme"), _Entry("other", "Other")]
+        return [_Entry("dummy", "Acme"), _Entry("other", "Other")]
 
-    name = cleanup_component.client_display_name("demo", _load)
+    name = cleanup_component.client_display_name("dummy", _load)
     assert name == "Acme"
 
     name_unknown = cleanup_component.client_display_name("missing", _load)
@@ -70,7 +70,7 @@ def test_list_raw_subfolders_returns_sorted(tmp_path: Path) -> None:
     def _resolve(_slug: str) -> Path:
         return root
 
-    folders = cleanup_component.list_raw_subfolders("demo", _resolve)
+    folders = cleanup_component.list_raw_subfolders("dummy", _resolve)
     assert folders == ["a", "b", "c"]
 
 
@@ -85,18 +85,18 @@ def test_open_cleanup_modal_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     cleanup_component.open_cleanup_modal(
         st=st_stub,
-        slug="demo",
-        client_name="Demo",
+        slug="dummy",
+        client_name="Dummy srl",
         set_slug=slug_updates.append,
         run_cleanup=_run,
         perform_cleanup=None,
     )
 
-    assert calls == [("demo", True)]
+    assert calls == [("dummy", True)]
     assert slug_updates == [""]
     result = st_stub.session_state["__cleanup_done"]
     assert result["level"] == "success"
-    assert "Demo" in result["text"]
+    assert "Dummy" in result["text"]
     assert st_stub.rerun_called is True
 
 
@@ -108,8 +108,8 @@ def test_open_cleanup_modal_missing_runner_sets_error(monkeypatch: pytest.Monkey
 
     cleanup_component.open_cleanup_modal(
         st=st_stub,
-        slug="demo",
-        client_name="Demo",
+        slug="dummy",
+        client_name="Dummy srl",
         set_slug=slug_updates.append,
         run_cleanup=None,
         perform_cleanup=None,

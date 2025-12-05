@@ -63,17 +63,17 @@ def test_render_logs_renders_workspace_summary(
     monkeypatch.setattr(page.diag, "tail_log_bytes", lambda *_args, **_kwargs: b"log")
     monkeypatch.setattr(page.diag, "build_logs_archive", lambda *_args, **_kwargs: b"zip")
 
-    summary_payload = {"slug": "demo", "log_files": ["log0.txt"], "counts": {"raw": (0, False)}}
+    summary_payload = {"slug": "dummy", "log_files": ["log0.txt"], "counts": {"raw": (0, False)}}
 
     def _build_summary(slug: str, files: list[Path], *, base_dir: Optional[Path] = None):
-        assert slug == "demo"
+        assert slug == "dummy"
         assert files == log_files
         assert base_dir == tmp_path
         return summary_payload
 
     monkeypatch.setattr(page.diag, "build_workspace_summary", _build_summary)
 
-    page._render_logs(tmp_path, "demo")
+    page._render_logs(tmp_path, "dummy")
 
     assert streamlit_stub.json_payloads[-1] is summary_payload
     assert any("Workspace summary" in caption for caption in streamlit_stub.captions)
@@ -94,6 +94,6 @@ def test_render_logs_handles_missing_summary(
     monkeypatch.setattr(page.diag, "build_logs_archive", lambda *_args, **_kwargs: b"zip")
     monkeypatch.setattr(page.diag, "build_workspace_summary", lambda *_args, **_kwargs: None)
 
-    page._render_logs(tmp_path, "demo")
+    page._render_logs(tmp_path, "dummy")
 
     assert not streamlit_stub.json_payloads, "Il summary non deve essere renderizzato quando assente"

@@ -22,8 +22,8 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 
 try:
-    from google.auth.transport import requests as greq  # type: ignore[import]
-    from google.oauth2 import id_token  # type: ignore[import]
+    from google.auth.transport import requests as greq
+    from google.oauth2 import id_token
 except Exception:  # pragma: no cover - ambiente senza google-auth
     greq = None
     id_token = None
@@ -143,10 +143,9 @@ def _verify_id_token(idt: str) -> Dict[str, Any]:
         )
 
     cfg = _oauth_env()
-    info = cast(
-        Dict[str, Any],
-        id_token.verify_oauth2_token(idt, greq.Request(), cfg["client_id"]),  # type: ignore[union-attr]
-    )
+    google_id_token = cast(Any, id_token)
+    google_requests = cast(Any, greq)
+    info = cast(Dict[str, Any], google_id_token.verify_oauth2_token(idt, google_requests.Request(), cfg["client_id"]))
     iss = str(info.get("iss"))
     if iss not in ISS_ALLOWED:
         raise ConfigError(f"Issuer non valido: {iss}")

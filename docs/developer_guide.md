@@ -67,8 +67,8 @@ Usa sempre il logger strutturato della pipeline; vietati `print`, `logging.basic
 ```python
 from pipeline.logging_utils import get_structured_logger
 
-log = get_structured_logger(__name__, run_id=None, context={"slug": "acme"})
-log.info("ui.preview.open", extra={"slug": "acme", "page": "preview"})
+log = get_structured_logger(__name__, run_id=None, context={"slug": "dummy"})
+log.info("ui.preview.open", extra={"slug": "dummy", "page": "preview"})
 ```
 
 **Caratteristiche:**

@@ -11,7 +11,7 @@ from pipeline.exceptions import ConfigError
 from semantic.semantic_mapping import load_semantic_mapping
 
 
-def _ctx(*, config_dir: Any, repo_root_dir: Any, slug: str = "demo") -> Any:
+def _ctx(*, config_dir: Any, repo_root_dir: Any, slug: str = "dummy") -> Any:
     return SimpleNamespace(config_dir=config_dir, repo_root_dir=repo_root_dir, slug=slug)
 
 

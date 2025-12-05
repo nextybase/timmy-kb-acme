@@ -56,7 +56,7 @@ def test_ingest_within_base_succeeds(monkeypatch, tmp_path: Path) -> None:
         scope="s",
         path=str(f),
         version="v",
-        meta={"slug": "demo"},
+        meta={"slug": "dummy"},
         embeddings_client=FakeEmb(),
         base_dir=base,
     )
@@ -173,7 +173,7 @@ def test_ingest_within_base_calls_insert(monkeypatch, tmp_path: Path) -> None:
         scope="s",
         path=str(f),
         version="v",
-        meta={"slug": "demo"},
+        meta={"slug": "dummy"},
         embeddings_client=FakeEmb(),
         base_dir=base,
     )
@@ -198,7 +198,7 @@ def test_ingest_folder_respects_max_files(monkeypatch, tmp_path: Path) -> None:
         scope="scope",
         folder_glob=str(tmp_path / "*.md"),
         version="v1",
-        meta={"slug": "demo"},
+        meta={"slug": "dummy"},
         embeddings_client=FakeEmb(),
         max_files=2,
     )

@@ -59,7 +59,7 @@ def test_save_persisted_uses_safe_utils(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(slug_utils, "safe_write_text", fake_safe, raising=False)
 
-    slug_utils._save_persisted("demo")
+    slug_utils._save_persisted("dummy")
 
     base_dir = persist_path.parent
     assert base_dir.exists(), "La directory di persistenza deve essere creata"
@@ -69,9 +69,9 @@ def test_save_persisted_uses_safe_utils(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert safe_call["path"] == persist_path
     assert safe_call["encoding"] == "utf-8"
     assert safe_call["atomic"] is True
-    assert json.loads(str(safe_call["payload"]).strip()) == {"active_slug": "demo"}
+    assert json.loads(str(safe_call["payload"]).strip()) == {"active_slug": "dummy"}
     assert getattr(fake_safe, "count", 0) == 1
 
     # Seconda invocazione con lo stesso valore non deve riscrivere
-    slug_utils._save_persisted("demo")
+    slug_utils._save_persisted("dummy")
     assert getattr(fake_safe, "count", 0) == 1

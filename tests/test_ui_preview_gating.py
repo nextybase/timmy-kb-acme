@@ -31,7 +31,7 @@ class _Env:
 
 
 def _setup_environment(monkeypatch: pytest.MonkeyPatch, env: _Env) -> None:
-    slug = "acme"
+    slug = "dummy"
     monkeypatch.setattr("ui.gating.get_active_slug", lambda: slug, raising=False)
     monkeypatch.setattr("ui.gating.has_raw_pdfs", lambda _slug: (env.raw_ready, None), raising=False)
     monkeypatch.setattr("ui.gating.get_state", lambda _slug: env.state, raising=False)

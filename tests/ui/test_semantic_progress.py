@@ -54,16 +54,16 @@ def test_get_semantic_progress_defaults(temp_repo_root: Path) -> None:
 
 
 def test_mark_semantic_step_done_roundtrip(temp_repo_root: Path) -> None:
-    semantic_progress.mark_semantic_step_done(" ACME ", semantic_progress.STEP_ENRICH)
+    semantic_progress.mark_semantic_step_done(" dummy ", semantic_progress.STEP_ENRICH)
 
     storage_dir = temp_repo_root / "clients_db" / "semantic_progress"
-    progress_file = storage_dir / "acme.json"
+    progress_file = storage_dir / "dummy.json"
 
     with progress_file.open("r", encoding="utf-8") as fp:
         persisted = json.load(fp)
 
     assert persisted == {semantic_progress.STEP_ENRICH: True}
-    result = semantic_progress.get_semantic_progress("acme")
+    result = semantic_progress.get_semantic_progress("dummy")
     assert result[semantic_progress.STEP_ENRICH] is True
     assert all(
         not result[step] for step in semantic_progress.SEMANTIC_STEP_IDS if step != semantic_progress.STEP_ENRICH

@@ -40,7 +40,7 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
 
-    monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
+    monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
 
     original = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
 
@@ -70,7 +70,7 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
 
-    monkeypatch.setattr(new_client, "_repo_root", lambda: template_root)
+    monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
 
     class _LoggerStub:
         def __init__(self) -> None:

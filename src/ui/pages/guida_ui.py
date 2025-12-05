@@ -5,19 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, cast
 
+from ui.utils.docs_view import load_markdown, render_markdown
+from ui.utils.repo_root import get_repo_root
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
 
-from pipeline.path_utils import read_text_safe
 from ui.chrome import render_chrome_then_require
-
-
-def _repo_root() -> Path:
-    # pages -> ui -> src -> REPO_ROOT
-    return Path(__file__).resolve().parents[3]
-
 
 CacheDecorator = Callable[[Callable[[str], str]], Callable[[str], str]]
 cache_markdown = cast(CacheDecorator, st.cache_data(show_spinner=False))
@@ -29,10 +24,7 @@ def _read_markdown(rel_path: str) -> str:
     Lettura sicura e cacheata di un file Markdown relativo alla root del repo.
     Ritorna un messaggio di warning in caso di errore.
     """
-    try:
-        return cast(str, read_text_safe(_repo_root(), Path(rel_path)))
-    except Exception as e:
-        return f"> ⚠️ Impossibile leggere `{rel_path}`: {e}"
+    return cast(str, load_markdown(get_repo_root() / Path(rel_path)))
 
 
 # ---------- UI ----------
@@ -57,4 +49,4 @@ div[data-testid="stMarkdownContainer"] pre code { font-size: .90rem; }
 )
 
 md = _read_markdown("docs/guida_ui.md")
-st.markdown(md)
+render_markdown(st, md)

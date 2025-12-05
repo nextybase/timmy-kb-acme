@@ -34,14 +34,14 @@ def _make_context(tmp_path: Path) -> _DummyContext:
     book_dir = base_dir / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
     (book_dir / "foo.md").write_text("# demo", encoding="utf-8")
-    return _DummyContext(slug="demo", md_dir=book_dir, base_dir=base_dir, env={})
+    return _DummyContext(slug="dummy", md_dir=book_dir, base_dir=base_dir, env={})
 
 
 def test_push_output_to_github_skips_when_no_markdown(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base_dir = tmp_path / "workspace"
     book_dir = base_dir / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
-    ctx = _DummyContext(slug="demo", md_dir=book_dir, base_dir=base_dir, env={})
+    ctx = _DummyContext(slug="dummy", md_dir=book_dir, base_dir=base_dir, env={})
 
     def _fail_prepare(*_: Any, **__: Any) -> None:
         raise AssertionError("prepare_repo non dovrebbe essere invocato")
@@ -177,7 +177,7 @@ def test_stage_changes_commits_and_logs(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(github_flow, "_stage_and_commit", _fake_stage_and_commit)
 
-    res = github_flow._stage_changes(tmp_path, {}, slug="demo", force_ack=None, logger=_Recorder())  # type: ignore[arg-type]
+    res = github_flow._stage_changes(tmp_path, {}, slug="dummy", force_ack=None, logger=_Recorder())  # type: ignore[arg-type]
 
     assert res is False
     assert any(msg == "github.push.no_changes" for msg in recorded)
@@ -204,16 +204,16 @@ def test_lease_lock_blocks_second_acquisition(tmp_path: Path) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("tests.github.lock")
 
-    lock_one = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.3, poll_interval_s=0.05)
+    lock_one = LeaseLock(base_dir, slug="dummy", logger=logger, timeout_s=0.3, poll_interval_s=0.05)
     lock_one.acquire()
     try:
-        lock_two = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+        lock_two = LeaseLock(base_dir, slug="dummy", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
         with pytest.raises(PushError):
             lock_two.acquire()
     finally:
         lock_one.release()
 
-    lock_three = LeaseLock(base_dir, slug="demo", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
+    lock_three = LeaseLock(base_dir, slug="dummy", logger=logger, timeout_s=0.1, poll_interval_s=0.02)
     lock_three.acquire()
     lock_three.release()
 

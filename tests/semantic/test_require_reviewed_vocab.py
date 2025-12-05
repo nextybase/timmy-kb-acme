@@ -23,25 +23,25 @@ def _make_loader(
 
 
 def test_require_reviewed_vocab_returns_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    base_dir = tmp_path / "acme"
+    base_dir = tmp_path / "dummy"
     (base_dir / "semantic").mkdir(parents=True)
     logger = logging.getLogger("test.semantic.require")
     expected = {"areas": {"area": ["term"]}}
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader(expected))
 
-    vocab = api.require_reviewed_vocab(base_dir, logger, slug="acme")
+    vocab = api.require_reviewed_vocab(base_dir, logger, slug="dummy")
 
     assert vocab == expected
 
 
 def test_require_reviewed_vocab_detects_stub(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    base_dir = tmp_path / "acme"
+    base_dir = tmp_path / "dummy"
     (base_dir / "semantic").mkdir(parents=True)
     logger = logging.getLogger("test.semantic.require.stub")
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader({}, module_name="tests.stub"))
 
     with pytest.raises(ConfigError) as excinfo:
-        api.require_reviewed_vocab(base_dir, logger, slug="acme")
+        api.require_reviewed_vocab(base_dir, logger, slug="dummy")
 
     text = str(excinfo.value)
     assert "Vocabolario canonico assente" in text
@@ -49,13 +49,13 @@ def test_require_reviewed_vocab_detects_stub(monkeypatch: pytest.MonkeyPatch, tm
 
 
 def test_require_reviewed_vocab_requires_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    base_dir = tmp_path / "acme"
+    base_dir = tmp_path / "dummy"
     (base_dir / "semantic").mkdir(parents=True)
     logger = logging.getLogger("test.semantic.require.empty")
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader({}))
 
     with pytest.raises(ConfigError) as excinfo:
-        api.require_reviewed_vocab(base_dir, logger, slug="acme")
+        api.require_reviewed_vocab(base_dir, logger, slug="dummy")
 
     assert "Vocabolario canonico assente" in str(excinfo.value)
     assert excinfo.value.file_path == base_dir / "semantic" / "tags.db"

@@ -17,9 +17,10 @@ Questa pagina NON richiede slug attivo: opera a livello globale.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 from urllib.parse import urlparse
 
 import requests
@@ -27,6 +28,7 @@ import requests
 from pipeline.log_viewer import LogFileInfo, get_global_logs_dir, list_global_log_files, load_log_sample
 from pipeline.logging_utils import get_structured_logger
 from pipeline.observability_config import (
+    ObservabilitySettings,
     get_grafana_errors_dashboard_url,
     get_grafana_logs_dashboard_url,
     get_grafana_url,
@@ -37,7 +39,7 @@ from pipeline.observability_config import (
 from pipeline.tracing import start_phase_span, start_root_trace
 
 try:  # Prefer local tool under repo root
-    from tools import observability_stack  # type: ignore[import]
+    from tools import observability_stack
 except Exception:  # pragma: no cover
     observability_stack = None
 
@@ -50,12 +52,13 @@ if observability_stack is None:  # pragma: no cover
         spec = importlib.util.spec_from_file_location("observability_stack", obs_path)
         if spec is not None and spec.loader is not None:
             observability_stack = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(observability_stack)  # type: ignore[arg-type]
+            spec.loader.exec_module(observability_stack)
     except Exception:
         observability_stack = None
 
-start_observability_stack = getattr(observability_stack, "start_observability_stack", None)
-stop_observability_stack = getattr(observability_stack, "stop_observability_stack", None)
+StackAction = Callable[[], tuple[bool, str]]
+start_observability_stack: StackAction | None = getattr(observability_stack, "start_observability_stack", None)
+stop_observability_stack: StackAction | None = getattr(observability_stack, "stop_observability_stack", None)
 from ui.chrome import render_chrome_then_require
 from ui.utils.slug import get_active_slug
 from ui.utils.stubs import get_streamlit
@@ -146,8 +149,8 @@ def _check_grafana_reachable(url: str, timeout: float = 2.0) -> tuple[bool, str]
 
 def _render_grafana_block(
     *,
-    settings,
-    toggle,
+    settings: "ObservabilitySettings",
+    toggle: Callable[..., bool],
 ) -> tuple[bool, bool, bool, str]:
     """
     Rende la sezione Grafana/dashboards di osservabilità e restituisce:
@@ -189,7 +192,9 @@ def _render_stack_controls(
     docker_cmd: str,
     stack_enabled: bool,
     grafana_reachable: bool,
-    action_button,
+    action_button: Callable[..., bool],
+    start_stack: StackAction | None,
+    stop_stack: StackAction | None,
 ) -> None:
     """
     Rende i controlli Start/Stop stack e i messaggi informativi
@@ -205,28 +210,34 @@ def _render_stack_controls(
     stack_ready = stack_enabled and grafana_reachable
     if stack_ready:
         if action_button("Stop Stack"):
-            ok, msg = stop_observability_stack()
-            if ok:
-                _safe_success(f"Stack fermato: {msg}")
+            if stop_stack is None:
+                st.warning("Stop Stack non disponibile: modulo observability_stack non importato.")
             else:
-                st.warning(f"Errore Stop Stack: {msg}")
-        st.caption("Stack attivo – usa Stop Stack per spegnere temporaneamente il monitoring.")
+                ok, msg = stop_stack()
+                if ok:
+                    _safe_success(f"Stack fermato: {msg}")
+                else:
+                    st.warning(f"Errore Stop Stack: {msg}")
+        st.caption("Stack attivo - usa Stop Stack per spegnere temporaneamente il monitoring.")
     else:
         if action_button("Start Stack"):
-            ok, msg = start_observability_stack()
-            if ok:
-                _safe_success(f"Stack avviato: {msg}")
+            if start_stack is None:
+                st.warning("Start Stack non disponibile: modulo observability_stack non importato.")
             else:
-                st.warning(f"Errore Start Stack: {msg}")
-        st.caption("Stack inattivo – avvialo con Start Stack o verifica lo stato del daemon.")
+                ok, msg = start_stack()
+                if ok:
+                    _safe_success(f"Stack avviato: {msg}")
+                else:
+                    st.warning(f"Errore Start Stack: {msg}")
+        st.caption("Stack inattivo - avvialo con Start Stack o verifica lo stato del daemon.")
 
 
 def _render_tracing_controls(
     *,
-    settings,
-    toggle,
-    action_button,
-    logger,
+    settings: ObservabilitySettings,
+    toggle: Callable[..., bool],
+    action_button: Callable[..., bool],
+    logger: logging.Logger,
 ) -> bool:
     """
     Rende la sezione di controllo per il tracing OpenTelemetry
@@ -338,6 +349,8 @@ def _render_observability_controls() -> None:
         stack_enabled=stack_enabled,
         grafana_reachable=reachable,
         action_button=action_button,
+        start_stack=start_observability_stack,
+        stop_stack=stop_observability_stack,
     )
 
     with col2:
