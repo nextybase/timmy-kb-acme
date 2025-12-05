@@ -106,7 +106,7 @@ def _check_semantic_gating(slug: str, *, base_root: Path | None, logger) -> bool
     - presenza di PDF validi in raw/ per lo slug
     """
     # has_raw_pdfs applica già path-safety e cache LRU sui risultati positivi
-    raw_ready = ws.has_raw_pdfs(slug=slug)
+    raw_ready, _raw_dir = ws.has_raw_pdfs(slug=slug)
     if not raw_ready:
         logger.info("ui.gating.sem_hidden", extra={"slug": slug, "raw_ready": False})
         return False
@@ -155,11 +155,17 @@ def main() -> int:
 
         with phase_scope(logger, stage="smoke.semantic_gating", customer=slug) as m_gate:
             if not _check_semantic_gating(slug, base_root=base_root, logger=logger):
-                # Se il gating fallisce, falliamo con ConfigError (contratto UX: manca RAW)
-                raise ConfigError(
+                # Gating non soddisfatto: segnala e termina senza eccezioni hard.
+                err = ConfigError(
                     "Gating Semantica fallito: nessun PDF valido in raw/ per lo slug.",
                     slug=slug,
                 )
+                code = int(exit_code_for(err))
+                logger.warning(
+                    "smoke.semantic_from_drive.gating_unavailable",
+                    extra={"slug": slug, "exit_code": code},
+                )
+                return code
             m_gate.set_artifacts(1)
 
         def _wrap(stage_name: str, fn: Callable[[], Any]) -> Any:
