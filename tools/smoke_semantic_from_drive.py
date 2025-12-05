@@ -40,16 +40,17 @@ from ui.services import drive_runner  # type: ignore[import]
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Smoke: Drive → RAW → Semantica (headless)")
+    p = argparse.ArgumentParser(description="Smoke: Drive -> RAW -> Semantica (headless)")
     p.add_argument(
         "--slug",
         default="dummy",
         help="Slug cliente (default: dummy)",
     )
     p.add_argument(
-        "--skip-drive",
-        action="store_true",
-        help="Non eseguire il download da Drive (usa solo RAW locale)",
+        "--with-drive",
+        dest="skip_drive",
+        action="store_false",
+        help="Scarica da Drive prima del gating (default: salta Drive).",
     )
     p.add_argument(
         "--base-root",
@@ -58,11 +59,14 @@ def _parse_args() -> argparse.Namespace:
         help="Root workspaces (default = OUTPUT_DIR_NAME). Solo per debug/sandbox.",
     )
     p.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help="Carica il contesto in modalità non interattiva (come le CLI).",
+        "--interactive",
+        dest="non_interactive",
+        action="store_false",
+        help="Attiva modalita interattiva (default: headless/non-interactive).",
     )
+    p.set_defaults(skip_drive=True, non_interactive=True)
     return p.parse_args()
+
 
 
 def _print_progress(msg: str, **extra: Any) -> None:
