@@ -5,20 +5,7 @@ import inspect
 from typing import Any, Callable, ContextManager, Optional, Protocol, Sequence, cast
 
 from ui.manage._helpers import call_best_effort
-
-
-class StreamlitLike(Protocol):
-    def expander(self, label: str, *, expanded: bool = ...) -> ContextManager[Any]: ...
-
-    def markdown(self, body: str) -> Any: ...
-
-    def info(self, body: str) -> Any: ...
-
-    def toast(self, body: str) -> Any: ...
-
-    def error(self, body: str) -> Any: ...
-
-    def warning(self, body: str) -> Any: ...
+from ui.types import StreamlitLike
 
 
 class StatusGuard(Protocol):
