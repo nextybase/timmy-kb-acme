@@ -97,10 +97,10 @@ qa-safe:
 
 # Variante completa che include i test, ma sempre in modo degradabile
 sbom: env-check
-\t@./scripts/sbom.sh --output sbom.json
+\t@./tools/sbom.sh --output sbom.json
 
 sbom: env-check
-\t@./scripts/sbom.sh --output sbom.json
+\t@./tools/sbom.sh --output sbom.json
 
 ci-safe: qa-safe
 	@if command -v pytest >/dev/null 2>&1; then \
@@ -111,8 +111,8 @@ ci-safe: qa-safe
 
 # Benchmark leggerezza normalizzazione embeddings (retriever/semantic)
 bench: env-check
-	@$(PY) -m scripts.bench_embeddings_normalization
+	@$(PY) -m tools.bench_embeddings_normalization
 
 # Benchmark retriever (locale, senza rete). Usa fallback di query integrate se non passi --queries
 bench-retriever: env-check
-	@$(PY) scripts/retriever_benchmark.py --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000
+	@$(PY) tools/retriever_benchmark.py --runs 3 --k 10 --candidates 500,1000,2000,5000,10000,20000

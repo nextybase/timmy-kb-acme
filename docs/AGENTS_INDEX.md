@@ -21,11 +21,11 @@ In sintesi: policy **qui**, override **nei loro AGENTS**, e l'agente lavora *on-
 
 | Area | File | Override chiave (sintesi) | Criteri di accettazione (key) | Note |
 |------|------|---------------------------|-------------------------------|------|
-| Root | `AGENTS.md` | — | — |  |
+| Root | `AGENTS.md` | â€” | â€” |  |
 | Pipeline Core | `src/pipeline/AGENTS.md` | **path-safety**: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).; **Scritture atomiche**: `safe_write_text/bytes` obbligatorie. | Nessuna write fuori dal workspace cliente. |  |
 | Semantica | `src/semantic/AGENTS.md` | **SSoT tag runtime: SQLite (`semantic/tags.db`)**; YAML `tags_reviewed.yaml` e solo authoring/migrazione.; Non importare o invocare funzioni `_private`; mantenere compatibilita della facade. | Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter. |  |
 | UI (Streamlit) | `src/ui/AGENTS.md` | Riferimento operativo: segui le linee guida di `docs/streamlit_ui.md` (router, stato, I/O, logging).; Gating: la tab **Semantica** si abilita **solo** quando `raw/` locale e presente. | Nessuna azione "Semantica" se RAW vuoto. | UX guidata da stato |
-| UI (Streamlit) | `src/ui/pages/AGENTS.md` | — | — | UX guidata da stato |
+| UI (Streamlit) | `src/ui/pages/AGENTS.md` | â€” | â€” | UX guidata da stato |
 | Test | `tests/AGENTS.md` | Niente dipendenze di rete (Drive/Git mockati o bypass).; Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati). | Build verde locale; smoke E2E su dummy slug riproducibile. |  |
 | Documentazione | `docs/AGENTS.md` | **cSpell**: eseguire `pre-commit run cspell --all-files` (o `--files docs/...`) prima del commit; aggiungere nuove parole solo se sono termini di dominio verificati.; **Frontmatter & titoli**: i file Markdown devono indicare la versione coerente; niente numerazioni divergenti tra README e docs/. | Spell check pulito su `docs/` e `README.md`, senza ignorare file. |  |
 | Codex (repo) | `.codex/AGENTS.md` | **Path-safety**: scrivo solo in `src/`, `tests/`, `docs/`, `.codex/` (mai in `config/**`, `.env*`, `output/**`).; **Scritture atomiche**: temp + replace; zero side-effect a import-time. | Micro-PR: 1 change set, motivazione chiara, diff minimale; se tocco X aggiorno docs Y/Z. |  |

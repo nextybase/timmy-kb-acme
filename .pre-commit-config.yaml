@@ -73,7 +73,7 @@ repos:
     hooks:
       - id: agents-matrix-check
         name: Check AGENTS matrix
-        entry: python scripts/gen_agents_matrix.py --check
+        entry: python tools/gen_agents_matrix.py --check
         language: system
         pass_filenames: false
         files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$
@@ -91,21 +91,21 @@ repos:
 
       - id: forbid-unsafe-file-reads
         name: Forbid unsafe file reads (open/read_text/read_bytes) outside path_utils/tests/scripts
-        entry: python scripts/dev/check_no_unsafe_reads.py
+        entry: python tools/smoke/check_no_unsafe_reads.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: no-dup-ingest-csv
         name: forbid local emit/copy helpers (use semantic.api)
-        entry: python scripts/dev/check_no_local_emit_or_copy.py
+        entry: python tools/smoke/check_no_local_emit_or_copy.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: forbid-runtime-asserts
         name: Forbid runtime asserts in src/
-        entry: python scripts/dev/forbid_runtime_asserts.py
+        entry: python tools/dev/forbid_runtime_asserts.py
         language: system
         pass_filenames: true
         files: ^src/.*\.py$
@@ -113,7 +113,7 @@ repos:
 
       - id: forbid-path-write-text-bytes
         name: Forbid Path.write_text/bytes in src/ (use safe_write_*)
-        entry: python scripts/dev/forbid_path_writetext_bytes.py
+        entry: python tools/dev/forbid_path_writetext_bytes.py
         language: system
         pass_filenames: true
         files: ^src/.*\.py$
@@ -121,7 +121,7 @@ repos:
 
       - id: qa-safe
         name: qa-safe (isort/black/ruff/mypy se presenti)
-        entry: python scripts/dev/qa_safe.py
+        entry: python tools/dev/qa_safe.py
         language: python
         additional_dependencies: [
             "PyMuPDF==1.24.14",
@@ -172,7 +172,7 @@ repos:
 
       - id: no-secrets-in-yaml
         name: Forbid inline secrets in config YAML
-        entry: python scripts/dev/check_yaml_secrets.py
+        entry: python tools/smoke/check_yaml_secrets.py
         language: system
         pass_filenames: true
         files: ^config/.*\.ya?ml$
@@ -181,7 +181,7 @@ repos:
       # FIXER: rimuove C0/C1 e normalizza NFC (se modifica, pre-commit fallirà chiedendo di rieseguire il commit)
       - id: fix-control-chars
         name: Fix Unicode control chars (remove C0/C1 + NFC)
-        entry: python scripts/forbid_control_chars.py --fix
+        entry: python tools/forbid_control_chars.py --fix
         language: system
         pass_filenames: true
         types: [text]
@@ -191,7 +191,7 @@ repos:
       # GUARDIANO: blocca se restano caratteri di controllo o file non-UTF-8
       - id: forbid-control-chars
         name: Forbid Unicode control chars & non-UTF-8
-        entry: python scripts/forbid_control_chars.py
+        entry: python tools/forbid_control_chars.py
         language: system
         pass_filenames: true
         types: [text]
@@ -200,26 +200,26 @@ repos:
 
       - id: forbid-streamlit-deprecated
         name: Forbid deprecated Streamlit APIs
-        entry: python scripts/dev/check_streamlit_deprecations.py
+        entry: python tools/smoke/check_streamlit_deprecations.py
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
       - id: ui-beta0-compliance
         name: UI beta0 compliance checks
-        entry: python scripts/dev/check_ui_beta0_compliance.py
+        entry: python tools/smoke/check_ui_beta0_compliance.py
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
       - id: streamlit-ui-guard
         name: Streamlit UI guard (router + path-safety + logging)
-        entry: python scripts/dev/check_streamlit_ui.py --ci
+        entry: python tools/smoke/check_streamlit_ui.py --ci
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
       - id: forbid-hardcoded-vision-model
         name: Forbid hardcoded Vision model in UI services
-        entry: python scripts/dev/check_no_hardcoded_vision_model.py
+        entry: python tools/smoke/check_no_hardcoded_vision_model.py
         language: system
         files: ^src/ui/services/.*\.py$
         pass_filenames: true
@@ -235,14 +235,14 @@ repos:
 
       - id: add-spdx-headers
         name: Auto add missing SPDX headers
-        entry: python scripts/dev/add_spdx_headers.py
+        entry: python tools/dev/add_spdx_headers.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: check-spdx-headers
         name: Check SPDX headers in Python files
-        entry: python scripts/dev/check_spdx_headers.py
+        entry: python tools/smoke/check_spdx_headers.py
         language: system
         pass_filenames: true
         types_or: [python]

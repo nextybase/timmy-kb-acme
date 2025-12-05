@@ -358,6 +358,8 @@ def test_emette_eventi_tags(caplog, monkeypatch):
 
 ## Gating e SSoT di stato
 
+La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.
+
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
     - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
     - `VISION=0` disabilita il provisioning Vision (estrazione PDF, tool assistito).
@@ -396,7 +398,7 @@ except RuntimeError as exc:
     st.caption(str(exc))
     st.stop()
 
-> Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`. Cosi lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
+> Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: La semantica Ã¨ disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`. Cosi lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
 ```
 
 **Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.
@@ -446,7 +448,7 @@ else:
 ```
 
 - Evita pattern che forzano `with col:` sugli stub: alcuni colonnati mock non implementano il context manager.
-- Per le pagine piu recenti (Onboarding, Semantica, Admin) l'UI è incapsulata in `main()` e gli import non generano side-effect; mantieni questo pattern per i nuovi moduli.
+- Per le pagine piu recenti (Onboarding, Semantica, Admin) l'UI Ã¨ incapsulata in `main()` e gli import non generano side-effect; mantieni questo pattern per i nuovi moduli.
 
 ---
 

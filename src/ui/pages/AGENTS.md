@@ -9,7 +9,7 @@
 
 - **Versione minima**: Streamlit **1.50.0** (il check e hard-fail nell'entrypoint UI) :contentReference[oaicite:0]{index=0}.
 - **Router nativo obbligatorio**: `st.Page` e `st.navigation` per build/run delle pagine :contentReference[oaicite:1]{index=1} :contentReference[oaicite:2]{index=2}.
-- Le deprecazioni sono sorvegliate da `scripts/dev/check_streamlit_deprecations.py` in CI (vedi 3) :contentReference[oaicite:3]{index=3}.
+- Le deprecazioni sono sorvegliate da `tools/smoke/check_streamlit_deprecations.py` in CI (vedi 3) :contentReference[oaicite:3]{index=3}.
 
 ---
 

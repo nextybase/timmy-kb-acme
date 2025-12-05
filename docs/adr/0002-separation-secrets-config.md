@@ -34,5 +34,5 @@ Accepted  25/10/2025
 - Miglior DX Streamlit: gli operatori possono diagnosticare le ENV mancanti senza vedere i segreti.
 
 ## Collegamenti
-- Hook e script: `scripts/dev/check_yaml_secrets.py`, `.pre-commit-config.yaml`.
+- Hook e script: `tools/dev/check_yaml_secrets.py`, `.pre-commit-config.yaml`.
 - UI: `src/ui/pages/config_editor.py`, `src/ui/pages/secrets_healthcheck.py`.

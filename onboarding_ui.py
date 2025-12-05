@@ -39,7 +39,7 @@ def _ensure_repo_src_on_sys_path() -> None:
 
 def _bootstrap_sys_path() -> None:
     try:
-        from scripts.smoke_e2e import _add_paths as _repo_add_paths
+        from tools.smoke.smoke_e2e import _add_paths as _repo_add_paths
 
         try:
             _repo_add_paths()

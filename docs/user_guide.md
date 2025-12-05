@@ -168,7 +168,7 @@ Esecuzione manuale:
 ```bash
 pre-commit run fix-control-chars --all-files
 pre-commit run forbid-control-chars --all-files
-python scripts/forbid_control_chars.py --fix <path>
+python tools/forbid_control_chars.py --fix <path>
 ```
 
 ## Troubleshooting essenziale

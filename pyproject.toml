@@ -83,4 +83,4 @@ ignore = ["E203", "ANN201", "ANN202", "ANN204", "B009", "B010", "B023", "B033", 
 "src/pipeline/proc_utils.py" = ["S404", "S603"]
 "src/ui/app.py" = ["S404", "S603"]
 "src/storage/tags_store.py" = ["S608"]
-"scripts/*" = ["S603", "S607", "S106", "T201"]
+"tools/**" = ["S603", "S607", "S106", "T201"]

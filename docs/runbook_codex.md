@@ -124,13 +124,13 @@ Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> 
   Grafana: `http://localhost:3000` (`admin`/`admin` da cambiare via `GF_SECURITY_ADMIN_PASSWORD`), Loki: `http://localhost:3100`.
 - Spegnimento: `docker compose down`. Per ambienti Windows ricordarsi di condividere i percorsi `output` e `.timmykb` con Docker Desktop.
 - Il docker compose ora include anche `tempo` (porta 3200/4317) e `otel-collector` (porta 4318) per esporre il tracing; il collector riceve OTLP HTTP dal TIMMY_OTEL_ENDPOINT del host e invia OTLP gRPC a Tempo, che a sua volta viene collegato da Grafana tramite il datasource `Tempo`.
-- Le stesse operazioni possono essere eseguite anche dalla UI *Log dashboard* (Start/Stop Stack) o dallo script `scripts/observability_stack.py` che chiama `docker compose` con gli stessi file `.env`/compose della UI. Lancia `python scripts/observability_stack.py start|stop` e, se hai bisogno di percorsi alternativi, usa `--env-file` e `--compose-file` (o imposta `TIMMY_OBSERVABILITY_ENV_FILE` / `TIMMY_OBSERVABILITY_COMPOSE_FILE`).
+- Le stesse operazioni possono essere eseguite anche dalla UI *Log dashboard* (Start/Stop Stack) o dallo script `tools/observability_stack.py` che chiama `docker compose` con gli stessi file `.env`/compose della UI. Lancia `python tools/observability_stack.py start|stop` e, se hai bisogno di percorsi alternativi, usa `--env-file` e `--compose-file` (o imposta `TIMMY_OBSERVABILITY_ENV_FILE` / `TIMMY_OBSERVABILITY_COMPOSE_FILE`).
 
 ---
 
 ### Script legacy
 
-- Gli script non piu supportati sono stati spostati in `scripts/archive/` ed esclusi dai flussi standard.
+- Gli script non piu supportati sono stati spostati in `tools/archive/` ed esclusi dai flussi standard.
 - Milestone di stabilizzazione: vedi `docs/milestones/archive_cleanup.md`; al termine la cartella verra rimossa.
 
 ---
@@ -236,7 +236,7 @@ Riferimenti: [.codex/AGENTS](../.codex/AGENTS.md).
 - **SSoT di policy:** [AGENTS Index](AGENTS_INDEX.md).
 - Gli `AGENTS.md` locali (UI, Pipeline, Semantica, Test, Documentazione, Codex) contengono **solo override** e rimandano all'indice.
 - Tenere allineata la **matrice** con `pre-commit run agents-matrix-check --all-files` quando si toccano gli `AGENTS.md`.
-- La CI (`job build` in `.github/workflows/ci.yaml`) esegue `python scripts/gen_agents_matrix.py --check` e fallisce se la matrice non e' aggiornata.
+- La CI (`job build` in `.github/workflows/ci.yaml`) esegue `python tools/gen_agents_matrix.py --check` e fallisce se la matrice non e' aggiornata.
 
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [docs/AGENTS.md](AGENTS.md), [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/semantic/AGENTS.md](../src/semantic/AGENTS.md), [src/pipeline/AGENTS.md](../src/pipeline/AGENTS.md), [tests/AGENTS.md](../tests/AGENTS.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
 
@@ -258,7 +258,7 @@ Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](.
 - Generazione mapping: `tools/gen_vision_yaml.py` produce `semantic/semantic_mapping.yaml` a partire da `config/VisionStatement.pdf`.
 - La UI legge sempre il modello da `config/config.yaml` via `get_vision_model()` (SSoT).
 - Preferire scenario **Agent**; *Full Access* solo con motivazione esplicita e branch dedicato.
-- Health-check Vision (`scripts/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell'output JSON (oltre ai log) per agevolare diagnosi end-to-end.
+- Health-check Vision (`tools/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell'output JSON (oltre ai log) per agevolare diagnosi end-to-end.
 - `use_kb` segue lSSoT Settings/config con override opzionale `VISION_USE_KB` (0/false/no/off  False); le istruzioni runtime abilitano File Search solo se il flag risulta attivo.
 
 Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -> Configurazione](developer_guide.md).

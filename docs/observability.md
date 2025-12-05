@@ -91,22 +91,22 @@ le righe log correlate (anche da un altro pannello se usi la dashboard dedicata)
 
 - La UI mostra un badge `Grafana /` nella sezione osservabilita e lo aggiorna solo se Docker e attivo, cosi distingui subito se lo stack e raggiungibile o meno.
 - Se Docker non e attivo, compare un messaggio informativo con il comando `{docker compose ... up -d}` da eseguire prima di usare i pulsanti; Start/Stop restano disabilitati fino a quel momento.
-- Quando Docker e disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano internamente le funzioni esposte in `scripts/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`. Se tutto va a buon fine la UI mostra un messaggio di conferma (`Stack avviato: ...` / `Stack fermato: ...`), altrimenti riporta un warning con l'errore.
+- Quando Docker e disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano internamente le funzioni esposte in `tools/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`. Se tutto va a buon fine la UI mostra un messaggio di conferma (`Stack avviato: ...` / `Stack fermato: ...`), altrimenti riporta un warning con l'errore.
 
 I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env` (o i `TIMMY_*` dei container) e riavviare l'interfaccia.
 
-### Helper CLI (scripts/observability_stack)
+### Helper CLI (tools/observability_stack)
 
-Lo stesso helper `scripts/observability_stack.py` e disponibile anche come script stand-alone per chi preferisce avviare/fermare lo stack da shell. Esegui il comando
+Lo stesso helper `tools/observability_stack.py` e disponibile anche come script stand-alone per chi preferisce avviare/fermare lo stack da shell. Esegui il comando
 
 ```bash
-python scripts/observability_stack.py start
+python tools/observability_stack.py start
 ```
 
 per avviare l'intero stack e
 
 ```bash
-python scripts/observability_stack.py stop
+python tools/observability_stack.py stop
 ```
 
 per fermarlo; lo script stampa l'output del `docker compose` e restituisce exit code `0` solo in caso di successo.

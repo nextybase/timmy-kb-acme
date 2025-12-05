@@ -12,7 +12,7 @@
 - Schema `config/config.yaml` riorganizzato in macro-sezioni `meta`, `ui`, `ai` (openai/vision), `pipeline` (retriever/raw_cache), `security`, `integrations`, `ops`, `finance`; aggiornare eventuali tool esterni che leggevano le chiavi legacy.
 
 ### Changed
-- Dev tooling: rinominata la cartella root `tools/` in `scripts/`; aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`).
+- Dev tooling: gli script legacy sono stati consolidati in `tools/` (`tools/smoke` per gli smoke); aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`).
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune) con telemetria aggiornata (`semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned`, `semantic.index.skips`).
 - Telemetria phase_scope: i rami "no files" e "no contents" ora emettono sempre `artifact_count=0` e chiusura `semantic.index.done`.
 - File I/O: `safe_append_text` passa ad append diretto O(1) per record, mantenendo lock e fsync opzionale.

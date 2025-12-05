@@ -3,10 +3,10 @@
 Percorso minimo per sviluppatori e agenti Codex: comandi lineari, SSoT rispettate, niente sorprese.
 
 ## Prerequisiti rapidi
-- Python ≥ 3.11, dipendenze installate: `pip install -r requirements.txt -r requirements-dev.txt`.
+- Python â‰¥ 3.11, dipendenze installate: `pip install -r requirements.txt -r requirements-dev.txt`.
 - Config SSoT globale: `config/config.yaml` (solo tramite `pipeline.settings.Settings` / `ClientContext.settings`).
 - Segreti: `.env` letto da `Settings.resolve_env_ref` (mai `os.environ` diretto).
-- Path-safety/I/O: sempre `ensure_within*` + `safe_write_*` (già usati dagli orchestratori).
+- Path-safety/I/O: sempre `ensure_within*` + `safe_write_*` (giÃ  usati dagli orchestratori).
 
 ## Flusso 1: CLI end-to-end (happy path)
 ```bash
@@ -16,7 +16,7 @@ py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive
 # 2) Tag onboarding (estrazione tag + DB sqlite SSoT)
 py src/tag_onboarding.py --slug <slug> --non-interactive --proceed
 
-# 3) Semantic onboarding (convert → enrich → README/SUMMARY)
+# 3) Semantic onboarding (convert â†’ enrich â†’ README/SUMMARY)
 py src/semantic_onboarding.py --slug <slug> --non-interactive
 
 # 4) Push opzionale (GitBook/preview): usa solo il workspace appena creato
@@ -30,11 +30,11 @@ streamlit run onboarding_ui.py
 ```
 - Seleziona/crea lo slug dal pannello iniziale (registry UI).
 - Gating: la tab **Semantica** si attiva solo con `raw/` presente; i percorsi sono validati via path-safety.
-- Il modello Vision è letto da `ui.config_store.get_vision_model()` → SSoT `config/config.yaml`.
+- Il modello Vision Ã¨ letto da `ui.config_store.get_vision_model()` â†’ SSoT `config/config.yaml`.
 
 ## Flusso 3: Aggiunta nuovo cliente (registry UI)
-- Apri la UI, vai su **Gestisci cliente** → **Nuovo cliente**.
-- Inserisci slug/nome; il registry è gestito da `ui.clients_store` (SSoT runtime).
+- Apri la UI, vai su **Gestisci cliente** â†’ **Nuovo cliente**.
+- Inserisci slug/nome; il registry Ã¨ gestito da `ui.clients_store` (SSoT runtime).
 - La configurazione cliente viene creata in `output/timmy-kb-<slug>/config/config.yaml` e letta via `pipeline.config_utils.get_client_config(context)`.
 
 ## QA rapidi consigliati

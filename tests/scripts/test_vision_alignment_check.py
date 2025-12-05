@@ -1,14 +1,25 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from scripts import vision_alignment_check as vac
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+_VAC_PATH = ROOT / "tools" / "smoke" / "vision_alignment_check.py"
+_spec = importlib.util.spec_from_file_location("vision_alignment_check", _VAC_PATH)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"Impossibile caricare vision_alignment_check da {_VAC_PATH}")
+vac = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(vac)  # type: ignore[arg-type]
 
 
 class _DummyOpenAI:

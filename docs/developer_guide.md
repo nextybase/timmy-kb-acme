@@ -37,9 +37,9 @@ ai:
 
 **Regole:**
 - Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `ai.vision.model`.
-- Il flusso **Assistant** usa l'ID letto da l'env il cui nome è in `ai.vision.assistant_id_env`.
+- Il flusso **Assistant** usa l'ID letto da l'env il cui nome Ã¨ in `ai.vision.assistant_id_env`.
 - Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
-- Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` → `context.settings` → `.as_dict()` per le UI/CLI.
+- Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` â†’ `context.settings` â†’ `.as_dict()` per le UI/CLI.
 
 Getter consigliato lato UI:
 
@@ -52,12 +52,12 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 ### OIDC (opzionale)
 - Configurare `security.oidc.*` in `config/config.yaml` usando riferimenti `*_env`.
 - Impostare gli eventuali placeholder in `.env` (vedi `.env.example`).
-- In CI GitHub, valorizza `GITHUB_OIDC_AUDIENCE` come Repository Variable per abilitare il probe (`scripts/ci/oidc_probe.py`), che logga solo metadati (`has_token` non include il token).
+- In CI GitHub, valorizza `GITHUB_OIDC_AUDIENCE` come Repository Variable per abilitare il probe (`tools/ci/oidc_probe.py`), che logga solo metadati (`has_token` non include il token).
 
 ### GitBook API
 
 - `GITBOOK_TOKEN` e `GITBOOK_SPACE_ID` servono per pubblicare automaticamente il contenuto `book/` su GitBook. Esporta questi valori in `.env` o nelle secret variables dei runner CI (do not commit them). Il token deve avere permessi di scrittura sullo spazio indicato.
-- Use `scripts/gitbook_publish_smoke.py --slug <slug> --dry-run` per validare localmente la summary e i secrets prima di eseguire `py src/onboarding_full.py --slug <slug> --non-interactive`, che ora invia lo ZIP con metadata `layout_summary`.
+- Use `tools/gitbook_publish_smoke.py --slug <slug> --dry-run` per validare localmente la summary e i secrets prima di eseguire `py src/onboarding_full.py --slug <slug> --non-interactive`, che ora invia lo ZIP con metadata `layout_summary`.
 
 ---
 
@@ -208,7 +208,7 @@ make ci-safe     # qa-safe + pytest
 
 - `src/adapters/**`  integrazioni esterne e client API da rifinire con TypedDict/Protocol.
 - `src/tools/**`  script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
-- `scripts/**`  tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
+- `tools/**`  tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
 
 Checklist per le PR che riducono il debito:
 1. Isolare un sotto-scope (max ~30 righe modificate) e rendere le funzioni import-safe.

@@ -11,7 +11,14 @@ from typing import List
 
 import pytest
 
-from scripts.dev import qa_safe
+ROOT = Path(__file__).resolve().parents[1]
+
+QA_SAFE_PATH = ROOT / "tools" / "dev" / "qa_safe.py"
+spec = importlib.util.spec_from_file_location("qa_safe", QA_SAFE_PATH)
+if spec is None or spec.loader is None:
+    raise ImportError(f"Impossibile caricare qa_safe da {QA_SAFE_PATH}")
+qa_safe = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(qa_safe)  # type: ignore[arg-type]
 
 
 def test_qa_safe_executes_toolchain_in_order(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -143,8 +143,8 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Import tag YAML  SQLite (fallback):** `tests/storage/test_import_tags_yaml_to_db.py` verifica l'import e il log `storage.tags_store.import_yaml.fallback` quando PyYAML non e disponibile.
 
 ### 13) Script e qualita repo
-- **Sanitizzazione file (test):** `tests/scripts/test_forbid_control_chars.py`.
-- **Script CLI correlato:** `scripts/forbid_control_chars.py`.
+- **Sanitizzazione file (test):** `tests/tools/test_forbid_control_chars.py`.
+- **Script CLI correlato:** `tools/forbid_control_chars.py`.
 
 ### 14) Process utils  Esecuzione comandi esterni
 - **Redazione tail stdout/stderr:** `tests/test_proc_run_cmd_redacts_output.py`.
@@ -154,14 +154,14 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 
 ---
 
-## Script di supporto (`scripts/`)
+## Script di supporto (`tools/`)
 
 Strumenti CLI che fungono da estensioni e smoke manuali della suite:
-- **Smoke E2E rapidi:** `scripts/smoke_e2e.py`, `scripts/e2e_smoke_test.py`.
-- **Gating Semantica:** `tools/smoke_semantics_gating.py` (verifica che la pagina Semantica compaia solo con PDF in `raw/`).
-- **Benchmark retriever/semantic:** `scripts/bench_embeddings_normalization.py` (output opzionale in JSON con metrica `pdf_scan` per il costo di iterazione dei PDF, utile a monitorare la cache opportunistica introdotta in `iter_safe_pdfs`).
-- **SBOM:** `scripts/sbom.sh` (genera `sbom.json`).
-- **Migrazioni operative:** `scripts/migrate_yaml_to_db.py` (conversioni YAML  SQLite per i tag).
+- **Smoke E2E rapidi:** `tools/smoke/smoke_e2e.py`, `tools/smoke/e2e_smoke_test.py`.
+- **Gating Semantica:** `tools/smoke/smoke_semantics_gating.py` (verifica che la pagina Semantica compaia solo con PDF in `raw/`).
+- **Benchmark retriever/semantic:** `tools/bench_embeddings_normalization.py` (output opzionale in JSON con metrica `pdf_scan` per il costo di iterazione dei PDF, utile a monitorare la cache opportunistica introdotta in `iter_safe_pdfs`).
+- **SBOM:** `tools/sbom.sh` (genera `sbom.json`).
+- **Migrazioni operative:** `tools/migrate_yaml_to_db.py` (conversioni YAML  SQLite per i tag).
 
 > Quando si introduce un nuovo script CLI: riusare helper di path-safety e writer atomici (`pipeline.*`), documentare le variabili d'ambiente e valutare un test dedicato.
 
@@ -213,7 +213,7 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 - *UI policy*: `forbid-streamlit-deprecated`, `ui-beta0-compliance`.
 - *Boundary error*: `forbid-legacy-valueerror` (vietato `raise ValueError(` in runtime).
 - *Security/Docs* (**commit**): `gitleaks` (segreti), `cspell` (README+docs).
-- *Doc governance* (**commit**): `agents-matrix-check`  verifica che la matrice in `docs/AGENTS_INDEX.md` sia **allineata** agli `AGENTS.md` locali; fallisce se va rigenerata. Esegue `python scripts/gen_agents_matrix.py --check`; scope file: `docs/AGENTS_INDEX.md`, `src/**/AGENTS.md`, `tests/AGENTS.md`, `.codex/AGENTS.md`, `AGENTS.md`.
+- *Doc governance* (**commit**): `agents-matrix-check`  verifica che la matrice in `docs/AGENTS_INDEX.md` sia **allineata** agli `AGENTS.md` locali; fallisce se va rigenerata. Esegue `python tools/gen_agents_matrix.py --check`; scope file: `docs/AGENTS_INDEX.md`, `src/**/AGENTS.md`, `tests/AGENTS.md`, `.codex/AGENTS.md`, `AGENTS.md`.
 
 **Esecuzioni tipiche**
 ```bash
@@ -245,7 +245,7 @@ SKIP=ruff,black git commit -m "..."
 - Versione minima: `pre-commit  3.6`; Python di default: `3.11`.
 - Esclusi dal scan: `.venv/`, `node_modules/`, `output/`, `dist/`, `build/`, `docs/_build/`.
 - Scope file: Python limitato a `src|tests`; cSpell = `README.md` e `docs/*.md`.
-- Matrice AGENTS: hook locale `agents-matrix-check` (`.pre-commit-config.yaml`  `repo: local`, `id: agents-matrix-check`, `entry: python scripts/gen_agents_matrix.py --check`, `language: system`, `pass_filenames: false`, `files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$`).
+- Matrice AGENTS: hook locale `agents-matrix-check` (`.pre-commit-config.yaml`  `repo: local`, `id: agents-matrix-check`, `entry: python tools/gen_agents_matrix.py --check`, `language: system`, `pass_filenames: false`, `files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$`).
 
 > Riferimenti: `.pre-commit-config.yaml` (stadi, scope, hook e argomenti), README/Developer Guide (installazione rapida), User Guide (fixer/guard Unicode).
 

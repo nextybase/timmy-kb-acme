@@ -21,7 +21,7 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 ### Accesso runtime (SSoT)
 
 - **Config globale**: usa sempre `pipeline.settings.Settings.load(...)` oppure `ClientContext.settings`; la UI passa da `ui.config_store.get_vision_model()` (nessuna lettura YAML diretta).
-- **Config cliente**: API unificata `pipeline.config_utils.load_client_settings(context)` → `context.settings` → dict via `.as_dict()`.
+- **Config cliente**: API unificata `pipeline.config_utils.load_client_settings(context)` â†’ `context.settings` â†’ dict via `.as_dict()`.
 - **Segreti**: recuperati solo via `Settings.resolve_env_ref` / `Settings.get_secret`; evitare `os.environ[...]` per credenziali nei call-site applicativi.
 
 > **Nota:** una *deny-list* interna impedisce di spostare in YAML variabili che devono
@@ -49,7 +49,7 @@ ai:
 
 ## Config YAML
 
-`config/config.yaml` è la SSoT applicativa strutturata per macro-sezioni:
+`config/config.yaml` Ã¨ la SSoT applicativa strutturata per macro-sezioni:
 
 - `meta`: nome cliente, riferimenti SSoT (`semantic_mapping_yaml`, `vision_statement_pdf`), versioning (`N_VER`, `DATA_VER`).
 - `ui`: `skip_preflight`, `allow_local_only`, `admin_local_mode`.
@@ -107,7 +107,7 @@ Il modulo `pipeline.oidc_utils` espone `ensure_oidc(settings)`:
 3. Se `provider=vault`, scambia il JWT con un client token (`VAULT_TOKEN`) tramite login standard.
 4. Restituisce un dizionario di variabili da esportare/loggare (mai il token vero).
 
-Lo script `scripts/ci/oidc_probe.py` richiama `ensure_oidc` e fallisce quando
+Lo script `tools/ci/oidc_probe.py` richiama `ensure_oidc` e fallisce quando
 `ci_required=true` ma mancano i prerequisiti: e eseguito automaticamente in CI quando
 `OIDC_PROVIDER` e valorizzato.
 

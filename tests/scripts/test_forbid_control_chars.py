@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = REPO_ROOT / "scripts" / "forbid_control_chars.py"
+SCRIPT = REPO_ROOT / "tools" / "forbid_control_chars.py"
 
 
 @pytest.fixture()

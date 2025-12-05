@@ -35,7 +35,27 @@ from pipeline.observability_config import (
     update_observability_settings,
 )
 from pipeline.tracing import start_phase_span, start_root_trace
-from scripts.observability_stack import start_observability_stack, stop_observability_stack
+
+try:  # Prefer local tool under repo root
+    from tools import observability_stack  # type: ignore[import]
+except Exception:  # pragma: no cover
+    observability_stack = None
+
+if observability_stack is None:  # pragma: no cover
+    try:
+        import importlib.util
+
+        repo_root = Path(__file__).resolve().parents[2]
+        obs_path = repo_root / "tools" / "observability_stack.py"
+        spec = importlib.util.spec_from_file_location("observability_stack", obs_path)
+        if spec is not None and spec.loader is not None:
+            observability_stack = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(observability_stack)  # type: ignore[arg-type]
+    except Exception:
+        observability_stack = None
+
+start_observability_stack = getattr(observability_stack, "start_observability_stack", None)
+stop_observability_stack = getattr(observability_stack, "stop_observability_stack", None)
 from ui.chrome import render_chrome_then_require
 from ui.utils.slug import get_active_slug
 from ui.utils.stubs import get_streamlit

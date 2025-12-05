@@ -12,7 +12,7 @@ import pytest
 def test_ui_beta0_compliance() -> None:
     """Richiama lo script di compliance e fallisce se vengono rilevate violazioni."""
     repo_root = Path(__file__).resolve().parents[1]
-    script = repo_root / "scripts" / "dev" / "check_ui_beta0_compliance.py"
+    script = repo_root / "tools" / "smoke" / "check_ui_beta0_compliance.py"
     result = subprocess.run(
         [sys.executable, str(script)],
         cwd=repo_root,

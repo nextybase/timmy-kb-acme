@@ -17,7 +17,7 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 
 - Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
 - Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
-- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `scripts/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` e valorizzata.
+- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `tools/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` e valorizzata.
 - Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
 - Per rendere la pipeline hard imposta in `config/config.yaml`:
   ```yaml
@@ -92,7 +92,7 @@ Configura la regola su `main` (GitHub a Settings a Branches):
 4. **Restrict who can push** (solo bot o release manager)
 5. *(Facoltativo)* Require signed commits
 
-Script opzionale (`scripts/apply_branch_protection.sh`) mostra i comandi `gh api`
+Script opzionale (`tools/apply_branch_protection.sh`) mostra i comandi `gh api`
 per applicare automaticamente la policy (non eseguire in CI).
 
 ## Logging & Alerting
