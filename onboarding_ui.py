@@ -24,8 +24,6 @@ except Exception:  # pragma: no cover
 REPO_ROOT = Path(__file__).resolve().parent
 os.environ.pop("REPO_ROOT_DIR", None)
 
-st: Any | None = None
-
 
 # --------------------------------------------------------------------------------------
 # Path bootstrap: aggiunge <repo>/src a sys.path il prima possibile
@@ -67,68 +65,71 @@ def _init_ui_logging() -> None:
 LOGGER: logging.Logger = logging.getLogger("ui.preflight")
 
 
-def _lazy_bootstrap() -> None:
-    """Bootstrap logging in modo idempotente (invocato all'avvio UI)."""
+def _lazy_bootstrap() -> logging.Logger:
+    """Bootstrap logging in modo idempotente (invocato all'avvio UI).
+
+    Ritorna il logger `ui.preflight` da passare alle funzioni interne.
+    """
     from pipeline.logging_utils import get_structured_logger
 
-    global LOGGER
     _bootstrap_sys_path()
     _init_ui_logging()
-    LOGGER = get_structured_logger("ui.preflight")
+    return get_structured_logger("ui.preflight")
 
 
-def _render_preflight_header() -> None:
+def _render_preflight_header(st_module: Any, logger: logging.Logger) -> None:
     """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
     from ui.utils.branding import get_main_logo_path
 
-    if st is None:
+    if st_module is None:
         return
 
     logo_path = None
     try:
         logo_path = get_main_logo_path(REPO_ROOT)
     except Exception as exc:
-        LOGGER.warning("ui.preflight.logo_resolve_failed", extra={"error": repr(exc)})
+        logger.warning("ui.preflight.logo_resolve_failed", extra={"error": repr(exc)})
 
     try:
-        cols = st.columns([1, 2, 1])
+        cols = st_module.columns([1, 2, 1])
     except Exception as exc:
-        LOGGER.warning("ui.preflight.columns_failed", extra={"error": repr(exc)})
+        logger.warning("ui.preflight.columns_failed", extra={"error": repr(exc)})
         cols = None
 
-    target = cols[1] if cols and len(cols) >= 3 else st
+    target: Any = cols[1] if cols and len(cols) >= 3 else st_module
 
     def _render(target_st: Any) -> None:
         if logo_path:
             try:
                 target_st.image(str(logo_path))
             except Exception as exc:
-                LOGGER.warning("ui.preflight.logo_render_failed", extra={"error": repr(exc)})
+                logger.warning("ui.preflight.logo_render_failed", extra={"error": repr(exc)})
         try:
             target_st.markdown("### Controllo di sistema")
         except Exception as exc:
-            LOGGER.warning("ui.preflight.header_render_failed", extra={"error": repr(exc)})
+            logger.warning("ui.preflight.header_render_failed", extra={"error": repr(exc)})
 
     try:
-        with target:
+        # Alcuni stub non supportano il context manager, quindi fallback esplicito.
+        with target:  # type: ignore[assignment]
             _render(target)
     except Exception as exc:
-        LOGGER.warning("ui.preflight.header_container_failed", extra={"error": repr(exc)})
-        _render(st)
+        logger.warning("ui.preflight.header_container_failed", extra={"error": repr(exc)})
+        _render(st_module)
 
 
-def _load_dotenv_best_effort() -> None:
+def _load_dotenv_best_effort(logger: logging.Logger) -> None:
     """Carica .env solo a runtime, preservando l'import-safe della UI."""
     if load_dotenv is None:
         return
     env_path = REPO_ROOT / ".env"
     if not env_path.exists():
-        LOGGER.info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
+        logger.info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
         return
     try:
         load_dotenv(override=False)
     except Exception as exc:
-        LOGGER.warning(
+        logger.warning(
             "ui.preflight.dotenv_error",
             extra={"path": str(env_path), "error": repr(exc)},
         )
@@ -147,11 +148,13 @@ def _parse_version(raw: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
-def _ensure_streamlit_api() -> None:
-    if st is None:
+def _ensure_streamlit_api(st_module: Any) -> None:
+    if st_module is None:
         raise RuntimeError("Streamlit non inizializzato")
-    version = getattr(st, "__version__", "0")
-    if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st, "Page") or not hasattr(st, "navigation"):
+    version = getattr(st_module, "__version__", "0")
+    if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st_module, "Page") or not hasattr(
+        st_module, "navigation"
+    ):
         raise RuntimeError(
             "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 0. "
             'Aggiorna con `pip install --upgrade "streamlit>=1.50.0"`.'
@@ -238,13 +241,13 @@ def _run_preflight_flow(
     if st_module.session_state.get("preflight_ok", False):
         return
 
-    _load_dotenv_best_effort()
+    _load_dotenv_best_effort(logger)
 
     if skip_preflight:
         st_module.session_state["preflight_ok"] = True
         return
 
-    _render_preflight_header()
+    _render_preflight_header(st_module, logger)
     box = st_module.container()
     with box:
         with st_module.expander("Prerequisiti", expanded=True):
@@ -362,12 +365,10 @@ def build_navigation(
 
 
 def main() -> None:
-    global st
-
-    _lazy_bootstrap()
+    logger = _lazy_bootstrap()
 
     try:  # noqa: E402
-        import streamlit as st  # type: ignore
+        import streamlit as st_module  # type: ignore
     except Exception as exc:  # pragma: no cover
         raise RuntimeError("Streamlit non disponibile: installa le dipendenze UI") from exc
 
@@ -387,13 +388,13 @@ def main() -> None:
     try:  # noqa: E402
         from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
     except Exception as exc:  # pragma: no cover
-        LOGGER.error(
+        logger.error(
             "ui.preflight.route_state_missing",
             extra={"error": repr(exc)},
         )
         raise RuntimeError("Router UI non disponibile: reinstalla Streamlit/UI") from exc
 
-    st.set_page_config(
+    st_module.set_page_config(
         page_title="Onboarding NeXT - Clienti",
         page_icon=str(get_favicon_path(REPO_ROOT)),
         layout="wide",
@@ -402,19 +403,19 @@ def main() -> None:
     inject_theme_css()
 
     try:
-        _ensure_streamlit_api()
+        _ensure_streamlit_api(st_module)
     except Exception as exc:
-        st.error(str(exc))
-        st.stop()
+        st_module.error(str(exc))
+        st_module.stop()
 
-    if not st.session_state.get("_startup_logged", False):
+    if not st_module.session_state.get("_startup_logged", False):
         port = os.getenv("PORT") or os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("SERVER_PORT")
-        st.session_state["_startup_logged"] = True
-        LOGGER.info(
+        st_module.session_state["_startup_logged"] = True
+        logger.info(
             "ui.startup",
             extra={
                 "version": "v1.0-beta",
-                "streamlit_version": getattr(st, "__version__", "unknown"),
+                "streamlit_version": getattr(st_module, "__version__", "unknown"),
                 "port": port,
                 "mode": "streamlit",
             },
@@ -424,8 +425,8 @@ def main() -> None:
 
     # Gestione del parametro di uscita (?exit=1)
     if _handle_exit_param(
-        st,
-        logger=LOGGER,
+        st_module,
+        logger=logger,
         clear_active_slug=clear_active_slug,
         clear_tab=clear_tab,
     ):
@@ -433,8 +434,8 @@ def main() -> None:
 
     # Flusso di preflight (può impostare preflight_ok e chiamare rerun/stop).
     _run_preflight_flow(
-        st_module=st,
-        logger=LOGGER,
+        st_module=st_module,
+        logger=logger,
         get_skip_preflight=get_skip_preflight,
         set_skip_preflight=set_skip_preflight,
         apply_preflight_once=apply_preflight_once,
@@ -444,8 +445,8 @@ def main() -> None:
 
     # Navigazione principale (st.navigation + st.Page)
     build_navigation(
-        st=st,
-        logger=LOGGER,
+        st=st_module,
+        logger=logger,
         compute_gates=compute_gates,
         visible_page_specs=visible_page_specs,
         get_streamlit=_get_streamlit,
